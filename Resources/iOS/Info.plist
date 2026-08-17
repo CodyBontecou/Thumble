@@ -70,6 +70,8 @@
   <string>Thumble uses the camera to scan the Mac helper QR code.</string>
   <key>UIApplicationSupportsIndirectInputEvents</key>
   <true/>
+  <key>GCSupportsControllerUserInteraction</key>
+  <true/>
   <key>UILaunchScreen</key>
   <dict/>
   <key>UISupportedInterfaceOrientations</key>
