@@ -6,6 +6,7 @@ Pixel-art landing page for Thumble with a Cloudflare Pages Function that saves l
 
 - `index.html` / `styles.css` / `script.js` — static landing page, screenshot gallery, and launch-list form.
 - `docs.html` — comprehensive Thumble documentation for setup, pairing, skins, editor workflows, outputs, CLI, troubleshooting, and safety behavior.
+- `blog.html` + `blog/` — the Thumble blog index and posts. Posts are static pages that reuse the docs article styles; add a new card to `blog.html` per post.
 - `skins.html` / `skins.js` — searchable, filterable skin directory with package verification, Web Share installation, direct downloads, and detail deep links.
 - `skins/catalog.source.json` — editorial catalog data; `skins/catalog.json`, packages, and previews are generated deployable assets.
 - `skins/CONTRIBUTING.md` — reviewed community submission workflow.

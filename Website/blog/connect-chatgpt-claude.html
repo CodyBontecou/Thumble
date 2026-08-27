@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Build Mac controllers by chatting: Thumble + ChatGPT and Claude</title>
+  <meta name="description" content="Connect ChatGPT or Claude to Thumble over remote MCP: describe the keypad you want, and the assistant drafts, previews, and saves it while your Mac stays the authority.">
+  <meta name="theme-color" content="#f4efe5">
+  <meta property="og:title" content="Build Mac controllers by chatting: Thumble + ChatGPT and Claude">
+  <meta property="og:description" content="A five-minute guide to wiring ChatGPT or Claude into Thumble's remote MCP relay — and why your Mac never gives up control.">
+  <meta property="og:type" content="article">
+  <meta property="og:image" content="/assets/app-icon.png">
+  <link rel="icon" href="/assets/favicon.png" type="image/png">
+  <link rel="apple-touch-icon" href="/assets/app-icon.png">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body class="docs-page blog-post">
+  <header class="site-header">
+    <a class="brand" href="/" aria-label="Thumble home">
+      <span class="brand-mark">TC</span>
+      <span>Thumble</span>
+    </a>
+    <nav aria-label="Primary navigation">
+      <a href="/">Home</a>
+      <a href="/#screens">Screens</a>
+      <a href="/skins.html">Skins</a>
+      <a href="/docs.html">Docs</a>
+      <a href="/blog.html" aria-current="page">Blog</a>
+      <a class="nav-cta" href="/#waitlist">Waitlist</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="docs-hero section-shell blog-hero">
+      <div>
+        <p class="eyebrow">guide · august 25, 2026</p>
+        <h1>Build Mac controllers by chatting.</h1>
+        <p class="lede">Connect ChatGPT or Claude to Thumble over remote MCP, describe the keypad you want, and let the assistant draft, preview, and save it — while your Mac stays in charge of every change.</p>
+        <div class="hero-actions">
+          <a class="pixel-button" href="#setup">start the 5-minute setup</a>
+          <a class="pixel-button pixel-button-secondary" href="#security">how it stays safe</a>
+        </div>
+      </div>
+
+      <div class="docs-hero-art" aria-label="Thumble screenshots">
+        <figure class="docs-floating-shot editor-shot">
+          <img src="/assets/screenshots/keypad-editor.png" alt="Thumble Mac keypad editor showing a layout canvas and inspectors">
+        </figure>
+      </div>
+    </section>
+
+    <section class="docs-layout section-shell">
+      <aside class="docs-toc" aria-label="Post sections">
+        <strong>Contents</strong>
+        <a href="#what-you-get">What you get</a>
+        <a href="#how-it-works">How it works</a>
+        <a href="#requirements">Requirements</a>
+        <a href="#setup">Setup in five minutes</a>
+        <a href="#chatgpt">Add the connector in ChatGPT</a>
+        <a href="#claude">Add it in Claude</a>
+        <a href="#using-it">Using it</a>
+        <a href="#security">The security model</a>
+        <a href="#daily-care">Day-to-day care</a>
+        <a href="#faq">FAQ</a>
+      </aside>
+
+      <article class="docs-copy">
+        <section id="what-you-get" class="doc-section">
+          <p class="eyebrow">what you get</p>
+          <h2>An assistant that actually edits your controller</h2>
+          <p>Thumble already turns an iPhone into a programmable control surface for a Mac — keypads for games, shortcut pads for productivity, joysticks and triggers for anything that wants a gamepad. The Mac app is the editor; the CLI mirrors it for scripting.</p>
+          <p>This guide adds the third interface: <strong>chat</strong>. With a remote MCP connector, ChatGPT or Claude can read your profiles, build new layouts, adjust buttons, previews, and bindings, and save — through the exact same revision-safe tool surface the CLI uses. You describe the outcome; the assistant does the pixel-pushing.</p>
+
+          <div class="doc-card-grid three">
+            <div class="doc-card">
+              <span>1 · local</span>
+              <h3>Mac app + CLI</h3>
+              <p>The visual editor and the scriptable terminal, talking to the local host.</p>
+            </div>
+            <div class="doc-card">
+              <span>2 · scripted</span>
+              <h3>Agents + skills</h3>
+              <p>Terminal-capable agents drive the same CLI with repository skill files.</p>
+            </div>
+            <div class="doc-card">
+              <span>3 · remote</span>
+              <h3>ChatGPT / Claude</h3>
+              <p>The same tools over an authenticated hosted relay — no Mac exposure.</p>
+            </div>
+          </div>
+
+          <p>What that looks like in a chat window:</p>
+          <pre><code>you:    List my Thumble profiles, then build a landscape keypad
+        for Hollow Knight — d-pad left, jump, dash, focus,
+        attack, and a super-art button. Save it when it looks good.
+
+chat:   ● read 6 profiles
+        ● drafted "Hollow Knight" (9 elements)
+        ● preview rendered — layout quality: 3 suggestions
+        ● applied suggestions, re-checked: clean
+        ✔ saved as profile 7, synced to your iPhone</code></pre>
+          <p>Every write went through Thumble's normal draft → validate → save pipeline on your Mac, with revision checks, before anything reached your phone.</p>
+        </section>
+
+        <section id="how-it-works" class="doc-section">
+          <p class="eyebrow">architecture</p>
+          <h2>How it works</h2>
+          <p>The piece that makes this safe is that your Mac never accepts inbound connections. Instead:</p>
+          <pre><code>ChatGPT / Claude
+   │  HTTPS · OAuth 2.1 + PKCE · per-tool scopes
+   ▼
+thumble gateway  (hosted router — never holds your profiles)
+   ▲
+   │  outbound WebSocket tunnel (your Mac dials out,
+   │  authenticated with a device token)
+   ▼
+thumble relay  (on your Mac)
+   │  same local unix socket as the CLI
+   ▼
+Thumble host  ── profile sync ──▶  iPhone</code></pre>
+          <ul class="doc-checklist">
+            <li><strong>The gateway is only a router.</strong> It checks OAuth scopes and forwards already-sanitized MCP JSON. Your profiles, bindings, and key material never leave your Mac.</li>
+            <li><strong>One-time device binding.</strong> ChatGPT's OAuth login proves who the assistant is; a six-digit code printed on your Mac proves which Mac it may drive. The code expires in five minutes and works once.</li>
+            <li><strong>Two gates on every write.</strong> Saving needs the <code>thumble.config</code> OAuth scope <em>and</em> the local <code>--allow-config-write</code> opt-in on your Mac. Either one alone is not enough.</li>
+          </ul>
+        </section>
+
+        <section id="requirements" class="doc-section">
+          <p class="eyebrow">requirements</p>
+          <h2>What you need</h2>
+          <ul class="doc-checklist">
+            <li><strong>Thumble for Mac</strong> installed, paired with your iPhone, with the helper running.</li>
+            <li><strong>The <code>thumble</code> CLI</strong> — it ships with the Mac app. If it is not on <code>PATH</code>, see the <a href="/docs.html#cli">CLI section of the docs</a>.</li>
+            <li><strong>A ChatGPT plan that allows custom connectors</strong> (developer mode), or <strong>Claude</strong> with custom-connector access, depending on the assistant you want to wire up.</li>
+            <li><strong>Your Mac awake and online</strong> while you use the assistant. Building for a paired phone needs the Mac anyway.</li>
+          </ul>
+        </section>
+
+        <section id="setup" class="doc-section">
+          <p class="eyebrow">setup</p>
+          <h2>Setup in five minutes</h2>
+
+          <ol class="doc-steps">
+            <li>
+              <strong>Make sure the Thumble helper is running.</strong>
+              <pre><code>thumble server start
+thumble status</code></pre>
+              <p>The second command should report a running helper. If you use Thumble daily, it already is.</p>
+            </li>
+
+            <li>
+              <strong>Link your Mac and keep the relay in the foreground.</strong>
+              <pre><code>thumble relay connect --allow-config-write</code></pre>
+              <p>The command prints a one-time six-digit code, copies it to your clipboard, and opens the link page in your browser. Leave it running for now.</p>
+            </li>
+
+            <li>
+              <strong>Add the connector in your assistant</strong> (ChatGPT or Claude — next two sections), and paste the code when the <em>Link your Mac's Thumble controller</em> page appears.
+              <p>The connector URL is <code>https://thumble-mcp-gateway.fly.dev/mcp</code>. When linking succeeds, the page names the device it bound — your Mac's hostname — and the terminal prints that the manifest is published.</p>
+            </li>
+
+            <li>
+              <strong>Move the relay to the background.</strong>
+              <p>Once linking works, stop the foreground command (Ctrl-C) and install the always-on service instead:</p>
+              <pre><code>thumble relay install --allow-config-write</code></pre>
+              <p>This installs a launch agent that starts at login and keeps the tunnel alive, reconnecting on network changes. <code>thumble relay uninstall</code> removes it.</p>
+            </li>
+
+            <li>
+              <strong>Verify everything.</strong>
+              <pre><code>thumble relay doctor</code></pre>
+              <p>Eight checks — helper, bridge, device link, token hygiene, relay process, launch agent, gateway, manifest — each with a fix command if anything is off. <code>overall: ready</code> and you are done.</p>
+            </li>
+          </ol>
+        </section>
+
+        <section id="chatgpt" class="doc-section">
+          <p class="eyebrow">chatgpt</p>
+          <h2>Add the connector in ChatGPT</h2>
+          <ol class="doc-steps compact">
+            <li>In ChatGPT, open <strong>Settings → Apps &amp; Connectors</strong> (on plans with developer mode) and choose to create a connector.</li>
+            <li>Paste <code>https://thumble-mcp-gateway.fly.dev/mcp</code> as the MCP server URL and continue. ChatGPT discovers the server's OAuth endpoints automatically.</li>
+            <li>Sign in with the OAuth flow. When the <strong>Link your Mac's Thumble controller</strong> consent page appears, paste the six-digit code from your terminal (it is already on your clipboard) and click <strong>Link device</strong> once.</li>
+            <li>Review the requested scopes — <code>thumble.read</code>, <code>thumble.draft</code>, <code>thumble.config</code>, and <code>offline_access</code> — and approve.</li>
+          </ol>
+          <p>Start a new conversation, and the connector appears as <strong>Thumble MCP Controller</strong>. Ask for something small first: <em>"What's my Thumble host status?"</em></p>
+        </section>
+
+        <section id="claude" class="doc-section">
+          <p class="eyebrow">claude</p>
+          <h2>Add it in Claude</h2>
+          <p>Claude's custom connectors speak the same language — MCP over Streamable HTTP with OAuth — so the setup is the same shape. As of this writing it lives under <strong>Settings → Connectors → Add custom connector</strong> (availability depends on your plan):</p>
+          <ol class="doc-steps compact">
+            <li>Add a custom connector with the same URL: <code>https://thumble-mcp-gateway.fly.dev/mcp</code>.</li>
+            <li>Follow the OAuth consent, paste the code from <code>thumble relay connect</code>, and link the device.</li>
+            <li>Grant the same scopes when prompted.</li>
+          </ol>
+          <p>One gateway, many assistants: you can link the same Mac from both ChatGPT and Claude — each gets its own OAuth grant, and <code>thumble relay doctor</code> still shows a single healthy device.</p>
+        </section>
+
+        <section id="using-it" class="doc-section">
+          <p class="eyebrow">using it</p>
+          <h2>Using it</h2>
+          <p>The assistant sees twenty curated tools: read status, list profiles and controls, render previews, query the template catalog, run the full draft lifecycle, and save. Things that work well:</p>
+
+          <div class="doc-card-grid two">
+            <div class="doc-card">
+              <span>greenfield</span>
+              <h3>Describe a game pad</h3>
+              <p>"Build a landscape SNES-style pad for Celeste with a d-pad, jump, dash, grab, and two spares — name it after the game and save it."</p>
+            </div>
+            <div class="doc-card">
+              <span>iterate</span>
+              <h3>Adjust what exists</h3>
+              <p>"On the Hollow Knight pad, make the dash button bigger, move focus below attack, and swap the labels to the game's glyphs."</p>
+            </div>
+            <div class="doc-card">
+              <span>inspect</span>
+              <h3>Preview before saving</h3>
+              <p>"Render the current draft and show me the layout issues." Previews and quality checks never touch your saved profiles.</p>
+            </div>
+            <div class="doc-card">
+              <span>repair</span>
+              <h3>Fix messy layouts</h3>
+              <p>"Run layout repair on the active profile and apply the suggested fixes." Same deterministic passes as the CLI.</p>
+            </div>
+          </div>
+
+          <p>Two habits make results better: <strong>ask for a preview first</strong> on big changes ("draft it and show me before saving"), and <strong>save deliberately</strong> — a save is a transaction with revision checks, and if you changed the same profile in the Mac editor meanwhile, the assistant's save is rejected rather than silently clobbering your work.</p>
+        </section>
+
+        <section id="security" class="doc-section">
+          <p class="eyebrow">security</p>
+          <h2>The security model, plainly</h2>
+          <ul class="doc-checklist">
+            <li><strong>No inbound holes.</strong> Your Mac dials out; nothing on your network listens for the internet.</li>
+            <li><strong>OAuth 2.1 with PKCE</strong> at the gateway, refresh tokens that rotate with replay detection, and per-tool scopes. A read-only grant can't save.</li>
+            <li><strong>Device binding by code.</strong> Knowing your account is not enough — linking a Mac needs a code that only appears on that Mac.</li>
+            <li><strong>Writes are doubly gated.</strong> The <code>thumble.config</code> scope must be granted <em>and</em> your Mac must have been started with <code>--allow-config-write</code>. Revoke either at any time.</li>
+            <li><strong>Input injection is never remote.</strong> <code>press_control</code> and phone pairing are local-only by design; no remote scope can unlock them.</li>
+            <li><strong>Reversible always.</strong> <code>thumble relay rotate</code> replaces the device credential in place; <code>thumble relay revoke</code> cuts the Mac off at the gateway and deletes the local token.</li>
+          </ul>
+        </section>
+
+        <section id="daily-care" class="doc-section">
+          <p class="eyebrow">operations</p>
+          <h2>Day-to-day care</h2>
+          <pre><code>thumble relay status        # linked? online? manifest published?
+thumble relay doctor        # full diagnosis with fixes
+thumble relay rotate        # new credential, same device — run anytime
+thumble relay revoke        # unlink this Mac from the gateway
+thumble relay uninstall     # remove the background service</code></pre>
+          <p>If ChatGPT reports <em>"Your Thumble device is unavailable"</em>, it means exactly that: the Mac is asleep, offline, or the relay stopped. Wake it, check with <code>doctor</code>, retry. Tool listings keep working even while the Mac is offline because the gateway caches your device's manifest — so the connector never breaks validation.</p>
+          <p>Sleep is the main gotcha. A laptop with the lid closed is not a controller host; either keep the Mac awake while chatting, or accept that saves will wait until it is.</p>
+        </section>
+
+        <section id="faq" class="doc-section">
+          <p class="eyebrow">faq</p>
+          <h2>FAQ</h2>
+          <details>
+            <summary>Does my data go through your servers?</summary>
+            <p>Sanitized, already-structured MCP responses are relayed through the hosted gateway so ChatGPT can reach your Mac — the gateway never sees raw profiles, bindings, or secrets, and it stores no profile state. Configuration authority stays on your Mac the whole time.</p>
+          </details>
+          <details>
+            <summary>Can the assistant press buttons on my phone?</summary>
+            <p>No. Input injection is a local-only capability with no remote scope. Remote sessions can build layouts and save configurations; pressing controls stays with you and your terminal.</p>
+          </details>
+          <details>
+            <summary>What if I link a second Mac?</summary>
+            <p>Each Mac links separately and shows up under its own hostname. Connectors bind to one device per link, so add the connector again from the other Mac's code if you need both.</p>
+          </details>
+          <details>
+            <summary>I revoked by mistake — how do I get back?</summary>
+            <p>Run <code>thumble relay connect</code> again for a fresh code and re-link. Your profiles were never touched; only the credential is replaced.</p>
+          </details>
+        </section>
+
+        <section class="doc-section">
+          <p class="eyebrow">next steps</p>
+          <h2>Go further</h2>
+          <ul class="doc-checklist">
+            <li><a href="/docs.html">Full Thumble documentation</a> — pairing, editor, outputs, CLI, and local agents.</li>
+            <li><a href="/docs.html#agents">Guide an AI agent locally</a> — the terminal-native sibling of this setup.</li>
+            <li><a href="https://github.com/CodyBontecou/Thumble" rel="noreferrer">Source and issue tracker on GitHub</a> — the relay's design is documented in <code>docs/mcp/</code>.</li>
+          </ul>
+        </section>
+      </article>
+    </section>
+  </main>
+
+  <footer class="site-footer section-shell">
+    <span>© <span id="year">2026</span> Thumble</span>
+    <span class="footer-links"><a href="/">home</a><a href="/blog.html">blog</a><a href="/docs.html">docs</a><a href="/privacy.html">privacy</a></span>
+  </footer>
+
+  <script src="/script.js" defer></script>
+</body>
+</html>
