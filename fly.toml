@@ -1,0 +1,45 @@
+# fly.io deployment for the Thumble MCP gateway.
+#   fly launch --no-deploy --name thumble-mcp-gateway --copy-config
+#   fly secrets set THUMBLE_GATEWAY_BASE_URL=https://thumble-mcp-gateway.fly.dev
+#   fly deploy
+app = "thumble-mcp-gateway"
+primary_region = "iad"
+
+[build]
+dockerfile = "Host/crates/thumble-gateway/Dockerfile"
+
+[env]
+THUMBLE_GATEWAY_BIND = "0.0.0.0:8080"
+THUMBLE_GATEWAY_DB = "/data/thumble-gateway.db"
+THUMBLE_GATEWAY_BACKUP_ENABLED = "1"
+THUMBLE_GATEWAY_BACKUP_INTERVAL_SECONDS = "86400"
+
+# TLS terminates at the Fly edge; advertise the public HTTPS base URL.
+# THUMBLE_GATEWAY_BASE_URL is set via `fly secrets set`.
+
+[http_service]
+internal_port = 8080
+force_https = true
+auto_stop_machines = false
+auto_start_machines = true
+min_machines_running = 1
+
+[http_service.concurrency]
+type = "requests"
+soft_limit = 200
+hard_limit = 250
+
+[[http_service.checks]]
+grace_period = "5s"
+interval = "15s"
+method = "GET"
+path = "/healthz"
+timeout = "2s"
+
+[[mounts]]
+source = "thumble_gateway_data"
+destination = "/data"
+
+[[vm]]
+size = "shared-cpu-1x"
+memory = "512mb"

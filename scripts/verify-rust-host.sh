@@ -10,6 +10,17 @@ RUST_TOOLCHAIN="${RUST_TOOLCHAIN:-1.88.0}"
 python3 "$ROOT_DIR/scripts/verify-mcp-cli-parity.py"
 python3 "$ROOT_DIR/scripts/verify-cli-profile-persistence-allowlist.py"
 
+for script in \
+  "$ROOT_DIR/scripts/install-relay-launch-agent.sh" \
+  "$ROOT_DIR/Host/crates/thumble-gateway/backup.sh" \
+  "$ROOT_DIR/Host/crates/thumble-gateway/start.sh"; do
+  bash -n "$script"
+done
+grep -Fq 'install-relay-launch-agent.sh' "$ROOT_DIR/scripts/release/macos-host.sh" || {
+  echo "macOS host release does not package the relay LaunchAgent installer." >&2
+  exit 1
+}
+
 BRANDING_PATTERN='PocketPad Host|PocketPad MCP|PocketPad (skin|controller)|PocketPad(Skin|Mcp)|pocketpad-(host|mcp|core|protocol)|POCKETPAD NATIVE'
 if grep -RInE "$BRANDING_PATTERN" \
   "$ROOT_DIR/Host/crates" \
@@ -35,6 +46,6 @@ fi
 cargo fmt --manifest-path "$MANIFEST" --all --check
 cargo clippy --locked --manifest-path "$MANIFEST" --workspace --all-targets --all-features -- -D warnings
 cargo test --locked --manifest-path "$MANIFEST" --workspace --all-features
-cargo check --locked --manifest-path "$MANIFEST" --package thumble-host --package thumble-mcp --all-targets
+cargo check --locked --manifest-path "$MANIFEST" --package thumble-host --package thumble-mcp --package thumble-tunnel --package thumble-gateway --all-targets
 
 echo "Thumble Rust host and MCP verification passed."

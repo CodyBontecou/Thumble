@@ -17,3 +17,11 @@ scripts/app-store-images/node_modules/
 
 # Local Playwright CLI sessions and artifacts
 .playwright-cli/
+
+# Local build artifacts
+/.build/
+/build/
+
+# Local agent working state
+/.pi/todos/
+/context.md

@@ -1608,7 +1608,7 @@ final class ThumbleConfigurationBridgeTests: XCTestCase {
             operation: [
                 "type": "generation.generate",
                 "preset": "hollow-knight",
-                "presetRevision": 1,
+                "presetRevision": 2,
                 "destination": ["action": "create", "newProfileID": generatedProfileID],
                 "newElementIDs": customIDs,
                 "select": true,
@@ -1769,7 +1769,7 @@ final class ThumbleConfigurationBridgeTests: XCTestCase {
         let wrongCount = try decodeRequest(
             profileObjects: [rawProfile],
             operation: [
-                "type": "generation.generate", "preset": "hollow-knight", "presetRevision": 1,
+                "type": "generation.generate", "preset": "hollow-knight", "presetRevision": 2,
                 "destination": ["action": "create", "newProfileID": "00000000-0000-0000-0000-000000000702"],
                 "newElementIDs": [], "select": false, "makeDefault": false
             ]

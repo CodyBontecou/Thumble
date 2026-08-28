@@ -1,0 +1,9 @@
+{
+  "thumble": {
+    "command": "bash",
+    "args": [
+      "-c",
+      "B=\"${THUMBLE_MCP_BINARY:-}\"; if [ -n \"$B\" ] && [ -x \"$B\" ]; then exec \"$B\"; fi; A='/Applications/Thumble Host.app/Contents/MacOS/thumble-mcp'; if [ -x \"$A\" ]; then exec \"$A\"; fi; if command -v thumble-mcp >/dev/null 2>&1; then exec thumble-mcp; fi; echo 'thumble-mcp not found. Install the Thumble Host app bundle, or build the adapter with: cargo install --locked --path Host/crates/thumble-mcp' >&2; exit 127"
+    ]
+  }
+}

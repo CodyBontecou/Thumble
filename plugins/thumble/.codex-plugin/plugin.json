@@ -1,0 +1,34 @@
+{
+  "name": "thumble",
+  "version": "1.0.0",
+  "description": "Turn an iPhone into a Mac controller. Bundles the thumble-keypad-generator skill plus a local stdio MCP server for Thumble Host: generate and edit game keypads, validate layouts, and inspect runtime state.",
+  "author": {
+    "name": "Cody Bontecou",
+    "url": "https://github.com/CodyBontecou"
+  },
+  "homepage": "https://github.com/CodyBontecou/Thumble",
+  "repository": "https://github.com/CodyBontecou/Thumble",
+  "keywords": [
+    "thumble",
+    "controller",
+    "keypad",
+    "iphone",
+    "gaming",
+    "gamepad",
+    "mcp"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Thumble",
+    "shortDescription": "iPhone keypad workflows plus a local Thumble MCP server",
+    "longDescription": "Generate, dry-run, and install game keypad profiles, edit controls and bindings, validate layouts, and inspect the running Thumble Mac helper. The bundled MCP server exposes the same revision-safe operations to ChatGPT and Codex through Thumble Host's local control socket.",
+    "developerName": "Cody Bontecou",
+    "category": "Productivity",
+    "websiteURL": "https://github.com/CodyBontecou/Thumble",
+    "defaultPrompt": [
+      "Use Thumble to create a thumb-sized keypad for a game I name, dry-run it, then install and select it."
+    ],
+    "brandColor": "#7C3AED"
+  }
+}

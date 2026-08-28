@@ -88,7 +88,7 @@ Use `run --port 0 --no-bonjour --no-input` for an isolated development receiver.
 
 ## MCP adapter
 
-`thumble-mcp` is a stateless adapter between a local MCP client and the running host's user-only control socket. It never reads `state.json`, owns the receiver lifecycle, accepts shell commands, or exposes authentication tokens and raw key codes. It implements the stable MCP `2025-11-25` lifecycle using the official Rust SDK and newline-framed stdio transport.
+`thumble-mcp` is a stateless adapter between a local MCP client and the running host's user-only control socket. It never reads `state.json`, owns the receiver lifecycle, accepts shell commands, or exposes authentication tokens and raw key codes. It uses the official Rust SDK and supports both the legacy MCP `2025-11-25` initialization lifecycle and modern MCP `2026-07-28` per-request discovery metadata; local stdio remains newline-framed.
 
 Start `thumble-host` before the MCP client launches the adapter. The server currently exposes twenty tools:
 
@@ -157,7 +157,167 @@ Codex desktop currently gates third-party MCP Apps UI behind an experimental fea
 enable_mcp_apps = true
 ```
 
-The tool remains useful as structured/text output if that experimental renderer is unavailable. Use an absolute binary path because GUI clients often have a restricted `PATH`. The current adapter is intentionally local stdio only. A remote ChatGPT/connector deployment requires a separately authenticated Streamable HTTP transport with TLS and per-tool authorization; do not expose this stdio process or the host control socket over the network.
+The tool remains useful as structured/text output if that experimental renderer is unavailable. Use an absolute binary path because GUI clients often have a restricted `PATH`. The stdio adapter is local only: never expose the stdio process or the host control socket over the network. Remote connector deployments use the authenticated relay below instead.
+
+## Remote MCP connector relay (ChatGPT)
+
+Remote platforms such as ChatGPT's developer-mode connectors speak MCP over
+Streamable HTTP with OAuth 2.1 (PKCE S256, RFC 8414 metadata, RFC 7591 dynamic
+client registration, RFC 9207 authorization-response issuer identification,
+RFC 8707 MCP resource binding, and refresh-token rotation). The `thumble-gateway` crate is
+a hosted, authenticated router for that surface. It is a pure relay:
+
+```
+ChatGPT ─HTTPS (Streamable HTTP, OAuth 2.1)→ thumble-gateway (cloud)
+                                              │ scope gate + rate + audit
+                                              │ WebSocket (outbound from Mac)
+                 thumble-mcp --relay ←─────────┘
+                   (serves the same ThumbleMcp tool surface)
+                       │ unix control socket (unchanged, user-only)
+                    thumble-host ── profile sync ──→ iPhone
+```
+
+- The gateway never receives host `ControlResponse` payloads directly; it
+  forwards already-sanitized MCP JSON and enforces per-tool scopes before
+  forwarding. It holds no profiles, bindings, pairing data, or credentials,
+  and never becomes a configuration authority.
+- The Mac keeps serving the ordinary twenty-tool `ThumbleMcp` handler over
+  per-session tunnels; drafts, revisions, commits, the Swift bridge, and
+  phone delivery remain entirely local.
+- `pairing_code`, `press_control`, and `release_all` are never reachable
+  remotely. Input injection is not grantable in v1 at any scope.
+- Scopes: `thumble.read`, `thumble.draft`, `thumble.config`, plus OAuth's
+  `offline_access` for refresh tokens. The RFC 9728 challenge requests all
+  four on initial ChatGPT authorization so the connector can build and save;
+  the consent page lists them explicitly. `thumble.draft` implies read;
+  `thumble.config` implies draft and read.
+  Configuration writes still require the device-side `--allow-config-write`
+  opt-in — the gateway scope is the outer gate, the local flags remain the
+  fail-closed inner gate.
+- Linking is push-approved. When ChatGPT opens `/authorize`, the gateway
+  sends `ConnectorApprovalRequest` over an open link socket, or over the
+  already-authenticated control tunnel for later re-authorization. The relay
+  shows a native macOS dialog; clicking **Allow** sends a target-bound,
+  single-use decision, and `/authorize/wait` returns the OAuth callback
+  automatically — no code entry. Push is restricted to verified ChatGPT
+  callback hosts and pending/online relays whose gateway-observed source
+  matches the browser authorization; each exact connection may have only one
+  active prompt, and the dialog defaults to Deny. The dialog stays off with
+  `THUMBLE_RELAY_NO_PROMPT=1` (SSH/headless use). OAuth success is withheld
+  until the relay acknowledges atomic token persistence; an explicit token
+  rotation also closes the previous authenticated control socket. A one-time six-digit code
+  is still printed and copied to the clipboard as the fallback; its consent
+  form retains the existing retry/error behavior. The completion page names
+  the linked device (hostname by default, `--device-name` to override).
+  `thumble relay rotate` still rotates an already-linked credential **in
+  place** — same device identity and OAuth bindings, with no window where
+  both tokens are valid.
+- High-entropy tokens are opaque and stored as SHA-256 digests; six-digit
+  link codes use HMAC-SHA256 with `THUMBLE_GATEWAY_TOKEN_SECRET`. OAuth
+  request fields live server-side behind an opaque request ID rather than
+  unsigned hidden fields. Refresh tokens require `offline_access`, rotate
+  with reuse detection plus a bounded 60-second concurrent-refresh grace
+  window (multi-window desktop clients share one token cache; replays
+  outside the window or past the successor budget revoke the whole device
+  family), and revoke the entire family on confirmed replay. Link
+  codes live one hour, are single-use, and have per-request, per-source,
+  and global attempt/connection limits.
+- When the Mac is offline, connector tool scanning still works from the
+  cached manifest; tool calls fail fast with an actionable error.
+
+Run the device side (start `thumble-host` first):
+
+```bash
+# One managed foreground flow: links on first run, then serves MCP.
+thumble relay connect --allow-config-write
+
+# Check gateway liveness and MCP manifest readiness.
+thumble relay status --json
+
+# Diagnose every onboarding prerequisite with concrete fixes.
+thumble relay doctor
+
+# Explicitly rotate an existing device link in place; the running relay
+# reconnects with the new credential automatically.
+thumble relay rotate
+
+# Install (or update) the background launch agent; uninstall removes it.
+thumble relay install --allow-config-write
+thumble relay uninstall
+
+# Revoke the current device link.
+thumble relay revoke
+
+# Equivalent low-level long-lived binary.
+thumble-mcp --relay wss://thumble-mcp-gateway.fly.dev/tunnel --allow-config-write
+```
+
+`thumble relay connect` is the supported onboarding path. With no token it
+opens a link window and prints a fallback URL/code; the user clicks
+**Connect** in ChatGPT and **Allow** in the native Mac prompt. The relay
+persists the granted token atomically, publishes the MCP manifest, and keeps
+serving the tunnel. On macOS the fallback code is copied to the clipboard,
+but no extra browser tab is opened. With an existing token, the background
+control tunnel can approve a later ChatGPT connection without token rotation. The legacy `thumble relay link` command remains a one-shot
+link-only primitive for scripts; it does not start the tunnel. `thumble
+relay rotate` authenticates the link socket with the current token so the
+gateway replaces the same device's credential atomically; a running relay
+detects the canonical `0600` token replacement and reconnects
+automatically. `relay status` reports both gateway liveness and whether
+the MCP manifest has been published. `relay doctor` merges local checks
+(host, bridge, token hygiene, relay singleton lock, launch agent) with
+gateway-side status and exits non-zero with fix instructions when
+anything is not ready. A launchd `KeepAlive` job running the foreground
+`--relay` command is the recommended lifecycle on macOS: install it with
+`thumble relay install [--allow-config-write] [--binary PATH]` and remove
+it with `thumble relay uninstall`. From a source checkout,
+`./scripts/install-relay-launch-agent.sh [--allow-config-write]` is an
+equivalent installer; packaged builds include the same installer at
+`/Applications/Thumble Host.app/Contents/Resources/install-relay-launch-agent.sh`.
+A macOS app pane (if added later) must drive these same relay commands per
+the CLI-parity rule.
+
+Run the hosted side (Dockerfile and `fly.toml` at the repository root;
+secrets via `fly secrets set`):
+
+```bash
+THUMBLE_GATEWAY_BASE_URL=https://thumble-mcp-gateway.fly.dev \
+THUMBLE_GATEWAY_TOKEN_SECRET='at-least-32-random-characters' \
+THUMBLE_GATEWAY_BIND=0.0.0.0:8080 \
+THUMBLE_GATEWAY_DB=/data/thumble-gateway.db \
+thumble-gateway
+```
+
+Endpoints: `/mcp` (bearer-authenticated Streamable HTTP),
+`/.well-known/oauth-protected-resource`, `/.well-known/oauth-authorization-server`,
+`/register` (DCR), `/authorize` + `/authorize/wait` (push approval) plus
+`/authorize/code` + `/authorize/confirm` (stable fallback-code consent),
+`/token` (PKCE + refresh
+rotation), `/link`, bearer-authenticated
+`/device/status`, `/tunnel`, `/tunnel/link`, `/tunnel/revoke`, and
+`/tunnel/session/{id}` (device WebSockets), `/healthz`.
+TLS terminates at the Fly edge; the app also emits HSTS, CSP, no-store,
+no-referrer, and no-sniff headers. Register the live connector URL
+`https://thumble-mcp-gateway.fly.dev/mcp` in ChatGPT developer mode. The MCP
+server advertises the distinct **Thumble MCP Controller** title, connector-only
+description, website, and version-pinned 1024×1024 PNG through `serverInfo`.
+ChatGPT owns the draft app's listing artwork separately: while the app remains
+a developer-mode draft, use **Apps → Thumble MCP Controller → Manage**, upload
+`Website/assets/app-icon.png` as its logo, and refresh the app to pull current
+MCP metadata. ChatGPT does not render MCP Apps UI; remote sessions rely on the
+structured/JSON and SVG textual outputs the tools already return.
+
+End-to-end design and threat model: `docs/mcp/remote-deployment-plan.md`.
+The gateway's own tests include a full-stack OAuth + Streamable HTTP +
+tunnel + real `ThumbleMcp` session against a bound host control socket
+(`Host/crates/thumble-gateway/tests/e2e.rs`). They exercise both legacy
+initialize/list/call and current `2026-07-28` stateless `server/discover`,
+`tools/list`, and `tools/call` flows, including the exact ChatGPT origin. The production deployment is
+`thumble-mcp-gateway` in Fly region `iad`, with one passing `/healthz`
+check, an encrypted 1 GiB volume, Fly scheduled volume snapshots, and daily
+consistent SQLite `.backup` archives/checksums under `/data/backups`.
+Optional `THUMBLE_GATEWAY_BACKUP_UPLOAD_URL` (with `{filename}` placeholder)
+and `THUMBLE_GATEWAY_BACKUP_TOKEN` upload each archive off-platform.
 
 ## Security and permissions
 

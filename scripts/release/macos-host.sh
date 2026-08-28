@@ -91,7 +91,8 @@ xcodebuild -project "$ROOT_DIR/Thumble.xcodeproj" -scheme ThumbleCLI \
 rm -rf "$OUTPUT_DIR"
 APP_DIR="$OUTPUT_DIR/Thumble Host.app"
 MACOS_DIR="$APP_DIR/Contents/MacOS"
-mkdir -p "$MACOS_DIR"
+RESOURCES_DIR="$APP_DIR/Contents/Resources"
+mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
 touch "$OUTPUT_DIR/.thumble-host-release-dir"
 cp "$INFO_PLIST" "$APP_DIR/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$APP_DIR/Contents/Info.plist"
@@ -122,6 +123,9 @@ for executable in thumble-host thumble-mcp thumble-cli-bridge thumble-bridge thu
   lipo "$MACOS_DIR/$executable" -verify_arch arm64 x86_64
 done
 chmod 755 "$MACOS_DIR/thumble-host" "$MACOS_DIR/thumble-mcp" "$MACOS_DIR/thumble-cli-bridge" "$MACOS_DIR/thumble-bridge" "$MACOS_DIR/thumble"
+cp "$ROOT_DIR/scripts/install-relay-launch-agent.sh" "$RESOURCES_DIR/install-relay-launch-agent.sh"
+chmod 755 "$RESOURCES_DIR/install-relay-launch-agent.sh"
+bash -n "$RESOURCES_DIR/install-relay-launch-agent.sh"
 
 if [[ -n "$SIGNING_IDENTITY" ]]; then
   codesign --force --options runtime --timestamp --sign "$SIGNING_IDENTITY" "$MACOS_DIR/thumble-mcp"

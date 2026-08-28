@@ -178,7 +178,9 @@ public enum ThumbleBridgeProfileDestination: Decodable, Sendable {
 public enum ThumbleBridgeGenerationPreset: String, CaseIterable, Decodable, Sendable {
     case hollowKnight = "hollow-knight"
 
-    var revision: Int { 1 }
+    // Revision 2: thumb-sized controls — d-pad/face buttons enlarged ~30%,
+    // controlScale compact → standard, re-tuned cluster spacing.
+    var revision: Int { 2 }
     var customElementIDCount: Int { 4 }
 }
 

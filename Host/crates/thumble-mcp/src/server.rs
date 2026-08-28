@@ -1,10 +1,11 @@
+use crate::channel::SharedHostChannel;
 use crate::rate_limit::PressRateLimiter;
 use rmcp::{
     handler::server::{router::tool::ToolRouter, wrapper::Parameters},
     model::{
-        Implementation, ListResourcesResult, Meta, PaginatedRequestParams,
-        ReadResourceRequestParams, ReadResourceResult, Resource, ResourceContents,
-        ServerCapabilities, ServerInfo,
+        Icon, Implementation, ListResourcesResult, MetaObject, PaginatedRequestParams,
+        ReadResourceRequestParams, ReadResourceResponse, ReadResourceResult, Resource,
+        ResourceContents, ServerCapabilities, ServerInfo,
     },
     schemars::{self, JsonSchema},
     service::RequestContext,
@@ -13,13 +14,24 @@ use rmcp::{
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
-use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use thumble_core::ControllerSnapshot;
 use thumble_host::control::{
-    send_request, AccessibilityAction, ConfigurationDraftSummary, ControlRequest, ControlResponse,
-    HostStatus,
+    AccessibilityAction, ConfigurationDraftSummary, ControlRequest, ControlResponse, HostStatus,
 };
+const THUMBLE_ICON_URL: &str = "https://pocketpad-site.pages.dev/assets/app-icon.png?v=6eae962e";
+const THUMBLE_WEBSITE_URL: &str = "https://pocketpad-site.pages.dev";
+
+fn thumble_server_implementation() -> Implementation {
+    Implementation::new("thumble-mcp", env!("CARGO_PKG_VERSION"))
+        .with_title("Thumble MCP Controller")
+        .with_description("Authenticated Thumble MCP connector for typed controller setup, preview, validation, and save; use MCP tools rather than Computer Use")
+        .with_icons(vec![Icon::new(THUMBLE_ICON_URL)
+            .with_mime_type("image/png")
+            .with_sizes(vec!["1024x1024".to_owned()])])
+        .with_website_url(THUMBLE_WEBSITE_URL)
+}
+
 use thumble_host::draft_operation::{
     ConfigurationAccentStyle, ConfigurationBackgroundEdit, ConfigurationBackgroundScope,
     ConfigurationColorScheme, ConfigurationControlBarItem, ConfigurationControlScale,
@@ -53,7 +65,7 @@ const CONTROLLER_TEMPLATE_CATALOG_JSON: &str =
     include_str!("../../../../docs/mcp/controller-templates-v1.json");
 const DEVICE_FRAME_CATALOG_JSON: &str = include_str!("../../../../docs/mcp/device-frames-v1.json");
 
-fn controller_editor_ui_tool_meta() -> Meta {
+fn controller_editor_ui_tool_meta() -> MetaObject {
     let value = serde_json::json!({
         "ui": {
             "resourceUri": CONTROLLER_EDITOR_UI_URI,
@@ -62,10 +74,10 @@ fn controller_editor_ui_tool_meta() -> Meta {
         "ui/resourceUri": CONTROLLER_EDITOR_UI_URI,
         "openai/outputTemplate": CONTROLLER_EDITOR_UI_URI
     });
-    Meta(value.as_object().cloned().unwrap_or_default())
+    MetaObject(value.as_object().cloned().unwrap_or_default())
 }
 
-fn controller_ui_tool_meta() -> Meta {
+fn controller_ui_tool_meta() -> MetaObject {
     let value = serde_json::json!({
         "ui": {
             "resourceUri": CONTROLLER_UI_URI,
@@ -74,7 +86,7 @@ fn controller_ui_tool_meta() -> Meta {
         "ui/resourceUri": CONTROLLER_UI_URI,
         "openai/outputTemplate": CONTROLLER_UI_URI
     });
-    Meta(value.as_object().cloned().unwrap_or_default())
+    MetaObject(value.as_object().cloned().unwrap_or_default())
 }
 
 #[derive(Debug, Clone, Serialize, JsonSchema)]
@@ -1588,7 +1600,7 @@ pub enum ConfigurationOperationInput {
     GenerationGenerate {
         /// Canonical built-in generation preset.
         preset: GenerationPresetInput,
-        /// Exact installed preset revision. Hollow Knight is revision 1.
+        /// Exact installed preset revision. Hollow Knight is revision 2 (thumb-sized controls).
         #[serde(rename = "presetRevision")]
         preset_revision: u32,
         destination: GeneratedProfileDestinationInput,
@@ -4035,7 +4047,7 @@ pub struct SaveConfigurationDraftResult {
 #[derive(Clone)]
 pub struct ThumbleMcp {
     tool_router: ToolRouter<Self>,
-    control_socket: PathBuf,
+    channel: SharedHostChannel,
     allow_input: bool,
     allow_config_write: bool,
     press_limiter: Arc<Mutex<PressRateLimiter>>,
@@ -4045,7 +4057,7 @@ impl std::fmt::Debug for ThumbleMcp {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
             .debug_struct("ThumbleMcp")
-            .field("control_socket", &"[CONFIGURED]")
+            .field("host_channel", &"[CONFIGURED]")
             .field("allow_input", &self.allow_input)
             .field("allow_config_write", &self.allow_config_write)
             .finish_non_exhaustive()
@@ -4054,10 +4066,27 @@ impl std::fmt::Debug for ThumbleMcp {
 
 #[tool_router(router = tool_router)]
 impl ThumbleMcp {
-    pub fn new(control_socket: PathBuf, allow_input: bool, allow_config_write: bool) -> Self {
+    pub fn new(
+        control_socket: std::path::PathBuf,
+        allow_input: bool,
+        allow_config_write: bool,
+    ) -> Self {
+        Self::with_channel(
+            std::sync::Arc::new(crate::channel::UnixHostChannel::new(control_socket)),
+            allow_input,
+            allow_config_write,
+        )
+    }
+
+    /// Build the server over a custom host channel (relay transport).
+    pub fn with_channel(
+        channel: SharedHostChannel,
+        allow_input: bool,
+        allow_config_write: bool,
+    ) -> Self {
         Self {
             tool_router: Self::tool_router(),
-            control_socket,
+            channel,
             allow_input,
             allow_config_write,
             press_limiter: Arc::new(Mutex::new(PressRateLimiter::new())),
@@ -4810,7 +4839,7 @@ impl ThumbleMcp {
         request: ControlRequest,
     ) -> Result<ControlResponse, String> {
         audit(tool_name, "started");
-        let response = match send_request(&self.control_socket, &request).await {
+        let response = match self.channel.request(request).await {
             Ok(response) => response,
             Err(error) => {
                 audit(tool_name, "unavailable");
@@ -4853,10 +4882,7 @@ impl ServerHandler for ThumbleMcp {
                 .enable_tools()
                 .build(),
         )
-        .with_server_info(Implementation::new(
-            "thumble-mcp",
-            env!("CARGO_PKG_VERSION"),
-        ))
+        .with_server_info(thumble_server_implementation())
         .with_instructions(
             "Control a running local Thumble Host through installed profiles and revision-safe private configuration drafts. Call configuration_status before beginning draft work and pass every exact revision returned by the host. Use render_controller for the authoritative read-only visual preview. Input injection is disabled unless the server was explicitly launched with --allow-input. Always call list_controls before press_control, never guess IDs, and use release_all if control state is uncertain. Authentication tokens, raw key codes, arbitrary process arguments, typed input text, and shell execution are not exposed.",
         )
@@ -4909,7 +4935,7 @@ impl ServerHandler for ThumbleMcp {
         &self,
         request: ReadResourceRequestParams,
         _context: RequestContext<RoleServer>,
-    ) -> Result<ReadResourceResult, ErrorData> {
+    ) -> Result<ReadResourceResponse, ErrorData> {
         let (content, mime_type) = match request.uri.as_str() {
             CONTROLLER_UI_URI => (CONTROLLER_UI_HTML, CONTROLLER_UI_MIME_TYPE),
             CONTROLLER_EDITOR_UI_URI => (CONTROLLER_EDITOR_UI_HTML, CONTROLLER_UI_MIME_TYPE),
@@ -4930,14 +4956,14 @@ impl ServerHandler for ThumbleMcp {
                 "prefersBorder": false
             }
         });
-        Ok(ReadResourceResult::new(vec![ResourceContents::text(
-            content,
-            request.uri,
+        Ok(
+            ReadResourceResult::new(vec![ResourceContents::text(content, request.uri)
+                .with_mime_type(mime_type)
+                .with_meta(MetaObject(
+                    resource_meta.as_object().cloned().unwrap_or_default(),
+                ))])
+            .into(),
         )
-        .with_mime_type(mime_type)
-        .with_meta(Meta(
-            resource_meta.as_object().cloned().unwrap_or_default(),
-        ))]))
     }
 }
 
@@ -4964,6 +4990,7 @@ mod tests {
         ServiceExt,
     };
     use std::os::unix::fs::PermissionsExt;
+    use std::path::PathBuf;
     use std::sync::Arc;
     use tempfile::tempdir;
     use thumble_host::control::{
@@ -5612,7 +5639,25 @@ mod tests {
             client.peer_info().unwrap().protocol_version,
             ProtocolVersion::V_2025_11_25
         );
-        assert!(client.peer_info().unwrap().capabilities.resources.is_some());
+        let peer_info = client.peer_info().unwrap();
+        assert!(peer_info.capabilities.resources.is_some());
+        let server_info = peer_info
+            .server_info
+            .as_ref()
+            .expect("server implementation metadata");
+        assert_eq!(server_info.title.as_deref(), Some("Thumble MCP Controller"));
+        assert_eq!(
+            server_info.website_url.as_deref(),
+            Some(THUMBLE_WEBSITE_URL)
+        );
+        let icons = server_info.icons.as_ref().expect("branded server icon");
+        assert_eq!(icons.len(), 1);
+        assert_eq!(icons[0].src, THUMBLE_ICON_URL);
+        assert_eq!(icons[0].mime_type.as_deref(), Some("image/png"));
+        assert_eq!(
+            icons[0].sizes.as_deref(),
+            Some(["1024x1024".to_owned()].as_slice())
+        );
         let tools = client.list_all_tools().await.unwrap();
         assert_eq!(tools.len(), 20);
 

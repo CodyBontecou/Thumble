@@ -1,5 +1,9 @@
+mod channel;
 mod rate_limit;
+pub mod relay;
 pub mod server;
+
+pub use channel::{HostChannel, SharedHostChannel, UnixHostChannel};
 
 use std::ffi::OsStr;
 

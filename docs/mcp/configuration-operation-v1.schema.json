@@ -3555,7 +3555,7 @@
           "description": "Canonical built-in generation preset."
         },
         "presetRevision": {
-          "description": "Exact installed preset revision. Hollow Knight is revision 1.",
+          "description": "Exact installed preset revision. Hollow Knight is revision 2 (thumb-sized controls).",
           "format": "uint32",
           "minimum": 0,
           "type": "integer"

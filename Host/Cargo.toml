@@ -5,6 +5,8 @@ members = [
     "crates/thumble-host",
     "crates/thumble-cli-bridge",
     "crates/thumble-mcp",
+    "crates/thumble-tunnel",
+    "crates/thumble-gateway",
 ]
 resolver = "2"
 

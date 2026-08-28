@@ -1046,20 +1046,25 @@ private enum AgentSpecTemplate {
         }
     }
 
+    /// Thumb-first defaults tuned on the reference iPhone landscape canvas
+    /// (~874×402pt). Primary actions land ~110–122pt, movement ~96×90pt, and
+    /// clusters keep ≥20pt visual gaps so runtime hit regions stay separate.
+    /// `layout validate` reports no issues for the common 4-movement + 4-action
+    /// + secondary + utility + system mixes generated from these values.
     private static func layoutDefaults(for button: GameButton, role: KeypadRole, index: Int) -> LayoutDefaults {
         switch button {
         case .up:
-            return LayoutDefaults(x: 0.18, y: 0.30, width: 1.02, height: 0.92, shape: .roundedRectangle)
+            return LayoutDefaults(x: 0.20, y: 0.42, width: 1.12, height: 1.05, shape: .roundedRectangle)
         case .down:
-            return LayoutDefaults(x: 0.18, y: 0.72, width: 1.02, height: 0.92, shape: .roundedRectangle)
+            return LayoutDefaults(x: 0.20, y: 0.70, width: 1.12, height: 1.05, shape: .roundedRectangle)
         case .left:
-            return LayoutDefaults(x: 0.07, y: 0.51, width: 1.02, height: 0.92, shape: .roundedRectangle)
+            return LayoutDefaults(x: 0.066, y: 0.56, width: 1.12, height: 1.05, shape: .roundedRectangle)
         case .right:
-            return LayoutDefaults(x: 0.29, y: 0.51, width: 1.02, height: 0.92, shape: .roundedRectangle)
+            return LayoutDefaults(x: 0.334, y: 0.56, width: 1.12, height: 1.05, shape: .roundedRectangle)
         case .map:
-            return LayoutDefaults(x: 0.47, y: 0.18, width: 0.88, height: 0.96, shape: .capsule)
+            return LayoutDefaults(x: 0.29, y: 0.16, width: 1.0, height: 1.1, shape: .capsule)
         case .pause:
-            return LayoutDefaults(x: 0.61, y: 0.18, width: 0.82, height: 0.96, shape: .capsule)
+            return LayoutDefaults(x: 0.78, y: 0.21, width: 0.95, height: 1.1, shape: .capsule)
         default:
             break
         }
@@ -1067,38 +1072,38 @@ private enum AgentSpecTemplate {
         switch role {
         case .movement:
             return repeating([
-                LayoutDefaults(x: 0.18, y: 0.30, width: 1.02, height: 0.92, shape: .roundedRectangle),
-                LayoutDefaults(x: 0.18, y: 0.72, width: 1.02, height: 0.92, shape: .roundedRectangle),
-                LayoutDefaults(x: 0.07, y: 0.51, width: 1.02, height: 0.92, shape: .roundedRectangle),
-                LayoutDefaults(x: 0.29, y: 0.51, width: 1.02, height: 0.92, shape: .roundedRectangle)
+                LayoutDefaults(x: 0.20, y: 0.42, width: 1.12, height: 1.05, shape: .roundedRectangle),
+                LayoutDefaults(x: 0.20, y: 0.70, width: 1.12, height: 1.05, shape: .roundedRectangle),
+                LayoutDefaults(x: 0.066, y: 0.56, width: 1.12, height: 1.05, shape: .roundedRectangle),
+                LayoutDefaults(x: 0.334, y: 0.56, width: 1.12, height: 1.05, shape: .roundedRectangle)
             ], index: index)
         case .primary:
             return repeating([
-                LayoutDefaults(x: 0.82, y: 0.70, width: 1.26, height: 1.12, shape: .roundedRectangle),
-                LayoutDefaults(x: 0.70, y: 0.54, width: 1.18, height: 1.06, shape: .roundedRectangle),
-                LayoutDefaults(x: 0.91, y: 0.47, width: 1.05, height: 0.98, shape: .roundedRectangle),
-                LayoutDefaults(x: 0.79, y: 0.29, width: 1.02, height: 0.96, shape: .roundedRectangle),
-                LayoutDefaults(x: 0.60, y: 0.77, width: 0.96, height: 0.84, shape: .roundedRectangle),
-                LayoutDefaults(x: 0.93, y: 0.75, width: 0.96, height: 0.84, shape: .roundedRectangle)
+                LayoutDefaults(x: 0.82, y: 0.84, width: 1.42, height: 1.28, shape: .roundedRectangle),
+                LayoutDefaults(x: 0.66, y: 0.62, width: 1.34, height: 1.20, shape: .roundedRectangle),
+                LayoutDefaults(x: 0.93, y: 0.53, width: 1.24, height: 1.12, shape: .roundedRectangle),
+                LayoutDefaults(x: 0.62, y: 0.32, width: 1.18, height: 1.06, shape: .roundedRectangle),
+                LayoutDefaults(x: 0.60, y: 0.89, width: 1.12, height: 0.95, shape: .roundedRectangle),
+                LayoutDefaults(x: 0.94, y: 0.42, width: 1.06, height: 0.94, shape: .roundedRectangle)
             ], index: index)
         case .secondary:
             return repeating([
-                LayoutDefaults(x: 0.66, y: 0.32, width: 0.92, height: 0.84, shape: .roundedRectangle),
-                LayoutDefaults(x: 0.93, y: 0.25, width: 0.94, height: 0.84, shape: .roundedRectangle),
-                LayoutDefaults(x: 0.48, y: 0.84, width: 0.88, height: 0.78, shape: .capsule),
-                LayoutDefaults(x: 0.54, y: 0.35, width: 0.88, height: 0.78, shape: .roundedRectangle)
+                LayoutDefaults(x: 0.94, y: 0.255, width: 1.06, height: 0.96, shape: .roundedRectangle),
+                LayoutDefaults(x: 0.42, y: 0.86, width: 1.06, height: 0.94, shape: .roundedRectangle),
+                LayoutDefaults(x: 0.68, y: 0.88, width: 1.06, height: 0.94, shape: .roundedRectangle),
+                LayoutDefaults(x: 0.36, y: 0.74, width: 1.06, height: 0.94, shape: .roundedRectangle)
             ], index: index)
         case .utility:
             return repeating([
-                LayoutDefaults(x: 0.47, y: 0.18, width: 0.88, height: 0.96, shape: .capsule),
-                LayoutDefaults(x: 0.59, y: 0.18, width: 0.88, height: 0.96, shape: .capsule),
-                LayoutDefaults(x: 0.48, y: 0.84, width: 0.88, height: 0.78, shape: .capsule),
-                LayoutDefaults(x: 0.60, y: 0.84, width: 0.88, height: 0.78, shape: .capsule)
+                LayoutDefaults(x: 0.29, y: 0.16, width: 1.0, height: 1.1, shape: .capsule),
+                LayoutDefaults(x: 0.55, y: 0.86, width: 1.0, height: 0.94, shape: .capsule),
+                LayoutDefaults(x: 0.68, y: 0.90, width: 1.0, height: 0.94, shape: .capsule),
+                LayoutDefaults(x: 0.50, y: 0.90, width: 1.0, height: 0.94, shape: .capsule)
             ], index: index)
         case .system:
             return repeating([
-                LayoutDefaults(x: 0.61, y: 0.18, width: 0.82, height: 0.96, shape: .capsule),
-                LayoutDefaults(x: 0.73, y: 0.18, width: 0.82, height: 0.96, shape: .capsule)
+                LayoutDefaults(x: 0.78, y: 0.21, width: 0.95, height: 1.1, shape: .capsule),
+                LayoutDefaults(x: 0.68, y: 0.90, width: 0.90, height: 0.95, shape: .capsule)
             ], index: index)
         }
     }
@@ -1137,24 +1142,26 @@ private enum HollowKnightTemplate {
         let dPadFill = "#171717"
         let utilityFill = "#374151"
 
+        // Thumb-first sizing: d-pad ~96×91pt, face buttons ~91pt circles on the
+        // reference landscape canvas, with ≥20pt gaps so hit regions stay separate.
         let controls: [GeneratedControlDefinition] = [
-            .init(.up, label: "↑", key: "UpArrow", role: .movement, x: 0.16, y: 0.48, width: 0.98, height: 0.98, fill: dPadFill, cornerRadius: 8),
-            .init(.down, label: "↓", key: "DownArrow", role: .movement, x: 0.16, y: 0.88, width: 0.98, height: 0.98, fill: dPadFill, cornerRadius: 8),
-            .init(.left, label: "←", key: "LeftArrow", role: .movement, x: 0.07, y: 0.68, width: 0.98, height: 0.98, fill: dPadFill, cornerRadius: 8),
-            .init(.right, label: "→", key: "RightArrow", role: .movement, x: 0.25, y: 0.68, width: 0.98, height: 0.98, fill: dPadFill, cornerRadius: 8),
+            .init(.up, label: "↑", key: "UpArrow", role: .movement, x: 0.205, y: 0.46, width: 1.12, height: 1.06, fill: dPadFill, cornerRadius: 8),
+            .init(.down, label: "↓", key: "DownArrow", role: .movement, x: 0.205, y: 0.86, width: 1.12, height: 1.06, fill: dPadFill, cornerRadius: 8),
+            .init(.left, label: "←", key: "LeftArrow", role: .movement, x: 0.065, y: 0.655, width: 1.12, height: 1.06, fill: dPadFill, cornerRadius: 8),
+            .init(.right, label: "→", key: "RightArrow", role: .movement, x: 0.345, y: 0.655, width: 1.12, height: 1.06, fill: dPadFill, cornerRadius: 8),
 
-            .init(.focus, label: "Soul", key: "A", role: .secondary, x: 0.84, y: 0.48, width: 0.98, height: 0.98, shape: .circle, fill: "#22C55E", shadowStrength: 1.25),
-            .init(.dash, label: "Dash", key: "C", role: .primary, x: 0.93, y: 0.68, width: 0.98, height: 0.98, shape: .circle, fill: "#EF4444", shadowStrength: 1.25),
-            .init(.jump, label: "Jump", key: "Z", role: .primary, x: 0.84, y: 0.88, width: 0.98, height: 0.98, shape: .circle, fill: "#3B82F6", shadowStrength: 1.25),
-            .init(.attack, label: "Nail", key: "X", role: .primary, x: 0.75, y: 0.68, width: 0.98, height: 0.98, shape: .circle, fill: "#EC4899", shadowStrength: 1.25),
+            .init(.focus, label: "Soul", key: "A", role: .secondary, x: 0.815, y: 0.40, width: 1.06, height: 1.06, shape: .circle, fill: "#22C55E", shadowStrength: 1.25),
+            .init(.dash, label: "Dash", key: "C", role: .primary, x: 0.945, y: 0.65, width: 1.06, height: 1.06, shape: .circle, fill: "#EF4444", shadowStrength: 1.25),
+            .init(.jump, label: "Jump", key: "Z", role: .primary, x: 0.815, y: 0.88, width: 1.06, height: 1.06, shape: .circle, fill: "#3B82F6", shadowStrength: 1.25),
+            .init(.attack, label: "Nail", key: "X", role: .primary, x: 0.685, y: 0.65, width: 1.06, height: 1.06, shape: .circle, fill: "#EC4899", shadowStrength: 1.25),
 
-            .init(.map, label: "Map", key: "Tab", role: .utility, x: 0.43, y: 0.88, width: 0.76, height: 0.90, shape: .capsule, fill: utilityFill, shadowStrength: 0.75),
-            .init(.pause, label: "Pause", key: "Escape", role: .system, x: 0.57, y: 0.88, width: 0.76, height: 0.90, shape: .capsule, fill: utilityFill, shadowStrength: 0.75),
+            .init(.map, label: "Map", key: "Tab", role: .utility, x: 0.47, y: 0.905, width: 1.0, height: 1.1, shape: .capsule, fill: utilityFill, shadowStrength: 0.75),
+            .init(.pause, label: "Pause", key: "Escape", role: .system, x: 0.655, y: 0.905, width: 1.0, height: 1.1, shape: .capsule, fill: utilityFill, shadowStrength: 0.75),
 
-            .init(.custom5, label: "Quick Cast", key: "F", role: .secondary, x: 0.20, y: 0.07, width: 1.14, height: 0.62, shape: .capsule, fill: utilityFill),
-            .init(.custom6, label: "Dream Nail", key: "D", role: .secondary, x: 0.80, y: 0.07, width: 1.14, height: 0.62, shape: .capsule, fill: utilityFill),
-            .init(.custom7, label: "Super Dash", key: "S", role: .utility, x: 0.20, y: 0.185, width: 1.14, height: 0.62, shape: .capsule, fill: dPadFill),
-            .init(.custom8, label: "Inventory", key: "I", role: .utility, x: 0.80, y: 0.185, width: 1.14, height: 0.62, shape: .capsule, fill: dPadFill)
+            .init(.custom5, label: "Quick Cast", key: "F", role: .secondary, x: 0.20, y: 0.10, width: 1.0, height: 0.78, shape: .capsule, fill: utilityFill),
+            .init(.custom6, label: "Dream Nail", key: "D", role: .secondary, x: 0.80, y: 0.10, width: 1.0, height: 0.78, shape: .capsule, fill: utilityFill),
+            .init(.custom7, label: "Super Dash", key: "S", role: .utility, x: 0.345, y: 0.23, width: 1.0, height: 0.78, shape: .capsule, fill: dPadFill),
+            .init(.custom8, label: "Inventory", key: "I", role: .utility, x: 0.63, y: 0.17, width: 1.0, height: 0.78, shape: .capsule, fill: dPadFill)
         ]
 
         var generated = GeneratedProfileBuilder.build(
@@ -1168,7 +1175,7 @@ private enum HollowKnightTemplate {
                 "Applies the Cavern Glow theme: dark cave gradient background, pale glyph controls, cyan Soul glow, slate utility buttons, pressed states, icons, and per-control haptics.",
                 "The theme is inspired by dark-fantasy metroidvania controls without bundling copyrighted game art."
             ],
-            controlScale: .compact,
+            controlScale: .standard,
             accentStyle: .purple
         )
         GamepadThemePreset.cavernGlow.apply(to: &generated.profile.customization)

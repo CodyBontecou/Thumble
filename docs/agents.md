@@ -56,6 +56,15 @@ cp /absolute/path/to/Thumble/SKILL.md \
 
 Use the skill directory documented by your agent host if it expects a different location. Keep the copied skill updated when Thumble adds commands.
 
+### ChatGPT and Codex plugin
+
+The repository also ships an installable ChatGPT/Codex plugin at `plugins/thumble` that bundles the keypad-generator skill together with the local `thumble-mcp` stdio server (typed profile, layout, binding, and runtime tools). A repo marketplace at `.agents/plugins/marketplace.json` exposes it:
+
+1. Restart the ChatGPT desktop app with this repository checked out (or run `codex plugin marketplace add /absolute/path/to/Thumble`).
+2. Open **Plugins** in the sidebar, choose the **Thumble (repo marketplace)** source, and install **Thumble**.
+
+The bundled MCP launcher finds the adapter via `$THUMBLE_MCP_BINARY`, the Thumble Host app bundle, or `PATH`. Input and configuration writes stay disabled unless explicitly enabled. See [`plugins/thumble/README.md`](../plugins/thumble/README.md) and [`docs/rust-host.md`](rust-host.md) for details, security defaults, and the remote relay option for ChatGPT chat-side connectors.
+
 ## Locate or build the CLI
 
 First ask the agent to check whether the CLI is already available:
@@ -108,7 +117,7 @@ thumble status --json
 | Apply an existing visual skin | `skin inspect`, `skin validate`, then `skin import` / `skin apply` |
 | Diagnose the Mac helper | `status`, `monitor`, `latency`, `server`, `pairing`, or `accessibility` |
 
-For generated profiles, remember that `generate` installs, selects, and makes the new profile the default unless the agent passes `--no-select` or `--no-default`.
+For generated profiles, remember that `generate` installs, selects, and makes the new profile the default unless the agent passes `--no-select` or `--no-default`. The dry-run summary also lists every control's rendered point size on the reference canvas, so the agent can confirm buttons are thumb-sized before installing.
 
 ### 3. Preview before applying
 
@@ -152,8 +161,10 @@ Read /absolute/path/to/Thumble/SKILL.md, then use the thumble CLI to
 create a keypad for [GAME]. Look up the default Mac keyboard controls from a
 reliable source. Dry-run before installing. Put movement on the left, frequent
 actions within easy right-thumb reach, and pause/menu away from primary actions.
-Install and select the profile, but do not replace unrelated profiles. Validate
-the layout and summarize the source, confidence, bindings, and validation result.
+Make controls thumb-sized — primary actions at least ~90pt rendered, nothing
+under 66pt (check the dry-run size table). Install and select the profile, but
+do not replace unrelated profiles. Validate the layout and summarize the source,
+confidence, bindings, control sizes, and validation result.
 ```
 
 ### Create a productivity pad
@@ -171,9 +182,9 @@ and validate the layout, then show me exactly what changed.
 ```text
 Read /absolute/path/to/Thumble/SKILL.md. Inspect my Thumble profile
 "[PROFILE]" without changing it first. Validate portrait and landscape layouts,
-then fix only touch-target, overlap, edge, and thumb-reach issues. Preserve all
-bindings, labels, output modes, and the current default. Render layout previews
-and report each repair plus any issue that remains.
+then fix only touch-target, overlap, edge, size, and thumb-reach issues. Preserve
+all bindings, labels, output modes, and the current default. Render layout
+previews and report each repair plus any issue that remains.
 ```
 
 ### Diagnose connection or input lag

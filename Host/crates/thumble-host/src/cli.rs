@@ -186,6 +186,9 @@ async fn detached_start(paths: &HostPaths, options: RuntimeOptions) -> Result<()
     if !options.input {
         command.arg("--no-input");
     }
+    if options.configuration_write {
+        command.arg("--allow-config-write");
+    }
     // SAFETY: pre_exec performs only the async-signal-safe setsid syscall.
     unsafe {
         command.pre_exec(|| {

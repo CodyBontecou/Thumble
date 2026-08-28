@@ -9506,7 +9506,7 @@ private enum GamepadInspectorAccordionSection: Hashable {
 private enum GamepadEditorOnboardingTarget: Hashable {
     case setups
     case canvas
-    case toolbar
+    case addControl
     case inspector
 }
 
@@ -9522,7 +9522,7 @@ private enum GamepadEditorFirstKeypadStep: Int, CaseIterable, Identifiable, Equa
         switch self {
         case .setups: .setups
         case .canvas: .canvas
-        case .toolbar: .toolbar
+        case .toolbar: .addControl
         case .inspector: .inspector
         }
     }
@@ -9538,7 +9538,7 @@ private enum GamepadEditorFirstKeypadStep: Int, CaseIterable, Identifiable, Equa
         case .canvas:
             "Build the keypad on the canvas"
         case .toolbar:
-            "Add controls from the toolbar"
+            "Add controls from the command bar"
         case .inspector:
             "Tune shortcuts in the inspector"
         }
@@ -9551,7 +9551,7 @@ private enum GamepadEditorFirstKeypadStep: Int, CaseIterable, Identifiable, Equa
         case .canvas:
             "This iPhone canvas is where your controls will live. Use the starter card to show default controls, add a joystick, or switch into draw mode for a custom button."
         case .toolbar:
-            "The floating toolbar is the fastest path: choose Layout tools for default controls, joysticks, triggers, or trackpads; choose Shape tools to draw your own keys."
+            "Click Add Control to place buttons, text, joysticks, triggers, or trackpads on the canvas — or choose a shape to draw your own keys."
         case .inspector:
             "Select any control to edit its label, shortcut output, fill, size, haptics, and positioning. Keypad-level settings live here while nothing is selected."
         }
@@ -9571,6 +9571,19 @@ private enum GamepadEditorFirstKeypadStep: Int, CaseIterable, Identifiable, Equa
             .inspector
         case .inspector:
             nil
+        }
+    }
+
+    var previous: GamepadEditorFirstKeypadStep? {
+        switch self {
+        case .setups:
+            nil
+        case .canvas:
+            .setups
+        case .toolbar:
+            .canvas
+        case .inspector:
+            .toolbar
         }
     }
 }
@@ -9953,6 +9966,7 @@ struct GamepadCustomizationEditor: View {
                         step: step,
                         targetRect: anchors[step.target].map { proxy[$0] },
                         containerSize: proxy.size,
+                        onPrevious: retreatFirstKeypadOnboarding,
                         onNext: advanceFirstKeypadOnboarding,
                         onSkip: completeFirstKeypadOnboarding
                     )
@@ -9977,6 +9991,7 @@ struct GamepadCustomizationEditor: View {
         .onAppear {
             applyConnectedDeviceFrameIfAvailable()
             applySelectedProfileCustomizationForCurrentOrientation()
+            presentFirstKeypadOnboardingIfNeeded()
         }
         .onChange(of: isFirstKeypadOnboardingReplayRequested) { _, requested in
             if requested {
@@ -10487,6 +10502,7 @@ struct GamepadCustomizationEditor: View {
         }
         .geistButtonStyle(.primary, size: .small)
         .help("Add a named control or draw a shape")
+        .gamepadEditorOnboardingTarget(.addControl)
         .popover(isPresented: $isAddControlPalettePresented, arrowEdge: .bottom) {
             addControlPalette
                 .frame(width: 430)
@@ -10913,26 +10929,26 @@ struct GamepadCustomizationEditor: View {
     private var configurationSidebar: some View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: Geist.Spacing.s3) {
-                HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: Geist.Spacing.s2) {
                     Text(configurationSidebarTab == .setups ? "Setups" : "Layers")
                         .geistTypography(.heading20)
                         .foregroundStyle(Geist.color(.gray1000, scheme: colorScheme))
 
-                    Spacer(minLength: Geist.Spacing.s2)
-
                     if configurationSidebarTab == .setups {
-                        templateMenu(showsTitle: false)
-                        importMenu(showsTitle: false)
-                        exportMenu(showsTitle: false)
+                        HStack(spacing: Geist.Spacing.s1) {
+                            templateMenu(showsTitle: false)
+                            importMenu(showsTitle: false)
+                            exportMenu(showsTitle: false)
 
-                        Button {
-                            createProfile()
-                        } label: {
-                            Image(systemName: "plus")
-                                .frame(width: 22, height: 22)
+                            Button {
+                                createProfile()
+                            } label: {
+                                Image(systemName: "plus")
+                                    .frame(width: 22, height: 22)
+                            }
+                            .geistButtonStyle(.secondary, size: .small)
+                            .accessibilityLabel("New keypad setup")
                         }
-                        .geistButtonStyle(.secondary, size: .small)
-                        .accessibilityLabel("New keypad setup")
                     }
                 }
 
@@ -12114,17 +12130,10 @@ struct GamepadCustomizationEditor: View {
     }
 
     private var configurationFooter: some View {
-        VStack(alignment: .leading, spacing: Geist.Spacing.s3) {
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: Geist.Spacing.s2) {
-                    defaultProfileButton
-                    profileManagementButtons
-                }
-                VStack(alignment: .leading, spacing: Geist.Spacing.s2) {
-                    defaultProfileButton
-                    profileManagementButtons
-                }
-            }
+        VStack(alignment: .leading, spacing: Geist.Spacing.s2) {
+            profileManagementButtons
+
+            defaultProfileButton
 
             Button {
                 resetActiveConfiguration()
@@ -12198,6 +12207,13 @@ struct GamepadCustomizationEditor: View {
         }
     }
 
+    private func retreatFirstKeypadOnboarding() {
+        guard let currentStep = activeFirstKeypadOnboardingStep,
+              let previousStep = currentStep.previous
+        else { return }
+        activeFirstKeypadOnboardingStep = previousStep
+    }
+
     private func completeFirstKeypadOnboarding() {
         guard activeFirstKeypadOnboardingStep != nil || !hasCompletedFirstKeypadOnboarding || isFirstKeypadOnboardingReplayRequested else { return }
         hasCompletedFirstKeypadOnboarding = true
@@ -12220,34 +12236,73 @@ struct GamepadCustomizationEditor: View {
         let actionIDs = selectedProfileActionIDs
         let selectedCount = actionIDs.count
 
-        Button {
-            beginRenamingSelectedProfile()
-        } label: {
-            Label("Rename", systemImage: "pencil")
-                .labelStyle(.iconOnly)
-        }
-        .geistButtonStyle(.secondary, size: .small)
-        .disabled(selectedCount != 1)
-        .help("Rename setup")
+        HStack(spacing: 0) {
+            profileManagementSegment(
+                systemImage: "pencil",
+                isEnabled: selectedCount == 1,
+                label: "Rename",
+                help: "Rename setup",
+                action: { beginRenamingSelectedProfile() }
+            )
 
-        Button {
-            duplicateProfiles(ids: actionIDs)
-        } label: {
-            Label(selectedCount > 1 ? "Duplicate Selected" : "Duplicate", systemImage: "doc.on.doc")
-                .labelStyle(.iconOnly)
-        }
-        .geistButtonStyle(.secondary, size: .small)
-        .help(selectedCount > 1 ? "Duplicate selected setups" : "Duplicate setup")
+            profileManagementDivider
 
-        Button {
-            deleteProfiles(actionIDs)
-        } label: {
-            Label(selectedCount > 1 ? "Delete Selected" : "Delete", systemImage: "trash")
-                .labelStyle(.iconOnly)
+            profileManagementSegment(
+                systemImage: "doc.on.doc",
+                isEnabled: true,
+                label: selectedCount > 1 ? "Duplicate Selected" : "Duplicate",
+                help: selectedCount > 1 ? "Duplicate selected setups" : "Duplicate setup",
+                action: { duplicateProfiles(ids: actionIDs) }
+            )
+
+            profileManagementDivider
+
+            profileManagementSegment(
+                systemImage: "trash",
+                isEnabled: canDeleteProfiles(actionIDs),
+                label: selectedCount > 1 ? "Delete Selected" : "Delete",
+                help: selectedCount > 1 ? "Delete selected setups" : "Delete setup",
+                action: { deleteProfiles(actionIDs) }
+            )
         }
-        .geistButtonStyle(.tertiary, size: .small)
-        .disabled(!canDeleteProfiles(actionIDs))
-        .help(selectedCount > 1 ? "Delete selected setups" : "Delete setup")
+        .frame(maxWidth: .infinity)
+        .frame(height: Geist.ControlSize.small.height)
+        .background(
+            RoundedRectangle(cornerRadius: Geist.Radius.sm, style: .continuous)
+                .fill(Geist.color(.background100, scheme: colorScheme))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: Geist.Radius.sm, style: .continuous)
+                .stroke(Geist.color(.grayAlpha400, scheme: colorScheme), lineWidth: 1)
+        )
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Selected setup actions")
+    }
+
+    private var profileManagementDivider: some View {
+        Capsule()
+            .fill(Geist.color(.grayAlpha300, scheme: colorScheme))
+            .frame(width: 1, height: 16)
+    }
+
+    private func profileManagementSegment(
+        systemImage: String,
+        isEnabled: Bool,
+        label: String,
+        help: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(Geist.color(isEnabled ? .gray1000 : .gray700, scheme: colorScheme))
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!isEnabled)
+        .accessibilityLabel(label)
+        .help(help)
     }
 
     private var canvasPasteboardColor: Color {
@@ -12582,136 +12637,6 @@ struct GamepadCustomizationEditor: View {
         )
         .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.28 : 0.08), radius: 8, x: 0, y: 3)
         .accessibilityLabel("Editing \(editorColorScheme.displayName) keypad appearance for \(activeDeviceFrame.displayName)")
-    }
-
-    private var canvasFloatingCreationToolbar: some View {
-        HStack(spacing: Geist.Spacing.s2) {
-            canvasToolButton(.select)
-
-            toolbarMenu(systemImage: activeDeviceFrame.systemImage, accessibilityLabel: "Device frame") {
-                if let connectedDeviceFrame {
-                    Button {
-                        setDeviceFrame(connectedDeviceFrame)
-                    } label: {
-                        Label("Use Connected iPhone (\(connectedDeviceFrame.displayName))", systemImage: connectedDeviceFrame.id == activeDeviceFrame.id ? "checkmark" : "iphone.gen3.radiowaves.left.and.right")
-                    }
-                    .help("Match the editor canvas to the currently connected iPhone.")
-
-                    Divider()
-                }
-
-                ForEach(GamepadEditorDeviceCatalog.specs) { spec in
-                    Menu(spec.displayName) {
-                        ForEach(GamepadEditorDeviceOrientation.allCases) { orientation in
-                            let frame = GamepadEditorDeviceFrame(spec: spec, orientation: orientation)
-                            Button {
-                                setDeviceFrame(frame)
-                            } label: {
-                                Label(frame.shortName, systemImage: frame.id == activeDeviceFrame.id ? "checkmark" : frame.systemImage)
-                            }
-                            .help(frame.helpText)
-                        }
-                    }
-                }
-            }
-
-            toolbarMenu(systemImage: "square.grid.3x3", accessibilityLabel: "Layout tools") {
-                Button {
-                    setBuiltInControlsHidden(false)
-                } label: {
-                    Label("Show Default Controls", systemImage: "eye")
-                }
-                Button {
-                    setBuiltInControlsHidden(true)
-                } label: {
-                    Label("Hide Built-in Controls", systemImage: "eye.slash")
-                }
-                Divider()
-                Button {
-                    addJoystickControl()
-                } label: {
-                    Label("Add Joystick", systemImage: "circle.grid.cross")
-                }
-                .disabled(customization.customButtons.filter { $0.normalized.isJoystick }.count >= GamepadCustomization.maximumJoysticks || customization.customButtons.count >= GamepadCustomization.maximumCustomButtons)
-                Button {
-                    addTriggerControl()
-                } label: {
-                    Label("Add Trigger", systemImage: "slider.horizontal.3")
-                }
-                .disabled(customization.customButtons.filter { $0.normalized.isTrigger }.count >= GamepadCustomization.maximumTriggers || customization.customButtons.count >= GamepadCustomization.maximumCustomButtons)
-                Button {
-                    addTrackpadControl()
-                } label: {
-                    Label("Add Trackpad", systemImage: "rectangle.and.hand.point.up.left")
-                }
-                .disabled(customization.customButtons.filter { $0.normalized.isTrackpad }.count >= GamepadCustomization.maximumTrackpads || customization.customButtons.count >= GamepadCustomization.maximumCustomButtons)
-                Divider()
-                Button {
-                    addDecorationControl(kind: .plate)
-                } label: {
-                    Label("Add Soft Plate", systemImage: "rectangle.fill")
-                }
-                .disabled(customization.customButtons.count >= GamepadCustomization.maximumCustomButtons)
-                Button {
-                    addDecorationControl(kind: .ring)
-                } label: {
-                    Label("Add Ring", systemImage: "circle")
-                }
-                .disabled(customization.customButtons.count >= GamepadCustomization.maximumCustomButtons)
-                Divider()
-                Button {
-                    resetKeyLayout()
-                } label: {
-                    Label("Reset Key Layout", systemImage: "arrow.counterclockwise")
-                }
-                .disabled(!customization.usesFreeformLayout)
-            }
-
-            shapeDrawingToolMenu
-
-            toolbarMenu(systemImage: "pencil.tip", accessibilityLabel: "Style tools") {
-                Section("Accent") {
-                    ForEach(GamepadAccentStyle.allCases) { style in
-                        Button(style.displayName) {
-                            update { $0.accentStyle = style }
-                        }
-                    }
-                }
-                Divider()
-                Section("Themes") {
-                    ForEach(GamepadThemePreset.allCases) { preset in
-                        Button("Apply \(preset.displayName)") {
-                            update(actionName: "Apply \(preset.displayName) Theme") { preset.apply(to: &$0) }
-                        }
-                        .help(preset.description)
-                    }
-                }
-            }
-
-            Button {
-                isResourceLibraryPresented = true
-            } label: {
-                Image(systemName: "books.vertical")
-                    .font(.system(size: 20, weight: .medium))
-                    .foregroundStyle(Geist.color(.gray1000, scheme: colorScheme))
-                    .frame(width: 32, height: 32)
-                    .contentShape(RoundedRectangle(cornerRadius: Geist.Radius.sm, style: .continuous))
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Style and asset library")
-            .help("Manage reusable styles and keypad assets")
-        }
-        .padding(Geist.Spacing.s2)
-        .background(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(Geist.color(.background100, scheme: colorScheme))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .stroke(Geist.color(.grayAlpha400, scheme: colorScheme), lineWidth: 1)
-        )
-        .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.38 : 0.16), radius: 18, x: 0, y: 8)
-        .gamepadEditorOnboardingTarget(.toolbar)
     }
 
     private var shortcutReferenceSheet: some View {
@@ -13382,114 +13307,6 @@ struct GamepadCustomizationEditor: View {
                 resourceLibraryNotice = error.localizedDescription
             }
         }
-    }
-
-    private func canvasToolButton(_ tool: GamepadCanvasTool) -> some View {
-        let isSelected = activeCanvasTool == tool
-
-        return Button {
-            activeCanvasTool = tool
-        } label: {
-            Image(systemName: tool.systemImage)
-                .font(.system(size: 20, weight: .medium))
-                .foregroundStyle(isSelected ? Color.white : Geist.color(.gray1000, scheme: colorScheme))
-                .frame(width: 32, height: 32)
-                .background(isSelected ? Geist.color(.blue700, scheme: colorScheme) : Color.clear, in: RoundedRectangle(cornerRadius: Geist.Radius.sm, style: .continuous))
-                .contentShape(RoundedRectangle(cornerRadius: Geist.Radius.sm, style: .continuous))
-        }
-        .buttonStyle(.plain)
-        .keyboardShortcut("v", modifiers: [])
-        .accessibilityLabel("Select controls")
-        .help("Select and drag controls (V)")
-    }
-
-    private var shapeDrawingToolMenu: some View {
-        let activeShapeTool = activeCanvasTool.isDrawingShape ? activeCanvasTool : GamepadCanvasTool.rectangle
-        let isShapeToolSelected = activeCanvasTool.isDrawingShape
-
-        return Menu {
-            shapeToolMenuButton(.rectangle)
-            shapeToolMenuButton(.ellipse)
-            shapeToolMenuButton(.polygon)
-            shapeToolMenuButton(.star)
-        } label: {
-            HStack(spacing: Geist.Spacing.s2) {
-                Image(systemName: activeShapeTool.systemImage)
-                    .font(.system(size: 24, weight: .regular))
-                    .foregroundStyle(isShapeToolSelected ? Color.white : Geist.color(.gray1000, scheme: colorScheme))
-                    .frame(width: 32, height: 32)
-                    .background(isShapeToolSelected ? Geist.color(.blue700, scheme: colorScheme) : Color.clear, in: RoundedRectangle(cornerRadius: Geist.Radius.sm, style: .continuous))
-
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(isShapeToolSelected ? Color.white : Geist.color(.gray1000, scheme: colorScheme))
-                    .frame(width: 12, height: 32)
-            }
-            .padding(.horizontal, Geist.Spacing.s2)
-            .contentShape(RoundedRectangle(cornerRadius: Geist.Radius.md, style: .continuous))
-        }
-        .menuStyle(.button)
-        .buttonStyle(.plain)
-        .accessibilityLabel("Shape tools")
-        .help("Draw key shapes on the keypad")
-    }
-
-    @ViewBuilder
-    private func shapeToolMenuButton(_ tool: GamepadCanvasTool) -> some View {
-        let isSelected = activeCanvasTool == tool
-        let title = tool.displayName
-
-        if tool == .rectangle {
-            Button {
-                activeCanvasTool = tool
-            } label: {
-                Label(title, systemImage: isSelected ? "checkmark" : tool.systemImage)
-            }
-            .keyboardShortcut("r", modifiers: [])
-            .disabled(customization.customButtons.count >= GamepadCustomization.maximumCustomButtons)
-        } else if tool == .ellipse {
-            Button {
-                activeCanvasTool = tool
-            } label: {
-                Label(title, systemImage: isSelected ? "checkmark" : tool.systemImage)
-            }
-            .keyboardShortcut("o", modifiers: [])
-            .disabled(customization.customButtons.count >= GamepadCustomization.maximumCustomButtons)
-        } else {
-            Button {
-                activeCanvasTool = tool
-            } label: {
-                Label(title, systemImage: isSelected ? "checkmark" : tool.systemImage)
-            }
-            .disabled(customization.customButtons.count >= GamepadCustomization.maximumCustomButtons)
-        }
-    }
-
-    private func toolbarMenu<Content: View>(
-        systemImage: String,
-        accessibilityLabel: String,
-        @ViewBuilder content: @escaping () -> Content
-    ) -> some View {
-        Menu {
-            content()
-        } label: {
-            HStack(spacing: Geist.Spacing.s2) {
-                Image(systemName: systemImage)
-                    .font(.system(size: 24, weight: .regular))
-                    .foregroundStyle(Geist.color(.gray1000, scheme: colorScheme))
-                    .frame(width: 32, height: 32)
-
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(Geist.color(.gray1000, scheme: colorScheme))
-                    .frame(width: 12, height: 32)
-            }
-            .padding(.horizontal, Geist.Spacing.s2)
-            .contentShape(RoundedRectangle(cornerRadius: Geist.Radius.md, style: .continuous))
-        }
-        .menuStyle(.button)
-        .buttonStyle(.plain)
-        .accessibilityLabel(accessibilityLabel)
     }
 
     private var inspectorSidebar: some View {
@@ -21407,6 +21224,7 @@ private struct GamepadEditorFirstKeypadOverlay: View {
     var step: GamepadEditorFirstKeypadStep
     var targetRect: CGRect?
     var containerSize: CGSize
+    var onPrevious: () -> Void
     var onNext: () -> Void
     var onSkip: () -> Void
 
@@ -21472,10 +21290,16 @@ private struct GamepadEditorFirstKeypadOverlay: View {
             }
 
             HStack(spacing: Geist.Spacing.s2) {
-                Button("Skip", action: onSkip)
-                    .geistButtonStyle(.tertiary, size: .small)
+                Button(action: onPrevious) {
+                    Label("Back", systemImage: "arrow.left")
+                }
+                .geistButtonStyle(.secondary, size: .small)
+                .disabled(step.previous == nil)
 
                 Spacer(minLength: Geist.Spacing.s2)
+
+                Button("Skip", action: onSkip)
+                    .geistButtonStyle(.tertiary, size: .small)
 
                 Button(action: onNext) {
                     Label(step.nextTitle, systemImage: step.next == nil ? "checkmark" : "arrow.right")
@@ -21506,8 +21330,8 @@ private struct GamepadEditorFirstKeypadOverlay: View {
             CGRect(x: 16, y: 24, width: min(280, max(180, containerSize.width * 0.26)), height: max(180, containerSize.height - 48))
         case .canvas:
             CGRect(x: max(24, containerSize.width * 0.30), y: max(48, containerSize.height * 0.18), width: max(220, containerSize.width * 0.40), height: max(180, containerSize.height * 0.46))
-        case .toolbar:
-            CGRect(x: max(40, containerSize.width * 0.35), y: max(80, containerSize.height - 120), width: max(260, containerSize.width * 0.30), height: 76)
+        case .addControl:
+            CGRect(x: max(24, containerSize.width * 0.5 - 150), y: 14, width: min(300, containerSize.width * 0.4), height: 72)
         case .inspector:
             CGRect(x: max(24, containerSize.width - min(360, containerSize.width * 0.32) - 16), y: 24, width: min(360, max(220, containerSize.width * 0.32)), height: max(180, containerSize.height - 48))
         }
@@ -21572,11 +21396,14 @@ private struct GamepadEditorSpotlightScrim: View {
             )
             context.fill(
                 path,
-                with: .color(Geist.color(.background100, scheme: colorScheme).opacity(colorScheme == .dark ? 0.78 : 0.68)),
+                with: .color(Color.black.opacity(colorScheme == .dark ? 0.62 : 0.46)),
                 style: FillStyle(eoFill: true)
             )
         }
-        .ignoresSafeArea()
+        // Deliberately no .ignoresSafeArea() here: on macOS, expanding into the
+        // NavigationSplitView sidebar region shifts the canvas origin away from the
+        // overlay's coordinate space, displacing the spotlight cutout by the sidebar
+        // width. The scrim must match the ZStack frame the target rect is measured in.
     }
 }
 

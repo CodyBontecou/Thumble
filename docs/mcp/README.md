@@ -69,3 +69,45 @@ Run the ledger gate with:
 ```bash
 python3 scripts/verify-mcp-cli-parity.py
 ```
+
+## Remote connector deployments
+
+`docs/mcp/remote-deployment-plan.md` documents the hosted relay for remote
+MCP connectors (ChatGPT): an OAuth 2.1-authenticated `thumble-gateway`
+routing Streamable HTTP sessions to the user's own `thumble-mcp --relay`
+over an outbound WebSocket tunnel. The gateway is a router, never an
+authority: this directory's transaction rules, the Rust host's ownership of
+configuration state, and every sanitization contract above continue to apply
+unchanged to remote sessions, which exercise the exact same MCP tool surface
+through the same local adapter. Per-tool remote scopes (`thumble.read`,
+`thumble.draft`, `thumble.config`) are an additional outer gate enforced
+before forwarding; the local `--allow-input` / `--allow-config-write`
+fail-closed flags remain the inner gate, and `pairing_code`, `press_control`,
+and `release_all` are never remotely reachable. Onboarding is one managed
+command (`thumble relay connect`): clicking **Connect** in ChatGPT pushes a
+native approval prompt to the Mac, and clicking **Allow** completes OAuth
+without entering a code. Native push is enabled only for verified ChatGPT
+callback hosts, then limited to relay connections from the same
+gateway-observed network source as the authorization page and one active
+prompt per exact connection; the dialog defaults to Deny. OAuth completion
+waits for the relay's durable-token acknowledgment, and rotation closes the
+previous authenticated control socket. The one-time six-digit code remains a clipboard
+fallback for headless/SSH use. Re-authorization through an already-running
+relay uses the same approval path without rotating its device token;
+`thumble relay rotate` remains the explicit credential-rotation command,
+`thumble relay doctor` reports merged local + gateway readiness with fixes,
+and `thumble relay install` keeps the relay alive as a background launch
+agent. The click-to-connect gateway and release relay were rolled out on
+2026-08-27. Connect → Mac Allow → automatic OAuth return completed in
+production; v16 isolates independent OAuth token families, and the release
+relay independently detects silent half-open control sockets. If ChatGPT shows
+the app as connected but exposes no tools after a server/action change, use
+**Refresh actions** on the Thumble developer-mode app before reconnecting—the
+OAuth link can be active while OpenAI's cached action catalog is still empty.
+The hosted plugin now exposes all 17 remote actions and has completed a real
+`host_status` call; a fresh visible ChatGPT conversation remains the final
+human UI receipt. The production Streamable HTTP endpoint is
+`https://thumble-mcp-gateway.fly.dev/mcp`; refresh tokens are issued only with
+`offline_access`. Production acceptance with the OpenAI-hosted Codex runtime
+bundled in ChatGPT.app is recorded in
+`docs/mcp/openai-client-acceptance.md`.

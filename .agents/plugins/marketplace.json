@@ -1,0 +1,20 @@
+{
+  "name": "thumble-repo",
+  "interface": {
+    "displayName": "Thumble (repo marketplace)"
+  },
+  "plugins": [
+    {
+      "name": "thumble",
+      "source": {
+        "source": "local",
+        "path": "./plugins/thumble"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

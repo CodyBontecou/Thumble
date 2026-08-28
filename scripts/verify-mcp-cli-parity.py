@@ -22,6 +22,11 @@ OPERATION_SCHEMA = ROOT / "docs/mcp/configuration-operation-v1.schema.json"
 DEVICE_CATALOG = ROOT / "docs/mcp/device-frames-v1.json"
 
 ALLOWED_STATUSES = {"planned", "foundation", "partial", "current", "host-cli-only"}
+# Transport/lifecycle commands configure how the same MCP tool surface is
+# reached; they are not host capabilities and therefore do not belong in the
+# CLI-operation-to-MCP-tool ledger.
+NON_MCP_TRANSPORT_ROOTS = {"relay"}
+
 FORBIDDEN_SCHEMA_KEYS = {
     "argv",
     "arguments",
@@ -156,7 +161,11 @@ def main() -> None:
     # Top-level source coverage. Compatibility aliases intentionally map to the
     # canonical first case value rather than duplicating every alias as a family.
     run_body = function_body(source, "run")
-    root_commands = set(direct_string_cases(run_body)) - {"--help"}
+    root_commands = (
+        set(direct_string_cases(run_body))
+        - {"--help"}
+        - NON_MCP_TRANSPORT_ROOTS
+    )
     ledger_roots = {path.split()[0] for path in cli_paths}
     missing_roots = sorted(root_commands - ledger_roots)
     if missing_roots:
