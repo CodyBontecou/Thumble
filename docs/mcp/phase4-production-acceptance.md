@@ -38,6 +38,32 @@ Owner approval: the repository owner explicitly approved push + deploy of this w
 - Security headers on all sampled routes: HSTS, `nosniff`, `no-store`,
   restrictive CSP.
 
+## OAuth browser compatibility follow-up
+
+The first visible ChatGPT attempt exposed two client-compatibility issues:
+
+1. ChatGPT requested the shared issuer's relay scopes (`thumble.read`, etc.)
+   while authorizing the builder resource. Commit `04381eb` filters those
+   relay-resource scopes and keeps only builder scopes.
+2. The browser consent form POST omitted `Origin`. Commit `98e9387` accepts
+   that browser-compatible case when the exact one-time scoped consent cookie
+   is present; explicit cross-origin or malformed `Origin` values remain
+   rejected, and a missing/wrong cookie still returns `403`.
+
+Release v19 (`98e9387`, image
+`deployment-01M171X8K3S535Z1FXKZNAYCVD`) is live and healthy. A production
+round trip using a disposable DCR client verified:
+
+- shared relay+builder scope union → consent page shows builder scopes only;
+- consent POST with the scoped cookie and no `Origin` → `302` callback;
+- authorization-code exchange → `200`, scope set exactly
+  `{thumble.build, offline_access}`.
+
+The v19 pre-deploy backup is
+`/data/thumble-gateway-predeploy-04381eb.db`, SHA-256
+`0f5e08c51bd8937cf91b40a9179b9ecf1bcf2068e0c6043c095e1111b9312aad`, with
+`PRAGMA integrity_check` = `ok`.
+
 ## Remaining gate
 
 Visible ChatGPT developer-mode builder acceptance (fresh conversation:
