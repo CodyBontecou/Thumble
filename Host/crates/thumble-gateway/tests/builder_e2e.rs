@@ -185,10 +185,10 @@ async fn authorize(http: &reqwest::Client, gateway: &Gateway, label: &str) -> Au
     assert!(html.contains("Authorize Thumble Builder"));
     let request_id = hidden_value(&html, "request_id");
 
-    // Consent is bound to both the scoped cookie and the gateway origin.
+    // Consent remains bound to the scoped cookie. Browser form POSTs may omit
+    // Origin, so the header is optional when the exact cookie is present.
     assert_eq!(
         http.post(format!("{}/authorize/builder/confirm", gateway.base))
-            .header("Cookie", &cookie)
             .form(&[("request_id", request_id.as_str()), ("decision", "allow")])
             .send()
             .await

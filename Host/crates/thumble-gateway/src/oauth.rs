@@ -70,7 +70,11 @@ fn builder_consent_nonce(headers: &HeaderMap) -> Option<&str> {
 fn same_gateway_origin(headers: &HeaderMap, base_url: &str) -> bool {
     let mut origins = headers.get_all(header::ORIGIN).iter();
     let Some(origin) = origins.next().and_then(|value| value.to_str().ok()) else {
-        return false;
+        // Some legitimate browser/webview HTML form POSTs omit Origin. The
+        // caller still requires the exact one-time consent cookie below, so
+        // absence is compatible while an explicit cross-origin value remains
+        // rejected.
+        return true;
     };
     if origins.next().is_some() {
         return false;
@@ -1719,7 +1723,13 @@ mod tests {
     }
 
     #[test]
-    fn builder_origin_requires_one_exact_origin_header() {
+    fn builder_origin_allows_browser_requests_without_origin_header() {
+        let headers = HeaderMap::new();
+        assert!(same_gateway_origin(&headers, "https://mcp.thumble.app"));
+    }
+
+    #[test]
+    fn builder_origin_rejects_explicit_cross_origin_headers() {
         let mut headers = HeaderMap::new();
         headers.insert(
             header::ORIGIN,

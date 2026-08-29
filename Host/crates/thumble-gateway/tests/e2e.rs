@@ -2399,14 +2399,50 @@ async fn builder_oauth_is_resource_isolated_without_a_device_or_tunnel() {
         .await
         .unwrap();
     assert_eq!(malformed_cookie.status(), 403);
-    let missing_origin = http
-        .post(&confirm_url)
-        .header("Cookie", &protected_cookie)
-        .form(&form)
+    // Browser form POSTs may omit Origin (Safari and some webviews). The
+    // one-time scoped cookie remains mandatory, so this is still bound to the
+    // consent browser/request even without that optional header.
+    let missing_origin_page = http
+        .get(format!("{base}/authorize"))
+        .query(&[
+            ("response_type", "code"),
+            ("client_id", client_id.as_str()),
+            ("redirect_uri", "https://builder.example/callback"),
+            ("state", "missing-origin"),
+            ("resource", builder_resource.as_str()),
+            ("scope", "thumble.build"),
+            ("code_challenge", challenge.as_str()),
+            ("code_challenge_method", "S256"),
+        ])
         .send()
         .await
         .unwrap();
-    assert_eq!(missing_origin.status(), 403);
+    let missing_origin_cookie = builder_consent_cookie(&missing_origin_page);
+    let missing_origin_html = missing_origin_page.text().await.unwrap();
+    let missing_origin_request = hidden_form_value(&missing_origin_html, "request_id");
+    let missing_origin = http
+        .post(&confirm_url)
+        .header("Cookie", &missing_origin_cookie)
+        .form(&[
+            ("request_id", missing_origin_request.as_str()),
+            ("decision", "allow"),
+        ])
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(missing_origin.status(), 302);
+    assert_eq!(
+        callback_values(
+            missing_origin
+                .headers()
+                .get("location")
+                .unwrap()
+                .to_str()
+                .unwrap(),
+            "state"
+        ),
+        vec!["missing-origin"]
+    );
     for origin in ["https://cross-site.example", "not an origin"] {
         let rejected = http
             .post(&confirm_url)
