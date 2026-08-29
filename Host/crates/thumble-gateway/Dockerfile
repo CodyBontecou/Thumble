@@ -4,6 +4,8 @@ FROM rust:1.88-slim AS builder
 WORKDIR /build
 COPY Host/Cargo.toml Host/Cargo.lock ./
 COPY Host/crates ./crates
+# thumble-builder embeds the template/spec/artifact fixtures at compile time.
+COPY Host/fixtures ./fixtures
 RUN cargo build --release --locked -p thumble-gateway
 
 FROM debian:bookworm-slim
