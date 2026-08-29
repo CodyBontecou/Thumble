@@ -1,6 +1,6 @@
 # Hosted controller builder (tunnel-free) — end-to-end plan
 
-Status: **Phases 0–3, Phase 4 local integration, Phase 5 local iPhone pickup/practice/adoption, and Phase 6 local desktop adoption/docs decision are implemented; production deployment, physical-device acceptance, and the visible ChatGPT alpha remain pending.** This document turns the deferred "stateless cloud
+Status: **Phases 0–3, Phase 4 local integration, Phase 5 local iPhone pickup/practice/adoption, and Phase 6 local desktop adoption/docs decision are implemented; Phase 4 is production-deployed with post-deploy receipts (`phase4-production-acceptance.md`); physical-device acceptance and the visible ChatGPT alpha remain pending.** This document turns the deferred "stateless cloud
 builder" alternative from [`remote-deployment-plan.md`](remote-deployment-plan.md)
 into a scoped, phased plan. Every phase keeps the existing relay connector unchanged; the
 builder is a second connector mode, not a replacement.
@@ -298,7 +298,8 @@ throughout; revisit cloud skins only after the artifact flow proves out
 | 1 | `thumble-core` artifact codec + RFC 8785 fixtures; schema-8 Rust authority export/import with draft/CAS/replay; bounded Swift transport and raw CLI routing; `verify-profile-artifact-flow.sh`; stack-safety and Rust workspace gates | complete |
 | 2 | Deterministic generation spec v1 in `thumble-core`; schema-8 read-only planning; Swift native report/preview + artifact import; cross-language fixtures and `verify-generation-spec-flow.sh` | complete |
 | 3 | Pure `thumble-builder` session state machine; safe edits/generation/all-template fixtures; preview/validation; deterministic emission and deletion handoff | complete |
-| 4 local | Gateway OAuth/builder MCP/share integration, full loopback e2e, restart/migration/prune and backup-restore gate, Linux Docker build gate; production and ChatGPT receipts remain pending | locally verified, unavailable |
+| 4 local | Gateway OAuth/builder MCP/share integration, full loopback e2e, restart/migration/prune and backup-restore gate, Linux Docker build gate | locally verified |
+| 4 prod | Deployed with owner approval (`2114fb8`, `c4c5776`); pre-deploy backup/checksum, preserved volume + token secret, rollback release, post-deploy health/OAuth/AASA/share receipts (`phase4-production-acceptance.md`); visible ChatGPT acceptance pending | production deployed, ChatGPT receipt pending |
 | 5 local | Defensive share pickup, quarantine, practice-only preview, and explicit paired-Mac append-as-copies adoption with replay/snapshot confirmation; physical-device checks remain pending | locally verified, unavailable |
 | 6 local | Mac "Import Shared Keypad…" (share link or file → token-free review → explicit append/replace through the same authority import), Rust-authority pointer to `thumble profile import --append`, docs finalize, cloud-skins decision recorded; alpha production/device/ChatGPT receipts remain pending | locally verified, unavailable |
 
