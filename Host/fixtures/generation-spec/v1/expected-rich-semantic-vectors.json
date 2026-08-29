@@ -1,0 +1,405 @@
+{
+  "richAppearance": {
+    "artifactContentHash": "66718c4b41641d5572596941ce985e937aa2dc280c8f305a15f8404f56f56cf4",
+    "descriptorDigest": "601723efe59e78389b3554c36fd9b64508fe0191ac68a2d068ed0b494ea34c31",
+    "hapticFeedback": {
+      "duration": 0.09,
+      "intensity": 0.73,
+      "pattern": "double",
+      "sharpness": 0.88,
+      "style": "heavy"
+    },
+    "hapticStyle": "heavy",
+    "icon": {
+      "placement": "center",
+      "renderingMode": "template",
+      "scale": 1.0,
+      "source": "sf_symbol",
+      "value": "sparkles"
+    },
+    "profileID": "5dbf90ec-609d-5a93-b547-9104e3966d6b",
+    "visualStyle": {
+      "normal": {
+        "bevelHighlightColor": {
+          "alpha": 1.0,
+          "blue": 1.0,
+          "green": 1.0,
+          "red": 1.0
+        },
+        "bevelShadowColor": {
+          "alpha": 1.0,
+          "blue": 0.8,
+          "green": 0.7529411764705882,
+          "red": 0.7803921568627451
+        },
+        "bevelWidth": 1.5,
+        "foregroundColor": {
+          "alpha": 1.0,
+          "blue": 0.6588235294117647,
+          "green": 0.3803921568627451,
+          "red": 0.48627450980392156
+        },
+        "highlightColor": {
+          "alpha": 1.0,
+          "blue": 1.0,
+          "green": 1.0,
+          "red": 1.0
+        },
+        "highlightOpacity": 0.45,
+        "highlightX": -4.0,
+        "highlightY": -4.0,
+        "innerShadowColor": {
+          "alpha": 1.0,
+          "blue": 0.7607843137254902,
+          "green": 0.6980392156862745,
+          "red": 0.7215686274509804
+        },
+        "innerShadowRadius": 5.0,
+        "shadows": [
+          {
+            "color": {
+              "alpha": 0.9,
+              "blue": 1.0,
+              "green": 1.0,
+              "red": 1.0
+            },
+            "radius": 12.0,
+            "x": -6.0,
+            "y": -6.0
+          },
+          {
+            "color": {
+              "alpha": 0.24,
+              "blue": 0.67,
+              "green": 0.57,
+              "red": 0.61
+            },
+            "radius": 20.0,
+            "x": 8.0,
+            "y": 9.0
+          }
+        ],
+        "strokeColor": {
+          "alpha": 1.0,
+          "blue": 0.9882352941176471,
+          "green": 0.9803921568627451,
+          "red": 0.9725490196078431
+        },
+        "strokeWidth": 2.0
+      },
+      "pressed": {
+        "fillStyle": {
+          "color": {
+            "alpha": 1.0,
+            "blue": 0.9725490196078431,
+            "green": 0.7411764705882353,
+            "red": 0.2196078431372549
+          },
+          "kind": "solid"
+        }
+      }
+    }
+  },
+  "materials": {
+    "artifactContentHash": "83302333ae027f0d2c164acdfcde542804d2928571bd7f70ff7dfff1f1d00e25",
+    "descriptorDigest": "9f354f96a2dad205ec28171dd244b4aa8204dd031093b1e69d59003ce737787b",
+    "profileID": "1e48fad0-0a4b-5ee6-a289-f3195692c324",
+    "visualStyles": [
+      {
+        "hapticFeedback": {
+          "duration": 0.06,
+          "intensity": 0.42,
+          "pattern": "single",
+          "sharpness": 0.22,
+          "style": "soft"
+        },
+        "normal": {
+          "bevelHighlightColor": {
+            "alpha": 0.7,
+            "blue": 1.0,
+            "green": 1.0,
+            "red": 1.0
+          },
+          "bevelShadowColor": {
+            "alpha": 0.5,
+            "blue": 0.8235294117647058,
+            "green": 0.7529411764705882,
+            "red": 0.7843137254901961
+          },
+          "bevelWidth": 1.25,
+          "fillStyle": {
+            "color": {
+              "alpha": 1.0,
+              "blue": 0.9725490196078431,
+              "green": 0.9568627450980393,
+              "red": 0.9686274509803922
+            },
+            "kind": "solid"
+          },
+          "foregroundColor": {
+            "alpha": 1.0,
+            "blue": 0.6588235294117647,
+            "green": 0.3803921568627451,
+            "red": 0.48627450980392156
+          },
+          "highlightColor": {
+            "alpha": 1.0,
+            "blue": 1.0,
+            "green": 1.0,
+            "red": 1.0
+          },
+          "highlightOpacity": 0.34,
+          "highlightRadius": 10.0,
+          "highlightX": -5.0,
+          "highlightY": -5.0,
+          "shadows": [
+            {
+              "color": {
+                "alpha": 0.96,
+                "blue": 1.0,
+                "green": 1.0,
+                "red": 1.0
+              },
+              "radius": 14.0,
+              "x": -7.0,
+              "y": -7.0
+            },
+            {
+              "color": {
+                "alpha": 0.24,
+                "blue": 0.6666666666666666,
+                "green": 0.5686274509803921,
+                "red": 0.6078431372549019
+              },
+              "radius": 20.0,
+              "x": 8.0,
+              "y": 9.0
+            }
+          ],
+          "strokeColor": {
+            "alpha": 0.68,
+            "blue": 1.0,
+            "green": 1.0,
+            "red": 1.0
+          },
+          "strokeWidth": 1.0
+        },
+        "pressed": {
+          "bevelWidth": 0.6,
+          "fillStyle": {
+            "color": {
+              "alpha": 1.0,
+              "blue": 0.9450980392156862,
+              "green": 0.9098039215686274,
+              "red": 0.9294117647058824
+            },
+            "kind": "solid"
+          },
+          "highlightOpacity": 0.1,
+          "innerShadowColor": {
+            "alpha": 0.36,
+            "blue": 0.7568627450980392,
+            "green": 0.6862745098039216,
+            "red": 0.7098039215686275
+          },
+          "innerShadowRadius": 6.0,
+          "innerShadowX": 2.0,
+          "innerShadowY": 2.0,
+          "scale": 0.975,
+          "shadows": [
+            {
+              "color": {
+                "alpha": 0.18,
+                "blue": 0.7176470588235294,
+                "green": 0.615686274509804,
+                "red": 0.6588235294117647
+              },
+              "radius": 8.0,
+              "x": 3.0,
+              "y": 3.0
+            },
+            {
+              "color": {
+                "alpha": 0.74,
+                "blue": 1.0,
+                "green": 1.0,
+                "red": 1.0
+              },
+              "radius": 8.0,
+              "x": -2.0,
+              "y": -2.0
+            }
+          ]
+        }
+      },
+      {
+        "hapticFeedback": {
+          "duration": 0.06,
+          "intensity": 0.34,
+          "pattern": "single",
+          "sharpness": 0.18,
+          "style": "soft"
+        },
+        "normal": {
+          "bevelHighlightColor": {
+            "alpha": 0.58,
+            "blue": 1.0,
+            "green": 1.0,
+            "red": 1.0
+          },
+          "bevelShadowColor": {
+            "alpha": 0.42,
+            "blue": 0.7686274509803922,
+            "green": 0.6823529411764706,
+            "red": 0.7176470588235294
+          },
+          "bevelWidth": 1.0,
+          "fillStyle": {
+            "color": {
+              "alpha": 1.0,
+              "blue": 0.9490196078431372,
+              "green": 0.9176470588235294,
+              "red": 0.9372549019607843
+            },
+            "kind": "solid"
+          },
+          "foregroundColor": {
+            "alpha": 1.0,
+            "blue": 0.6549019607843137,
+            "green": 0.403921568627451,
+            "red": 0.5019607843137255
+          },
+          "highlightColor": {
+            "alpha": 1.0,
+            "blue": 1.0,
+            "green": 1.0,
+            "red": 1.0
+          },
+          "highlightOpacity": 0.22,
+          "highlightRadius": 8.0,
+          "highlightX": -4.0,
+          "highlightY": -4.0,
+          "innerShadowColor": {
+            "alpha": 0.3,
+            "blue": 0.7333333333333333,
+            "green": 0.6549019607843137,
+            "red": 0.6862745098039216
+          },
+          "innerShadowRadius": 8.0,
+          "innerShadowX": 3.0,
+          "innerShadowY": 3.0,
+          "shadows": [
+            {
+              "color": {
+                "alpha": 0.62,
+                "blue": 1.0,
+                "green": 1.0,
+                "red": 1.0
+              },
+              "radius": 10.0,
+              "x": -3.0,
+              "y": -3.0
+            },
+            {
+              "color": {
+                "alpha": 0.2,
+                "blue": 0.7372549019607844,
+                "green": 0.6549019607843137,
+                "red": 0.6901960784313725
+              },
+              "radius": 12.0,
+              "x": 4.0,
+              "y": 5.0
+            }
+          ],
+          "strokeColor": {
+            "alpha": 0.42,
+            "blue": 1.0,
+            "green": 1.0,
+            "red": 1.0
+          },
+          "strokeWidth": 1.0
+        },
+        "pressed": {
+          "innerShadowRadius": 10.0,
+          "innerShadowX": 4.0,
+          "innerShadowY": 4.0,
+          "scale": 0.985
+        }
+      },
+      {
+        "normal": {
+          "bevelHighlightColor": {
+            "alpha": 0.64,
+            "blue": 1.0,
+            "green": 1.0,
+            "red": 1.0
+          },
+          "bevelShadowColor": {
+            "alpha": 0.42,
+            "blue": 0.8235294117647058,
+            "green": 0.7529411764705882,
+            "red": 0.7843137254901961
+          },
+          "bevelWidth": 1.4,
+          "fillStyle": {
+            "color": {
+              "alpha": 1.0,
+              "blue": 0.9607843137254902,
+              "green": 0.9333333333333333,
+              "red": 0.9490196078431372
+            },
+            "kind": "solid"
+          },
+          "foregroundColor": {
+            "alpha": 1.0,
+            "blue": 0.6549019607843137,
+            "green": 0.4117647058823529,
+            "red": 0.5058823529411764
+          },
+          "highlightColor": {
+            "alpha": 1.0,
+            "blue": 1.0,
+            "green": 1.0,
+            "red": 1.0
+          },
+          "highlightOpacity": 0.26,
+          "highlightRadius": 22.0,
+          "highlightX": -10.0,
+          "highlightY": -10.0,
+          "shadows": [
+            {
+              "color": {
+                "alpha": 0.92,
+                "blue": 1.0,
+                "green": 1.0,
+                "red": 1.0
+              },
+              "radius": 26.0,
+              "x": -12.0,
+              "y": -12.0
+            },
+            {
+              "color": {
+                "alpha": 0.22,
+                "blue": 0.6666666666666666,
+                "green": 0.5529411764705883,
+                "red": 0.6
+              },
+              "radius": 34.0,
+              "x": 14.0,
+              "y": 16.0
+            }
+          ],
+          "strokeColor": {
+            "alpha": 0.48,
+            "blue": 1.0,
+            "green": 1.0,
+            "red": 1.0
+          },
+          "strokeWidth": 1.0
+        }
+      }
+    ]
+  }
+}

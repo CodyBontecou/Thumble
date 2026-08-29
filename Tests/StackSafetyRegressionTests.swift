@@ -14,6 +14,7 @@ final class StackSafetyRegressionTests: XCTestCase {
         case templateResolutionFailed
         case persistenceStartupFailed
         case reconciliationFailed
+        case generationPlanDecodeMismatch
     }
 
     func testCriticalValueTypeInlineSizesStayWithinBudgets() {
@@ -32,6 +33,10 @@ final class StackSafetyRegressionTests: XCTestCase {
         assertInlineSize(ThumbleBridgeOperation.self, atMost: 512)
         assertInlineSize(ThumbleBridgeStyleAppearance.self, atMost: 64)
         assertInlineSize(ThumbleConfigurationBridgeRequest.self, atMost: 512)
+        assertInlineSize(ThumbleCLIProfileBackend.Response.self, atMost: 4 * 1024)
+        assertInlineSize(PortableProfileArtifact.self, atMost: 64)
+        assertInlineSize(IOSBuilderArtifactPracticePreview.self, atMost: 64)
+        assertInlineSize(IOSBuilderArtifactReview.self, atMost: 256)
     }
 
     private func assertInlineSize<Value>(
@@ -416,6 +421,49 @@ final class StackSafetyRegressionTests: XCTestCase {
         }
     }
 
+    private final class GenerationPlanDecodingJob: @unchecked Sendable {
+        private let payload: Data
+        private let expectedGeneratedJSONBytes: Int
+        private let expectedArtifactJSONBytes: Int
+
+        init(
+            payload: Data,
+            expectedGeneratedJSONBytes: Int,
+            expectedArtifactJSONBytes: Int
+        ) {
+            self.payload = payload
+            self.expectedGeneratedJSONBytes = expectedGeneratedJSONBytes
+            self.expectedArtifactJSONBytes = expectedArtifactJSONBytes
+        }
+
+        func run() throws {
+            let response = try JSONDecoder().decode(
+                ThumbleCLIProfileBackend.Response.self,
+                from: payload
+            )
+            guard response.schemaVersion == ThumbleCLIProfileBackend.schemaVersion,
+                  response.ok,
+                  let plan = response.generationPlan,
+                  plan.schemaVersion == 1,
+                  plan.catalogRevision == 1,
+                  plan.plannerRevision == 1,
+                  plan.generatedJSON.utf8.count == expectedGeneratedJSONBytes,
+                  plan.artifactJSON.utf8.count == expectedArtifactJSONBytes,
+                  plan.warnings.count == 128,
+                  plan.assignedControls.count == 128,
+                  plan.droppedControls.count == 32,
+                  plan.layoutQuality.issueCount == 128,
+                  plan.layoutQuality.issues.count == 128,
+                  plan.layoutQuality.issues.last?.controlIDs.count == 4,
+                  plan.layoutQuality.issues.last?.suggestedRepairs.count == 3,
+                  plan.generatedJSON.hasPrefix("{\"profile\":"),
+                  plan.artifactJSON.hasPrefix("{\"schemaVersion\":1")
+            else {
+                throw StackTestError.generationPlanDecodeMismatch
+            }
+        }
+    }
+
     private final class ThreadResultBox: @unchecked Sendable {
         private let lock = NSLock()
         private var result: Result<Int, Error>?
@@ -430,6 +478,33 @@ final class StackSafetyRegressionTests: XCTestCase {
             lock.lock()
             defer { lock.unlock() }
             return result
+        }
+    }
+
+    func testPortableProfileArtifactDecodesOn512KiBStack() throws {
+        let data = try Data(contentsOf: URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Host/fixtures/profile-artifact/v1.json"))
+
+        try runOnThread(stackSize: 512 * 1024, timeout: 30) {
+            let artifact = try PortableProfileArtifact(validating: data)
+            guard artifact.rawData == data, artifact.profiles.count == 1 else {
+                throw StackTestError.profileCodableMismatch
+            }
+        }
+    }
+
+    func testLargeGenerationPlanResponseDecodesOn512KiBStack() throws {
+        let fixture = try makeLargeGenerationPlanResponsePayload()
+        let job = GenerationPlanDecodingJob(
+            payload: fixture.payload,
+            expectedGeneratedJSONBytes: fixture.generatedJSONBytes,
+            expectedArtifactJSONBytes: fixture.artifactJSONBytes
+        )
+
+        try runOnThread(stackSize: 512 * 1024, timeout: 30) {
+            try job.run()
         }
     }
 
@@ -601,6 +676,92 @@ final class StackSafetyRegressionTests: XCTestCase {
         }
     }
 
+    /// The complete CSS pipeline — tokenize, parse, cascade, var() resolution, lowering,
+    /// package encoding, and archive writes — must run on a constrained 512 KiB stack.
+    func testCSSSkinCompilationRunsOn512KiBStack() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("Thumble-CSS-Compile-Stack-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(
+            at: root.appendingPathComponent("styles"),
+            withIntermediateDirectories: true
+        )
+        let stylesheet = """
+        :root { --surface: #F2EEF5; --ink: #6E4F9E; }
+        controller { background: linear-gradient(160deg, #E9E4F2, #C9C2D2); }
+        control {
+          color: var(--ink);
+          background: var(--surface);
+          border: 1px solid rgba(255, 255, 255, 0.6);
+          border-radius: 14px;
+          box-shadow: 0 2px 4px #101027, inset 1px 1px 2px #FFFFFF;
+        }
+        control:pressed { transform: scale(0.96); }
+        control:disabled { opacity: 0.45; }
+        control[role="primary_action"] { background: linear-gradient(135deg, #8A6FD0, #5B4497); color: #FFFFFF; }
+        @media (prefers-color-scheme: dark) {
+          :root { --surface: #211A46; --ink: #B8A0E8; }
+          controller { background: #17143B; }
+        }
+        """
+        try stylesheet.write(
+            to: root.appendingPathComponent("styles/controller.css"),
+            atomically: true,
+            encoding: .utf8
+        )
+        let workspace = ThumbleSkinWorkspace.starterCSS(
+            name: "CSS Stack Skin",
+            identifier: "com.example.css-stack-skin",
+            artboardID: "showcase-controller-v1"
+        )
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+        try encoder.encode(workspace).write(
+            to: root.appendingPathComponent(ThumbleSkinScaffolder.sourceFileName),
+            options: .atomic
+        )
+
+        let first = try ThumbleSkinCompiler.compile(
+            source: root,
+            buildDirectory: root.appendingPathComponent("build-a"),
+            clean: true
+        ).packageData
+        let second = try runOnConstrainedStackReturning(stackSize: 512 * 1024) {
+            try ThumbleSkinCompiler.compile(
+                source: root,
+                buildDirectory: root.appendingPathComponent("build-b"),
+                clean: true
+            ).packageData
+        }
+        XCTAssertEqual(first, second, "CSS compilation must stay byte-identical on a constrained stack")
+    }
+
+    private func runOnConstrainedStackReturning(
+        stackSize: Int,
+        timeout: TimeInterval = 60,
+        operation: @escaping @Sendable () throws -> Data
+    ) throws -> Data {
+        let completed = expectation(description: "constrained-stack returning operation")
+        final class Box: @unchecked Sendable {
+            var data: Data?
+            var error: Error?
+        }
+        let box = Box()
+        let thread = Thread {
+            do {
+                box.data = try operation()
+            } catch {
+                box.error = error
+            }
+            completed.fulfill()
+        }
+        thread.stackSize = stackSize
+        thread.start()
+        wait(for: [completed], timeout: timeout)
+        if let error = box.error { throw error }
+        return try XCTUnwrap(box.data)
+    }
+
     private func runOnThread(
         stackSize: Int,
         timeout: TimeInterval = 15,
@@ -626,6 +787,89 @@ final class StackSafetyRegressionTests: XCTestCase {
         let actualStackSize = try result.get()
         XCTAssertGreaterThanOrEqual(actualStackSize, stackSize)
         XCTAssertLessThan(actualStackSize, stackSize + (64 * 1024))
+    }
+
+    private func makeLargeGenerationPlanResponsePayload() throws -> (
+        payload: Data,
+        generatedJSONBytes: Int,
+        artifactJSONBytes: Int
+    ) {
+        let generatedJSON = "{\"profile\":{\"name\":\"Stack Generation\"},\"padding\":\""
+            + String(repeating: "g", count: 512 * 1024)
+            + "\"}"
+        let artifactJSON = "{\"schemaVersion\":1,\"artifactVersion\":1,\"profiles\":[],\"padding\":\""
+            + String(repeating: "a", count: 512 * 1024)
+            + "\"}"
+        let warnings: [[String: Any]] = (0..<128).map { index in
+            [
+                "code": "stack-warning-\(index)",
+                "sourceOrdinal": index,
+                "message": "Bounded generation warning \(index)",
+            ]
+        }
+        let assignedControls: [[String: Any]] = (0..<128).map { index in
+            [
+                "sourceOrdinal": index,
+                "button": "custom\((index % 8) + 1)",
+                "elementID": String(format: "00000000-0000-5000-8000-%012d", index),
+                "kind": index.isMultiple(of: 4) ? "joystick" : "button",
+                "usedExplicitButton": index.isMultiple(of: 2),
+            ]
+        }
+        let droppedControls: [[String: Any]] = (0..<32).map { index in
+            [
+                "sourceOrdinal": index + 96,
+                "reason": "slot-exhaustion",
+            ]
+        }
+        let layoutIssues: [[String: Any]] = (0..<128).map { index in
+            [
+                "code": "expanded-hit-target-overlap",
+                "severity": index.isMultiple(of: 5) ? "error" : "warning",
+                "controlIDs": (0..<4).map { "control-\(index)-\($0)" },
+                "controlCount": 4,
+                "metric": Double(index) / 128.0,
+                "suggestedRepairs": [
+                    "resolve-overlap",
+                    "minimum-touch-target",
+                    "ergonomic-auto-arrange",
+                ],
+            ]
+        }
+        let response: [String: Any] = [
+            "schemaVersion": ThumbleCLIProfileBackend.schemaVersion,
+            "ok": true,
+            "invocationID": "11111111-2222-5333-8444-555555555555",
+            "authorityMode": "offline",
+            "authorityPresent": true,
+            "generationPlan": [
+                "configurationRevision": 42,
+                "schemaVersion": 1,
+                "catalogRevision": 1,
+                "plannerRevision": 1,
+                "descriptorDigest": String(repeating: "d", count: 64),
+                "generatedJSON": generatedJSON,
+                "artifactJSON": artifactJSON,
+                "contentHash": [
+                    "algorithm": "sha256",
+                    "canonicalization": "rfc8785",
+                    "value": String(repeating: "f", count: 64),
+                ],
+                "warnings": warnings,
+                "omittedWarningCount": 7,
+                "assignedControls": assignedControls,
+                "droppedControls": droppedControls,
+                "layoutQuality": [
+                    "issueCount": 128,
+                    "errorCount": 26,
+                    "warningCount": 102,
+                    "issues": layoutIssues,
+                    "omittedIssueCount": 9,
+                ],
+            ],
+        ]
+        let payload = try JSONSerialization.data(withJSONObject: response, options: [.sortedKeys])
+        return (payload, generatedJSON.utf8.count, artifactJSON.utf8.count)
     }
 
     private func makeFullProfileWireMessage() -> (ControllerMessage, GamepadConfigurationProfile) {

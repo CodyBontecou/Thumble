@@ -108,6 +108,32 @@ public enum ThumbleVectorCompiler {
         return canvases
     }
 
+    /// Rasterizes declared SVG source assets by ID for CSS-authored workspaces, where
+    /// `background: url(#asset-id)` references them from stylesheets.
+    public static func compileSourceAssets(
+        workspace: ThumbleSkinWorkspace,
+        sourceRoot: URL,
+        fileManager: FileManager = .default
+    ) throws -> [(id: String, data: Data, width: Int, height: Int, purpose: ThumbleSkinAssetPurpose)] {
+        var results: [(String, Data, Int, Int, ThumbleSkinAssetPurpose)] = []
+        for source in workspace.sourceAssets {
+            let sourceURL = try safeSourceURL(source.path, root: sourceRoot, fileManager: fileManager)
+            guard sourceURL.pathExtension.lowercased() == "svg" else {
+                throw ThumbleVectorCompilerError.unsupportedSourceFormat(source.path)
+            }
+            let png = try ThumbleSVGRasterizer.rasterize(
+                Data(contentsOf: sourceURL, options: [.mappedIfSafe]),
+                width: source.outputWidth,
+                height: source.outputHeight
+            )
+            guard png.count <= GamepadImageFill.maximumStoredBytes else {
+                throw ThumbleVectorCompilerError.outputTooLarge(source.id)
+            }
+            results.append((source.id, png, source.outputWidth, source.outputHeight, source.purpose))
+        }
+        return results
+    }
+
     public static func generatedSVG(
         workspace: ThumbleSkinWorkspace,
         artboard: ThumbleSkinArtboardVariant,

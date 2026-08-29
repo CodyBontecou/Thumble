@@ -37,7 +37,7 @@
             "install-spec",
             "import"
           ],
-          "status": "planned",
+          "status": "host-cli-only",
           "mcpTool": "edit_configuration_draft"
         }
       ]
@@ -140,7 +140,7 @@
           "cli": [
             "profile export"
           ],
-          "status": "planned",
+          "status": "host-cli-only",
           "mcpTool": "export_configuration_draft"
         },
         {
@@ -148,7 +148,7 @@
           "cli": [
             "profile import"
           ],
-          "status": "planned",
+          "status": "host-cli-only",
           "mcpTool": "edit_configuration_draft"
         },
         {
@@ -296,6 +296,32 @@
           "mcpTool": "begin_skin_workspace"
         },
         {
+          "id": "skin.css.capabilities",
+          "cli": [
+            "skin css capabilities",
+            "skin css profile"
+          ],
+          "status": "planned",
+          "mcpTool": "query_catalog"
+        },
+        {
+          "id": "skin.css.lint",
+          "cli": [
+            "skin css lint",
+            "skin css check"
+          ],
+          "status": "planned",
+          "mcpTool": "validate_skin_workspace"
+        },
+        {
+          "id": "skin.css.computed",
+          "cli": [
+            "skin css computed"
+          ],
+          "status": "planned",
+          "mcpTool": "query_catalog"
+        },
+        {
           "id": "skin.compile",
           "cli": [
             "skin compile",
@@ -410,7 +436,7 @@
             "skin preview",
             "skin render"
           ],
-          "status": "planned",
+          "status": "current",
           "mcpTool": "preview_skin_workspace"
         }
       ]

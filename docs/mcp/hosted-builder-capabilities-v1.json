@@ -1,0 +1,104 @@
+{
+  "schema": "com.codybontecou.thumble.hosted-builder-capabilities",
+  "version": 1,
+  "authority": {
+    "workspace": "pre-adoption-builder-session",
+    "adoption": "explicit-profile-artifact-import",
+    "phoneSync": "none",
+    "input": "none"
+  },
+  "connector": {
+    "path": "/builder/mcp",
+    "scope": "thumble.build",
+    "status": "partial"
+  },
+  "gates": [
+    "builder-session",
+    "share-read"
+  ],
+  "sharedOperations": [
+    "generation.install-spec",
+    "profile.export",
+    "profile.import"
+  ],
+  "shareEndpoint": {
+    "method": "GET",
+    "path": "/share/{artifactID}",
+    "gate": "share-read",
+    "status": "partial"
+  },
+  "operations": [
+    {
+      "id": "builder.session.begin",
+      "mcpTool": "begin_builder_session",
+      "executor": "thumble-builder",
+      "gate": "builder-session",
+      "status": "partial",
+      "phoneEffect": "none"
+    },
+    {
+      "id": "builder.session.status",
+      "mcpTool": "builder_status",
+      "executor": "thumble-builder",
+      "gate": "builder-session",
+      "status": "partial",
+      "phoneEffect": "none"
+    },
+    {
+      "id": "builder.profile.edit",
+      "mcpTool": "edit_builder_profile",
+      "executor": "thumble-builder",
+      "gate": "builder-session",
+      "status": "partial",
+      "phoneEffect": "none"
+    },
+    {
+      "id": "builder.profile.validate",
+      "mcpTool": "validate_builder_profile",
+      "executor": "thumble-builder",
+      "gate": "builder-session",
+      "status": "partial",
+      "phoneEffect": "none"
+    },
+    {
+      "id": "builder.profile.preview",
+      "mcpTool": "preview_builder_profile",
+      "executor": "thumble-builder",
+      "gate": "builder-session",
+      "status": "partial",
+      "phoneEffect": "none"
+    },
+    {
+      "id": "builder.template.install",
+      "mcpTool": "install_template",
+      "executor": "thumble-builder",
+      "gate": "builder-session",
+      "status": "partial",
+      "phoneEffect": "none"
+    },
+    {
+      "id": "builder.generation.generate-spec",
+      "mcpTool": "generate_from_spec",
+      "executor": "thumble-builder",
+      "gate": "builder-session",
+      "status": "partial",
+      "phoneEffect": "none"
+    },
+    {
+      "id": "builder.artifact.emit",
+      "mcpTool": "emit_profile_artifact",
+      "executor": "thumble-builder",
+      "gate": "builder-session",
+      "status": "partial",
+      "phoneEffect": "none"
+    },
+    {
+      "id": "builder.session.discard",
+      "mcpTool": "discard_builder_session",
+      "executor": "thumble-builder",
+      "gate": "builder-session",
+      "status": "partial",
+      "phoneEffect": "none"
+    }
+  ]
+}

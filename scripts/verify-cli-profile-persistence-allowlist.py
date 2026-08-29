@@ -11,11 +11,8 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "Sources/CLI/ThumbleCLI.swift"
 EXPECTED = {
-    "install": (1, 1),
     "profile": (1, 0),  # artifact-only `profile show`
     "createProfile": (1, 1),
-    "exportProfiles": (1, 0),
-    "importProfiles": (1, 1),
     "attachApplicationToProfile": (1, 1),
     "detachApplicationFromProfile": (1, 1),
     "launchAttachedApplication": (1, 0),
@@ -54,22 +51,93 @@ if normalized != EXPECTED:
     )
     raise SystemExit(1)
 
-profile_block = SOURCE.read_text(encoding="utf-8").split("private static func moveProfiles", 1)[0]
+source_text = SOURCE.read_text(encoding="utf-8")
+profile_block = source_text.split("private static func moveProfiles", 1)[0]
 for command in ("select", "set-default", "rename", "duplicate", "delete", "reset"):
     if f'"{command}"' not in profile_block:
         print(f"Missing migrated profile command routing: {command}", file=sys.stderr)
         raise SystemExit(1)
 
-for function_name in ("generate", "template"):
-    function_block = SOURCE.read_text(encoding="utf-8").split(
-        f"private static func {function_name}", 1
-    )[1].split("private static func", 1)[0]
-    if "generationGenerate" not in function_block and "templateInstall" not in function_block:
-        print(f"Missing Rust-authoritative {function_name} install routing", file=sys.stderr)
+profile_transfer_block = source_text.split(
+    "private static func exportProfiles", 1
+)[1].split("private static func attachApplicationToProfile", 1)[0]
+for forbidden in ("loadStore(", "persistStore(", "Data(contentsOf:"):
+    if forbidden in profile_transfer_block:
+        print(f"Migrated profile export/import routing still uses {forbidden}", file=sys.stderr)
         raise SystemExit(1)
-    if function_name == "template" and ("loadStore(" in function_block or "persistStore(" in function_block):
-        print("Migrated template install routing still uses direct persistence", file=sys.stderr)
+for command in (".export(", ".import("):
+    if command not in profile_transfer_block:
+        print(f"Missing Rust-authoritative profile transfer routing: {command}", file=sys.stderr)
         raise SystemExit(1)
+for required in (
+    "maximumProfileArtifactBytes", "O_NOFOLLOW", "Darwin.open", "Darwin.fstat",
+    "S_IFREG", "Darwin.read", "Darwin.close", "String(decoding:",
+):
+    if required not in profile_transfer_block:
+        print(f"Missing bounded profile artifact IO guard: {required}", file=sys.stderr)
+        raise SystemExit(1)
+for required in ("artifact.artifactJSON", "options: .atomic", "FileHandle.standardOutput"):
+    if required not in profile_transfer_block:
+        print(f"Missing raw profile export behavior: {required}", file=sys.stderr)
+        raise SystemExit(1)
+if "attributesOfItem" in profile_transfer_block:
+    print("Profile import must inspect the opened descriptor without a path pre-check", file=sys.stderr)
+    raise SystemExit(1)
+if "hasExplicitProfileArtifactSchema" not in profile_transfer_block:
+    print("Missing explicit profile artifact schema routing", file=sys.stderr)
+    raise SystemExit(1)
+
+generation_block = source_text.split(
+    "private static func generate(arguments:", 1
+)[1].split("// MARK: - Profiles", 1)[0]
+for forbidden in ("loadStore(", "persistStore(", "requireExplicitUnmigratedProfileAccess("):
+    if forbidden in generation_block:
+        print(f"Migrated generation routing still uses {forbidden}", file=sys.stderr)
+        raise SystemExit(1)
+for command in ("generationGenerate", "generationPlanSpec", ".import("):
+    if command not in generation_block:
+        print(f"Missing Rust-authoritative generation routing: {command}", file=sys.stderr)
+        raise SystemExit(1)
+
+spec_generation_block = generation_block.split(
+    "private static func generateFromSpec", 1
+)[1].split("private static func prepareGeneratedProfile", 1)[0]
+plan_index = spec_generation_block.find("generationPlanSpec")
+import_index = spec_generation_block.find(".import(")
+if plan_index < 0 or import_index <= plan_index:
+    print("Spec generation must plan through Rust before backend import", file=sys.stderr)
+    raise SystemExit(1)
+for required in (
+    "plan.artifactJSON", "appendAsCopies: false", "planningResponse.invocationID",
+    "expectedConfigurationRevision: plan.configurationRevision", "importResponse.outcome",
+):
+    if required not in spec_generation_block:
+        print(f"Missing transactional spec-generation import guard: {required}", file=sys.stderr)
+        raise SystemExit(1)
+
+spec_io_block = generation_block.split(
+    "private static func readBoundedGenerationSpec(path:", 1
+)[1]
+for required in (
+    "maximumGenerationSpecBytes", "O_NOFOLLOW", "Darwin.open", "Darwin.fstat",
+    "S_IFREG", "Darwin.read", "Darwin.close", "String(data:",
+):
+    if required not in spec_io_block:
+        print(f"Missing bounded generation-spec IO guard: {required}", file=sys.stderr)
+        raise SystemExit(1)
+if "Data(contentsOf:" in spec_io_block:
+    print("Generation spec must be read from the safely opened descriptor", file=sys.stderr)
+    raise SystemExit(1)
+
+template_block = source_text.split(
+    "private static func template(arguments:", 1
+)[1].split("// MARK: - Themes", 1)[0]
+if "templateInstall" not in template_block:
+    print("Missing Rust-authoritative template install routing", file=sys.stderr)
+    raise SystemExit(1)
+if "loadStore(" in template_block or "persistStore(" in template_block:
+    print("Migrated template install routing still uses direct persistence", file=sys.stderr)
+    raise SystemExit(1)
 
 orientation_block = SOURCE.read_text(encoding="utf-8").split(
     "private static func orientation", 1

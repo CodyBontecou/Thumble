@@ -6,39 +6,87 @@ on:
       - "Host/**"
       - "Resources/Host/**"
       - "Sources/CLI/ThumbleCLI.swift"
+      - "Sources/CLI/ThumbleCLIBackend.swift"
       - "Sources/Shared/ControllerProtocol.swift"
+      - "Sources/Shared/GameKeypadGenerator.swift"
+      - "Sources/Shared/GamepadCustomization.swift"
+      - "Sources/Shared/GamepadDesignSystem.swift"
+      - "Sources/Shared/GamepadLayoutQuality.swift"
+      - "Sources/Shared/GamepadOutputTypes.swift"
+      - "Sources/Shared/KeypadConfigurationExport.swift"
       - "Sources/Shared/ThumbleConfigurationBridge.swift"
       - "Sources/Bridge/**"
       - "Sources/iOS/ControllerClient.swift"
       - "Sources/Mac/MacControllerServer.swift"
+      - "Sources/Mac/MacControlOutputBinding.swift"
+      - "Sources/Mac/KeyMap.swift"
       - "Tests/RustHostInteropTests.swift"
+      - "Tests/ThumbleCLIBackendTests.swift"
+      - "Tests/ThumbleCLISmokeTestSuite.swift"
       - "Tests/ThumbleConfigurationBridgeTests.swift"
       - "project.yml"
       - "Thumble.xcodeproj/project.pbxproj"
       - "docs/mcp/**"
+      - "SKILL.md"
+      - "plugins/thumble/**"
+      - "scripts/verify-plugin-skill-sync.sh"
       - "scripts/verify-mcp-cli-parity.py"
+      - "scripts/verify-cli-profile-persistence-allowlist.py"
+      - "scripts/verify-hosted-builder-capabilities.py"
+      - "scripts/verify-hosted-builder-local.sh"
+      - "scripts/test-gateway-start.sh"
+      - "scripts/verify-profile-artifact-flow.sh"
+      - "scripts/verify-generation-spec-flow.sh"
+      - "scripts/verify-controller-template-fixtures.py"
+      - "scripts/verify-controller-template-fixtures.sh"
+      - "scripts/test_verify_controller_template_fixtures.py"
       - "scripts/verify-rust-host.sh"
       - "scripts/release/macos-host.sh"
       - ".github/workflows/rust-host.yml"
+      - "fly.toml"
   pull_request:
     paths:
       - "Host/**"
       - "Resources/Host/**"
       - "Sources/CLI/ThumbleCLI.swift"
+      - "Sources/CLI/ThumbleCLIBackend.swift"
       - "Sources/Shared/ControllerProtocol.swift"
+      - "Sources/Shared/GameKeypadGenerator.swift"
+      - "Sources/Shared/GamepadCustomization.swift"
+      - "Sources/Shared/GamepadDesignSystem.swift"
+      - "Sources/Shared/GamepadLayoutQuality.swift"
+      - "Sources/Shared/GamepadOutputTypes.swift"
+      - "Sources/Shared/KeypadConfigurationExport.swift"
       - "Sources/Shared/ThumbleConfigurationBridge.swift"
       - "Sources/Bridge/**"
       - "Sources/iOS/ControllerClient.swift"
       - "Sources/Mac/MacControllerServer.swift"
+      - "Sources/Mac/MacControlOutputBinding.swift"
+      - "Sources/Mac/KeyMap.swift"
       - "Tests/RustHostInteropTests.swift"
+      - "Tests/ThumbleCLIBackendTests.swift"
+      - "Tests/ThumbleCLISmokeTestSuite.swift"
       - "Tests/ThumbleConfigurationBridgeTests.swift"
       - "project.yml"
       - "Thumble.xcodeproj/project.pbxproj"
       - "docs/mcp/**"
+      - "SKILL.md"
+      - "plugins/thumble/**"
+      - "scripts/verify-plugin-skill-sync.sh"
       - "scripts/verify-mcp-cli-parity.py"
+      - "scripts/verify-cli-profile-persistence-allowlist.py"
+      - "scripts/verify-hosted-builder-capabilities.py"
+      - "scripts/verify-hosted-builder-local.sh"
+      - "scripts/test-gateway-start.sh"
+      - "scripts/verify-profile-artifact-flow.sh"
+      - "scripts/verify-generation-spec-flow.sh"
+      - "scripts/verify-controller-template-fixtures.py"
+      - "scripts/verify-controller-template-fixtures.sh"
+      - "scripts/test_verify_controller_template_fixtures.py"
       - "scripts/verify-rust-host.sh"
       - "scripts/release/macos-host.sh"
       - ".github/workflows/rust-host.yml"
+      - "fly.toml"
 
 permissions:
   contents: read
@@ -58,9 +106,45 @@ jobs:
         with:
           workspaces: Host
       - run: python3 ../scripts/verify-mcp-cli-parity.py
+      - run: python3 ../scripts/verify-hosted-builder-capabilities.py
+      - run: python3 ../scripts/test_verify_controller_template_fixtures.py
+      - run: ../scripts/verify-plugin-skill-sync.sh
+      - run: bash -n ../scripts/verify-hosted-builder-local.sh ../scripts/test-gateway-start.sh ../Host/crates/thumble-gateway/backup.sh ../Host/crates/thumble-gateway/start.sh
+      - run: ../scripts/test-gateway-start.sh
       - run: cargo fmt --all --check
       - run: cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
       - run: cargo test --locked --workspace --all-features
+
+  hosted-builder-local:
+    needs: portable-core
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.88.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: Host
+      - name: Install local SQLite verification tooling
+        run: sudo apt-get update && sudo apt-get install -y sqlite3
+      - name: Build the exact gateway deployment image
+        run: docker build --file Host/crates/thumble-gateway/Dockerfile --tag thumble-gateway:ci .
+      - name: Smoke the builder metadata route from the deployment image
+        run: |
+          CID="$(docker run --detach --publish 127.0.0.1::8080 \
+            --env THUMBLE_GATEWAY_BASE_URL=http://127.0.0.1:8080 \
+            --env THUMBLE_GATEWAY_TOKEN_SECRET=ci-only-builder-route-smoke-secret-0123456789 \
+            thumble-gateway:ci)"
+          trap 'docker rm --force "$CID" >/dev/null 2>&1 || true' EXIT
+          PORT="$(docker inspect --format '{{(index (index .NetworkSettings.Ports "8080/tcp") 0).HostPort}}' "$CID")"
+          for _ in {1..100}; do
+            curl --fail --silent --max-time 1 "http://127.0.0.1:$PORT/healthz" >/dev/null && break
+            sleep 0.1
+          done
+          curl --fail --silent --show-error --max-time 2 \
+            "http://127.0.0.1:$PORT/.well-known/oauth-protected-resource/builder/mcp" \
+            | python3 -c 'import json,sys; value=json.load(sys.stdin); assert value["resource"].endswith("/builder/mcp"); assert value["scopes_supported"] == ["thumble.build", "offline_access"]'
+      - name: Verify real loopback gateway, builder e2e, restart, and backup restore
+        run: ./scripts/verify-hosted-builder-local.sh --focused
 
   macos-host:
     runs-on: macos-15
@@ -85,6 +169,8 @@ jobs:
           -destination 'platform=macOS'
           -only-testing:ThumbleCLITests/RustHostInteropTests
           -only-testing:ThumbleCLITests/ThumbleConfigurationBridgeTests
+          -only-testing:ThumbleCLITests/ThumbleCLIBackendTests
+          -only-testing:ThumbleCLITests/ThumbleCLISmokeTestSuite
           CODE_SIGNING_ALLOWED=NO
       - name: Universal host, MCP, and Swift bridge package smoke
         env:
@@ -96,6 +182,11 @@ jobs:
           test -x "$APP/Contents/MacOS/thumble-host"
           test -x "$APP/Contents/MacOS/thumble-mcp"
           test -x "$APP/Contents/MacOS/thumble-bridge"
+          test -x "$APP/Contents/MacOS/thumble"
+          test -x "$APP/Contents/MacOS/thumble-cli-bridge"
+          ./scripts/verify-profile-artifact-flow.sh "$APP/Contents/MacOS"
+          ./scripts/verify-generation-spec-flow.sh "$APP/Contents/MacOS"
+          ./scripts/verify-controller-template-fixtures.sh "$APP/Contents/MacOS"
           lipo "$APP/Contents/MacOS/thumble-host" -verify_arch arm64 x86_64
           lipo "$APP/Contents/MacOS/thumble-mcp" -verify_arch arm64 x86_64
           lipo "$APP/Contents/MacOS/thumble-bridge" -verify_arch arm64 x86_64
@@ -172,7 +263,7 @@ jobs:
           process.stdin.write('{"jsonrpc":"2.0","method":"notifications/initialized"}\n')
           process.stdin.flush()
           tools = request(2, "tools/list", {})["tools"]
-          assert len(tools) == 20
+          assert len(tools) == 21
           render = next(tool for tool in tools if tool["name"] == "render_controller")
           uri = render["_meta"]["ui"]["resourceUri"]
           assert uri == "ui://thumble/controller-builder-v1.html"

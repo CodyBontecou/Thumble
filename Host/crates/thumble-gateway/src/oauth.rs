@@ -12,6 +12,7 @@ use axum::Json;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
+use crate::principal::{Principal, ResourceKind};
 use crate::scopes;
 use crate::state::AppState;
 use crate::tunnel::ApprovalTarget;
@@ -22,11 +23,121 @@ const ACCESS_TOKEN_TTL_SECONDS: i64 = 900;
 const REFRESH_TOKEN_TTL_SECONDS: i64 = 30 * 24 * 3600;
 /// How often the waiting authorization page polls the decision endpoint.
 const APPROVAL_POLL_SECONDS: u64 = 2;
+const BUILDER_CONSENT_COOKIE: &str = "thumble_builder_consent";
+const BUILDER_CONFIRM_PATH: &str = "/authorize/builder/confirm";
+
+fn builder_consent_cookie(base_url: &str, nonce: &str, clear: bool) -> Result<HeaderValue, String> {
+    let base = url::Url::parse(base_url).map_err(|_| "gateway base URL is invalid")?;
+    let secure = match (base.scheme(), base.host_str()) {
+        ("https", Some(_)) => true,
+        ("http", Some("localhost" | "127.0.0.1" | "::1")) => false,
+        _ => return Err("builder consent requires HTTPS or exact loopback HTTP".to_owned()),
+    };
+    let value = if clear {
+        format!(
+            "{BUILDER_CONSENT_COOKIE}=; Path={BUILDER_CONFIRM_PATH}; HttpOnly; SameSite=Lax; Max-Age=0{}",
+            if secure { "; Secure" } else { "" }
+        )
+    } else {
+        format!(
+            "{BUILDER_CONSENT_COOKIE}={nonce}; Path={BUILDER_CONFIRM_PATH}; HttpOnly; SameSite=Lax{}",
+            if secure { "; Secure" } else { "" }
+        )
+    };
+    HeaderValue::from_str(&value).map_err(|_| "builder consent cookie is invalid".to_owned())
+}
+
+fn builder_consent_nonce(headers: &HeaderMap) -> Option<&str> {
+    let mut found = None;
+    for value in headers.get_all(header::COOKIE) {
+        let value = value.to_str().ok()?;
+        for cookie in value.split(';') {
+            let (name, value) = cookie.trim().split_once('=')?;
+            if name == BUILDER_CONSENT_COOKIE {
+                if found.is_some()
+                    || value.len() != 64
+                    || !value.bytes().all(|byte| byte.is_ascii_alphanumeric())
+                {
+                    return None;
+                }
+                found = Some(value);
+            }
+        }
+    }
+    found
+}
+
+fn same_gateway_origin(headers: &HeaderMap, base_url: &str) -> bool {
+    let mut origins = headers.get_all(header::ORIGIN).iter();
+    let Some(origin) = origins.next().and_then(|value| value.to_str().ok()) else {
+        return false;
+    };
+    if origins.next().is_some() {
+        return false;
+    }
+    let Ok(origin) = url::Url::parse(origin) else {
+        return false;
+    };
+    let Ok(base) = url::Url::parse(base_url) else {
+        return false;
+    };
+    origin.username().is_empty()
+        && origin.password().is_none()
+        && origin.path() == "/"
+        && origin.query().is_none()
+        && origin.fragment().is_none()
+        && origin.scheme() == base.scheme()
+        && origin.host() == base.host()
+        && origin.port_or_known_default() == base.port_or_known_default()
+}
+
+fn with_builder_cookie(mut response: Response, cookie: HeaderValue) -> Response {
+    response.headers_mut().append(header::SET_COOKIE, cookie);
+    response
+}
+
+fn forbidden_builder_consent() -> Response {
+    (
+        StatusCode::FORBIDDEN,
+        Html("<h1>Forbidden</h1><p>This builder consent must be submitted by the browser that opened it.</p>"),
+    )
+        .into_response()
+}
+
+fn resource_url(base_url: &str, resource: ResourceKind) -> String {
+    let base_url = base_url.trim_end_matches('/');
+    match resource {
+        ResourceKind::Relay => format!("{base_url}/mcp"),
+        ResourceKind::Builder => format!("{base_url}/builder/mcp"),
+    }
+}
+
+fn requested_resource_kind(base_url: &str, resource: Option<&str>) -> Result<ResourceKind, String> {
+    match resource {
+        None => Ok(ResourceKind::Relay),
+        Some(resource) if resource == resource_url(base_url, ResourceKind::Relay) => {
+            Ok(ResourceKind::Relay)
+        }
+        Some(resource) if resource == resource_url(base_url, ResourceKind::Builder) => {
+            Ok(ResourceKind::Builder)
+        }
+        Some(_) => Err("resource does not identify this MCP server".to_owned()),
+    }
+}
+
+fn audit_principal(event: &str, principal: &Principal) {
+    // Principal identifiers are generated or validated by the store and are
+    // bounded. Never log codes, bearer tokens, state, callbacks, or content.
+    eprintln!(
+        "gateway: OAuth {event}; principal_kind={} principal_id={}",
+        principal.kind, principal.id
+    );
+}
 
 pub fn protected_resource_metadata(base_url: &str) -> Json<serde_json::Value> {
     Json(serde_json::json!({
-        "resource": format!("{base_url}/mcp"),
-        "authorization_servers": [base_url],
+        "resource": resource_url(base_url, ResourceKind::Relay),
+        "authorization_servers": [base_url.trim_end_matches('/')],
         "scopes_supported": [
             scopes::SCOPE_READ,
             scopes::SCOPE_DRAFT,
@@ -36,7 +147,16 @@ pub fn protected_resource_metadata(base_url: &str) -> Json<serde_json::Value> {
     }))
 }
 
+pub fn builder_protected_resource_metadata(base_url: &str) -> Json<serde_json::Value> {
+    Json(serde_json::json!({
+        "resource": resource_url(base_url, ResourceKind::Builder),
+        "authorization_servers": [base_url.trim_end_matches('/')],
+        "scopes_supported": [scopes::SCOPE_BUILD, scopes::SCOPE_OFFLINE_ACCESS],
+    }))
+}
+
 pub fn authorization_server_metadata(base_url: &str) -> Json<serde_json::Value> {
+    let base_url = base_url.trim_end_matches('/');
     Json(serde_json::json!({
         "issuer": base_url,
         "authorization_response_iss_parameter_supported": true,
@@ -51,6 +171,7 @@ pub fn authorization_server_metadata(base_url: &str) -> Json<serde_json::Value> 
             scopes::SCOPE_READ,
             scopes::SCOPE_DRAFT,
             scopes::SCOPE_CONFIG,
+            scopes::SCOPE_BUILD,
             scopes::SCOPE_OFFLINE_ACCESS,
         ],
         "refresh_token_endpoint": format!("{base_url}/token"),
@@ -200,7 +321,19 @@ fn html_escape(value: &str) -> String {
 }
 
 fn server_error(error: impl std::fmt::Display) -> Response {
-    eprintln!("gateway: OAuth server error: {error}");
+    let bounded: String = error
+        .to_string()
+        .chars()
+        .map(|character| {
+            if character.is_control() {
+                ' '
+            } else {
+                character
+            }
+        })
+        .take(512)
+        .collect();
+    eprintln!("gateway: OAuth server error: {bounded}");
     (
         StatusCode::INTERNAL_SERVER_ERROR,
         Html("<h1>Server error</h1><p>The request could not be completed.</p>"),
@@ -407,17 +540,17 @@ pub async fn authorize(
             query.state.as_deref(),
         );
     }
-    let expected_resource = format!("{}/mcp", issuer.trim_end_matches('/'));
-    if let Some(resource) = query.resource.as_deref() {
-        if resource != expected_resource {
+    let resource = match requested_resource_kind(&issuer, query.resource.as_deref()) {
+        Ok(resource) => resource,
+        Err(error) => {
             return redirect_error(
                 "invalid_target",
-                "resource does not identify this MCP server",
+                &error,
                 Some(redirect_uri),
                 query.state.as_deref(),
-            );
+            )
         }
-    }
+    };
     if query.response_type.as_deref() != Some("code") {
         return error_redirect(
             "only response_type=code is supported",
@@ -446,27 +579,54 @@ pub async fn authorize(
             query.state.as_deref(),
         );
     }
-    let requested_scope = query
-        .scope
-        .as_deref()
-        .unwrap_or("thumble.read thumble.draft thumble.config offline_access");
-    let granted_scopes = match scopes::parse_scopes(requested_scope) {
+    let requested_scope = query.scope.as_deref().unwrap_or(match resource {
+        ResourceKind::Relay => "thumble.read thumble.draft thumble.config offline_access",
+        ResourceKind::Builder => "",
+    });
+    let granted_scopes = match resource {
+        ResourceKind::Relay => scopes::parse_relay_scopes(requested_scope),
+        ResourceKind::Builder => scopes::parse_builder_scopes(requested_scope),
+    };
+    let granted_scopes = match granted_scopes {
         Ok(scopes) => scopes,
         Err(error) => return error_redirect(&error, Some(redirect_uri), query.state.as_deref()),
     };
 
     let granted_scope = granted_scopes.join(" ");
-    let request_id = match state.store.create_authorization_request(
+    if resource == ResourceKind::Builder {
+        let (request_id, consent_nonce) = match state.store.create_builder_authorization_request(
+            client_id,
+            redirect_uri,
+            query.state.as_deref().unwrap_or_default(),
+            &granted_scope,
+            code_challenge,
+            AUTH_CODE_TTL_SECONDS,
+        ) {
+            Ok(created) => created,
+            Err(error) => return server_error(error),
+        };
+        let cookie = match builder_consent_cookie(&issuer, &consent_nonce, false) {
+            Ok(cookie) => cookie,
+            Err(error) => return server_error(error),
+        };
+        return with_builder_cookie(
+            Html(builder_consent_html(&request_id, &granted_scope)).into_response(),
+            cookie,
+        );
+    }
+    let request_id = match state.store.create_authorization_request_for_resource(
         client_id,
         redirect_uri,
         query.state.as_deref().unwrap_or_default(),
         &granted_scope,
         code_challenge,
+        resource,
         AUTH_CODE_TTL_SECONDS,
     ) {
         Ok(request_id) => request_id,
         Err(error) => return server_error(error),
     };
+
     let prefilled_code = query
         .code
         .as_deref()
@@ -504,6 +664,144 @@ pub async fn authorize(
         &prefilled_code,
     ))
     .into_response()
+}
+
+fn builder_consent_html(request_id: &str, granted_scope: &str) -> String {
+    let offline = if granted_scope
+        .split_whitespace()
+        .any(|scope| scope == scopes::SCOPE_OFFLINE_ACCESS)
+    {
+        "<li><b>offline_access</b> — refresh access without repeating this consent</li>"
+    } else {
+        ""
+    };
+    format!(
+        r#"<!doctype html><html><head><meta charset="utf-8"><title>Authorize Thumble Builder</title>
+<style>body{{font-family:-apple-system,system-ui,sans-serif;max-width:32rem;margin:4rem auto;padding:0 1rem;line-height:1.45}}
+.panel{{border:1px solid #ddd;border-radius:.7rem;padding:1rem 1.2rem}}button{{font-size:1rem;padding:.65rem 1rem;margin:.5rem .5rem 0 0}}
+.deny{{background:white;border:1px solid #999}}</style></head><body>
+<h1>Authorize Thumble Builder</h1><div class="panel"><p>This connector is requesting a fresh, private builder authorization. It does not connect to a Mac, device, or tunnel.</p>
+<ul><li><b>thumble.build</b> — use the hosted controller builder</li>{offline}</ul>
+<p>This creates a new opaque authorization identity for this consent. No existing account selects that identity.</p>
+<form method="post" action="/authorize/builder/confirm">
+<input type="hidden" name="request_id" value="{request_id}">
+<button type="submit" name="decision" value="allow">Authorize builder</button>
+<button class="deny" type="submit" name="decision" value="deny">Deny</button>
+</form></div></body></html>"#,
+        request_id = html_escape(request_id),
+    )
+}
+
+fn unavailable_builder_authorization(reason: &str) -> Response {
+    let message = if reason.contains("expired") {
+        "This builder authorization expired. Return to the connector and start a fresh request."
+    } else if reason.contains("used") {
+        "This builder authorization was already submitted and cannot be used again."
+    } else {
+        "This builder authorization is not available. Return to the connector and start again."
+    };
+    (
+        StatusCode::CONFLICT,
+        Html(format!(
+            "<!doctype html><html><head><meta charset=\"utf-8\"><title>Authorization unavailable</title></head><body><h1>Authorization unavailable</h1><p>{}</p></body></html>",
+            html_escape(message)
+        )),
+    )
+        .into_response()
+}
+
+#[derive(Debug, Deserialize)]
+pub struct BuilderConfirmForm {
+    pub request_id: String,
+    pub decision: String,
+}
+
+pub async fn authorize_builder_confirm(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    connect_info: axum::extract::ConnectInfo<std::net::SocketAddr>,
+    axum::Form(form): axum::Form<BuilderConfirmForm>,
+) -> Response {
+    let issuer = state.base_url();
+    if !same_gateway_origin(&headers, &issuer) {
+        return forbidden_builder_consent();
+    }
+    let Some(consent_nonce) = builder_consent_nonce(&headers) else {
+        return forbidden_builder_consent();
+    };
+    let source = crate::http::client_source_key(&headers, Some(&connect_info));
+    if let Err(error) = state.oauth_rate_limiter.allow_authorization(&source) {
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            Html(format!(
+                "<h1>Try again later</h1><p>{}</p>",
+                html_escape(&error)
+            )),
+        )
+            .into_response();
+    }
+    if form.request_id.is_empty() || form.request_id.len() > 128 {
+        return (StatusCode::BAD_REQUEST, Html("<h1>Bad request</h1>")).into_response();
+    }
+    let clear_cookie = match builder_consent_cookie(&issuer, "", true) {
+        Ok(cookie) => cookie,
+        Err(error) => return server_error(error),
+    };
+    if form.decision == "deny" {
+        let request = match state
+            .store
+            .deny_builder_authorization(&form.request_id, consent_nonce)
+        {
+            Ok(Ok(request)) => request,
+            Ok(Err(reason)) if reason == "builder consent verification failed" => {
+                return forbidden_builder_consent()
+            }
+            Ok(Err(reason)) => return unavailable_builder_authorization(&reason),
+            Err(error) => return server_error(error),
+        };
+        let mut parameters = vec![
+            ("error", "access_denied"),
+            ("error_description", "builder authorization was denied"),
+            ("iss", issuer.as_str()),
+        ];
+        if !request.state.is_empty() {
+            parameters.push(("state", request.state.as_str()));
+        }
+        return match oauth_response_url(&request.redirect_uri, &parameters) {
+            Ok(url) => with_builder_cookie(oauth_redirect(&url), clear_cookie),
+            Err(error) => server_error(error),
+        };
+    }
+    if form.decision != "allow" {
+        return (StatusCode::BAD_REQUEST, Html("<h1>Bad request</h1>")).into_response();
+    }
+    let (authorization_code, builder_id, request) = match state
+        .store
+        .complete_new_builder_authorization(&form.request_id, consent_nonce, AUTH_CODE_TTL_SECONDS)
+    {
+        Ok(Ok(completed)) => completed,
+        Ok(Err(reason)) if reason == "builder consent verification failed" => {
+            return forbidden_builder_consent()
+        }
+        Ok(Err(reason)) => return unavailable_builder_authorization(&reason),
+        Err(error) => return server_error(error),
+    };
+    let principal = match Principal::builder(builder_id) {
+        Ok(principal) => principal,
+        Err(error) => return server_error(error),
+    };
+    audit_principal("builder consent granted", &principal);
+    let mut parameters = vec![
+        ("code", authorization_code.as_str()),
+        ("iss", issuer.as_str()),
+    ];
+    if !request.state.is_empty() {
+        parameters.push(("state", request.state.as_str()));
+    }
+    match oauth_response_url(&request.redirect_uri, &parameters) {
+        Ok(url) => with_builder_cookie(oauth_redirect(&url), clear_cookie),
+        Err(error) => server_error(error),
+    }
 }
 
 fn scope_list_markup(granted_scope: &str) -> String {
@@ -1083,9 +1381,10 @@ pub async fn authorize_wait(
                 Ok(url) => url,
                 Err(error) => return server_error(error),
             };
-            eprintln!(
-                "gateway: OAuth connector approved on device {device_id}; returning authorization response"
-            );
+            match Principal::device(&device_id) {
+                Ok(principal) => audit_principal("connector approved", &principal),
+                Err(error) => return server_error(error),
+            }
             state
                 .tunnels
                 .complete_connector_approval(&request_id, true, "ChatGPT connected")
@@ -1135,19 +1434,15 @@ pub async fn token(
             &error,
         );
     }
-    if let Some(resource) = form.resource.as_deref() {
-        let expected = format!("{}/mcp", state.base_url().trim_end_matches('/'));
-        if resource != expected {
-            return token_error(
-                StatusCode::BAD_REQUEST,
-                "invalid_target",
-                "resource does not identify this MCP server",
-            );
+    let resource = match requested_resource_kind(&state.base_url(), form.resource.as_deref()) {
+        Ok(resource) => resource,
+        Err(error) => {
+            return token_error(StatusCode::BAD_REQUEST, "invalid_target", &error);
         }
-    }
+    };
     match form.grant_type.as_str() {
-        "authorization_code" => token_authorization_code(state, form).await,
-        "refresh_token" => token_refresh(state, form).await,
+        "authorization_code" => token_authorization_code(state, form, resource).await,
+        "refresh_token" => token_refresh(state, form, resource).await,
         other => token_error(
             StatusCode::BAD_REQUEST,
             "unsupported_grant_type",
@@ -1156,7 +1451,31 @@ pub async fn token(
     }
 }
 
-async fn token_authorization_code(state: Arc<AppState>, form: TokenRequest) -> Response {
+fn token_store_error(detail: &str) -> Response {
+    let bounded: String = detail
+        .chars()
+        .map(|character| {
+            if character.is_control() {
+                ' '
+            } else {
+                character
+            }
+        })
+        .take(512)
+        .collect();
+    eprintln!("gateway: OAuth token store error: {bounded}");
+    token_error(
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "server_error",
+        "the token request could not be completed",
+    )
+}
+
+async fn token_authorization_code(
+    state: Arc<AppState>,
+    form: TokenRequest,
+    resource: ResourceKind,
+) -> Response {
     let Some(code) = form.code.as_deref() else {
         return token_error(
             StatusCode::BAD_REQUEST,
@@ -1192,26 +1511,22 @@ async fn token_authorization_code(state: Arc<AppState>, form: TokenRequest) -> R
             "code_verifier must be 43-128 RFC 7636 unreserved characters",
         );
     }
-    let grant = match state.store.exchange_auth_code(
+    let grant = match state.store.exchange_auth_code_for_resource(
         code,
         client_id,
         redirect_uri,
         verifier,
+        resource,
         ACCESS_TOKEN_TTL_SECONDS,
         REFRESH_TOKEN_TTL_SECONDS,
     ) {
         Ok(Ok(grant)) => grant,
-        Ok(Err(error)) => {
-            return token_error(StatusCode::BAD_REQUEST, "invalid_grant", &error);
+        Ok(Err(_)) => {
+            return token_error(StatusCode::BAD_REQUEST, "invalid_grant", "invalid grant");
         }
-        Err(error) => {
-            return token_error(StatusCode::INTERNAL_SERVER_ERROR, "server_error", &error);
-        }
+        Err(error) => return token_store_error(&error),
     };
-    eprintln!(
-        "gateway: OAuth authorization code exchanged for device {}",
-        grant.device_id
-    );
+    audit_principal("authorization code exchanged", &grant.binding.principal);
     token_success(
         grant.access_token,
         grant.refresh_token,
@@ -1220,7 +1535,11 @@ async fn token_authorization_code(state: Arc<AppState>, form: TokenRequest) -> R
     )
 }
 
-async fn token_refresh(state: Arc<AppState>, form: TokenRequest) -> Response {
+async fn token_refresh(
+    state: Arc<AppState>,
+    form: TokenRequest,
+    resource: ResourceKind,
+) -> Response {
     let Some(refresh_token) = form.refresh_token.as_deref() else {
         return token_error(
             StatusCode::BAD_REQUEST,
@@ -1235,18 +1554,26 @@ async fn token_refresh(state: Arc<AppState>, form: TokenRequest) -> Response {
             "client_id is required",
         );
     };
-    let rotated =
-        state
-            .store
-            .rotate_refresh_token(refresh_token, client_id, REFRESH_TOKEN_TTL_SECONDS);
-    let (access, refresh, scope) = match rotated {
+    let rotated = state.store.rotate_refresh_token_for_resource(
+        refresh_token,
+        client_id,
+        resource,
+        REFRESH_TOKEN_TTL_SECONDS,
+    );
+    let grant = match rotated {
         Ok(Ok(rotated)) => rotated,
-        Ok(Err(error)) => return token_error(StatusCode::BAD_REQUEST, "invalid_grant", &error),
-        Err(error) => {
-            return token_error(StatusCode::INTERNAL_SERVER_ERROR, "server_error", &error)
+        Ok(Err(_)) => {
+            return token_error(StatusCode::BAD_REQUEST, "invalid_grant", "invalid grant")
         }
+        Err(error) => return token_store_error(&error),
     };
-    token_success(access, Some(refresh), scope, ACCESS_TOKEN_TTL_SECONDS)
+    audit_principal("refresh token rotated", &grant.binding.principal);
+    token_success(
+        grant.access_token,
+        Some(grant.refresh_token),
+        grant.scope,
+        ACCESS_TOKEN_TTL_SECONDS,
+    )
 }
 
 fn token_success(access: String, refresh: Option<String>, scope: String, ttl: i64) -> Response {
@@ -1323,6 +1650,35 @@ mod tests {
     use super::*;
     use thumble_tunnel::TunnelMessage;
 
+    #[tokio::test]
+    async fn storage_error_responses_are_generic_and_do_not_leak_sql() {
+        let detail = "SQLITE_ERROR: no such table: refresh_tokens; SELECT token_digest";
+        let response = server_error(detail);
+        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+        let body = axum::body::to_bytes(response.into_body(), 4_096)
+            .await
+            .unwrap();
+        let body = String::from_utf8(body.to_vec()).unwrap();
+        assert_eq!(
+            body,
+            "<h1>Server error</h1><p>The request could not be completed.</p>"
+        );
+        assert!(!body.contains("SQLITE"));
+        assert!(!body.contains("refresh_tokens"));
+        assert!(!body.contains("SELECT"));
+
+        let response = token_store_error(detail);
+        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+        let body = axum::body::to_bytes(response.into_body(), 4_096)
+            .await
+            .unwrap();
+        let body = String::from_utf8(body.to_vec()).unwrap();
+        assert!(body.contains("the token request could not be completed"));
+        assert!(!body.contains("SQLITE"));
+        assert!(!body.contains("refresh_tokens"));
+        assert!(!body.contains("SELECT"));
+    }
+
     #[test]
     fn native_push_requires_a_verified_chatgpt_callback_host() {
         assert_eq!(
@@ -1336,6 +1692,45 @@ mod tests {
         assert!(trusted_push_connector("https://evil.example/callback").is_none());
         assert!(trusted_push_connector("https://chatgpt.com.evil.example/callback").is_none());
         assert!(trusted_push_connector("http://chatgpt.com/callback").is_none());
+    }
+
+    #[test]
+    fn builder_consent_cookie_is_secure_except_on_exact_loopback_http() {
+        let secure = builder_consent_cookie(
+            "https://mcp.thumble.app",
+            "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            false,
+        )
+        .unwrap();
+        assert!(secure.to_str().unwrap().contains("; Secure"));
+        let loopback = builder_consent_cookie(
+            "http://127.0.0.1:8080",
+            "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            false,
+        )
+        .unwrap();
+        assert!(!loopback.to_str().unwrap().contains("; Secure"));
+        assert!(builder_consent_cookie(
+            "http://gateway.example",
+            "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            false,
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn builder_origin_requires_one_exact_origin_header() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::ORIGIN,
+            HeaderValue::from_static("https://mcp.thumble.app"),
+        );
+        assert!(same_gateway_origin(&headers, "https://mcp.thumble.app:443"));
+        headers.append(
+            header::ORIGIN,
+            HeaderValue::from_static("https://cross-site.example"),
+        );
+        assert!(!same_gateway_origin(&headers, "https://mcp.thumble.app"));
     }
 
     #[tokio::test]
@@ -1366,6 +1761,7 @@ mod tests {
             state: "state".to_owned(),
             scope: "thumble.read".to_owned(),
             code_challenge: "challenge".to_owned(),
+            resource: crate::principal::ResourceKind::Relay,
         };
         let completion_state = state.clone();
         let completion = tokio::spawn(async move {

@@ -27,7 +27,7 @@ Schemas:
 - [`pocketpad-skin.schema.json`](pocketpad-skin.schema.json)
 - [`pocketpad-skin-source.schema.json`](pocketpad-skin-source.schema.json)
 
-A minimal package source is in [`starter/`](starter/). Published handcrafted examples cover distinct structures: [`Indigo Pocket`](examples/indigo-pocket/) for a showcase controller, [`Solar Sumi`](examples/solar-sumi/) for arcade stick, [`Tideglass Field`](examples/tideglass-field/) for compact handheld, and [`Foldline Relay`](examples/foldline-relay/) for a one-handed productivity surface.
+A minimal package source is in [`starter/`](starter/). Published handcrafted examples cover distinct structures: [`Indigo Pocket`](examples/indigo-pocket/) for a showcase controller, [`Solar Sumi`](examples/solar-sumi/) for arcade stick, [`Tideglass Field`](examples/tideglass-field/) for compact handheld, [`Foldline Relay`](examples/foldline-relay/) for a one-handed productivity surface, and [`CSS First Light`](examples/css-first-light/) for the CSS authoring profile.
 
 ## Appearance cascade
 
@@ -67,6 +67,20 @@ thumble skin preview ./IndigoPocket \
   -o ./IndigoPocket/reviews/contact-sheet.png \
   --all-variants --all-states --native-renderer --contact-sheet
 ```
+
+### CSS authoring
+
+Schema-2 workspaces can style the entire controller with real CSS instead of materials:
+
+```bash
+thumble skin scaffold "My Skin" --identifier com.me.my-skin --css
+thumble skin css capabilities
+thumble skin css lint .
+thumble skin css computed . --control builtin-jump --scheme dark --state pressed
+thumble skin compile . --strict
+```
+
+CSS compiles into the same deterministic native style model; no stylesheet ships at runtime. See [css-authoring.md](css-authoring.md) and [`examples/css-first-light/`](examples/css-first-light/).
 
 `skin preview` uses the same SwiftUI control faces, fills, effects, labels, artwork layers, and state resolver as the app. Without `--contact-sheet`, a single request writes one PNG and a multi-request render writes a frame directory.
 

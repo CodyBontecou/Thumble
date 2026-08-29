@@ -246,8 +246,38 @@ impl DraftStore {
         )
             -> Result<(ConfigurationDocument, ConfigurationOperationOutcome), DraftError>,
     {
+        self.edit_with_descriptor(
+            draft_id,
+            expected_draft_revision,
+            operation_id,
+            operation,
+            now_millis,
+            apply,
+        )
+    }
+
+    /// Apply a native closure while recording the digest of an explicit,
+    /// credential-free semantic descriptor. This keeps non-general-purpose
+    /// authority transforms on the same bounded draft log and replay path as
+    /// ordinary typed operations.
+    pub fn edit_with_descriptor<D, F>(
+        &self,
+        draft_id: &str,
+        expected_draft_revision: u64,
+        operation_id: &str,
+        descriptor: &D,
+        now_millis: i64,
+        apply: F,
+    ) -> Result<DraftEditResult, DraftError>
+    where
+        D: Serialize,
+        F: FnOnce(
+            &ConfigurationDocument,
+        )
+            -> Result<(ConfigurationDocument, ConfigurationOperationOutcome), DraftError>,
+    {
         let operation_id = canonical_operation_id(operation_id)?;
-        let operation_digest = Self::operation_digest(operation)?;
+        let operation_digest = Self::operation_digest(descriptor)?;
         let mut draft = self.get(draft_id, now_millis)?;
 
         if let Some(record) = draft
@@ -833,6 +863,53 @@ mod tests {
                 expected: 1,
                 actual: 2
             })
+        ));
+    }
+
+    #[test]
+    fn explicit_descriptor_closure_edits_replay_and_conflict_by_semantics() {
+        let (_directory, store) = store();
+        let state = PersistentState::minimal("server-id").unwrap();
+        let draft = store.begin(&state, 1, 0).unwrap();
+        let operation_id = "00000000-0000-0000-0000-000000000499";
+        let descriptor = serde_json::json!({"type":"native.test","contentHash":"abc"});
+        let edited = store
+            .edit_with_descriptor(
+                &draft.draft_id,
+                1,
+                operation_id,
+                &descriptor,
+                10,
+                |document| {
+                    let mut candidate = document.clone();
+                    candidate.profiles[0]["name"] = serde_json::json!("Native");
+                    Ok((
+                        candidate,
+                        ConfigurationOperationOutcome {
+                            changed: true,
+                            changed_paths: vec!["/profiles".to_owned()],
+                        },
+                    ))
+                },
+            )
+            .unwrap();
+        assert_eq!(edited.draft.draft_revision, 2);
+        let replay = store
+            .edit_with_descriptor(&draft.draft_id, 1, operation_id, &descriptor, 20, |_| {
+                panic!("replay must not execute the closure")
+            })
+            .unwrap();
+        assert!(replay.idempotent_replay);
+        assert!(matches!(
+            store.edit_with_descriptor(
+                &draft.draft_id,
+                1,
+                operation_id,
+                &serde_json::json!({"type":"native.test","contentHash":"changed"}),
+                30,
+                |_| panic!("conflict must not execute the closure"),
+            ),
+            Err(DraftError::OperationIdConflict)
         ));
     }
 

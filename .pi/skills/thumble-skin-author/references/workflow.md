@@ -21,7 +21,9 @@ thumble skin scaffold "Name" \
   -o Website/skins/sources/name
 ```
 
-Expected source tree:
+Add `--css` to author with real CSS instead of materials. CSS workspaces declare stylesheets in `skin-source.json` (`stylesheets: ["styles/controller.css"]`) under profile `thumble-css-core-1`; unsupported CSS is a strict compile error. See `docs/skins/css-authoring.md`.
+
+Expected source tree (materials):
 
 ```text
 skin-source.json
@@ -31,6 +33,8 @@ reviews/README.md
 reviews/human-approval.json
 build/                       # generated, ignored
 ```
+
+CSS workspaces replace SVG sources with `styles/*.css`; both paths produce the same validated package format.
 
 SVG is authoring input only. The sanitizer rejects scripts, external URLs, entities, event handlers, pathological complexity, traversal, and symlinks. Compilation rasterizes visual media to package-safe PNG.
 
@@ -75,7 +79,23 @@ thumble skin preview SOURCE \
   --all-variants --all-states --native-renderer --contact-sheet
 ```
 
-The package compiler is deterministic. Native review snapshots use the real SwiftUI renderer and are review evidence, not inputs to package hashing.
+The package compiler is deterministic. Native review snapshots use the real SwiftUI renderer and are review evidence, not inputs to package hashing. For CSS workspaces, `thumble skin css lint` and `thumble skin css computed` diagnose stylesheets before compiling, and `thumble skin quality --strict` evaluates compiled tokens directly.
+
+### Showing the controller view in chat (read-only)
+
+The `render_controller` MCP tool only shows the installed active profile. To show a review package's exact controller view inside an MCP chat (ChatGPT, Codex, Claude) without importing or applying it, call the `preview_skin_workspace` MCP tool — it renders any absolute `.pocketpad` package path (or workspace directory) with the same native renderer and returns the image inline. Example parameters:
+
+```json
+{
+  "sourcePath": "/absolute/path/to/skin.pocketpad",
+  "orientation": "landscape",
+  "scheme": "light",
+  "state": "normal",
+  "scale": 2
+}
+```
+
+All parameters except `sourcePath` are optional. The equivalent CLI command is `thumble skin preview SOURCE -o OUT.png --orientation landscape --scheme light --state normal --render-scale 2 --json`. These renders are display-only evidence; they never change the active controller, configuration, or paired phone, and they are not a substitute for the immutable contact sheet used for critique and human approval.
 
 ## 6. Critique loop
 

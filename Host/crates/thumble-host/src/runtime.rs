@@ -2179,6 +2179,71 @@ mod tests {
     }
 
     #[test]
+    fn online_legacy_profile_import_uses_the_same_draft_and_cas_path_as_offline_import() {
+        let directory = tempdir().unwrap();
+        let paths = HostPaths::new(
+            directory.path().join("state"),
+            directory.path().join("state/control.sock"),
+        );
+        let state = thumble_core::PersistentState::minimal("server").unwrap();
+        let document = thumble_core::ConfigurationDocument::from_state(&state).unwrap();
+        let artifact = thumble_core::ProfileArtifact::from_configuration(
+            &document,
+            thumble_core::ProfileArtifactSelection::All,
+            1,
+        )
+        .unwrap();
+        let mut legacy = serde_json::to_value(artifact).unwrap();
+        let object = legacy.as_object_mut().unwrap();
+        object.remove("artifactVersion");
+        object.remove("catalogRevision");
+        object.remove("contentHash");
+        object.insert("version".to_owned(), Value::from(1));
+        let artifact_json = serde_json::to_string(&legacy).unwrap();
+        let core = HostCore::new(state, "123456").unwrap();
+        let (shutdown, _) = watch::channel(false);
+        let shared = SharedRuntime {
+            inner: Mutex::new(RuntimeInner {
+                core,
+                tokens: SecureTokens,
+                connections: HashMap::new(),
+                output: OutputExecutor::new(false, None),
+                control_press_times: VecDeque::new(),
+            }),
+            paths: paths.clone(),
+            requested_port: 0,
+            actual_port: 0,
+            service_name: "Test".to_owned(),
+            input_enabled: false,
+            configuration_write_enabled: true,
+            bonjour: Arc::new(BonjourRegistration::disabled("Test".to_owned())),
+            shutdown,
+            started_at: Instant::now(),
+        };
+        let response = shared.cli_profile_transaction(&CliProfileRequest {
+            schema_version: cli_profile::CLI_PROFILE_SCHEMA_VERSION,
+            invocation_id: Some(Uuid::parse_str("abcdefab-cdef-5abc-8def-abcdefabcdef").unwrap()),
+            expected_configuration_revision: Some(1),
+            command: cli_profile::CliProfileCommand::Import {
+                artifact_json,
+                append_as_copies: true,
+                select: true,
+                make_default: false,
+            },
+        });
+        assert!(response.ok, "{:?}", response.error);
+        assert_eq!(response.authority_mode, "online");
+        assert_eq!(response.outcome.unwrap().profile_names.len(), 1);
+        let in_memory = shared.inner.lock().unwrap();
+        assert_eq!(in_memory.core.persistent_state().profiles.len(), 2);
+        assert_eq!(in_memory.core.persistent_state().configuration_revision, 2);
+        drop(in_memory);
+        let persisted = storage::load(&paths.state_file).unwrap();
+        assert_eq!(persisted.profiles.len(), 2);
+        assert_eq!(persisted.configuration_revision, 2);
+    }
+
+    #[test]
     fn failed_profile_persistence_rolls_back_in_memory_selection() {
         let directory = tempdir().unwrap();
         let mut paths = HostPaths::new(

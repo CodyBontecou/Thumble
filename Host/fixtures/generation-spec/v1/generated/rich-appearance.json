@@ -1,0 +1,375 @@
+{
+  "confidence": "low",
+  "keyBindings": [
+    "focus",
+    {
+      "key": "F",
+      "modifiers": []
+    }
+  ],
+  "notes": [
+    "Installed from an agent-provided keypad spec."
+  ],
+  "profile": {
+    "customization": {
+      "accentStyle": "purple",
+      "buttonCustomizations": [
+        "up",
+        {
+          "heightScale": 1.0,
+          "isHidden": true,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1.0,
+          "widthScale": 1.0,
+          "zIndex": 0
+        },
+        "down",
+        {
+          "heightScale": 1.0,
+          "isHidden": true,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1.0,
+          "widthScale": 1.0,
+          "zIndex": 0
+        },
+        "left",
+        {
+          "heightScale": 1.0,
+          "isHidden": true,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1.0,
+          "widthScale": 1.0,
+          "zIndex": 0
+        },
+        "right",
+        {
+          "heightScale": 1.0,
+          "isHidden": true,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1.0,
+          "widthScale": 1.0,
+          "zIndex": 0
+        },
+        "jump",
+        {
+          "heightScale": 1.0,
+          "isHidden": true,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1.0,
+          "widthScale": 1.0,
+          "zIndex": 0
+        },
+        "attack",
+        {
+          "heightScale": 1.0,
+          "isHidden": true,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1.0,
+          "widthScale": 1.0,
+          "zIndex": 0
+        },
+        "dash",
+        {
+          "heightScale": 1.0,
+          "isHidden": true,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1.0,
+          "widthScale": 1.0,
+          "zIndex": 0
+        },
+        "focus",
+        {
+          "accentStyle": "blue",
+          "centerX": 0.94,
+          "centerY": 0.255,
+          "cornerRadius": 12.0,
+          "fillColor": {
+            "alpha": 1.0,
+            "blue": 0.15294117647058825,
+            "green": 0.09411764705882353,
+            "red": 0.06666666666666667
+          },
+          "hapticFeedback": {
+            "duration": 0.09,
+            "intensity": 0.73,
+            "pattern": "double",
+            "sharpness": 0.88,
+            "style": "heavy"
+          },
+          "hapticStyle": "heavy",
+          "heightScale": 0.96,
+          "icon": {
+            "placement": "center",
+            "renderingMode": "template",
+            "scale": 1.0,
+            "source": "sf_symbol",
+            "value": "sparkles"
+          },
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1.0,
+          "shape": "rounded_rectangle",
+          "visualStyle": {
+            "normal": {
+              "bevelHighlightColor": {
+                "alpha": 1.0,
+                "blue": 1.0,
+                "green": 1.0,
+                "red": 1.0
+              },
+              "bevelShadowColor": {
+                "alpha": 1.0,
+                "blue": 0.8,
+                "green": 0.7529411764705882,
+                "red": 0.7803921568627451
+              },
+              "bevelWidth": 1.5,
+              "foregroundColor": {
+                "alpha": 1.0,
+                "blue": 0.6588235294117647,
+                "green": 0.3803921568627451,
+                "red": 0.48627450980392156
+              },
+              "highlightColor": {
+                "alpha": 1.0,
+                "blue": 1.0,
+                "green": 1.0,
+                "red": 1.0
+              },
+              "highlightOpacity": 0.45,
+              "highlightX": -4.0,
+              "highlightY": -4.0,
+              "innerShadowColor": {
+                "alpha": 1.0,
+                "blue": 0.7607843137254902,
+                "green": 0.6980392156862745,
+                "red": 0.7215686274509804
+              },
+              "innerShadowRadius": 5.0,
+              "shadows": [
+                {
+                  "color": {
+                    "alpha": 0.9,
+                    "blue": 1.0,
+                    "green": 1.0,
+                    "red": 1.0
+                  },
+                  "radius": 12.0,
+                  "x": -6.0,
+                  "y": -6.0
+                },
+                {
+                  "color": {
+                    "alpha": 0.24,
+                    "blue": 0.67,
+                    "green": 0.57,
+                    "red": 0.61
+                  },
+                  "radius": 20.0,
+                  "x": 8.0,
+                  "y": 9.0
+                }
+              ],
+              "strokeColor": {
+                "alpha": 1.0,
+                "blue": 0.9882352941176471,
+                "green": 0.9803921568627451,
+                "red": 0.9725490196078431
+              },
+              "strokeWidth": 2.0
+            },
+            "pressed": {
+              "fillStyle": {
+                "color": {
+                  "alpha": 1.0,
+                  "blue": 0.9725490196078431,
+                  "green": 0.7411764705882353,
+                  "red": 0.2196078431372549
+                },
+                "kind": "solid"
+              }
+            }
+          },
+          "widthScale": 1.06,
+          "zIndex": 0
+        },
+        "map",
+        {
+          "heightScale": 1.0,
+          "isHidden": true,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1.0,
+          "widthScale": 1.0,
+          "zIndex": 0
+        },
+        "pause",
+        {
+          "heightScale": 1.0,
+          "isHidden": true,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1.0,
+          "widthScale": 1.0,
+          "zIndex": 0
+        }
+      ],
+      "colorSchemePreference": "system",
+      "controlScale": "standard",
+      "customButtons": [],
+      "deviceCanvas": {
+        "frameID": "iphone-17-pro-landscape"
+      },
+      "elements": [
+        {
+          "builtInButton": "focus",
+          "id": "00000000-0000-0000-0000-000000000108",
+          "kind": "button",
+          "label": "Focus",
+          "layout": {
+            "accentStyle": "blue",
+            "centerX": 0.94,
+            "centerY": 0.255,
+            "cornerRadius": 12.0,
+            "fillColor": {
+              "alpha": 1.0,
+              "blue": 0.15294117647058825,
+              "green": 0.09411764705882353,
+              "red": 0.06666666666666667
+            },
+            "hapticFeedback": {
+              "duration": 0.09,
+              "intensity": 0.73,
+              "pattern": "double",
+              "sharpness": 0.88,
+              "style": "heavy"
+            },
+            "hapticStyle": "heavy",
+            "heightScale": 0.96,
+            "icon": {
+              "placement": "center",
+              "renderingMode": "template",
+              "scale": 1.0,
+              "source": "sf_symbol",
+              "value": "sparkles"
+            },
+            "isHidden": false,
+            "isLocationLocked": false,
+            "rotationDegrees": 0,
+            "shadowStrength": 1.0,
+            "shape": "rounded_rectangle",
+            "visualStyle": {
+              "normal": {
+                "bevelHighlightColor": {
+                  "alpha": 1.0,
+                  "blue": 1.0,
+                  "green": 1.0,
+                  "red": 1.0
+                },
+                "bevelShadowColor": {
+                  "alpha": 1.0,
+                  "blue": 0.8,
+                  "green": 0.7529411764705882,
+                  "red": 0.7803921568627451
+                },
+                "bevelWidth": 1.5,
+                "foregroundColor": {
+                  "alpha": 1.0,
+                  "blue": 0.6588235294117647,
+                  "green": 0.3803921568627451,
+                  "red": 0.48627450980392156
+                },
+                "highlightColor": {
+                  "alpha": 1.0,
+                  "blue": 1.0,
+                  "green": 1.0,
+                  "red": 1.0
+                },
+                "highlightOpacity": 0.45,
+                "highlightX": -4.0,
+                "highlightY": -4.0,
+                "innerShadowColor": {
+                  "alpha": 1.0,
+                  "blue": 0.7607843137254902,
+                  "green": 0.6980392156862745,
+                  "red": 0.7215686274509804
+                },
+                "innerShadowRadius": 5.0,
+                "shadows": [
+                  {
+                    "color": {
+                      "alpha": 0.9,
+                      "blue": 1.0,
+                      "green": 1.0,
+                      "red": 1.0
+                    },
+                    "radius": 12.0,
+                    "x": -6.0,
+                    "y": -6.0
+                  },
+                  {
+                    "color": {
+                      "alpha": 0.24,
+                      "blue": 0.67,
+                      "green": 0.57,
+                      "red": 0.61
+                    },
+                    "radius": 20.0,
+                    "x": 8.0,
+                    "y": 9.0
+                  }
+                ],
+                "strokeColor": {
+                  "alpha": 1.0,
+                  "blue": 0.9882352941176471,
+                  "green": 0.9803921568627451,
+                  "red": 0.9725490196078431
+                },
+                "strokeWidth": 2.0
+              },
+              "pressed": {
+                "fillStyle": {
+                  "color": {
+                    "alpha": 1.0,
+                    "blue": 0.9725490196078431,
+                    "green": 0.7411764705882353,
+                    "red": 0.2196078431372549
+                  },
+                  "kind": "solid"
+                }
+              }
+            },
+            "widthScale": 1.06,
+            "zIndex": 0
+          },
+          "legacySlot": "focus",
+          "partOutputs": [],
+          "visualRole": "secondary_action"
+        }
+      ],
+      "labelOverrides": [
+        "focus",
+        "Focus"
+      ],
+      "layoutMode": "standard",
+      "showsButtonLabels": true,
+      "updatedAt": 0
+    },
+    "id": "5dbf90ec-609d-5a93-b547-9104e3966d6b",
+    "name": "Rich Style Test",
+    "orientationPreference": "automatic",
+    "outputMode": "keyboard",
+    "updatedAt": 0
+  },
+  "requestedGameName": "Rich Style Test",
+  "resolvedGameName": "Rich Style Test",
+  "source": "Agent-provided keypad spec"
+}

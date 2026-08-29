@@ -563,6 +563,8 @@ public enum ControllerCapability: String, Codable, CaseIterable, Sendable {
     case skinPackages = "skin_packages"
     /// The peer accepts profile-scoped skin apply/detach mutations.
     case gamepadProfileSkinSelection = "gamepad_profile_skin_selection"
+    /// The paired Mac accepts bounded portable artifact v1 uploads for explicit adoption.
+    case profileArtifactAdoptionV1 = "profile_artifact_adoption_v1"
 }
 
 public enum ControllerMessageType: String, Codable, Sendable {
@@ -589,6 +591,11 @@ public enum ControllerMessageType: String, Codable, Sendable {
     /// receive this message type and continue to treat orientation as automatic.
     case gamepadProfileOrientationPreferenceMutation = "gamepad_profile_orientation_preference_mutation"
     case launchProfileTarget = "launch_profile_target"
+    case profileArtifactAdoptionBegin = "profile_artifact_adoption_begin"
+    case profileArtifactAdoptionChunk = "profile_artifact_adoption_chunk"
+    case profileArtifactAdoptionCommit = "profile_artifact_adoption_commit"
+    case profileArtifactAdoptionCancel = "profile_artifact_adoption_cancel"
+    case profileArtifactAdoptionResult = "profile_artifact_adoption_result"
     case error
 }
 
@@ -632,6 +639,11 @@ public struct ControllerMessage: Codable, Sendable {
     public var inputGeneration: UInt64?
     public var inputSequence: UInt64?
     public var pressIdentifier: UInt64?
+    public var profileArtifactAdoptionMetadata: ProfileArtifactAdoptionMetadata?
+    public var profileArtifactAdoptionOperationID: UUID?
+    public var profileArtifactAdoptionChunkIndex: Int?
+    public var profileArtifactAdoptionChunkData: Data?
+    public var profileArtifactAdoptionResult: ProfileArtifactAdoptionResult?
 
     public init(
         type: ControllerMessageType,
@@ -670,7 +682,12 @@ public struct ControllerMessage: Codable, Sendable {
         inputProtocolVersion: Int? = nil,
         inputGeneration: UInt64? = nil,
         inputSequence: UInt64? = nil,
-        pressIdentifier: UInt64? = nil
+        pressIdentifier: UInt64? = nil,
+        profileArtifactAdoptionMetadata: ProfileArtifactAdoptionMetadata? = nil,
+        profileArtifactAdoptionOperationID: UUID? = nil,
+        profileArtifactAdoptionChunkIndex: Int? = nil,
+        profileArtifactAdoptionChunkData: Data? = nil,
+        profileArtifactAdoptionResult: ProfileArtifactAdoptionResult? = nil
     ) {
         self.type = type
         self.button = button
@@ -709,6 +726,11 @@ public struct ControllerMessage: Codable, Sendable {
         self.inputGeneration = inputGeneration
         self.inputSequence = inputSequence
         self.pressIdentifier = pressIdentifier
+        self.profileArtifactAdoptionMetadata = profileArtifactAdoptionMetadata
+        self.profileArtifactAdoptionOperationID = profileArtifactAdoptionOperationID
+        self.profileArtifactAdoptionChunkIndex = profileArtifactAdoptionChunkIndex
+        self.profileArtifactAdoptionChunkData = profileArtifactAdoptionChunkData
+        self.profileArtifactAdoptionResult = profileArtifactAdoptionResult
     }
 }
 
@@ -862,7 +884,8 @@ public enum ControllerWireCodec {
         "gamepadCustomization",
         "gamepadProfiles",
         "skinPackages",
-        "bindingPresentations"
+        "bindingPresentations",
+        "profileArtifactAdoptionChunkData"
     ]
     private static let expandedDecodeKeyMarkers = expandedDecodeFieldNames.map {
         Data("\"\($0)\"".utf8)
@@ -921,6 +944,7 @@ public enum ControllerWireCodec {
             || message.gamepadProfiles != nil
             || message.skinPackages != nil
             || message.bindingPresentations != nil
+            || message.profileArtifactAdoptionChunkData != nil
     }
 
     static func requiresExpandedStackForDecoding(_ data: Data) -> Bool {
@@ -1261,7 +1285,7 @@ private extension ControllerMessageType {
         case .heartbeat: 3
         case .ping: 4
         case .pong: 5
-        case .hello, .pairingRequest, .pairingChallenge, .pairingAccepted, .elementInput, .pointer, .gamepadAnalog, .gamepadCustomization, .gamepadProfiles, .skinPackages, .skinPackageRemoval, .gamepadProfileSkinSelection, .gamepadProfileSelection, .gamepadDefaultProfile, .gamepadProfileOrientationPreferenceMutation, .launchProfileTarget, .error: nil
+        case .hello, .pairingRequest, .pairingChallenge, .pairingAccepted, .elementInput, .pointer, .gamepadAnalog, .gamepadCustomization, .gamepadProfiles, .skinPackages, .skinPackageRemoval, .gamepadProfileSkinSelection, .gamepadProfileSelection, .gamepadDefaultProfile, .gamepadProfileOrientationPreferenceMutation, .launchProfileTarget, .profileArtifactAdoptionBegin, .profileArtifactAdoptionChunk, .profileArtifactAdoptionCommit, .profileArtifactAdoptionCancel, .profileArtifactAdoptionResult, .error: nil
         }
     }
 

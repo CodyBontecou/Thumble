@@ -1,4 +1,5 @@
 import CoreGraphics
+import Darwin
 import SwiftUI
 import XCTest
 
@@ -938,6 +939,85 @@ final class ThumbleCLISmokeTestSuite: XCTestCase {
         XCTAssertEqual(layout.visualStyle?.pressed?.fillStyle?.representativeColor, GamepadRGBAColor(hexString: "#38BDF8")!.normalized)
     }
 
+    func testRustGeneratedFixturesDecodeWithSwiftSemanticParity() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Host/fixtures/generation-spec/v1/generated", isDirectory: true)
+        let decoder = JSONDecoder()
+
+        func fixture(_ name: String) throws -> GeneratedGameKeypadProfile {
+            let data = try Data(contentsOf: root.appendingPathComponent("\(name).json"))
+            return try decoder.decode(GeneratedGameKeypadProfile.self, from: data)
+        }
+
+        let aliases = try fixture("aliases-basic")
+        XCTAssertEqual(aliases.profile.id.uuidString.lowercased(), "b6e5fb93-be66-5a82-9801-88da1dbb4c49")
+        XCTAssertEqual(aliases.profile, aliases.profile.normalized)
+        XCTAssertEqual(aliases.profile.outputMode, .keyboard)
+        XCTAssertEqual(aliases.profile.customization.visualLabel(for: .up), "Move Up")
+        XCTAssertEqual(aliases.profile.customization.visualLabel(for: .jump), "Jump")
+        XCTAssertEqual(aliases.keyBindings[.up], .init(key: "up arrow"))
+        XCTAssertEqual(aliases.keyBindings[.jump], .init(key: "space-bar", modifiers: ["shift"]))
+
+        let specialized = try fixture("specialized-capacity")
+        XCTAssertEqual(specialized.profile.id.uuidString.lowercased(), "64542b15-5a6f-5c8d-ba94-99cd24da68f7")
+        XCTAssertEqual(specialized.profile, specialized.profile.normalized)
+        XCTAssertEqual(specialized.profile.outputMode, .keyboard)
+        let specializedControls = specialized.profile.customization.customButtons.map(\.normalized)
+        XCTAssertEqual(specializedControls.filter(\.isJoystick).count, 2)
+        XCTAssertEqual(specializedControls.filter(\.isTrigger).count, 2)
+        XCTAssertEqual(specializedControls.filter(\.isTrackpad).count, 1)
+        XCTAssertEqual(Set(specializedControls.map { $0.id.uuidString.lowercased() }), Set([
+            "95e98733-8394-53b3-9a63-95f364da5cad",
+            "e31e8da3-f034-538f-8e47-cdac8de728a3",
+            "d1f85e97-c08b-5757-b400-50f8cfd4eefa",
+            "cd604c20-d5a4-5bc2-a4a5-b300a32f1138",
+            "213a5b40-5a29-5437-b1e6-b2cdf42ee0a1"
+        ]))
+        XCTAssertEqual(specializedControls.first(where: \.isJoystick)?.joystickMapping, .movement)
+        XCTAssertEqual(
+            specializedControls.first(where: \.isTrackpad)?.trackpadSettings,
+            GamepadTrackpadSettings(
+                sensitivity: 1.2,
+                scrollSensitivity: 0.85,
+                tapToClick: true,
+                twoFingerScroll: true,
+                naturalScrolling: true
+            ).normalized
+        )
+        XCTAssertEqual(Set(specialized.keyBindings.keys), Set([.custom1, .custom2, .custom4, .custom5, .custom7]))
+
+        let trigger = try fixture("trigger-defaults")
+        XCTAssertEqual(trigger.profile.id.uuidString.lowercased(), "2c6d329f-e7c2-5895-aa29-a290e42032d5")
+        let triggerControl = try XCTUnwrap(trigger.profile.customization.customButtons.first?.normalized)
+        XCTAssertEqual(triggerControl.id.uuidString.lowercased(), "1938d035-4098-5bfc-9c99-baa58e176420")
+        XCTAssertEqual(triggerControl.label, "Right Trigge")
+        XCTAssertEqual(triggerControl.label.count, GamepadCustomization.maximumLabelLength)
+        XCTAssertEqual(triggerControl.triggerSettings, .defaultValue)
+        XCTAssertEqual(triggerControl.layout.shape, .ellipse)
+        XCTAssertEqual(trigger.keyBindings, [.custom1: .init(key: "R")])
+        XCTAssertEqual(trigger.profile.outputMode, .keyboard)
+
+        let rich = try fixture("rich-appearance")
+        XCTAssertEqual(rich.profile.id.uuidString.lowercased(), "5dbf90ec-609d-5a93-b547-9104e3966d6b")
+        XCTAssertEqual(rich.profile, rich.profile.normalized)
+        XCTAssertEqual(rich.profile.outputMode, .keyboard)
+        XCTAssertEqual(rich.keyBindings, [.focus: .init(key: "F")])
+        let richLayout = rich.profile.customization.buttonCustomization(for: .focus)
+        XCTAssertEqual(richLayout.icon?.value, "sparkles")
+        XCTAssertEqual(richLayout.icon?.source, .sfSymbol)
+        XCTAssertEqual(richLayout.hapticStyle, .heavy)
+        XCTAssertEqual(richLayout.hapticFeedback?.pattern, .double)
+        XCTAssertEqual(richLayout.hapticFeedback?.intensity ?? 0, 0.73, accuracy: 0.0001)
+        XCTAssertEqual(richLayout.visualStyle?.normal.shadows?.count, 2)
+        XCTAssertEqual(richLayout.visualStyle?.normal.bevelWidth, 1.5)
+        XCTAssertEqual(
+            richLayout.visualStyle?.pressed?.fillStyle?.representativeColor,
+            GamepadRGBAColor(hexString: "#38BDF8")!.normalized
+        )
+    }
+
     func testProductivityTemplatesAreFirstClassAndKeepGamingTemplatesAvailable() {
         XCTAssertEqual(Array(GamepadControllerTemplate.allCases.prefix(3)), [
             .productivityStarter,
@@ -1548,5 +1628,801 @@ final class ThumbleCLISmokeTestSuite: XCTestCase {
 
     func testGamepadLayoutResolverSmokeSuite() {
         GamepadLayoutResolverSmokeTests.main()
+    }
+
+    func testBuiltInJSONInstallIsOneDocumentAndStillUsesAuthority() throws {
+        let routed = try makeGenerationRoutedCLI(
+            generatedJSON: try generationFixtureText("aliases-basic")
+        )
+        defer { try? FileManager.default.removeItem(at: routed.root) }
+        let invocationID = "AAAAAAAA-BBBB-5CCC-8DDD-EEEEEEEEEEEE"
+
+        let result = try runRoutedCLI(
+            routed,
+            arguments: ["generate", "Hollow Knight", "--json", "--invocation-id", invocationID]
+        )
+        XCTAssertEqual(result.status, 0, result.stderr)
+        let document = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: Data(result.stdout.utf8)) as? [String: Any]
+        )
+        XCTAssertEqual(document["resolvedGameName"] as? String, "Hollow Knight")
+        XCTAssertFalse(result.stdout.contains("Generated, installed"))
+        XCTAssertEqual(result.stderr, "Invocation ID: \(invocationID)\n")
+        let requests = try recordedGenerationRequests(in: routed)
+        XCTAssertEqual(requests.count, 1)
+        let command = try XCTUnwrap(requests[0]["command"] as? [String: Any])
+        XCTAssertEqual(command["type"] as? String, "generation.generate")
+        XCTAssertEqual(command["select"] as? Bool, true)
+        XCTAssertEqual(command["makeDefault"] as? Bool, true)
+    }
+
+    func testSpecGenerationDryRunJSONRoutesRawSpecAndWritesExactRustBytesWithoutImport() throws {
+        let generatedJSON = try generationFixtureText("aliases-basic")
+        let routed = try makeGenerationRoutedCLI(generatedJSON: generatedJSON)
+        defer { try? FileManager.default.removeItem(at: routed.root) }
+        let invocationID = "AAAAAAAA-BBBB-5CCC-8DDD-EEEEEEEEEEEE"
+        let specJSON = "{\n  \"gameName\": \"Original\",\n  \"controls\": []\n}"
+        let input = routed.root.appendingPathComponent("spec.json")
+        try Data(specJSON.utf8).write(to: input)
+
+        let result = try runRoutedCLI(
+            routed,
+            arguments: [
+                "generate", "Requested Override", "--spec", input.path, "--json", "--dry-run",
+                "--skip-layout-validation", "--invocation-id", invocationID
+            ]
+        )
+        XCTAssertEqual(result.status, 0, result.stderr)
+        XCTAssertEqual(Data(result.stdout.utf8), Data(generatedJSON.utf8))
+        XCTAssertEqual(result.stderr, "")
+        let requests = try recordedGenerationRequests(in: routed)
+        XCTAssertEqual(requests.count, 1)
+        XCTAssertEqual(requests[0]["invocationID"] as? String, invocationID)
+        let command = try XCTUnwrap(requests[0]["command"] as? [String: Any])
+        XCTAssertEqual(command["type"] as? String, "generation.plan-spec")
+        XCTAssertEqual(command["specJSON"] as? String, specJSON)
+        XCTAssertEqual(command["requestedGameName"] as? String, "Requested Override")
+    }
+
+    func testSpecGenerationInstallUsesPlanRevisionInvocationArtifactAndFlags() throws {
+        let generatedJSON = try generationFixtureText("aliases-basic")
+        let artifactJSON = "{\"schema\":\"future-artifact\",\"preserve\":[1,2,3]}"
+        let routed = try makeGenerationRoutedCLI(
+            generatedJSON: generatedJSON,
+            artifactJSON: artifactJSON
+        )
+        defer { try? FileManager.default.removeItem(at: routed.root) }
+        let invocationID = "AAAAAAAA-BBBB-5CCC-8DDD-EEEEEEEEEEEE"
+        let input = routed.root.appendingPathComponent("spec.json")
+        try Data("{\"controls\":[]}".utf8).write(to: input)
+
+        let result = try runRoutedCLI(
+            routed,
+            arguments: [
+                "install-spec", input.path, "--json", "--no-select", "--default",
+                "--skip-layout-validation", "--invocation-id", invocationID
+            ]
+        )
+        XCTAssertEqual(result.status, 0, result.stderr)
+        XCTAssertEqual(Data(result.stdout.utf8), Data(generatedJSON.utf8))
+        XCTAssertEqual(result.stderr, "Invocation ID: \(invocationID)\n")
+        let requests = try recordedGenerationRequests(in: routed)
+        XCTAssertEqual(requests.count, 2)
+        XCTAssertEqual(requests.map { $0["invocationID"] as? String }, [invocationID, invocationID])
+        XCTAssertNil(requests[0]["expectedConfigurationRevision"])
+        XCTAssertEqual(requests[1]["expectedConfigurationRevision"] as? Int, 41)
+        let importCommand = try XCTUnwrap(requests[1]["command"] as? [String: Any])
+        XCTAssertEqual(importCommand["type"] as? String, "profile.import")
+        XCTAssertEqual(importCommand["artifactJSON"] as? String, artifactJSON)
+        XCTAssertEqual(importCommand["appendAsCopies"] as? Bool, false)
+        XCTAssertEqual(importCommand["select"] as? Bool, false)
+        XCTAssertEqual(importCommand["makeDefault"] as? Bool, true)
+    }
+
+    func testSpecGenerationReportsWarningsDeterministicallyAndKeepsJSONStdoutClean() throws {
+        let generatedJSON = try generationFixtureText("aliases-basic")
+        let warnings: [[String: Any]] = [
+            ["code": "zeta", "sourceOrdinal": 3, "message": "Later warning"],
+            ["code": "slot-exhaustion", "sourceOrdinal": 0, "message": "Control dropped because every slot is assigned"]
+        ]
+        let routed = try makeGenerationRoutedCLI(
+            generatedJSON: generatedJSON,
+            warnings: warnings
+        )
+        defer { try? FileManager.default.removeItem(at: routed.root) }
+        let input = routed.root.appendingPathComponent("spec.json")
+        try Data("{}".utf8).write(to: input)
+
+        let result = try runRoutedCLI(
+            routed,
+            arguments: ["generate", "--spec", input.path, "--dry-run", "--skip-layout-validation"]
+        )
+        XCTAssertEqual(result.status, 0, result.stderr)
+        let firstWarning = "- control 1 [slot-exhaustion]: Control dropped because every slot is assigned"
+        let laterWarning = "- control 4 [zeta]: Later warning"
+        XCTAssertTrue(result.stdout.contains("Generation warnings (2):"))
+        XCTAssertLessThan(
+            try XCTUnwrap(result.stdout.range(of: firstWarning)?.lowerBound),
+            try XCTUnwrap(result.stdout.range(of: laterWarning)?.lowerBound)
+        )
+        XCTAssertEqual(result.stdout.components(separatedBy: "Generated \"Alias Arcade\"").count - 1, 1)
+        XCTAssertTrue(result.stdout.contains("Bindings:"))
+
+        let jsonResult = try runRoutedCLI(
+            routed,
+            arguments: [
+                "generate", "--spec", input.path, "--json", "--dry-run",
+                "--skip-layout-validation"
+            ]
+        )
+        XCTAssertEqual(jsonResult.status, 0, jsonResult.stderr)
+        XCTAssertEqual(Data(jsonResult.stdout.utf8), Data(generatedJSON.utf8))
+        XCTAssertTrue(jsonResult.stderr.contains("Generation warnings (2):"))
+        XCTAssertTrue(jsonResult.stderr.contains(firstWarning))
+        XCTAssertTrue(jsonResult.stderr.contains("dropped"))
+        XCTAssertLessThan(
+            try XCTUnwrap(jsonResult.stderr.range(of: firstWarning)?.lowerBound),
+            try XCTUnwrap(jsonResult.stderr.range(of: laterWarning)?.lowerBound)
+        )
+        XCTAssertEqual(try recordedGenerationRequests(in: routed).count, 2)
+    }
+
+    func testSpecGenerationStrictJSONModeReportsWarningsBeforeFailureWithoutStdout() throws {
+        let routed = try makeGenerationRoutedCLI(
+            generatedJSON: try generationFixtureText("aliases-basic"),
+            warnings: [["code": "fallback", "sourceOrdinal": 0, "message": "Used fallback"]]
+        )
+        defer { try? FileManager.default.removeItem(at: routed.root) }
+        let input = routed.root.appendingPathComponent("spec.json")
+        try Data("{}".utf8).write(to: input)
+
+        let result = try runRoutedCLI(
+            routed,
+            arguments: [
+                "generate", "--spec", input.path, "--json", "--strict-layout",
+                "--skip-layout-validation"
+            ]
+        )
+        XCTAssertEqual(result.status, 1)
+        XCTAssertEqual(result.stdout, "")
+        XCTAssertTrue(result.stderr.contains("- control 1 [fallback]: Used fallback"))
+        XCTAssertTrue(result.stderr.contains("Rust generation reported warnings in strict layout mode."))
+        XCTAssertEqual(try recordedGenerationRequests(in: routed).count, 1)
+    }
+
+    func testSpecGenerationRejectsUnsafeOversizedAndInvalidInputsBeforeBackend() throws {
+        let routed = try makeGenerationRoutedCLI(
+            generatedJSON: try generationFixtureText("aliases-basic")
+        )
+        defer { try? FileManager.default.removeItem(at: routed.root) }
+        let oversized = routed.root.appendingPathComponent("oversized.json")
+        try Data(count: 256 * 1024 + 1).write(to: oversized)
+        let invalidUTF8 = routed.root.appendingPathComponent("invalid.json")
+        try Data([0x7B, 0xFF, 0x7D]).write(to: invalidUTF8)
+        let valid = routed.root.appendingPathComponent("valid.json")
+        try Data("{}".utf8).write(to: valid)
+        let symlink = routed.root.appendingPathComponent("symlink.json")
+        try FileManager.default.createSymbolicLink(at: symlink, withDestinationURL: valid)
+
+        for input in [oversized, invalidUTF8, symlink] {
+            try? FileManager.default.removeItem(at: routed.record)
+            let result = try runRoutedCLI(
+                routed,
+                arguments: [
+                    "generate", "--spec", input.path, "--json", "--dry-run",
+                    "--skip-layout-validation"
+                ]
+            )
+            XCTAssertEqual(result.status, 1, input.lastPathComponent)
+            XCTAssertEqual(result.stdout, "", input.lastPathComponent)
+            XCTAssertFalse(FileManager.default.fileExists(atPath: routed.record.path))
+        }
+
+        let exactLimit = Data(repeating: 0x20, count: 256 * 1024)
+        var result = try runRoutedCLI(
+            routed,
+            arguments: ["generate", "--stdin", "--json", "--dry-run", "--skip-layout-validation"],
+            standardInput: exactLimit
+        )
+        XCTAssertEqual(result.status, 0, result.stderr)
+        XCTAssertEqual(try recordedGenerationRequests(in: routed).count, 1)
+
+        try? FileManager.default.removeItem(at: routed.record)
+        result = try runRoutedCLI(
+            routed,
+            arguments: ["generate", "--stdin", "--json", "--dry-run", "--skip-layout-validation"],
+            standardInput: Data(repeating: 0x20, count: 256 * 1024 + 1)
+        )
+        XCTAssertEqual(result.status, 1)
+        XCTAssertEqual(result.stdout, "")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: routed.record.path))
+    }
+
+    func testSpecGenerationPreviewUsesPlannedSwiftProfile() throws {
+        let routed = try makeGenerationRoutedCLI(
+            generatedJSON: try generationFixtureText("aliases-basic")
+        )
+        defer { try? FileManager.default.removeItem(at: routed.root) }
+        let input = routed.root.appendingPathComponent("spec.json")
+        let preview = routed.root.appendingPathComponent("preview.png")
+        try Data("{}".utf8).write(to: input)
+
+        let result = try runRoutedCLI(
+            routed,
+            arguments: [
+                "generate", "--spec", input.path, "--dry-run", "--skip-layout-validation",
+                "--layout-preview", preview.path
+            ]
+        )
+        XCTAssertEqual(result.status, 0, result.stderr)
+        XCTAssertTrue(result.stdout.contains("Wrote layout preview to \(preview.path)."))
+        let previewData = try Data(contentsOf: preview)
+        XCTAssertTrue(previewData.starts(with: [0x89, 0x50, 0x4E, 0x47]))
+        XCTAssertEqual(try recordedGenerationRequests(in: routed).count, 1)
+    }
+
+    func testSpecGenerationRejectsDuplicateOrMissingSourcePreviewAndInvocationValues() throws {
+        let routed = try makeGenerationRoutedCLI(
+            generatedJSON: try generationFixtureText("aliases-basic")
+        )
+        defer { try? FileManager.default.removeItem(at: routed.root) }
+        let cases: [[String]] = [
+            ["generate", "--stdin", "--spec", "other.json"],
+            ["generate", "--spec", "--json"],
+            ["generate", "--stdin", "--layout-preview", "one.png", "--preview-output", "two.png"],
+            ["generate", "--stdin", "--layout-preview", "--json"],
+            ["generate", "--stdin", "--invocation-id", UUID().uuidString, "--invocation-id", UUID().uuidString],
+            ["generate", "--stdin", "--invocation-id", "--json"]
+        ]
+        for arguments in cases {
+            try? FileManager.default.removeItem(at: routed.record)
+            let result = try runRoutedCLI(routed, arguments: arguments, standardInput: Data("{}".utf8))
+            XCTAssertEqual(result.status, 1, arguments.joined(separator: " "))
+            XCTAssertFalse(FileManager.default.fileExists(atPath: routed.record.path))
+        }
+    }
+
+    func testProfileExportRoutesRawArtifactBytesWithoutContaminatingStandardOutput() throws {
+        let artifactJSON = "{\n  \"schema\": \"com.example.future\",\n  \"unknown\": [1, 2, 3]\n}"
+        let routed = try makeRoutedCLI(exportArtifactJSON: artifactJSON)
+        defer { try? FileManager.default.removeItem(at: routed.root) }
+        let invocationID = "AAAAAAAA-BBBB-5CCC-8DDD-EEEEEEEEEEEE"
+
+        var result = try runRoutedCLI(
+            routed,
+            arguments: ["profile", "export", "--all", "--invocation-id", invocationID]
+        )
+        XCTAssertEqual(result.status, 0, result.stderr)
+        XCTAssertEqual(result.stdout, artifactJSON + "\n")
+        var command = try recordedCommand(in: routed)
+        XCTAssertEqual(command["type"] as? String, "profile.export")
+        XCTAssertNil(command["target"])
+        XCTAssertEqual(try recordedRequest(in: routed)["invocationID"] as? String, invocationID)
+
+        let output = routed.root.appendingPathComponent("profile.json")
+        result = try runRoutedCLI(
+            routed,
+            arguments: ["profile", "export", "Arcade", "-o", output.path]
+        )
+        XCTAssertEqual(result.status, 0, result.stderr)
+        XCTAssertEqual(result.stdout, "")
+        XCTAssertEqual(try Data(contentsOf: output), Data(artifactJSON.utf8))
+        command = try recordedCommand(in: routed)
+        let target = try XCTUnwrap(command["target"] as? [String: Any])
+        XCTAssertEqual(target["kind"] as? String, "name")
+        XCTAssertEqual(target["name"] as? String, "Arcade")
+    }
+
+    func testProfileImportPreservesExplicitCurrentArtifactFlagsAndPrintsInvocationToStderr() throws {
+        let routed = try makeRoutedCLI(importedProfileNames: ["One", "Two"])
+        defer { try? FileManager.default.removeItem(at: routed.root) }
+        let invocationID = "AAAAAAAA-BBBB-5CCC-8DDD-EEEEEEEEEEEE"
+        let artifactJSON = "{\n  \"schema\": \"\(ThumbleKeypadConfigurationExport.schemaIdentifier)\",\n  \"version\": 4,\n  \"artifactVersion\": 1,\n  \"future\": true\n}"
+        let input = routed.root.appendingPathComponent("current.json")
+        try Data(artifactJSON.utf8).write(to: input)
+
+        let result = try runRoutedCLI(
+            routed,
+            arguments: [
+                "profile", "import", input.path, "--append", "--no-select", "--default",
+                "--invocation-id", invocationID
+            ]
+        )
+        XCTAssertEqual(result.status, 0, result.stderr)
+        XCTAssertEqual(result.stdout, "Imported 2 profiles as copies.\n")
+        XCTAssertEqual(result.stderr, "Invocation ID: \(invocationID)\n")
+        let command = try recordedCommand(in: routed)
+        XCTAssertEqual(command["type"] as? String, "profile.import")
+        XCTAssertEqual(command["artifactJSON"] as? String, artifactJSON)
+        XCTAssertEqual(command["appendAsCopies"] as? Bool, true)
+        XCTAssertEqual(command["select"] as? Bool, false)
+        XCTAssertEqual(command["makeDefault"] as? Bool, true)
+    }
+
+    func testCheckedInRustProfileArtifactFixtureRoutesUnchangedThroughSiblingImport() throws {
+        let repositoryRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let fixtureURL = repositoryRoot
+            .appendingPathComponent("Host/fixtures/profile-artifact/v1.json")
+        let fixtureBytes = try Data(contentsOf: fixtureURL)
+        let fixture = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: fixtureBytes) as? [String: Any]
+        )
+
+        XCTAssertEqual(
+            fixture["schema"] as? String,
+            ThumbleKeypadConfigurationExport.schemaIdentifier
+        )
+        XCTAssertEqual(fixture["version"] as? Int, 4)
+        XCTAssertEqual(fixture["artifactVersion"] as? Int, 1)
+        let hash = try XCTUnwrap(fixture["contentHash"] as? [String: Any])
+        XCTAssertEqual(hash["algorithm"] as? String, "sha256")
+        XCTAssertEqual(hash["canonicalization"] as? String, "rfc8785")
+        XCTAssertEqual(
+            hash["value"] as? String,
+            "71bb1a2c4832391a93df43ff42cc970b2ff90e8e85bc4041eebbfaa6d2cee3ff"
+        )
+
+        let profile = try XCTUnwrap((fixture["profiles"] as? [[String: Any]])?.first)
+        let futureProfile = try XCTUnwrap(profile["futureProfileField"] as? [String: Any])
+        XCTAssertEqual((futureProfile["nested"] as? [Any])?[2] as? Double, 3.5)
+        let profileID = "00000000-0000-0000-0000-000000000201"
+        let keyMaps = try XCTUnwrap(fixture["profileKeyBindings"] as? [String: Any])
+        let keyBindings = try XCTUnwrap(keyMaps[profileID] as? [String: Any])
+        let futureButton = try XCTUnwrap(keyBindings["futureButton"] as? [String: Any])
+        let futureBinding = try XCTUnwrap(futureButton["futureBindingField"] as? [String: Any])
+        XCTAssertEqual(futureBinding["label"] as? String, "保持")
+        let outputMaps = try XCTUnwrap(fixture["profileOutputBindings"] as? [String: Any])
+        let outputBindings = try XCTUnwrap(outputMaps[profileID] as? [String: Any])
+        let futureOutputButton = try XCTUnwrap(outputBindings["futureButton"] as? [String: Any])
+        let futureOutput = try XCTUnwrap(futureOutputButton["futureOutputField"] as? [String: Any])
+        XCTAssertEqual(futureOutput["mode"] as? String, "next")
+
+        let routed = try makeRoutedCLI()
+        defer { try? FileManager.default.removeItem(at: routed.root) }
+        let result = try runRoutedCLI(
+            routed,
+            arguments: ["profile", "import", fixtureURL.path]
+        )
+        XCTAssertEqual(result.status, 0, result.stderr)
+        let command = try recordedCommand(in: routed)
+        XCTAssertEqual(command["type"] as? String, "profile.import")
+        let routedArtifact = try XCTUnwrap(command["artifactJSON"] as? String)
+        XCTAssertEqual(Data(routedArtifact.utf8), fixtureBytes)
+    }
+
+    func testProfileImportFakeAuthorityRejectsUnsupportedSchemaAndVersion() throws {
+        let routed = try makeRoutedCLI()
+        defer { try? FileManager.default.removeItem(at: routed.root) }
+        let invocationID = "AAAAAAAA-BBBB-5CCC-8DDD-EEEEEEEEEEEE"
+        let cases = [
+            (
+                "{\"schema\":\"com.example.unsupported\",\"version\":4,\"profiles\":[]}",
+                "profile import artifact schema is unsupported [unsupported_profile_artifact_schema]"
+            ),
+            (
+                "{\"schema\":\"\(ThumbleKeypadConfigurationExport.schemaIdentifier)\",\"version\":999,\"profiles\":[]}",
+                "profile import artifact schema version is unsupported [unsupported_profile_artifact_schema_version]"
+            )
+        ]
+        for (index, testCase) in cases.enumerated() {
+            let input = routed.root.appendingPathComponent("unsupported-\(index).json")
+            try Data(testCase.0.utf8).write(to: input)
+            let result = try runRoutedCLI(
+                routed,
+                arguments: ["profile", "import", input.path, "--invocation-id", invocationID]
+            )
+            XCTAssertEqual(result.status, 1)
+            XCTAssertEqual(result.stdout, "")
+            XCTAssertEqual(
+                result.stderr,
+                "thumble: \(testCase.1) Invocation ID: \(invocationID)\nRun `thumble --help` for usage.\n"
+            )
+        }
+    }
+
+    func testProfileImportSchemaLessEnvelopeAdapterRunsFirstAndPreservesCatalogMetadata() throws {
+        struct SchemaLessEnvelope: Codable {
+            var exportedAt: Int64
+            var profiles: [GamepadConfigurationProfile]
+            var activeProfileID: UUID
+            var defaultProfileID: UUID
+            var profileKeyBindings: [String: [String: MacKeyBinding]]
+            var profileOutputBindings: [String: [String: MacControlOutputBinding]]
+        }
+
+        let routed = try makeRoutedCLI(importedProfileNames: ["One", "Two"])
+        defer { try? FileManager.default.removeItem(at: routed.root) }
+        let first = GamepadConfigurationProfile(name: "First", customization: .defaultValue)
+        let second = GamepadConfigurationProfile(name: "Second", customization: .defaultValue)
+        let keyBindings = [first.id.uuidString: ["jump": MacKeyBinding(keyCode: MacVirtualKey.space)]]
+        let outputBindings = [
+            second.id.uuidString: ["attack": MacControlOutputBinding(gamepadButtons: [.south])]
+        ]
+        let inputEnvelope = SchemaLessEnvelope(
+            exportedAt: 123_456,
+            profiles: [first, second],
+            activeProfileID: second.id,
+            defaultProfileID: first.id,
+            profileKeyBindings: keyBindings,
+            profileOutputBindings: outputBindings
+        )
+        let input = routed.root.appendingPathComponent("schema-less-envelope.json")
+        try JSONEncoder().encode(inputEnvelope).write(to: input)
+
+        let result = try runRoutedCLI(routed, arguments: ["profile", "import", input.path])
+        XCTAssertEqual(result.status, 0, result.stderr)
+        let artifactJSON = try XCTUnwrap(try recordedCommand(in: routed)["artifactJSON"] as? String)
+        let adapted = try JSONDecoder().decode(SchemaLessEnvelope.self, from: Data(artifactJSON.utf8))
+        XCTAssertEqual(adapted.exportedAt, 123_456)
+        XCTAssertEqual(adapted.profiles.map(\.id), [first.id, second.id])
+        XCTAssertEqual(adapted.activeProfileID, second.id)
+        XCTAssertEqual(adapted.defaultProfileID, first.id)
+        XCTAssertEqual(adapted.profileKeyBindings, keyBindings)
+        XCTAssertEqual(adapted.profileOutputBindings, outputBindings)
+    }
+
+    func testProfileImportLegacyAdaptersProduceVersionFourEnvelopes() throws {
+        let routed = try makeRoutedCLI()
+        defer { try? FileManager.default.removeItem(at: routed.root) }
+        let profile = GamepadConfigurationProfile(name: "Adapter Profile", customization: .defaultValue)
+        let generated = GeneratedGameKeypadProfile(
+            requestedGameName: "Adapter Game",
+            resolvedGameName: "Adapter Game",
+            profile: profile,
+            keyBindings: [.jump: .init(key: "Space")],
+            source: "test",
+            confidence: .high
+        )
+        let encoder = JSONEncoder()
+        let adapters: [(String, Data, Int)] = [
+            ("generated", try encoder.encode(generated), 1),
+            ("profile", try encoder.encode(profile), 1),
+            ("profiles", try encoder.encode([
+                profile,
+                GamepadConfigurationProfile(name: "Second", primaryCustomization: .defaultValue)
+            ]), 2),
+            ("customization", try encoder.encode(GamepadCustomization.defaultValue), 1)
+        ]
+
+        for (name, data, expectedCount) in adapters {
+            let input = routed.root.appendingPathComponent("\(name).json")
+            try data.write(to: input)
+            let result = try runRoutedCLI(routed, arguments: ["profile", "import", input.path])
+            XCTAssertEqual(result.status, 0, "\(name): \(result.stderr)")
+            let artifactJSON = try XCTUnwrap(try recordedCommand(in: routed)["artifactJSON"] as? String)
+            let envelope = try XCTUnwrap(
+                JSONSerialization.jsonObject(with: Data(artifactJSON.utf8)) as? [String: Any]
+            )
+            XCTAssertEqual(envelope["schema"] as? String, ThumbleKeypadConfigurationExport.schemaIdentifier, name)
+            XCTAssertEqual(envelope["version"] as? Int, 4, name)
+            XCTAssertEqual((envelope["profiles"] as? [Any])?.count, expectedCount, name)
+            if name == "customization" {
+                XCTAssertEqual((envelope["profiles"] as? [[String: Any]])?.first?["name"] as? String, name)
+            }
+        }
+    }
+
+    func testProfileImportRejectsNonRegularOversizedAndInvalidUTF8BeforeBackend() throws {
+        let routed = try makeRoutedCLI()
+        defer { try? FileManager.default.removeItem(at: routed.root) }
+        let directory = routed.root.appendingPathComponent("directory", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
+        let oversized = routed.root.appendingPathComponent("oversized.json")
+        try Data(count: 8 * 1024 * 1024 + 1).write(to: oversized)
+        let invalidUTF8 = routed.root.appendingPathComponent("invalid.json")
+        try Data([0x7B, 0x22, 0x78, 0x22, 0x3A, 0xFF, 0x7D]).write(to: invalidUTF8)
+        let validFile = routed.root.appendingPathComponent("valid.json")
+        try Data("{}".utf8).write(to: validFile)
+        let symlink = routed.root.appendingPathComponent("symlink.json")
+        try FileManager.default.createSymbolicLink(at: symlink, withDestinationURL: validFile)
+        let fifo = routed.root.appendingPathComponent("fifo.json")
+        XCTAssertEqual(mkfifo(fifo.path, 0o600), 0)
+
+        for input in [directory, symlink, fifo, oversized, invalidUTF8] {
+            try? FileManager.default.removeItem(at: routed.record)
+            let result = try runRoutedCLI(routed, arguments: ["profile", "import", input.path])
+            XCTAssertNotEqual(result.status, 0, input.lastPathComponent)
+            XCTAssertFalse(FileManager.default.fileExists(atPath: routed.record.path), input.lastPathComponent)
+        }
+    }
+
+    func testProfileTransferRejectsAmbiguousAndUnknownArgumentsBeforeBackend() throws {
+        let routed = try makeRoutedCLI()
+        defer { try? FileManager.default.removeItem(at: routed.root) }
+        let input = routed.root.appendingPathComponent("input.json")
+        try Data("{}".utf8).write(to: input)
+        let cases: [([String], String)] = [
+            (["profile", "export", "--all", "Arcade"], "Profile export cannot combine --all with a target"),
+            (["profile", "export", "Arcade", "Second"], "Profile export accepts only one target"),
+            (["profile", "export", "--output"], "Missing path after --output"),
+            (["profile", "export", "--future"], "Unknown profile export option: --future"),
+            (["profile", "import", input.path, "second.json"], "Profile import accepts only one path"),
+            (["profile", "import", input.path, "--name"], "Missing value after --name"),
+            (["profile", "import", input.path, "--future"], "Unknown profile import option: --future")
+        ]
+        for (arguments, message) in cases {
+            try? FileManager.default.removeItem(at: routed.record)
+            let result = try runRoutedCLI(routed, arguments: arguments)
+            XCTAssertEqual(result.status, 1, arguments.joined(separator: " "))
+            XCTAssertEqual(result.stderr, "thumble: \(message)\nRun `thumble --help` for usage.\n")
+            XCTAssertFalse(FileManager.default.fileExists(atPath: routed.record.path))
+        }
+    }
+
+    func testProfileInvocationIDRejectsDuplicateMissingAndInvalidValuesExactly() throws {
+        let routed = try makeRoutedCLI()
+        defer { try? FileManager.default.removeItem(at: routed.root) }
+        let cases: [([String], String)] = [
+            (
+                ["profile", "export", "--invocation-id", UUID().uuidString, "--invocation-id", UUID().uuidString],
+                "--invocation-id may be provided only once"
+            ),
+            (["profile", "export", "--invocation-id"], "Missing UUID after --invocation-id"),
+            (["profile", "export", "--invocation-id", "--all"], "Missing UUID after --invocation-id"),
+            (["profile", "export", "--invocation-id", "not-a-uuid"], "--invocation-id must be an exact UUID")
+        ]
+        for (arguments, message) in cases {
+            try? FileManager.default.removeItem(at: routed.record)
+            let result = try runRoutedCLI(routed, arguments: arguments)
+            XCTAssertEqual(result.status, 1)
+            XCTAssertEqual(result.stderr, "thumble: \(message)\nRun `thumble --help` for usage.\n")
+            XCTAssertFalse(FileManager.default.fileExists(atPath: routed.record.path))
+        }
+    }
+
+    func testProfileTransferHelpDocumentsImportAndInvocationFlags() throws {
+        let routed = try makeRoutedCLI()
+        defer { try? FileManager.default.removeItem(at: routed.root) }
+        let result = try runRoutedCLI(routed, arguments: ["--help"])
+        XCTAssertEqual(result.status, 0, result.stderr)
+        XCTAssertTrue(result.stdout.contains("profile export [NAME|UUID|--all] [-o file.json] [--invocation-id UUID]"))
+        XCTAssertTrue(result.stdout.contains("profile import file.json [--append] [--no-select] [--default] [--name NAME] [--invocation-id UUID]"))
+    }
+
+    private struct RoutedCLI {
+        var root: URL
+        var executable: URL
+        var record: URL
+    }
+
+    private struct RoutedCLIResult {
+        var status: Int32
+        var stdout: String
+        var stderr: String
+    }
+
+    private func generationFixtureText(_ name: String) throws -> String {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let data = try Data(
+            contentsOf: root.appendingPathComponent(
+                "Host/fixtures/generation-spec/v1/generated/\(name).json"
+            )
+        )
+        guard let text = String(data: data, encoding: .utf8) else {
+            throw CocoaError(.fileReadInapplicableStringEncoding)
+        }
+        return text
+    }
+
+    private func makeGenerationRoutedCLI(
+        generatedJSON: String,
+        artifactJSON: String = "{\"artifact\":true}",
+        warnings: [[String: Any]] = []
+    ) throws -> RoutedCLI {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("thumble-generation-routing-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: false)
+        let executable = root.appendingPathComponent("thumble")
+        let builtExecutable = Bundle(for: ThumbleCLISmokeTestSuite.self).bundleURL
+            .deletingLastPathComponent()
+            .appendingPathComponent("thumble")
+        try FileManager.default.copyItem(at: builtExecutable, to: executable)
+
+        let record = root.appendingPathComponent("requests.jsonl")
+        let generatedBase64 = Data(generatedJSON.utf8).base64EncodedString()
+        let artifactBase64 = Data(artifactJSON.utf8).base64EncodedString()
+        let warningsBase64 = try JSONSerialization.data(withJSONObject: warnings).base64EncodedString()
+        let recordBase64 = Data(record.path.utf8).base64EncodedString()
+        let bridge = root.appendingPathComponent("thumble-cli-bridge")
+        let script = """
+        #!/usr/bin/python3
+        import base64
+        import json
+        import sys
+        request_text = sys.stdin.readline()
+        record = base64.b64decode("\(recordBase64)").decode("utf-8")
+        with open(record, "a", encoding="utf-8") as output:
+            output.write(request_text)
+        request = json.loads(request_text)
+        command = request["command"]
+        response = {
+            "schemaVersion": 8,
+            "ok": True,
+            "invocationID": request["invocationID"],
+            "authorityMode": "offline"
+        }
+        if command["type"] == "generation.plan-spec":
+            response["generationPlan"] = {
+                "configurationRevision": 41,
+                "schemaVersion": 1,
+                "catalogRevision": 1,
+                "plannerRevision": 1,
+                "descriptorDigest": "b" * 64,
+                "generatedJSON": base64.b64decode("\(generatedBase64)").decode("utf-8"),
+                "artifactJSON": base64.b64decode("\(artifactBase64)").decode("utf-8"),
+                "contentHash": {
+                    "algorithm": "sha256",
+                    "canonicalization": "rfc8785",
+                    "value": "c" * 64
+                },
+                "warnings": json.loads(base64.b64decode("\(warningsBase64)")),
+                "omittedWarningCount": 0,
+                "assignedControls": [],
+                "droppedControls": [],
+                "layoutQuality": {
+                    "issueCount": 0,
+                    "errorCount": 0,
+                    "warningCount": 0,
+                    "issues": [],
+                    "omittedIssueCount": 0
+                }
+            }
+        elif command["type"] in ["profile.import", "generation.generate"]:
+            is_builtin = command["type"] == "generation.generate"
+            response["outcome"] = {
+                "operation": command["type"],
+                "profileNames": ["Hollow Knight" if is_builtin else "Alias Arcade"],
+                "removedEveryProfile": False,
+                "changed": True,
+                "configurationRevision": 42,
+                "draftID": "AAAAAAAA-BBBB-5CCC-8DDD-EEEEEEEEEEE1",
+                "commitID": "AAAAAAAA-BBBB-5CCC-8DDD-EEEEEEEEEEE2",
+                "idempotentReplay": False
+            }
+        else:
+            response["ok"] = False
+            response["error"] = {
+                "code": "unexpected_command",
+                "message": "unexpected command"
+            }
+        print(json.dumps(response, separators=(",", ":")))
+        """
+        try script.write(to: bridge, atomically: true, encoding: .utf8)
+        XCTAssertEqual(chmod(bridge.path, 0o700), 0)
+        return RoutedCLI(root: root, executable: executable, record: record)
+    }
+
+    private func recordedGenerationRequests(in routed: RoutedCLI) throws -> [[String: Any]] {
+        let text = try String(contentsOf: routed.record, encoding: .utf8)
+        return try text.split(separator: "\n").map { line in
+            try XCTUnwrap(
+                JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any]
+            )
+        }
+    }
+
+    private func makeRoutedCLI(
+        exportArtifactJSON: String = "{}",
+        importedProfileNames: [String] = ["Imported"]
+    ) throws -> RoutedCLI {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("thumble-cli-routing-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: false)
+        let executable = root.appendingPathComponent("thumble")
+        let builtExecutable = Bundle(for: ThumbleCLISmokeTestSuite.self).bundleURL
+            .deletingLastPathComponent()
+            .appendingPathComponent("thumble")
+        try FileManager.default.copyItem(at: builtExecutable, to: executable)
+
+        let record = root.appendingPathComponent("request.json")
+        let artifactBase64 = Data(exportArtifactJSON.utf8).base64EncodedString()
+        let namesBase64 = try JSONEncoder().encode(importedProfileNames).base64EncodedString()
+        let recordBase64 = Data(record.path.utf8).base64EncodedString()
+        let bridge = root.appendingPathComponent("thumble-cli-bridge")
+        let script = """
+        #!/usr/bin/python3
+        import base64
+        import json
+        import sys
+        request_text = sys.stdin.readline()
+        record = base64.b64decode("\(recordBase64)").decode("utf-8")
+        with open(record, "w", encoding="utf-8") as output:
+            output.write(request_text)
+        request = json.loads(request_text)
+        command = request["command"]
+        response = {
+            "schemaVersion": 8,
+            "ok": True,
+            "invocationID": request["invocationID"],
+            "authorityMode": "offline"
+        }
+        if command["type"] == "profile.export":
+            response["artifact"] = {
+                "configurationRevision": 21,
+                "artifactJSON": base64.b64decode("\(artifactBase64)").decode("utf-8"),
+                "contentHash": {
+                    "algorithm": "sha256",
+                    "canonicalization": "rfc8785",
+                    "value": "a" * 64
+                }
+            }
+        else:
+            artifact = json.loads(command["artifactJSON"])
+            expected_schema = "com.codybontecou.pocketpad.keypad-configuration"
+            if artifact.get("schema") != expected_schema:
+                response["ok"] = False
+                response["error"] = {
+                    "code": "unsupported_profile_artifact_schema",
+                    "message": "profile import artifact schema is unsupported"
+                }
+            elif artifact.get("version") not in range(1, 5):
+                response["ok"] = False
+                response["error"] = {
+                    "code": "unsupported_profile_artifact_schema_version",
+                    "message": "profile import artifact schema version is unsupported"
+                }
+            elif "artifactVersion" in artifact and artifact["artifactVersion"] != 1:
+                response["ok"] = False
+                response["error"] = {
+                    "code": "unsupported_profile_artifact_version",
+                    "message": "profile import artifact version is unsupported"
+                }
+            else:
+                response["outcome"] = {
+                    "operation": "profile.import",
+                    "profileNames": json.loads(base64.b64decode("\(namesBase64)")),
+                    "removedEveryProfile": False,
+                    "changed": True,
+                    "configurationRevision": 22,
+                    "draftID": "AAAAAAAA-BBBB-5CCC-8DDD-EEEEEEEEEEE1",
+                    "commitID": "AAAAAAAA-BBBB-5CCC-8DDD-EEEEEEEEEEE2",
+                    "idempotentReplay": False
+                }
+        print(json.dumps(response, separators=(",", ":")))
+        """
+        try script.write(to: bridge, atomically: true, encoding: .utf8)
+        XCTAssertEqual(chmod(bridge.path, 0o700), 0)
+        return RoutedCLI(root: root, executable: executable, record: record)
+    }
+
+    private func runRoutedCLI(
+        _ routed: RoutedCLI,
+        arguments: [String],
+        standardInput: Data? = nil
+    ) throws -> RoutedCLIResult {
+        let process = Process()
+        let stdout = Pipe()
+        let stderr = Pipe()
+        let stdin = standardInput.map { _ in Pipe() }
+        process.executableURL = routed.executable
+        process.arguments = arguments
+        process.standardInput = stdin
+        process.standardOutput = stdout
+        process.standardError = stderr
+        try process.run()
+        if let standardInput, let stdin {
+            try? stdin.fileHandleForWriting.write(contentsOf: standardInput)
+            try? stdin.fileHandleForWriting.close()
+        }
+        process.waitUntilExit()
+        return RoutedCLIResult(
+            status: process.terminationStatus,
+            stdout: String(decoding: stdout.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self),
+            stderr: String(decoding: stderr.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+        )
+    }
+
+    private func recordedRequest(in routed: RoutedCLI) throws -> [String: Any] {
+        try XCTUnwrap(
+            JSONSerialization.jsonObject(with: Data(contentsOf: routed.record)) as? [String: Any]
+        )
+    }
+
+    private func recordedCommand(in routed: RoutedCLI) throws -> [String: Any] {
+        try XCTUnwrap(try recordedRequest(in: routed)["command"] as? [String: Any])
     }
 }

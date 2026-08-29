@@ -3,7 +3,8 @@ import Foundation
 
 public enum ThumbleSkinWorkspaceSchema {
     public static let identifier = "com.codybontecou.pocketpad.skin-source"
-    public static let currentVersion = 1
+    /// Schema 1: material/component authoring. Schema 2 adds optional CSS stylesheets.
+    public static let currentVersion = 2
 }
 
 public struct ThumbleNormalizedRect: Codable, Equatable, Sendable {
@@ -395,6 +396,8 @@ public struct ThumbleSkinWorkspace: Codable, Equatable, Sendable {
     public var components: [ThumbleSkinComponentSpec]
     public var assignments: [ThumbleSemanticStyleAssignment]
     public var sourceAssets: [ThumbleSkinSourceAsset]
+    /// CSS authoring (schema 2): paths relative to the workspace root, under `styles/`.
+    public var stylesheets: [String]
     public var previews: [ThumblePreviewRequest]
 
     public init(
@@ -414,6 +417,7 @@ public struct ThumbleSkinWorkspace: Codable, Equatable, Sendable {
         components: [ThumbleSkinComponentSpec] = [],
         assignments: [ThumbleSemanticStyleAssignment] = [],
         sourceAssets: [ThumbleSkinSourceAsset] = [],
+        stylesheets: [String] = [],
         previews: [ThumblePreviewRequest] = []
     ) {
         self.schema = schema
@@ -432,13 +436,17 @@ public struct ThumbleSkinWorkspace: Codable, Equatable, Sendable {
         self.components = components
         self.assignments = assignments
         self.sourceAssets = sourceAssets
+        self.stylesheets = stylesheets
         self.previews = previews
     }
 
     private enum CodingKeys: String, CodingKey {
         case schema, schemaVersion, identifier, version, name, author, summary, license, artboardID
-        case orientations, colorSchemes, palette, materials, components, assignments, sourceAssets, previews
+        case orientations, colorSchemes, palette, materials, components, assignments, sourceAssets
+        case stylesheets, previews
     }
+
+    public var usesCSSAuthoring: Bool { !stylesheets.isEmpty }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -458,6 +466,7 @@ public struct ThumbleSkinWorkspace: Codable, Equatable, Sendable {
         components = try container.decodeIfPresent([ThumbleSkinComponentSpec].self, forKey: .components) ?? []
         assignments = try container.decodeIfPresent([ThumbleSemanticStyleAssignment].self, forKey: .assignments) ?? []
         sourceAssets = try container.decodeIfPresent([ThumbleSkinSourceAsset].self, forKey: .sourceAssets) ?? []
+        stylesheets = try container.decodeIfPresent([String].self, forKey: .stylesheets) ?? []
         previews = try container.decodeIfPresent([ThumblePreviewRequest].self, forKey: .previews) ?? []
     }
 
@@ -479,6 +488,9 @@ public struct ThumbleSkinWorkspace: Codable, Equatable, Sendable {
         try container.encode(components, forKey: .components)
         try container.encode(assignments, forKey: .assignments)
         try container.encode(sourceAssets, forKey: .sourceAssets)
+        if !stylesheets.isEmpty {
+            try container.encode(stylesheets, forKey: .stylesheets)
+        }
         try container.encode(previews, forKey: .previews)
     }
 
@@ -610,6 +622,36 @@ public struct ThumbleSkinWorkspace: Codable, Equatable, Sendable {
                 ThumblePreviewRequest(id: "portrait-dark-normal", artboardID: artboardID, orientation: .portrait, colorScheme: .dark)
             ]
         )
+    }
+
+    /// Schema-2 workspace whose control styling comes entirely from CSS.
+    public static func starterCSS(name: String, identifier: String, artboardID: String) -> ThumbleSkinWorkspace {
+        var workspace = ThumbleSkinWorkspace(
+            schemaVersion: 2,
+            identifier: identifier,
+            name: name,
+            author: ThumbleSkinAuthor(name: "Your Name"),
+            summary: "A CSS-authored controller skin built from a canonical Thumble artboard.",
+            license: "All Rights Reserved",
+            artboardID: artboardID,
+            palette: [
+                ThumbleSkinPaletteToken(id: "surface", light: "#F2EEF5", dark: "#211A46"),
+                ThumbleSkinPaletteToken(id: "accent", light: "#7C61A8", dark: "#A77CFF")
+            ],
+            materials: [],
+            components: [],
+            assignments: [],
+            sourceAssets: [],
+            stylesheets: ["styles/controller.css"],
+            previews: [
+                ThumblePreviewRequest(id: "landscape-light-normal", artboardID: artboardID, orientation: .landscape, colorScheme: .light),
+                ThumblePreviewRequest(id: "landscape-dark-normal", artboardID: artboardID, orientation: .landscape, colorScheme: .dark),
+                ThumblePreviewRequest(id: "portrait-light-normal", artboardID: artboardID, orientation: .portrait, colorScheme: .light),
+                ThumblePreviewRequest(id: "portrait-dark-normal", artboardID: artboardID, orientation: .portrait, colorScheme: .dark)
+            ]
+        )
+        workspace.schemaVersion = 2
+        return workspace
     }
 }
 
@@ -928,6 +970,7 @@ public enum ThumbleSkinScaffolder {
         artboardID: String = ThumbleSkinArtboardCatalog.defaultID,
         to destination: URL,
         force: Bool = false,
+        css: Bool = false,
         fileManager: FileManager = .default
     ) throws -> ThumbleSkinWorkspace {
         guard ThumbleSkinPackageValidator.isValidReverseDNSIdentifier(identifier),
@@ -943,7 +986,9 @@ public enum ThumbleSkinScaffolder {
                 try fileManager.removeItem(at: destination)
             }
         }
-        let workspace = ThumbleSkinWorkspace.starter(name: name, identifier: identifier, artboardID: artboardID)
+        let workspace = css
+            ? ThumbleSkinWorkspace.starterCSS(name: name, identifier: identifier, artboardID: artboardID)
+            : ThumbleSkinWorkspace.starter(name: name, identifier: identifier, artboardID: artboardID)
         do {
             try fileManager.createDirectory(
                 at: destination.appendingPathComponent("sources/artwork", isDirectory: true),
@@ -957,22 +1002,36 @@ public enum ThumbleSkinScaffolder {
                 at: destination.appendingPathComponent("reviews", isDirectory: true),
                 withIntermediateDirectories: true
             )
+            if css {
+                try fileManager.createDirectory(
+                    at: destination.appendingPathComponent("styles", isDirectory: true),
+                    withIntermediateDirectories: true
+                )
+            }
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
             try encoder.encode(workspace).write(
                 to: destination.appendingPathComponent(sourceFileName),
                 options: .atomic
             )
-            try readme(name: name, artboardID: artboardID).write(
+            try readme(name: name, artboardID: artboardID, css: css).write(
                 to: destination.appendingPathComponent("README.md"),
                 atomically: true,
                 encoding: .utf8
             )
-            try starterSVG(name: name).write(
-                to: destination.appendingPathComponent("sources/artwork/accent-lines.svg"),
-                atomically: true,
-                encoding: .utf8
-            )
+            if css {
+                try starterStylesheet(name: name).write(
+                    to: destination.appendingPathComponent("styles/controller.css"),
+                    atomically: true,
+                    encoding: .utf8
+                )
+            } else {
+                try starterSVG(name: name).write(
+                    to: destination.appendingPathComponent("sources/artwork/accent-lines.svg"),
+                    atomically: true,
+                    encoding: .utf8
+                )
+            }
             try reviewReadme.write(
                 to: destination.appendingPathComponent("reviews/README.md"),
                 atomically: true,
@@ -994,8 +1053,21 @@ public enum ThumbleSkinScaffolder {
         return workspace
     }
 
-    private static func readme(name: String, artboardID: String) -> String {
-        """
+    private static func readme(name: String, artboardID: String, css: Bool = false) -> String {
+        if css {
+            return """
+            # \(name)
+
+            Editable CSS-authored Thumble skin workspace targeting `\(artboardID)`.
+
+            - Edit `styles/controller.css` using the `\(ThumbleCSSProfile.identifier)` profile.
+            - `skin-source.json` points at the stylesheet; materials and SVG are not required.
+            - Inspect with `thumble skin css lint .` and `thumble skin css computed . --control jump`.
+            - Compile with `thumble skin compile . --strict`.
+            - Review the native contact sheet before publication.
+            """ + "\n"
+        }
+        return """
         # \(name)
 
         Editable Thumble skin workspace targeting `\(artboardID)`.
@@ -1045,6 +1117,55 @@ public enum ThumbleSkinScaffolder {
           <path d="M80 150 C420 40 650 210 920 105 S1430 30 1668 170" fill="none" stroke="url(#accent)" stroke-width="3"/>
           <path d="M80 654 C420 764 650 594 920 699 S1430 774 1668 634" fill="none" stroke="url(#accent)" stroke-width="2" opacity="0.62"/>
         </svg>
+        """ + "\n"
+    }
+
+    private static func starterStylesheet(name: String) -> String {
+        let escaped = name.replacingOccurrences(of: "*/", with: "")
+        return """
+        /* \(escaped) — \(ThumbleCSSProfile.identifier) */
+
+        :root {
+          --surface: #F2EEF5;
+          --surface-dark: #211A46;
+          --ink: #7C61A8;
+          --accent: #A77CFF;
+        }
+
+        controller {
+          background: linear-gradient(160deg, #E9E4F2, #C9C2D2);
+        }
+
+        control {
+          color: var(--ink);
+          background: var(--surface);
+          border: 1px solid rgba(255, 255, 255, 0.6);
+          border-radius: 14px;
+          box-shadow: 0 2px 4px rgba(16, 12, 39, 0.18);
+        }
+
+        control:pressed {
+          transform: scale(0.96);
+        }
+
+        control:disabled {
+          opacity: 0.45;
+        }
+
+        control[role="primary_action"] {
+          background: linear-gradient(135deg, #8A6FD0, #5B4497);
+          color: #FFFFFF;
+        }
+
+        @media (prefers-color-scheme: dark) {
+          :root {
+            --surface: var(--surface-dark);
+            --ink: #B8A0E8;
+          }
+          controller {
+            background: linear-gradient(160deg, #17143B, #0A0819);
+          }
+        }
         """ + "\n"
     }
 }

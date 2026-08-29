@@ -136,8 +136,11 @@ targets:
       - path: Sources/Mac/MacControlOutputBinding.swift
       - path: Sources/Mac/MacConfigurationBindings.swift
       - path: Sources/Mac/MacRustAuthorityInterlock.swift
+      - path: Sources/Mac/MacSharedKeypadImport.swift
       - path: Sources/CLI/ThumbleCLIBackend.swift
       - path: Sources/iOS/IOSLocalKeypadUX.swift
+      - path: Sources/iOS/IOSPendingBuilderArtifactStore.swift
+      - path: Sources/iOS/IOSBuilderArtifactPickup.swift
       - path: Tests
     dependencies:
       - package: ZIPFoundation
@@ -165,6 +168,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.codybontecou.PocketPad.iOS
         PRODUCT_NAME: Thumble
         INFOPLIST_FILE: Resources/iOS/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Resources/iOS/ThumbleiOS.entitlements
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: 67KC823C9A
@@ -188,6 +192,13 @@ targets:
               --object-root "${OBJECT_FILE_DIR_normal:-$OBJECT_FILE_DIR}"
           fi
 schemes:
+  ThumbleTests:
+    build:
+      targets:
+        ThumbleCLITests: [test]
+    test:
+      targets:
+        - ThumbleCLITests
   ThumbleMac:
     build:
       targets:

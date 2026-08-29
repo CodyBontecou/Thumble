@@ -1,0 +1,125 @@
+{
+  "gameName": "Exhaustion",
+  "controls": [
+    {
+      "button": "up",
+      "label": "Primary 0",
+      "key": "A",
+      "role": "primary"
+    },
+    {
+      "button": "down",
+      "label": "Primary 1",
+      "key": "A",
+      "role": "primary"
+    },
+    {
+      "button": "left",
+      "label": "Primary 2",
+      "key": "A",
+      "role": "primary"
+    },
+    {
+      "button": "right",
+      "label": "Primary 3",
+      "key": "A",
+      "role": "primary"
+    },
+    {
+      "button": "jump",
+      "label": "Primary 4",
+      "key": "A",
+      "role": "primary"
+    },
+    {
+      "button": "attack",
+      "label": "Primary 5",
+      "key": "A",
+      "role": "primary"
+    },
+    {
+      "button": "dash",
+      "label": "Primary 6",
+      "key": "A",
+      "role": "primary"
+    },
+    {
+      "button": "focus",
+      "label": "Primary 7",
+      "key": "A",
+      "role": "primary"
+    },
+    {
+      "button": "map",
+      "label": "Primary 8",
+      "key": "A",
+      "role": "primary"
+    },
+    {
+      "button": "pause",
+      "label": "Primary 9",
+      "key": "A",
+      "role": "primary"
+    },
+    {
+      "button": "custom1",
+      "label": "Primary 10",
+      "key": "A",
+      "role": "primary"
+    },
+    {
+      "button": "custom2",
+      "label": "Primary 11",
+      "key": "A",
+      "role": "primary"
+    },
+    {
+      "button": "custom3",
+      "label": "Primary 12",
+      "key": "A",
+      "role": "primary"
+    },
+    {
+      "button": "custom4",
+      "label": "Primary 13",
+      "key": "A",
+      "role": "primary"
+    },
+    {
+      "button": "custom5",
+      "label": "Primary 14",
+      "key": "A",
+      "role": "primary"
+    },
+    {
+      "button": "custom6",
+      "label": "Primary 15",
+      "key": "A",
+      "role": "primary"
+    },
+    {
+      "button": "custom7",
+      "label": "Primary 16",
+      "key": "A",
+      "role": "primary"
+    },
+    {
+      "button": "custom8",
+      "label": "Primary 17",
+      "key": "A",
+      "role": "primary"
+    },
+    {
+      "button": "jump",
+      "label": "Duplicate",
+      "key": "B",
+      "role": "primary"
+    },
+    {
+      "id": "overflow",
+      "label": "Overflow",
+      "key": "C",
+      "role": "primary"
+    }
+  ]
+}

@@ -56,4 +56,25 @@ test -s "$contact_sheet"
 cmp "$reference_a" "$reference_b"
 cmp "$reference_a" "$reference/dist/indigo-pocket-1.0.0.pocketpad"
 
-echo "Thumble package, authoring, quality, and native-preview verification passed: $temporary"
+# CSS authoring (thumble-css-core-1) compiles deterministically into the same package model.
+css_reference="docs/skins/examples/css-first-light"
+css_a="$temporary/css-a.pocketpad"
+css_b="$temporary/css-b.pocketpad"
+css_sheet="$temporary/css-contact-sheet.png"
+"$binary" skin css capabilities --json > "$temporary/css-capabilities.json"
+"$binary" skin css lint "$css_reference" --json > "$temporary/css-lint.json"
+python3 -m json.tool "$temporary/css-capabilities.json" >/dev/null
+python3 -m json.tool "$temporary/css-lint.json" >/dev/null
+"$binary" skin compile "$css_reference" \
+  --build-directory "$temporary/css-build-a" -o "$css_a" --clean --strict
+"$binary" skin compile "$css_reference" \
+  --build-directory "$temporary/css-build-b" -o "$css_b" --clean --strict
+"$binary" skin validate "$css_a" --strict
+"$binary" skin quality "$css_reference" --artboard showcase-controller-v1 --strict
+"$binary" skin preview "$css_a" --artboard showcase-controller-v1 \
+  -o "$css_sheet" --all-variants --all-states --native-renderer --contact-sheet
+test -s "$css_sheet"
+cmp "$css_a" "$css_b"
+cmp "$css_a" "$css_reference/dist/css-first-light-1.0.0.pocketpad"
+
+echo "Thumble package, authoring, CSS, quality, and native-preview verification passed: $temporary"

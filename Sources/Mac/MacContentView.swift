@@ -20,6 +20,9 @@ struct MacContentView: View {
     @State private var keypadExportDocument = MacKeypadConfigurationJSONDocument()
     @State private var keypadExportFilename = ThumbleKeypadConfigurationExport.suggestedFilename()
     @State private var keypadExportError: String?
+    @StateObject private var sharedKeypadImportModel = MacSharedKeypadImportModel()
+    @State private var isShowingSharedKeypadImport = false
+    @State private var isSharedKeypadFileImporterPresented = false
 
     private var shouldPresentOnboarding: Bool {
         !hasCompletedOnboarding || isShowingOnboarding
@@ -74,6 +77,47 @@ struct MacContentView: View {
         } message: {
             Text(keypadExportError ?? "The keypad could not be exported.")
         }
+        .sheet(isPresented: $isShowingSharedKeypadImport) {
+            MacSharedKeypadImportSheet(
+                model: sharedKeypadImportModel,
+                isFileImporterPresented: $isSharedKeypadFileImporterPresented,
+                onAdopt: adoptSharedKeypadArtifact
+            )
+        }
+        .fileImporter(
+            isPresented: $isSharedKeypadFileImporterPresented,
+            allowedContentTypes: [.json],
+            allowsMultipleSelection: false
+        ) { result in
+            switch result {
+            case .success(let urls):
+                guard let url = urls.first else { return }
+                sharedKeypadImportModel.loadFile(url: url)
+            case .failure(let error):
+                if (error as? CocoaError)?.code != .userCancelled {
+                    sharedKeypadImportModel.failImport(safeMessage: error.localizedDescription)
+                }
+            }
+        }
+    }
+
+    /// Explicit desktop adoption of a hosted-builder artifact through the same
+    /// authority import used by `thumble profile import`. The sheet owns review;
+    /// this path registers undo and mutates authority state once.
+    private func adoptSharedKeypadArtifact(_ review: MacSharedKeypadReview, appendAsCopies: Bool) throws -> String {
+        registerMacGamepadUndoSnapshot(
+            server.editorUndoSnapshot(),
+            undoManager: undoManager,
+            undoTarget: gamepadEditorUndoTarget,
+            server: server,
+            actionName: appendAsCopies ? "Import Shared Keypad as New Setups" : "Import Shared Keypad"
+        )
+        let summary = try server.importKeypadConfiguration(
+            data: review.artifact.rawData,
+            sourceName: review.profileNames.first ?? "Shared Controller",
+            mode: appendAsCopies ? .appendAsCopies : .replaceMatching
+        )
+        return summary.message
     }
 
     private var applicationContent: some View {
@@ -93,6 +137,15 @@ struct MacContentView: View {
         }
         .geistScreenBackground()
         .toolbar {
+            ToolbarItem {
+                Button {
+                    sharedKeypadImportModel.reset()
+                    isShowingSharedKeypadImport = true
+                } label: {
+                    Label("Import Shared Keypad…", systemImage: "square.and.arrow.down.on.square")
+                }
+                .help("Adopt a hosted-builder shared keypad from a link or file")
+            }
             ToolbarItem {
                 Button {
                     isShowingOnboarding = true
@@ -3716,5 +3769,198 @@ private enum QRCodeRenderer {
 
         guard let cgImage = context.createCGImage(scaledImage, from: scaledImage.extent) else { return nil }
         return NSImage(cgImage: cgImage, size: NSSize(width: scaledImage.extent.width, height: scaledImage.extent.height))
+    }
+}
+
+/// Review-before-import sheet for hosted-builder shared keypads. It accepts a
+/// pasted share link or a local `.json` file, validates through the portable
+/// artifact codec, and requires an explicit adoption mode. The pasted link text
+/// is cleared as soon as parsing succeeds and neither the URL nor token is ever
+/// stored beyond the transient fetch.
+private struct MacSharedKeypadImportSheet: View {
+    @ObservedObject var model: MacSharedKeypadImportModel
+    @Binding var isFileImporterPresented: Bool
+    let onAdopt: (MacSharedKeypadReview, _ appendAsCopies: Bool) throws -> String
+
+    @State private var appendAsCopies = true
+
+    var body: some View {
+        VStack(spacing: 0) {
+            header
+            Divider()
+            Group {
+                switch model.phase {
+                case .idle, .fetching, .readingFile:
+                    sourcePicker
+                case .reviewing:
+                    if let review = model.review {
+                        reviewSection(review)
+                    }
+                case .importing:
+                    ProgressView("Importing shared keypad…")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                case .succeeded(let message):
+                    succeededSection(message)
+                case .failed(let message):
+                    failedSection(message)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .frame(width: 560, height: 520)
+        .onDisappear { model.cancelFetch() }
+    }
+
+    private var header: some View {
+        HStack {
+            Label("Import Shared Keypad", systemImage: "square.and.arrow.down.on.square")
+                .font(.headline)
+            Spacer()
+            Button("Close") {
+                model.reset()
+            }
+            .keyboardShortcut(.cancelAction)
+        }
+        .padding()
+    }
+
+    private var sourcePicker: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Adopt a controller setup built in ChatGPT. Review it here, then import through the Mac’s keypad authority — the same operation as `thumble profile import`.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Shared build link")
+                    .font(.subheadline.weight(.semibold))
+                HStack {
+                    TextField("https://thumble-mcp-gateway.fly.dev/share/…#token=…", text: $model.shareURLText)
+                        .textFieldStyle(.roundedBorder)
+                        .disabled(model.isBusy)
+                        .onSubmit { model.startFromShareURL() }
+                    Button(model.phase == .fetching ? "Checking…" : "Check Link") {
+                        model.startFromShareURL()
+                    }
+                    .disabled(model.isBusy || model.shareURLText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+                Text("The link contains an access token. Thumble sends it only to the Thumble share server and never stores it.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            if model.phase == .fetching {
+                ProgressView("Downloading and validating the shared build…")
+            }
+
+            Divider()
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Or choose a saved artifact file")
+                    .font(.subheadline.weight(.semibold))
+                Button("Choose .json File…") {
+                    isFileImporterPresented = true
+                }
+                .disabled(model.isBusy)
+                if model.phase == .readingFile {
+                    ProgressView("Reading file…")
+                }
+            }
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+
+    private func reviewSection(_ review: MacSharedKeypadReview) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            LabeledContent("From") { Text(review.sourceHost) }
+            LabeledContent("Setups") { Text("\(review.profileNames.count)") }
+            LabeledContent("Size") {
+                Text(ByteCountFormatter.string(fromByteCount: Int64(review.byteCount), countStyle: .file))
+            }
+            LabeledContent("Integrity") { Text(review.hashPrefix) }
+            Divider()
+            Text("Controller Setups")
+                .font(.subheadline.weight(.semibold))
+            ForEach(Array(review.profileNames.enumerated()), id: \.offset) { _, name in
+                Label(name, systemImage: "rectangle.grid.2x2")
+            }
+            Spacer()
+            Divider()
+            VStack(alignment: .leading, spacing: 8) {
+                Picker("Import mode", selection: $appendAsCopies) {
+                    Text("Append as New Setups").tag(true)
+                    Text("Replace Matching…").tag(false)
+                }
+                .pickerStyle(.radioGroup)
+                Text(appendAsCopies
+                     ? "Adds every setup as a new copy with a unique name. Existing setups and the default are untouched."
+                     : "Replaces the first setup matching by ID, then by case-insensitive name; otherwise appends a copy. The default can change.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            HStack {
+                Button("Back") {
+                    model.reset()
+                }
+                Spacer()
+                Button(appendAsCopies ? "Import as New Setups" : "Replace Matching Setups") {
+                    model.beginImport()
+                    do {
+                        let message = try onAdopt(review, appendAsCopies)
+                        model.finishImport(summaryMessage: message)
+                    } catch {
+                        model.failImport(safeMessage: error.localizedDescription)
+                    }
+                }
+                .keyboardShortcut(.defaultAction)
+                .buttonStyle(.borderedProminent)
+            }
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+
+    private func succeededSection(_ message: String) -> some View {
+        VStack(spacing: 12) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 42))
+                .foregroundStyle(.green)
+            Text("Imported")
+                .font(.title3.weight(.semibold))
+            Text(message)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.secondary)
+            Button("Done") {
+                model.reset()
+            }
+                .keyboardShortcut(.defaultAction)
+                .buttonStyle(.borderedProminent)
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func failedSection(_ message: String) -> some View {
+        VStack(spacing: 12) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 36))
+                .foregroundStyle(.orange)
+            Text("Couldn’t Import Shared Keypad")
+                .font(.title3.weight(.semibold))
+            Text(message)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.secondary)
+            HStack {
+                Button("Start Over") {
+                    model.reset()
+                }
+                Button("Close") {
+                    model.reset()
+                }
+                    .keyboardShortcut(.cancelAction)
+            }
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

@@ -1,0 +1,27 @@
+{
+  "game": "Mixed Controls",
+  "controls": [
+    {
+      "id": "movement-stick",
+      "label": "Move",
+      "key": "W",
+      "kind": "stick",
+      "thumbstick": true,
+      "knobColor": "#FFFFFF",
+      "joystickMapping": {"up":"up","down":"down","left":"left","right":"right"},
+      "right": "custom4"
+    },
+    {
+      "id": "pointer",
+      "label": "Pointer",
+      "kind": "touchpad",
+      "cursorSensitivity": 1.5,
+      "scrollSensitivity": 0.9,
+      "tapToClick": true,
+      "twoFingerScroll": false,
+      "naturalScroll": false
+    },
+    {"id":"heading","label":"Inventory","kind":"text","key":"I"},
+    {"id":"plate","label":"Panel","kind":"decor","key":"P","color":"#374151"}
+  ]
+}

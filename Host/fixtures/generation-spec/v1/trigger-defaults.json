@@ -1,0 +1,13 @@
+{
+  "gameName": "Trigger Defaults",
+  "controls": [
+    {
+      "id": "right-trigger",
+      "button": "custom1",
+      "label": "  Right Trigger Extended  ",
+      "key": "R",
+      "kind": "trigger",
+      "shape": "ellipse"
+    }
+  ]
+}

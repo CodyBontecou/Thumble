@@ -53,6 +53,11 @@ private struct RustAuthorityActiveView: View {
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: 520)
+            Text("To adopt a hosted-builder shared keypad while Rust authority is active, run: thumble profile import --append ARTIFACT.json")
+                .multilineTextAlignment(.center)
+                .font(.callout.monospaced())
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: 620)
         }
         .padding(40)
     }

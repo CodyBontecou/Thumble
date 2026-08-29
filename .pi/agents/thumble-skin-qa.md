@@ -20,7 +20,7 @@ Run and record:
 - native all-variant/all-state contact-sheet generation;
 - package unpack/repack integrity and declared asset hash checks;
 - compatibility evaluation for portrait and landscape canonical profiles;
-- package safety boundaries: appearance-only content, no bindings/profile payload, SVG excluded from the distributable archive;
+- package safety boundaries: appearance-only content, no bindings/profile payload, SVG sources and CSS stylesheets excluded from the distributable archive;
 - image dimensions, budgets, state assets/materials, contrast, safe areas, semantic roles, and website preview readiness.
 
 Write a versioned `reviews/qa-report.md` with exact commands, pass/fail outcomes, hashes, remaining warnings, and verdict `qa-pass` or `qa-fail`. Any warning under a strict command is a failure. Do not modify source to make tests pass; report defects to the parent for synthesis and a designer revision.

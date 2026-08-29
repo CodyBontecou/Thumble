@@ -80,8 +80,12 @@ public enum ThumbleSkinQualityEvaluator {
                     path: issue.path
                 )
             }
-            evaluateAuthorship(workspace, add: add)
-            evaluateSourceContrast(workspace, add: add)
+            evaluateAuthorship(workspace, usesCSS: workspace.usesCSSAuthoring, add: add)
+            if workspace.usesCSSAuthoring {
+                evaluatePackageContrast(package, add: add)
+            } else {
+                evaluateSourceContrast(workspace, add: add)
+            }
         }
 
         let artboardID = requestedArtboardID
@@ -96,7 +100,7 @@ public enum ThumbleSkinQualityEvaluator {
             add(.warning, "unverified-artboard", "No canonical artboard was selected, so alignment and safe-area checks were skipped.")
         }
 
-        evaluateVariantMatrix(package, artboard: artboard, add: add)
+        evaluateVariantMatrix(package, artboard: artboard, workspace: workspace, add: add)
         evaluateControlStates(package, add: add)
         evaluateAssetDimensionsAndBudgets(package, artboard: artboard, add: add)
         evaluateLayerSafety(package, add: add)
@@ -111,29 +115,75 @@ public enum ThumbleSkinQualityEvaluator {
 
     private static func evaluateAuthorship(
         _ workspace: ThumbleSkinWorkspace,
+        usesCSS: Bool,
         add: (ThumbleSkinQualitySeverity, String, String, String?) -> Void
     ) {
         if workspace.summary.trimmingCharacters(in: .whitespacesAndNewlines).count < 40 {
             add(.warning, "thin-art-direction", "Write a specific art-direction summary of at least 40 characters.", "skin-source.json.summary")
         }
-        if workspace.materials.count < 3 {
-            add(.error, "insufficient-material-system", "Handcrafted skins need at least three deliberate materials.", "skin-source.json.materials")
-        }
-        let kinds = Set(workspace.components.map(\.kind))
-        if !kinds.contains(.controllerShell) {
-            add(.error, "missing-controller-shell", "Add an authored controller shell component.", "skin-source.json.components")
-        }
-        if !kinds.contains(.controlWell) {
-            add(.warning, "missing-control-wells", "Add layout-aware control wells or equivalent grouping artwork.", "skin-source.json.components")
-        }
-        if workspace.sourceAssets.isEmpty {
-            add(.error, "missing-editable-artwork", "Retain at least one editable SVG source asset.", "skin-source.json.sourceAssets")
+        if usesCSS {
+            if workspace.stylesheets.isEmpty {
+                add(.error, "missing-stylesheet", "CSS skins must declare at least one stylesheet under styles/.", "skin-source.json.stylesheets")
+            }
+        } else {
+            if workspace.materials.count < 3 {
+                add(.error, "insufficient-material-system", "Handcrafted skins need at least three deliberate materials.", "skin-source.json.materials")
+            }
+            let kinds = Set(workspace.components.map(\.kind))
+            if !kinds.contains(.controllerShell) {
+                add(.error, "missing-controller-shell", "Add an authored controller shell component.", "skin-source.json.components")
+            }
+            if !kinds.contains(.controlWell) {
+                add(.warning, "missing-control-wells", "Add layout-aware control wells or equivalent grouping artwork.", "skin-source.json.components")
+            }
+            if workspace.sourceAssets.isEmpty {
+                add(.error, "missing-editable-artwork", "Retain at least one editable SVG source asset.", "skin-source.json.sourceAssets")
+            }
         }
         if workspace.license.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             add(.error, "missing-source-license", "Declare a redistribution license.", "skin-source.json.license")
         }
         if workspace.author.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased().contains("unknown") {
             add(.warning, "placeholder-author", "Replace the placeholder creator name before publication.", "skin-source.json.author")
+        }
+    }
+
+    /// CSS skins evaluate contrast against their compiled style tokens.
+    private static func evaluatePackageContrast(
+        _ package: ThumbleSkinPackage,
+        add: (ThumbleSkinQualitySeverity, String, String, String?) -> Void
+    ) {
+        guard let skin = package.skin else { return }
+        var scopes: [(label: String, styles: [GamepadStyleToken])] = [("base", skin.base.styleLibrary.styles)]
+        for variant in skin.variants {
+            let label = [variant.orientation?.rawValue, variant.colorScheme?.rawValue]
+                .compactMap { $0 }
+                .joined(separator: "-")
+            scopes.append((label.isEmpty ? variant.id : label, variant.appearance.styleLibrary.styles))
+        }
+        for (scope, styles) in scopes {
+            for style in styles {
+                let normal = style.visualStyle.normal
+                guard let foreground = normal.foregroundColor,
+                      let fill = normal.fillStyle?.representativeColor
+                else { continue }
+                let ratio = contrastRatio(foreground, fill)
+                if ratio < 3 {
+                    add(
+                        .error,
+                        "low-style-contrast",
+                        "Style \(style.id) (\(scope)) has \(String(format: "%.2f", ratio)):1 legend contrast; require at least 3:1.",
+                        "skin.json.styleLibrary.\(style.id)"
+                    )
+                } else if ratio < 4.5 {
+                    add(
+                        .warning,
+                        "moderate-style-contrast",
+                        "Style \(style.id) (\(scope)) has \(String(format: "%.2f", ratio)):1 legend contrast; 4.5:1 is preferred for small legends.",
+                        "skin.json.styleLibrary.\(style.id)"
+                    )
+                }
+            }
         }
     }
 
@@ -178,9 +228,14 @@ public enum ThumbleSkinQualityEvaluator {
     ) {
         let requiredRoles = Set(artboard.expectedRoles.filter { ![.system, .decoration, .custom].contains($0) })
         if let workspace {
-            let assignedRoles = Set(workspace.assignments.compactMap(\.role))
+            let assignedRoles: Set<GamepadVisualRole>
+            if workspace.usesCSSAuthoring {
+                assignedRoles = Set((package.skin?.base.roleRules ?? []).map(\.role))
+            } else {
+                assignedRoles = Set(workspace.assignments.compactMap(\.role))
+            }
             for role in requiredRoles.subtracting(assignedRoles).sorted(by: { $0.rawValue < $1.rawValue }) {
-                add(.error, "missing-semantic-role", "No material assignment covers \(role.displayName.lowercased()).", "skin-source.json.assignments")
+                add(.error, "missing-semantic-role", "No \(workspace.usesCSSAuthoring ? "CSS role rule" : "material assignment") covers \(role.displayName.lowercased()).", "skin-source.json.\(workspace.usesCSSAuthoring ? "stylesheets" : "assignments")")
             }
             for component in workspace.components where component.frame != nil && (component.role != nil || component.button != nil) {
                 guard let frame = component.frame?.normalized else { continue }
@@ -236,9 +291,11 @@ public enum ThumbleSkinQualityEvaluator {
     private static func evaluateVariantMatrix(
         _ package: ThumbleSkinPackage,
         artboard: ThumbleSkinArtboard?,
+        workspace: ThumbleSkinWorkspace?,
         add: (ThumbleSkinQualitySeverity, String, String, String?) -> Void
     ) {
         guard let skin = package.skin else { return }
+        let isCSS = package.manifest.tags.contains("css")
         let orientations = package.manifest.compatibility?.normalized.orientations.isEmpty == false
             ? package.manifest.compatibility!.normalized.orientations
             : (artboard?.variants.map(\.orientation) ?? ThumbleSkinOrientation.allCases)
@@ -246,13 +303,32 @@ public enum ThumbleSkinQualityEvaluator {
             for scheme in ThumbleSkinColorScheme.allCases {
                 let appearance = skin.appearance(orientation: orientation, colorScheme: scheme)
                 if appearance.backgroundFillStyle == nil && (appearance.artworkLayers ?? []).isEmpty {
-                    add(.error, "missing-artwork-variant", "Missing \(orientation.rawValue) \(scheme.rawValue) canvas artwork.", "skin.json.variants")
+                    if isCSS {
+                        add(.warning, "missing-controller-background", "No controller background was declared for \(orientation.rawValue) \(scheme.rawValue); the user's keypad background shows through.", "stylesheets")
+                    } else {
+                        add(.error, "missing-artwork-variant", "Missing \(orientation.rawValue) \(scheme.rawValue) canvas artwork.", "skin.json.variants")
+                    }
                 }
-                let previewExists = package.manifest.previews.contains {
-                    $0.orientation == orientation && ($0.colorScheme == nil || $0.colorScheme == scheme)
-                }
-                if !previewExists {
-                    add(.error, "missing-preview-variant", "Missing \(orientation.rawValue) \(scheme.rawValue) package preview.", "manifest.previews")
+                if isCSS {
+                    // CSS packages carry no raster previews; the workspace preview requests
+                    // define the review matrix instead.
+                    if let workspace {
+                        let declared = workspace.previews.contains {
+                            $0.artboardID == workspace.artboardID
+                                && $0.orientation == orientation
+                                && $0.colorScheme == scheme
+                        }
+                        if !declared {
+                            add(.error, "missing-preview-variant", "Missing \(orientation.rawValue) \(scheme.rawValue) preview request.", "skin-source.json.previews")
+                        }
+                    }
+                } else {
+                    let previewExists = package.manifest.previews.contains {
+                        $0.orientation == orientation && ($0.colorScheme == nil || $0.colorScheme == scheme)
+                    }
+                    if !previewExists {
+                        add(.error, "missing-preview-variant", "Missing \(orientation.rawValue) \(scheme.rawValue) package preview.", "manifest.previews")
+                    }
                 }
             }
         }

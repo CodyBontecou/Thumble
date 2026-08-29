@@ -1,0 +1,210 @@
+{
+  "confidence": "low",
+  "keyBindings": [
+    "custom1",
+    {
+      "key": "R",
+      "modifiers": []
+    }
+  ],
+  "notes": [
+    "Installed from an agent-provided keypad spec."
+  ],
+  "profile": {
+    "customization": {
+      "accentStyle": "purple",
+      "buttonCustomizations": [
+        "up",
+        {
+          "heightScale": 1.0,
+          "isHidden": true,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1.0,
+          "widthScale": 1.0,
+          "zIndex": 0
+        },
+        "down",
+        {
+          "heightScale": 1.0,
+          "isHidden": true,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1.0,
+          "widthScale": 1.0,
+          "zIndex": 0
+        },
+        "left",
+        {
+          "heightScale": 1.0,
+          "isHidden": true,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1.0,
+          "widthScale": 1.0,
+          "zIndex": 0
+        },
+        "right",
+        {
+          "heightScale": 1.0,
+          "isHidden": true,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1.0,
+          "widthScale": 1.0,
+          "zIndex": 0
+        },
+        "jump",
+        {
+          "heightScale": 1.0,
+          "isHidden": true,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1.0,
+          "widthScale": 1.0,
+          "zIndex": 0
+        },
+        "attack",
+        {
+          "heightScale": 1.0,
+          "isHidden": true,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1.0,
+          "widthScale": 1.0,
+          "zIndex": 0
+        },
+        "dash",
+        {
+          "heightScale": 1.0,
+          "isHidden": true,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1.0,
+          "widthScale": 1.0,
+          "zIndex": 0
+        },
+        "focus",
+        {
+          "heightScale": 1.0,
+          "isHidden": true,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1.0,
+          "widthScale": 1.0,
+          "zIndex": 0
+        },
+        "map",
+        {
+          "heightScale": 1.0,
+          "isHidden": true,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1.0,
+          "widthScale": 1.0,
+          "zIndex": 0
+        },
+        "pause",
+        {
+          "heightScale": 1.0,
+          "isHidden": true,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1.0,
+          "widthScale": 1.0,
+          "zIndex": 0
+        }
+      ],
+      "colorSchemePreference": "system",
+      "controlScale": "standard",
+      "customButtons": [
+        {
+          "controlKind": "trigger",
+          "id": "1938d035-4098-5bfc-9c99-baa58e176420",
+          "label": "Right Trigge",
+          "layout": {
+            "accentStyle": "monochrome",
+            "centerX": 0.2,
+            "centerY": 0.42,
+            "fillColor": {
+              "alpha": 1.0,
+              "blue": 0.21568627450980393,
+              "green": 0.1607843137254902,
+              "red": 0.12156862745098039
+            },
+            "heightScale": 1.05,
+            "isHidden": false,
+            "isLocationLocked": false,
+            "rotationDegrees": 0,
+            "shadowStrength": 1.0,
+            "shape": "ellipse",
+            "widthScale": 1.12,
+            "zIndex": 0
+          },
+          "mappedButton": "custom1",
+          "triggerSettings": {
+            "deadZone": 0.03,
+            "digitalThreshold": 0.5,
+            "orientation": "vertical",
+            "sendsDigitalButton": false,
+            "sensitivity": 1.0,
+            "target": "right"
+          },
+          "visualRole": "trigger"
+        }
+      ],
+      "deviceCanvas": {
+        "frameID": "iphone-17-pro-landscape"
+      },
+      "elements": [
+        {
+          "id": "1938d035-4098-5bfc-9c99-baa58e176420",
+          "kind": "trigger",
+          "label": "Right Trigge",
+          "layout": {
+            "accentStyle": "monochrome",
+            "centerX": 0.2,
+            "centerY": 0.42,
+            "fillColor": {
+              "alpha": 1.0,
+              "blue": 0.21568627450980393,
+              "green": 0.1607843137254902,
+              "red": 0.12156862745098039
+            },
+            "heightScale": 1.05,
+            "isHidden": false,
+            "isLocationLocked": false,
+            "rotationDegrees": 0,
+            "shadowStrength": 1.0,
+            "shape": "ellipse",
+            "widthScale": 1.12,
+            "zIndex": 0
+          },
+          "legacySlot": "custom1",
+          "partOutputs": [],
+          "triggerSettings": {
+            "deadZone": 0.03,
+            "digitalThreshold": 0.5,
+            "orientation": "vertical",
+            "sendsDigitalButton": false,
+            "sensitivity": 1.0,
+            "target": "right"
+          },
+          "visualRole": "trigger"
+        }
+      ],
+      "labelOverrides": [],
+      "layoutMode": "standard",
+      "showsButtonLabels": true,
+      "updatedAt": 0
+    },
+    "id": "2c6d329f-e7c2-5895-aa29-a290e42032d5",
+    "name": "Trigger Defaults",
+    "orientationPreference": "automatic",
+    "outputMode": "keyboard",
+    "updatedAt": 0
+  },
+  "requestedGameName": "Trigger Defaults",
+  "resolvedGameName": "Trigger Defaults",
+  "source": "Agent-provided keypad spec"
+}

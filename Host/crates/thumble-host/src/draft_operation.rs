@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::error::Error;
 use std::fmt;
+pub(crate) use thumble_core::{semantic_key_code, semantic_key_name};
 use thumble_core::{
     ConfigurationDocument, KeyBinding, KeyStroke, MAXIMUM_CONFIGURATION_BINDING_STROKES,
 };
@@ -553,7 +554,7 @@ pub enum GenerationPreset {
 
 impl GenerationPreset {
     pub const fn revision(self) -> u32 {
-        1
+        2
     }
 
     pub const fn custom_element_id_count(self) -> usize {
@@ -2820,240 +2821,6 @@ pub(crate) fn resolve_stroke(
     Ok(KeyStroke::new(key_code, modifiers))
 }
 
-pub(crate) fn semantic_key_code(key: &str) -> Option<u16> {
-    let key = key.trim();
-    let direct = match key {
-        "LeftArrow" | "←" => 123,
-        "RightArrow" | "→" => 124,
-        "DownArrow" | "↓" => 125,
-        "UpArrow" | "↑" => 126,
-        "Escape" | "Esc" => 53,
-        "Tab" => 48,
-        "Space" => 49,
-        "Return" => 36,
-        "Delete" | "Backspace" => 51,
-        "ForwardDelete" | "Forward Delete" => 117,
-        "Home" => 115,
-        "End" => 119,
-        "PageUp" | "Page Up" => 116,
-        "PageDown" | "Page Down" => 121,
-        "F1" => 122,
-        "F2" => 120,
-        "F3" => 99,
-        "F4" => 118,
-        "F5" => 96,
-        "F6" => 97,
-        "F7" => 98,
-        "F8" => 100,
-        "F9" => 101,
-        "F10" => 109,
-        "F11" => 103,
-        "F12" => 111,
-        "F13" => 105,
-        "F14" => 107,
-        "F15" => 113,
-        "F16" => 106,
-        "F17" => 64,
-        "=" => 24,
-        "-" => 27,
-        "]" => 30,
-        "[" => 33,
-        "'" => 39,
-        ";" => 41,
-        "\\" => 42,
-        "," => 43,
-        "/" => 44,
-        "." => 47,
-        "`" => 50,
-        "Right Command" => 54,
-        "Command" => 55,
-        "Shift" => 56,
-        "Caps Lock" => 57,
-        "Option" => 58,
-        "Control" => 59,
-        "Right Shift" => 60,
-        "Right Option" => 61,
-        "Right Control" => 62,
-        "Fn" => 63,
-        "Keypad ." => 65,
-        "Keypad *" => 67,
-        "Keypad +" => 69,
-        "Clear" => 71,
-        "Keypad /" => 75,
-        "Keypad Enter" => 76,
-        "Keypad -" => 78,
-        "Keypad =" => 81,
-        "Keypad 0" => 82,
-        "Keypad 1" => 83,
-        "Keypad 2" => 84,
-        "Keypad 3" => 85,
-        "Keypad 4" => 86,
-        "Keypad 5" => 87,
-        "Keypad 6" => 88,
-        "Keypad 7" => 89,
-        "Keypad 8" => 91,
-        "Keypad 9" => 92,
-        "Help" => 114,
-        _ => return alphanumeric_key_code(key),
-    };
-    Some(direct)
-}
-
-fn alphanumeric_key_code(key: &str) -> Option<u16> {
-    Some(match key {
-        "A" => 0,
-        "S" => 1,
-        "D" => 2,
-        "F" => 3,
-        "H" => 4,
-        "G" => 5,
-        "Z" => 6,
-        "X" => 7,
-        "C" => 8,
-        "V" => 9,
-        "B" => 11,
-        "Q" => 12,
-        "W" => 13,
-        "E" => 14,
-        "R" => 15,
-        "Y" => 16,
-        "T" => 17,
-        "1" => 18,
-        "2" => 19,
-        "3" => 20,
-        "4" => 21,
-        "6" => 22,
-        "5" => 23,
-        "9" => 25,
-        "7" => 26,
-        "8" => 28,
-        "0" => 29,
-        "O" => 31,
-        "U" => 32,
-        "I" => 34,
-        "P" => 35,
-        "L" => 37,
-        "J" => 38,
-        "K" => 40,
-        "N" => 45,
-        "M" => 46,
-        _ => return None,
-    })
-}
-
-pub(crate) fn semantic_key_name(code: u16) -> Option<&'static str> {
-    Some(match code {
-        0 => "A",
-        1 => "S",
-        2 => "D",
-        3 => "F",
-        4 => "H",
-        5 => "G",
-        6 => "Z",
-        7 => "X",
-        8 => "C",
-        9 => "V",
-        11 => "B",
-        12 => "Q",
-        13 => "W",
-        14 => "E",
-        15 => "R",
-        16 => "Y",
-        17 => "T",
-        18 => "1",
-        19 => "2",
-        20 => "3",
-        21 => "4",
-        22 => "6",
-        23 => "5",
-        24 => "=",
-        25 => "9",
-        26 => "7",
-        27 => "-",
-        28 => "8",
-        29 => "0",
-        30 => "]",
-        31 => "O",
-        32 => "U",
-        33 => "[",
-        34 => "I",
-        35 => "P",
-        36 => "Return",
-        37 => "L",
-        38 => "J",
-        39 => "'",
-        40 => "K",
-        41 => ";",
-        42 => "\\",
-        43 => ",",
-        44 => "/",
-        45 => "N",
-        46 => "M",
-        47 => ".",
-        48 => "Tab",
-        49 => "Space",
-        50 => "`",
-        51 => "Delete",
-        53 => "Esc",
-        54 => "Right Command",
-        55 => "Command",
-        56 => "Shift",
-        57 => "Caps Lock",
-        58 => "Option",
-        59 => "Control",
-        60 => "Right Shift",
-        61 => "Right Option",
-        62 => "Right Control",
-        63 => "Fn",
-        64 => "F17",
-        65 => "Keypad .",
-        67 => "Keypad *",
-        69 => "Keypad +",
-        71 => "Clear",
-        75 => "Keypad /",
-        76 => "Keypad Enter",
-        78 => "Keypad -",
-        81 => "Keypad =",
-        82 => "Keypad 0",
-        83 => "Keypad 1",
-        84 => "Keypad 2",
-        85 => "Keypad 3",
-        86 => "Keypad 4",
-        87 => "Keypad 5",
-        88 => "Keypad 6",
-        89 => "Keypad 7",
-        91 => "Keypad 8",
-        92 => "Keypad 9",
-        96 => "F5",
-        97 => "F6",
-        98 => "F7",
-        99 => "F3",
-        100 => "F8",
-        101 => "F9",
-        103 => "F11",
-        105 => "F13",
-        106 => "F16",
-        107 => "F14",
-        109 => "F10",
-        111 => "F12",
-        113 => "F15",
-        114 => "Help",
-        115 => "Home",
-        116 => "PageUp",
-        117 => "ForwardDelete",
-        118 => "F4",
-        119 => "End",
-        120 => "F2",
-        121 => "PageDown",
-        122 => "F1",
-        123 => "LeftArrow",
-        124 => "RightArrow",
-        125 => "DownArrow",
-        126 => "UpArrow",
-        _ => return None,
-    })
-}
-
 fn requested_element_kind(initial: ElementKind, changes: &ElementChanges) -> ElementKind {
     let explicit = changes.kind.unwrap_or(initial);
     if changes.joystick_mapping.is_some()
@@ -3253,6 +3020,20 @@ mod tests {
                 modifiers: vec![],
             }),
             Ok(KeyStroke::new(123, 0))
+        );
+        assert_eq!(
+            resolve_stroke(&SemanticKeyStroke {
+                key: "left-arrow".to_owned(),
+                modifiers: vec![],
+            }),
+            Err(ConfigurationOperationError::UnsupportedSemanticKey)
+        );
+        assert_eq!(
+            resolve_stroke(&SemanticKeyStroke {
+                key: "A".to_owned(),
+                modifiers: vec![SemanticModifier::Command, SemanticModifier::Command],
+            }),
+            Err(ConfigurationOperationError::InvalidModifier)
         );
     }
 
@@ -3687,7 +3468,7 @@ mod tests {
         );
         let colliding = ConfigurationOperation::GenerationGenerate {
             preset: GenerationPreset::HollowKnight,
-            preset_revision: 1,
+            preset_revision: 2,
             destination,
             new_element_ids: vec![
                 "00000000-0000-0000-0000-000000000801".to_owned(),

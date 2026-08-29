@@ -12,6 +12,7 @@ const TOKENS_PER_SECOND: f64 = 10.0;
 const BURST_CAPACITY: f64 = 20.0;
 const IDLE_EVICTION: Duration = Duration::from_secs(15 * 60);
 const MAXIMUM_BUCKETS: usize = 10_000;
+const MAXIMUM_WINDOW_KEYS: usize = 4_096;
 
 #[derive(Debug)]
 struct Bucket {
@@ -45,6 +46,19 @@ impl Bucket {
 #[derive(Debug, Default)]
 pub struct GatewayRateLimiter {
     buckets: Mutex<HashMap<String, Bucket>>,
+}
+
+/// Builder calls use a separate bucket namespace from relay calls even when a
+/// deployment happens to reuse a textual principal identifier.
+#[derive(Debug, Default)]
+pub struct BuilderToolRateLimiter {
+    inner: GatewayRateLimiter,
+}
+
+impl BuilderToolRateLimiter {
+    pub fn allow(&self, principal_id: &str) -> Result<(), String> {
+        self.inner.allow(principal_id)
+    }
 }
 
 impl GatewayRateLimiter {
@@ -178,38 +192,58 @@ struct WindowClass {
     global: Mutex<FixedWindow>,
     source_maximum: u32,
     global_maximum: u32,
+    maximum_keys: usize,
 }
 
 impl WindowClass {
     fn new(source_maximum: u32, global_maximum: u32) -> Self {
+        Self::with_key_cap(source_maximum, global_maximum, MAXIMUM_WINDOW_KEYS)
+    }
+
+    fn with_key_cap(source_maximum: u32, global_maximum: u32, maximum_keys: usize) -> Self {
         Self {
             sources: Mutex::new(HashMap::new()),
             global: Mutex::new(FixedWindow::new(Instant::now())),
             source_maximum,
             global_maximum,
+            maximum_keys,
         }
     }
 
     fn allow(&self, source: &str, label: &str) -> Result<(), String> {
-        let now = Instant::now();
+        self.allow_at(source, label, Instant::now())
+    }
+
+    fn allow_at(&self, source: &str, label: &str, now: Instant) -> Result<(), String> {
         let duration = Duration::from_secs(5 * 60);
+        // Every WindowClass follows one lock order: source map, then global.
+        // Preflight the source and hard map cap without charging either
+        // window. Only after both preflights pass do we charge global and then
+        // the source while retaining both locks, so a rejected source cannot
+        // consume aggregate capacity and concurrent calls remain exact.
         let mut sources = self.sources.lock().unwrap();
         prune_windows(&mut sources, now, duration);
+        if !sources.contains_key(source) && sources.len() >= self.maximum_keys {
+            return Err(format!("{label} request key capacity reached"));
+        }
+        if let Some(window) = sources.get_mut(source) {
+            if now.duration_since(window.started) >= duration {
+                window.started = now;
+                window.count = 0;
+            }
+            if window.count >= self.source_maximum {
+                return Err(format!("too many {label} requests from this source"));
+            }
+        }
+        let mut global = self.global.lock().unwrap();
+        if !global.allow(now, duration, self.global_maximum) {
+            return Err(format!("global {label} request capacity reached"));
+        }
         let source_window = sources
             .entry(source.to_owned())
             .or_insert_with(|| FixedWindow::new(now));
-        if !source_window.allow(now, duration, self.source_maximum) {
-            return Err(format!("too many {label} requests from this source"));
-        }
-        drop(sources);
-        if !self
-            .global
-            .lock()
-            .unwrap()
-            .allow(now, duration, self.global_maximum)
-        {
-            return Err(format!("global {label} request capacity reached"));
-        }
+        let source_accepted = source_window.allow(now, duration, self.source_maximum);
+        debug_assert!(source_accepted);
         Ok(())
     }
 }
@@ -254,28 +288,147 @@ impl OAuthRateLimiter {
     }
 }
 
-#[derive(Debug, Default)]
+/// Share credentials are bounded independently by network source and token
+/// digest. This prevents token swapping from bypassing a source limit and
+/// distributed reuse of one credential from bypassing a credential limit.
+#[derive(Debug)]
+pub struct ShareRateLimiter {
+    sources: Mutex<HashMap<String, FixedWindow>>,
+    source_global: Mutex<FixedWindow>,
+    token_digests: Mutex<HashMap<String, FixedWindow>>,
+    token_global: Mutex<FixedWindow>,
+    maximum_keys: usize,
+    source_global_maximum: u32,
+    token_global_maximum: u32,
+}
+
+impl Default for ShareRateLimiter {
+    fn default() -> Self {
+        let now = Instant::now();
+        Self {
+            sources: Mutex::new(HashMap::new()),
+            source_global: Mutex::new(FixedWindow::new(now)),
+            token_digests: Mutex::new(HashMap::new()),
+            token_global: Mutex::new(FixedWindow::new(now)),
+            maximum_keys: MAXIMUM_WINDOW_KEYS,
+            source_global_maximum: Self::SOURCE_MAXIMUM * MAXIMUM_WINDOW_KEYS as u32,
+            token_global_maximum: Self::TOKEN_MAXIMUM * MAXIMUM_WINDOW_KEYS as u32,
+        }
+    }
+}
+
+impl ShareRateLimiter {
+    const WINDOW: Duration = Duration::from_secs(60);
+    pub const SOURCE_MAXIMUM: u32 = 60;
+    pub const TOKEN_MAXIMUM: u32 = 30;
+
+    /// Charge the network source before parsing any attacker-controlled
+    /// artifact or credential value.
+    pub fn allow_source(&self, source: &str) -> Result<(), String> {
+        Self::allow_keyed(
+            &self.source_global,
+            &self.sources,
+            source,
+            Self::SOURCE_MAXIMUM,
+            self.source_global_maximum,
+            self.maximum_keys,
+            Instant::now(),
+        )
+    }
+
+    /// Charge a validated credential independently, so distributed reuse of
+    /// one share token remains bounded.
+    pub fn allow_token(&self, token_digest: &str) -> Result<(), String> {
+        Self::allow_keyed(
+            &self.token_global,
+            &self.token_digests,
+            token_digest,
+            Self::TOKEN_MAXIMUM,
+            self.token_global_maximum,
+            self.maximum_keys,
+            Instant::now(),
+        )
+    }
+
+    fn allow_keyed(
+        global: &Mutex<FixedWindow>,
+        windows: &Mutex<HashMap<String, FixedWindow>>,
+        key: &str,
+        maximum: u32,
+        global_maximum: u32,
+        maximum_keys: usize,
+        now: Instant,
+    ) -> Result<(), String> {
+        // Reject aggregate overload before an attacker-controlled key can
+        // enter either share map.
+        if !global
+            .lock()
+            .unwrap()
+            .allow(now, Self::WINDOW, global_maximum)
+        {
+            return Err("global share read capacity reached".to_owned());
+        }
+        let mut windows = windows.lock().unwrap();
+        prune_windows(&mut windows, now, Self::WINDOW);
+        if !windows.contains_key(key) && windows.len() >= maximum_keys {
+            return Err("share read rate-limit capacity reached".to_owned());
+        }
+        let window = windows
+            .entry(key.to_owned())
+            .or_insert_with(|| FixedWindow::new(now));
+        if !window.allow(now, Self::WINDOW, maximum) {
+            return Err("share read rate limit exceeded".to_owned());
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
 pub struct SessionLimiter {
-    counts: Mutex<HashMap<String, usize>>,
+    counts: Mutex<SessionCounts>,
+    per_key_maximum: usize,
+    global_maximum: usize,
+}
+
+#[derive(Debug, Default)]
+struct SessionCounts {
+    by_key: HashMap<String, usize>,
+    total: usize,
 }
 
 impl SessionLimiter {
-    pub fn acquire(&self, device_id: &str) -> Result<(), String> {
-        let mut counts = self.counts.lock().unwrap();
-        let count = counts.entry(device_id.to_owned()).or_default();
-        if *count >= crate::tunnel::MAXIMUM_REMOTE_SESSIONS {
-            return Err("gateway MCP session limit reached for this device".to_owned());
+    pub fn new(per_key_maximum: usize, global_maximum: usize) -> Self {
+        assert!(per_key_maximum > 0);
+        assert!(global_maximum > 0);
+        Self {
+            counts: Mutex::new(SessionCounts::default()),
+            per_key_maximum,
+            global_maximum,
         }
-        *count += 1;
+    }
+
+    pub fn acquire(&self, key: &str) -> Result<(), String> {
+        let mut counts = self.counts.lock().unwrap();
+        if counts.total >= self.global_maximum {
+            return Err("gateway MCP global session limit reached".to_owned());
+        }
+        if counts.by_key.get(key).copied().unwrap_or(0) >= self.per_key_maximum {
+            return Err("gateway MCP session limit reached for this identity".to_owned());
+        }
+        // No key is inserted until both limits have accepted the session.
+        *counts.by_key.entry(key.to_owned()).or_default() += 1;
+        counts.total += 1;
         Ok(())
     }
 
-    pub fn release(&self, device_id: &str) {
+    pub fn release(&self, key: &str) {
         let mut counts = self.counts.lock().unwrap();
-        if let Some(count) = counts.get_mut(device_id) {
-            *count = count.saturating_sub(1);
-            if *count == 0 {
-                counts.remove(device_id);
+        if let Some(count) = counts.by_key.get_mut(key) {
+            *count -= 1;
+            let remove = *count == 0;
+            counts.total -= 1;
+            if remove {
+                counts.by_key.remove(key);
             }
         }
     }
@@ -285,6 +438,7 @@ impl SessionLimiter {
         self.counts
             .lock()
             .unwrap()
+            .by_key
             .get(device_id)
             .copied()
             .unwrap_or(0)
@@ -365,12 +519,19 @@ mod tests {
     }
 
     #[test]
-    fn oauth_endpoints_are_source_bounded() {
+    fn oauth_endpoints_are_source_bounded_without_spending_global_capacity() {
         let limiter = OAuthRateLimiter::default();
         for _ in 0..10 {
             limiter.allow_registration("source-a").unwrap();
         }
-        assert!(limiter.allow_registration("source-a").is_err());
+        let global_before_denials = limiter.registrations.global.lock().unwrap().count;
+        for _ in 0..100 {
+            assert!(limiter.allow_registration("source-a").is_err());
+        }
+        assert_eq!(
+            limiter.registrations.global.lock().unwrap().count,
+            global_before_denials
+        );
         assert!(limiter.allow_registration("source-b").is_ok());
         for _ in 0..30 {
             limiter.allow_authorization("source-c").unwrap();
@@ -379,18 +540,133 @@ mod tests {
     }
 
     #[test]
-    fn mcp_sessions_are_bounded_per_device_and_released() {
-        let limiter = SessionLimiter::default();
-        for _ in 0..crate::tunnel::MAXIMUM_REMOTE_SESSIONS {
-            limiter.acquire("dev_a").unwrap();
+    fn oauth_map_cap_rejection_does_not_charge_global_and_global_cap_is_exact() {
+        let now = Instant::now();
+        let limiter = WindowClass::with_key_cap(2, 3, 2);
+        limiter.allow_at("source-a", "test", now).unwrap();
+        limiter.allow_at("source-b", "test", now).unwrap();
+        let before = limiter.global.lock().unwrap().count;
+        assert!(limiter.allow_at("source-c", "test", now).is_err());
+        assert_eq!(limiter.global.lock().unwrap().count, before);
+        limiter.allow_at("source-a", "test", now).unwrap();
+        assert_eq!(limiter.global.lock().unwrap().count, 3);
+        assert!(limiter.allow_at("source-b", "test", now).is_err());
+        assert_eq!(limiter.global.lock().unwrap().count, 3);
+    }
+
+    #[test]
+    fn concurrent_oauth_acceptance_never_exceeds_either_window() {
+        use std::sync::{Arc, Barrier};
+
+        let limiter = Arc::new(WindowClass::with_key_cap(100, 17, 100));
+        let barrier = Arc::new(Barrier::new(65));
+        let handles = (0..64)
+            .map(|index| {
+                let limiter = limiter.clone();
+                let barrier = barrier.clone();
+                std::thread::spawn(move || {
+                    barrier.wait();
+                    limiter.allow_at(&format!("source-{index}"), "test", Instant::now())
+                })
+            })
+            .collect::<Vec<_>>();
+        barrier.wait();
+        let accepted = handles
+            .into_iter()
+            .map(|handle| handle.join().unwrap())
+            .filter(Result::is_ok)
+            .count();
+        assert_eq!(accepted, 17);
+        assert_eq!(limiter.global.lock().unwrap().count, 17);
+        assert_eq!(limiter.sources.lock().unwrap().len(), 17);
+    }
+
+    #[test]
+    fn share_reads_are_independently_bounded() {
+        let limiter = ShareRateLimiter::default();
+        for _ in 0..ShareRateLimiter::TOKEN_MAXIMUM {
+            limiter.allow_source("source-a").unwrap();
+            limiter.allow_token("digest-a").unwrap();
         }
+        limiter.allow_source("source-b").unwrap();
+        assert!(limiter.allow_token("digest-a").is_err());
+        limiter.allow_token("digest-b").unwrap();
+    }
+
+    #[test]
+    fn attacker_keyed_window_maps_are_hard_bounded() {
+        let oauth = WindowClass::with_key_cap(10, 100, 2);
+        let now = Instant::now();
+        oauth.allow_at("source-a", "test", now).unwrap();
+        oauth.allow_at("source-b", "test", now).unwrap();
+        assert!(oauth.allow_at("source-c", "test", now).is_err());
+        assert_eq!(oauth.sources.lock().unwrap().len(), 2);
+
+        let shares = ShareRateLimiter {
+            sources: Mutex::new(HashMap::new()),
+            source_global: Mutex::new(FixedWindow::new(now)),
+            token_digests: Mutex::new(HashMap::new()),
+            token_global: Mutex::new(FixedWindow::new(now)),
+            maximum_keys: 2,
+            source_global_maximum: 100,
+            token_global_maximum: 100,
+        };
+        shares.allow_source("source-a").unwrap();
+        shares.allow_source("source-b").unwrap();
+        assert!(shares.allow_source("source-c").is_err());
+        assert_eq!(shares.sources.lock().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn global_window_caps_reject_before_inserting_attacker_keys() {
+        let now = Instant::now();
+        let oauth = WindowClass::with_key_cap(10, 2, 10);
+        oauth.allow_at("source-a", "test", now).unwrap();
+        oauth.allow_at("source-b", "test", now).unwrap();
+        assert!(oauth.allow_at("source-c", "test", now).is_err());
+        assert_eq!(oauth.sources.lock().unwrap().len(), 2);
+
+        let shares = ShareRateLimiter {
+            sources: Mutex::new(HashMap::new()),
+            source_global: Mutex::new(FixedWindow::new(now)),
+            token_digests: Mutex::new(HashMap::new()),
+            token_global: Mutex::new(FixedWindow::new(now)),
+            maximum_keys: 10,
+            source_global_maximum: 2,
+            token_global_maximum: 2,
+        };
+        shares.allow_source("source-a").unwrap();
+        shares.allow_source("source-b").unwrap();
+        assert!(shares.allow_source("source-c").is_err());
+        assert_eq!(shares.sources.lock().unwrap().len(), 2);
+        shares.allow_token("digest-a").unwrap();
+        shares.allow_token("digest-b").unwrap();
+        assert!(shares.allow_token("digest-c").is_err());
+        assert_eq!(shares.token_digests.lock().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn mcp_sessions_are_bounded_per_key_and_globally_then_recover() {
+        let limiter = SessionLimiter::new(2, 3);
+        limiter.acquire("dev_a").unwrap();
+        limiter.acquire("dev_a").unwrap();
         assert!(limiter.acquire("dev_a").is_err());
         limiter.acquire("dev_b").unwrap();
+        assert!(limiter.acquire("sybil-c").is_err());
+        assert!(!limiter
+            .counts
+            .lock()
+            .unwrap()
+            .by_key
+            .contains_key("sybil-c"));
         limiter.release("dev_a");
-        assert_eq!(
-            limiter.count("dev_a"),
-            crate::tunnel::MAXIMUM_REMOTE_SESSIONS - 1
-        );
-        limiter.acquire("dev_a").unwrap();
+        assert_eq!(limiter.count("dev_a"), 1);
+        limiter.acquire("sybil-c").unwrap();
+        limiter.release("dev_a");
+        limiter.release("dev_b");
+        limiter.release("sybil-c");
+        let counts = limiter.counts.lock().unwrap();
+        assert_eq!(counts.total, 0);
+        assert!(counts.by_key.is_empty());
     }
 }

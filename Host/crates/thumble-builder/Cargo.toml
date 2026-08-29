@@ -1,0 +1,18 @@
+[package]
+name = "thumble-builder"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+
+[lib]
+name = "thumble_builder"
+path = "src/lib.rs"
+
+[dependencies]
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.151"
+serde_json_canonicalizer = "=0.3.2"
+sha2 = "=0.10.9"
+thumble-core = { path = "../thumble-core" }
+thumble-protocol = { path = "../thumble-protocol" }
+uuid = "=1.18.1"

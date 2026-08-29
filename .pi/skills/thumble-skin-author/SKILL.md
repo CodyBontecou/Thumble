@@ -24,7 +24,7 @@ Read [workflow.md](references/workflow.md) before execution and [quality-bar.md]
 ## Required staged workflow
 
 1. **Art direction** — run the `thumble-art-director` agent. Require `reviews/art-direction.md` before source changes.
-2. **Execution** — run the `thumble-skin-designer` agent to author JSON/SVG, compile, validate, quality-check, and render `reviews/contact-sheet-1.png`.
+2. **Execution** — run the `thumble-skin-designer` agent to author JSON/SVG or a CSS workspace (`scaffold --css`, profile `thumble-css-core-1`), compile, validate, quality-check, and render `reviews/contact-sheet-1.png`.
 3. **Independent critique** — run `thumble-visual-critic` against the exact sheet. The parent must read and synthesize findings; then give the designer exact corrective changes. Never delegate “fix whatever the critic found.”
 4. **Repeat** — require at least two independent critic passes and a final `visual-pass`. Preserve every contact sheet and critique report.
 5. **QA** — run `thumble-skin-qa`. A passing package must compile byte-for-byte identically twice and pass both strict validators.
@@ -40,7 +40,10 @@ thumble skin artboard show ARTBOARD --json
 thumble skin scaffold "Skin Name" \
   --identifier com.creator.skin-name \
   --artboard ARTBOARD \
-  -o PATH
+  -o PATH                      # add --css for a CSS-authored workspace
+thumble skin css capabilities
+thumble skin css lint PATH
+thumble skin css computed PATH --control builtin-jump --scheme dark --state pressed
 
 thumble skin compile PATH -o PATH/build/skin.pocketpad --clean
 thumble skin validate PATH/build/skin.pocketpad --strict
@@ -48,7 +51,13 @@ thumble skin quality PATH --artboard ARTBOARD --strict
 thumble skin preview PATH \
   -o PATH/reviews/contact-sheet-N.png \
   --all-variants --all-states --native-renderer --contact-sheet --columns 4
+thumble skin preview PACKAGE \
+  -o /tmp/controller-view.png --orientation landscape --scheme light --state normal --json
 ```
+
+To show a package's controller view inside an MCP chat without importing or applying it, call the `preview_skin_workspace` MCP tool with the absolute package path (see `references/workflow.md`).
+
+CSS workspaces follow the same staged workflow, gates, and human approval; `thumble skin quality --strict` understands stylesheets directly. See `docs/skins/css-authoring.md` for the CSS profile and `docs/skins/examples/css-first-light/` for a complete example.
 
 If `thumble` is not on `PATH`, build `ThumbleCLI` with Xcode and use the resulting executable. Guard long builds with a timeout and keep output bounded.
 
@@ -56,7 +65,7 @@ If `thumble` is not on `PATH`, build `ThumbleCLI` with Xcode and use the resulti
 
 A skin-authoring task is complete only when all of these exist:
 
-- editable `skin-source.json` and SVG source;
+- editable source: `skin-source.json` with SVG, or declared stylesheets for CSS workspaces;
 - deterministic `.pocketpad` output;
 - canonical compatibility metadata;
 - all variant/state native contact sheet;

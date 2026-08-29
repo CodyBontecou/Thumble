@@ -1,0 +1,60 @@
+/* CSS First Light — thumble-css-core-1 */
+
+:root {
+  --surface: #F2EEF5;
+  --ink: #6E4F9E;
+  --accent: #A77CFF;
+}
+
+controller {
+  background: linear-gradient(160deg, #E9E4F2, #C9C2D2);
+}
+
+control {
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 14px;
+  box-shadow: 0 2px 4px #101027;
+}
+
+control:pressed {
+  transform: scale(0.96);
+}
+
+control:disabled {
+  opacity: 0.45;
+}
+
+control[role="movement"] {
+  border-radius: 10px;
+  background: #DDD8E6;
+}
+
+control[role="primary_action"] {
+  background: linear-gradient(135deg, #8A6FD0, #5B4497);
+  color: #FFFFFF;
+}
+
+control[role="menu"] {
+  border-radius: 22px;
+}
+
+#builtin-jump {
+  box-shadow:
+    0 3px 6px rgba(23, 20, 59, 0.28),
+    inset 0 1px 2px rgba(255, 255, 255, 0.4);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface: #211A46;
+    --ink: #B8A0E8;
+  }
+  controller {
+    background: linear-gradient(160deg, #17143B, #0A0819);
+  }
+  control[role="movement"] {
+    background: #2A2650;
+  }
+}

@@ -1,0 +1,108 @@
+{
+  "fixtures": [
+    {
+      "file": "productivityStarter.json",
+      "revision": 1,
+      "sha256": "3934c7a0bfd0dadd54177f20bfcbffed1172124aa71252d38d2c6fc532f318e4",
+      "templateID": "productivityStarter"
+    },
+    {
+      "file": "productivityOneHandedLeft.json",
+      "revision": 1,
+      "sha256": "5343b8c4f9b889c514a6333b45a596685fd7d8228ddfbfafb6753a5b08ad9032",
+      "templateID": "productivityOneHandedLeft"
+    },
+    {
+      "file": "productivityOneHandedRight.json",
+      "revision": 1,
+      "sha256": "3b4a101dff8806673a8d7e42c57e84e77c9c240f1fe75e4f76f38347bd25f516",
+      "templateID": "productivityOneHandedRight"
+    },
+    {
+      "file": "nes.json",
+      "revision": 1,
+      "sha256": "33a619d9d268116b34c5f0566b1d1fc0f6caa88df84226dfc9650deef94b0771",
+      "templateID": "nes"
+    },
+    {
+      "file": "snes.json",
+      "revision": 2,
+      "sha256": "9142a6a7e07869318fdf437a6167028e6ac743104f09ce42baa25cde1df5ca5e",
+      "templateID": "snes"
+    },
+    {
+      "file": "nintendo64.json",
+      "revision": 1,
+      "sha256": "b8d188d6bbabd621eb8f97e4f9446951228b0dfb9cdb4632cb0a19939cf327a9",
+      "templateID": "nintendo64"
+    },
+    {
+      "file": "gameCube.json",
+      "revision": 1,
+      "sha256": "404a0687d32422701b0b40042390a191358ff14b707ef632c8a2bbb0f68d3f68",
+      "templateID": "gameCube"
+    },
+    {
+      "file": "gameBoy.json",
+      "revision": 1,
+      "sha256": "a96e3fbace45de6cdd4dbcb52bbd4862c8ea1010ffc7c684999cdbcde0dfd161",
+      "templateID": "gameBoy"
+    },
+    {
+      "file": "gameBoyAdvance.json",
+      "revision": 1,
+      "sha256": "27c678d02216d9c284bc40f184f2847b99cfe41e1e61fe32b462708858fbd98c",
+      "templateID": "gameBoyAdvance"
+    },
+    {
+      "file": "genesisSixButton.json",
+      "revision": 1,
+      "sha256": "56c5ff056f0169396d4c6986ce3ea86ef170d2a87c305d254c88aa0f43b6f969",
+      "templateID": "genesisSixButton"
+    },
+    {
+      "file": "saturn.json",
+      "revision": 1,
+      "sha256": "2f9bb3e2a208e1b4099a115ccd51827ad8840331d0e31bfae9e510dd0177cc5c",
+      "templateID": "saturn"
+    },
+    {
+      "file": "dreamcast.json",
+      "revision": 1,
+      "sha256": "7c904e866c55ef350177a5d2d69f0d87cc70bd16f9add1fa84f31389c7bcfaca",
+      "templateID": "dreamcast"
+    },
+    {
+      "file": "arcadeStick.json",
+      "revision": 1,
+      "sha256": "65cc1744f73793cf8821d1049c9392d01048f978c93d44623d8f6d839e3f3e15",
+      "templateID": "arcadeStick"
+    },
+    {
+      "file": "psp.json",
+      "revision": 1,
+      "sha256": "7c73e79e567bf34177290d96ed6d8ef5def2324066bb8c74b519a7485e2d27c2",
+      "templateID": "psp"
+    },
+    {
+      "file": "playStation.json",
+      "revision": 1,
+      "sha256": "7109234e55853fe538f86be854fc5913809577cf8d0a4375bfa3252e95a25e02",
+      "templateID": "playStation"
+    },
+    {
+      "file": "xbox.json",
+      "revision": 1,
+      "sha256": "76f195fa4cd12561f345445c66ca9be374b17cb9d4290253ab1227b4e130a8c4",
+      "templateID": "xbox"
+    },
+    {
+      "file": "softWhite.json",
+      "revision": 1,
+      "sha256": "b85e4c05840c2c6efa78c588aaddcd361ab3a9a1ec8b27a015d1d579eee04b7e",
+      "templateID": "softWhite"
+    }
+  ],
+  "schema": "com.codybontecou.thumble.controller-template-fixture-manifest",
+  "version": 1
+}

@@ -199,6 +199,30 @@ struct ThumbleCLI {
         var previewIDs: [String]
     }
 
+    /// Machine-readable `skin preview --json` summary consumed by scripts and
+    /// the `preview_skin_workspace` MCP tool. `pixelWidth`/`pixelHeight` are
+    /// omitted for contact sheets, whose canvas is assembled at render time.
+    private struct SkinPreviewFrameJSON: Encodable {
+        var title: String
+        var path: String
+        var pixelWidth: Int?
+        var pixelHeight: Int?
+    }
+
+    private struct SkinPreviewSummaryJSON: Encodable {
+        var skinName: String
+        var skinIdentifier: String
+        var skinVersion: String
+        var artboardID: String?
+        var orientation: String
+        var colorScheme: String
+        var state: String
+        var contactSheet: Bool
+        var output: String
+        var frameCount: Int
+        var frames: [SkinPreviewFrameJSON]
+    }
+
     private struct OrientationPreferenceSummary: Codable {
         var configurationRevision: UInt64
         var profileID: UUID
@@ -345,21 +369,131 @@ struct ThumbleCLI {
 
     private static func generate(arguments: [String]) throws {
         let options = try parseGenerateOptions(arguments)
-        let generated: GeneratedGameKeypadProfile
-        if let specPath = options.specPath {
-            let spec = try loadAgentSpec(path: specPath)
-            generated = GameKeypadGenerator.generate(from: spec, requestedGameName: options.gameName)
-        } else if let gameName = options.gameName, let builtInProfile = GameKeypadGenerator.generate(for: gameName) {
-            generated = builtInProfile
-        } else if let gameName = options.gameName {
-            throw CLIError.message("No built-in template for \"\(gameName)\". Have your agent write a JSON keypad spec and run `thumble generate --spec <file>`.")
-        } else {
+        if options.specPath != nil {
+            try generateFromSpec(options: options)
+            return
+        }
+
+        guard let gameName = options.gameName else {
             throw CLIError.message("Missing game name or --spec <file>")
         }
-        let macBindings = try resolvedMacBindings(for: generated)
-        let layoutReport = generated.profile.customization.layoutQualityReport(profileName: generated.resolvedGameName)
+        guard let generated = GameKeypadGenerator.generate(for: gameName) else {
+            throw CLIError.message("No built-in template for \"\(gameName)\". Have your agent write a JSON keypad spec and run `thumble generate --spec <file>`.")
+        }
+        let macBindings = try prepareGeneratedProfile(generated, options: options)
+        if options.printJSON {
+            try printJSON(generated)
+        }
+
+        if options.install {
+            let response = try profileBackend().perform(
+                .generationGenerate(
+                    select: options.select,
+                    makeDefault: options.makeDefault
+                ),
+                invocationID: options.invocationID
+            )
+            guard response.outcome?.profileNames.first == "Hollow Knight" else {
+                throw CLIError.message("Rust profile authority returned no generated-profile outcome")
+            }
+            if !options.printJSON {
+                printSummary(
+                    generated: generated,
+                    macBindings: macBindings,
+                    installed: true,
+                    selected: options.select
+                )
+            }
+            printProfileInvocation(response)
+        } else if !options.printJSON {
+            printSummary(generated: generated, macBindings: macBindings, installed: false, selected: false)
+        }
+    }
+
+    private static func generateFromSpec(options: GenerateOptions) throws {
+        guard let specPath = options.specPath else {
+            throw CLIError.message("Missing --spec path")
+        }
+        let specJSON = try readBoundedGenerationSpec(path: specPath)
+        let planningResponse = try profileBackend().perform(
+            .generationPlanSpec(
+                specJSON: specJSON,
+                requestedGameName: options.gameName
+            ),
+            invocationID: options.invocationID
+        )
+        guard let plan = planningResponse.generationPlan else {
+            throw CLIError.message("Rust profile authority returned no generation plan")
+        }
+        guard let generatedData = plan.generatedJSON.data(using: .utf8),
+              let generated = try? JSONDecoder().decode(
+                  GeneratedGameKeypadProfile.self,
+                  from: generatedData
+              )
+        else {
+            throw CLIError.message("Rust generation plan returned an invalid generated profile")
+        }
+
+        printGenerationWarnings(plan, toStandardError: options.printJSON)
+        if options.strictLayoutValidation,
+           !plan.warnings.isEmpty || plan.omittedWarningCount > 0 {
+            throw CLIError.validationFailed("Rust generation reported warnings in strict layout mode.")
+        }
+
+        let macBindings = try prepareGeneratedProfile(generated, options: options)
+        if options.printJSON {
+            try FileHandle.standardOutput.write(contentsOf: generatedData)
+        }
+        guard options.install else {
+            if !options.printJSON {
+                printSummary(
+                    generated: generated,
+                    macBindings: macBindings,
+                    installed: false,
+                    selected: false
+                )
+            }
+            return
+        }
+
+        let importResponse = try profileBackend().perform(
+            .import(
+                artifactJSON: plan.artifactJSON,
+                appendAsCopies: false,
+                select: options.select,
+                makeDefault: options.makeDefault
+            ),
+            invocationID: planningResponse.invocationID,
+            expectedConfigurationRevision: plan.configurationRevision
+        )
+        guard importResponse.outcome != nil else {
+            throw CLIError.message("Rust profile authority returned no profile-import outcome")
+        }
+        if !options.printJSON {
+            printSummary(
+                generated: generated,
+                macBindings: macBindings,
+                installed: true,
+                selected: options.select
+            )
+        }
+        printProfileInvocation(importResponse)
+    }
+
+    private static func prepareGeneratedProfile(
+        _ generated: GeneratedGameKeypadProfile,
+        options: GenerateOptions
+    ) throws -> [GameButton: MacKeyBinding] {
+        let macBindings = options.printJSON ? [:] : try resolvedMacBindings(for: generated)
+        let layoutReport = generated.profile.customization.layoutQualityReport(
+            profileName: generated.resolvedGameName
+        )
         if options.validateLayout {
-            try enforceLayoutQuality(layoutReport, strict: options.strictLayoutValidation, quiet: options.printJSON)
+            try enforceLayoutQuality(
+                layoutReport,
+                strict: options.strictLayoutValidation,
+                quiet: options.printJSON
+            )
         }
         if let previewOutputPath = options.previewOutputPath {
 #if os(macOS)
@@ -373,56 +507,38 @@ struct ThumbleCLI {
             }
 #endif
         }
+        return macBindings
+    }
 
-        if options.printJSON {
-            try printJSON(generated)
+    private static func printGenerationWarnings(
+        _ plan: ThumbleCLIProfileBackend.GenerationPlan,
+        toStandardError: Bool
+    ) {
+        let warnings = plan.warnings.sorted {
+            ($0.sourceOrdinal, $0.code, $0.message) < ($1.sourceOrdinal, $1.code, $1.message)
         }
-
-        if options.install {
-            if options.specPath != nil {
-                try requireExplicitUnmigratedProfileAccess(
-                    operation: "generation spec install",
-                    artifactRequired: true
-                )
-                try install(
-                    profile: generated.profile,
-                    macBindings: macBindings,
-                    select: options.select,
-                    makeDefault: options.makeDefault
-                )
-                printSummary(
-                    generated: generated,
-                    macBindings: macBindings,
-                    installed: true,
-                    selected: options.select
-                )
-            } else {
-                let response = try profileBackend().perform(
-                    .generationGenerate(
-                        select: options.select,
-                        makeDefault: options.makeDefault
-                    ),
-                    invocationID: options.invocationID
-                )
-                guard response.outcome?.profileNames.first == "Hollow Knight" else {
-                    throw CLIError.message("Rust profile authority returned no generated-profile outcome")
-                }
-                printSummary(
-                    generated: generated,
-                    macBindings: macBindings,
-                    installed: true,
-                    selected: options.select
-                )
-                printProfileInvocation(response)
-            }
-        } else if !options.printJSON {
-            printSummary(generated: generated, macBindings: macBindings, installed: false, selected: false)
+        guard !warnings.isEmpty || plan.omittedWarningCount > 0 else { return }
+        var lines = ["Generation warnings (\(warnings.count + plan.omittedWarningCount)):"]
+        lines.append(contentsOf: warnings.map { warning in
+            "- control \(warning.sourceOrdinal + 1) [\(warning.code)]: \(warning.message)"
+        })
+        if plan.omittedWarningCount > 0 {
+            lines.append("- …and \(plan.omittedWarningCount) more generation warnings")
+        }
+        let output = lines.joined(separator: "\n") + "\n"
+        if toStandardError {
+            fputs(output, stderr)
+        } else {
+            print(output, terminator: "")
         }
     }
 
     private static func parseGenerateOptions(_ arguments: [String]) throws -> GenerateOptions {
         var gameNameParts: [String] = []
         var options = GenerateOptions()
+        var hasSpecSource = false
+        var hasPreviewOutput = false
+        var hasInvocationID = false
 
         var index = 0
         while index < arguments.count {
@@ -431,11 +547,21 @@ struct ThumbleCLI {
             case "--dry-run", "--no-install":
                 options.install = false
             case "--spec", "--from-spec":
+                guard !hasSpecSource else {
+                    throw CLIError.message("--spec/--from-spec/--stdin may be provided only once")
+                }
                 index += 1
-                guard index < arguments.count else { throw CLIError.message("Missing path after \(argument)") }
+                guard index < arguments.count,
+                      arguments[index] == "-" || !arguments[index].hasPrefix("-")
+                else { throw CLIError.message("Missing path after \(argument)") }
                 options.specPath = arguments[index]
+                hasSpecSource = true
             case "--stdin":
+                guard !hasSpecSource else {
+                    throw CLIError.message("--spec/--from-spec/--stdin may be provided only once")
+                }
                 options.specPath = "-"
+                hasSpecSource = true
             case "--select":
                 options.select = true
             case "--no-select":
@@ -452,15 +578,28 @@ struct ThumbleCLI {
             case "--strict-layout", "--strict-layout-validation":
                 options.strictLayoutValidation = true
             case "--layout-preview", "--preview-output":
+                guard !hasPreviewOutput else {
+                    throw CLIError.message("--layout-preview/--preview-output may be provided only once")
+                }
                 index += 1
-                guard index < arguments.count else { throw CLIError.message("Missing path after \(argument)") }
+                guard index < arguments.count, !arguments[index].hasPrefix("-") else {
+                    throw CLIError.message("Missing path after \(argument)")
+                }
                 options.previewOutputPath = arguments[index]
+                hasPreviewOutput = true
             case "--invocation-id":
+                guard !hasInvocationID else {
+                    throw CLIError.message("--invocation-id may be provided only once")
+                }
                 index += 1
-                guard index < arguments.count,
-                      let invocationID = UUID(uuidString: arguments[index])
-                else { throw CLIError.message("--invocation-id must be an exact UUID") }
+                guard index < arguments.count, !arguments[index].hasPrefix("-") else {
+                    throw CLIError.message("Missing UUID after --invocation-id")
+                }
+                guard let invocationID = UUID(uuidString: arguments[index]) else {
+                    throw CLIError.message("--invocation-id must be an exact UUID")
+                }
                 options.invocationID = invocationID
+                hasInvocationID = true
             case "--help", "-h":
                 throw CLIError.helpRequested
             default:
@@ -478,40 +617,70 @@ struct ThumbleCLI {
         return options
     }
 
-    private static func loadAgentSpec(path: String) throws -> AgentKeypadSpec {
-        let data: Data
+    private static func readBoundedGenerationSpec(path: String) throws -> String {
         if path == "-" {
-            data = FileHandle.standardInput.readDataToEndOfFile()
-        } else {
-            data = try Data(contentsOf: URL(fileURLWithPath: path))
+            return try readBoundedGenerationSpec(
+                descriptor: STDIN_FILENO,
+                sizeHint: nil,
+                sourceDescription: "standard input"
+            )
         }
-        return try JSONDecoder().decode(AgentKeypadSpec.self, from: data)
+
+        let descriptor = Darwin.open(path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK)
+        guard descriptor >= 0 else {
+            throw CLIError.message("Could not safely open generation spec as a regular file")
+        }
+        defer { _ = Darwin.close(descriptor) }
+
+        var status = stat()
+        guard Darwin.fstat(descriptor, &status) == 0 else {
+            throw CLIError.message("Could not inspect the opened generation spec file")
+        }
+        guard status.st_mode & S_IFMT == S_IFREG else {
+            throw CLIError.message("Generation spec path must be a regular file")
+        }
+        guard status.st_size >= 0,
+              UInt64(status.st_size) <= UInt64(ThumbleCLIProfileBackend.maximumGenerationSpecBytes)
+        else {
+            throw CLIError.message("Generation spec JSON exceeds the 256 KiB limit")
+        }
+        return try readBoundedGenerationSpec(
+            descriptor: descriptor,
+            sizeHint: Int(status.st_size),
+            sourceDescription: "generation spec file"
+        )
     }
 
-    private static func install(
-        profile inputProfile: GamepadConfigurationProfile,
-        macBindings: [GameButton: MacKeyBinding],
-        select: Bool,
-        makeDefault: Bool
-    ) throws {
-        var store = loadStore()
-        var profile = inputProfile.normalized
-
-        if let existingIndex = store.profiles.firstIndex(where: { sameProfileName($0.name, profile.name) }) {
-            profile.id = store.profiles[existingIndex].id
-            profile.updatedAt = Date.currentMilliseconds
-            store.profiles[existingIndex] = profile
-        } else {
-            store.profiles.append(profile)
+    private static func readBoundedGenerationSpec(
+        descriptor: Int32,
+        sizeHint: Int?,
+        sourceDescription: String
+    ) throws -> String {
+        let maximumBytes = ThumbleCLIProfileBackend.maximumGenerationSpecBytes
+        var data = Data()
+        if let sizeHint { data.reserveCapacity(sizeHint) }
+        let chunkSize = 32 * 1024
+        var buffer = [UInt8](repeating: 0, count: chunkSize)
+        while true {
+            let remaining = maximumBytes - data.count
+            let requestedCount = min(chunkSize, remaining + 1)
+            let bytesRead = buffer.withUnsafeMutableBytes { bytes in
+                Darwin.read(descriptor, bytes.baseAddress, requestedCount)
+            }
+            if bytesRead < 0 {
+                if errno == EINTR { continue }
+                throw CLIError.message("Could not read \(sourceDescription)")
+            }
+            if bytesRead == 0 { break }
+            guard bytesRead <= remaining else {
+                throw CLIError.message("Generation spec JSON exceeds the 256 KiB limit")
+            }
+            data.append(buffer, count: bytesRead)
         }
-
-        if select { store.activeProfileID = profile.id }
-        if makeDefault { store.defaultProfileID = profile.id }
-        store.profileKeyBindings[profile.id.uuidString] = rawBindings(macBindings)
-        store.profileOutputBindings[profile.id.uuidString] = rawOutputBindings(
-            outputBindings(from: macBindings)
-        )
-        try persistStore(store)
+        guard let specJSON = String(data: data, encoding: .utf8) else {
+            throw CLIError.message("Generation spec must be valid UTF-8")
+        }
+        return specJSON
     }
 
     // MARK: - Profiles
@@ -521,8 +690,15 @@ struct ThumbleCLI {
     }
 
     private static func profileInvocationID(in arguments: [String]) throws -> UUID? {
-        guard let value = optionValue("--invocation-id", in: arguments) else { return nil }
-        guard let id = UUID(uuidString: value) else {
+        let indexes = arguments.indices.filter { arguments[$0] == "--invocation-id" }
+        guard indexes.count <= 1 else {
+            throw CLIError.message("--invocation-id may be provided only once")
+        }
+        guard let index = indexes.first else { return nil }
+        guard index + 1 < arguments.count, !arguments[index + 1].hasPrefix("-") else {
+            throw CLIError.message("Missing UUID after --invocation-id")
+        }
+        guard let id = UUID(uuidString: arguments[index + 1]) else {
             throw CLIError.message("--invocation-id must be an exact UUID")
         }
         return id
@@ -535,7 +711,7 @@ struct ThumbleCLI {
             throw CLIError.message("--invocation-id may be provided only once")
         }
         guard let index = indexes.first else { return result }
-        guard index + 1 < result.count else {
+        guard index + 1 < result.count, !result[index + 1].hasPrefix("-") else {
             throw CLIError.message("Missing UUID after --invocation-id")
         }
         result.removeSubrange(index ... index + 1)
@@ -734,11 +910,9 @@ struct ThumbleCLI {
             }
 
         case "export":
-            try requireExplicitUnmigratedProfileAccess(operation: "profile export", artifactRequired: true)
             try exportProfiles(arguments: rest)
 
         case "import":
-            try requireExplicitUnmigratedProfileAccess(operation: "profile import", artifactRequired: true)
             try importProfiles(arguments: rest)
 
         case "attach-app", "attach-application", "app", "application":
@@ -905,132 +1079,341 @@ struct ThumbleCLI {
         print("Created profile \"\(profile.name)\".")
     }
 
-    private static func exportProfiles(arguments: [String]) throws {
-        let store = loadStore()
-        let outputPath = optionValue("--output", in: arguments) ?? optionValue("-o", in: arguments)
-        let exportAll = arguments.contains("--all")
-        let target = firstPositional(in: arguments)
+    private struct ProfileExportArguments {
+        var target: String?
+        var outputPath: String?
+        var exportAll: Bool
+        var invocationID: UUID?
+    }
 
-        let profiles: [GamepadConfigurationProfile]
-        let activeID: UUID?
-        let defaultID: UUID?
-        if exportAll || target == nil {
-            profiles = store.profiles
-            activeID = store.activeProfileID
-            defaultID = store.defaultProfileID
-        } else {
-            let profile = try resolveProfile(target, in: store)
-            profiles = [profile]
-            activeID = profile.id
-            defaultID = store.defaultProfileID == profile.id ? profile.id : nil
+    private struct ProfileImportArguments {
+        var path: String
+        var name: String?
+        var select: Bool
+        var makeDefault: Bool
+        var appendAsCopies: Bool
+        var invocationID: UUID?
+    }
+
+    private static func parseProfileExportArguments(_ arguments: [String]) throws -> ProfileExportArguments {
+        let invocationID = try profileInvocationID(in: arguments)
+        var targets: [String] = []
+        var outputPath: String?
+        var exportAll = false
+        var index = 0
+        while index < arguments.count {
+            let argument = arguments[index]
+            switch argument {
+            case "--all":
+                exportAll = true
+                index += 1
+            case "-o", "--output":
+                guard outputPath == nil else {
+                    throw CLIError.message("Profile export output may be provided only once")
+                }
+                guard index + 1 < arguments.count,
+                      arguments[index + 1] == "-" || !arguments[index + 1].hasPrefix("-")
+                else {
+                    throw CLIError.message("Missing path after \(argument)")
+                }
+                outputPath = arguments[index + 1]
+                index += 2
+            case "--invocation-id":
+                index += 2
+            default:
+                guard !argument.hasPrefix("-") else {
+                    throw CLIError.message("Unknown profile export option: \(argument)")
+                }
+                targets.append(argument)
+                index += 1
+            }
         }
-        let validIDs = Set(profiles.map { $0.id.uuidString })
-        let bindings = store.profileKeyBindings.filter { validIDs.contains($0.key) }
-        let envelope = ProfileExportEnvelope(profiles: profiles, activeProfileID: activeID, defaultProfileID: defaultID, profileKeyBindings: bindings, profileOutputBindings: store.profileOutputBindings.filter { validIDs.contains($0.key) })
-        try writeJSON(envelope, to: outputPath)
+        guard targets.count <= 1 else {
+            throw CLIError.message("Profile export accepts only one target")
+        }
+        guard !exportAll || targets.isEmpty else {
+            throw CLIError.message("Profile export cannot combine --all with a target")
+        }
+        return ProfileExportArguments(
+            target: targets.first,
+            outputPath: outputPath,
+            exportAll: exportAll,
+            invocationID: invocationID
+        )
+    }
+
+    private static func parseProfileImportArguments(_ arguments: [String]) throws -> ProfileImportArguments {
+        let invocationID = try profileInvocationID(in: arguments)
+        var paths: [String] = []
+        var name: String?
+        var select = true
+        var makeDefault = false
+        var appendAsCopies = false
+        var index = 0
+        while index < arguments.count {
+            let argument = arguments[index]
+            switch argument {
+            case "--append":
+                appendAsCopies = true
+                index += 1
+            case "--no-select":
+                select = false
+                index += 1
+            case "--default":
+                makeDefault = true
+                index += 1
+            case "--name":
+                guard name == nil else {
+                    throw CLIError.message("--name may be provided only once")
+                }
+                guard index + 1 < arguments.count, !arguments[index + 1].hasPrefix("-") else {
+                    throw CLIError.message("Missing value after --name")
+                }
+                name = arguments[index + 1]
+                index += 2
+            case "--invocation-id":
+                index += 2
+            default:
+                guard !argument.hasPrefix("-") else {
+                    throw CLIError.message("Unknown profile import option: \(argument)")
+                }
+                paths.append(argument)
+                index += 1
+            }
+        }
+        guard let path = paths.first else { throw CLIError.message("Missing import path") }
+        guard paths.count == 1 else {
+            throw CLIError.message("Profile import accepts only one path")
+        }
+        return ProfileImportArguments(
+            path: path,
+            name: name,
+            select: select,
+            makeDefault: makeDefault,
+            appendAsCopies: appendAsCopies,
+            invocationID: invocationID
+        )
+    }
+
+    private static func exportProfiles(arguments: [String]) throws {
+        let parsed = try parseProfileExportArguments(arguments)
+        let target = parsed.exportAll
+            ? nil
+            : parsed.target.map(ThumbleCLIProfileBackend.ProfileSelector.init)
+        let response = try profileBackend().perform(
+            .export(target),
+            invocationID: parsed.invocationID
+        )
+        guard let artifact = response.artifact else {
+            throw CLIError.message("Rust profile authority returned no bounded profile artifact")
+        }
+        try writeRawProfileArtifact(artifact.artifactJSON, to: parsed.outputPath)
     }
 
     private static func importProfiles(arguments: [String]) throws {
-        guard let path = firstPositional(in: arguments) else { throw CLIError.message("Missing import path") }
-        let select = !arguments.contains("--no-select")
-        let makeDefault = arguments.contains("--default")
-        let appendAsCopies = arguments.contains("--append")
-        let data = try Data(contentsOf: URL(fileURLWithPath: path))
-        let decoder = JSONDecoder()
-        var importedProfiles: [GamepadConfigurationProfile] = []
-        var importedBindings: [String: [String: MacKeyBinding]] = [:]
-        var importedOutputBindings: [String: [String: MacControlOutputBinding]] = [:]
-        var importedActiveID: UUID?
-        var importedDefaultID: UUID?
+        let parsed = try parseProfileImportArguments(arguments)
+        let path = parsed.path
+        let select = parsed.select
+        let makeDefault = parsed.makeDefault
+        let appendAsCopies = parsed.appendAsCopies
+        let rawArtifactJSON = try readBoundedProfileArtifact(at: URL(fileURLWithPath: path))
+        let topLevelProbe = topLevelProfileProbe(rawArtifactJSON)
+        let artifactJSON: String
+        if hasExplicitProfileArtifactSchema(topLevelProbe) {
+            artifactJSON = rawArtifactJSON
+        } else {
+            artifactJSON = try legacyProfileArtifactJSON(
+                adapting: rawArtifactJSON,
+                topLevelProbe: topLevelProbe,
+                path: path,
+                name: parsed.name
+            )
+        }
+        let response = try profileBackend().perform(
+            .import(
+                artifactJSON: artifactJSON,
+                appendAsCopies: appendAsCopies,
+                select: select,
+                makeDefault: makeDefault
+            ),
+            invocationID: parsed.invocationID
+        )
+        guard let outcome = response.outcome else {
+            throw CLIError.message("Rust profile authority returned no profile-import outcome")
+        }
+        printProfileInvocation(response)
+        let importedCount = outcome.profileNames.count
+        print("Imported \(importedCount) profile\(importedCount == 1 ? "" : "s")\(appendAsCopies ? " as copies" : "").")
+    }
 
-        if let envelope = try? decoder.decode(ProfileExportEnvelope.self, from: data) {
-            importedProfiles = envelope.profiles.map(\.normalized)
-            importedBindings = envelope.profileKeyBindings
-            importedOutputBindings = envelope.profileOutputBindings
-            importedActiveID = envelope.activeProfileID
-            importedDefaultID = envelope.defaultProfileID
-        } else if let generated = try? decoder.decode(GeneratedGameKeypadProfile.self, from: data) {
-            importedProfiles = [generated.profile.normalized]
+    private static func writeRawProfileArtifact(_ artifactJSON: String, to outputPath: String?) throws {
+        let data = Data(artifactJSON.utf8)
+        if let outputPath, outputPath != "-" {
+            try data.write(to: URL(fileURLWithPath: outputPath), options: .atomic)
+            return
+        }
+        var standardOutputData = data
+        while standardOutputData.last == 0x0A || standardOutputData.last == 0x0D {
+            standardOutputData.removeLast()
+        }
+        standardOutputData.append(0x0A)
+        try FileHandle.standardOutput.write(contentsOf: standardOutputData)
+    }
+
+    private static func readBoundedProfileArtifact(at url: URL) throws -> String {
+        let openFlags = O_RDONLY | O_CLOEXEC | O_NOFOLLOW
+        let descriptor = Darwin.open(url.path, openFlags | O_NONBLOCK)
+        guard descriptor >= 0 else {
+            throw CLIError.message("Could not safely open profile import path as a regular file")
+        }
+        defer { _ = Darwin.close(descriptor) }
+
+        var status = stat()
+        guard Darwin.fstat(descriptor, &status) == 0 else {
+            throw CLIError.message("Could not inspect the opened profile import file")
+        }
+        guard status.st_mode & S_IFMT == S_IFREG else {
+            throw CLIError.message("Profile import path must be a regular file")
+        }
+        guard status.st_size >= 0,
+              UInt64(status.st_size) <= UInt64(ThumbleCLIProfileBackend.maximumProfileArtifactBytes)
+        else {
+            throw CLIError.message("Profile import JSON exceeds the 8 MiB limit")
+        }
+
+        var data = Data()
+        data.reserveCapacity(Int(status.st_size))
+        let chunkSize = 64 * 1024
+        var buffer = [UInt8](repeating: 0, count: chunkSize)
+        while true {
+            let remaining = ThumbleCLIProfileBackend.maximumProfileArtifactBytes - data.count
+            let requestedCount = min(chunkSize, remaining + 1)
+            let bytesRead = buffer.withUnsafeMutableBytes { bytes in
+                Darwin.read(descriptor, bytes.baseAddress, requestedCount)
+            }
+            if bytesRead < 0 {
+                if errno == EINTR { continue }
+                throw CLIError.message("Could not read the opened profile import file")
+            }
+            if bytesRead == 0 { break }
+            guard bytesRead <= remaining else {
+                throw CLIError.message("Profile import JSON exceeds the 8 MiB limit")
+            }
+            data.append(buffer, count: bytesRead)
+        }
+        let artifactJSON = String(decoding: data, as: UTF8.self)
+        guard Data(artifactJSON.utf8) == data else {
+            throw CLIError.message("Profile import file must contain valid UTF-8")
+        }
+        return artifactJSON
+    }
+
+    private struct TopLevelProfileSchemaProbe: Decodable {
+        let hasSchema: Bool
+        let hasArtifactVersion: Bool
+        let hasGeneratedProfileShape: Bool
+        let hasProfileShape: Bool
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: AnyCodingKey.self)
+            hasSchema = container.contains(AnyCodingKey("schema"))
+            hasArtifactVersion = container.contains(AnyCodingKey("artifactVersion"))
+            hasGeneratedProfileShape = container.contains(AnyCodingKey("profile"))
+            hasProfileShape = [
+                "name", "customization", "landscapeCustomization", "portraitCustomization",
+                "orientationPreference", "outputMode", "launchTarget"
+            ].contains { container.contains(AnyCodingKey($0)) }
+        }
+    }
+
+    private struct AnyCodingKey: CodingKey {
+        var stringValue: String
+        var intValue: Int? { nil }
+
+        init(_ stringValue: String) {
+            self.stringValue = stringValue
+        }
+
+        init?(stringValue: String) {
+            self.init(stringValue)
+        }
+
+        init?(intValue: Int) {
+            return nil
+        }
+    }
+
+    private static func topLevelProfileProbe(_ artifactJSON: String) -> TopLevelProfileSchemaProbe? {
+        try? JSONDecoder().decode(
+            TopLevelProfileSchemaProbe.self,
+            from: Data(artifactJSON.utf8)
+        )
+    }
+
+    private static func hasExplicitProfileArtifactSchema(_ probe: TopLevelProfileSchemaProbe?) -> Bool {
+        guard let probe else { return false }
+        return probe.hasSchema || probe.hasArtifactVersion
+    }
+
+    private static func legacyProfileArtifactJSON(
+        adapting artifactJSON: String,
+        topLevelProbe: TopLevelProfileSchemaProbe?,
+        path: String,
+        name: String?
+    ) throws -> String {
+        let data = Data(artifactJSON.utf8)
+        let decoder = JSONDecoder()
+        let envelope: ProfileExportEnvelope
+
+        if let legacyEnvelope = try? decoder.decode(ProfileExportEnvelope.self, from: data) {
+            envelope = legacyEnvelope
+        } else if topLevelProbe?.hasGeneratedProfileShape == true,
+                  let generated = try? decoder.decode(GeneratedGameKeypadProfile.self, from: data) {
             let generatedBindings = try resolvedMacBindings(for: generated)
-            importedBindings[generated.profile.id.uuidString] = rawBindings(generatedBindings)
-            importedOutputBindings[generated.profile.id.uuidString] = rawOutputBindings(outputBindings(from: generatedBindings))
-            importedActiveID = generated.profile.id
-        } else if let profile = try? decoder.decode(GamepadConfigurationProfile.self, from: data) {
-            importedProfiles = [profile.normalized]
-            importedActiveID = profile.id
-        } else if let profiles = try? decoder.decode([GamepadConfigurationProfile].self, from: data), !profiles.isEmpty {
-            importedProfiles = profiles.map(\.normalized)
-            importedActiveID = profiles.first?.id
+            envelope = ProfileExportEnvelope(
+                profiles: [generated.profile.normalized],
+                activeProfileID: generated.profile.id,
+                defaultProfileID: nil,
+                profileKeyBindings: [generated.profile.id.uuidString: rawBindings(generatedBindings)],
+                profileOutputBindings: [
+                    generated.profile.id.uuidString: rawOutputBindings(outputBindings(from: generatedBindings))
+                ]
+            )
+        } else if topLevelProbe?.hasProfileShape == true,
+                  let profile = try? decoder.decode(GamepadConfigurationProfile.self, from: data) {
+            envelope = ProfileExportEnvelope(
+                profiles: [profile.normalized],
+                activeProfileID: profile.id,
+                defaultProfileID: nil
+            )
+        } else if let profiles = try? decoder.decode([GamepadConfigurationProfile].self, from: data),
+                  !profiles.isEmpty {
+            envelope = ProfileExportEnvelope(
+                profiles: profiles.map(\.normalized),
+                activeProfileID: profiles.first?.id,
+                defaultProfileID: nil
+            )
         } else if let customization = try? decoder.decode(GamepadCustomization.self, from: data) {
-            let name = optionValue("--name", in: arguments) ?? URL(fileURLWithPath: path).deletingPathExtension().lastPathComponent
-            let profile = GamepadConfigurationProfile(name: name, primaryCustomization: customization)
-            importedProfiles = [profile]
-            importedActiveID = profile.id
+            let requestedName = name ?? URL(fileURLWithPath: path).deletingPathExtension().lastPathComponent
+            let profile = GamepadConfigurationProfile(name: requestedName, primaryCustomization: customization)
+            envelope = ProfileExportEnvelope(
+                profiles: [profile],
+                activeProfileID: profile.id,
+                defaultProfileID: nil
+            )
         } else {
             throw CLIError.message("Unsupported profile import JSON")
         }
 
-        guard !importedProfiles.isEmpty else { throw CLIError.message("Import did not contain any profiles") }
-        var store = loadStore()
-        var importedIDMap: [UUID: UUID] = [:]
-        var destinationIDs: [UUID] = []
-        var claimedDestinationIDs = Set<UUID>()
-
-        func uniqueName(_ requestedName: String, excluding profileID: UUID? = nil) -> String {
-            let base = requestedName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Imported Setup" : requestedName
-            let names = Set(store.profiles.filter { $0.id != profileID }.map { $0.name.lowercased() })
-            guard names.contains(base.lowercased()) else { return base }
-            var suffix = 2
-            while names.contains("\(base) \(suffix)".lowercased()) { suffix += 1 }
-            return "\(base) \(suffix)"
+        var legacyEnvelope = envelope
+        legacyEnvelope.version = 4
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        let encoded = try encoder.encode(legacyEnvelope)
+        guard encoded.count <= ThumbleCLIProfileBackend.maximumProfileArtifactBytes else {
+            throw CLIError.message("Adapted profile import JSON exceeds the 8 MiB limit")
         }
-
-        for imported in importedProfiles {
-            var profile = imported.normalized
-            if appendAsCopies {
-                profile.id = UUID()
-                profile.name = uniqueName(profile.name)
-                profile.updatedAt = Date.currentMilliseconds
-                store.profiles.append(profile)
-            } else if let existingIndex = store.profiles.firstIndex(where: { candidate in
-                guard !claimedDestinationIDs.contains(candidate.id) else { return false }
-                return candidate.id == imported.id || sameProfileName(candidate.name, profile.name)
-            }) {
-                profile.id = store.profiles[existingIndex].id
-                profile.updatedAt = Date.currentMilliseconds
-                store.profiles[existingIndex] = profile
-            } else {
-                profile.name = uniqueName(profile.name)
-                store.profiles.append(profile)
-            }
-
-            claimedDestinationIDs.insert(profile.id)
-            importedIDMap[imported.id] = profile.id
-            destinationIDs.append(profile.id)
-
-            if let raw = importedBindings[imported.id.uuidString] {
-                store.profileKeyBindings[profile.id.uuidString] = raw
-            } else if store.profileKeyBindings[profile.id.uuidString] == nil {
-                store.profileKeyBindings[profile.id.uuidString] = rawBindings(DefaultKeypadKeyMap.defaultBindings)
-            }
-            if let rawOutput = importedOutputBindings[imported.id.uuidString] {
-                store.profileOutputBindings[profile.id.uuidString] = rawOutput
-            } else if store.profileOutputBindings[profile.id.uuidString] == nil {
-                let keys = decodedBindings(store.profileKeyBindings[profile.id.uuidString]) ?? DefaultKeypadKeyMap.defaultBindings
-                store.profileOutputBindings[profile.id.uuidString] = rawOutputBindings(outputBindings(from: keys))
-            }
-        }
-
-        guard let firstDestinationID = destinationIDs.first else { throw CLIError.message("Import did not contain any usable profiles") }
-        let importedSelectedID = importedActiveID.flatMap { importedIDMap[$0] } ?? firstDestinationID
-        if select {
-            store.activeProfileID = importedSelectedID
-        }
-        if makeDefault {
-            store.defaultProfileID = importedDefaultID.flatMap { importedIDMap[$0] } ?? importedSelectedID
-        }
-        try persistStore(store)
-        print("Imported \(importedProfiles.count) profile\(importedProfiles.count == 1 ? "" : "s")\(appendAsCopies ? " as copies" : "").")
+        return String(decoding: encoded, as: UTF8.self)
     }
 
     private static func attachApplicationToProfile(arguments: [String]) throws {
@@ -1214,7 +1597,7 @@ struct ThumbleCLI {
 
     private static func skin(arguments: [String]) throws {
         guard let subcommand = arguments.first else {
-            throw CLIError.message("Missing skin subcommand. Use artboard, scaffold, compile, preview, quality, list, inspect, validate, import, apply, detach, export, pack, or unpack.")
+            throw CLIError.message("Missing skin subcommand. Use artboard, scaffold, css, compile, preview, quality, list, inspect, validate, import, apply, detach, export, pack, or unpack.")
         }
         let rest = Array(arguments.dropFirst())
         switch subcommand {
@@ -1265,7 +1648,7 @@ struct ThumbleCLI {
 
         case "scaffold", "new":
             guard let name = firstPositional(in: rest) else {
-                throw CLIError.message("Usage: thumble skin scaffold NAME --identifier REVERSE.DNS.ID [-o DIRECTORY] [--artboard ARTBOARD] [--force]")
+                throw CLIError.message("Usage: thumble skin scaffold NAME --identifier REVERSE.DNS.ID [-o DIRECTORY] [--artboard ARTBOARD] [--css] [--force]")
             }
             guard let identifier = optionValue("--identifier", in: rest) else {
                 throw CLIError.message("skin scaffold requires --identifier <reverse.dns.id>")
@@ -1273,14 +1656,22 @@ struct ThumbleCLI {
             let artboardID = optionValue("--artboard", in: rest) ?? ThumbleSkinArtboardCatalog.defaultID
             let output = optionValue("--output", in: rest) ?? optionValue("-o", in: rest)
                 ?? name.replacingOccurrences(of: " ", with: "-")
-            _ = try ThumbleSkinScaffolder.write(
+            let workspace = try ThumbleSkinScaffolder.write(
                 name: name,
                 identifier: identifier,
                 artboardID: artboardID,
                 to: URL(fileURLWithPath: output),
-                force: rest.contains("--force")
+                force: rest.contains("--force"),
+                css: rest.contains("--css")
             )
-            print("Created editable skin workspace at \(output).")
+            if workspace.usesCSSAuthoring {
+                print("Created editable CSS skin workspace at \(output) with styles/controller.css.")
+            } else {
+                print("Created editable skin workspace at \(output).")
+            }
+
+        case "css":
+            try skinCSS(rest)
 
         case "compile", "build":
             guard let input = firstPositional(in: rest) else {
@@ -1538,7 +1929,7 @@ struct ThumbleCLI {
 
     private static func renderSkinPreview(command: String, arguments: [String]) throws {
         guard let target = firstPositional(in: arguments) else {
-            throw CLIError.message("Usage: thumble skin preview SOURCE|PACKAGE -o OUTPUT [--all-variants] [--all-states] [--contact-sheet]")
+            throw CLIError.message("Usage: thumble skin preview SOURCE|PACKAGE -o OUTPUT [--all-variants] [--all-states] [--contact-sheet] [--json]")
         }
         guard let output = optionValue("--output", in: arguments) ?? optionValue("-o", in: arguments) else {
             throw CLIError.message("skin \(command) requires -o <preview.png|frames-directory>")
@@ -1655,6 +2046,9 @@ struct ThumbleCLI {
 
         let outputURL = URL(fileURLWithPath: output)
         let contactSheet = arguments.contains("--contact-sheet")
+        let jsonOutput = arguments.contains("--json")
+        var renderedFrames: [SkinPreviewFrameJSON] = []
+        var reportedOutput = outputURL.path
         if contactSheet {
             let columns = Int(optionValue("--columns", in: arguments) ?? "4") ?? 4
             try MainActor.assumeIsolated {
@@ -1666,7 +2060,9 @@ struct ThumbleCLI {
                     scale: CGFloat(scale)
                 )
             }
-            print("Rendered \(items.count)-panel native contact sheet to \(output).")
+            if !jsonOutput {
+                print("Rendered \(items.count)-panel native contact sheet to \(output).")
+            }
         } else if items.count == 1, let item = items.first {
             try MainActor.assumeIsolated {
                 try ThumbleNativeSkinPreviewRenderer.writePNG(
@@ -1675,7 +2071,16 @@ struct ThumbleCLI {
                     scale: CGFloat(scale)
                 )
             }
-            print("Rendered \(package.manifest.name) with the native renderer to \(output).")
+            let pixels = renderedPixelSize(of: item.customization, scale: scale)
+            renderedFrames.append(SkinPreviewFrameJSON(
+                title: item.title,
+                path: outputURL.path,
+                pixelWidth: pixels.width,
+                pixelHeight: pixels.height
+            ))
+            if !jsonOutput {
+                print("Rendered \(package.manifest.name) with the native renderer to \(output).")
+            }
         } else {
             let framesDirectory = outputURL.pathExtension.isEmpty
                 ? outputURL
@@ -1686,16 +2091,59 @@ struct ThumbleCLI {
                     .replacingOccurrences(of: " · ", with: "-")
                     .replacingOccurrences(of: " ", with: "-")
                     .lowercased() + ".png"
+                let frameURL = framesDirectory.appendingPathComponent(filename)
                 try MainActor.assumeIsolated {
                     try ThumbleNativeSkinPreviewRenderer.writePNG(
                         item: item,
-                        outputURL: framesDirectory.appendingPathComponent(filename),
+                        outputURL: frameURL,
                         scale: CGFloat(scale)
                     )
                 }
+                let pixels = renderedPixelSize(of: item.customization, scale: scale)
+                renderedFrames.append(SkinPreviewFrameJSON(
+                    title: item.title,
+                    path: frameURL.path,
+                    pixelWidth: pixels.width,
+                    pixelHeight: pixels.height
+                ))
             }
-            print("Rendered \(items.count) native preview frames to \(framesDirectory.path).")
+            reportedOutput = framesDirectory.path
+            if !jsonOutput {
+                print("Rendered \(items.count) native preview frames to \(framesDirectory.path).")
+            }
         }
+        if jsonOutput {
+            let artboardID = workspace?.artboardID
+                ?? package.manifest.compatibility?.templates.first?.templateID
+            let orientationLabel = orientations.count > 1 ? "all" : orientations[0].rawValue
+            let schemeLabel = schemes.count > 1 ? "all" : schemes[0].rawValue
+            let stateLabel = states.count > 1 ? "all" : states[0].rawValue
+            try printJSON(SkinPreviewSummaryJSON(
+                skinName: package.manifest.name,
+                skinIdentifier: package.manifest.identifier,
+                skinVersion: package.manifest.version,
+                artboardID: artboardID,
+                orientation: orientationLabel,
+                colorScheme: schemeLabel,
+                state: stateLabel,
+                contactSheet: contactSheet,
+                output: reportedOutput,
+                frameCount: items.count,
+                frames: renderedFrames
+            ))
+        }
+    }
+
+    /// Pixel dimensions the native renderer produces for one preview frame.
+    private static func renderedPixelSize(
+        of customization: GamepadCustomization,
+        scale: Double
+    ) -> (width: Int, height: Int) {
+        let size = customization.deviceCanvas.editorDeviceFrame.screenRect.size
+        return (
+            Int((size.width * CGFloat(scale)).rounded()),
+            Int((size.height * CGFloat(scale)).rounded())
+        )
     }
 
     private static func skinInspectionSummary(_ package: ThumbleSkinPackage) -> SkinInspectionSummary {
@@ -1742,6 +2190,185 @@ struct ThumbleCLI {
         for issue in report.issues {
             let path = issue.path.map { " [\($0)]" } ?? ""
             print("- \(issue.severity.rawValue.uppercased()) \(issue.code)\(path): \(issue.message)")
+        }
+    }
+
+    private static func skinCSS(_ arguments: [String]) throws {
+        guard let subcommand = arguments.first else {
+            throw CLIError.message("Missing skin css subcommand. Use capabilities, lint, or computed.")
+        }
+        let rest = Array(arguments.dropFirst())
+        switch subcommand {
+        case "capabilities", "profile":
+            if rest.contains("--json") {
+                try printJSON(ThumbleCSSCapabilities.current)
+            } else {
+                let capabilities = ThumbleCSSCapabilities.current
+                print("Profile: \(capabilities.profile)")
+                print("Properties:")
+                for property in capabilities.properties {
+                    print("  \(property.name): \(property.syntax)  (\(property.appliesTo))")
+                }
+                print("Selectors: \(capabilities.selectors.joined(separator: ", "))")
+                print("Pseudo-classes: \(capabilities.pseudoClasses.joined(separator: ", "))")
+                print("Media features: \(capabilities.mediaFeatures.joined(separator: ", "))")
+                print("States: \(capabilities.states.joined(separator: ", "))")
+            }
+        case "lint", "check":
+            guard let target = firstPositional(in: rest) else {
+                throw CLIError.message("Usage: thumble skin css lint <workspace|stylesheet.css> [--json]")
+            }
+            let loaded = try loadCSSLintTarget(target)
+            defer { loaded.cleanup?() }
+            let report = ThumbleCSSCompiler.lint(
+                workspace: loaded.workspace,
+                sourceRoot: loaded.root,
+                fileManager: .default
+            )
+            if rest.contains("--json") {
+                try printJSON(report)
+            } else {
+                if report.issues.isEmpty {
+                    print("CSS passed with no issues.")
+                }
+                for issue in report.issues {
+                    let location = [issue.path, issue.line.map(String.init), issue.column.map(String.init)]
+                        .compactMap { $0 }
+                        .joined(separator: ":")
+                    print("- \(issue.severity.rawValue.uppercased()) \(issue.code)\(location.isEmpty ? "" : " [\(location)]"): \(issue.message)")
+                }
+            }
+            if !report.isValid {
+                throw CLIError.validationFailed("CSS lint failed with \(report.errors.count) error(s).")
+            }
+        case "computed":
+            guard let target = firstPositional(in: rest) else {
+                throw CLIError.message("Usage: thumble skin css computed <workspace> [--control ID] [--orientation portrait|landscape] [--scheme light|dark] [--state normal|pressed|active|disabled] [--json]")
+            }
+            let loaded = try loadCSSLintTarget(target)
+            defer { loaded.cleanup?() }
+            let documents = try ThumbleCSSCompiler.computed(
+                workspace: loaded.workspace,
+                sourceRoot: loaded.root,
+                fileManager: .default
+            )
+            let controlID = optionValue("--control", in: rest)?.lowercased()
+            let orientation = try optionValue("--orientation", in: rest).map { value in
+                guard let orientation = ThumbleSkinOrientation(rawValue: value.lowercased()) else {
+                    throw CLIError.message("Unknown orientation: \(value). Use portrait or landscape.")
+                }
+                return orientation
+            }
+            let scheme = try optionValue("--scheme", in: rest).map { value in
+                guard let scheme = ThumbleSkinColorScheme(rawValue: value.lowercased()) else {
+                    throw CLIError.message("Unknown scheme: \(value). Use light or dark.")
+                }
+                return scheme
+            }
+            let state = try optionValue("--state", in: rest).map { value in
+                guard let state = GamepadControlPresentationState(rawValue: value.lowercased()) else {
+                    throw CLIError.message("Unknown state: \(value). Use normal, pressed, active, or disabled.")
+                }
+                return state
+            }
+            var filtered = documents.filter { document in
+                (orientation.map { document.orientation == $0.rawValue } ?? true)
+                    && (scheme.map { document.colorScheme == $0.rawValue } ?? true)
+            }
+            if filtered.isEmpty { filtered = documents }
+            if let controlID {
+                for document in filtered {
+                    if let element = document.elements.first(where: { $0.id == controlID }) {
+                        try printComputedElement(element, state: state, json: rest.contains("--json"))
+                        return
+                    }
+                }
+                let available = Set(filtered.flatMap { $0.elements.map(\.id) }).sorted().joined(separator: ", ")
+                throw CLIError.message("No control with ID `\(controlID)`. Available: \(available)")
+            }
+            if rest.contains("--json") {
+                try printJSON(filtered)
+            } else {
+                for document in filtered {
+                    print("== \(document.orientation) / \(document.colorScheme) ==")
+                    printComputedStates(document.controller, label: "controller", state: state)
+                    for element in document.elements {
+                        printComputedStates(element.states, label: "\(element.id) (\(element.kind), \(element.role))", state: state)
+                    }
+                }
+            }
+        default:
+            throw CLIError.message("Unknown skin css subcommand: \(subcommand). Use capabilities, lint, or computed.")
+        }
+    }
+
+    private struct CSSLintTarget {
+        var workspace: ThumbleSkinWorkspace
+        var root: URL
+        var cleanup: (() -> Void)?
+    }
+
+    private static func loadCSSLintTarget(_ target: String) throws -> CSSLintTarget {
+        let url = URL(fileURLWithPath: target)
+        if ThumbleSkinCompiler.containsWorkspace(at: url) {
+            let loaded = try ThumbleSkinCompiler.loadWorkspace(from: url)
+            return CSSLintTarget(workspace: loaded.workspace, root: loaded.root, cleanup: nil)
+        }
+        // Standalone stylesheet: copy it into an isolated temp workspace so the
+        // author's directory is never mutated.
+        guard url.pathExtension.lowercased() == "css", FileManager.default.fileExists(atPath: url.path) else {
+            throw CLIError.message("Usage: thumble skin css <workspace|stylesheet.css>. No workspace or stylesheet at \(target).")
+        }
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("thumble-css-lint-\(UUID().uuidString)", isDirectory: true)
+        do {
+            try FileManager.default.createDirectory(
+                at: root.appendingPathComponent("styles"),
+                withIntermediateDirectories: true
+            )
+            try FileManager.default.copyItem(
+                at: url,
+                to: root.appendingPathComponent("styles/controller.css")
+            )
+        } catch {
+            throw CLIError.message("Could not prepare a temporary workspace for \(target): \(error.localizedDescription)")
+        }
+        var workspace = ThumbleSkinWorkspace.starterCSS(
+            name: "Lint Target",
+            identifier: "com.example.lint-target",
+            artboardID: ThumbleSkinArtboardCatalog.defaultID
+        )
+        workspace.stylesheets = ["styles/controller.css"]
+        return CSSLintTarget(workspace: workspace, root: root) {
+            try? FileManager.default.removeItem(at: root)
+        }
+    }
+
+    private static func printComputedElement(
+        _ element: ThumbleCSSCompiler.ComputedElementStyles,
+        state: GamepadControlPresentationState?,
+        json: Bool
+    ) throws {
+        if json {
+            try printJSON(element)
+            return
+        }
+        printComputedStates(element.states, label: "\(element.id) (\(element.kind), \(element.role))", state: state)
+    }
+
+    private static func printComputedStates(
+        _ allStates: [ThumbleCSSCompiler.ComputedElementStyles.StateDeclarations],
+        label: String,
+        state: GamepadControlPresentationState?
+    ) {
+        let states = state.map { current in allStates.filter { $0.state == current.rawValue } } ?? allStates
+        for current in states {
+            let entries = current.declarations.sorted { $0.key < $1.key }
+            guard !entries.isEmpty else { continue }
+            print("  \(label):\(current.state)")
+            for (name, value) in entries {
+                print("    \(name): \(value)")
+            }
         }
     }
 
@@ -7779,8 +8406,9 @@ struct ThumbleCLI {
 
         Generation:
           thumble generate "Hollow Knight" [--json] [--dry-run]
-          thumble generate --spec agent-keypad.json [--layout-preview preview.png]
-          thumble install-spec agent-keypad.json
+          thumble generate [GAME NAME] --spec agent-keypad.json [--json] [--dry-run] [--layout-preview preview.png] [--strict-layout] [--invocation-id UUID]
+          thumble generate [GAME NAME] --stdin [same options]
+          thumble install-spec agent-keypad.json [--no-select] [--no-default] [--json] [--invocation-id UUID]
 
         Profiles:
           thumble profile list [--ids|--json]
@@ -7797,8 +8425,8 @@ struct ThumbleCLI {
           thumble profile attach-app [NAME|UUID|--profile PROFILE] --bundle-id com.example.App
           thumble profile detach-app [NAME|UUID|--profile PROFILE]
           thumble profile launch [NAME|UUID|--profile PROFILE]
-          thumble profile export [NAME|UUID|--all] [-o file.json]
-          thumble profile import file.json [--default] [--append]
+          thumble profile export [NAME|UUID|--all] [-o file.json] [--invocation-id UUID]
+          thumble profile import file.json [--append] [--no-select] [--default] [--name NAME] [--invocation-id UUID]
 
         Templates:
           thumble template list
@@ -7815,7 +8443,10 @@ struct ThumbleCLI {
           thumble skin artboard list [--json]
           thumble skin artboard show ARTBOARD [--json]
           thumble skin artboard export ARTBOARD -o profile.json
-          thumble skin scaffold NAME --identifier REVERSE.DNS.ID [--artboard ARTBOARD] [-o DIRECTORY] [--force]
+          thumble skin scaffold NAME --identifier REVERSE.DNS.ID [--artboard ARTBOARD] [-o DIRECTORY] [--css] [--force]
+          thumble skin css capabilities [--json]
+          thumble skin css lint WORKSPACE|STYLESHEET.css [--json]
+          thumble skin css computed WORKSPACE [--control ID] [--orientation portrait|landscape] [--scheme light|dark] [--state normal|pressed|active|disabled] [--json]
           thumble skin compile SOURCE [-o skin.pocketpad] [--build-directory DIRECTORY] [--clean] [--strict] [--json]
           thumble skin preview SOURCE|PACKAGE -o OUTPUT [--artboard ARTBOARD] [--all-variants] [--all-states] [--orientation all|portrait|landscape] [--appearance all|light|dark] [--state all|normal|pressed|active|disabled] [--native-renderer] [--contact-sheet] [--columns N] [--render-scale 0.5...4]
           thumble skin quality SOURCE|PACKAGE [--artboard ARTBOARD] [--strict] [--json]

@@ -1,0 +1,8 @@
+{
+  "gameName": "Material Vectors",
+  "controls": [
+    { "button": "jump", "label": "Raised", "key": "Space", "material": "soft-white-raised" },
+    { "button": "attack", "label": "Inset", "key": "A", "materialPreset": "softWhiteInset" },
+    { "button": "dash", "label": "Plate", "key": "D", "material": "panel" }
+  ]
+}

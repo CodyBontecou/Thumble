@@ -13,6 +13,7 @@ name = "thumble-mcp"
 path = "src/main.rs"
 
 [dependencies]
+base64 = "=0.22.1"
 clap = { version = "=4.5.47", features = ["derive"] }
 fs2 = "=0.4.3"
 futures = "=0.3.31"
@@ -25,11 +26,11 @@ rustls = { version = "=0.23.43", default-features = false, features = ["ring", "
 serde.workspace = true
 serde_json.workspace = true
 sha2 = "=0.10.9"
+tempfile = "=3.22.0"
 tokio = { version = "=1.47.1", features = ["io-std", "macros", "rt-multi-thread", "sync", "time", "process"] }
 tokio-tungstenite = { version = "=0.27.0", features = ["rustls-tls-webpki-roots"] }
 tokio-util = { version = "=0.7.16", features = ["codec"] }
 url = "=2.5.8"
-
 [dev-dependencies]
 rmcp = { version = "=3.1.4", default-features = false, features = ["client", "server", "macros", "transport-io"] }
 tempfile = "=3.22.0"

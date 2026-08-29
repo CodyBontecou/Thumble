@@ -1,6 +1,6 @@
 ---
 name: thumble-keypad-generator
-description: Generate, install, skin, edit, export/import, and runtime-control Thumble keypad profiles using the `thumble` CLI. Use whenever a user asks for a Thumble keypad, iPhone controller layout, game profile, keyboard-to-touch controls, shortcut pad setup, profile/template management, key binding changes, joystick/custom button layout changes, or Mac helper runtime actions such as status, pairing code/payload, accessibility, test tap, server restart, or release-all. For unknown games, research or infer controls, write an agent-provided JSON spec, dry-run it, and install it without asking the user unless they explicitly want custom controls.
+description: Generate, install, skin, edit, export/import, and runtime-control Thumble keypad profiles using the `thumble` CLI. Use whenever a user asks for a Thumble keypad, iPhone controller layout, game profile, keyboard-to-touch controls, shortcut pad setup, profile/template management, key binding changes, joystick/custom button layout changes, shareable skin creation (material JSON or CSS authoring), or Mac helper runtime actions such as status, pairing code/payload, accessibility, test tap, server restart, or release-all. For unknown games, research or infer controls, write an agent-provided JSON spec, dry-run it, and install it without asking the user unless they explicitly want custom controls.
 ---
 
 # Thumble CLI / Keypad Generator
@@ -13,6 +13,7 @@ Use this skill to configure Thumble from the command line. Thumble turns an iPho
 - User wants an emulator/controller-style layout → use `template list` / `template install`.
 - User wants to change shortcuts → use `binding` commands.
 - User wants shape/color/joystick/layout changes → use `customization` or `element` commands.
+- User wants a shareable appearance-only skin (materials or CSS) → use `skin` commands; scaffold with `--css` for CSS authoring.
 - User wants to customize the iPhone control bar or one of its buttons → use `control-bar` commands.
 - User wants backup/restore/share → use `profile export` / `profile import`.
 - User wants pairing/status/server/accessibility/test/release-all → use runtime commands.
@@ -31,7 +32,9 @@ xcodebuild -project Thumble.xcodeproj \
 THUMBLE_CLI="$PWD/build/DerivedData/Build/Products/Debug/thumble"
 ```
 
-If `build/DerivedData/Build/Products/Debug/thumble` already exists and is recent enough, reuse it.
+If `build/DerivedData/Build/Products/Debug/thumble` already exists and is recent enough, reuse it. New subcommands land in source before any prebuilt binary: if an existing binary rejects a subcommand documented here (probe with `"$THUMBLE_CLI" skin css capabilities`), rebuild it from the current source.
+
+Note: the `skin` family is CLI-only. It is not part of the MCP tool surface (local stdio adapter or hosted gateway), so skin scaffold/lint/compile/quality/preview always run through the local `thumble` CLI; do not look for skin MCP tools. MCP tools cover status, pairing, input, profiles, configuration drafts, catalog queries, and rendering.
 
 ## Generate a game profile
 
@@ -95,6 +98,14 @@ Useful variants:
 "$THUMBLE_CLI" install-spec /tmp/game-keypad.json
 "$THUMBLE_CLI" generate --spec /tmp/game-keypad.json --json --dry-run
 ```
+
+Agent specs are planned deterministically in Rust and, when installed, cross
+the same revision-safe profile-artifact import boundary as shared profiles.
+`--json` emits exactly one generated-profile document for both dry-run and
+install; installation receipts go to stderr. Slot/capacity loss and reused
+layout defaults are explicit warnings (`--strict-layout` rejects them). Specs
+are appearance/layout/binding data only: paths, URLs, embedded assets,
+credentials, commands, and asset-backed image/tile fills are rejected.
 
 ## Agent spec fields
 
@@ -256,6 +267,20 @@ Use `.pocketpad` skins for appearance-only sharing. They preserve profile geomet
 "$THUMBLE_CLI" skin apply com.example.pocketpad.skin.aurora --profile "My Setup"
 "$THUMBLE_CLI" skin detach --profile "My Setup"
 ```
+
+### CSS-authored skins
+
+The same skin workflow can be driven by real CSS (profile `thumble-css-core-1`) instead of material JSON. CSS is a compile-time authoring format — it lowers into the same deterministic native style model, and no stylesheet ever ships inside the package or runs at runtime:
+
+```bash
+"$THUMBLE_CLI" skin scaffold "My Skin" --identifier com.creator.my-skin --css -o ./MySkin
+"$THUMBLE_CLI" skin css capabilities          # live property/selector/limit list
+"$THUMBLE_CLI" skin css lint ./MySkin
+"$THUMBLE_CLI" skin css computed ./MySkin --control builtin-jump --scheme dark --state pressed
+"$THUMBLE_CLI" skin compile ./MySkin --clean --strict
+```
+
+Style controls with semantic selectors (`control[role="primary_action"]`, `#builtin-jump`, `:pressed`, `@media (prefers-color-scheme: dark)`) so one skin covers any profile using the same roles. Unsupported CSS is a strict compile error, never silently ignored. See `docs/skins/css-authoring.md` and the complete example at `docs/skins/examples/css-first-light/`.
 
 Assign reusable semantic roles and independent touch expansion while creating a keypad:
 

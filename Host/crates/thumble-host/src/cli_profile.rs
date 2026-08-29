@@ -17,15 +17,19 @@ use crate::paths::HostPaths;
 use crate::storage;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use thumble_core::{
+    canonical_default_profile_key_bindings, plan_generation_spec, ButtonBindings,
     ConfigurationDocument, ControllerControlBarItemSnapshot, ControllerGroupSnapshot,
-    ControllerLayerSnapshot, ControllerStyleSnapshot, KeyBinding, OutputBinding, PersistentState,
+    ControllerLayerSnapshot, ControllerStyleSnapshot, GenerationSpecError, GenerationSpecPlan,
+    KeyBinding, OutputBinding, PersistentState, ProfileArtifact, ProfileArtifactContentHash,
+    ProfileArtifactError, ProfileArtifactSelection,
 };
 use thumble_protocol::{GameButton, KeypadElementInputPart};
 use uuid::Uuid;
 
-pub const CLI_PROFILE_SCHEMA_VERSION: u32 = 6;
+pub const CLI_PROFILE_SCHEMA_VERSION: u32 = 8;
+pub const MAXIMUM_CLI_PROFILE_FRAME_BYTES: usize = 18 * 1024 * 1024;
 const MAXIMUM_PROFILE_SELECTORS: usize = 256;
 const MAXIMUM_SELECTOR_CHARACTERS: usize = 256;
 
@@ -51,6 +55,21 @@ pub enum CliProfileCommand {
     AuthorityStatus,
     #[serde(rename = "profile.list")]
     List,
+    #[serde(rename = "profile.export")]
+    Export {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        target: Option<ProfileSelector>,
+    },
+    #[serde(rename = "profile.import")]
+    Import {
+        #[serde(rename = "artifactJSON")]
+        artifact_json: String,
+        #[serde(rename = "appendAsCopies")]
+        append_as_copies: bool,
+        select: bool,
+        #[serde(rename = "makeDefault")]
+        make_default: bool,
+    },
     #[serde(rename = "profile.select")]
     Select { target: ProfileSelector },
     #[serde(rename = "profile.default")]
@@ -84,6 +103,17 @@ pub enum CliProfileCommand {
         select: bool,
         #[serde(rename = "makeDefault")]
         make_default: bool,
+    },
+    #[serde(rename = "generation.plan-spec")]
+    GenerationPlanSpec {
+        #[serde(rename = "specJSON")]
+        spec_json: String,
+        #[serde(
+            rename = "requestedGameName",
+            default,
+            skip_serializing_if = "Option::is_none"
+        )]
+        requested_game_name: Option<String>,
     },
     #[serde(rename = "template.install")]
     TemplateInstall {
@@ -448,6 +478,8 @@ impl CliProfileCommand {
         match self {
             Self::AuthorityStatus => "authority.status",
             Self::List => "profile.list",
+            Self::Export { .. } => "profile.export",
+            Self::Import { .. } => "profile.import",
             Self::Select { .. } => "profile.select",
             Self::SetDefault { .. } => "profile.default",
             Self::Rename { .. } => "profile.rename",
@@ -456,6 +488,7 @@ impl CliProfileCommand {
             Self::Reset { .. } => "profile.reset",
             Self::Move { .. } => "profile.move",
             Self::GenerationGenerate { .. } => "generation.generate",
+            Self::GenerationPlanSpec { .. } => "generation.plan-spec",
             Self::TemplateInstall { .. } => "template.install",
             Self::CustomizationSet { .. } => "customization.set",
             Self::CustomizationFix { .. } => "customization.fix",
@@ -760,6 +793,84 @@ impl std::fmt::Debug for CliControlBarItemProjection {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CliProfileArtifact {
+    pub configuration_revision: u64,
+    #[serde(rename = "artifactJSON")]
+    pub artifact_json: String,
+    pub content_hash: ProfileArtifactContentHash,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CliGenerationWarning {
+    pub code: String,
+    pub source_ordinal: usize,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CliGenerationAssignedControl {
+    pub source_ordinal: usize,
+    pub button: String,
+    #[serde(rename = "elementID")]
+    pub element_id: String,
+    pub kind: String,
+    pub used_explicit_button: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CliGenerationDroppedControl {
+    pub source_ordinal: usize,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CliGenerationLayoutIssue {
+    pub code: String,
+    pub severity: String,
+    #[serde(rename = "controlIDs")]
+    pub control_ids: Vec<String>,
+    pub control_count: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub metric: Option<f64>,
+    pub suggested_repairs: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CliGenerationLayoutQuality {
+    pub issue_count: usize,
+    pub error_count: usize,
+    pub warning_count: usize,
+    pub issues: Vec<CliGenerationLayoutIssue>,
+    pub omitted_issue_count: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CliGenerationPlan {
+    pub configuration_revision: u64,
+    pub schema_version: u32,
+    pub catalog_revision: u32,
+    pub planner_revision: u32,
+    pub descriptor_digest: String,
+    #[serde(rename = "generatedJSON")]
+    pub generated_json: String,
+    #[serde(rename = "artifactJSON")]
+    pub artifact_json: String,
+    pub content_hash: ProfileArtifactContentHash,
+    pub warnings: Vec<CliGenerationWarning>,
+    pub omitted_warning_count: usize,
+    pub assigned_controls: Vec<CliGenerationAssignedControl>,
+    pub dropped_controls: Vec<CliGenerationDroppedControl>,
+    pub layout_quality: CliGenerationLayoutQuality,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CliProfileOutcome {
     pub operation: String,
@@ -794,7 +905,7 @@ pub struct CliProfileError {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CliProfileResponse {
     pub schema_version: u32,
     pub ok: bool,
@@ -805,6 +916,10 @@ pub struct CliProfileResponse {
     pub authority_present: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub catalog: Option<CliProfileCatalog>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub artifact: Option<CliProfileArtifact>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub generation_plan: Option<CliGenerationPlan>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub orientation: Option<CliOrientationSummary>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -836,6 +951,8 @@ impl CliProfileResponse {
             authority_mode: "status".to_owned(),
             authority_present: Some(present),
             catalog: None,
+            artifact: None,
+            generation_plan: None,
             orientation: None,
             projection: None,
             control_bar: None,
@@ -863,34 +980,24 @@ impl CliProfileResponse {
     }
 
     fn success(invocation_id: Uuid, authority_mode: &str, result: TransactionResult) -> Self {
-        let (
-            catalog,
-            orientation,
-            projection,
-            control_bar,
-            control_bar_item,
-            device,
-            styles,
-            layers,
-            groups,
-            outcome,
-        ) = result;
         Self {
             schema_version: CLI_PROFILE_SCHEMA_VERSION,
             ok: true,
             invocation_id,
             authority_mode: authority_mode.to_owned(),
             authority_present: None,
-            catalog,
-            orientation,
-            projection,
-            control_bar,
-            control_bar_item,
-            device,
-            styles,
-            layers,
-            groups,
-            outcome,
+            catalog: result.catalog,
+            artifact: result.artifact,
+            generation_plan: result.generation_plan,
+            orientation: result.orientation,
+            projection: result.projection,
+            control_bar: result.control_bar,
+            control_bar_item: result.control_bar_item,
+            device: result.device,
+            styles: result.styles,
+            layers: result.layers,
+            groups: result.groups,
+            outcome: result.outcome,
             error: None,
         }
     }
@@ -903,6 +1010,8 @@ impl CliProfileResponse {
             authority_mode: authority_mode.to_owned(),
             authority_present: None,
             catalog: None,
+            artifact: None,
+            generation_plan: None,
             orientation: None,
             projection: None,
             control_bar: None,
@@ -950,18 +1059,224 @@ impl TransactionFailure {
     }
 }
 
-type TransactionResult = (
-    Option<CliProfileCatalog>,
-    Option<CliOrientationSummary>,
-    Option<CliBindingOutputProjection>,
-    Option<CliControlBarProjection>,
-    Option<CliControlBarItemProjection>,
-    Option<CliDeviceProjection>,
-    Option<CliStyleProjection>,
-    Option<CliLayerProjection>,
-    Option<CliGroupProjection>,
-    Option<CliProfileOutcome>,
-);
+#[derive(Debug, Default)]
+struct TransactionResult {
+    catalog: Option<CliProfileCatalog>,
+    artifact: Option<CliProfileArtifact>,
+    generation_plan: Option<CliGenerationPlan>,
+    orientation: Option<CliOrientationSummary>,
+    projection: Option<CliBindingOutputProjection>,
+    control_bar: Option<CliControlBarProjection>,
+    control_bar_item: Option<CliControlBarItemProjection>,
+    device: Option<CliDeviceProjection>,
+    styles: Option<CliStyleProjection>,
+    layers: Option<CliLayerProjection>,
+    groups: Option<CliGroupProjection>,
+    outcome: Option<CliProfileOutcome>,
+}
+
+fn generation_plan_projection(
+    configuration_revision: u64,
+    plan: GenerationSpecPlan,
+) -> Result<CliGenerationPlan, TransactionFailure> {
+    let bounded = plan.descriptor_digest.len() == 64
+        && plan
+            .descriptor_digest
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit())
+        && plan.generated_json.len() <= thumble_core::MAXIMUM_GENERATION_OUTPUT_BYTES
+        && plan.artifact_json.len() <= thumble_core::MAXIMUM_GENERATION_OUTPUT_BYTES
+        && plan.warnings.len() <= thumble_core::MAXIMUM_GENERATION_WARNINGS
+        && plan.assigned_controls.len() <= thumble_core::MAXIMUM_GENERATION_SOURCE_CONTROLS
+        && plan.dropped_controls.len() <= thumble_core::MAXIMUM_GENERATION_SOURCE_CONTROLS
+        && plan.layout_quality.issues.len() <= 128
+        && plan.warnings.iter().all(|warning| {
+            warning.code.len() <= 64
+                && warning.message.len() <= 256
+                && warning.source_ordinal < thumble_core::MAXIMUM_GENERATION_SOURCE_CONTROLS
+        })
+        && plan.assigned_controls.iter().all(|control| {
+            control.button.len() <= 32
+                && control.element_id.len() <= 64
+                && control.kind.len() <= 32
+                && control.source_ordinal < thumble_core::MAXIMUM_GENERATION_SOURCE_CONTROLS
+        })
+        && plan.dropped_controls.iter().all(|control| {
+            control.reason.len() <= 128
+                && control.source_ordinal < thumble_core::MAXIMUM_GENERATION_SOURCE_CONTROLS
+        })
+        && plan.layout_quality.issues.iter().all(|issue| {
+            issue.code.len() <= 64
+                && issue.severity.len() <= 16
+                && issue.control_ids.len() <= 16
+                && issue
+                    .control_ids
+                    .iter()
+                    .all(|identifier| identifier.len() <= 128)
+                && issue.suggested_repairs.len() <= 16
+                && issue
+                    .suggested_repairs
+                    .iter()
+                    .all(|repair| repair.len() <= 128)
+                && issue.metric.is_none_or(f64::is_finite)
+        });
+    if !bounded {
+        return Err(TransactionFailure::new(
+            "generation_spec_encoding_failed",
+            "generation plan response exceeded its bounded projection contract",
+        ));
+    }
+
+    let content_hash = plan.artifact.content_hash.clone();
+    Ok(CliGenerationPlan {
+        configuration_revision,
+        schema_version: plan.schema_version,
+        catalog_revision: plan.catalog_revision,
+        planner_revision: plan.planner_revision,
+        descriptor_digest: plan.descriptor_digest,
+        generated_json: plan.generated_json,
+        artifact_json: plan.artifact_json,
+        content_hash,
+        warnings: plan
+            .warnings
+            .into_iter()
+            .map(|warning| CliGenerationWarning {
+                code: warning.code,
+                source_ordinal: warning.source_ordinal,
+                message: warning.message,
+            })
+            .collect(),
+        omitted_warning_count: plan.omitted_warning_count,
+        assigned_controls: plan
+            .assigned_controls
+            .into_iter()
+            .map(|control| CliGenerationAssignedControl {
+                source_ordinal: control.source_ordinal,
+                button: control.button,
+                element_id: control.element_id,
+                kind: control.kind,
+                used_explicit_button: control.used_explicit_button,
+            })
+            .collect(),
+        dropped_controls: plan
+            .dropped_controls
+            .into_iter()
+            .map(|control| CliGenerationDroppedControl {
+                source_ordinal: control.source_ordinal,
+                reason: control.reason,
+            })
+            .collect(),
+        layout_quality: CliGenerationLayoutQuality {
+            issue_count: plan.layout_quality.issue_count,
+            error_count: plan.layout_quality.error_count,
+            warning_count: plan.layout_quality.warning_count,
+            omitted_issue_count: plan.layout_quality.omitted_issue_count,
+            issues: plan
+                .layout_quality
+                .issues
+                .into_iter()
+                .map(|issue| CliGenerationLayoutIssue {
+                    code: issue.code,
+                    severity: issue.severity,
+                    control_ids: issue.control_ids,
+                    control_count: issue.control_count,
+                    metric: issue.metric,
+                    suggested_repairs: issue.suggested_repairs,
+                })
+                .collect(),
+        },
+    })
+}
+
+fn generation_spec_failure(error: GenerationSpecError) -> TransactionFailure {
+    let (code, message) = match error {
+        GenerationSpecError::TooLarge(_) => (
+            "generation_spec_too_large",
+            "generation spec exceeds the 256 KiB UTF-8 size limit",
+        ),
+        GenerationSpecError::DecodingFailed => (
+            "generation_spec_decoding_failed",
+            "generation spec must be valid UTF-8 JSON",
+        ),
+        GenerationSpecError::TopLevelMustBeObject | GenerationSpecError::MissingControls => (
+            "generation_spec_invalid_document",
+            "generation spec must be an object containing controls",
+        ),
+        GenerationSpecError::UnknownField { .. } => (
+            "generation_spec_unknown_field",
+            "generation spec contains an unknown field",
+        ),
+        GenerationSpecError::UnsafeField { .. } => (
+            "generation_spec_unsafe_field",
+            "generation spec contains a forbidden unsafe field",
+        ),
+        GenerationSpecError::InvalidType { .. } => (
+            "generation_spec_invalid_type",
+            "generation spec field has an invalid JSON type",
+        ),
+        GenerationSpecError::InvalidRevision { .. } => (
+            "generation_spec_unsupported_revision",
+            "generation spec schema, catalog, or planner revision is unsupported",
+        ),
+        GenerationSpecError::InvalidEnum { .. } => (
+            "generation_spec_invalid_enum",
+            "generation spec field has an unsupported catalog value",
+        ),
+        GenerationSpecError::InvalidNumber { .. } => (
+            "generation_spec_invalid_number",
+            "generation spec number must be finite",
+        ),
+        GenerationSpecError::NumberOutOfBounds { .. } => (
+            "generation_spec_number_out_of_bounds",
+            "generation spec number is outside its safe bound",
+        ),
+        GenerationSpecError::StringTooLong { .. } => (
+            "generation_spec_string_too_long",
+            "generation spec string exceeds its safe bound",
+        ),
+        GenerationSpecError::ControlCharacter { .. } => (
+            "generation_spec_control_character",
+            "generation spec contains a Unicode control character",
+        ),
+        GenerationSpecError::TooManyNotes(_) => (
+            "generation_spec_too_many_notes",
+            "generation spec contains too many notes",
+        ),
+        GenerationSpecError::TooManyControls(_) => (
+            "generation_spec_too_many_controls",
+            "generation spec contains more than 128 controls",
+        ),
+        GenerationSpecError::InvalidKey { source_ordinal, .. } => {
+            return TransactionFailure::new(
+                "generation_spec_invalid_key",
+                &format!("generation control {source_ordinal} has an unsupported semantic key"),
+            );
+        }
+        GenerationSpecError::InvalidModifier { source_ordinal, .. } => {
+            return TransactionFailure::new(
+                "generation_spec_invalid_modifier",
+                &format!("generation control {source_ordinal} has an unsupported modifier"),
+            );
+        }
+        GenerationSpecError::CanonicalizationFailed | GenerationSpecError::EncodingFailed => (
+            "generation_spec_encoding_failed",
+            "generation plan could not be encoded deterministically",
+        ),
+        GenerationSpecError::OutputTooLarge(_) => (
+            "generation_spec_output_too_large",
+            "generation plan output exceeds its bounded size limit",
+        ),
+        GenerationSpecError::Artifact(_) => (
+            "generation_spec_artifact_failed",
+            "generation plan could not produce a valid portable artifact",
+        ),
+        GenerationSpecError::LayoutEvaluationFailed => (
+            "generation_spec_layout_failed",
+            "generation plan layout quality could not be evaluated",
+        ),
+    };
+    TransactionFailure::new(code, message)
+}
 
 #[derive(Debug)]
 struct PlannedTransaction {
@@ -969,6 +1284,32 @@ struct PlannedTransaction {
     profile_names: Vec<String>,
     destination: Option<String>,
     removed_every_profile: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ProfileImportDescriptor {
+    operation: &'static str,
+    content_hash: ProfileArtifactContentHash,
+    append_as_copies: bool,
+    select: bool,
+    make_default: bool,
+    generated_profile_ids: Vec<String>,
+}
+
+#[derive(Debug)]
+struct DecodedProfileImport {
+    artifact: ProfileArtifact,
+    document: ConfigurationDocument,
+    descriptor: ProfileImportDescriptor,
+    source_names: Vec<String>,
+}
+
+#[derive(Debug)]
+struct PlannedProfileImport {
+    candidate: ConfigurationDocument,
+    outcome: crate::draft_operation::ConfigurationOperationOutcome,
+    profile_names: Vec<String>,
 }
 
 pub(crate) fn execute_profile_transaction<F>(
@@ -986,49 +1327,90 @@ where
         validate_request(request)?;
         validate_request_credentials(&request.command, state)?;
         let catalog = catalog_from_state(state)?;
+        if let CliProfileCommand::GenerationPlanSpec {
+            spec_json,
+            requested_game_name,
+        } = &request.command
+        {
+            let plan = plan_generation_spec(spec_json.as_bytes(), requested_game_name.as_deref())
+                .map_err(generation_spec_failure)?;
+            let commit_id = deterministic_uuid(invocation_id, "configuration-commit")
+                .hyphenated()
+                .to_string();
+            let configuration_revision = state
+                .recent_configuration_commit(&commit_id)
+                .map_or(catalog.configuration_revision, |record| {
+                    record.base_configuration_revision
+                });
+            let projection = generation_plan_projection(configuration_revision, plan)?;
+            return Ok(TransactionResult {
+                generation_plan: Some(projection),
+                ..TransactionResult::default()
+            });
+        }
         if matches!(request.command, CliProfileCommand::List) {
-            return Ok((
-                Some(catalog),
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-            ));
+            return Ok(TransactionResult {
+                catalog: Some(catalog),
+                ..TransactionResult::default()
+            });
+        }
+        if let CliProfileCommand::Export { target } = &request.command {
+            let document = ConfigurationDocument::from_state(state).map_err(|_| {
+                TransactionFailure::new(
+                    "profile_export_failed",
+                    "authoritative configuration could not be encoded as a portable profile artifact",
+                )
+            })?;
+            let selection = match target {
+                Some(target) => ProfileArtifactSelection::ProfileId(
+                    resolve_selector(target, &catalog)?
+                        .profile_id
+                        .hyphenated()
+                        .to_string(),
+                ),
+                None => ProfileArtifactSelection::All,
+            };
+            let artifact = ProfileArtifact::from_configuration(&document, selection, now_millis())
+                .map_err(|_| {
+                    TransactionFailure::new(
+                        "profile_export_failed",
+                        "authoritative configuration could not be encoded as a portable profile artifact",
+                    )
+                })?;
+            let artifact_json = String::from_utf8(artifact.encode_pretty_json().map_err(|_| {
+                TransactionFailure::new(
+                    "profile_export_failed",
+                    "portable profile artifact exceeded its encoding bound",
+                )
+            })?)
+            .map_err(|_| {
+                TransactionFailure::new(
+                    "profile_export_failed",
+                    "portable profile artifact encoding was not valid UTF-8",
+                )
+            })?;
+            return Ok(TransactionResult {
+                artifact: Some(CliProfileArtifact {
+                    configuration_revision: catalog.configuration_revision,
+                    artifact_json,
+                    content_hash: artifact.content_hash,
+                }),
+                ..TransactionResult::default()
+            });
         }
         if let CliProfileCommand::OrientationGet { target } = &request.command {
             let orientation = orientation_summary_from_state(state, target, &catalog)?;
-            return Ok((
-                None,
-                Some(orientation),
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-            ));
+            return Ok(TransactionResult {
+                orientation: Some(orientation),
+                ..TransactionResult::default()
+            });
         }
         if let CliProfileCommand::ControlBarList { target, variant } = &request.command {
             let projection = control_bar_projection_from_state(state, target, *variant, &catalog)?;
-            return Ok((
-                None,
-                None,
-                None,
-                Some(projection),
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-            ));
+            return Ok(TransactionResult {
+                control_bar: Some(projection),
+                ..TransactionResult::default()
+            });
         }
         if let CliProfileCommand::ControlBarItemShow {
             target,
@@ -1038,113 +1420,57 @@ where
         {
             let projection =
                 control_bar_item_projection_from_state(state, target, *variant, *item, &catalog)?;
-            return Ok((
-                None,
-                None,
-                None,
-                None,
-                Some(projection),
-                None,
-                None,
-                None,
-                None,
-                None,
-            ));
+            return Ok(TransactionResult {
+                control_bar_item: Some(projection),
+                ..TransactionResult::default()
+            });
         }
         if let CliProfileCommand::DeviceGet { target, variant } = &request.command {
             let projection = device_projection_from_state(state, target, *variant, &catalog)?;
-            return Ok((
-                None,
-                None,
-                None,
-                None,
-                None,
-                Some(projection),
-                None,
-                None,
-                None,
-                None,
-            ));
+            return Ok(TransactionResult {
+                device: Some(projection),
+                ..TransactionResult::default()
+            });
         }
         match &request.command {
             CliProfileCommand::StyleList { target } => {
                 let projection = style_projection_from_state(state, target, None, &catalog)?;
-                return Ok((
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                    Some(projection),
-                    None,
-                    None,
-                    None,
-                ));
+                return Ok(TransactionResult {
+                    styles: Some(projection),
+                    ..TransactionResult::default()
+                });
             }
             CliProfileCommand::StyleShow { target, style_id } => {
                 let projection =
                     style_projection_from_state(state, target, Some(style_id), &catalog)?;
-                return Ok((
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                    Some(projection),
-                    None,
-                    None,
-                    None,
-                ));
+                return Ok(TransactionResult {
+                    styles: Some(projection),
+                    ..TransactionResult::default()
+                });
             }
             CliProfileCommand::LayerList { target, variant } => {
                 let projection = layer_projection_from_state(state, target, *variant, &catalog)?;
-                return Ok((
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                    Some(projection),
-                    None,
-                    None,
-                ));
+                return Ok(TransactionResult {
+                    layers: Some(projection),
+                    ..TransactionResult::default()
+                });
             }
             CliProfileCommand::GroupList { target, variant } => {
                 let projection = group_projection_from_state(state, target, *variant, &catalog)?;
-                return Ok((
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                    Some(projection),
-                    None,
-                ));
+                return Ok(TransactionResult {
+                    groups: Some(projection),
+                    ..TransactionResult::default()
+                });
             }
             _ => {}
         }
         if request.command.is_binding_output_read() {
             let projection =
                 binding_output_projection_from_state(state, &request.command, &catalog)?;
-            return Ok((
-                None,
-                None,
-                Some(projection),
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-            ));
+            return Ok(TransactionResult {
+                projection: Some(projection),
+                ..TransactionResult::default()
+            });
         }
         if matches!(request.command, CliProfileCommand::AuthorityStatus) {
             return Err(TransactionFailure::new(
@@ -1153,13 +1479,34 @@ where
             ));
         }
 
+        let decoded_import = match &request.command {
+            CliProfileCommand::Import {
+                artifact_json,
+                append_as_copies,
+                select,
+                make_default,
+            } => Some(decode_profile_import(
+                artifact_json,
+                *append_as_copies,
+                *select,
+                *make_default,
+                invocation_id,
+            )?),
+            _ => None,
+        };
         let draft_id = deterministic_uuid(invocation_id, "configuration-draft");
         let commit_id = deterministic_uuid(invocation_id, "configuration-commit");
-        let request_digest = request_digest(&request.command)?;
+        let request_digest = match &decoded_import {
+            Some(import) => descriptor_digest(&import.descriptor)?,
+            None => request_digest(&request.command)?,
+        };
         if let Some(record) = state.recent_configuration_commit(&commit_id.hyphenated().to_string())
         {
             if record.draft_id != draft_id.hyphenated().to_string()
                 || record.client_request_digest.as_deref() != Some(request_digest.as_str())
+                || request
+                    .expected_configuration_revision
+                    .is_some_and(|expected| expected != record.base_configuration_revision)
             {
                 return Err(TransactionFailure::new(
                     "commit_id_conflict",
@@ -1168,7 +1515,12 @@ where
             }
             let outcome = CliProfileOutcome {
                 operation: request.command.kind().to_owned(),
-                profile_names: replay_profile_names(&request.command, &catalog, invocation_id),
+                profile_names: decoded_import
+                    .as_ref()
+                    .map(|import| replay_import_profile_names(import, &catalog))
+                    .unwrap_or_else(|| {
+                        replay_profile_names(&request.command, &catalog, invocation_id)
+                    }),
                 destination: replay_destination(&request.command),
                 removed_every_profile: replay_removed_every_profile(
                     &request.command,
@@ -1181,18 +1533,10 @@ where
                 commit_id,
                 idempotent_replay: true,
             };
-            return Ok((
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                Some(outcome),
-            ));
+            return Ok(TransactionResult {
+                outcome: Some(outcome),
+                ..TransactionResult::default()
+            });
         }
         if let Some(expected) = request.expected_configuration_revision {
             if expected != catalog.configuration_revision {
@@ -1204,7 +1548,28 @@ where
             }
         }
 
-        let plan = plan_transaction(&request.command, &catalog, &state.profiles, invocation_id)?;
+        let plan = if decoded_import.is_none() {
+            Some(plan_transaction(
+                &request.command,
+                &catalog,
+                &state.profiles,
+                invocation_id,
+            )?)
+        } else {
+            None
+        };
+        let import_plan = decoded_import
+            .as_ref()
+            .map(|import| {
+                let document = ConfigurationDocument::from_state(state).map_err(|_| {
+                    TransactionFailure::new(
+                        "profile_import_failed",
+                        "authoritative configuration could not be prepared for profile import",
+                    )
+                })?;
+                plan_profile_import(&document, import, now_millis())
+            })
+            .transpose()?;
         let store = DraftStore::new(paths);
         let draft_id_text = draft_id.hyphenated().to_string();
         let mut draft = store
@@ -1222,60 +1587,84 @@ where
                 }
             })?;
 
-        for (ordinal, operation) in plan.operations.iter().enumerate() {
-            let operation_id = deterministic_uuid(
-                invocation_id,
-                &format!("{}:operation:{ordinal}", request.command.kind()),
-            )
-            .hyphenated()
-            .to_string();
-            let operation_digest =
-                DraftStore::operation_digest(operation).map_err(draft_failure)?;
-            if let Some(existing) = draft
+        if let (Some(import), Some(import_plan)) = (&decoded_import, import_plan.as_ref()) {
+            let operation_id = deterministic_uuid(invocation_id, "profile.import:operation")
+                .hyphenated()
+                .to_string();
+            let expected_draft_revision = draft
                 .operation_log
                 .iter()
                 .find(|record| record.operation_id == operation_id)
-            {
-                if existing.operation_digest != operation_digest {
-                    return Err(TransactionFailure::new(
-                        "operation_id_conflict",
-                        "deterministic operation ID was reused with different content",
-                    )
-                    .with_draft(&draft));
-                }
-                continue;
-            }
-            let edited = if operation.requires_bridge() {
-                let bridge = ConfigurationBridge::discover().map_err(|_| {
-                    TransactionFailure::new(
-                        "configuration_bridge_failed",
-                        "required exact-sibling configuration bridge is unavailable or failed validation",
-                    )
-                    .with_draft(&draft)
-                })?;
-                store.edit_with(
+                .map_or(draft.draft_revision, |record| record.base_draft_revision);
+            let candidate = import_plan.candidate.clone();
+            let operation = import_plan.outcome.clone();
+            let edited = store
+                .edit_with_descriptor(
                     &draft.draft_id,
-                    draft.draft_revision,
+                    expected_draft_revision,
                     &operation_id,
-                    operation,
+                    &import.descriptor,
                     now_millis(),
-                    |document| {
-                        bridge
-                            .apply(document, operation, now_millis())
-                            .map_err(DraftError::Bridge)
-                    },
+                    move |_| Ok((candidate, operation)),
                 )
-            } else {
-                store.edit(
-                    &draft.draft_id,
-                    draft.draft_revision,
-                    &operation_id,
-                    operation,
-                    now_millis(),
-                )
-            }
-            .map_err(|error| draft_failure(error).with_draft(&draft))?;
+                .map_err(|error| draft_failure(error).with_draft(&draft))?;
             draft = edited.draft;
+        } else if let Some(plan) = &plan {
+            for (ordinal, operation) in plan.operations.iter().enumerate() {
+                let operation_id = deterministic_uuid(
+                    invocation_id,
+                    &format!("{}:operation:{ordinal}", request.command.kind()),
+                )
+                .hyphenated()
+                .to_string();
+                let operation_digest =
+                    DraftStore::operation_digest(operation).map_err(draft_failure)?;
+                if let Some(existing) = draft
+                    .operation_log
+                    .iter()
+                    .find(|record| record.operation_id == operation_id)
+                {
+                    if existing.operation_digest != operation_digest {
+                        return Err(TransactionFailure::new(
+                            "operation_id_conflict",
+                            "deterministic operation ID was reused with different content",
+                        )
+                        .with_draft(&draft));
+                    }
+                    continue;
+                }
+                let edited = if operation.requires_bridge() {
+                    let bridge = ConfigurationBridge::discover().map_err(|_| {
+                        TransactionFailure::new(
+                            "configuration_bridge_failed",
+                            "required exact-sibling configuration bridge is unavailable or failed validation",
+                        )
+                        .with_draft(&draft)
+                    })?;
+                    store.edit_with(
+                        &draft.draft_id,
+                        draft.draft_revision,
+                        &operation_id,
+                        operation,
+                        now_millis(),
+                        |document| {
+                            bridge
+                                .apply(document, operation, now_millis())
+                                .map_err(DraftError::Bridge)
+                        },
+                    )
+                } else {
+                    store.edit(
+                        &draft.draft_id,
+                        draft.draft_revision,
+                        &operation_id,
+                        operation,
+                        now_millis(),
+                    )
+                }
+                .map_err(|error| draft_failure(error).with_draft(&draft))?;
+                draft = edited.draft;
+            }
         }
 
         draft.working_document.validate().map_err(|_| {
@@ -1307,35 +1696,83 @@ where
                 error: Box::new(error),
             }
         })?;
+        let (profile_names, destination, removed_every_profile) = match (import_plan, plan) {
+            (Some(import), _) => (import.profile_names, None, false),
+            (_, Some(plan)) => (
+                plan.profile_names,
+                plan.destination,
+                plan.removed_every_profile,
+            ),
+            _ => unreachable!("mutation must have an import or operation plan"),
+        };
         let outcome = CliProfileOutcome {
             operation: request.command.kind().to_owned(),
-            profile_names: plan.profile_names,
-            destination: plan.destination,
-            removed_every_profile: plan.removed_every_profile,
+            profile_names,
+            destination,
+            removed_every_profile,
             changed: summary.changed,
             configuration_revision: summary.configuration_revision,
             draft_id,
             commit_id,
             idempotent_replay: summary.idempotent_replay,
         };
-        Ok((
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            Some(outcome),
-        ))
+        Ok(TransactionResult {
+            outcome: Some(outcome),
+            ..TransactionResult::default()
+        })
     })();
 
     match result {
         Ok(result) => CliProfileResponse::success(invocation_id, authority_mode, result),
         Err(failure) => CliProfileResponse::failure(invocation_id, authority_mode, failure),
     }
+}
+
+pub fn execute_offline_generation_plan(
+    paths: &HostPaths,
+    request: &CliProfileRequest,
+) -> CliProfileResponse {
+    let invocation_id = request.invocation_id.unwrap_or_else(Uuid::new_v4);
+    if !matches!(
+        &request.command,
+        CliProfileCommand::GenerationPlanSpec { .. }
+    ) {
+        return CliProfileResponse::transport_failure(
+            invocation_id,
+            "offline",
+            "invalid_request",
+            "read-only generation planning accepts only generation.plan-spec",
+        );
+    }
+
+    let mut state = if paths.state_file.exists() {
+        match storage::load(&paths.state_file) {
+            Ok(state) => state,
+            Err(_) => {
+                return CliProfileResponse::transport_failure(
+                    invocation_id,
+                    "offline",
+                    "state_load_failed",
+                    "Rust authority state could not be loaded read-only",
+                )
+            }
+        }
+    } else {
+        PersistentState::minimal("generation-planner")
+            .expect("the deterministic generation planner identity is valid")
+    };
+    if state.normalize().is_err() {
+        return CliProfileResponse::transport_failure(
+            invocation_id,
+            "offline",
+            "state_load_failed",
+            "Rust authority state could not be normalized read-only",
+        );
+    }
+
+    execute_profile_transaction(paths, &state, request, "offline", |_, _, _, _, _| {
+        unreachable!("generation planning cannot persist a transaction")
+    })
 }
 
 pub fn execute_offline_authority(
@@ -1454,7 +1891,7 @@ fn validate_request(request: &CliProfileRequest) -> Result<(), TransactionFailur
             "CLI profile request could not be encoded",
         )
     })?;
-    if encoded.len() > 64 * 1024 {
+    if encoded.len().saturating_add(1) > MAXIMUM_CLI_PROFILE_FRAME_BYTES {
         return Err(TransactionFailure::new(
             "request_too_large",
             "CLI profile request exceeds its size limit",
@@ -1465,6 +1902,8 @@ fn validate_request(request: &CliProfileRequest) -> Result<(), TransactionFailur
             &request.command,
             CliProfileCommand::AuthorityStatus
                 | CliProfileCommand::List
+                | CliProfileCommand::Export { .. }
+                | CliProfileCommand::GenerationPlanSpec { .. }
                 | CliProfileCommand::OrientationGet { .. }
                 | CliProfileCommand::BindingList { .. }
                 | CliProfileCommand::BindingDisplay { .. }
@@ -1485,6 +1924,28 @@ fn validate_request(request: &CliProfileRequest) -> Result<(), TransactionFailur
         ));
     }
     match &request.command {
+        CliProfileCommand::GenerationPlanSpec {
+            spec_json,
+            requested_game_name,
+        } => {
+            // Rust strings are valid UTF-8 by construction; apply the core byte
+            // bound before catalog lookup or any transaction machinery.
+            if spec_json.len() > thumble_core::MAXIMUM_GENERATION_SPEC_BYTES {
+                return Err(generation_spec_failure(GenerationSpecError::TooLarge(
+                    spec_json.len(),
+                )));
+            }
+            if requested_game_name
+                .as_ref()
+                .is_some_and(|name| name.chars().count() > MAXIMUM_SELECTOR_CHARACTERS)
+            {
+                return Err(generation_spec_failure(
+                    GenerationSpecError::StringTooLong {
+                        path: "requestedGameName".to_owned(),
+                    },
+                ));
+            }
+        }
         CliProfileCommand::Rename { name, .. } => validate_name(name)?,
         CliProfileCommand::Duplicate {
             name: Some(name), ..
@@ -2584,6 +3045,9 @@ fn plan_transaction(
             ))
         }
         CliProfileCommand::List
+        | CliProfileCommand::Export { .. }
+        | CliProfileCommand::Import { .. }
+        | CliProfileCommand::GenerationPlanSpec { .. }
         | CliProfileCommand::AuthorityStatus
         | CliProfileCommand::OrientationGet { .. }
         | CliProfileCommand::BindingList { .. }
@@ -4453,6 +4917,450 @@ fn catalog_from_parts<'a>(
     })
 }
 
+fn profile_artifact_import_failure(error: ProfileArtifactError) -> TransactionFailure {
+    let (code, message) = match error {
+        ProfileArtifactError::UnsupportedSchema => (
+            "unsupported_profile_artifact_schema",
+            "profile import artifact schema is unsupported",
+        ),
+        ProfileArtifactError::UnsupportedSchemaVersion(_) => (
+            "unsupported_profile_artifact_schema_version",
+            "profile import artifact schema version is unsupported",
+        ),
+        ProfileArtifactError::UnsupportedArtifactVersion(_) => (
+            "unsupported_profile_artifact_version",
+            "profile import artifact version is unsupported",
+        ),
+        ProfileArtifactError::UnsupportedCatalogRevision => (
+            "unsupported_profile_artifact_catalog_revision",
+            "profile import artifact catalog revision is unsupported",
+        ),
+        ProfileArtifactError::InvalidContentHash => (
+            "invalid_profile_artifact_hash",
+            "profile import artifact hash metadata is invalid",
+        ),
+        ProfileArtifactError::ContentHashMismatch => (
+            "profile_artifact_hash_mismatch",
+            "profile import artifact content hash does not match",
+        ),
+        ProfileArtifactError::TooLarge(_) => (
+            "profile_artifact_too_large",
+            "profile import artifact exceeds the 8 MiB limit",
+        ),
+        ProfileArtifactError::ReservedExtensionField(_)
+        | ProfileArtifactError::ForbiddenField(_)
+        | ProfileArtifactError::PortableDepthExceeded
+        | ProfileArtifactError::PortableStringTooLarge(_)
+        | ProfileArtifactError::PortableKeyTooLarge(_)
+        | ProfileArtifactError::PortableContainerTooLarge(_) => (
+            "unsafe_profile_artifact_content",
+            "profile import artifact contains forbidden or non-portable content",
+        ),
+        _ => (
+            "invalid_profile_artifact",
+            "profile import requires a valid bounded portable profile artifact",
+        ),
+    };
+    TransactionFailure::new(code, message)
+}
+
+fn decode_profile_import(
+    artifact_json: &str,
+    append_as_copies: bool,
+    select: bool,
+    make_default: bool,
+    invocation_id: Uuid,
+) -> Result<DecodedProfileImport, TransactionFailure> {
+    let artifact = ProfileArtifact::decode_import_json(artifact_json.as_bytes())
+        .map_err(profile_artifact_import_failure)?;
+    let document = artifact
+        .to_configuration_document()
+        .map_err(profile_artifact_import_failure)?;
+    let source_names = document
+        .profiles
+        .iter()
+        .map(|profile| {
+            profile_name(profile).map(str::to_owned).ok_or_else(|| {
+                TransactionFailure::new(
+                    "invalid_profile_artifact",
+                    "profile import artifact contains a malformed profile",
+                )
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let generated_profile_ids = if append_as_copies {
+        document
+            .profiles
+            .iter()
+            .enumerate()
+            .map(|(ordinal, profile)| {
+                let source_id = raw_profile_id(profile)
+                    .unwrap_or_default()
+                    .to_ascii_lowercase();
+                deterministic_uuid(
+                    invocation_id,
+                    &format!("profile.import:append:{source_id}:{ordinal}"),
+                )
+                .hyphenated()
+                .to_string()
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
+    let descriptor = ProfileImportDescriptor {
+        operation: "profile.import",
+        content_hash: artifact.content_hash.clone(),
+        append_as_copies,
+        select,
+        make_default,
+        generated_profile_ids,
+    };
+    Ok(DecodedProfileImport {
+        artifact,
+        document,
+        descriptor,
+        source_names,
+    })
+}
+
+fn descriptor_digest<T: Serialize>(descriptor: &T) -> Result<String, TransactionFailure> {
+    DraftStore::operation_digest(descriptor).map_err(|_| {
+        TransactionFailure::new(
+            "invalid_request",
+            "profile transaction descriptor could not be canonicalized",
+        )
+    })
+}
+
+fn plan_profile_import(
+    destination: &ConfigurationDocument,
+    import: &DecodedProfileImport,
+    updated_at: i64,
+) -> Result<PlannedProfileImport, TransactionFailure> {
+    let mut candidate = destination.clone();
+    let mut claimed_destination_ids = HashSet::new();
+    let mut imported_id_map = BTreeMap::new();
+    let mut destination_ids = Vec::with_capacity(import.document.profiles.len());
+    let mut profile_names = Vec::with_capacity(import.document.profiles.len());
+
+    for (ordinal, source) in import.document.profiles.iter().enumerate() {
+        let source_id = raw_profile_id(source).ok_or_else(import_profile_failure)?;
+        let source_name = profile_name(source).ok_or_else(import_profile_failure)?;
+        let matching_index = if import.descriptor.append_as_copies {
+            None
+        } else {
+            candidate
+                .profiles
+                .iter()
+                .enumerate()
+                .find(|(_, profile)| {
+                    raw_profile_id(profile).is_some_and(|id| {
+                        id.eq_ignore_ascii_case(source_id)
+                            && !claimed_destination_ids.contains(&id.to_ascii_lowercase())
+                    })
+                })
+                .map(|(index, _)| index)
+                .or_else(|| {
+                    candidate
+                        .profiles
+                        .iter()
+                        .enumerate()
+                        .find(|(_, profile)| {
+                            let Some(id) = raw_profile_id(profile) else {
+                                return false;
+                            };
+                            !claimed_destination_ids.contains(&id.to_ascii_lowercase())
+                                && profile_name(profile).is_some_and(|name| {
+                                    name.to_lowercase() == source_name.to_lowercase()
+                                })
+                        })
+                        .map(|(index, _)| index)
+                })
+        };
+
+        let (destination_id, is_new) = if import.descriptor.append_as_copies {
+            let id = import
+                .descriptor
+                .generated_profile_ids
+                .get(ordinal)
+                .cloned()
+                .ok_or_else(import_profile_failure)?;
+            let name = unique_import_name(&candidate.profiles, source_name, None);
+            let mut profile = source.clone();
+            set_import_profile_fields(&mut profile, &id, &name, updated_at)?;
+            candidate.profiles.push(profile);
+            (id, true)
+        } else if let Some(index) = matching_index {
+            let id = raw_profile_id(&candidate.profiles[index])
+                .ok_or_else(import_profile_failure)?
+                .to_owned();
+            let mut profile = source.clone();
+            set_import_profile_fields(&mut profile, &id, source_name, updated_at)?;
+            candidate.profiles[index] = profile;
+            (id, false)
+        } else {
+            let id = source_id.to_owned();
+            let name = unique_import_name(&candidate.profiles, source_name, None);
+            let mut profile = source.clone();
+            set_import_profile_fields(&mut profile, &id, &name, updated_at)?;
+            candidate.profiles.push(profile);
+            (id, true)
+        };
+
+        claimed_destination_ids.insert(destination_id.to_ascii_lowercase());
+        imported_id_map.insert(source_id.to_ascii_lowercase(), destination_id.clone());
+        destination_ids.push(destination_id.clone());
+        profile_names.push(
+            candidate
+                .profiles
+                .iter()
+                .find(|profile| {
+                    raw_profile_id(profile)
+                        .is_some_and(|id| id.eq_ignore_ascii_case(&destination_id))
+                })
+                .and_then(profile_name)
+                .unwrap_or(source_name)
+                .to_owned(),
+        );
+
+        if let Some(bindings) =
+            map_value_case_insensitive(&import.document.profile_key_bindings, source_id)
+        {
+            replace_binding_map(
+                &mut candidate.profile_key_bindings,
+                &destination_id,
+                bindings.clone(),
+            );
+        } else if is_new {
+            replace_binding_map(
+                &mut candidate.profile_key_bindings,
+                &destination_id,
+                canonical_default_profile_key_bindings(),
+            );
+        }
+
+        if let Some(bindings) =
+            map_value_case_insensitive(&import.document.profile_output_bindings, source_id)
+        {
+            replace_binding_map(
+                &mut candidate.profile_output_bindings,
+                &destination_id,
+                bindings.clone(),
+            );
+        } else if is_new {
+            let keys = map_value_case_insensitive(&candidate.profile_key_bindings, &destination_id)
+                .cloned()
+                .unwrap_or_else(canonical_default_profile_key_bindings);
+            replace_binding_map(
+                &mut candidate.profile_output_bindings,
+                &destination_id,
+                output_bindings_from_keys(&keys),
+            );
+        }
+    }
+
+    let selected_source = import
+        .artifact
+        .active_profile_id
+        .as_deref()
+        .unwrap_or_else(|| raw_profile_id(&import.document.profiles[0]).unwrap_or_default());
+    let selected_destination = imported_id_map
+        .get(&selected_source.to_ascii_lowercase())
+        .cloned()
+        .or_else(|| destination_ids.first().cloned())
+        .ok_or_else(import_profile_failure)?;
+    if import.descriptor.select {
+        candidate
+            .active_profile_id
+            .clone_from(&selected_destination);
+    }
+    if import.descriptor.make_default {
+        candidate.default_profile_id = import
+            .artifact
+            .default_profile_id
+            .as_deref()
+            .and_then(|id| imported_id_map.get(&id.to_ascii_lowercase()))
+            .cloned()
+            .unwrap_or(selected_destination);
+    }
+
+    candidate.validate().map_err(|_| {
+        TransactionFailure::new(
+            "invalid_profile_import",
+            "profile import merge produced an invalid authoritative candidate",
+        )
+    })?;
+    let mut changed_paths = Vec::new();
+    if candidate.profiles != destination.profiles {
+        changed_paths.push("/profiles".to_owned());
+    }
+    if candidate.active_profile_id != destination.active_profile_id {
+        changed_paths.push("/activeProfileID".to_owned());
+    }
+    if candidate.default_profile_id != destination.default_profile_id {
+        changed_paths.push("/defaultProfileID".to_owned());
+    }
+    if candidate.profile_key_bindings != destination.profile_key_bindings {
+        changed_paths.push("/profileKeyBindings".to_owned());
+    }
+    if candidate.profile_output_bindings != destination.profile_output_bindings {
+        changed_paths.push("/profileOutputBindings".to_owned());
+    }
+    Ok(PlannedProfileImport {
+        outcome: crate::draft_operation::ConfigurationOperationOutcome {
+            changed: candidate != *destination,
+            changed_paths,
+        },
+        candidate,
+        profile_names,
+    })
+}
+
+fn import_profile_failure() -> TransactionFailure {
+    TransactionFailure::new(
+        "invalid_profile_import",
+        "profile import merge could not preserve a valid portable profile",
+    )
+}
+
+fn raw_profile_id(profile: &serde_json::Value) -> Option<&str> {
+    profile.as_object()?.get("id")?.as_str()
+}
+
+fn profile_name(profile: &serde_json::Value) -> Option<&str> {
+    profile.as_object()?.get("name")?.as_str()
+}
+
+fn set_import_profile_fields(
+    profile: &mut serde_json::Value,
+    id: &str,
+    name: &str,
+    updated_at: i64,
+) -> Result<(), TransactionFailure> {
+    let object = profile.as_object_mut().ok_or_else(import_profile_failure)?;
+    object.insert("id".to_owned(), serde_json::Value::String(id.to_owned()));
+    object.insert(
+        "name".to_owned(),
+        serde_json::Value::String(name.to_owned()),
+    );
+    object.insert(
+        "updatedAt".to_owned(),
+        serde_json::Value::from(updated_at.max(0)),
+    );
+    Ok(())
+}
+
+fn unique_import_name(
+    profiles: &[serde_json::Value],
+    requested: &str,
+    excluding_id: Option<&str>,
+) -> String {
+    let base = if requested.trim().is_empty() {
+        "Imported Setup"
+    } else {
+        requested
+    };
+    let names = profiles
+        .iter()
+        .filter(|profile| {
+            excluding_id.is_none_or(|excluded| {
+                raw_profile_id(profile).is_none_or(|id| !id.eq_ignore_ascii_case(excluded))
+            })
+        })
+        .filter_map(profile_name)
+        .map(str::to_lowercase)
+        .collect::<HashSet<_>>();
+    if !names.contains(&base.to_lowercase()) {
+        return base.to_owned();
+    }
+    let mut suffix = 2_u32;
+    loop {
+        let suffix_text = format!(" {suffix}");
+        let available = MAXIMUM_SELECTOR_CHARACTERS.saturating_sub(suffix_text.chars().count());
+        let candidate = format!(
+            "{}{}",
+            base.chars().take(available).collect::<String>(),
+            suffix_text
+        );
+        if !names.contains(&candidate.to_lowercase()) {
+            return candidate;
+        }
+        suffix = suffix.saturating_add(1);
+    }
+}
+
+fn map_value_case_insensitive<'a, T>(map: &'a BTreeMap<String, T>, id: &str) -> Option<&'a T> {
+    map.iter()
+        .find(|(candidate, _)| candidate.eq_ignore_ascii_case(id))
+        .map(|(_, value)| value)
+}
+
+fn replace_binding_map<T>(map: &mut BTreeMap<String, T>, id: &str, value: T) {
+    let existing = map
+        .keys()
+        .find(|candidate| candidate.eq_ignore_ascii_case(id))
+        .cloned();
+    if let Some(existing) = existing {
+        map.remove(&existing);
+    }
+    map.insert(id.to_owned(), value);
+}
+
+fn output_bindings_from_keys(keys: &ButtonBindings<KeyBinding>) -> ButtonBindings<OutputBinding> {
+    let mut outputs = ButtonBindings::default();
+    for (button, binding) in keys.iter() {
+        outputs.insert_raw(button, OutputBinding::keyboard(binding.clone()));
+    }
+    outputs
+}
+
+fn replay_import_profile_names(
+    import: &DecodedProfileImport,
+    catalog: &CliProfileCatalog,
+) -> Vec<String> {
+    let mut claimed_destinations = HashSet::new();
+    import
+        .document
+        .profiles
+        .iter()
+        .enumerate()
+        .map(|(ordinal, source)| {
+            let source_name = &import.source_names[ordinal];
+            let destination_id = import
+                .descriptor
+                .generated_profile_ids
+                .get(ordinal)
+                .and_then(|id| Uuid::parse_str(id).ok())
+                .or_else(|| {
+                    (!import.descriptor.append_as_copies)
+                        .then(|| raw_profile_id(source).and_then(|id| Uuid::parse_str(id).ok()))
+                        .flatten()
+                });
+            let destination = destination_id
+                .and_then(|id| {
+                    catalog.profiles.iter().find(|profile| {
+                        profile.profile_id == id
+                            && !claimed_destinations.contains(&profile.profile_id)
+                    })
+                })
+                .or_else(|| {
+                    (!import.descriptor.append_as_copies).then_some(())?;
+                    catalog.profiles.iter().find(|profile| {
+                        !claimed_destinations.contains(&profile.profile_id)
+                            && profile.name.eq_ignore_ascii_case(source_name)
+                    })
+                });
+            if let Some(destination) = destination {
+                claimed_destinations.insert(destination.profile_id);
+                destination.name.clone()
+            } else {
+                source_name.clone()
+            }
+        })
+        .collect()
+}
+
 fn request_digest(command: &CliProfileCommand) -> Result<String, TransactionFailure> {
     let encoded = serde_json::to_vec(command).map_err(|_| {
         TransactionFailure::new(
@@ -4604,6 +5512,9 @@ fn replay_profile_names(
         }
         CliProfileCommand::AuthorityStatus
         | CliProfileCommand::List
+        | CliProfileCommand::Export { .. }
+        | CliProfileCommand::Import { .. }
+        | CliProfileCommand::GenerationPlanSpec { .. }
         | CliProfileCommand::OrientationGet { .. }
         | CliProfileCommand::BindingList { .. }
         | CliProfileCommand::BindingDisplay { .. }
@@ -4748,6 +5659,1204 @@ mod tests {
             expected_configuration_revision: None,
             command,
         }
+    }
+
+    #[test]
+    fn export_command_and_response_are_strict_typed_schema_eight_json() {
+        let omitted = serde_json::from_str::<CliProfileRequest>(
+            r#"{"schemaVersion":8,"command":{"type":"profile.export"}}"#,
+        )
+        .unwrap();
+        assert!(matches!(
+            omitted.command,
+            CliProfileCommand::Export { target: None }
+        ));
+        let explicit_null = serde_json::from_str::<CliProfileRequest>(
+            r#"{"schemaVersion":8,"command":{"type":"profile.export","target":null}}"#,
+        )
+        .unwrap();
+        assert!(matches!(
+            explicit_null.command,
+            CliProfileCommand::Export { target: None }
+        ));
+        assert!(serde_json::from_str::<CliProfileRequest>(
+            r#"{"schemaVersion":8,"command":{"type":"profile.export","unknown":true}}"#,
+        )
+        .is_err());
+
+        let response = CliProfileResponse::authority_status(Uuid::nil(), true);
+        let mut value = serde_json::to_value(response).unwrap();
+        value["unknown"] = serde_json::json!(true);
+        assert!(serde_json::from_value::<CliProfileResponse>(value).is_err());
+    }
+
+    #[test]
+    fn import_command_requires_all_strict_schema_eight_fields() {
+        let valid = r#"{"schemaVersion":8,"command":{"type":"profile.import","artifactJSON":"{}","appendAsCopies":false,"select":true,"makeDefault":false}}"#;
+        assert!(serde_json::from_str::<CliProfileRequest>(valid).is_ok());
+        for field in [
+            "\"artifactJSON\":\"{}\",",
+            "\"appendAsCopies\":false,",
+            "\"select\":true,",
+            "\"makeDefault\":false",
+        ] {
+            let missing = valid.replace(field, "");
+            assert!(serde_json::from_str::<CliProfileRequest>(&missing).is_err());
+        }
+        let unknown = valid.replace(
+            "\"makeDefault\":false",
+            "\"makeDefault\":false,\"path\":\"/tmp/x\"",
+        );
+        assert!(serde_json::from_str::<CliProfileRequest>(&unknown).is_err());
+    }
+
+    fn generation_request(
+        spec_json: impl Into<String>,
+        requested_game_name: Option<&str>,
+    ) -> CliProfileRequest {
+        request(CliProfileCommand::GenerationPlanSpec {
+            spec_json: spec_json.into(),
+            requested_game_name: requested_game_name.map(str::to_owned),
+        })
+    }
+
+    #[test]
+    fn generation_plan_command_and_projection_use_strict_acronym_preserving_schema_eight_json() {
+        let valid = r#"{"schemaVersion":8,"command":{"type":"generation.plan-spec","specJSON":"{\"controls\":[]}","requestedGameName":"Override"}}"#;
+        let decoded = serde_json::from_str::<CliProfileRequest>(valid).unwrap();
+        assert!(matches!(
+            decoded.command,
+            CliProfileCommand::GenerationPlanSpec {
+                requested_game_name: Some(ref name),
+                ..
+            } if name == "Override"
+        ));
+        let serialized = serde_json::to_value(&decoded).unwrap();
+        let command = serialized["command"].as_object().unwrap();
+        assert!(command.contains_key("specJSON"));
+        assert!(command.contains_key("requestedGameName"));
+        assert!(!command.contains_key("specJson"));
+        for forbidden in ["path", "prose", "argv"] {
+            let invalid = valid.replace(
+                "\"requestedGameName\":\"Override\"",
+                &format!("\"requestedGameName\":\"Override\",\"{forbidden}\":\"x\""),
+            );
+            assert!(serde_json::from_str::<CliProfileRequest>(&invalid).is_err());
+        }
+        assert!(
+            serde_json::from_str::<CliProfileRequest>(&valid.replace("specJSON", "specJson"))
+                .is_err()
+        );
+        assert!(serde_json::from_str::<CliProfileRequest>(
+            r#"{"schemaVersion":8,"command":{"type":"generation.plan-spec"}}"#,
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn generation_plan_is_revision_exact_decodable_hashed_and_read_only() {
+        let directory = tempdir().unwrap();
+        let paths = HostPaths::new(
+            directory.path().join("authority/state.json"),
+            directory.path().join("authority/control.sock"),
+        );
+        let mut state = PersistentState::minimal("server").unwrap();
+        state.configuration_revision = 88;
+        let generation = generation_request(
+            include_str!("../../../fixtures/generation-spec/v1/aliases-basic.json"),
+            Some("Requested Override"),
+        );
+        let invocation_id = generation.invocation_id.unwrap();
+        state
+            .recent_configuration_commits
+            .push(thumble_core::ConfigurationCommitRecord {
+                commit_id: deterministic_uuid(invocation_id, "configuration-commit")
+                    .hyphenated()
+                    .to_string(),
+                draft_id: deterministic_uuid(invocation_id, "configuration-draft")
+                    .hyphenated()
+                    .to_string(),
+                base_configuration_revision: 87,
+                result_configuration_revision: 88,
+                draft_revision: 2,
+                draft_digest: "0".repeat(64),
+                client_request_digest: Some(
+                    request_digest(&CliProfileCommand::GenerationGenerate {
+                        select: false,
+                        make_default: false,
+                    })
+                    .unwrap(),
+                ),
+                committed_at: 1,
+            });
+        let response =
+            execute_profile_transaction(&paths, &state, &generation, "test", |_, _, _, _, _| {
+                panic!("read-only generation planning must not save")
+            });
+        assert!(response.ok, "{:?}", response.error);
+        assert_eq!(response.schema_version, CLI_PROFILE_SCHEMA_VERSION);
+        assert!(response.outcome.is_none());
+
+        let response_value = serde_json::to_value(&response).unwrap();
+        let generation_value = &response_value["generationPlan"];
+        let keys = generation_value
+            .as_object()
+            .unwrap()
+            .keys()
+            .map(String::as_str)
+            .collect::<BTreeSet<_>>();
+        assert_eq!(
+            keys,
+            BTreeSet::from([
+                "artifactJSON",
+                "assignedControls",
+                "catalogRevision",
+                "configurationRevision",
+                "contentHash",
+                "descriptorDigest",
+                "droppedControls",
+                "generatedJSON",
+                "layoutQuality",
+                "omittedWarningCount",
+                "plannerRevision",
+                "schemaVersion",
+                "warnings",
+            ])
+        );
+        assert!(generation_value.get("generatedJson").is_none());
+        assert!(generation_value.get("artifactJson").is_none());
+        assert!(generation_value["assignedControls"][0]
+            .get("elementID")
+            .is_some());
+        assert!(generation_value["assignedControls"][0]
+            .get("elementId")
+            .is_none());
+        for issue in generation_value["layoutQuality"]["issues"]
+            .as_array()
+            .unwrap()
+        {
+            assert!(issue.get("controlIDs").is_some());
+            assert!(issue.get("controlIds").is_none());
+        }
+
+        let plan = response.generation_plan.as_ref().unwrap();
+        assert_eq!(plan.configuration_revision, 87);
+        assert_eq!(
+            plan.schema_version,
+            thumble_core::GENERATION_SPEC_SCHEMA_VERSION
+        );
+        assert_eq!(
+            plan.catalog_revision,
+            thumble_core::GENERATION_SPEC_CATALOG_REVISION
+        );
+        assert_eq!(
+            plan.planner_revision,
+            thumble_core::GENERATION_SPEC_PLANNER_REVISION
+        );
+        let generated: serde_json::Value = serde_json::from_str(&plan.generated_json).unwrap();
+        assert_eq!(generated["requestedGameName"], "Requested Override");
+        assert_eq!(generated["resolvedGameName"], "Alias Arcade");
+        let artifact = ProfileArtifact::decode_json(plan.artifact_json.as_bytes()).unwrap();
+        assert_eq!(artifact.content_hash, plan.content_hash);
+        assert_eq!(
+            artifact.extensions["generationMetadata"]["schemaVersion"],
+            plan.schema_version
+        );
+        assert_eq!(
+            artifact.extensions["generationMetadata"]["catalogRevision"],
+            plan.catalog_revision
+        );
+        assert_eq!(
+            artifact.extensions["generationMetadata"]["plannerRevision"],
+            plan.planner_revision
+        );
+        assert_eq!(
+            artifact.extensions["generationMetadata"]["descriptorDigest"],
+            plan.descriptor_digest
+        );
+        assert_eq!(artifact.profiles[0]["name"], "Alias Arcade");
+
+        let unrelated_import = CliProfileRequest {
+            schema_version: CLI_PROFILE_SCHEMA_VERSION,
+            invocation_id: Some(invocation_id),
+            expected_configuration_revision: Some(87),
+            command: CliProfileCommand::Import {
+                artifact_json: plan.artifact_json.clone(),
+                append_as_copies: true,
+                select: true,
+                make_default: true,
+            },
+        };
+        let conflict = execute_profile_transaction(
+            &paths,
+            &state,
+            &unrelated_import,
+            "test",
+            |_, _, _, _, _| panic!("conflicting import must not save"),
+        );
+        assert!(!conflict.ok);
+        assert_eq!(conflict.error.unwrap().code, "commit_id_conflict");
+
+        let fallback_name = execute_profile_transaction(
+            &paths,
+            &state,
+            &generation_request(r#"{"controls":[]}"#, Some("Fallback Override")),
+            "test",
+            |_, _, _, _, _| panic!("requested-name generation planning must not save"),
+        );
+        let fallback_plan = fallback_name.generation_plan.unwrap();
+        let fallback_generated: serde_json::Value =
+            serde_json::from_str(&fallback_plan.generated_json).unwrap();
+        assert_eq!(fallback_generated["requestedGameName"], "Fallback Override");
+        assert_eq!(
+            fallback_generated["resolvedGameName"],
+            "Agent Generated Game"
+        );
+        assert_eq!(
+            ProfileArtifact::decode_json(fallback_plan.artifact_json.as_bytes())
+                .unwrap()
+                .profiles[0]["name"],
+            "Agent Generated Game"
+        );
+
+        let mut strict = response_value;
+        strict["generationPlan"]["unknown"] = serde_json::json!(true);
+        assert!(serde_json::from_value::<CliProfileResponse>(strict).is_err());
+        assert!(!paths.drafts_dir.exists());
+        assert!(!paths.state_file.exists());
+        assert!(!directory.path().join("authority").exists());
+    }
+
+    #[test]
+    fn generation_plan_replays_the_import_base_revision_for_the_same_invocation() {
+        let directory = tempdir().unwrap();
+        let paths = HostPaths::new(
+            directory.path().join("authority/state.json"),
+            directory.path().join("authority/control.sock"),
+        );
+        let mut state = PersistentState::minimal("server").unwrap();
+        state.configuration_revision = 41;
+        storage::save_atomic(&paths.state_file, &state).unwrap();
+
+        let invocation_id = Uuid::parse_str("44444444-5555-5666-8777-888888888888").unwrap();
+        let spec_json = include_str!("../../../fixtures/generation-spec/v1/aliases-basic.json");
+        let mut generation = generation_request(spec_json, Some("Replay Game"));
+        generation.invocation_id = Some(invocation_id);
+
+        let before_plan = std::fs::read(&paths.state_file).unwrap();
+        let first_plan = execute_offline_authority(&paths, &generation);
+        assert!(first_plan.ok, "{:?}", first_plan.error);
+        let first_plan = first_plan.generation_plan.unwrap();
+        assert_eq!(first_plan.configuration_revision, 41);
+        assert_eq!(std::fs::read(&paths.state_file).unwrap(), before_plan);
+        assert!(!paths.drafts_dir.exists());
+
+        let import = CliProfileRequest {
+            schema_version: CLI_PROFILE_SCHEMA_VERSION,
+            invocation_id: Some(invocation_id),
+            expected_configuration_revision: Some(first_plan.configuration_revision),
+            command: CliProfileCommand::Import {
+                artifact_json: first_plan.artifact_json.clone(),
+                append_as_copies: true,
+                select: true,
+                make_default: true,
+            },
+        };
+        let installed = execute_offline_authority(&paths, &import);
+        assert!(installed.ok, "{:?}", installed.error);
+        let installed = installed.outcome.unwrap();
+        assert!(!installed.idempotent_replay);
+        assert_eq!(installed.configuration_revision, 42);
+
+        let committed_state = storage::load(&paths.state_file).unwrap();
+        assert_eq!(committed_state.configuration_revision, 42);
+        let commit_id = deterministic_uuid(invocation_id, "configuration-commit")
+            .hyphenated()
+            .to_string();
+        let commit = committed_state
+            .recent_configuration_commit(&commit_id)
+            .unwrap();
+        assert_eq!(commit.base_configuration_revision, 41);
+        assert_eq!(commit.result_configuration_revision, 42);
+        let after_install = std::fs::read(&paths.state_file).unwrap();
+
+        let repeated_plan = execute_offline_authority(&paths, &generation);
+        assert!(repeated_plan.ok, "{:?}", repeated_plan.error);
+        let repeated_plan = repeated_plan.generation_plan.unwrap();
+        assert_eq!(repeated_plan.configuration_revision, 41);
+        assert_eq!(repeated_plan.artifact_json, first_plan.artifact_json);
+        assert_eq!(std::fs::read(&paths.state_file).unwrap(), after_install);
+
+        let replay = execute_offline_authority(&paths, &import);
+        assert!(replay.ok, "{:?}", replay.error);
+        let replay = replay.outcome.unwrap();
+        assert!(replay.idempotent_replay);
+        assert_eq!(replay.configuration_revision, 42);
+        assert_eq!(std::fs::read(&paths.state_file).unwrap(), after_install);
+
+        let mut changed_generation = generation.clone();
+        let CliProfileCommand::GenerationPlanSpec { spec_json, .. } =
+            &mut changed_generation.command
+        else {
+            unreachable!();
+        };
+        *spec_json = r#"{"controls":[]}"#.to_owned();
+        let changed_plan = execute_offline_authority(&paths, &changed_generation);
+        assert!(changed_plan.ok, "{:?}", changed_plan.error);
+        let changed_plan = changed_plan.generation_plan.unwrap();
+        assert_eq!(changed_plan.configuration_revision, 41);
+        let changed_import = CliProfileRequest {
+            schema_version: CLI_PROFILE_SCHEMA_VERSION,
+            invocation_id: Some(invocation_id),
+            expected_configuration_revision: Some(changed_plan.configuration_revision),
+            command: CliProfileCommand::Import {
+                artifact_json: changed_plan.artifact_json,
+                append_as_copies: true,
+                select: true,
+                make_default: true,
+            },
+        };
+        let changed_spec = execute_offline_authority(&paths, &changed_import);
+        assert!(!changed_spec.ok);
+        assert_eq!(changed_spec.error.unwrap().code, "commit_id_conflict");
+
+        let mut changed_options = import.clone();
+        let CliProfileCommand::Import { select, .. } = &mut changed_options.command else {
+            unreachable!();
+        };
+        *select = false;
+        let changed_options = execute_offline_authority(&paths, &changed_options);
+        assert!(!changed_options.ok);
+        assert_eq!(changed_options.error.unwrap().code, "commit_id_conflict");
+
+        let mut new_invocation = generation;
+        new_invocation.invocation_id =
+            Some(Uuid::parse_str("55555555-6666-5777-8888-999999999999").unwrap());
+        let new_plan = execute_offline_authority(&paths, &new_invocation);
+        assert!(new_plan.ok, "{:?}", new_plan.error);
+        assert_eq!(new_plan.generation_plan.unwrap().configuration_revision, 42);
+        assert_eq!(std::fs::read(&paths.state_file).unwrap(), after_install);
+    }
+
+    #[test]
+    fn generation_plan_rejects_bounds_revisions_unsafe_and_expected_revision_without_side_effects()
+    {
+        let directory = tempdir().unwrap();
+        let paths = HostPaths::new(
+            directory.path().join("authority/state.json"),
+            directory.path().join("authority/control.sock"),
+        );
+        let state = PersistentState::minimal("server").unwrap();
+
+        let mut exact_spec = r#"{"controls":[]}"#.to_owned();
+        exact_spec
+            .push_str(&" ".repeat(thumble_core::MAXIMUM_GENERATION_SPEC_BYTES - exact_spec.len()));
+        let exact_name = "n".repeat(MAXIMUM_SELECTOR_CHARACTERS);
+        let exact = execute_profile_transaction(
+            &paths,
+            &state,
+            &generation_request(exact_spec, Some(&exact_name)),
+            "test",
+            |_, _, _, _, _| panic!("boundary generation planning must not save"),
+        );
+        assert!(exact.ok, "{:?}", exact.error);
+        let exact_generated: serde_json::Value =
+            serde_json::from_str(&exact.generation_plan.as_ref().unwrap().generated_json).unwrap();
+        assert_eq!(exact_generated["requestedGameName"], exact_name);
+
+        let assert_failure = |request: CliProfileRequest, expected_code: &str| {
+            let response =
+                execute_profile_transaction(&paths, &state, &request, "test", |_, _, _, _, _| {
+                    panic!("rejected generation planning must not save")
+                });
+            assert!(!response.ok);
+            assert_eq!(response.error.unwrap().code, expected_code);
+            assert!(!paths.drafts_dir.exists());
+            assert!(!paths.state_file.exists());
+        };
+
+        assert_failure(
+            generation_request(
+                "x".repeat(thumble_core::MAXIMUM_GENERATION_SPEC_BYTES + 1),
+                None,
+            ),
+            "generation_spec_too_large",
+        );
+        assert_failure(
+            generation_request(r#"{"controls":[]}"#, Some(&"n".repeat(257))),
+            "generation_spec_string_too_long",
+        );
+        assert_failure(
+            generation_request(
+                include_str!("../../../fixtures/generation-spec/v1/failures/revision.json"),
+                None,
+            ),
+            "generation_spec_unsupported_revision",
+        );
+        assert_failure(
+            generation_request(
+                include_str!("../../../fixtures/generation-spec/v1/failures/unsafe.json"),
+                None,
+            ),
+            "generation_spec_unsafe_field",
+        );
+        assert_failure(
+            generation_request(
+                include_str!("../../../fixtures/generation-spec/v1/failures/bounds.json"),
+                None,
+            ),
+            "generation_spec_number_out_of_bounds",
+        );
+        let mut expected_revision = generation_request(r#"{"controls":[]}"#, None);
+        expected_revision.expected_configuration_revision = Some(1);
+        assert_failure(expected_revision, "invalid_request");
+        assert!(!directory.path().join("authority").exists());
+    }
+
+    #[test]
+    fn generation_plan_rejects_control_text_before_artifact_or_import_side_effects() {
+        let directory = tempdir().unwrap();
+        let paths = HostPaths::new(
+            directory.path().join("authority/state.json"),
+            directory.path().join("authority/control.sock"),
+        );
+        let state = PersistentState::minimal("server").unwrap();
+        let spec = serde_json::to_string(&serde_json::json!({
+            "controls": [{"label": "RAW\u{1b}[31mPAYLOAD", "key": "A"}]
+        }))
+        .unwrap();
+        let response = execute_profile_transaction(
+            &paths,
+            &state,
+            &generation_request(spec, None),
+            "test",
+            |_, _, _, _, _| panic!("control-bearing generation must fail before save/import"),
+        );
+
+        assert!(!response.ok);
+        assert!(response.generation_plan.is_none());
+        assert!(response.outcome.is_none());
+        let error = response.error.as_ref().unwrap();
+        assert_eq!(error.code, "generation_spec_control_character");
+        assert_eq!(
+            error.message,
+            "generation spec contains a Unicode control character"
+        );
+        assert!(!error.message.contains("RAW"));
+        assert!(!error.message.contains("PAYLOAD"));
+        assert!(!error.message.chars().any(char::is_control));
+        let encoded = serde_json::to_string(&response).unwrap();
+        assert!(!encoded.contains("RAW"));
+        assert!(!encoded.contains("PAYLOAD"));
+        assert!(!encoded.contains('\u{1b}'));
+        assert!(!paths.drafts_dir.exists());
+        assert!(!paths.state_file.exists());
+        assert!(!directory.path().join("authority").exists());
+    }
+
+    #[test]
+    fn generation_plan_accepts_bounded_rich_appearance_without_exposing_raw_spec() {
+        let directory = tempdir().unwrap();
+        let paths = HostPaths::new(
+            directory.path().join("state.json"),
+            directory.path().join("control.sock"),
+        );
+        let state = PersistentState::minimal("server").unwrap();
+        let response = execute_profile_transaction(
+            &paths,
+            &state,
+            &generation_request(
+                include_str!("../../../fixtures/generation-spec/v1/rich-appearance.json"),
+                None,
+            ),
+            "test",
+            |_, _, _, _, _| panic!("rich generation planning must not save"),
+        );
+        assert!(response.ok, "{:?}", response.error);
+        let value = serde_json::to_value(response).unwrap();
+        let plan = value["generationPlan"].as_object().unwrap();
+        assert_eq!(plan.len(), 13);
+        assert!(plan.get("specJSON").is_none());
+        assert!(plan.get("profile").is_none());
+        let generated: serde_json::Value =
+            serde_json::from_str(plan["generatedJSON"].as_str().unwrap()).unwrap();
+        assert!(generated["profile"]["customization"].is_object());
+        assert!(!paths.drafts_dir.exists());
+        assert!(!paths.state_file.exists());
+    }
+
+    #[test]
+    fn generation_error_mapping_is_specific_bounded_and_omits_untrusted_values() {
+        let malicious = "UNTRUSTED".repeat(10_000);
+        let cases = vec![
+            (
+                GenerationSpecError::TooLarge(usize::MAX),
+                "generation_spec_too_large",
+            ),
+            (
+                GenerationSpecError::DecodingFailed,
+                "generation_spec_decoding_failed",
+            ),
+            (
+                GenerationSpecError::TopLevelMustBeObject,
+                "generation_spec_invalid_document",
+            ),
+            (
+                GenerationSpecError::UnknownField {
+                    path: malicious.clone(),
+                    field: malicious.clone(),
+                },
+                "generation_spec_unknown_field",
+            ),
+            (
+                GenerationSpecError::UnsafeField {
+                    path: malicious.clone(),
+                    field: malicious.clone(),
+                },
+                "generation_spec_unsafe_field",
+            ),
+            (
+                GenerationSpecError::InvalidType {
+                    path: malicious.clone(),
+                    expected: "a string",
+                },
+                "generation_spec_invalid_type",
+            ),
+            (
+                GenerationSpecError::InvalidRevision {
+                    field: "schemaVersion",
+                    value: u64::MAX,
+                },
+                "generation_spec_unsupported_revision",
+            ),
+            (
+                GenerationSpecError::InvalidEnum {
+                    path: malicious.clone(),
+                    value: malicious.clone(),
+                },
+                "generation_spec_invalid_enum",
+            ),
+            (
+                GenerationSpecError::InvalidNumber {
+                    path: malicious.clone(),
+                },
+                "generation_spec_invalid_number",
+            ),
+            (
+                GenerationSpecError::NumberOutOfBounds {
+                    path: malicious.clone(),
+                },
+                "generation_spec_number_out_of_bounds",
+            ),
+            (
+                GenerationSpecError::StringTooLong {
+                    path: malicious.clone(),
+                },
+                "generation_spec_string_too_long",
+            ),
+            (
+                GenerationSpecError::ControlCharacter {
+                    path: malicious.clone(),
+                },
+                "generation_spec_control_character",
+            ),
+            (
+                GenerationSpecError::TooManyNotes(usize::MAX),
+                "generation_spec_too_many_notes",
+            ),
+            (
+                GenerationSpecError::MissingControls,
+                "generation_spec_invalid_document",
+            ),
+            (
+                GenerationSpecError::TooManyControls(usize::MAX),
+                "generation_spec_too_many_controls",
+            ),
+            (
+                GenerationSpecError::InvalidKey {
+                    source_ordinal: 127,
+                    key: malicious.clone(),
+                },
+                "generation_spec_invalid_key",
+            ),
+            (
+                GenerationSpecError::InvalidModifier {
+                    source_ordinal: 127,
+                    modifier: malicious.clone(),
+                },
+                "generation_spec_invalid_modifier",
+            ),
+            (
+                GenerationSpecError::CanonicalizationFailed,
+                "generation_spec_encoding_failed",
+            ),
+            (
+                GenerationSpecError::EncodingFailed,
+                "generation_spec_encoding_failed",
+            ),
+            (
+                GenerationSpecError::OutputTooLarge(usize::MAX),
+                "generation_spec_output_too_large",
+            ),
+            (
+                GenerationSpecError::Artifact(ProfileArtifactError::DecodingFailed),
+                "generation_spec_artifact_failed",
+            ),
+            (
+                GenerationSpecError::LayoutEvaluationFailed,
+                "generation_spec_layout_failed",
+            ),
+        ];
+        for (error, expected_code) in cases {
+            let failure = generation_spec_failure(error);
+            assert_eq!(failure.error.code, expected_code);
+            assert!(failure.error.message.len() < 128);
+            assert!(!failure.error.message.contains("UNTRUSTED"));
+        }
+
+        let revision = generation_spec_failure(GenerationSpecError::InvalidRevision {
+            field: "plannerRevision",
+            value: u64::MAX,
+        });
+        assert_eq!(revision.error.code, "generation_spec_unsupported_revision");
+        assert_eq!(
+            revision.error.message,
+            "generation spec schema, catalog, or planner revision is unsupported"
+        );
+    }
+
+    fn import_artifact_json(state: &PersistentState, exported_at: i64) -> String {
+        let document = ConfigurationDocument::from_state(state).unwrap();
+        let artifact = ProfileArtifact::from_configuration(
+            &document,
+            ProfileArtifactSelection::All,
+            exported_at,
+        )
+        .unwrap();
+        String::from_utf8(artifact.encode_pretty_json().unwrap()).unwrap()
+    }
+
+    #[test]
+    fn import_replace_merges_profiles_maps_selection_default_and_unknown_fields_once() {
+        let root = tempdir().unwrap();
+        let paths = HostPaths::new(
+            root.path().join("state"),
+            root.path().join("state/control.sock"),
+        );
+        let mut destination = PersistentState::minimal("server").unwrap();
+        let name_match_id = "00000000-0000-4000-8000-000000000702";
+        let mut name_match = destination.profiles[0].clone();
+        name_match["id"] = serde_json::json!(name_match_id);
+        name_match["name"] = serde_json::json!("By Name");
+        destination.profiles.push(name_match);
+        let mut preserved_keys = ButtonBindings::default();
+        preserved_keys.insert(GameButton::Jump, KeyBinding::new(77, 2));
+        destination
+            .profile_key_bindings
+            .insert(name_match_id.to_owned(), preserved_keys.clone());
+        let mut preserved_outputs = ButtonBindings::default();
+        preserved_outputs.insert(
+            GameButton::Jump,
+            OutputBinding::keyboard(KeyBinding::new(78, 1)),
+        );
+        destination
+            .profile_output_bindings
+            .insert(name_match_id.to_owned(), preserved_outputs.clone());
+        destination.normalize().unwrap();
+        storage::save_atomic(&paths.state_file, &destination).unwrap();
+
+        let mut source = PersistentState::minimal("source").unwrap();
+        source.profiles[0]["name"] = serde_json::json!("UUID Replacement");
+        source.profiles[0]["futurePortable"] = serde_json::json!({"mode":"future"});
+        let source_name_id = "00000000-0000-4000-8000-000000000703";
+        let mut by_name = source.profiles[0].clone();
+        by_name["id"] = serde_json::json!(source_name_id);
+        by_name["name"] = serde_json::json!("by name");
+        let new_id = "00000000-0000-4000-8000-000000000704";
+        let mut new_profile = source.profiles[0].clone();
+        new_profile["id"] = serde_json::json!(new_id);
+        new_profile["name"] = serde_json::json!("New Setup");
+        source.profiles.extend([by_name, new_profile]);
+        source.active_profile_id = source_name_id.to_owned();
+        source.default_profile_id = new_id.to_owned();
+        source.profile_key_bindings.clear();
+        source.profile_key_bindings.insert(
+            thumble_core::DEFAULT_PROFILE_ID.to_owned(),
+            ButtonBindings::default(),
+        );
+        source.profile_output_bindings.clear();
+        source.profile_output_bindings.insert(
+            thumble_core::DEFAULT_PROFILE_ID.to_owned(),
+            ButtonBindings::default(),
+        );
+        source.normalize().unwrap();
+        let artifact_json = import_artifact_json(&source, 123);
+        let invocation = Uuid::parse_str("11111111-2222-5333-8444-555555555555").unwrap();
+        let response = execute_offline_authority(
+            &paths,
+            &CliProfileRequest {
+                schema_version: CLI_PROFILE_SCHEMA_VERSION,
+                invocation_id: Some(invocation),
+                expected_configuration_revision: Some(1),
+                command: CliProfileCommand::Import {
+                    artifact_json,
+                    append_as_copies: false,
+                    select: false,
+                    make_default: true,
+                },
+            },
+        );
+        assert!(response.ok, "{:?}", response.error);
+        assert_eq!(response.outcome.as_ref().unwrap().profile_names.len(), 3);
+        let imported = storage::load(&paths.state_file).unwrap();
+        assert_eq!(imported.configuration_revision, 2);
+        assert_eq!(imported.profiles.len(), 3);
+        assert_eq!(imported.active_profile_id, thumble_core::DEFAULT_PROFILE_ID);
+        assert_eq!(imported.default_profile_id, new_id);
+        assert_eq!(imported.profiles[0]["id"], thumble_core::DEFAULT_PROFILE_ID);
+        assert_eq!(imported.profiles[0]["futurePortable"]["mode"], "future");
+        assert_eq!(imported.profiles[1]["id"], name_match_id);
+        assert_eq!(imported.profiles[1]["name"], "by name");
+        assert_eq!(imported.profiles[2]["id"], new_id);
+        let update_times = imported
+            .profiles
+            .iter()
+            .map(|profile| profile["updatedAt"].as_i64().unwrap())
+            .collect::<BTreeSet<_>>();
+        assert_eq!(update_times.len(), 1);
+        assert!(update_times.iter().next().unwrap() > &0);
+        assert!(imported.profile_key_bindings[thumble_core::DEFAULT_PROFILE_ID].is_empty());
+        assert!(imported.profile_output_bindings[thumble_core::DEFAULT_PROFILE_ID].is_empty());
+        assert_eq!(imported.profile_key_bindings[name_match_id], preserved_keys);
+        assert_eq!(
+            imported.profile_output_bindings[name_match_id],
+            preserved_outputs
+        );
+        assert_eq!(imported.profile_key_bindings[new_id].len(), 10);
+        assert_eq!(imported.profile_output_bindings[new_id].len(), 10);
+        assert_eq!(imported.key_bindings, destination.key_bindings);
+        assert_eq!(imported.output_bindings, destination.output_bindings);
+        let draft_id = deterministic_uuid(invocation, "configuration-draft")
+            .hyphenated()
+            .to_string();
+        assert!(DraftStore::new(&paths)
+            .get(&draft_id, now_millis())
+            .is_err());
+    }
+
+    #[test]
+    fn import_retained_draft_replays_original_edit_revision_after_save_failure() {
+        let root = tempdir().unwrap();
+        let paths = HostPaths::new(
+            root.path().join("state"),
+            root.path().join("state/control.sock"),
+        );
+        let state = PersistentState::minimal("server").unwrap();
+        storage::save_atomic(&paths.state_file, &state).unwrap();
+
+        let mut source = state.clone();
+        source.profiles[0]["name"] = serde_json::json!("Changed Import");
+        let artifact_json = import_artifact_json(&source, 10);
+        let invocation = Uuid::parse_str("22222222-3333-5444-8555-666666666666").unwrap();
+        let request = CliProfileRequest {
+            schema_version: CLI_PROFILE_SCHEMA_VERSION,
+            invocation_id: Some(invocation),
+            expected_configuration_revision: Some(1),
+            command: CliProfileCommand::Import {
+                artifact_json,
+                append_as_copies: false,
+                select: true,
+                make_default: false,
+            },
+        };
+
+        let failed =
+            execute_profile_transaction(&paths, &state, &request, "test", |_, _, _, _, _| {
+                Err(TransactionFailure::new(
+                    "configuration_persistence_failed",
+                    "simulated persistence failure",
+                ))
+            });
+        assert!(!failed.ok);
+        assert_eq!(
+            failed.error.unwrap().code,
+            "configuration_persistence_failed"
+        );
+        let draft_id = deterministic_uuid(invocation, "configuration-draft")
+            .hyphenated()
+            .to_string();
+        let retained = DraftStore::new(&paths)
+            .get(&draft_id, now_millis())
+            .unwrap();
+        assert_eq!(retained.draft_revision, 2);
+        assert_eq!(retained.operation_log[0].base_draft_revision, 1);
+
+        let mut changed_descriptor = request.clone();
+        let CliProfileCommand::Import { select, .. } = &mut changed_descriptor.command else {
+            unreachable!();
+        };
+        *select = false;
+        let conflict = execute_profile_transaction(
+            &paths,
+            &state,
+            &changed_descriptor,
+            "test",
+            |_, _, _, _, _| panic!("conflicting retained edit must not save"),
+        );
+        assert!(!conflict.ok);
+        assert_eq!(conflict.error.unwrap().code, "operation_id_conflict");
+
+        let retry = execute_offline_authority(&paths, &request);
+        assert!(retry.ok, "{:?}", retry.error);
+        assert!(!retry.outcome.as_ref().unwrap().idempotent_replay);
+        assert_eq!(
+            storage::load(&paths.state_file).unwrap().profiles[0]["name"],
+            "Changed Import"
+        );
+        let replay = execute_offline_authority(&paths, &request);
+        assert!(replay.ok, "{:?}", replay.error);
+        assert!(replay.outcome.unwrap().idempotent_replay);
+    }
+
+    #[test]
+    fn import_append_ids_names_digest_replay_and_conflicts_are_deterministic() {
+        let root = tempdir().unwrap();
+        let paths = HostPaths::new(
+            root.path().join("state"),
+            root.path().join("state/control.sock"),
+        );
+        let state = PersistentState::minimal("server").unwrap();
+        storage::save_atomic(&paths.state_file, &state).unwrap();
+        let artifact_json = import_artifact_json(&state, 10);
+        let invocation = Uuid::parse_str("66666666-7777-5888-8999-aaaaaaaaaaaa").unwrap();
+        let make_request = |artifact_json: String, append_as_copies: bool| CliProfileRequest {
+            schema_version: CLI_PROFILE_SCHEMA_VERSION,
+            invocation_id: Some(invocation),
+            expected_configuration_revision: Some(1),
+            command: CliProfileCommand::Import {
+                artifact_json,
+                append_as_copies,
+                select: true,
+                make_default: true,
+            },
+        };
+        let first = execute_offline_authority(&paths, &make_request(artifact_json.clone(), true));
+        assert!(first.ok, "{:?}", first.error);
+        let imported = storage::load(&paths.state_file).unwrap();
+        let generated = deterministic_uuid(
+            invocation,
+            &format!(
+                "profile.import:append:{}:0",
+                thumble_core::DEFAULT_PROFILE_ID
+            ),
+        )
+        .hyphenated()
+        .to_string();
+        assert_eq!(imported.profiles[1]["id"], generated);
+        assert_eq!(imported.profiles[1]["name"], "Default 2");
+        assert_eq!(imported.active_profile_id, generated);
+        assert_eq!(imported.default_profile_id, generated);
+
+        let mut same_semantics = ProfileArtifact::decode_json(artifact_json.as_bytes()).unwrap();
+        same_semantics.exported_at = 999_999;
+        let compact = String::from_utf8(same_semantics.encode_compact_json().unwrap()).unwrap();
+        let replay = execute_offline_authority(&paths, &make_request(compact.clone(), true));
+        assert!(replay.ok, "{:?}", replay.error);
+        assert!(replay.outcome.unwrap().idempotent_replay);
+        assert_eq!(
+            storage::load(&paths.state_file)
+                .unwrap()
+                .configuration_revision,
+            2
+        );
+
+        let mut wrong_expected_revision = make_request(compact, true);
+        wrong_expected_revision.expected_configuration_revision = Some(2);
+        let wrong_expected_revision = execute_offline_authority(&paths, &wrong_expected_revision);
+        assert!(!wrong_expected_revision.ok);
+        assert_eq!(
+            wrong_expected_revision.error.unwrap().code,
+            "commit_id_conflict"
+        );
+
+        let changed_options =
+            execute_offline_authority(&paths, &make_request(artifact_json.clone(), false));
+        assert!(!changed_options.ok);
+        assert_eq!(changed_options.error.unwrap().code, "commit_id_conflict");
+
+        let mut changed_content = ProfileArtifact::decode_json(artifact_json.as_bytes()).unwrap();
+        changed_content.profiles[0]["futurePortable"] = serde_json::json!(true);
+        changed_content.refresh_content_hash().unwrap();
+        let changed_content =
+            String::from_utf8(changed_content.encode_compact_json().unwrap()).unwrap();
+        let conflict = execute_offline_authority(&paths, &make_request(changed_content, true));
+        assert!(!conflict.ok);
+        assert_eq!(conflict.error.unwrap().code, "commit_id_conflict");
+    }
+
+    #[test]
+    fn import_non_append_replay_reports_claimed_duplicate_name_destinations() {
+        let root = tempdir().unwrap();
+        let paths = HostPaths::new(
+            root.path().join("state"),
+            root.path().join("state/control.sock"),
+        );
+        let mut destination = PersistentState::minimal("server").unwrap();
+        destination.profiles[0]["name"] = serde_json::json!("Pad");
+        storage::save_atomic(&paths.state_file, &destination).unwrap();
+
+        let mut source = PersistentState::minimal("source").unwrap();
+        let first_id = "00000000-0000-4000-8000-000000000710";
+        source.profiles[0]["id"] = serde_json::json!(first_id);
+        source.profiles[0]["name"] = serde_json::json!("Pad");
+        source.active_profile_id = first_id.to_owned();
+        source.default_profile_id = first_id.to_owned();
+        let second_id = "00000000-0000-4000-8000-000000000711";
+        let mut second = source.profiles[0].clone();
+        second["id"] = serde_json::json!(second_id);
+        second["name"] = serde_json::json!("Pad");
+        source.profiles.push(second);
+        source.normalize().unwrap();
+        let invocation = Uuid::parse_str("33333333-4444-5555-8666-777777777777").unwrap();
+        let request = CliProfileRequest {
+            schema_version: CLI_PROFILE_SCHEMA_VERSION,
+            invocation_id: Some(invocation),
+            expected_configuration_revision: Some(1),
+            command: CliProfileCommand::Import {
+                artifact_json: import_artifact_json(&source, 20),
+                append_as_copies: false,
+                select: false,
+                make_default: false,
+            },
+        };
+
+        let first = execute_offline_authority(&paths, &request);
+        assert!(first.ok, "{:?}", first.error);
+        assert_eq!(first.outcome.unwrap().profile_names, vec!["Pad", "Pad 2"]);
+        let replay = execute_offline_authority(&paths, &request);
+        assert!(replay.ok, "{:?}", replay.error);
+        let replay = replay.outcome.unwrap();
+        assert!(replay.idempotent_replay);
+        assert_eq!(replay.profile_names, vec!["Pad", "Pad 2"]);
+    }
+
+    #[test]
+    fn import_rejects_stale_malformed_unsupported_tampered_and_oversized_artifacts_before_save() {
+        let directory = tempdir().unwrap();
+        let paths = HostPaths::new(
+            directory.path().to_path_buf(),
+            directory.path().join("control.sock"),
+        );
+        let state = PersistentState::minimal("server").unwrap();
+        let artifact_json = import_artifact_json(&state, 1);
+        let import_request = |artifact_json: String| CliProfileRequest {
+            schema_version: CLI_PROFILE_SCHEMA_VERSION,
+            invocation_id: Some(Uuid::new_v4()),
+            expected_configuration_revision: Some(99),
+            command: CliProfileCommand::Import {
+                artifact_json,
+                append_as_copies: false,
+                select: true,
+                make_default: false,
+            },
+        };
+        let stale = execute_profile_transaction(
+            &paths,
+            &state,
+            &import_request(artifact_json.clone()),
+            "test",
+            |_, _, _, _, _| panic!("stale import must not save"),
+        );
+        assert_eq!(stale.error.unwrap().code, "configuration_revision_conflict");
+
+        let malformed = execute_profile_transaction(
+            &paths,
+            &state,
+            &import_request("{".to_owned()),
+            "test",
+            |_, _, _, _, _| panic!("malformed import must not save"),
+        );
+        assert_eq!(malformed.error.unwrap().code, "invalid_profile_artifact");
+        let assert_rejected = |artifact: serde_json::Value, expected_code: &str| {
+            let response = execute_profile_transaction(
+                &paths,
+                &state,
+                &import_request(serde_json::to_string(&artifact).unwrap()),
+                "test",
+                |_, _, _, _, _| panic!("invalid current artifact must not save"),
+            );
+            assert_eq!(response.error.unwrap().code, expected_code);
+        };
+
+        let mut unsupported_schema: serde_json::Value =
+            serde_json::from_str(&artifact_json).unwrap();
+        unsupported_schema["schema"] = serde_json::json!("com.example.unsupported");
+        assert_rejected(unsupported_schema, "unsupported_profile_artifact_schema");
+        let mut unsupported_schema_version: serde_json::Value =
+            serde_json::from_str(&artifact_json).unwrap();
+        unsupported_schema_version["version"] = serde_json::json!(999);
+        assert_rejected(
+            unsupported_schema_version,
+            "unsupported_profile_artifact_schema_version",
+        );
+        let mut unsupported_artifact_version: serde_json::Value =
+            serde_json::from_str(&artifact_json).unwrap();
+        unsupported_artifact_version["artifactVersion"] = serde_json::json!(999);
+        assert_rejected(
+            unsupported_artifact_version,
+            "unsupported_profile_artifact_version",
+        );
+        let mut unsupported_catalog: serde_json::Value =
+            serde_json::from_str(&artifact_json).unwrap();
+        unsupported_catalog["catalogRevision"]["controllerTemplates"] = serde_json::json!(999);
+        assert_rejected(
+            unsupported_catalog,
+            "unsupported_profile_artifact_catalog_revision",
+        );
+        let mut invalid_hash: serde_json::Value = serde_json::from_str(&artifact_json).unwrap();
+        invalid_hash["contentHash"]["algorithm"] = serde_json::json!("SHA256");
+        assert_rejected(invalid_hash, "invalid_profile_artifact_hash");
+        let mut tampered: serde_json::Value = serde_json::from_str(&artifact_json).unwrap();
+        tampered["profiles"][0]["name"] = serde_json::json!("Tampered");
+        assert_rejected(tampered, "profile_artifact_hash_mismatch");
+        let oversized = execute_profile_transaction(
+            &paths,
+            &state,
+            &import_request("x".repeat(thumble_core::MAXIMUM_PROFILE_ARTIFACT_BYTES + 1)),
+            "test",
+            |_, _, _, _, _| panic!("oversized import must not save"),
+        );
+        assert_eq!(oversized.error.unwrap().code, "profile_artifact_too_large");
+        assert!(!paths.drafts_dir.exists());
+    }
+
+    #[test]
+    fn profile_import_error_mapping_is_specific_and_uses_bounded_messages() {
+        let cases = [
+            (
+                ProfileArtifactError::ForbiddenField("secret-path".repeat(1_000)),
+                "unsafe_profile_artifact_content",
+            ),
+            (
+                ProfileArtifactError::PortableDepthExceeded,
+                "unsafe_profile_artifact_content",
+            ),
+            (
+                ProfileArtifactError::DecodingFailed,
+                "invalid_profile_artifact",
+            ),
+        ];
+        for (error, expected_code) in cases {
+            let failure = profile_artifact_import_failure(error);
+            assert_eq!(failure.error.code, expected_code);
+            assert!(failure.error.message.len() < 128);
+            assert!(!failure.error.message.contains("secret-path"));
+        }
+    }
+
+    #[test]
+    fn export_all_is_revision_exact_decodable_and_does_not_create_a_draft_or_save() {
+        let directory = tempdir().unwrap();
+        let paths = HostPaths::new(
+            directory.path().to_path_buf(),
+            std::path::PathBuf::from("/unused"),
+        );
+        let mut state = PersistentState::minimal("server").unwrap();
+        let second_id = "bbbbbbbb-0000-0000-0000-000000000702";
+        let mut second = state.profiles[0].clone();
+        second["id"] = serde_json::json!(second_id);
+        second["name"] = serde_json::json!("Second");
+        state.profiles.push(second);
+        state.default_profile_id = second_id.to_owned();
+        state.configuration_revision = 73;
+
+        let response = execute_profile_transaction(
+            &paths,
+            &state,
+            &request(CliProfileCommand::Export { target: None }),
+            "test",
+            |_, _, _, _, _| panic!("read-only export must not save"),
+        );
+        assert!(response.ok, "{:?}", response.error);
+        assert_eq!(response.schema_version, CLI_PROFILE_SCHEMA_VERSION);
+        assert!(response.outcome.is_none());
+        let response_json = serde_json::to_value(&response).unwrap();
+        assert!(response_json["artifact"]["artifactJSON"].is_string());
+        assert!(response_json["artifact"].get("artifactJson").is_none());
+        let exported = response.artifact.unwrap();
+        assert_eq!(exported.configuration_revision, 73);
+        assert!(exported.artifact_json.starts_with("{\n"));
+        let artifact = ProfileArtifact::decode_json(exported.artifact_json.as_bytes()).unwrap();
+        assert_eq!(artifact.profiles.len(), 2);
+        assert_eq!(
+            artifact.active_profile_id.as_deref(),
+            Some(thumble_core::DEFAULT_PROFILE_ID)
+        );
+        assert_eq!(artifact.default_profile_id.as_deref(), Some(second_id));
+        assert_eq!(exported.content_hash, artifact.content_hash);
+        assert!(!paths.drafts_dir.exists());
+        assert!(!paths.state_file.exists());
+    }
+
+    #[test]
+    fn export_single_resolves_active_and_default_against_the_revision_catalog() {
+        let directory = tempdir().unwrap();
+        let paths = HostPaths::new(
+            directory.path().to_path_buf(),
+            std::path::PathBuf::from("/unused"),
+        );
+        let mut state = PersistentState::minimal("server").unwrap();
+        let second_id = "bbbbbbbb-0000-0000-0000-000000000703";
+        let mut second = state.profiles[0].clone();
+        second["id"] = serde_json::json!(second_id);
+        second["name"] = serde_json::json!("Second");
+        state.profiles.push(second);
+        state.default_profile_id = second_id.to_owned();
+        state.configuration_revision = 74;
+
+        let active = execute_profile_transaction(
+            &paths,
+            &state,
+            &request(CliProfileCommand::Export {
+                target: Some(ProfileSelector::Active),
+            }),
+            "test",
+            |_, _, _, _, _| panic!("read-only export must not save"),
+        );
+        let active = active.artifact.unwrap();
+        assert_eq!(active.configuration_revision, 74);
+        let active_artifact =
+            ProfileArtifact::decode_json(active.artifact_json.as_bytes()).unwrap();
+        assert_eq!(active_artifact.profiles.len(), 1);
+        assert_eq!(
+            active_artifact.active_profile_id.as_deref(),
+            Some(thumble_core::DEFAULT_PROFILE_ID)
+        );
+        assert_eq!(active_artifact.default_profile_id, None);
+
+        let default = execute_profile_transaction(
+            &paths,
+            &state,
+            &request(CliProfileCommand::Export {
+                target: Some(ProfileSelector::Default),
+            }),
+            "test",
+            |_, _, _, _, _| panic!("read-only export must not save"),
+        );
+        let default = default.artifact.unwrap();
+        assert_eq!(default.configuration_revision, 74);
+        let default_artifact =
+            ProfileArtifact::decode_json(default.artifact_json.as_bytes()).unwrap();
+        assert_eq!(default_artifact.profiles.len(), 1);
+        assert_eq!(
+            default_artifact.active_profile_id.as_deref(),
+            Some(second_id)
+        );
+        assert_eq!(
+            default_artifact.default_profile_id.as_deref(),
+            Some(second_id)
+        );
+        assert!(!paths.drafts_dir.exists());
     }
 
     #[test]
@@ -5651,7 +7760,7 @@ mod tests {
             generated.operations.as_slice(),
             [ConfigurationOperation::GenerationGenerate {
                 preset: GenerationPreset::HollowKnight,
-                preset_revision: 1,
+                preset_revision: 2,
                 destination: GeneratedProfileDestination::Create { new_profile_id },
                 new_element_ids,
                 select: false,

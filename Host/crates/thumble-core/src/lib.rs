@@ -8,7 +8,10 @@ mod binding;
 mod configuration;
 mod controller_snapshot;
 mod core;
+mod generation_spec;
+mod profile_artifact;
 mod resolver;
+mod semantic_key;
 mod state;
 
 pub use binding::{ButtonBindings, KeyBinding, KeyStroke, OutputBinding};
@@ -31,8 +34,25 @@ pub use core::{
     ConnectionId, CoreError, CoreTime, Effect, HostCore, LocalControlError, StatusCounters,
     StatusSnapshot, TokenSource,
 };
+pub use generation_spec::{
+    plan_generation_spec, GeneratedSemanticBinding, GenerationAssignedControl,
+    GenerationDroppedControl, GenerationSpecError, GenerationSpecPlan, GenerationSpecWarning,
+    GENERATION_SPEC_CATALOG_REVISION, GENERATION_SPEC_PLANNER_REVISION,
+    GENERATION_SPEC_SCHEMA_VERSION, GENERATION_UUID_NAMESPACE, MAXIMUM_GENERATION_OUTPUT_BYTES,
+    MAXIMUM_GENERATION_SOURCE_CONTROLS, MAXIMUM_GENERATION_SPEC_BYTES, MAXIMUM_GENERATION_WARNINGS,
+};
+pub use profile_artifact::{
+    ProfileArtifact, ProfileArtifactBindingMaps, ProfileArtifactCatalogRevision,
+    ProfileArtifactContentHash, ProfileArtifactError, ProfileArtifactSelection,
+    MAXIMUM_PROFILE_ARTIFACT_BYTES, PROFILE_ARTIFACT_CANONICALIZATION,
+    PROFILE_ARTIFACT_HASH_ALGORITHM, PROFILE_ARTIFACT_SCHEMA, PROFILE_ARTIFACT_SCHEMA_VERSION,
+    PROFILE_ARTIFACT_VERSION,
+};
+pub use semantic_key::{
+    generated_modifier_mask, generated_semantic_key_code, semantic_key_code, semantic_key_name,
+};
 pub use state::{
-    minimal_default_customization, minimal_default_profile, ConfigurationCommitRecord,
-    PersistentState, StateError, TrustedClient, CURRENT_SCHEMA_VERSION, DEFAULT_PROFILE_ID,
-    INITIAL_CONFIGURATION_REVISION, MAXIMUM_RECENT_CONFIGURATION_COMMITS,
+    canonical_default_profile_key_bindings, minimal_default_customization, minimal_default_profile,
+    ConfigurationCommitRecord, PersistentState, StateError, TrustedClient, CURRENT_SCHEMA_VERSION,
+    DEFAULT_PROFILE_ID, INITIAL_CONFIGURATION_REVISION, MAXIMUM_RECENT_CONFIGURATION_COMMITS,
 };

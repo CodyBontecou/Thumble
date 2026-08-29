@@ -1,0 +1,13 @@
+{
+  "gameName": "Specialized Capacity",
+  "controls": [
+    {"button":"custom1","label":"Joystick One","key":"A","kind":"joystick"},
+    {"button":"custom2","label":"Joystick Two","key":"B","kind":"joystick"},
+    {"button":"custom3","label":"Joystick Dropped","key":"C","kind":"joystick"},
+    {"button":"custom4","label":"Trigger One","key":"D","kind":"trigger"},
+    {"button":"custom5","label":"Trigger Two","key":"E","kind":"trigger"},
+    {"button":"custom6","label":"Trigger Dropped","key":"F","kind":"trigger"},
+    {"button":"custom7","label":"Trackpad One","key":"G","kind":"trackpad"},
+    {"button":"custom8","label":"Trackpad Dropped","key":"H","kind":"trackpad"}
+  ]
+}

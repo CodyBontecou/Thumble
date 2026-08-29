@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "catalogRevision": 1,
+  "plannerRevision": 1,
+  "name": "Alias Arcade",
+  "source": "fixture",
+  "confidence": "high",
+  "notes": ["Alias precedence vector."],
+  "controls": [
+    {
+      "id": "up",
+      "label": "Move Up",
+      "key": "up arrow",
+      "modifiers": [],
+      "x": 0.2,
+      "y": 0.42,
+      "width": 1.12,
+      "height": 1.05,
+      "fillHex": "#1F2937",
+      "shape": "rounded_rectangle"
+    },
+    {
+      "button": "jump",
+      "label": "Jump",
+      "key": "space-bar",
+      "modifiers": ["shift"],
+      "centerX": 0.82,
+      "x": 0.1,
+      "centerY": 0.84,
+      "y": 0.1,
+      "fill": "#7C3AED",
+      "accentStyle": "purple"
+    }
+  ]
+}

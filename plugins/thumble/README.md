@@ -4,9 +4,12 @@ One installable package that bundles:
 
 - **Skill** — `thumble-keypad-generator`: the full agent workflow for generating,
   dry-running, installing, and editing Thumble keypad profiles with the `thumble` CLI,
-  including thumb-sized control guidance.
+  including thumb-sized control guidance and shareable skin authoring (material JSON
+  or CSS).
 - **MCP server** — a local stdio adapter (`thumble-mcp`) exposing Thumble Host's
   revision-safe profile, layout, binding, and runtime operations as typed MCP tools.
+  Note: skin authoring (scaffold/compile/quality/preview, material or CSS) is
+  CLI-only and always runs through the local `thumble` CLI.
 
 Works in Codex (CLI, IDE extension, and Codex in the ChatGPT desktop app). Published
 plugin builds also surface in ChatGPT chat surfaces.

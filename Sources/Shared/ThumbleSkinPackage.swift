@@ -437,7 +437,7 @@ public enum ThumbleSkinPackageValidator {
                 requireProfile("Full packs must contain profile.json.")
             }
 
-            if manifest.previews.isEmpty {
+            if manifest.previews.isEmpty, !manifest.tags.contains("css") {
                 warning("missing-preview", "Add portrait or landscape previews to make the skin discoverable.", path: "manifest.previews")
             }
         }

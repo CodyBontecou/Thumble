@@ -22,6 +22,7 @@ use rmcp::transport::streamable_http_client::{
     StreamableHttpClientTransport, StreamableHttpClientTransportConfig,
 };
 use rmcp::{ClientLifecycleMode, ClientServiceExt as _, ServiceExt as _};
+use thumble_gateway::principal::ResourceKind;
 use thumble_gateway::state::AppState;
 use thumble_gateway::store::Store;
 use thumble_gateway::tunnel::TunnelRegistry;
@@ -305,6 +306,23 @@ fn hidden_form_value(html: &str, name: &str) -> String {
         .and_then(|rest| rest.split('"').next())
         .expect("hidden form value")
         .to_owned()
+}
+
+fn builder_consent_cookie(response: &reqwest::Response) -> String {
+    let set_cookie = response
+        .headers()
+        .get("set-cookie")
+        .expect("builder consent cookie")
+        .to_str()
+        .unwrap();
+    assert!(set_cookie.contains("Path=/authorize/builder/confirm"));
+    assert!(set_cookie.contains("HttpOnly"));
+    assert!(set_cookie.contains("SameSite=Lax"));
+    assert!(
+        !set_cookie.contains("Secure"),
+        "loopback HTTP cookie must remain usable"
+    );
+    set_cookie.split(';').next().unwrap().to_owned()
 }
 
 fn completion_callback(html: &str) -> String {
@@ -1194,7 +1212,7 @@ async fn chatgpt_style_connector_drives_a_device_end_to_end() {
     let modern_catalog = modern_tools["result"]["tools"].as_array().unwrap();
     assert_eq!(
         modern_catalog.len(),
-        17,
+        18,
         "complete production catalog minus three local-only tools"
     );
     let modern_catalog_bytes = serde_json::to_vec(modern_catalog).unwrap().len();
@@ -2083,4 +2101,744 @@ async fn chatgpt_style_connector_drives_a_device_end_to_end() {
     let _ = host_shutdown_tx.send(true);
     let _ = host_task.await;
     thumble_host::control::remove_control_socket(&control_socket);
+}
+
+async fn complete_builder_consent(
+    http: &reqwest::Client,
+    base: &str,
+    client_id: &str,
+    scope: Option<&str>,
+    oauth_state: &str,
+) -> (String, String, String) {
+    let (_, challenge) = pkce_pair();
+    let resource = format!("{base}/builder/mcp");
+    let mut query = vec![
+        ("response_type", "code"),
+        ("client_id", client_id),
+        ("redirect_uri", "https://builder.example/callback"),
+        ("state", oauth_state),
+        ("resource", resource.as_str()),
+        ("code_challenge", challenge.as_str()),
+        ("code_challenge_method", "S256"),
+    ];
+    if let Some(scope) = scope {
+        query.push(("scope", scope));
+    }
+    let consent = http
+        .get(format!("{base}/authorize"))
+        .query(&query)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(consent.status(), 200);
+    let cookie = builder_consent_cookie(&consent);
+    let consent = consent.text().await.unwrap();
+    assert!(consent.contains("Authorize Thumble Builder"));
+    assert!(consent.contains("action=\"/authorize/builder/confirm\""));
+    assert!(!consent.contains("six-digit"));
+    assert!(!consent.contains("consent_nonce"));
+    let request_id = hidden_form_value(&consent, "request_id");
+    assert!(!consent.contains(&cookie));
+    let confirmed = http
+        .post(format!("{base}/authorize/builder/confirm"))
+        .header("Origin", base)
+        .header("Cookie", &cookie)
+        .form(&[("request_id", request_id.as_str()), ("decision", "allow")])
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(confirmed.status(), 302);
+    assert!(confirmed
+        .headers()
+        .get("set-cookie")
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .contains("Max-Age=0"));
+    let location = confirmed
+        .headers()
+        .get("location")
+        .unwrap()
+        .to_str()
+        .unwrap();
+    assert_eq!(callback_values(location, "state"), vec![oauth_state]);
+    assert_eq!(callback_values(location, "iss"), vec![base]);
+    let code = callback_values(location, "code")
+        .into_iter()
+        .next()
+        .unwrap();
+    (request_id, code, cookie)
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn builder_oauth_is_resource_isolated_without_a_device_or_tunnel() {
+    let store = Arc::new(Store::open_in_memory().unwrap().with_refresh_grace(0));
+    let state = Arc::new(AppState::new(
+        store,
+        TunnelRegistry::new(),
+        "http://placeholder.invalid".to_owned(),
+    ));
+    let tcp = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = tcp.local_addr().unwrap().port();
+    let base = format!("http://127.0.0.1:{port}");
+    state.set_base_url(base.clone());
+    let assertions = state.clone();
+    let server = tokio::spawn(async move {
+        axum::serve(
+            tcp,
+            thumble_gateway::app(state)
+                .into_make_service_with_connect_info::<std::net::SocketAddr>(),
+        )
+        .await
+        .unwrap();
+    });
+    let http = reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .unwrap();
+    let relay_resource = format!("{base}/mcp");
+    let builder_resource = format!("{base}/builder/mcp");
+
+    let authorization_metadata: serde_json::Value = http
+        .get(format!("{base}/.well-known/oauth-authorization-server"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(authorization_metadata["issuer"], base);
+    let advertised_scopes = authorization_metadata["scopes_supported"]
+        .as_array()
+        .unwrap();
+    for scope in [
+        "thumble.read",
+        "thumble.draft",
+        "thumble.config",
+        "thumble.build",
+        "offline_access",
+    ] {
+        assert!(advertised_scopes.contains(&serde_json::Value::String(scope.to_owned())));
+    }
+    let relay_metadata: serde_json::Value = http
+        .get(format!("{base}/.well-known/oauth-protected-resource"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(relay_metadata["resource"], relay_resource);
+    assert!(!relay_metadata["scopes_supported"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::Value::String("thumble.build".to_owned())));
+    let builder_metadata: serde_json::Value = http
+        .get(format!(
+            "{base}/.well-known/oauth-protected-resource/builder/mcp"
+        ))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(builder_metadata["resource"], builder_resource);
+    assert_eq!(
+        builder_metadata["scopes_supported"],
+        serde_json::json!(["thumble.build", "offline_access"])
+    );
+
+    let register: serde_json::Value = http
+        .post(format!("{base}/register"))
+        .json(&serde_json::json!({
+            "client_name": "Builder OAuth E2E",
+            "redirect_uris": ["https://builder.example/callback"],
+            "token_endpoint_auth_method": "none",
+            "grant_types": ["authorization_code", "refresh_token"],
+            "response_types": ["code"]
+        }))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let client_id = register["client_id"].as_str().unwrap().to_owned();
+    let (verifier, challenge) = pkce_pair();
+
+    // Missing resource remains the relay compatibility flow, while every
+    // unknown resource and every cross-resource scope mix is rejected.
+    let omitted_resource = http
+        .get(format!("{base}/authorize"))
+        .query(&[
+            ("response_type", "code"),
+            ("client_id", client_id.as_str()),
+            ("redirect_uri", "https://builder.example/callback"),
+            ("scope", "thumble.read"),
+            ("code_challenge", challenge.as_str()),
+            ("code_challenge_method", "S256"),
+        ])
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(omitted_resource.status(), 200);
+    let omitted_resource = omitted_resource.text().await.unwrap();
+    assert!(omitted_resource.contains("Link your Mac's Thumble controller"));
+    let relay_request_id = hidden_form_value(&omitted_resource, "request_id");
+    for (resource, scope) in [
+        (builder_resource.as_str(), "thumble.build thumble.read"),
+        (relay_resource.as_str(), "thumble.build"),
+        ("https://wrong.example/mcp", "thumble.build"),
+    ] {
+        let rejected = http
+            .get(format!("{base}/authorize"))
+            .query(&[
+                ("response_type", "code"),
+                ("client_id", client_id.as_str()),
+                ("redirect_uri", "https://builder.example/callback"),
+                ("state", "rejected"),
+                ("resource", resource),
+                ("scope", scope),
+                ("code_challenge", challenge.as_str()),
+                ("code_challenge_method", "S256"),
+            ])
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(rejected.status(), 302);
+        let location = rejected
+            .headers()
+            .get("location")
+            .unwrap()
+            .to_str()
+            .unwrap();
+        assert!(matches!(
+            callback_values(location, "error").as_slice(),
+            [error] if error == "invalid_request" || error == "invalid_target"
+        ));
+    }
+
+    // Builder confirmation is bound to the exact browser consent cookie and
+    // same gateway origin. Rejected detached/cross-site submissions neither
+    // consume the request nor make a relay request eligible for this route.
+    let protected_page = http
+        .get(format!("{base}/authorize"))
+        .query(&[
+            ("response_type", "code"),
+            ("client_id", client_id.as_str()),
+            ("redirect_uri", "https://builder.example/callback"),
+            ("state", "protected-state"),
+            ("resource", builder_resource.as_str()),
+            ("scope", "thumble.build"),
+            ("code_challenge", challenge.as_str()),
+            ("code_challenge_method", "S256"),
+        ])
+        .send()
+        .await
+        .unwrap();
+    let protected_cookie = builder_consent_cookie(&protected_page);
+    let protected_html = protected_page.text().await.unwrap();
+    let protected_request = hidden_form_value(&protected_html, "request_id");
+    let confirm_url = format!("{base}/authorize/builder/confirm");
+    let form = [
+        ("request_id", protected_request.as_str()),
+        ("decision", "allow"),
+    ];
+
+    let missing_cookie = http
+        .post(&confirm_url)
+        .header("Origin", &base)
+        .form(&form)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(missing_cookie.status(), 403);
+    let wrong_cookie = http
+        .post(&confirm_url)
+        .header("Origin", &base)
+        .header(
+            "Cookie",
+            format!("thumble_builder_consent={}", "A".repeat(64)),
+        )
+        .form(&form)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(wrong_cookie.status(), 403);
+    let malformed_cookie = http
+        .post(&confirm_url)
+        .header("Origin", &base)
+        .header("Cookie", "thumble_builder_consent=not-valid!")
+        .form(&form)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(malformed_cookie.status(), 403);
+    let missing_origin = http
+        .post(&confirm_url)
+        .header("Cookie", &protected_cookie)
+        .form(&form)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(missing_origin.status(), 403);
+    for origin in ["https://cross-site.example", "not an origin"] {
+        let rejected = http
+            .post(&confirm_url)
+            .header("Origin", origin)
+            .header("Cookie", &protected_cookie)
+            .form(&form)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(rejected.status(), 403);
+    }
+    let detached = http.post(&confirm_url).form(&form).send().await.unwrap();
+    assert_eq!(detached.status(), 403);
+    let relay_at_builder_confirm = http
+        .post(&confirm_url)
+        .header("Origin", &base)
+        .header("Cookie", &protected_cookie)
+        .form(&[
+            ("request_id", relay_request_id.as_str()),
+            ("decision", "allow"),
+        ])
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(relay_at_builder_confirm.status(), 403);
+    assert!(assertions
+        .store
+        .authorization_request(&relay_request_id)
+        .unwrap()
+        .is_ok());
+
+    let protected_allow = http
+        .post(&confirm_url)
+        .header("Origin", &base)
+        .header("Cookie", &protected_cookie)
+        .form(&form)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(protected_allow.status(), 302);
+    assert_eq!(
+        callback_values(
+            protected_allow
+                .headers()
+                .get("location")
+                .unwrap()
+                .to_str()
+                .unwrap(),
+            "state"
+        ),
+        vec!["protected-state"]
+    );
+    let protected_replay = http
+        .post(&confirm_url)
+        .header("Origin", &base)
+        .header("Cookie", &protected_cookie)
+        .form(&form)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(protected_replay.status(), 409);
+
+    // Denial consumes the request without creating a principal or code.
+    let deny_page = http
+        .get(format!("{base}/authorize"))
+        .query(&[
+            ("response_type", "code"),
+            ("client_id", client_id.as_str()),
+            ("redirect_uri", "https://builder.example/callback"),
+            ("state", "deny-state"),
+            ("resource", builder_resource.as_str()),
+            ("scope", "thumble.build"),
+            ("code_challenge", challenge.as_str()),
+            ("code_challenge_method", "S256"),
+        ])
+        .send()
+        .await
+        .unwrap();
+    let deny_cookie = builder_consent_cookie(&deny_page);
+    let deny_page = deny_page.text().await.unwrap();
+    let denied_request = hidden_form_value(&deny_page, "request_id");
+    let denied = http
+        .post(format!("{base}/authorize/builder/confirm"))
+        .header("Origin", &base)
+        .header("Cookie", &deny_cookie)
+        .form(&[
+            ("request_id", denied_request.as_str()),
+            ("decision", "deny"),
+        ])
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(denied.status(), 302);
+    assert!(denied
+        .headers()
+        .get("set-cookie")
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .contains("Max-Age=0"));
+    let denied_location = denied.headers().get("location").unwrap().to_str().unwrap();
+    assert_eq!(
+        callback_values(denied_location, "error"),
+        vec!["access_denied"]
+    );
+    let denied_again = http
+        .post(format!("{base}/authorize/builder/confirm"))
+        .header("Origin", &base)
+        .header("Cookie", &deny_cookie)
+        .form(&[
+            ("request_id", denied_request.as_str()),
+            ("decision", "allow"),
+        ])
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(denied_again.status(), 409);
+
+    let (first_request, first_code, first_cookie) = complete_builder_consent(
+        &http,
+        &base,
+        &client_id,
+        Some("thumble.build offline_access"),
+        "builder-one",
+    )
+    .await;
+    assert_eq!(assertions.tunnels.device_count(), 0);
+    let used_again = http
+        .post(format!("{base}/authorize/builder/confirm"))
+        .header("Origin", &base)
+        .header("Cookie", &first_cookie)
+        .form(&[
+            ("request_id", first_request.as_str()),
+            ("decision", "allow"),
+        ])
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(used_again.status(), 409);
+
+    // A builder code cannot omit or switch its audience. Failed audience
+    // checks do not burn the code, so the exact builder resource still works.
+    for resource in [None, Some(relay_resource.as_str())] {
+        let mut form = vec![
+            ("grant_type", "authorization_code"),
+            ("code", first_code.as_str()),
+            ("redirect_uri", "https://builder.example/callback"),
+            ("client_id", client_id.as_str()),
+            ("code_verifier", verifier.as_str()),
+        ];
+        if let Some(resource) = resource {
+            form.push(("resource", resource));
+        }
+        let rejected: serde_json::Value = http
+            .post(format!("{base}/token"))
+            .form(&form)
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        assert_eq!(rejected["error"], "invalid_grant");
+    }
+    let unknown_target: serde_json::Value = http
+        .post(format!("{base}/token"))
+        .form(&[
+            ("grant_type", "authorization_code"),
+            ("code", first_code.as_str()),
+            ("redirect_uri", "https://builder.example/callback"),
+            ("client_id", client_id.as_str()),
+            ("code_verifier", verifier.as_str()),
+            ("resource", "https://wrong.example/mcp"),
+        ])
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(unknown_target["error"], "invalid_target");
+    let first_tokens: serde_json::Value = http
+        .post(format!("{base}/token"))
+        .form(&[
+            ("grant_type", "authorization_code"),
+            ("code", first_code.as_str()),
+            ("redirect_uri", "https://builder.example/callback"),
+            ("client_id", client_id.as_str()),
+            ("code_verifier", verifier.as_str()),
+            ("resource", builder_resource.as_str()),
+        ])
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(first_tokens["scope"], "thumble.build offline_access");
+    let first_access = first_tokens["access_token"].as_str().unwrap().to_owned();
+    let first_refresh = first_tokens["refresh_token"].as_str().unwrap().to_owned();
+    let first_identity = assertions
+        .store
+        .access_token_for_resource(&first_access, ResourceKind::Builder)
+        .unwrap()
+        .unwrap()
+        .binding
+        .principal;
+    assert!(first_identity.id.starts_with("bpr_"));
+
+    let omitted_refresh: serde_json::Value = http
+        .post(format!("{base}/token"))
+        .form(&[
+            ("grant_type", "refresh_token"),
+            ("refresh_token", first_refresh.as_str()),
+            ("client_id", client_id.as_str()),
+        ])
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(omitted_refresh["error"], "invalid_grant");
+    let rotated: serde_json::Value = http
+        .post(format!("{base}/token"))
+        .form(&[
+            ("grant_type", "refresh_token"),
+            ("refresh_token", first_refresh.as_str()),
+            ("client_id", client_id.as_str()),
+            ("resource", builder_resource.as_str()),
+        ])
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let rotated_access = rotated["access_token"].as_str().unwrap().to_owned();
+    let rotated_identity = assertions
+        .store
+        .access_token_for_resource(&rotated_access, ResourceKind::Builder)
+        .unwrap()
+        .unwrap()
+        .binding
+        .principal;
+    assert_eq!(rotated_identity, first_identity);
+
+    // Fresh consent creates a distinct principal; omission of scope defaults
+    // to build without granting refresh access.
+    let (_, second_code, _) =
+        complete_builder_consent(&http, &base, &client_id, None, "builder-two").await;
+    let second_tokens: serde_json::Value = http
+        .post(format!("{base}/token"))
+        .form(&[
+            ("grant_type", "authorization_code"),
+            ("code", second_code.as_str()),
+            ("redirect_uri", "https://builder.example/callback"),
+            ("client_id", client_id.as_str()),
+            ("code_verifier", verifier.as_str()),
+            ("resource", builder_resource.as_str()),
+        ])
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(second_tokens["scope"], "thumble.build");
+    assert!(second_tokens.get("refresh_token").is_none());
+    let second_access = second_tokens["access_token"].as_str().unwrap().to_owned();
+    let second_identity = assertions
+        .store
+        .access_token_for_resource(&second_access, ResourceKind::Builder)
+        .unwrap()
+        .unwrap()
+        .binding
+        .principal;
+    assert_ne!(second_identity, first_identity);
+
+    // Relay omission still exchanges a relay code. Each bearer gate rejects
+    // the other resource with its own exact RFC 9728 challenge.
+    let (device_id, _) = assertions.store.create_device("Isolation relay").unwrap();
+    let relay_code = assertions
+        .store
+        .create_auth_code(
+            &client_id,
+            "https://builder.example/callback",
+            "thumble.read offline_access",
+            &challenge,
+            &device_id,
+            60,
+        )
+        .unwrap();
+    let relay_wrong_audience: serde_json::Value = http
+        .post(format!("{base}/token"))
+        .form(&[
+            ("grant_type", "authorization_code"),
+            ("code", relay_code.as_str()),
+            ("redirect_uri", "https://builder.example/callback"),
+            ("client_id", client_id.as_str()),
+            ("code_verifier", verifier.as_str()),
+            ("resource", builder_resource.as_str()),
+        ])
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(relay_wrong_audience["error"], "invalid_grant");
+    let relay_tokens: serde_json::Value = http
+        .post(format!("{base}/token"))
+        .form(&[
+            ("grant_type", "authorization_code"),
+            ("code", relay_code.as_str()),
+            ("redirect_uri", "https://builder.example/callback"),
+            ("client_id", client_id.as_str()),
+            ("code_verifier", verifier.as_str()),
+        ])
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let relay_access = relay_tokens["access_token"].as_str().unwrap().to_owned();
+    let relay_refresh = relay_tokens["refresh_token"].as_str().unwrap();
+    let relay_refresh_wrong_audience: serde_json::Value = http
+        .post(format!("{base}/token"))
+        .form(&[
+            ("grant_type", "refresh_token"),
+            ("refresh_token", relay_refresh),
+            ("client_id", client_id.as_str()),
+            ("resource", builder_resource.as_str()),
+        ])
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(relay_refresh_wrong_audience["error"], "invalid_grant");
+    let relay_refresh_omitted: serde_json::Value = http
+        .post(format!("{base}/token"))
+        .form(&[
+            ("grant_type", "refresh_token"),
+            ("refresh_token", relay_refresh),
+            ("client_id", client_id.as_str()),
+        ])
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert!(relay_refresh_omitted["access_token"].is_string());
+
+    let relay_without_token = http.post(format!("{base}/mcp")).send().await.unwrap();
+    assert_eq!(relay_without_token.status(), 401);
+    let relay_challenge = format!(
+        "Bearer error=\"invalid_token\", resource_metadata=\"{base}/.well-known/oauth-protected-resource\", scope=\"thumble.read thumble.draft thumble.config offline_access\""
+    );
+    assert_eq!(
+        relay_without_token
+            .headers()
+            .get("www-authenticate")
+            .unwrap()
+            .to_str()
+            .unwrap(),
+        relay_challenge
+    );
+    let builder_without_token = http
+        .post(format!("{base}/builder/mcp"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(builder_without_token.status(), 401);
+    let builder_challenge = format!(
+        "Bearer error=\"invalid_token\", resource_metadata=\"{base}/.well-known/oauth-protected-resource/builder/mcp\", scope=\"thumble.build\""
+    );
+    assert_eq!(
+        builder_without_token
+            .headers()
+            .get("www-authenticate")
+            .unwrap()
+            .to_str()
+            .unwrap(),
+        builder_challenge
+    );
+    let builder_on_relay = http
+        .post(format!("{base}/mcp"))
+        .header("Authorization", format!("Bearer {second_access}"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(builder_on_relay.status(), 401);
+    assert_eq!(
+        builder_on_relay
+            .headers()
+            .get("www-authenticate")
+            .unwrap()
+            .to_str()
+            .unwrap(),
+        relay_challenge
+    );
+    let relay_on_builder = http
+        .post(format!("{base}/builder/mcp"))
+        .header("Authorization", format!("Bearer {relay_access}"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(relay_on_builder.status(), 401);
+    assert_eq!(
+        relay_on_builder
+            .headers()
+            .get("www-authenticate")
+            .unwrap()
+            .to_str()
+            .unwrap(),
+        builder_challenge
+    );
+    // A valid builder bearer now reaches the isolated Streamable HTTP
+    // service. An empty POST is not an MCP request and is rejected by the
+    // transport rather than by the former Stage B placeholder.
+    let builder_transport_rejection = http
+        .post(format!("{base}/builder/mcp"))
+        .header("Authorization", format!("Bearer {second_access}"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(builder_transport_rejection.status(), 406);
+    let rejection_body = builder_transport_rejection.text().await.unwrap();
+    assert!(rejection_body.len() < 256);
+    assert!(!rejection_body.contains("tools"));
+
+    assertions
+        .store
+        .revoke_builder_principal(&first_identity.id)
+        .unwrap();
+    let revoked_builder = http
+        .post(format!("{base}/builder/mcp"))
+        .header("Authorization", format!("Bearer {rotated_access}"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(revoked_builder.status(), 401);
+    assert!(assertions
+        .store
+        .access_token_for_resource(&second_access, ResourceKind::Builder)
+        .unwrap()
+        .is_some());
+    assert!(assertions
+        .store
+        .access_token(&relay_access)
+        .unwrap()
+        .is_some());
+
+    server.abort();
 }

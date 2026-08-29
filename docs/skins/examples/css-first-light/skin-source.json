@@ -1,0 +1,170 @@
+{
+  "artboardID": "showcase-controller-v1",
+  "assignments": [],
+  "author": {
+    "name": "Cody Bontecou"
+  },
+  "colorSchemes": [
+    "light",
+    "dark"
+  ],
+  "components": [],
+  "identifier": "com.codybontecou.pocketpad.css-first-light",
+  "license": "MIT",
+  "materials": [],
+  "name": "CSS First Light",
+  "orientations": [
+    "landscape",
+    "portrait"
+  ],
+  "palette": [
+    {
+      "dark": "#211A46",
+      "id": "surface",
+      "light": "#F2EEF5"
+    },
+    {
+      "dark": "#A77CFF",
+      "id": "accent",
+      "light": "#7C61A8"
+    }
+  ],
+  "previews": [
+    {
+      "artboardID": "showcase-controller-v1",
+      "colorScheme": "light",
+      "id": "landscape-light-normal",
+      "orientation": "landscape",
+      "scale": 2,
+      "state": "normal"
+    },
+    {
+      "artboardID": "showcase-controller-v1",
+      "colorScheme": "light",
+      "id": "landscape-light-pressed",
+      "orientation": "landscape",
+      "scale": 2,
+      "state": "pressed"
+    },
+    {
+      "artboardID": "showcase-controller-v1",
+      "colorScheme": "light",
+      "id": "landscape-light-active",
+      "orientation": "landscape",
+      "scale": 2,
+      "state": "active"
+    },
+    {
+      "artboardID": "showcase-controller-v1",
+      "colorScheme": "light",
+      "id": "landscape-light-disabled",
+      "orientation": "landscape",
+      "scale": 2,
+      "state": "disabled"
+    },
+    {
+      "artboardID": "showcase-controller-v1",
+      "colorScheme": "dark",
+      "id": "landscape-dark-normal",
+      "orientation": "landscape",
+      "scale": 2,
+      "state": "normal"
+    },
+    {
+      "artboardID": "showcase-controller-v1",
+      "colorScheme": "dark",
+      "id": "landscape-dark-pressed",
+      "orientation": "landscape",
+      "scale": 2,
+      "state": "pressed"
+    },
+    {
+      "artboardID": "showcase-controller-v1",
+      "colorScheme": "dark",
+      "id": "landscape-dark-active",
+      "orientation": "landscape",
+      "scale": 2,
+      "state": "active"
+    },
+    {
+      "artboardID": "showcase-controller-v1",
+      "colorScheme": "dark",
+      "id": "landscape-dark-disabled",
+      "orientation": "landscape",
+      "scale": 2,
+      "state": "disabled"
+    },
+    {
+      "artboardID": "showcase-controller-v1",
+      "colorScheme": "light",
+      "id": "portrait-light-normal",
+      "orientation": "portrait",
+      "scale": 2,
+      "state": "normal"
+    },
+    {
+      "artboardID": "showcase-controller-v1",
+      "colorScheme": "light",
+      "id": "portrait-light-pressed",
+      "orientation": "portrait",
+      "scale": 2,
+      "state": "pressed"
+    },
+    {
+      "artboardID": "showcase-controller-v1",
+      "colorScheme": "light",
+      "id": "portrait-light-active",
+      "orientation": "portrait",
+      "scale": 2,
+      "state": "active"
+    },
+    {
+      "artboardID": "showcase-controller-v1",
+      "colorScheme": "light",
+      "id": "portrait-light-disabled",
+      "orientation": "portrait",
+      "scale": 2,
+      "state": "disabled"
+    },
+    {
+      "artboardID": "showcase-controller-v1",
+      "colorScheme": "dark",
+      "id": "portrait-dark-normal",
+      "orientation": "portrait",
+      "scale": 2,
+      "state": "normal"
+    },
+    {
+      "artboardID": "showcase-controller-v1",
+      "colorScheme": "dark",
+      "id": "portrait-dark-pressed",
+      "orientation": "portrait",
+      "scale": 2,
+      "state": "pressed"
+    },
+    {
+      "artboardID": "showcase-controller-v1",
+      "colorScheme": "dark",
+      "id": "portrait-dark-active",
+      "orientation": "portrait",
+      "scale": 2,
+      "state": "active"
+    },
+    {
+      "artboardID": "showcase-controller-v1",
+      "colorScheme": "dark",
+      "id": "portrait-dark-disabled",
+      "orientation": "portrait",
+      "scale": 2,
+      "state": "disabled"
+    }
+  ],
+  "schema": "com.codybontecou.pocketpad.skin-source",
+  "schemaVersion": 2,
+  "sourceAssets": [],
+  "stylesheets": [
+    "styles/controller.css"
+  ],
+  "summary": "A CSS-authored controller skin exercising variables, role selectors, states, and dark mode through the thumble-css-core-1 profile.",
+  "version": "1.0.0"
+}

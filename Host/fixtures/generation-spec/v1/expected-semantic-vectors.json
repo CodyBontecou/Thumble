@@ -1,0 +1,36 @@
+{
+  "aliasesBasic": {
+    "descriptorDigest": "6bdfa3705c7653204ed81c147f49a028d2994e2d04de11ffe42a1f245bfa9492",
+    "profileID": "d8620521-07b3-51ab-b44e-1aefc030e84e",
+    "artifactContentHash": "217a99b93f63fc4ceb0b6aa2830f1c433241ec23b6e9e23b0b964ed62b74463b",
+    "assignedButtons": ["up", "jump"],
+    "generatedSemantic": {
+      "requestedGameName": "Requested Override",
+      "resolvedGameName": "Alias Arcade",
+      "keyBindingButtons": ["up", "jump"]
+    },
+    "artifactSemantic": {
+      "schemaVersion": 4,
+      "artifactVersion": 1,
+      "exportedAt": 0,
+      "profileCount": 1
+    }
+  },
+  "mixedControls": {
+    "descriptorDigest": "de77e40ab8357247c979462c577b379af104e2152fc820f969dc16f0c9fbad86",
+    "profileID": "b03088b5-705c-5592-bccc-8222d8dddc3b",
+    "artifactContentHash": "aeccf1f9e3b197c23d93bb3fdddf47c1edfea8a8de8a1a632c9d8910a3bf08d4",
+    "assignedButtons": ["custom1", "custom2", "custom3", "custom4"],
+    "generatedSemantic": {
+      "requestedGameName": "Mixed Controls",
+      "resolvedGameName": "Mixed Controls",
+      "keyBindingButtons": ["custom1"]
+    },
+    "artifactSemantic": {
+      "schemaVersion": 4,
+      "artifactVersion": 1,
+      "exportedAt": 0,
+      "profileCount": 1
+    }
+  }
+}

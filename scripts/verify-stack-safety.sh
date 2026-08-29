@@ -46,7 +46,7 @@ python3 "$ROOT_DIR/scripts/check-controller-stack-frames.py" --self-test
 printf '%s\n' "==> Running constrained-stack regression tests"
 xcodebuild test \
   -project "$PROJECT_PATH" \
-  -scheme ThumbleCLI \
+  -scheme ThumbleTests \
   -configuration Debug \
   -destination 'platform=macOS,arch=arm64' \
   -derivedDataPath "$DERIVED_DATA_PATH" \

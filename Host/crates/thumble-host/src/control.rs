@@ -1,5 +1,5 @@
 use crate::bonjour::BonjourInfo;
-use crate::cli_profile::{CliProfileRequest, CliProfileResponse};
+use crate::cli_profile::{CliProfileRequest, CliProfileResponse, MAXIMUM_CLI_PROFILE_FRAME_BYTES};
 use crate::draft_operation::{ConfigurationOperation, ConfigurationOperationOutcome};
 use crate::output::OutputSnapshot;
 use serde::{Deserialize, Serialize};
@@ -13,10 +13,12 @@ use thumble_core::{ControllerSnapshot, StatusSnapshot};
 use thumble_protocol::KeypadElementInputPart;
 use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{UnixListener, UnixStream};
-use tokio::sync::{watch, Semaphore};
+use tokio::sync::{watch, OwnedSemaphorePermit, Semaphore};
 
-const MAXIMUM_CONTROL_LINE: usize = 64 * 1024;
+pub const MAXIMUM_CONTROL_FRAME_BYTES: usize = MAXIMUM_CLI_PROFILE_FRAME_BYTES + 4 * 1024;
 const MAXIMUM_CONTROL_CONNECTIONS: usize = 16;
+const MAXIMUM_LARGE_CONTROL_FRAMES: usize = 2;
+const LARGE_CONTROL_FRAME_THRESHOLD_BYTES: usize = 64 * 1024;
 const CONTROL_LINE_TIMEOUT: Duration = Duration::from_secs(5);
 const CONTROL_WRITE_TIMEOUT: Duration = Duration::from_secs(5);
 const CONTROL_ADMISSION_TIMEOUT: Duration = Duration::from_millis(500);
@@ -381,6 +383,7 @@ pub async fn serve_control(
     mut shutdown: watch::Receiver<bool>,
 ) {
     let connection_limit = Arc::new(Semaphore::new(MAXIMUM_CONTROL_CONNECTIONS));
+    let large_frame_gate = Arc::new(Semaphore::new(MAXIMUM_LARGE_CONTROL_FRAMES));
     let command_gate = Arc::new(Semaphore::new(1));
     loop {
         tokio::select! {
@@ -399,10 +402,17 @@ pub async fn serve_control(
                             continue;
                         };
                         let handler = Arc::clone(&handler);
+                        let large_frame_gate = Arc::clone(&large_frame_gate);
                         let command_gate = Arc::clone(&command_gate);
                         tokio::spawn(async move {
                             let _connection_permit = connection_permit;
-                            let _ = handle_connection(stream, handler, command_gate).await;
+                            let _ = handle_connection(
+                                stream,
+                                handler,
+                                command_gate,
+                                large_frame_gate,
+                            )
+                            .await;
                         });
                     }
                     Err(_) => break,
@@ -416,12 +426,16 @@ async fn handle_connection(
     stream: UnixStream,
     handler: Arc<dyn ControlHandler>,
     command_gate: Arc<Semaphore>,
+    large_frame_gate: Arc<Semaphore>,
 ) -> Result<(), String> {
     let (read_half, mut write_half) = stream.into_split();
     let mut reader = BufReader::new(read_half);
     loop {
-        let line = match tokio::time::timeout(CONTROL_LINE_TIMEOUT, read_bounded_line(&mut reader))
-            .await
+        let line = match tokio::time::timeout(
+            CONTROL_LINE_TIMEOUT,
+            read_bounded_line(&mut reader, Some(Arc::clone(&large_frame_gate))),
+        )
+        .await
         {
             Ok(Ok(Some(line))) => line,
             Ok(Ok(None)) => return Ok(()),
@@ -433,12 +447,20 @@ async fn handle_connection(
                 .await?;
                 return Ok(());
             }
+            Ok(Err(BoundedLineError::Unterminated)) => {
+                write_response(
+                    &mut write_half,
+                    &ControlResponse::error("control request is unterminated"),
+                )
+                .await?;
+                return Ok(());
+            }
             Ok(Err(BoundedLineError::Io(error))) => {
                 return Err(format!("read control request: {error}"));
             }
             Err(_) => return Err("control request read timed out".to_owned()),
         };
-        let response = match serde_json::from_slice::<ControlRequest>(&line) {
+        let response = match serde_json::from_slice::<ControlRequest>(&line.bytes) {
             Ok(request) => {
                 let permit = match tokio::time::timeout(
                     CONTROL_ADMISSION_TIMEOUT,
@@ -486,7 +508,7 @@ pub async fn send_request(
         let mut encoded = serde_json::to_vec(request)
             .map_err(|error| format!("encode control request: {error}"))?;
         encoded.push(b'\n');
-        if encoded.len() > MAXIMUM_CONTROL_LINE {
+        if encoded.len() > MAXIMUM_CONTROL_FRAME_BYTES {
             return Err("control request is too large".to_owned());
         }
         stream
@@ -494,17 +516,20 @@ pub async fn send_request(
             .await
             .map_err(|error| format!("write control request: {error}"))?;
         let mut reader = BufReader::new(stream);
-        let response = match read_bounded_line(&mut reader).await {
+        let response = match read_bounded_line(&mut reader, None).await {
             Ok(Some(response)) => response,
             Ok(None) => return Err("host closed the control socket without a response".to_owned()),
             Err(BoundedLineError::TooLarge) => {
                 return Err("control response is too large".to_owned());
             }
+            Err(BoundedLineError::Unterminated) => {
+                return Err("control response is unterminated".to_owned());
+            }
             Err(BoundedLineError::Io(error)) => {
                 return Err(format!("read control response: {error}"));
             }
         };
-        serde_json::from_slice(&response)
+        serde_json::from_slice(&response.bytes)
             .map_err(|error| format!("decode control response: {error}"))
     };
     tokio::time::timeout(CONTROL_REQUEST_TIMEOUT, operation)
@@ -519,7 +544,7 @@ async fn write_response(
     let mut encoded = serde_json::to_vec(response)
         .map_err(|error| format!("encode control response: {error}"))?;
     encoded.push(b'\n');
-    if encoded.len() > MAXIMUM_CONTROL_LINE {
+    if encoded.len() > MAXIMUM_CONTROL_FRAME_BYTES {
         encoded = serde_json::to_vec(&ControlResponse::error("control response is too large"))
             .map_err(|error| format!("encode bounded control response: {error}"))?;
         encoded.push(b'\n');
@@ -533,31 +558,68 @@ async fn write_response(
 #[derive(Debug)]
 enum BoundedLineError {
     TooLarge,
+    Unterminated,
     Io(std::io::Error),
 }
 
-async fn read_bounded_line<R>(reader: &mut R) -> Result<Option<Vec<u8>>, BoundedLineError>
+#[derive(Debug)]
+struct BoundedLine {
+    bytes: Vec<u8>,
+    _large_frame_permit: Option<OwnedSemaphorePermit>,
+}
+
+impl std::ops::Deref for BoundedLine {
+    type Target = [u8];
+
+    fn deref(&self) -> &Self::Target {
+        &self.bytes
+    }
+}
+
+async fn read_bounded_line<R>(
+    reader: &mut R,
+    large_frame_gate: Option<Arc<Semaphore>>,
+) -> Result<Option<BoundedLine>, BoundedLineError>
 where
     R: AsyncBufRead + Unpin,
 {
     let mut line = Vec::new();
+    let mut large_frame_permit = None;
     loop {
         let available = reader.fill_buf().await.map_err(BoundedLineError::Io)?;
         if available.is_empty() {
-            return Ok((!line.is_empty()).then_some(line));
+            return if line.is_empty() {
+                Ok(None)
+            } else {
+                Err(BoundedLineError::Unterminated)
+            };
         }
         let consumed = available
             .iter()
             .position(|byte| *byte == b'\n')
             .map_or(available.len(), |position| position + 1);
-        if line.len().saturating_add(consumed) > MAXIMUM_CONTROL_LINE {
+        let resulting_length = line.len().saturating_add(consumed);
+        if resulting_length > MAXIMUM_CONTROL_FRAME_BYTES {
             return Err(BoundedLineError::TooLarge);
+        }
+        if resulting_length > LARGE_CONTROL_FRAME_THRESHOLD_BYTES && large_frame_permit.is_none() {
+            if let Some(gate) = &large_frame_gate {
+                large_frame_permit =
+                    Some(Arc::clone(gate).acquire_owned().await.map_err(|_| {
+                        BoundedLineError::Io(std::io::Error::other(
+                            "large-frame admission gate closed",
+                        ))
+                    })?);
+            }
         }
         let complete = available.get(consumed.saturating_sub(1)) == Some(&b'\n');
         line.extend_from_slice(&available[..consumed]);
         reader.consume(consumed);
         if complete {
-            return Ok(Some(line));
+            return Ok(Some(BoundedLine {
+                bytes: line,
+                _large_frame_permit: large_frame_permit,
+            }));
         }
     }
 }
@@ -662,6 +724,7 @@ mod tests {
     use super::*;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use tempfile::tempdir;
+    use tokio::io::AsyncReadExt;
 
     struct PairingHandler;
 
@@ -800,6 +863,128 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn near_maximum_cli_request_and_response_wrap_over_online_control() {
+        struct NearMaximumCliHandler {
+            expected_artifact_bytes: usize,
+            near_maximum_response: CliProfileResponse,
+        }
+
+        impl ControlHandler for NearMaximumCliHandler {
+            fn handle(&self, request: ControlRequest) -> ControlResponse {
+                let ControlRequest::CliProfileTransaction { request } = request else {
+                    return ControlResponse::error("unexpected request");
+                };
+                let cli_profile = match request.command {
+                    crate::cli_profile::CliProfileCommand::Import { artifact_json, .. } => {
+                        assert_eq!(artifact_json.len(), self.expected_artifact_bytes);
+                        CliProfileResponse::authority_status(request.invocation_id.unwrap(), true)
+                    }
+                    crate::cli_profile::CliProfileCommand::List => {
+                        self.near_maximum_response.clone()
+                    }
+                    _ => return ControlResponse::error("unexpected CLI profile command"),
+                };
+                let mut response = ControlResponse::success();
+                response.cli_profile = Some(cli_profile);
+                response
+            }
+        }
+
+        let invocation = uuid::Uuid::parse_str("00000000-0000-5000-8000-000000000602").unwrap();
+        let mut request = CliProfileRequest {
+            schema_version: crate::cli_profile::CLI_PROFILE_SCHEMA_VERSION,
+            invocation_id: Some(invocation),
+            expected_configuration_revision: None,
+            command: crate::cli_profile::CliProfileCommand::Import {
+                artifact_json: String::new(),
+                append_as_copies: true,
+                select: true,
+                make_default: false,
+            },
+        };
+        let request_base = serde_json::to_vec(&request).unwrap().len() + 1;
+        let crate::cli_profile::CliProfileCommand::Import { artifact_json, .. } =
+            &mut request.command
+        else {
+            unreachable!();
+        };
+        *artifact_json = "x".repeat(MAXIMUM_CLI_PROFILE_FRAME_BYTES - request_base);
+        let request_frame_bytes = serde_json::to_vec(&request).unwrap().len() + 1;
+        assert_eq!(request_frame_bytes, MAXIMUM_CLI_PROFILE_FRAME_BYTES);
+
+        let mut response =
+            CliProfileResponse::transport_failure(invocation, "online", "near_maximum_test", "");
+        let response_base = serde_json::to_vec(&response).unwrap().len() + 1;
+        response.error.as_mut().unwrap().message =
+            "x".repeat(MAXIMUM_CLI_PROFILE_FRAME_BYTES - response_base);
+        let response_frame_bytes = serde_json::to_vec(&response).unwrap().len() + 1;
+        assert_eq!(response_frame_bytes, MAXIMUM_CLI_PROFILE_FRAME_BYTES);
+
+        let wrapped_request_bytes = serde_json::to_vec(&ControlRequest::CliProfileTransaction {
+            request: request.clone(),
+        })
+        .unwrap()
+        .len()
+            + 1;
+        let mut wrapped_response = ControlResponse::success();
+        wrapped_response.cli_profile = Some(response.clone());
+        let wrapped_response_bytes = serde_json::to_vec(&wrapped_response).unwrap().len() + 1;
+        assert!(wrapped_request_bytes > MAXIMUM_CLI_PROFILE_FRAME_BYTES);
+        assert!(wrapped_response_bytes > MAXIMUM_CLI_PROFILE_FRAME_BYTES);
+        assert!(wrapped_request_bytes <= MAXIMUM_CONTROL_FRAME_BYTES);
+        assert!(wrapped_response_bytes <= MAXIMUM_CONTROL_FRAME_BYTES);
+
+        let directory = tempdir().unwrap();
+        fs::set_permissions(directory.path(), fs::Permissions::from_mode(0o700)).unwrap();
+        let path = directory.path().join("control.sock");
+        let listener = bind_control_socket(&path).await.unwrap();
+        let (shutdown_tx, shutdown_rx) = watch::channel(false);
+        let expected_artifact_bytes = match &request.command {
+            crate::cli_profile::CliProfileCommand::Import { artifact_json, .. } => {
+                artifact_json.len()
+            }
+            _ => unreachable!(),
+        };
+        let server = tokio::spawn(serve_control(
+            listener,
+            Arc::new(NearMaximumCliHandler {
+                expected_artifact_bytes,
+                near_maximum_response: response,
+            }),
+            shutdown_rx,
+        ));
+        let small_response =
+            send_request(&path, &ControlRequest::CliProfileTransaction { request })
+                .await
+                .unwrap()
+                .cli_profile
+                .unwrap();
+        assert_eq!(small_response.authority_present, Some(true));
+
+        let received = send_request(
+            &path,
+            &ControlRequest::CliProfileTransaction {
+                request: CliProfileRequest {
+                    schema_version: crate::cli_profile::CLI_PROFILE_SCHEMA_VERSION,
+                    invocation_id: Some(invocation),
+                    expected_configuration_revision: None,
+                    command: crate::cli_profile::CliProfileCommand::List,
+                },
+            },
+        )
+        .await
+        .unwrap()
+        .cli_profile
+        .unwrap();
+        assert_eq!(received.invocation_id, invocation);
+        assert_eq!(received.error.unwrap().code, "near_maximum_test");
+
+        shutdown_tx.send(true).unwrap();
+        server.await.unwrap();
+        remove_control_socket(&path);
+    }
+
+    #[tokio::test]
     async fn insecure_existing_control_directory_is_rejected() {
         let directory = tempdir().unwrap();
         fs::set_permissions(directory.path(), fs::Permissions::from_mode(0o755)).unwrap();
@@ -810,16 +995,152 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn bounded_reader_accepts_an_eight_mib_heap_backed_line() {
+        let (mut writer, reader) = tokio::io::duplex(64 * 1024);
+        let mut payload = vec![b'x'; 8 * 1024 * 1024];
+        payload.push(b'\n');
+        let expected_length = payload.len();
+        let write = tokio::spawn(async move { writer.write_all(&payload).await.unwrap() });
+        let mut reader = BufReader::new(reader);
+        let line = read_bounded_line(&mut reader, None).await.unwrap().unwrap();
+        assert_eq!(line.len(), expected_length);
+        assert_eq!(line.last(), Some(&b'\n'));
+        write.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn bounded_reader_rejects_a_newline_free_oversized_line() {
-        let (mut writer, reader) = tokio::io::duplex(MAXIMUM_CONTROL_LINE * 2);
-        let payload = vec![b'x'; MAXIMUM_CONTROL_LINE + 1];
+        let (mut writer, reader) = tokio::io::duplex(64 * 1024);
+        let payload = vec![b'x'; MAXIMUM_CONTROL_FRAME_BYTES + 1];
         let write = tokio::spawn(async move { writer.write_all(&payload).await.unwrap() });
         let mut reader = BufReader::new(reader);
         assert!(matches!(
-            read_bounded_line(&mut reader).await,
+            read_bounded_line(&mut reader, None).await,
             Err(BoundedLineError::TooLarge)
         ));
         write.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn bounded_reader_accepts_exact_control_boundary_and_rejects_one_more() {
+        let mut exact = vec![b'x'; MAXIMUM_CONTROL_FRAME_BYTES - 1];
+        exact.push(b'\n');
+        let mut exact_reader = BufReader::new(exact.as_slice());
+        assert_eq!(
+            read_bounded_line(&mut exact_reader, None)
+                .await
+                .unwrap()
+                .unwrap()
+                .len(),
+            MAXIMUM_CONTROL_FRAME_BYTES
+        );
+
+        let mut oversized = vec![b'x'; MAXIMUM_CONTROL_FRAME_BYTES];
+        oversized.push(b'\n');
+        let mut oversized_reader = BufReader::new(oversized.as_slice());
+        assert!(matches!(
+            read_bounded_line(&mut oversized_reader, None).await,
+            Err(BoundedLineError::TooLarge)
+        ));
+    }
+
+    #[tokio::test]
+    async fn large_frame_gate_holds_two_frames_without_blocking_small_frames() {
+        let gate = Arc::new(Semaphore::new(MAXIMUM_LARGE_CONTROL_FRAMES));
+        let large = vec![b'x'; LARGE_CONTROL_FRAME_THRESHOLD_BYTES + 1];
+        let mut first_payload = large.clone();
+        first_payload.push(b'\n');
+        let second_payload = first_payload.clone();
+        let third_payload = first_payload.clone();
+        let mut first_reader = BufReader::new(first_payload.as_slice());
+        let mut second_reader = BufReader::new(second_payload.as_slice());
+        let first = read_bounded_line(&mut first_reader, Some(Arc::clone(&gate)))
+            .await
+            .unwrap()
+            .unwrap();
+        let second = read_bounded_line(&mut second_reader, Some(Arc::clone(&gate)))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(gate.available_permits(), 0);
+
+        let mut small_reader = BufReader::new(b"{}\n".as_slice());
+        assert!(
+            read_bounded_line(&mut small_reader, Some(Arc::clone(&gate)))
+                .await
+                .unwrap()
+                .is_some()
+        );
+
+        let mut third_reader = BufReader::new(third_payload.as_slice());
+        let third = read_bounded_line(&mut third_reader, Some(Arc::clone(&gate)));
+        tokio::pin!(third);
+        assert!(tokio::time::timeout(Duration::from_millis(25), &mut third)
+            .await
+            .is_err());
+        drop(first);
+        assert!(tokio::time::timeout(Duration::from_secs(1), &mut third)
+            .await
+            .unwrap()
+            .unwrap()
+            .is_some());
+        drop(second);
+    }
+
+    #[tokio::test]
+    async fn server_rejects_unterminated_request_frame() {
+        let directory = tempdir().unwrap();
+        fs::set_permissions(directory.path(), fs::Permissions::from_mode(0o700)).unwrap();
+        let path = directory.path().join("control.sock");
+        let listener = bind_control_socket(&path).await.unwrap();
+        let (shutdown_tx, shutdown_rx) = watch::channel(false);
+        let server = tokio::spawn(serve_control(
+            listener,
+            Arc::new(PairingHandler),
+            shutdown_rx,
+        ));
+        let mut client = UnixStream::connect(&path).await.unwrap();
+        client.write_all(b"{}").await.unwrap();
+        client.shutdown().await.unwrap();
+        let mut response = Vec::new();
+        client.read_to_end(&mut response).await.unwrap();
+        let response: ControlResponse = serde_json::from_slice(&response).unwrap();
+        assert_eq!(
+            response.error.as_deref(),
+            Some("control request is unterminated")
+        );
+        shutdown_tx.send(true).unwrap();
+        server.await.unwrap();
+        remove_control_socket(&path);
+    }
+
+    #[tokio::test]
+    async fn client_rejects_unterminated_response_frame() {
+        let directory = tempdir().unwrap();
+        fs::set_permissions(directory.path(), fs::Permissions::from_mode(0o700)).unwrap();
+        let path = directory.path().join("control.sock");
+        let listener = bind_control_socket(&path).await.unwrap();
+        let server = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            let mut request = Vec::new();
+            loop {
+                let mut byte = [0_u8; 1];
+                stream.read_exact(&mut byte).await.unwrap();
+                request.push(byte[0]);
+                if byte[0] == b'\n' {
+                    break;
+                }
+            }
+            let encoded = serde_json::to_vec(&ControlResponse::success()).unwrap();
+            stream.write_all(&encoded).await.unwrap();
+            stream.shutdown().await.unwrap();
+        });
+        let error = send_request(&path, &ControlRequest::Status)
+            .await
+            .unwrap_err();
+        assert!(error.contains("unterminated"));
+        server.await.unwrap();
+        remove_control_socket(&path);
     }
 
     #[test]

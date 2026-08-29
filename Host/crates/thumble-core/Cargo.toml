@@ -8,3 +8,7 @@ rust-version.workspace = true
 thumble-protocol = { path = "../thumble-protocol" }
 serde.workspace = true
 serde_json.workspace = true
+serde_json_canonicalizer = "=0.3.2"
+sha2 = "=0.10.9"
+unicode-segmentation = "=1.12.0"
+uuid = { version = "=1.18.1", features = ["v5"] }

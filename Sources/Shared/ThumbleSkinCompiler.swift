@@ -49,6 +49,23 @@ public enum ThumbleSkinSourceValidator {
         if workspace.schemaVersion > ThumbleSkinWorkspaceSchema.currentVersion || workspace.schemaVersion < 1 {
             issue(.error, "unsupported-source-version", "Unsupported skin source schema version.", "schemaVersion")
         }
+        if !workspace.stylesheets.isEmpty, workspace.schemaVersion < 2 {
+            issue(.error, "stylesheets-require-schema-2", "CSS stylesheets require skin-source schema version 2.", "stylesheets")
+        }
+        if workspace.stylesheets.count > ThumbleCSSProfile.Limits.maximumStylesheetCount {
+            issue(.error, "stylesheet-count-limit", "At most \(ThumbleCSSProfile.Limits.maximumStylesheetCount) stylesheets are supported.", "stylesheets")
+        }
+        var seenStylesheets = Set<String>()
+        for (index, path) in workspace.stylesheets.enumerated() {
+            guard ThumbleSkinPackageCodec.isSafePackagePath(path), path.hasPrefix("styles/"), path.hasSuffix(".css") else {
+                issue(.error, "unsafe-stylesheet-path", "Stylesheet paths must stay below styles/ and end in .css.", "stylesheets[\(index)]")
+                continue
+            }
+            guard seenStylesheets.insert(path).inserted else {
+                issue(.error, "duplicate-stylesheet", "Duplicate stylesheet \(path).", "stylesheets[\(index)]")
+                continue
+            }
+        }
         if !ThumbleSkinPackageValidator.isValidReverseDNSIdentifier(workspace.identifier) {
             issue(.error, "invalid-identifier", "Use a reverse-DNS package identifier.", "identifier")
         }
@@ -142,12 +159,14 @@ public enum ThumbleSkinSourceValidator {
                 issue(.error, "missing-material", "Assignment references missing material \(assignment.materialID).", "assignments[\(index)].materialID")
             }
         }
-        if workspace.assignments.isEmpty {
-            issue(.error, "missing-assignments", "Assign materials to semantic control roles.", "assignments")
-        }
-        let assignedRoles = Set(workspace.assignments.compactMap(\.role))
-        for role in artboard.expectedRoles where role != .system && role != .decoration && !assignedRoles.contains(role) {
-            issue(.warning, "unstyled-role", "Canonical artboard role \(role.rawValue) has no explicit material assignment.", "assignments")
+        if !workspace.usesCSSAuthoring {
+            if workspace.assignments.isEmpty {
+                issue(.error, "missing-assignments", "Assign materials to semantic control roles.", "assignments")
+            }
+            let assignedRoles = Set(workspace.assignments.compactMap(\.role))
+            for role in artboard.expectedRoles where role != .system && role != .decoration && !assignedRoles.contains(role) {
+                issue(.warning, "unstyled-role", "Canonical artboard role \(role.rawValue) has no explicit material assignment.", "assignments")
+            }
         }
         for orientation in workspace.orientations where !artboard.variants.contains(where: { $0.orientation == orientation }) {
             issue(.error, "unsupported-orientation", "The artboard has no \(orientation.rawValue) variant.", "orientations")
@@ -279,15 +298,31 @@ public enum ThumbleSkinCompiler {
         throw ThumbleSkinCompilerError.unsupportedPlatform
         #else
         let loaded = try loadWorkspace(from: input)
-        let report = ThumbleSkinSourceValidator.validate(loaded.workspace)
+        var report = ThumbleSkinSourceValidator.validate(loaded.workspace)
         guard report.isValid else { throw ThumbleSkinCompilerError.invalidSource(report) }
+        var cssCompilation: ThumbleCSSCompilation?
+        var canvases: [ThumbleCompiledCanvas] = []
+        if loaded.workspace.usesCSSAuthoring {
+            do {
+                cssCompilation = try ThumbleCSSCompiler.compile(
+                    workspace: loaded.workspace,
+                    sourceRoot: loaded.root,
+                    fileManager: fileManager
+                )
+            } catch ThumbleCSSCompilerError.invalidCSS(let cssReport) {
+                report.issues.append(contentsOf: cssReport.issues.map(\.sourceIssue))
+                throw ThumbleSkinCompilerError.invalidSource(report)
+            }
+            report.issues.append(contentsOf: (cssCompilation?.report.warnings ?? []).map(\.sourceIssue))
+        } else {
+            canvases = try ThumbleVectorCompiler.compileCanvases(
+                workspace: loaded.workspace,
+                sourceRoot: loaded.root,
+                fileManager: fileManager
+            )
+        }
         if strict, !report.warnings.isEmpty { throw ThumbleSkinCompilerError.strictWarnings(report) }
-        let canvases = try ThumbleVectorCompiler.compileCanvases(
-            workspace: loaded.workspace,
-            sourceRoot: loaded.root,
-            fileManager: fileManager
-        )
-        let package = try makePackage(workspace: loaded.workspace, canvases: canvases)
+        let package = try makePackage(workspace: loaded.workspace, canvases: canvases, css: cssCompilation, sourceRoot: loaded.root, fileManager: fileManager)
         let packageData = try ThumbleSkinPackageCodec.encode(package)
         let decodedPackage = try ThumbleSkinPackageCodec.decode(packageData)
         let buildDirectory = requestedBuildDirectory ?? loaded.root.appendingPathComponent("build", isDirectory: true)
@@ -331,8 +366,14 @@ public enum ThumbleSkinCompiler {
 
     private static func makePackage(
         workspace: ThumbleSkinWorkspace,
-        canvases: [ThumbleCompiledCanvas]
+        canvases: [ThumbleCompiledCanvas],
+        css: ThumbleCSSCompilation? = nil,
+        sourceRoot: URL = URL(fileURLWithPath: "."),
+        fileManager: FileManager = .default
     ) throws -> ThumbleSkinPackage {
+        if let css {
+            return try makeCSSPackage(workspace: workspace, css: css, sourceRoot: sourceRoot, fileManager: fileManager)
+        }
         let materialByID = Dictionary(uniqueKeysWithValues: workspace.materials.map { ($0.id, $0) })
         let lightStyles = workspace.materials.compactMap { materialStyle($0, scheme: .light) }
         let darkStyles = workspace.materials.compactMap { materialStyle($0, scheme: .dark) }
@@ -479,6 +520,74 @@ public enum ThumbleSkinCompiler {
             skin: skin,
             assets: Dictionary(uniqueKeysWithValues: canvases.map { ($0.id, $0.data) }),
             previews: Dictionary(uniqueKeysWithValues: canvases.map { ("preview-\($0.id)", $0.data) })
+        )
+    }
+
+    /// CSS-authored workspaces compile to the same package shape with resolved role/button
+    /// styles and no rasterized material canvases. The background comes from `controller {}`.
+    private static func makeCSSPackage(
+        workspace: ThumbleSkinWorkspace,
+        css: ThumbleCSSCompilation,
+        sourceRoot: URL,
+        fileManager: FileManager
+    ) throws -> ThumbleSkinPackage {
+        let variants = css.variants.map { lowered in
+            ThumbleSkinVariant(
+                id: "css-\(lowered.orientation?.rawValue ?? "any")-\(lowered.colorScheme?.rawValue ?? "any")",
+                orientation: lowered.orientation,
+                colorScheme: lowered.colorScheme,
+                appearance: lowered.appearance
+            )
+        }
+        let skin = ThumbleSkin(base: css.base, variants: variants)
+        let artboard = ThumbleSkinArtboardCatalog.resolve(workspace.artboardID)
+        let compatibleRoles = (artboard?.expectedRoles ?? [])
+            .filter { ![GamepadVisualRole.system, .decoration, .custom].contains($0) }
+
+        // CSS workspaces rasterize their declared SVG sourceAssets once and expose
+        // them to stylesheets through url(#asset-id) references.
+        let compiledAssets = try ThumbleVectorCompiler.compileSourceAssets(
+            workspace: workspace,
+            sourceRoot: sourceRoot,
+            fileManager: fileManager
+        )
+        let assetDescriptors = compiledAssets.map { asset in
+            ThumbleSkinResourceDescriptor(
+                id: asset.id,
+                path: "assets/\(asset.id).png",
+                contentType: "image/png",
+                role: asset.purpose == .canvasArtwork ? .background : (asset.purpose == .texture ? .texture : .icon),
+                byteCount: asset.data.count,
+                sha256: asset.data.thumbleSHA256
+            )
+        }
+        return ThumbleSkinPackage(
+            manifest: ThumbleSkinManifest(
+                identifier: workspace.identifier,
+                version: workspace.version,
+                name: workspace.name,
+                author: workspace.author,
+                summary: workspace.summary,
+                license: workspace.license,
+                minimumAppVersion: "1.0.0",
+                tags: ["handcrafted", "css", ThumbleCSSProfile.identifier, workspace.artboardID],
+                assets: assetDescriptors,
+                previews: [],
+                compatibility: ThumbleSkinCompatibility(
+                    mode: .templateAligned,
+                    templates: artboard.map {
+                        [ThumbleSkinTemplateRequirement(templateID: $0.templateID, minimumRevision: $0.revision, maximumRevision: $0.revision)]
+                    } ?? [],
+                    orientations: workspace.orientations,
+                    minimumAspectRatio: 0.4,
+                    maximumAspectRatio: 2.5,
+                    requiredRoles: compatibleRoles,
+                    requiredFeatures: []
+                )
+            ),
+            skin: skin,
+            assets: Dictionary(uniqueKeysWithValues: compiledAssets.map { ($0.id, $0.data) }),
+            previews: [:]
         )
     }
 

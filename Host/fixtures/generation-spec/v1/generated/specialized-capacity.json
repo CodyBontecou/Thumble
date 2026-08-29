@@ -1,0 +1,538 @@
+{
+  "confidence": "low",
+  "keyBindings": [
+    "custom1",
+    {
+      "key": "A",
+      "modifiers": []
+    },
+    "custom2",
+    {
+      "key": "B",
+      "modifiers": []
+    },
+    "custom4",
+    {
+      "key": "D",
+      "modifiers": []
+    },
+    "custom5",
+    {
+      "key": "E",
+      "modifiers": []
+    },
+    "custom7",
+    {
+      "key": "G",
+      "modifiers": []
+    }
+  ],
+  "notes": [
+    "Installed from an agent-provided keypad spec."
+  ],
+  "profile": {
+    "customization": {
+      "accentStyle": "purple",
+      "buttonCustomizations": [
+        "up",
+        {
+          "heightScale": 1.0,
+          "isHidden": true,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1.0,
+          "widthScale": 1.0,
+          "zIndex": 0
+        },
+        "down",
+        {
+          "heightScale": 1.0,
+          "isHidden": true,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1.0,
+          "widthScale": 1.0,
+          "zIndex": 0
+        },
+        "left",
+        {
+          "heightScale": 1.0,
+          "isHidden": true,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1.0,
+          "widthScale": 1.0,
+          "zIndex": 0
+        },
+        "right",
+        {
+          "heightScale": 1.0,
+          "isHidden": true,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1.0,
+          "widthScale": 1.0,
+          "zIndex": 0
+        },
+        "jump",
+        {
+          "heightScale": 1.0,
+          "isHidden": true,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1.0,
+          "widthScale": 1.0,
+          "zIndex": 0
+        },
+        "attack",
+        {
+          "heightScale": 1.0,
+          "isHidden": true,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1.0,
+          "widthScale": 1.0,
+          "zIndex": 0
+        },
+        "dash",
+        {
+          "heightScale": 1.0,
+          "isHidden": true,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1.0,
+          "widthScale": 1.0,
+          "zIndex": 0
+        },
+        "focus",
+        {
+          "heightScale": 1.0,
+          "isHidden": true,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1.0,
+          "widthScale": 1.0,
+          "zIndex": 0
+        },
+        "map",
+        {
+          "heightScale": 1.0,
+          "isHidden": true,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1.0,
+          "widthScale": 1.0,
+          "zIndex": 0
+        },
+        "pause",
+        {
+          "heightScale": 1.0,
+          "isHidden": true,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1.0,
+          "widthScale": 1.0,
+          "zIndex": 0
+        }
+      ],
+      "colorSchemePreference": "system",
+      "controlScale": "standard",
+      "customButtons": [
+        {
+          "controlKind": "joystick",
+          "id": "95e98733-8394-53b3-9a63-95f364da5cad",
+          "joystickMapping": {
+            "down": "down",
+            "left": "left",
+            "right": "right",
+            "up": "up"
+          },
+          "joystickOutputSettings": {
+            "analogTarget": "none",
+            "deadZone": 0.12,
+            "invertX": false,
+            "invertY": false,
+            "sendsDigitalDirections": true,
+            "sensitivity": 1.0,
+            "snapToCardinal": false
+          },
+          "label": "Joystick One",
+          "layout": {
+            "accentStyle": "monochrome",
+            "centerX": 0.22,
+            "centerY": 0.64,
+            "fillColor": {
+              "alpha": 1.0,
+              "blue": 0.21568627450980393,
+              "green": 0.1607843137254902,
+              "red": 0.12156862745098039
+            },
+            "heightScale": 1.35,
+            "isHidden": false,
+            "isLocationLocked": false,
+            "rotationDegrees": 0,
+            "shadowStrength": 1.0,
+            "shape": "circle",
+            "widthScale": 1.35,
+            "zIndex": 0
+          },
+          "mappedButton": "custom1",
+          "visualRole": "joystick"
+        },
+        {
+          "controlKind": "joystick",
+          "id": "e31e8da3-f034-538f-8e47-cdac8de728a3",
+          "joystickMapping": {
+            "down": "down",
+            "left": "left",
+            "right": "right",
+            "up": "up"
+          },
+          "joystickOutputSettings": {
+            "analogTarget": "none",
+            "deadZone": 0.12,
+            "invertX": false,
+            "invertY": false,
+            "sendsDigitalDirections": true,
+            "sensitivity": 1.0,
+            "snapToCardinal": false
+          },
+          "label": "Joystick Two",
+          "layout": {
+            "accentStyle": "monochrome",
+            "centerX": 0.22,
+            "centerY": 0.64,
+            "fillColor": {
+              "alpha": 1.0,
+              "blue": 0.21568627450980393,
+              "green": 0.1607843137254902,
+              "red": 0.12156862745098039
+            },
+            "heightScale": 1.35,
+            "isHidden": false,
+            "isLocationLocked": false,
+            "rotationDegrees": 0,
+            "shadowStrength": 1.0,
+            "shape": "circle",
+            "widthScale": 1.35,
+            "zIndex": 0
+          },
+          "mappedButton": "custom2",
+          "visualRole": "joystick"
+        },
+        {
+          "controlKind": "trigger",
+          "id": "d1f85e97-c08b-5757-b400-50f8cfd4eefa",
+          "label": "Trigger One",
+          "layout": {
+            "accentStyle": "monochrome",
+            "centerX": 0.066,
+            "centerY": 0.56,
+            "cornerRadius": 12.0,
+            "fillColor": {
+              "alpha": 1.0,
+              "blue": 0.21568627450980393,
+              "green": 0.1607843137254902,
+              "red": 0.12156862745098039
+            },
+            "heightScale": 1.05,
+            "isHidden": false,
+            "isLocationLocked": false,
+            "rotationDegrees": 0,
+            "shadowStrength": 1.0,
+            "shape": "rounded_rectangle",
+            "widthScale": 1.12,
+            "zIndex": 0
+          },
+          "mappedButton": "custom4",
+          "triggerSettings": {
+            "deadZone": 0.03,
+            "digitalThreshold": 0.5,
+            "orientation": "vertical",
+            "sendsDigitalButton": false,
+            "sensitivity": 1.0,
+            "target": "right"
+          },
+          "visualRole": "trigger"
+        },
+        {
+          "controlKind": "trigger",
+          "id": "cd604c20-d5a4-5bc2-a4a5-b300a32f1138",
+          "label": "Trigger Two",
+          "layout": {
+            "accentStyle": "monochrome",
+            "centerX": 0.334,
+            "centerY": 0.56,
+            "cornerRadius": 12.0,
+            "fillColor": {
+              "alpha": 1.0,
+              "blue": 0.21568627450980393,
+              "green": 0.1607843137254902,
+              "red": 0.12156862745098039
+            },
+            "heightScale": 1.05,
+            "isHidden": false,
+            "isLocationLocked": false,
+            "rotationDegrees": 0,
+            "shadowStrength": 1.0,
+            "shape": "rounded_rectangle",
+            "widthScale": 1.12,
+            "zIndex": 0
+          },
+          "mappedButton": "custom5",
+          "triggerSettings": {
+            "deadZone": 0.03,
+            "digitalThreshold": 0.5,
+            "orientation": "vertical",
+            "sendsDigitalButton": false,
+            "sensitivity": 1.0,
+            "target": "right"
+          },
+          "visualRole": "trigger"
+        },
+        {
+          "controlKind": "trackpad",
+          "id": "213a5b40-5a29-5437-b1e6-b2cdf42ee0a1",
+          "label": "Trackpad One",
+          "layout": {
+            "accentStyle": "monochrome",
+            "centerX": 0.5,
+            "centerY": 0.58,
+            "cornerRadius": 18.0,
+            "fillColor": {
+              "alpha": 1.0,
+              "blue": 0.21568627450980393,
+              "green": 0.1607843137254902,
+              "red": 0.12156862745098039
+            },
+            "heightScale": 1.0,
+            "isHidden": false,
+            "isLocationLocked": false,
+            "rotationDegrees": 0,
+            "shadowStrength": 1.0,
+            "shape": "rounded_rectangle",
+            "widthScale": 1.25,
+            "zIndex": 0
+          },
+          "mappedButton": "custom7",
+          "trackpadSettings": {
+            "naturalScrolling": true,
+            "scrollSensitivity": 0.85,
+            "sensitivity": 1.2,
+            "tapToClick": true,
+            "twoFingerScroll": true
+          },
+          "visualRole": "trackpad"
+        }
+      ],
+      "deviceCanvas": {
+        "frameID": "iphone-17-pro-landscape"
+      },
+      "elements": [
+        {
+          "id": "95e98733-8394-53b3-9a63-95f364da5cad",
+          "joystickMapping": {
+            "down": "down",
+            "left": "left",
+            "right": "right",
+            "up": "up"
+          },
+          "joystickOutputSettings": {
+            "analogTarget": "none",
+            "deadZone": 0.12,
+            "invertX": false,
+            "invertY": false,
+            "sendsDigitalDirections": true,
+            "sensitivity": 1.0,
+            "snapToCardinal": false
+          },
+          "kind": "joystick",
+          "label": "Joystick One",
+          "layout": {
+            "accentStyle": "monochrome",
+            "centerX": 0.22,
+            "centerY": 0.64,
+            "fillColor": {
+              "alpha": 1.0,
+              "blue": 0.21568627450980393,
+              "green": 0.1607843137254902,
+              "red": 0.12156862745098039
+            },
+            "heightScale": 1.35,
+            "isHidden": false,
+            "isLocationLocked": false,
+            "rotationDegrees": 0,
+            "shadowStrength": 1.0,
+            "shape": "circle",
+            "widthScale": 1.35,
+            "zIndex": 0
+          },
+          "legacySlot": "custom1",
+          "partOutputs": [],
+          "visualRole": "joystick"
+        },
+        {
+          "id": "e31e8da3-f034-538f-8e47-cdac8de728a3",
+          "joystickMapping": {
+            "down": "down",
+            "left": "left",
+            "right": "right",
+            "up": "up"
+          },
+          "joystickOutputSettings": {
+            "analogTarget": "none",
+            "deadZone": 0.12,
+            "invertX": false,
+            "invertY": false,
+            "sendsDigitalDirections": true,
+            "sensitivity": 1.0,
+            "snapToCardinal": false
+          },
+          "kind": "joystick",
+          "label": "Joystick Two",
+          "layout": {
+            "accentStyle": "monochrome",
+            "centerX": 0.22,
+            "centerY": 0.64,
+            "fillColor": {
+              "alpha": 1.0,
+              "blue": 0.21568627450980393,
+              "green": 0.1607843137254902,
+              "red": 0.12156862745098039
+            },
+            "heightScale": 1.35,
+            "isHidden": false,
+            "isLocationLocked": false,
+            "rotationDegrees": 0,
+            "shadowStrength": 1.0,
+            "shape": "circle",
+            "widthScale": 1.35,
+            "zIndex": 0
+          },
+          "legacySlot": "custom2",
+          "partOutputs": [],
+          "visualRole": "joystick"
+        },
+        {
+          "id": "d1f85e97-c08b-5757-b400-50f8cfd4eefa",
+          "kind": "trigger",
+          "label": "Trigger One",
+          "layout": {
+            "accentStyle": "monochrome",
+            "centerX": 0.066,
+            "centerY": 0.56,
+            "cornerRadius": 12.0,
+            "fillColor": {
+              "alpha": 1.0,
+              "blue": 0.21568627450980393,
+              "green": 0.1607843137254902,
+              "red": 0.12156862745098039
+            },
+            "heightScale": 1.05,
+            "isHidden": false,
+            "isLocationLocked": false,
+            "rotationDegrees": 0,
+            "shadowStrength": 1.0,
+            "shape": "rounded_rectangle",
+            "widthScale": 1.12,
+            "zIndex": 0
+          },
+          "legacySlot": "custom4",
+          "partOutputs": [],
+          "triggerSettings": {
+            "deadZone": 0.03,
+            "digitalThreshold": 0.5,
+            "orientation": "vertical",
+            "sendsDigitalButton": false,
+            "sensitivity": 1.0,
+            "target": "right"
+          },
+          "visualRole": "trigger"
+        },
+        {
+          "id": "cd604c20-d5a4-5bc2-a4a5-b300a32f1138",
+          "kind": "trigger",
+          "label": "Trigger Two",
+          "layout": {
+            "accentStyle": "monochrome",
+            "centerX": 0.334,
+            "centerY": 0.56,
+            "cornerRadius": 12.0,
+            "fillColor": {
+              "alpha": 1.0,
+              "blue": 0.21568627450980393,
+              "green": 0.1607843137254902,
+              "red": 0.12156862745098039
+            },
+            "heightScale": 1.05,
+            "isHidden": false,
+            "isLocationLocked": false,
+            "rotationDegrees": 0,
+            "shadowStrength": 1.0,
+            "shape": "rounded_rectangle",
+            "widthScale": 1.12,
+            "zIndex": 0
+          },
+          "legacySlot": "custom5",
+          "partOutputs": [],
+          "triggerSettings": {
+            "deadZone": 0.03,
+            "digitalThreshold": 0.5,
+            "orientation": "vertical",
+            "sendsDigitalButton": false,
+            "sensitivity": 1.0,
+            "target": "right"
+          },
+          "visualRole": "trigger"
+        },
+        {
+          "id": "213a5b40-5a29-5437-b1e6-b2cdf42ee0a1",
+          "kind": "trackpad",
+          "label": "Trackpad One",
+          "layout": {
+            "accentStyle": "monochrome",
+            "centerX": 0.5,
+            "centerY": 0.58,
+            "cornerRadius": 18.0,
+            "fillColor": {
+              "alpha": 1.0,
+              "blue": 0.21568627450980393,
+              "green": 0.1607843137254902,
+              "red": 0.12156862745098039
+            },
+            "heightScale": 1.0,
+            "isHidden": false,
+            "isLocationLocked": false,
+            "rotationDegrees": 0,
+            "shadowStrength": 1.0,
+            "shape": "rounded_rectangle",
+            "widthScale": 1.25,
+            "zIndex": 0
+          },
+          "legacySlot": "custom7",
+          "partOutputs": [],
+          "trackpadSettings": {
+            "naturalScrolling": true,
+            "scrollSensitivity": 0.85,
+            "sensitivity": 1.2,
+            "tapToClick": true,
+            "twoFingerScroll": true
+          },
+          "visualRole": "trackpad"
+        }
+      ],
+      "labelOverrides": [],
+      "layoutMode": "standard",
+      "showsButtonLabels": true,
+      "updatedAt": 0
+    },
+    "id": "64542b15-5a6f-5c8d-ba94-99cd24da68f7",
+    "name": "Specialized Capacity",
+    "orientationPreference": "automatic",
+    "outputMode": "keyboard",
+    "updatedAt": 0
+  },
+  "requestedGameName": "Specialized Capacity",
+  "resolvedGameName": "Specialized Capacity",
+  "source": "Agent-provided keypad spec"
+}

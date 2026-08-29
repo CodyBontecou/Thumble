@@ -1,7 +1,10 @@
 # fly.io deployment for the Thumble MCP gateway.
 #   fly launch --no-deploy --name thumble-mcp-gateway --copy-config
 #   fly secrets set THUMBLE_GATEWAY_BASE_URL=https://thumble-mcp-gateway.fly.dev
+#   fly secrets set THUMBLE_GATEWAY_TOKEN_SECRET="$(openssl rand -hex 32)"
 #   fly deploy
+# Preserve THUMBLE_GATEWAY_TOKEN_SECRET across ordinary deploys and restores:
+# rotating it invalidates existing signed/link-derived gateway credentials.
 app = "thumble-mcp-gateway"
 primary_region = "iad"
 

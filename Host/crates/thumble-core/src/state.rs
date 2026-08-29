@@ -136,7 +136,7 @@ impl PersistentState {
             return Err(StateError::EmptyServerId);
         }
 
-        let key_bindings = default_key_bindings();
+        let key_bindings = canonical_default_profile_key_bindings();
         let mut output_bindings = ButtonBindings::default();
         for button in GameButton::ALL {
             if let Some(binding) = key_bindings.get(&button).cloned() {
@@ -333,7 +333,9 @@ pub(crate) fn ids_equal(left: &str, right: &str) -> bool {
     left.eq_ignore_ascii_case(right)
 }
 
-fn default_key_bindings() -> ButtonBindings<KeyBinding> {
+/// Canonical bindings installed for a newly imported profile that does not
+/// supply its own per-profile key map.
+pub fn canonical_default_profile_key_bindings() -> ButtonBindings<KeyBinding> {
     let mut bindings = ButtonBindings::default();
     for (button, key_code, modifiers) in [
         (GameButton::Left, 123, 0),

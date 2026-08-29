@@ -1,11 +1,15 @@
 use crate::channel::SharedHostChannel;
 use crate::rate_limit::PressRateLimiter;
+use crate::skin_preview::{
+    render_skin_preview, SkinPreviewOrientation, SkinPreviewRequest, SkinPreviewScheme,
+    SkinPreviewState,
+};
 use rmcp::{
     handler::server::{router::tool::ToolRouter, wrapper::Parameters},
     model::{
-        Icon, Implementation, ListResourcesResult, MetaObject, PaginatedRequestParams,
-        ReadResourceRequestParams, ReadResourceResponse, ReadResourceResult, Resource,
-        ResourceContents, ServerCapabilities, ServerInfo,
+        CallToolResult, ContentBlock, Icon, Implementation, ListResourcesResult, MetaObject,
+        PaginatedRequestParams, ReadResourceRequestParams, ReadResourceResponse,
+        ReadResourceResult, Resource, ResourceContents, ServerCapabilities, ServerInfo,
     },
     schemars::{self, JsonSchema},
     service::RequestContext,
@@ -14,6 +18,7 @@ use rmcp::{
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use thumble_core::ControllerSnapshot;
 use thumble_host::control::{
@@ -1600,7 +1605,7 @@ pub enum ConfigurationOperationInput {
     GenerationGenerate {
         /// Canonical built-in generation preset.
         preset: GenerationPresetInput,
-        /// Exact installed preset revision. Hollow Knight is revision 2 (thumb-sized controls).
+        /// Exact installed preset revision. Hollow Knight is revision 2.
         #[serde(rename = "presetRevision")]
         preset_revision: u32,
         destination: GeneratedProfileDestinationInput,
@@ -4023,6 +4028,38 @@ pub struct ExportControllerPreviewResult {
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PreviewSkinWorkspaceParams {
+    /// Absolute path to a `.pocketpad` review package or a skin workspace directory.
+    pub source_path: String,
+    /// Optional single `portrait` or `landscape` orientation. Omit for the source's default.
+    pub orientation: Option<String>,
+    /// Optional `light` or `dark` color scheme. Omit for `light`.
+    pub scheme: Option<String>,
+    /// Optional `normal`, `pressed`, `active`, or `disabled` control state. Omit for `normal`.
+    pub state: Option<String>,
+    /// Optional pixel scale between 0.5 and 4. Omit for 2.
+    pub scale: Option<f64>,
+}
+
+#[derive(Debug, Clone, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PreviewSkinWorkspaceResult {
+    pub source_path: String,
+    pub skin_name: String,
+    pub skin_identifier: String,
+    pub skin_version: String,
+    pub orientation: String,
+    pub color_scheme: String,
+    pub state: String,
+    pub width: u32,
+    pub height: u32,
+    pub byte_length: u64,
+    pub sha256: String,
+    pub mime_type: String,
+}
+
+#[derive(Debug, Clone, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SaveConfigurationDraftParams {
     pub draft_id: String,
     pub expected_draft_revision: u64,
@@ -4425,6 +4462,100 @@ impl ThumbleMcp {
             sha256: format!("{digest:x}"),
             svg,
         }))
+    }
+
+    #[tool(
+        description = "Render an arbitrary .pocketpad review package or skin workspace with Thumble's native controller renderer and return the exact controller view as an inline image. Read-only review evidence: it never imports, applies, detaches, drafts, saves, or changes the active controller, authoritative configuration, or paired phone, so an uninstalled skin can be shown in chat exactly as the app would draw it.",
+        annotations(
+            title = "Preview Thumble skin controller view",
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
+    )]
+    pub async fn preview_skin_workspace(
+        &self,
+        Parameters(params): Parameters<PreviewSkinWorkspaceParams>,
+    ) -> Result<CallToolResult, String> {
+        let orientation = match params.orientation.as_deref() {
+            None => None,
+            Some("portrait") => Some(SkinPreviewOrientation::Portrait),
+            Some("landscape") => Some(SkinPreviewOrientation::Landscape),
+            Some(other) => {
+                audit("preview_skin_workspace", "rejected");
+                return Err(format!(
+                    "orientation must be portrait or landscape, not {other}"
+                ));
+            }
+        };
+        let scheme = match params.scheme.as_deref() {
+            None => None,
+            Some("light") => Some(SkinPreviewScheme::Light),
+            Some("dark") => Some(SkinPreviewScheme::Dark),
+            Some(other) => {
+                audit("preview_skin_workspace", "rejected");
+                return Err(format!("scheme must be light or dark, not {other}"));
+            }
+        };
+        let state = match params.state.as_deref() {
+            None => None,
+            Some("normal") => Some(SkinPreviewState::Normal),
+            Some("pressed") => Some(SkinPreviewState::Pressed),
+            Some("active") => Some(SkinPreviewState::Active),
+            Some("disabled") => Some(SkinPreviewState::Disabled),
+            Some(other) => {
+                audit("preview_skin_workspace", "rejected");
+                return Err(format!(
+                    "state must be normal, pressed, active, or disabled, not {other}"
+                ));
+            }
+        };
+        let request = SkinPreviewRequest {
+            source_path: PathBuf::from(&params.source_path),
+            orientation,
+            scheme,
+            state,
+            scale: params.scale,
+        };
+        let image = render_skin_preview(&request).await.inspect_err(|_| {
+            audit("preview_skin_workspace", "failed");
+        })?;
+        audit("preview_skin_workspace", "ok");
+        let png_base64 = image.png_base64();
+        let result = PreviewSkinWorkspaceResult {
+            source_path: params.source_path,
+            skin_name: image.skin_name,
+            skin_identifier: image.skin_identifier,
+            skin_version: image.skin_version,
+            orientation: image.orientation,
+            color_scheme: image.color_scheme,
+            state: image.state,
+            width: image.pixel_width,
+            height: image.pixel_height,
+            byte_length: image.byte_length,
+            sha256: image.sha256,
+            mime_type: "image/png".to_owned(),
+        };
+        let structured =
+            serde_json::to_value(&result).map_err(|error| format!("encode summary: {error}"))?;
+        let summary = format!(
+            "{} · {} · {} {} {} · {}×{} · sha256 {} · rendered only, not imported or applied",
+            result.skin_name,
+            result.skin_identifier,
+            result.orientation,
+            result.color_scheme,
+            result.state,
+            result.width,
+            result.height,
+            result.sha256
+        );
+        let mut call = CallToolResult::success(vec![
+            ContentBlock::image(png_base64, "image/png"),
+            ContentBlock::text(summary),
+        ]);
+        call.structured_content = Some(structured);
+        Ok(call)
     }
 
     #[tool(
@@ -4990,7 +5121,6 @@ mod tests {
         ServiceExt,
     };
     use std::os::unix::fs::PermissionsExt;
-    use std::path::PathBuf;
     use std::sync::Arc;
     use tempfile::tempdir;
     use thumble_host::control::{
@@ -5397,7 +5527,7 @@ mod tests {
     }
 
     #[test]
-    fn tool_router_exposes_only_the_twenty_curated_tools() {
+    fn tool_router_exposes_only_the_twenty_one_curated_tools() {
         let server = ThumbleMcp::new(PathBuf::from("/tmp/not-used"), false, false);
         let tools = server.tool_router.list_all();
         let schema_json = serde_json::to_string(&tools).unwrap();
@@ -5405,7 +5535,10 @@ mod tests {
         assert!(!schema_json.contains("keyCode"));
         assert!(!schema_json.contains("PocketPad"));
         assert!(!schema_json.contains("pocketpad-"));
-        assert_eq!(tools.len(), 20);
+        assert_eq!(tools.len(), 21);
+        assert!(tools
+            .iter()
+            .any(|tool| tool.name == "preview_skin_workspace"));
         for operation in [
             "generation.generate",
             "template.install",
@@ -5510,6 +5643,7 @@ mod tests {
                 "pairing_code",
                 "press_control",
                 "preview_configuration_draft",
+                "preview_skin_workspace",
                 "query_catalog",
                 "rebase_configuration_draft",
                 "release_all",
@@ -5614,6 +5748,131 @@ mod tests {
         assert!(!error.contains("control.sock"));
     }
 
+    #[tokio::test]
+    async fn preview_skin_workspace_rejects_unknown_enums_before_touching_the_cli() {
+        let server = ThumbleMcp::new(
+            PathBuf::from("/definitely/missing/control.sock"),
+            false,
+            false,
+        );
+        let error = match server
+            .preview_skin_workspace(Parameters(PreviewSkinWorkspaceParams {
+                source_path: "/absolute/review.pocketpad".to_owned(),
+                orientation: Some("diagonal".to_owned()),
+                scheme: None,
+                state: None,
+                scale: None,
+            }))
+            .await
+        {
+            Ok(_) => panic!("unknown orientation unexpectedly succeeded"),
+            Err(error) => error,
+        };
+        assert!(error.contains("orientation"));
+        let error = match server
+            .preview_skin_workspace(Parameters(PreviewSkinWorkspaceParams {
+                source_path: "/absolute/review.pocketpad".to_owned(),
+                orientation: None,
+                scheme: Some("sepia".to_owned()),
+                state: None,
+                scale: None,
+            }))
+            .await
+        {
+            Ok(_) => panic!("unknown scheme unexpectedly succeeded"),
+            Err(error) => error,
+        };
+        assert!(error.contains("scheme"));
+        let error = match server
+            .preview_skin_workspace(Parameters(PreviewSkinWorkspaceParams {
+                source_path: "relative/review.pocketpad".to_owned(),
+                orientation: None,
+                scheme: None,
+                state: None,
+                scale: None,
+            }))
+            .await
+        {
+            Ok(_) => panic!("relative path unexpectedly succeeded"),
+            Err(error) => error,
+        };
+        assert!(error.contains("absolute"));
+    }
+
+    /// Full transport round trip with a real CLI render. Enabled by
+    /// `THUMBLE_MCP_SKIN_CLI=/abs/thumble` plus
+    /// `THUMBLE_MCP_SKIN_TEST_PACKAGE=/abs/review.pocketpad`.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn preview_skin_workspace_returns_an_inline_controller_view_when_configured() {
+        let (Ok(_cli), Ok(package)) = (
+            std::env::var("THUMBLE_MCP_SKIN_CLI"),
+            std::env::var("THUMBLE_MCP_SKIN_TEST_PACKAGE"),
+        ) else {
+            return;
+        };
+        let directory = tempdir().unwrap();
+        std::fs::set_permissions(directory.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
+        let socket = directory.path().join("control.sock");
+        let listener = bind_control_socket(&socket).await.unwrap();
+        let (shutdown_tx, shutdown_rx) = watch::channel(false);
+        let control_task = tokio::spawn(serve_control(listener, Arc::new(FakeHost), shutdown_rx));
+
+        let (server_transport, client_transport) = tokio::io::duplex(64 * 1024);
+        let server = ThumbleMcp::new(socket.clone(), false, false);
+        let mcp_task = tokio::spawn(async move {
+            server
+                .serve(server_transport)
+                .await
+                .unwrap()
+                .waiting()
+                .await
+                .unwrap();
+        });
+        let client = ().serve(client_transport).await.unwrap();
+        let result = client
+            .call_tool(
+                CallToolRequestParams::new("preview_skin_workspace").with_arguments(
+                    serde_json::json!({
+                        "sourcePath": package,
+                        "orientation": "landscape",
+                        "scheme": "light",
+                        "state": "normal",
+                        "scale": 2
+                    })
+                    .as_object()
+                    .unwrap()
+                    .clone(),
+                ),
+            )
+            .await
+            .unwrap();
+        assert_eq!(result.is_error, Some(false));
+        let image = result
+            .content
+            .iter()
+            .find_map(|block| block.as_image())
+            .expect("inline controller-view image");
+        assert_eq!(image.mime_type, "image/png".to_owned());
+        assert!(!image.data.is_empty());
+        let structured = result.structured_content.as_ref().unwrap();
+        assert!(structured.get("skinName").is_some());
+        assert_eq!(
+            structured.get("mimeType").and_then(Value::as_str),
+            Some("image/png")
+        );
+        assert_eq!(
+            structured
+                .get("sha256")
+                .and_then(Value::as_str)
+                .map(str::len),
+            Some(64)
+        );
+        drop(client);
+        mcp_task.abort();
+        control_task.abort();
+        let _ = shutdown_tx.send(true);
+    }
+
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn official_client_initializes_lists_tools_and_calls_over_mcp() {
         let directory = tempdir().unwrap();
@@ -5659,7 +5918,10 @@ mod tests {
             Some(["1024x1024".to_owned()].as_slice())
         );
         let tools = client.list_all_tools().await.unwrap();
-        assert_eq!(tools.len(), 20);
+        assert_eq!(tools.len(), 21);
+        assert!(tools
+            .iter()
+            .any(|tool| tool.name == "preview_skin_workspace"));
 
         let resources = client.list_all_resources().await.unwrap();
         assert_eq!(resources.len(), 4);

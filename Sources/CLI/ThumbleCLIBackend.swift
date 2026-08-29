@@ -4,9 +4,12 @@ import Foundation
 /// Typed, bounded client for the exact-sibling Rust CLI authority bridge.
 /// It never opens Unix sockets or reads Rust state from Swift.
 final class ThumbleCLIProfileBackend {
-    static let schemaVersion = 6
-    static let maximumRequestBytes = 64 * 1024
-    static let maximumResponseBytes = 256 * 1024
+    static let schemaVersion = 8
+    static let maximumRequestBytes = 18 * 1024 * 1024
+    static let maximumResponseBytes = 18 * 1024 * 1024
+    static let maximumProfileArtifactBytes = 8 * 1024 * 1024
+    static let maximumGenerationSpecBytes = 256 * 1024
+    static let maximumGenerationOutputBytes = 8 * 1024 * 1024
     static let maximumStderrBytes = 16 * 1024
 
     enum ProfileSelector: Encodable, Equatable {
@@ -564,6 +567,8 @@ final class ThumbleCLIProfileBackend {
     enum Command: Encodable {
         case authorityStatus
         case list
+        case export(ProfileSelector?)
+        case `import`(artifactJSON: String, appendAsCopies: Bool, select: Bool, makeDefault: Bool)
         case select(ProfileSelector)
         case setDefault(ProfileSelector)
         case rename(ProfileSelector, String)
@@ -572,6 +577,7 @@ final class ThumbleCLIProfileBackend {
         case reset(ProfileSelector?)
         case move([ProfileSelector], MoveDestination)
         case generationGenerate(select: Bool, makeDefault: Bool)
+        case generationPlanSpec(specJSON: String, requestedGameName: String?)
         case templateInstall(ControllerTemplate, name: String?, select: Bool, makeDefault: Bool)
         case customizationSet(ProfileSelector, ConfigurationVariant, [CustomizationChanges], frameID: String?)
         case customizationFix(ProfileSelector, ConfigurationVariant, LayoutRepairTarget, LayoutRepairCanvas, includeLocked: Bool)
@@ -631,6 +637,8 @@ final class ThumbleCLIProfileBackend {
 
         private enum CodingKeys: String, CodingKey {
             case type, target, name, targets, destination, preference, source, automaticallyArrange
+            case artifactJSON, appendAsCopies
+            case specJSON, requestedGameName
             case template, select, makeDefault, styleID, elementID, appearance
             case button, sequence, mode, keyboardEdit, gamepadEdit
             case variant, frameID, items, item, direction, changes
@@ -658,6 +666,15 @@ final class ThumbleCLIProfileBackend {
                 try container.encode("authority.status", forKey: .type)
             case .list:
                 try container.encode("profile.list", forKey: .type)
+            case .export(let target):
+                try container.encode("profile.export", forKey: .type)
+                try container.encodeIfPresent(target, forKey: .target)
+            case .import(let artifactJSON, let appendAsCopies, let select, let makeDefault):
+                try container.encode("profile.import", forKey: .type)
+                try container.encode(artifactJSON, forKey: .artifactJSON)
+                try container.encode(appendAsCopies, forKey: .appendAsCopies)
+                try container.encode(select, forKey: .select)
+                try container.encode(makeDefault, forKey: .makeDefault)
             case .select(let target):
                 try container.encode("profile.select", forKey: .type)
                 try container.encode(target, forKey: .target)
@@ -686,6 +703,10 @@ final class ThumbleCLIProfileBackend {
                 try container.encode("generation.generate", forKey: .type)
                 try container.encode(select, forKey: .select)
                 try container.encode(makeDefault, forKey: .makeDefault)
+            case .generationPlanSpec(let specJSON, let requestedGameName):
+                try container.encode("generation.plan-spec", forKey: .type)
+                try container.encode(specJSON, forKey: .specJSON)
+                try container.encodeIfPresent(requestedGameName, forKey: .requestedGameName)
             case .templateInstall(let template, let name, let select, let makeDefault):
                 try container.encode("template.install", forKey: .type)
                 try container.encode(template, forKey: .template)
@@ -1160,6 +1181,86 @@ final class ThumbleCLIProfileBackend {
         var appearance: SafeControlBarItemAppearance
     }
 
+    struct ContentHash: Codable, Equatable {
+        var algorithm: String
+        var canonicalization: String
+        var value: String
+    }
+
+    struct ProfileArtifactResponse: Codable, Equatable {
+        var configurationRevision: UInt64
+        var artifactJSON: String
+        var contentHash: ContentHash
+    }
+
+    struct GenerationWarning: Codable, Equatable {
+        var code: String
+        var sourceOrdinal: Int
+        var message: String
+    }
+
+    struct GenerationAssignedControl: Codable, Equatable {
+        var sourceOrdinal: Int
+        var button: String
+        var elementID: String
+        var kind: String
+        var usedExplicitButton: Bool
+    }
+
+    struct GenerationDroppedControl: Codable, Equatable {
+        var sourceOrdinal: Int
+        var reason: String
+    }
+
+    struct GenerationLayoutIssue: Codable, Equatable {
+        var code: String
+        var severity: String
+        var controlIDs: [String]
+        var controlCount: Int
+        var metric: Double?
+        var suggestedRepairs: [String]
+    }
+
+    struct GenerationLayoutQuality: Codable, Equatable {
+        var issueCount: Int
+        var errorCount: Int
+        var warningCount: Int
+        var issues: [GenerationLayoutIssue]
+        var omittedIssueCount: Int
+    }
+
+    final class GenerationPlan: Codable, Equatable {
+        let configurationRevision: UInt64
+        let schemaVersion: Int
+        let catalogRevision: Int
+        let plannerRevision: Int
+        let descriptorDigest: String
+        let generatedJSON: String
+        let artifactJSON: String
+        let contentHash: ContentHash
+        let warnings: [GenerationWarning]
+        let omittedWarningCount: Int
+        let assignedControls: [GenerationAssignedControl]
+        let droppedControls: [GenerationDroppedControl]
+        let layoutQuality: GenerationLayoutQuality
+
+        static func == (lhs: GenerationPlan, rhs: GenerationPlan) -> Bool {
+            lhs.configurationRevision == rhs.configurationRevision
+                && lhs.schemaVersion == rhs.schemaVersion
+                && lhs.catalogRevision == rhs.catalogRevision
+                && lhs.plannerRevision == rhs.plannerRevision
+                && lhs.descriptorDigest == rhs.descriptorDigest
+                && lhs.generatedJSON == rhs.generatedJSON
+                && lhs.artifactJSON == rhs.artifactJSON
+                && lhs.contentHash == rhs.contentHash
+                && lhs.warnings == rhs.warnings
+                && lhs.omittedWarningCount == rhs.omittedWarningCount
+                && lhs.assignedControls == rhs.assignedControls
+                && lhs.droppedControls == rhs.droppedControls
+                && lhs.layoutQuality == rhs.layoutQuality
+        }
+    }
+
     struct Outcome: Codable, Equatable {
         var operation: String
         var profileNames: [String]
@@ -1189,6 +1290,8 @@ final class ThumbleCLIProfileBackend {
         var authorityMode: String
         var authorityPresent: Bool?
         var catalog: Catalog?
+        var artifact: ProfileArtifactResponse?
+        var generationPlan: GenerationPlan?
         var orientation: OrientationSummary?
         var projection: BindingOutputProjection?
         var controlBar: ControlBarProjection?
@@ -1206,6 +1309,8 @@ final class ThumbleCLIProfileBackend {
         case insecureExecutable
         case encodingFailed
         case requestTooLarge
+        case generationSpecTooLarge
+        case requestedGameNameTooLong
         case launchFailed
         case timeout
         case inputWriteFailed
@@ -1224,6 +1329,10 @@ final class ThumbleCLIProfileBackend {
                 return "Could not encode the typed CLI profile request."
             case .requestTooLarge:
                 return "Typed CLI profile request exceeds its size limit."
+            case .generationSpecTooLarge:
+                return "Generation spec JSON exceeds its 256 KiB UTF-8 size limit."
+            case .requestedGameNameTooLong:
+                return "Requested game name exceeds its 256-character limit."
             case .launchFailed:
                 return "Could not launch the validated CLI profile bridge."
             case .timeout:
@@ -1267,6 +1376,7 @@ final class ThumbleCLIProfileBackend {
         invocationID: UUID? = nil,
         expectedConfigurationRevision: UInt64? = nil
     ) throws -> Response {
+        try Self.validateBeforeLaunch(command)
         let invocationID = invocationID ?? UUID()
         let request = Request(
             command: command,
@@ -1276,7 +1386,7 @@ final class ThumbleCLIProfileBackend {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
         guard var input = try? encoder.encode(request) else { throw BackendError.encodingFailed }
-        guard input.count <= Self.maximumRequestBytes else { throw BackendError.requestTooLarge }
+        guard input.count + 1 <= Self.maximumRequestBytes else { throw BackendError.requestTooLarge }
         input.append(0x0A)
         let result = try execute(input: input)
         let line = try Self.singleLine(result.stdout)
@@ -1294,6 +1404,18 @@ final class ThumbleCLIProfileBackend {
         }
         guard result.status == 0 else { throw BackendError.helperFailed }
         return response
+    }
+
+    private static func validateBeforeLaunch(_ command: Command) throws {
+        guard case .generationPlanSpec(let specJSON, let requestedGameName) = command else {
+            return
+        }
+        guard specJSON.utf8.count <= maximumGenerationSpecBytes else {
+            throw BackendError.generationSpecTooLarge
+        }
+        guard requestedGameName.map({ $0.unicodeScalars.count <= 256 }) ?? true else {
+            throw BackendError.requestedGameNameTooLong
+        }
     }
 
     func requireLegacyPersistenceAllowed(operation: String) throws {
@@ -1448,6 +1570,14 @@ final class ThumbleCLIProfileBackend {
         let safeText: (String, Int) -> Bool = { value, maximum in
             !value.isEmpty && value.count <= maximum && !value.unicodeScalars.contains { CharacterSet.controlCharacters.contains($0) }
         }
+        if let artifact = response.artifact {
+            guard artifact.artifactJSON.utf8.count <= maximumProfileArtifactBytes,
+                  boundedSHA256(artifact.contentHash)
+            else { return false }
+        }
+        if let generationPlan = response.generationPlan {
+            guard boundedGenerationPlan(generationPlan) else { return false }
+        }
         if let catalog = response.catalog {
             guard catalog.profiles.count <= 256,
                   catalog.profiles.enumerated().allSatisfy({ offset, profile in
@@ -1550,14 +1680,148 @@ final class ThumbleCLIProfileBackend {
         return true
     }
 
+    private static func boundedGenerationPlan(_ plan: GenerationPlan) -> Bool {
+        let safeText: (String, Int) -> Bool = { value, maximum in
+            !value.isEmpty && value.utf8.count <= maximum
+                && !value.unicodeScalars.contains { CharacterSet.controlCharacters.contains($0) }
+        }
+        guard plan.schemaVersion == 1,
+              plan.catalogRevision == 1,
+              plan.plannerRevision == 1,
+              isLowercaseSHA256(plan.descriptorDigest),
+              plan.generatedJSON.utf8.count <= maximumGenerationOutputBytes,
+              plan.artifactJSON.utf8.count <= maximumGenerationOutputBytes,
+              boundedSHA256(plan.contentHash),
+              plan.warnings.count <= 128,
+              plan.omittedWarningCount >= 0,
+              plan.omittedWarningCount <= 128,
+              plan.omittedWarningCount == 0 || plan.warnings.count == 128,
+              plan.assignedControls.count <= 18,
+              plan.droppedControls.count <= 128,
+              plan.layoutQuality.issues.count <= 128
+        else { return false }
+
+        let validOrdinal: (Int) -> Bool = { (0 ..< 128).contains($0) }
+        guard plan.warnings.allSatisfy({ warning in
+            validOrdinal(warning.sourceOrdinal)
+                && safeText(warning.code, 64)
+                && safeText(warning.message, 256)
+        }),
+        plan.assignedControls.allSatisfy({ control in
+            validOrdinal(control.sourceOrdinal)
+                && safeText(control.button, 32)
+                && safeText(control.elementID, 64)
+                && safeText(control.kind, 32)
+        }),
+        plan.droppedControls.allSatisfy({ control in
+            validOrdinal(control.sourceOrdinal) && safeText(control.reason, 128)
+        })
+        else { return false }
+
+        let assignedOrdinals = plan.assignedControls.map(\.sourceOrdinal)
+        let droppedOrdinals = plan.droppedControls.map(\.sourceOrdinal)
+        let allOrdinals = assignedOrdinals + droppedOrdinals
+        guard Set(allOrdinals).count == allOrdinals.count,
+              Set(plan.assignedControls.map(\.elementID)).count == plan.assignedControls.count
+        else { return false }
+
+        let quality = plan.layoutQuality
+        guard quality.issueCount >= 0,
+              quality.errorCount >= 0,
+              quality.warningCount >= 0,
+              quality.omittedIssueCount >= 0,
+              quality.issueCount == quality.issues.count + quality.omittedIssueCount,
+              quality.errorCount + quality.warningCount <= quality.issueCount
+        else { return false }
+
+        let retainedErrors = quality.issues.filter { $0.severity == "error" }.count
+        let retainedWarnings = quality.issues.filter { $0.severity == "warning" }.count
+        guard retainedErrors <= quality.errorCount,
+              retainedWarnings <= quality.warningCount,
+              quality.omittedIssueCount > 0
+                || (retainedErrors == quality.errorCount
+                    && retainedWarnings == quality.warningCount),
+              quality.issues.allSatisfy({ issue in
+                  safeText(issue.code, 64)
+                      && ["error", "warning", "info"].contains(issue.severity)
+                      && issue.controlIDs.count <= 16
+                      && Set(issue.controlIDs).count == issue.controlIDs.count
+                      && issue.controlIDs.allSatisfy({ safeText($0, 128) })
+                      && issue.controlCount >= issue.controlIDs.count
+                      && issue.controlCount <= 18
+                      && (issue.metric.map(\.isFinite) ?? true)
+                      && issue.suggestedRepairs.count <= 16
+                      && issue.suggestedRepairs.allSatisfy({ safeText($0, 128) })
+              })
+        else { return false }
+        return true
+    }
+
+    private static func boundedSHA256(_ hash: ContentHash) -> Bool {
+        hash.algorithm == "sha256"
+            && hash.canonicalization == "rfc8785"
+            && isLowercaseSHA256(hash.value)
+    }
+
+    private static func isLowercaseSHA256(_ value: String) -> Bool {
+        value.utf8.count == 64 && value.utf8.allSatisfy { byte in
+            (0x30 ... 0x39).contains(byte) || (0x61 ... 0x66).contains(byte)
+        }
+    }
+
     private static func validateStrictResponseJSON(_ data: Data) throws {
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw BackendError.malformedResponse
         }
         try requireOnly(root, [
             "schemaVersion", "ok", "invocationID", "authorityMode", "authorityPresent",
-            "catalog", "orientation", "projection", "controlBar", "controlBarItem", "device", "styles", "layers", "groups", "outcome", "error"
+            "catalog", "artifact", "generationPlan", "orientation", "projection", "controlBar",
+            "controlBarItem", "device", "styles", "layers", "groups", "outcome", "error"
         ])
+        if let artifact = root["artifact"] as? [String: Any] {
+            try requireOnly(artifact, ["configurationRevision", "artifactJSON", "contentHash"])
+            guard let contentHash = artifact["contentHash"] as? [String: Any] else {
+                throw BackendError.malformedResponse
+            }
+            try requireOnly(contentHash, ["algorithm", "canonicalization", "value"])
+        }
+        if let plan = root["generationPlan"] as? [String: Any] {
+            try requireOnly(plan, [
+                "configurationRevision", "schemaVersion", "catalogRevision", "plannerRevision",
+                "descriptorDigest", "generatedJSON", "artifactJSON", "contentHash", "warnings",
+                "omittedWarningCount", "assignedControls", "droppedControls", "layoutQuality"
+            ])
+            guard let contentHash = plan["contentHash"] as? [String: Any],
+                  let warnings = plan["warnings"] as? [[String: Any]], warnings.count <= 128,
+                  let assigned = plan["assignedControls"] as? [[String: Any]], assigned.count <= 18,
+                  let dropped = plan["droppedControls"] as? [[String: Any]], dropped.count <= 128,
+                  let quality = plan["layoutQuality"] as? [String: Any]
+            else { throw BackendError.malformedResponse }
+            try requireOnly(contentHash, ["algorithm", "canonicalization", "value"])
+            for warning in warnings {
+                try requireOnly(warning, ["code", "sourceOrdinal", "message"])
+            }
+            for control in assigned {
+                try requireOnly(control, [
+                    "sourceOrdinal", "button", "elementID", "kind", "usedExplicitButton"
+                ])
+            }
+            for control in dropped {
+                try requireOnly(control, ["sourceOrdinal", "reason"])
+            }
+            try requireOnly(quality, [
+                "issueCount", "errorCount", "warningCount", "issues", "omittedIssueCount"
+            ])
+            guard let issues = quality["issues"] as? [[String: Any]], issues.count <= 128 else {
+                throw BackendError.malformedResponse
+            }
+            for issue in issues {
+                try requireOnly(issue, [
+                    "code", "severity", "controlIDs", "controlCount", "metric",
+                    "suggestedRepairs"
+                ])
+            }
+        }
         if let catalog = root["catalog"] as? [String: Any] {
             try requireOnly(catalog, ["configurationRevision", "profiles"])
             guard let profiles = catalog["profiles"] as? [[String: Any]], profiles.count <= 256 else {

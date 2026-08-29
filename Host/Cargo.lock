@@ -1419,6 +1419,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9774ba4a74de5f7b1c1451ed6cd5285a32eddb5cccb8cc655a4e50009e06477f"
 
 [[package]]
+name = "ryu-js"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "04d056b875a9d2e6cb9a61d127afee9ac5999b9f87bcb32079d1318e505be714"
+
+[[package]]
 name = "schemars"
 version = "1.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1496,6 +1502,17 @@ dependencies = [
  "serde",
  "serde_core",
  "zmij",
+]
+
+[[package]]
+name = "serde_json_canonicalizer"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fe52319a927259afbfa5180c5157cd8167edfd3e8c254f9558c7fef44c5649f2"
+dependencies = [
+ "ryu-js",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -1706,11 +1723,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "thumble-builder"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "serde_json_canonicalizer",
+ "sha2",
+ "thumble-core",
+ "thumble-protocol",
+ "uuid",
+]
+
+[[package]]
 name = "thumble-cli-bridge"
 version = "0.1.0"
 dependencies = [
  "libc",
  "serde_json",
+ "tempfile",
+ "thumble-core",
  "thumble-host",
  "tokio",
  "uuid",
@@ -1722,7 +1754,11 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
+ "serde_json_canonicalizer",
+ "sha2",
  "thumble-protocol",
+ "unicode-segmentation",
+ "uuid",
 ]
 
 [[package]]
@@ -1740,6 +1776,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "tempfile",
+ "thumble-builder",
  "thumble-core",
  "thumble-host",
  "thumble-mcp",
@@ -1780,6 +1817,7 @@ dependencies = [
 name = "thumble-mcp"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "clap",
  "fs2",
  "futures",
@@ -2086,6 +2124,12 @@ name = "unicode-ident"
 version = "1.0.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e6e4313cd5fcd3dad5cafa179702e2b244f760991f45397d14d4ebf38247da75"
+
+[[package]]
+name = "unicode-segmentation"
+version = "1.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f6ccf251212114b54433ec949fd6a7841275f9ada20dddd2f29e9ceea4501493"
 
 [[package]]
 name = "untrusted"

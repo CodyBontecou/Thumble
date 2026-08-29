@@ -61,7 +61,9 @@ async fn run() -> Result<(), String> {
         TunnelRegistry::new(),
         base_url.clone(),
     ));
-    let router = thumble_gateway::app(state);
+    // Readiness fails closed until the checked bounded startup prune completes;
+    // router construction (and therefore serving) happens only afterward.
+    let router = thumble_gateway::app_after_startup_prune(state.clone()).await?;
 
     let address: SocketAddr = bind
         .parse()
@@ -69,11 +71,38 @@ async fn run() -> Result<(), String> {
     let listener = tokio::net::TcpListener::bind(address)
         .await
         .map_err(|error| format!("bind {bind}: {error}"))?;
+
+    // Keep bounded periodic maintenance after the checked startup pass. The
+    // task is aborted explicitly when the server shuts down.
+    let maintenance_store = store.clone();
+    let maintenance_work = state.builder_work_semaphore.clone();
+    let maintenance = tokio::spawn(async move {
+        loop {
+            let store = maintenance_store.clone();
+            let permit = match maintenance_work.clone().acquire_owned().await {
+                Ok(permit) => permit,
+                Err(_) => break,
+            };
+            match tokio::task::spawn_blocking(move || {
+                let _permit = permit;
+                store.prune_builder_storage()
+            })
+            .await
+            {
+                Ok(Ok(())) => {}
+                Ok(Err(_)) | Err(_) => {
+                    eprintln!("gateway: builder-prune phase=periodic outcome=storage-error")
+                }
+            }
+            tokio::time::sleep(std::time::Duration::from_secs(15 * 60)).await;
+        }
+    });
+
     eprintln!(
         "thumble-gateway listening on http://{bind} (public base {base_url}, database {})",
         database.display()
     );
-    axum::serve(
+    let result = axum::serve(
         listener,
         router.into_make_service_with_connect_info::<SocketAddr>(),
     )
@@ -82,6 +111,7 @@ async fn run() -> Result<(), String> {
         eprintln!("thumble-gateway shutting down");
     })
     .await
-    .map_err(|error| format!("serve gateway: {error}"))?;
-    Ok(())
+    .map_err(|error| format!("serve gateway: {error}"));
+    maintenance.abort();
+    result
 }

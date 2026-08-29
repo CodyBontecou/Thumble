@@ -24,14 +24,31 @@ silently synchronized in both directions with host state.
   executor, permission gate, phone effect, intended MCP tool, and implementation
   status. `planned`, `foundation`, and `partial` entries are not claims that the
   capability is currently available.
+- `hosted-builder-capabilities-v1.json` separately records the hosted-only
+  builder connector, its pre-adoption authority boundary, tool contracts,
+  shared CLI-operation dependencies, and share endpoint. Builder tools never
+  receive invented CLI paths; `planned`, `foundation`, and `partial` remain
+  non-availability statuses.
+- `profile-artifact-v1.md` specifies the bounded hashed profile interchange
+  format, portability boundary, legacy upgrade behavior, Rust authority import
+  semantics, framing limits, and real-binary verification flow.
+- `generation-spec-v1.md` specifies deterministic typed agent-spec planning,
+  safe appearance/semantic-key bounds, generated/profile artifact outputs,
+  plan-to-import authority routing, fixtures, and real-binary verification.
+- `builder-session-v1.md` specifies the pure pre-adoption session state machine,
+  revision/replay and persistence invariants, edit/generate/template surface,
+  sanitized projections, deterministic emission, bounds, and fixture gates.
 - `configuration-operation-v1.schema.json` is the allowlisted operation
   contract for revision-safe native and Swift-bridge draft transforms. It currently covers deterministic built-in generation and template installation, profile rename/select/default/duplicate/delete/move/create/reset, safe scalar customization, deterministic `customization.fix`, catalog-only persisted device selection, orientation preference/copy, typed control-bar collections/resets and rendering-effective non-file item appearance patches, complete non-file reusable-style create/rename/apply/detach/delete, revision-safe layer ordering and deterministic layer-group create/rename/duplicate/ungroup/visibility/locking/catalog-canvas nudging/reordering, theme application, deterministic six-kind non-file element creation, complete safe non-file element edits, semantic element/part outputs, semantic bindings, and output modes/resets. `customization.fix` accepts `{kind:"all"}` or one of seven canonical repairs, targets primary/portrait/landscape, respects locks unless `includeLocked` is true, and uses exactly one stored, checked-in frame, or 240...1800 bounded width/height canvas. Canvas overrides affect repair geometry only and never persist a custom frame ID. All/suggested mode uses priority-sorted issues, the first suggestion, at most one auto-arrange per pass, and at most three passes. Issue-code targeting remains intentionally CLI-only. Element add/set cover mapped buttons, labels/roles, geometry, visibility/locking, hit regions/corners, solid/gradient/tile fills, joystick thumb colors, bounded inline appearance, existing style references, text/SF-symbol icons, haptics, joystick/trigger/trackpad behavior, and safe output parts. Style creation includes the CLI's three material presets, solid colors, strokes, glow, inner shadow, highlight, bevel, opacity, up to eight shadows, pressed fill/scale, SF-symbol or text icons, and bounded haptics. It intentionally excludes
   arbitrary JSON patches, raw style/profile payloads, persisted custom dimensions, asset/image/file payloads or icons, artwork IDs, shell/process arguments, filesystem paths, numeric
   key codes, modifier masks, and authentication data. `control-bar.item.set` starts from the selected variant's effective item appearance, requires membership and nonempty changes, and permits only retained width/height, visibility, shape/corners/shadow/accent, typed solid/gradient/tile fills and opacities, canonical existing style references, bounded inline material/appearance, text/SF-symbol icons, and haptics; spacer accepts only width and visibility. Hit insets, integrated labels, coordinates, rotation, z-index, locking, joystick fields, images/assets, launch targets, and raw payloads are absent because they are inert or unsafe for control-bar rendering. `preview_configuration_draft` exposes color-scheme/accent/label preferences, sanitized normal-state canvas fills, bounded ordered `controlBarItems` with canonical item/target IDs, order, visibility, and sanitized effective appearance; a bounded ordered `layers` list; bounded `groups`; up to 64 sanitized style definitions; and bounded message-free `layoutQuality` issues containing only canonical code/severity, safe target IDs, finite metrics, counts, and canonical repair suggestions. The embedded read-only and draft MCP Apps render the safe canvas and element appearance fields with native fill precedence, contrast, stroke, corner, shadow, joystick, label, polygon, and star semantics rather than a fixed web palette. Control-bar records remain bounded inspection/edit targets; transient iPhone app chrome is not simulated in the controller canvas. Unsupported asset/image/path-bearing content is omitted and flagged without exposing profile JSON; layout issues are pruned before editor targets to preserve the 48 KiB snapshot cap.
 - `controller-templates-v1.json` is the bounded read-only template catalog used by `query_catalog`; Swift tests keep its IDs, descriptions, revisions, and deterministic UUID counts golden against `GamepadControllerTemplate.allCases`.
 - `device-frames-v1.json` is the bounded read-only catalog of the 68 exact built-in portrait/landscape frame IDs accepted by `device.set`. Custom dimensions and model aliases are deliberately absent from the write contract.
-- `scripts/verify-mcp-cli-parity.py` checks ledger integrity and compares it with
-  the canonical root/subcommand dispatch surface in `ThumbleCLI.swift`.
+- `scripts/verify-mcp-cli-parity.py` checks CLI-ledger integrity and compares it
+  with the canonical root/subcommand dispatch surface in `ThumbleCLI.swift`.
+- `scripts/verify-hosted-builder-capabilities.py` checks the hosted-only tool
+  set, gates, connector/share contracts, and references back to shared CLI
+  operations without weakening the CLI ledger's mandatory path rule.
 
 ## Non-negotiable transaction rules
 
@@ -68,6 +85,7 @@ Run the ledger gate with:
 
 ```bash
 python3 scripts/verify-mcp-cli-parity.py
+python3 scripts/verify-hosted-builder-capabilities.py
 ```
 
 ## Remote connector deployments
@@ -77,8 +95,30 @@ MCP connectors (ChatGPT): an OAuth 2.1-authenticated `thumble-gateway`
 routing Streamable HTTP sessions to the user's own `thumble-mcp --relay`
 over an outbound WebSocket tunnel. The gateway is a router, never an
 authority: this directory's transaction rules, the Rust host's ownership of
-configuration state, and every sanitization contract above continue to apply
-unchanged to remote sessions, which exercise the exact same MCP tool surface
+configuration state, and every sanitization contract above continue to apply.
+
+`docs/mcp/hosted-builder-plan.md` is the planning document for the deferred
+tunnel-free **builder connector**: hosted sessions that run `thumble-core`
+server-side and emit importable profile artifacts — pre-adoption state only,
+with no cloud authority over any phone. Phases 0–3, the Phase 4 local
+gateway integration, Phase 5 local iPhone pickup/practice/paired-adoption,
+and Phase 6 local desktop adoption are implemented: the separate capability
+contract, portable profile artifact
+flow, deterministic Rust generation-spec plan/import flow, pure replay-safe
+builder session/template/artifact library, authenticated loopback gateway
+runtime, token-gated share endpoint, defensive iPhone quarantine, practice-only
+preview, explicit append-as-copies transfer into the paired Mac authority, and
+the Mac app's "Import Shared Keypad…" entry (share link or file) through the
+same authority import as `thumble profile import`. Cloud skins stay out of v1
+and the alpha (decision recorded in the plan). The hosted capability
+contracts remain `partial` and unavailable until production, ChatGPT, and
+physical-device acceptance are complete. See
+`docs/mcp/phase4-local-acceptance.md` and
+`docs/mcp/phase5-adoption-local-acceptance.md` for local gates and pending
+receipts.
+
+The relay authority and sanitization contracts remain unchanged for remote
+sessions, which exercise the exact same MCP tool surface
 through the same local adapter. Per-tool remote scopes (`thumble.read`,
 `thumble.draft`, `thumble.config`) are an additional outer gate enforced
 before forwarding; the local `--allow-input` / `--allow-config-write`
