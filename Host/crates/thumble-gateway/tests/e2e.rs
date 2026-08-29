@@ -2286,10 +2286,34 @@ async fn builder_oauth_is_resource_isolated_without_a_device_or_tunnel() {
     let omitted_resource = omitted_resource.text().await.unwrap();
     assert!(omitted_resource.contains("Link your Mac's Thumble controller"));
     let relay_request_id = hidden_form_value(&omitted_resource, "request_id");
+    // The builder resource tolerates shared-issuer scope unions: relay scopes
+    // are filtered out (never granted) and the builder consent page is shown.
+    let union_scopes = http
+        .get(format!("{base}/authorize"))
+        .query(&[
+            ("response_type", "code"),
+            ("client_id", client_id.as_str()),
+            ("redirect_uri", "https://builder.example/callback"),
+            ("state", "union"),
+            ("resource", builder_resource.as_str()),
+            ("scope", "thumble.build thumble.read"),
+            ("code_challenge", challenge.as_str()),
+            ("code_challenge_method", "S256"),
+        ])
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(union_scopes.status(), 200);
+    let union_page = union_scopes.text().await.unwrap();
+    assert!(union_page.contains("thumble.build"));
+    assert!(
+        !union_page.contains("thumble.read"),
+        "the consent page must show only builder scopes, never relay scopes"
+    );
     for (resource, scope) in [
-        (builder_resource.as_str(), "thumble.build thumble.read"),
         (relay_resource.as_str(), "thumble.build"),
         ("https://wrong.example/mcp", "thumble.build"),
+        (builder_resource.as_str(), "thumble.nonsense"),
     ] {
         let rejected = http
             .get(format!("{base}/authorize"))

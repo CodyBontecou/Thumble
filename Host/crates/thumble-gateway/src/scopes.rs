@@ -74,6 +74,13 @@ pub fn parse_relay_scopes(requested: &str) -> Result<Vec<String>, String> {
 
 /// Parse builder grants independently from relay grants. A non-empty request
 /// must explicitly include `thumble.build`; omitted scope defaults to it.
+/// The union-tolerant behavior: relay-resource scopes (and the never-grantable
+/// input scope) are ignored rather than rejected, and a request whose scopes
+/// are all filtered out defaults to `thumble.build` — mirroring the empty-scope
+/// default. This is safe because the authorize request is already bound to the
+/// builder resource via the RFC 8707 `resource` parameter and the consent page
+/// shows exactly the granted builder scope. Scopes unknown to this server
+/// still fail so typos are never silently accepted.
 pub fn parse_builder_scopes(requested: &str) -> Result<Vec<String>, String> {
     if requested.trim().is_empty() {
         return Ok(vec![SCOPE_BUILD.to_owned()]);
@@ -86,8 +93,14 @@ pub fn parse_builder_scopes(requested: &str) -> Result<Vec<String>, String> {
                     granted.push(scope.to_owned());
                 }
             }
+            // Relay-resource scopes (and the never-grantable input scope) are
+            // bound to the other connector on this shared issuer; ignore them.
+            SCOPE_READ | SCOPE_DRAFT | SCOPE_CONFIG | SCOPE_INPUT => {}
             other => return Err(format!("unknown builder scope: {other}")),
         }
+    }
+    if granted.is_empty() {
+        granted.push(SCOPE_BUILD.to_owned());
     }
     if !granted.iter().any(|scope| scope == SCOPE_BUILD) {
         return Err(format!("builder authorization requires {SCOPE_BUILD}"));
@@ -201,8 +214,20 @@ mod tests {
             parse_builder_scopes("thumble.build offline_access thumble.build").unwrap(),
             vec![SCOPE_BUILD, SCOPE_OFFLINE_ACCESS]
         );
-        assert!(parse_builder_scopes(SCOPE_READ).is_err());
+        // Relay scopes are ignored (shared-issuer union requests), not granted.
+        assert_eq!(parse_builder_scopes(SCOPE_READ).unwrap(), vec![SCOPE_BUILD]);
+        assert_eq!(
+            parse_builder_scopes(
+                "thumble.read thumble.draft thumble.config thumble.build offline_access"
+            )
+            .unwrap(),
+            vec![SCOPE_BUILD, SCOPE_OFFLINE_ACCESS]
+        );
+        assert_eq!(
+            parse_builder_scopes("thumble.build thumble.input thumble.config").unwrap(),
+            vec![SCOPE_BUILD]
+        );
         assert!(parse_builder_scopes("offline_access").is_err());
-        assert!(parse_builder_scopes("thumble.build thumble.config").is_err());
+        assert!(parse_builder_scopes("thumble.admin").is_err());
     }
 }
