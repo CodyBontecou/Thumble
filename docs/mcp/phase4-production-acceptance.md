@@ -64,6 +64,25 @@ The v19 pre-deploy backup is
 `0f5e08c51bd8937cf91b40a9179b9ecf1bcf2068e0c6043c095e1111b9312aad`, with
 `PRAGMA integrity_check` = `ok`.
 
+## v20 cookie-partitioned browser compatibility
+
+The browser could still lack both the consent cookie and `Origin`. Commit
+`2929bd4` renders a separate 64-character one-time `browser_proof` in the
+consent form. The server verifies that proof against the existing hashed
+authorization-request nonce, while preserving cookie support and explicit
+cross-origin rejection.
+
+Release v20 (`2929bd4`, image
+`deployment-01M1A1DAV0YDC4Q4NF7VM0EESH`) is live and healthy. Its pre-deploy
+backup is `/data/thumble-gateway-predeploy-2929bd4.db`, SHA-256
+`f2d1d10cb8109b7a0597770f6e67aa8195aa8b7217bf427381e25f5ab77f8241`,
+1,101,824 bytes, and `PRAGMA integrity_check` = `ok`.
+
+A production DCR → consent → authorization-code exchange smoke verified the
+exact browser case: **no Cookie + no Origin + the hidden one-time proof**
+returns `302`, and token exchange returns `200` with only
+`offline_access thumble.build`.
+
 ## Remaining gate
 
 Visible ChatGPT developer-mode builder acceptance (fresh conversation:
