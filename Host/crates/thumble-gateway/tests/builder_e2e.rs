@@ -170,7 +170,7 @@ async fn authorize(http: &reqwest::Client, gateway: &Gateway, label: &str) -> Au
         .await
         .unwrap();
     assert_eq!(consent.status(), 200);
-    let cookie = consent.headers()["set-cookie"]
+    let _cookie = consent.headers()["set-cookie"]
         .to_str()
         .unwrap()
         .split(';')
@@ -184,9 +184,12 @@ async fn authorize(http: &reqwest::Client, gateway: &Gateway, label: &str) -> Au
     let html = consent.text().await.unwrap();
     assert!(html.contains("Authorize Thumble Builder"));
     let request_id = hidden_value(&html, "request_id");
+    let browser_proof = hidden_value(&html, "browser_proof");
+    assert_eq!(browser_proof.len(), 64);
 
-    // Consent remains bound to the scoped cookie. Browser form POSTs may omit
-    // Origin, so the header is optional when the exact cookie is present.
+    // Consent remains bound to a one-time browser proof. Browser form POSTs
+    // may omit Origin and partition/omit cookies, so the form proof is a
+    // cookie-free fallback while the cookie path remains supported below.
     assert_eq!(
         http.post(format!("{}/authorize/builder/confirm", gateway.base))
             .form(&[("request_id", request_id.as_str()), ("decision", "allow")])
@@ -198,9 +201,11 @@ async fn authorize(http: &reqwest::Client, gateway: &Gateway, label: &str) -> Au
     );
     let confirmed = http
         .post(format!("{}/authorize/builder/confirm", gateway.base))
-        .header("Origin", &gateway.base)
-        .header("Cookie", cookie)
-        .form(&[("request_id", request_id.as_str()), ("decision", "allow")])
+        .form(&[
+            ("request_id", request_id.as_str()),
+            ("decision", "allow"),
+            ("browser_proof", browser_proof.as_str()),
+        ])
         .send()
         .await
         .unwrap();

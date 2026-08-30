@@ -47,6 +47,10 @@ fn builder_consent_cookie(base_url: &str, nonce: &str, clear: bool) -> Result<He
     HeaderValue::from_str(&value).map_err(|_| "builder consent cookie is invalid".to_owned())
 }
 
+fn valid_builder_consent_proof(value: &str) -> bool {
+    value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_alphanumeric())
+}
+
 fn builder_consent_nonce(headers: &HeaderMap) -> Option<&str> {
     let mut found = None;
     for value in headers.get_all(header::COOKIE) {
@@ -54,10 +58,7 @@ fn builder_consent_nonce(headers: &HeaderMap) -> Option<&str> {
         for cookie in value.split(';') {
             let (name, value) = cookie.trim().split_once('=')?;
             if name == BUILDER_CONSENT_COOKIE {
-                if found.is_some()
-                    || value.len() != 64
-                    || !value.bytes().all(|byte| byte.is_ascii_alphanumeric())
-                {
+                if found.is_some() || !valid_builder_consent_proof(value) {
                     return None;
                 }
                 found = Some(value);
@@ -71,9 +72,8 @@ fn same_gateway_origin(headers: &HeaderMap, base_url: &str) -> bool {
     let mut origins = headers.get_all(header::ORIGIN).iter();
     let Some(origin) = origins.next().and_then(|value| value.to_str().ok()) else {
         // Some legitimate browser/webview HTML form POSTs omit Origin. The
-        // caller still requires the exact one-time consent cookie below, so
-        // absence is compatible while an explicit cross-origin value remains
-        // rejected.
+        // caller still requires a one-time consent proof below, so absence is
+        // compatible while an explicit cross-origin value remains rejected.
         return true;
     };
     if origins.next().is_some() {
@@ -614,7 +614,12 @@ pub async fn authorize(
             Err(error) => return server_error(error),
         };
         return with_builder_cookie(
-            Html(builder_consent_html(&request_id, &granted_scope)).into_response(),
+            Html(builder_consent_html(
+                &request_id,
+                &granted_scope,
+                &consent_nonce,
+            ))
+            .into_response(),
             cookie,
         );
     }
@@ -670,7 +675,7 @@ pub async fn authorize(
     .into_response()
 }
 
-fn builder_consent_html(request_id: &str, granted_scope: &str) -> String {
+fn builder_consent_html(request_id: &str, granted_scope: &str, browser_proof: &str) -> String {
     let offline = if granted_scope
         .split_whitespace()
         .any(|scope| scope == scopes::SCOPE_OFFLINE_ACCESS)
@@ -689,10 +694,12 @@ fn builder_consent_html(request_id: &str, granted_scope: &str) -> String {
 <p>This creates a new opaque authorization identity for this consent. No existing account selects that identity.</p>
 <form method="post" action="/authorize/builder/confirm">
 <input type="hidden" name="request_id" value="{request_id}">
+<input type="hidden" name="browser_proof" value="{browser_proof}">
 <button type="submit" name="decision" value="allow">Authorize builder</button>
 <button class="deny" type="submit" name="decision" value="deny">Deny</button>
 </form></div></body></html>"#,
         request_id = html_escape(request_id),
+        browser_proof = html_escape(browser_proof),
     )
 }
 
@@ -718,6 +725,9 @@ fn unavailable_builder_authorization(reason: &str) -> Response {
 pub struct BuilderConfirmForm {
     pub request_id: String,
     pub decision: String,
+    /// Fallback for browser/webview contexts that partition or omit cookies.
+    /// The store still verifies this one-time proof against its digest.
+    pub browser_proof: Option<String>,
 }
 
 pub async fn authorize_builder_confirm(
@@ -730,8 +740,20 @@ pub async fn authorize_builder_confirm(
     if !same_gateway_origin(&headers, &issuer) {
         return forbidden_builder_consent();
     }
-    let Some(consent_nonce) = builder_consent_nonce(&headers) else {
-        return forbidden_builder_consent();
+    let cookie_nonce = builder_consent_nonce(&headers);
+    let form_nonce = form
+        .browser_proof
+        .as_deref()
+        .filter(|value| valid_builder_consent_proof(value));
+    let consent_nonce = match (cookie_nonce, form_nonce) {
+        (Some(cookie), Some(form))
+            if thumble_tunnel::constant_time_eq(cookie.as_bytes(), form.as_bytes()) =>
+        {
+            form
+        }
+        (Some(cookie), None) => cookie,
+        (None, Some(form)) => form,
+        _ => return forbidden_builder_consent(),
     };
     let source = crate::http::client_source_key(&headers, Some(&connect_info));
     if let Err(error) = state.oauth_rate_limiter.allow_authorization(&source) {
