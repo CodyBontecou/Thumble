@@ -120,6 +120,14 @@ fn callback_value(location: &str, name: &str) -> String {
         .into_owned()
 }
 
+fn completion_callback(html: &str) -> String {
+    html.split("id=\"oauth-callback\" href=\"")
+        .nth(1)
+        .and_then(|rest| rest.split('"').next())
+        .unwrap()
+        .replace("&amp;", "&")
+}
+
 fn pkce() -> (String, String) {
     let verifier = "builder-e2e-verifier-builder-e2e-verifier-123456789".to_owned();
     let challenge = base64::engine::general_purpose::URL_SAFE_NO_PAD
@@ -215,10 +223,13 @@ async fn authorize(http: &reqwest::Client, gateway: &Gateway, label: &str) -> Au
         .send()
         .await
         .unwrap();
-    assert_eq!(confirmed.status(), 302);
-    let location = confirmed.headers()["location"].to_str().unwrap();
-    assert_eq!(callback_value(location, "state"), label);
-    let code = callback_value(location, "code");
+    assert_eq!(confirmed.status(), 200);
+    assert!(confirmed.headers().get("location").is_none());
+    let completion = confirmed.text().await.unwrap();
+    assert!(completion.contains("Returning to ChatGPT"));
+    let location = completion_callback(&completion);
+    assert_eq!(callback_value(&location, "state"), label);
+    let code = callback_value(&location, "code");
 
     // Builder codes cannot be exchanged at the relay audience and a failed
     // audience check does not consume the code.

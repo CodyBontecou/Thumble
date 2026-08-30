@@ -834,7 +834,12 @@ pub async fn authorize_builder_confirm(
         parameters.push(("state", request.state.as_str()));
     }
     match oauth_response_url(&request.redirect_uri, &parameters) {
-        Ok(url) => with_builder_cookie(oauth_redirect(&url), clear_cookie),
+        // Isolated OAuth webviews can leave a POSTed consent page visible
+        // instead of following a cross-origin 302 (notably loopback callbacks
+        // owned by the ChatGPT desktop app). Reuse the relay flow's explicit
+        // no-script handoff page so meta refresh or the visible link completes
+        // the exact same validated callback without minting another code.
+        Ok(url) => with_builder_cookie(authorization_complete(&url, None), clear_cookie),
         Err(error) => server_error(error),
     }
 }

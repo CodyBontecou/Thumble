@@ -2147,7 +2147,7 @@ async fn complete_builder_consent(
         .send()
         .await
         .unwrap();
-    assert_eq!(confirmed.status(), 302);
+    assert_eq!(confirmed.status(), 200);
     assert!(confirmed
         .headers()
         .get("set-cookie")
@@ -2155,15 +2155,13 @@ async fn complete_builder_consent(
         .to_str()
         .unwrap()
         .contains("Max-Age=0"));
-    let location = confirmed
-        .headers()
-        .get("location")
-        .unwrap()
-        .to_str()
-        .unwrap();
-    assert_eq!(callback_values(location, "state"), vec![oauth_state]);
-    assert_eq!(callback_values(location, "iss"), vec![base]);
-    let code = callback_values(location, "code")
+    assert!(confirmed.headers().get("location").is_none());
+    let confirmed = confirmed.text().await.unwrap();
+    assert!(confirmed.contains("Returning to ChatGPT"));
+    let location = completion_callback(&confirmed);
+    assert_eq!(callback_values(&location, "state"), vec![oauth_state]);
+    assert_eq!(callback_values(&location, "iss"), vec![base]);
+    let code = callback_values(&location, "code")
         .into_iter()
         .next()
         .unwrap();
@@ -2505,17 +2503,11 @@ async fn builder_oauth_is_resource_isolated_without_a_device_or_tunnel() {
         .send()
         .await
         .unwrap();
-    assert_eq!(protected_allow.status(), 302);
+    assert_eq!(protected_allow.status(), 200);
+    assert!(protected_allow.headers().get("location").is_none());
+    let protected_allow = protected_allow.text().await.unwrap();
     assert_eq!(
-        callback_values(
-            protected_allow
-                .headers()
-                .get("location")
-                .unwrap()
-                .to_str()
-                .unwrap(),
-            "state"
-        ),
+        callback_values(&completion_callback(&protected_allow), "state"),
         vec!["protected-state"]
     );
     let protected_replay = http
