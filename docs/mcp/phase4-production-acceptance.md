@@ -83,6 +83,34 @@ exact browser case: **no Cookie + no Origin + the hidden one-time proof**
 returns `302`, and token exchange returns `200` with only
 `offline_access thumble.build`.
 
+## v21 authoritative form-proof compatibility
+
+A further visible attempt showed that the isolated OAuth webview could send an
+explicit opaque Origin and a stale partitioned cookie. Commit `0e928dc` makes
+the valid one-time form proof authoritative on that path; stale cookies and
+unreliable Origin are ignored only when that proof is present. Legacy
+cookie-only submissions again require the exact gateway Origin.
+
+An independent read-only OAuth/CSRF review confirmed the form-proof model is
+bound to the client, redirect URI, builder resource, PKCE challenge, and
+single-use authorization request. The review also identified and caused the
+cookie-only missing-Origin gate to be restored before deployment. Gateway
+validation passed (118 library + 10 integration tests, fmt, clippy), including:
+
+- `Origin: null` + stale cookie + valid form proof → allowed;
+- wrong form proof + valid cookie → `403` without consuming the request;
+- cookie-only + missing/cross-site Origin → `403`.
+
+Release v21 (`0e928dc`, image
+`deployment-01M1A37Y9B8TPR0M7Y64RB1N9N`) is live and healthy. Its pre-deploy
+backup is `/data/thumble-gateway-predeploy-0e928dc.db`, SHA-256
+`6d4b5782401164c7d8414270c0ef6e3c09f0777d3c8150c5adc96d35641cdb1f`,
+1,110,016 bytes, and `PRAGMA integrity_check` = `ok`; v20/image
+`deployment-01M1A1DAV0YDC4Q4NF7VM0EESH` remains the immediate rollback.
+A production isolated-webview smoke verified `Origin: null` + stale cookie +
+valid proof → `302`, then token exchange → `200` with the builder-only scope
+set. Fixed-label rejection telemetry contains no request/proof/token values.
+
 ## Remaining gate
 
 Visible ChatGPT developer-mode builder acceptance (fresh conversation:
