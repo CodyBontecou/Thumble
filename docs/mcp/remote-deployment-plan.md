@@ -241,17 +241,18 @@ pattern remains only as a headless fallback:
 - TLS everywhere; HSTS on the gateway.
 - Bearer token on every `/mcp` request; `401` + RFC 9728 metadata; exact
   redirect-URI matching; PKCE S256 enforced.
-- Refresh-token rotation with reuse detection, plus a bounded 60-second
-  grace window for concurrent refreshes: multi-window clients such as the
-  ChatGPT desktop app share one token cache across chat runtimes, so a
-  just-rotated token may be exchanged again within the window (at most four
-  live successors per credential, active devices only). Every independent
-  authorization receives its own random token family, propagated through
-  normal and grace rotations. Replays after the window, past the budget, or
-  on revoked devices revoke only the matching device/client/family; explicit
-  device revocation remains device-wide. Legacy empty-family rows remain
-  rollback-compatible. Override or disable the grace window via
-  `THUMBLE_GATEWAY_REFRESH_GRACE_SECONDS` (0 = strict replay revocation).
+- Refresh-token rotation with reuse detection, plus a bounded one-hour
+  overlap for delayed or concurrent refreshes: multi-window and independent
+  ChatGPT runtimes can retain the same token-cache entry after another runtime
+  rotates it, so the rotated token may be exchanged again within the overlap
+  (at most sixteen live successors per credential, active devices only).
+  Every independent authorization receives its own random token family,
+  propagated through normal and overlap rotations. Replays after the overlap,
+  past the budget, or on revoked devices revoke only the matching
+  device/client/family; explicit device revocation remains device-wide.
+  Legacy empty-family rows remain rollback-compatible. Override or disable
+  the overlap with `THUMBLE_GATEWAY_REFRESH_GRACE_SECONDS` (0 = strict replay
+  revocation, maximum 86400 seconds).
   Authorization-code consumption and access/refresh issuance are one SQLite
   transaction. All tokens/keys are hashed at rest; device tokens are
   revocable via `thumble relay revoke`.

@@ -217,10 +217,11 @@ ChatGPT ─HTTPS (Streamable HTTP, OAuth 2.1)→ thumble-gateway (cloud)
   link codes use HMAC-SHA256 with `THUMBLE_GATEWAY_TOKEN_SECRET`. OAuth
   request fields live server-side behind an opaque request ID rather than
   unsigned hidden fields. Refresh tokens require `offline_access`, rotate
-  with reuse detection plus a bounded 60-second concurrent-refresh grace
-  window (multi-window desktop clients share one token cache; replays
-  outside the window or past the successor budget revoke the whole device
-  family), and revoke the entire family on confirmed replay. Link
+  with reuse detection plus a bounded one-hour delayed/concurrent-refresh
+  overlap (multi-window and independent ChatGPT runtimes can retain the same
+  token cache entry; up to sixteen successors may be issued from one rotated
+  credential). Replays outside the overlap or past the successor budget revoke
+  only that authorization's token family. Link
   codes live one hour, are single-use, and have per-request, per-source,
   and global attempt/connection limits.
 - When the Mac is offline, connector tool scanning still works from the

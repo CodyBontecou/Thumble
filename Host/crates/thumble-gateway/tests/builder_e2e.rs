@@ -18,7 +18,7 @@ use thumble_gateway::builder::{BUILDER_TOOL_CATALOG_MAXIMUM_BYTES, BUILDER_TOOL_
 use thumble_gateway::builder_store::BuilderStoreError;
 use thumble_gateway::principal::ResourceKind;
 use thumble_gateway::state::AppState;
-use thumble_gateway::store::Store;
+use thumble_gateway::store::{Store, MAXIMUM_REFRESH_GRACE_SUCCESSORS};
 use thumble_gateway::tunnel::TunnelRegistry;
 
 const REDIRECT_URI: &str = "https://builder.example/callback";
@@ -875,7 +875,7 @@ async fn builder_limits_expiry_refresh_and_storage_cas_fail_closed() {
     // revokes that family without affecting another builder family.
     let resource = format!("{}/builder/mcp", gateway.base);
     let mut rotated_accesses = Vec::new();
-    for _ in 0..4 {
+    for _ in 0..MAXIMUM_REFRESH_GRACE_SUCCESSORS {
         let response = http
             .post(format!("{}/token", gateway.base))
             .form(&[

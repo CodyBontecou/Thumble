@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use thumble_gateway::state::AppState;
-use thumble_gateway::store::Store;
+use thumble_gateway::store::{Store, MAXIMUM_REFRESH_GRACE_SECONDS};
 use thumble_gateway::tunnel::TunnelRegistry;
 
 const BIND_ENV: &str = "THUMBLE_GATEWAY_BIND";
@@ -47,11 +47,15 @@ async fn run() -> Result<(), String> {
 
     let mut store = Store::open(&database, &token_secret)?;
     if let Some(grace) = environment("THUMBLE_GATEWAY_REFRESH_GRACE_SECONDS") {
-        let seconds: i64 = grace
-            .parse()
-            .map_err(|_| "THUMBLE_GATEWAY_REFRESH_GRACE_SECONDS must be 0-3600")?;
-        if !(0..=3600).contains(&seconds) {
-            return Err("THUMBLE_GATEWAY_REFRESH_GRACE_SECONDS must be 0-3600".to_owned());
+        let seconds: i64 = grace.parse().map_err(|_| {
+            format!(
+                "THUMBLE_GATEWAY_REFRESH_GRACE_SECONDS must be 0-{MAXIMUM_REFRESH_GRACE_SECONDS}"
+            )
+        })?;
+        if !(0..=MAXIMUM_REFRESH_GRACE_SECONDS).contains(&seconds) {
+            return Err(format!(
+                "THUMBLE_GATEWAY_REFRESH_GRACE_SECONDS must be 0-{MAXIMUM_REFRESH_GRACE_SECONDS}"
+            ));
         }
         store = store.with_refresh_grace(seconds);
     }

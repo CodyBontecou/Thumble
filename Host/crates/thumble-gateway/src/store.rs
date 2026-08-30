@@ -203,11 +203,17 @@ pub struct Store {
     refresh_grace_seconds: i64,
 }
 
-/// Default concurrent-refresh grace window in seconds.
-const DEFAULT_REFRESH_GRACE_SECONDS: i64 = 60;
+/// Default overlap for a rotated refresh token. ChatGPT can retain the same
+/// credential in independent chat runtimes and refresh it well after another
+/// runtime has advanced the shared token cache, so a near-simultaneous-only
+/// window is insufficient.
+pub const DEFAULT_REFRESH_GRACE_SECONDS: i64 = 60 * 60;
+/// Keep the operator override bounded: an intercepted rotated credential must
+/// not remain usable indefinitely.
+pub const MAXIMUM_REFRESH_GRACE_SECONDS: i64 = 24 * 60 * 60;
 /// Maximum direct successors one rotated refresh token may ever mint inside
-/// the grace window (original exchange plus concurrent peers).
-const MAXIMUM_GRACE_SUCCESSORS: i64 = 4;
+/// the grace window (original exchange plus delayed/concurrent ChatGPT peers).
+pub const MAXIMUM_REFRESH_GRACE_SUCCESSORS: i64 = 16;
 const DEFAULT_MAXIMUM_BUILDER_PRINCIPALS: i64 = 10_000;
 const DEFAULT_MAXIMUM_OAUTH_CLIENTS: i64 = 10_000;
 const DEFAULT_OAUTH_CLIENT_EVICTION_WATERMARK: i64 = 9_000;
@@ -867,10 +873,10 @@ impl Store {
         })
     }
 
-    /// Override the concurrent-refresh grace window (0 disables it and keeps
-    /// strict replay-revocation semantics).
+    /// Override the delayed/concurrent refresh-token overlap (0 disables it
+    /// and keeps strict replay-revocation semantics).
     pub fn with_refresh_grace(mut self, seconds: i64) -> Self {
-        self.refresh_grace_seconds = seconds.clamp(0, 3600);
+        self.refresh_grace_seconds = seconds.clamp(0, MAXIMUM_REFRESH_GRACE_SECONDS);
         self
     }
 
@@ -2619,7 +2625,7 @@ impl Store {
             } else {
                 i64::MAX
             };
-            if within_grace && successors < MAXIMUM_GRACE_SUCCESSORS && now <= expires_at {
+            if within_grace && successors < MAXIMUM_REFRESH_GRACE_SUCCESSORS && now <= expires_at {
                 if let Err(reason) =
                     require_active_principal(&transaction, &record.binding.principal)
                 {
@@ -3412,6 +3418,41 @@ mod tests {
     }
 
     #[test]
+    fn default_refresh_overlap_accepts_a_delayed_chatgpt_runtime() {
+        let store = store();
+        let (device, _) = store.create_device("Mac").unwrap();
+        let refresh = store
+            .issue_refresh_token(&device, "cc_1", "thumble.read", 3600, None)
+            .unwrap();
+        let (_, first_successor, _) = store
+            .rotate_refresh_token(&refresh, "cc_1", 3600)
+            .unwrap()
+            .unwrap();
+
+        // ChatGPT may leave the original credential in another chat runtime.
+        // Model that runtime arriving 30 minutes after the first rotation.
+        store
+            .connection
+            .lock()
+            .unwrap()
+            .execute(
+                "UPDATE refresh_tokens SET rotated_at = ?1 WHERE token_digest = ?2",
+                rusqlite::params![Store::now() - 30 * 60, token_digest(&refresh)],
+            )
+            .unwrap();
+
+        let delayed = store
+            .rotate_refresh_token(&refresh, "cc_1", 3600)
+            .unwrap()
+            .expect("the default overlap accepts a delayed ChatGPT refresh");
+        assert!(store.access_token(&delayed.0).unwrap().is_some());
+        assert!(store
+            .rotate_refresh_token(&first_successor, "cc_1", 3600)
+            .unwrap()
+            .is_ok());
+    }
+
+    #[test]
     fn refresh_rotation_detects_reuse_after_the_grace_window() {
         let store = store().with_refresh_grace(0);
         let (device, _token) = store.create_device("Mac").unwrap();
@@ -3551,11 +3592,11 @@ mod tests {
         let refresh = store
             .issue_refresh_token(&device, "cc_1", "thumble.read", 3600, None)
             .unwrap();
-        // The original exchange plus (MAXIMUM_GRACE_SUCCESSORS - 1) peers
-        // succeed, for MAXIMUM_GRACE_SUCCESSORS live successors total;
-        // grinding past the budget revokes everything.
+        // The original exchange plus (MAXIMUM_REFRESH_GRACE_SUCCESSORS - 1)
+        // peers succeed, for MAXIMUM_REFRESH_GRACE_SUCCESSORS live successors
+        // total; grinding past the budget revokes everything.
         let mut last_access = None;
-        for _ in 0..MAXIMUM_GRACE_SUCCESSORS {
+        for _ in 0..MAXIMUM_REFRESH_GRACE_SUCCESSORS {
             let (access, _, _) = store
                 .rotate_refresh_token(&refresh, "cc_1", 3600)
                 .unwrap()
@@ -3593,7 +3634,7 @@ mod tests {
 
         let mut relay_accesses = Vec::new();
         let mut relay_parent_grants = 0;
-        for _ in 0..MAXIMUM_GRACE_SUCCESSORS {
+        for _ in 0..MAXIMUM_REFRESH_GRACE_SUCCESSORS {
             let grant = store
                 .rotate_refresh_token_for_resource(&relay_parent, client, ResourceKind::Relay, 3600)
                 .unwrap()
@@ -3622,8 +3663,8 @@ mod tests {
                 |row| row.get(0),
             )
             .unwrap();
-        assert_eq!(relay_children, MAXIMUM_GRACE_SUCCESSORS);
-        assert_eq!(relay_parent_grants, MAXIMUM_GRACE_SUCCESSORS);
+        assert_eq!(relay_children, MAXIMUM_REFRESH_GRACE_SUCCESSORS);
+        assert_eq!(relay_parent_grants, MAXIMUM_REFRESH_GRACE_SUCCESSORS);
         assert!(store
             .rotate_refresh_token_for_resource(&relay_parent, client, ResourceKind::Relay, 3600,)
             .unwrap()
@@ -3633,10 +3674,10 @@ mod tests {
         }
 
         // The builder has the same client and forced family id, but is a
-        // separate typed binding and retains its own four-successor budget.
+        // separate typed binding and retains its own bounded successor budget.
         let mut builder_accesses = Vec::new();
         let mut builder_parent_grants = 0;
-        for _ in 0..MAXIMUM_GRACE_SUCCESSORS {
+        for _ in 0..MAXIMUM_REFRESH_GRACE_SUCCESSORS {
             let grant = store
                 .rotate_refresh_token_for_resource(
                     &builder_parent,
@@ -3659,7 +3700,7 @@ mod tests {
                 .unwrap();
             builder_accesses.push(child_grant.access_token);
         }
-        assert_eq!(builder_parent_grants, MAXIMUM_GRACE_SUCCESSORS);
+        assert_eq!(builder_parent_grants, MAXIMUM_REFRESH_GRACE_SUCCESSORS);
         let (relay_guard, relay_guard_refresh) = store
             .issue_authorization_tokens_for_binding(
                 &relay_binding,
