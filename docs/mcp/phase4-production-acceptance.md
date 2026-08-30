@@ -111,6 +111,31 @@ A production isolated-webview smoke verified `Origin: null` + stale cookie +
 valid proof → `302`, then token exchange → `200` with the builder-only scope
 set. Fixed-label rejection telemetry contains no request/proof/token values.
 
+## v22 explicit loopback callback handoff
+
+Visible acceptance then showed consent succeeding while ChatGPT remained
+unauthenticated. Production evidence made the boundary exact: three builder
+consents had minted three unexchanged authorization codes, all for loopback
+callbacks. The OAuth webview was suppressing the cross-origin `302` returned
+from the POSTed consent form.
+
+Commit `e80eb3c` reuses the already accepted relay flow's explicit no-script
+handoff: builder consent now returns a `200` page with an immediate standards-
+based meta refresh and a visible **Return to ChatGPT** link containing the
+same validated callback. A second consent/code is never needed.
+
+Release v22 (`e80eb3c`, image
+`deployment-01M1A3VMJ5F2H1XWC6AHBCCQAY`) is live and healthy. Its pre-deploy
+backup is `/data/thumble-gateway-predeploy-e80eb3c.db`, SHA-256
+`043bb4cf30141ec54850d155261be5969d2f1250ddecc256a7a158b06e3883f6`,
+1,110,016 bytes, and `PRAGMA integrity_check` = `ok`; v21/image
+`deployment-01M1A37Y9B8TPR0M7Y64RB1N9N` remains the immediate rollback.
+
+A production test with a real ephemeral `127.0.0.1` listener verified the
+complete ChatGPT-style path: consent confirmation → `200` handoff page → local
+loopback callback received with exact state → authorization-code exchange
+`200` → builder-only scope set. Callback, code, and token values were redacted.
+
 ## Remaining gate
 
 Visible ChatGPT developer-mode builder acceptance (fresh conversation:
