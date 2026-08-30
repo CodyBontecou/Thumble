@@ -71,10 +71,7 @@ fn builder_consent_nonce(headers: &HeaderMap) -> Option<&str> {
 fn same_gateway_origin(headers: &HeaderMap, base_url: &str) -> bool {
     let mut origins = headers.get_all(header::ORIGIN).iter();
     let Some(origin) = origins.next().and_then(|value| value.to_str().ok()) else {
-        // Some legitimate browser/webview HTML form POSTs omit Origin. The
-        // caller still requires a one-time consent proof below, so absence is
-        // compatible while an explicit cross-origin value remains rejected.
-        return true;
+        return false;
     };
     if origins.next().is_some() {
         return false;
@@ -100,10 +97,13 @@ fn with_builder_cookie(mut response: Response, cookie: HeaderValue) -> Response 
     response
 }
 
-fn forbidden_builder_consent() -> Response {
+fn forbidden_builder_consent(reason: &'static str) -> Response {
+    // Fixed reason labels only: never log request IDs, cookies, proofs, OAuth
+    // state, redirect URIs, or any other attacker/user-controlled value.
+    eprintln!("gateway: builder-consent outcome=forbidden reason={reason}");
     (
         StatusCode::FORBIDDEN,
-        Html("<h1>Forbidden</h1><p>This builder consent must be submitted by the browser that opened it.</p>"),
+        Html("<h1>Forbidden</h1><p>This builder consent could not be verified. Return to the connector and start a fresh authorization.</p>"),
     )
         .into_response()
 }
@@ -737,25 +737,9 @@ pub async fn authorize_builder_confirm(
     axum::Form(form): axum::Form<BuilderConfirmForm>,
 ) -> Response {
     let issuer = state.base_url();
-    if !same_gateway_origin(&headers, &issuer) {
-        return forbidden_builder_consent();
-    }
-    let cookie_nonce = builder_consent_nonce(&headers);
-    let form_nonce = form
-        .browser_proof
-        .as_deref()
-        .filter(|value| valid_builder_consent_proof(value));
-    let consent_nonce = match (cookie_nonce, form_nonce) {
-        (Some(cookie), Some(form))
-            if thumble_tunnel::constant_time_eq(cookie.as_bytes(), form.as_bytes()) =>
-        {
-            form
-        }
-        (Some(cookie), None) => cookie,
-        (None, Some(form)) => form,
-        _ => return forbidden_builder_consent(),
-    };
     let source = crate::http::client_source_key(&headers, Some(&connect_info));
+    // Charge every confirmation attempt before parsing proof material, which
+    // bounds both rejection telemetry and brute-force work.
     if let Err(error) = state.oauth_rate_limiter.allow_authorization(&source) {
         return (
             StatusCode::TOO_MANY_REQUESTS,
@@ -766,6 +750,31 @@ pub async fn authorize_builder_confirm(
         )
             .into_response();
     }
+
+    let form_nonce = match form.browser_proof.as_deref() {
+        Some(value) if valid_builder_consent_proof(value) => Some(value),
+        Some(_) => return forbidden_builder_consent("malformed-form-proof"),
+        None => None,
+    };
+    let consent_nonce = match form_nonce {
+        // The form-carried proof is authoritative for isolated OAuth
+        // webviews. It is random, stored only as a digest, request/PKCE/client/
+        // redirect/resource-bound, and atomically single-use. Origin and
+        // cookies are therefore unnecessary (and unreliable) on this path;
+        // stale partitioned cookies are deliberately ignored.
+        Some(form_nonce) => form_nonce,
+        None => {
+            // Backward-compatible cookie-only forms retain the strict exact-
+            // origin check because they do not carry the form proof.
+            if !same_gateway_origin(&headers, &issuer) {
+                return forbidden_builder_consent("cookie-only-origin");
+            }
+            match builder_consent_nonce(&headers) {
+                Some(cookie_nonce) => cookie_nonce,
+                None => return forbidden_builder_consent("missing-browser-proof"),
+            }
+        }
+    };
     if form.request_id.is_empty() || form.request_id.len() > 128 {
         return (StatusCode::BAD_REQUEST, Html("<h1>Bad request</h1>")).into_response();
     }
@@ -780,7 +789,7 @@ pub async fn authorize_builder_confirm(
         {
             Ok(Ok(request)) => request,
             Ok(Err(reason)) if reason == "builder consent verification failed" => {
-                return forbidden_builder_consent()
+                return forbidden_builder_consent("stored-proof-mismatch")
             }
             Ok(Err(reason)) => return unavailable_builder_authorization(&reason),
             Err(error) => return server_error(error),
@@ -807,7 +816,7 @@ pub async fn authorize_builder_confirm(
     {
         Ok(Ok(completed)) => completed,
         Ok(Err(reason)) if reason == "builder consent verification failed" => {
-            return forbidden_builder_consent()
+            return forbidden_builder_consent("stored-proof-mismatch")
         }
         Ok(Err(reason)) => return unavailable_builder_authorization(&reason),
         Err(error) => return server_error(error),
@@ -1745,9 +1754,9 @@ mod tests {
     }
 
     #[test]
-    fn builder_origin_allows_browser_requests_without_origin_header() {
+    fn builder_cookie_only_origin_rejects_missing_header() {
         let headers = HeaderMap::new();
-        assert!(same_gateway_origin(&headers, "https://mcp.thumble.app"));
+        assert!(!same_gateway_origin(&headers, "https://mcp.thumble.app"));
     }
 
     #[test]

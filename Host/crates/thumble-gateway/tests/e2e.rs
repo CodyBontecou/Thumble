@@ -2364,6 +2364,7 @@ async fn builder_oauth_is_resource_isolated_without_a_device_or_tunnel() {
     let protected_cookie = builder_consent_cookie(&protected_page);
     let protected_html = protected_page.text().await.unwrap();
     let protected_request = hidden_form_value(&protected_html, "request_id");
+    let protected_proof = hidden_form_value(&protected_html, "browser_proof");
     let confirm_url = format!("{base}/authorize/builder/confirm");
     let form = [
         ("request_id", protected_request.as_str()),
@@ -2399,9 +2400,8 @@ async fn builder_oauth_is_resource_isolated_without_a_device_or_tunnel() {
         .await
         .unwrap();
     assert_eq!(malformed_cookie.status(), 403);
-    // Browser form POSTs may omit Origin (Safari and some webviews). The
-    // one-time scoped cookie remains mandatory, so this is still bound to the
-    // consent browser/request even without that optional header.
+    // A legacy cookie-only submission still requires an exact gateway Origin.
+    // Cookie-partitioned/opaque-origin webviews use the form proof instead.
     let missing_origin_page = http
         .get(format!("{base}/authorize"))
         .query(&[
@@ -2430,19 +2430,12 @@ async fn builder_oauth_is_resource_isolated_without_a_device_or_tunnel() {
         .send()
         .await
         .unwrap();
-    assert_eq!(missing_origin.status(), 302);
-    assert_eq!(
-        callback_values(
-            missing_origin
-                .headers()
-                .get("location")
-                .unwrap()
-                .to_str()
-                .unwrap(),
-            "state"
-        ),
-        vec!["missing-origin"]
-    );
+    assert_eq!(missing_origin.status(), 403);
+    assert!(assertions
+        .store
+        .authorization_request(&missing_origin_request)
+        .unwrap()
+        .is_ok());
     for origin in ["https://cross-site.example", "not an origin"] {
         let rejected = http
             .post(&confirm_url)
@@ -2471,6 +2464,36 @@ async fn builder_oauth_is_resource_isolated_without_a_device_or_tunnel() {
     assert!(assertions
         .store
         .authorization_request(&relay_request_id)
+        .unwrap()
+        .is_ok());
+
+    // A syntactically valid but incorrect form proof is authoritative: it
+    // cannot fall back to a valid cookie and does not consume the request.
+    let mut wrong_proof = protected_proof.clone();
+    wrong_proof.replace_range(
+        0..1,
+        if wrong_proof.starts_with('A') {
+            "B"
+        } else {
+            "A"
+        },
+    );
+    let tampered_form_proof = http
+        .post(&confirm_url)
+        .header("Origin", &base)
+        .header("Cookie", &protected_cookie)
+        .form(&[
+            ("request_id", protected_request.as_str()),
+            ("decision", "allow"),
+            ("browser_proof", wrong_proof.as_str()),
+        ])
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(tampered_form_proof.status(), 403);
+    assert!(assertions
+        .store
+        .authorization_request(&protected_request)
         .unwrap()
         .is_ok());
 

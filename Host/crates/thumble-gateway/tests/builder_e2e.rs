@@ -170,13 +170,6 @@ async fn authorize(http: &reqwest::Client, gateway: &Gateway, label: &str) -> Au
         .await
         .unwrap();
     assert_eq!(consent.status(), 200);
-    let _cookie = consent.headers()["set-cookie"]
-        .to_str()
-        .unwrap()
-        .split(';')
-        .next()
-        .unwrap()
-        .to_owned();
     assert!(consent.headers()["set-cookie"]
         .to_str()
         .unwrap()
@@ -187,9 +180,11 @@ async fn authorize(http: &reqwest::Client, gateway: &Gateway, label: &str) -> Au
     let browser_proof = hidden_value(&html, "browser_proof");
     assert_eq!(browser_proof.len(), 64);
 
-    // Consent remains bound to a one-time browser proof. Browser form POSTs
-    // may omit Origin and partition/omit cookies, so the form proof is a
-    // cookie-free fallback while the cookie path remains supported below.
+    // Consent remains bound to a one-time browser proof. Isolated OAuth
+    // webviews may send an opaque Origin and a stale partitioned cookie, so a
+    // valid form proof is authoritative and both unreliable signals are
+    // ignored on this path. Cookie-only compatibility remains tested in
+    // e2e.rs.
     assert_eq!(
         http.post(format!("{}/authorize/builder/confirm", gateway.base))
             .form(&[("request_id", request_id.as_str()), ("decision", "allow")])
@@ -199,8 +194,19 @@ async fn authorize(http: &reqwest::Client, gateway: &Gateway, label: &str) -> Au
             .status(),
         403
     );
+    let mut stale_proof = browser_proof.clone();
+    stale_proof.replace_range(
+        0..1,
+        if stale_proof.starts_with('A') {
+            "B"
+        } else {
+            "A"
+        },
+    );
     let confirmed = http
         .post(format!("{}/authorize/builder/confirm", gateway.base))
+        .header("Origin", "null")
+        .header("Cookie", format!("thumble_builder_consent={stale_proof}"))
         .form(&[
             ("request_id", request_id.as_str()),
             ("decision", "allow"),
