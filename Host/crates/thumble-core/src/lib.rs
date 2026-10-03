@@ -8,6 +8,7 @@ mod binding;
 mod configuration;
 mod controller_snapshot;
 mod core;
+mod gamepad;
 mod generation_spec;
 mod profile_artifact;
 mod resolver;
@@ -34,6 +35,7 @@ pub use core::{
     ConnectionId, CoreError, CoreTime, Effect, HostCore, LocalControlError, StatusCounters,
     StatusSnapshot, TokenSource,
 };
+pub use gamepad::VirtualGamepadButton;
 pub use generation_spec::{
     plan_generation_spec, GeneratedSemanticBinding, GenerationAssignedControl,
     GenerationDroppedControl, GenerationSpecError, GenerationSpecPlan, GenerationSpecWarning,

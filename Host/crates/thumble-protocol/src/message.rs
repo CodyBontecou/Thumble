@@ -367,6 +367,8 @@ pub struct ControllerMessage {
     pub input_sequence: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub press_identifier: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub virtual_gamepad_status: Option<Box<Value>>,
 }
 
 impl ControllerMessage {
@@ -409,6 +411,7 @@ impl ControllerMessage {
             input_generation: None,
             input_sequence: None,
             press_identifier: None,
+            virtual_gamepad_status: None,
         }
     }
 }

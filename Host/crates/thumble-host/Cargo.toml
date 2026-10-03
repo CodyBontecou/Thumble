@@ -30,6 +30,10 @@ tokio-tungstenite = "=0.27.0"
 uuid = { version = "=1.18.1", features = ["serde", "v4", "v5"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
+block2 = { version = "=0.6.2", default-features = false, features = ["std"] }
+core-foundation = "=0.10.1"
+dispatch2 = { version = "=0.3.1", default-features = false, features = ["std", "block2"] }
+objc2-io-kit = { version = "=0.3.2", default-features = false, features = ["std", "hid", "hidsystem", "block2", "dispatch2", "objc2"] }
 objc2-application-services = { version = "=0.3.2", default-features = false, features = ["std", "HIServices", "AXUIElement"] }
 objc2-core-foundation = { version = "=0.3.2", default-features = false, features = ["std", "CFDictionary", "CFNumber", "CFString"] }
 objc2-core-graphics = { version = "=0.3.2", default-features = false, features = ["std", "CGDirectDisplay", "CGError", "CGEvent", "CGEventSource", "CGEventTypes", "CGRemoteOperation"] }

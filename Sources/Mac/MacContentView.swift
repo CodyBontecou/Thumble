@@ -501,6 +501,19 @@ struct MacContentView: View {
                 systemImage: server.isClientConnected ? "iphone.gen3.radiowaves.left.and.right" : "iphone.gen3",
                 isComplete: server.isClientConnected
             )
+            homeReadinessRow(
+                title: "Controller",
+                value: server.virtualGamepadStatus.summary,
+                systemImage: "gamecontroller",
+                isComplete: server.virtualGamepadStatus.isAvailable
+            )
+            if server.virtualGamepadStatus.phase != .inactive && !server.virtualGamepadStatus.isAvailable {
+                Button("Retry Controller Output") { server.retryVirtualGamepad() }
+                    .geistButtonStyle(.secondary, size: .small)
+                if let error = server.virtualGamepadStatus.lastError {
+                    Text(error).font(.footnote).foregroundStyle(.secondary).textSelection(.enabled)
+                }
+            }
         }
     }
 

@@ -6,6 +6,8 @@ pub mod cli_profile;
 pub mod control;
 pub mod draft_operation;
 pub mod drafts;
+pub mod gamepad;
+mod input_liveness;
 pub mod output;
 pub mod paths;
 pub mod platform;

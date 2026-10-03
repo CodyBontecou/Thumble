@@ -70,7 +70,9 @@ pub enum HostCommand {
         #[arg(long)]
         json: bool,
     },
-    /// Release every keyboard and pointer hold.
+    /// Inspect or recover the receiver-owned virtual gamepad; never creates a second input owner.
+    Gamepad(GamepadArgs),
+    /// Release every keyboard, pointer and controller hold.
     ReleaseAll,
 }
 
@@ -124,6 +126,36 @@ pub enum AccessibilityCommand {
     Open,
 }
 
+#[derive(Debug, Args)]
+pub struct GamepadArgs {
+    #[command(subcommand)]
+    pub action: GamepadCommand,
+    #[arg(long, global = true)]
+    pub json: bool,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum GamepadCommand {
+    Status,
+    /// Show HID readiness; consumer/game recognition still requires independent tests.
+    Doctor,
+    /// Release captured input and retry HID authorization/creation on the receiver.
+    Retry,
+    /// Exercise an installed opaque control ID; down holds expire after 30 seconds.
+    Test {
+        control_id: String,
+        #[arg(value_enum, default_value_t = GamepadTestState::Tap)]
+        state: GamepadTestState,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+pub enum GamepadTestState {
+    Tap,
+    Down,
+    Up,
+}
+
 pub async fn execute(cli: Cli, paths: HostPaths) -> Result<(), String> {
     match cli
         .command
@@ -144,6 +176,7 @@ pub async fn execute(cli: Cli, paths: HostPaths) -> Result<(), String> {
         HostCommand::PressControl { control_id, json } => {
             press_control(&paths, control_id, json).await
         }
+        HostCommand::Gamepad(arguments) => gamepad(&paths, arguments).await,
         HostCommand::ReleaseAll => release_all(&paths).await,
     }
 }
@@ -499,6 +532,52 @@ fn require_ok(response: ControlResponse) -> Result<ControlResponse, String> {
     }
 }
 
+async fn gamepad(paths: &HostPaths, arguments: GamepadArgs) -> Result<(), String> {
+    let doctor = matches!(arguments.action, GamepadCommand::Doctor);
+    let request = match arguments.action {
+        GamepadCommand::Status | GamepadCommand::Doctor => ControlRequest::GamepadStatus,
+        GamepadCommand::Retry => ControlRequest::GamepadRetry,
+        GamepadCommand::Test {
+            control_id,
+            state: GamepadTestState::Tap,
+        } => ControlRequest::PressControl { control_id },
+        GamepadCommand::Test { control_id, state } => ControlRequest::TestControl {
+            control_id,
+            pressed: state == GamepadTestState::Down,
+        },
+    };
+    let response = require_ok(send_request(&paths.control_socket, &request).await?)?;
+    if arguments.json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&response)
+                .map_err(|error| format!("encode gamepad status: {error}"))?
+        );
+    } else {
+        if let Some(id) = response.pressed_control_id {
+            println!("Tested installed control {id}");
+        }
+        if let Some(status) = response.virtual_gamepad_status {
+            println!("Controller phase: {}", status.phase);
+            if let Some(granted) = status.entitlement_granted {
+                println!(
+                    "Signed HID entitlement claim: {}",
+                    if granted { "present" } else { "missing" }
+                );
+            }
+            if let Some(error) = status.last_error {
+                println!("Last error: {error}");
+            }
+            println!("Report count: {}", status.report_count);
+        }
+        if doctor {
+            println!("HID-ready is not a GameController/SDL/Steam/game compatibility pass. Recording never injects system input.");
+            println!("Only the signed, provisioned receiver needs HID authorization; Accessibility is separate for keyboard/pointer output.");
+        }
+    }
+    Ok(())
+}
+
 fn print_human_status(status: &HostStatus) {
     println!(
         "Thumble Host {} (pid {})",
@@ -524,6 +603,9 @@ fn print_human_status(status: &HostStatus) {
         }
     );
     println!("Client: {}", status.core.status_text);
+    if let Some(gamepad) = &status.output.virtual_gamepad_status {
+        println!("Controller phase: {}", gamepad.phase);
+    }
     for url in &status.urls {
         println!("URL: {url}");
     }
@@ -591,6 +673,43 @@ mod tests {
         };
         assert_eq!(control_id, "element:id#joystick_up");
         assert!(!json);
+    }
+
+    #[test]
+    fn gamepad_commands_parse_owner_actions_and_bounded_installed_tests() {
+        for action in ["status", "doctor", "retry"] {
+            let cli = Cli::try_parse_from(["thumble-host", "gamepad", action, "--json"]).unwrap();
+            let HostCommand::Gamepad(arguments) = cli.command.unwrap() else {
+                panic!("gamepad command expected")
+            };
+            assert!(arguments.json);
+        }
+        for (raw, expected) in [
+            ("tap", GamepadTestState::Tap),
+            ("down", GamepadTestState::Down),
+            ("up", GamepadTestState::Up),
+        ] {
+            let cli =
+                Cli::try_parse_from(["thumble-host", "gamepad", "test", "element:installed", raw])
+                    .unwrap();
+            let HostCommand::Gamepad(GamepadArgs {
+                action: GamepadCommand::Test { control_id, state },
+                ..
+            }) = cli.command.unwrap()
+            else {
+                panic!("installed test expected")
+            };
+            assert_eq!(control_id, "element:installed");
+            assert_eq!(state, expected);
+        }
+        assert!(Cli::try_parse_from([
+            "thumble-host",
+            "gamepad",
+            "test",
+            "element:installed",
+            "forever"
+        ])
+        .is_err());
     }
 
     #[test]

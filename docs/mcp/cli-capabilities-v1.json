@@ -1235,6 +1235,29 @@
           "mcpTool": "host_status"
         },
         {
+          "id": "runtime.gamepad.status",
+          "cli": ["gamepad status", "gamepad doctor"],
+          "status": "partial",
+          "mcpTool": "host_status",
+          "notes": "Rust host_status.output.virtualGamepadStatus exposes HID readiness, not consumer recognition or signed-artifact certification."
+        },
+        {
+          "id": "runtime.gamepad.retry",
+          "cli": ["gamepad retry"],
+          "status": "host-cli-only",
+          "mcpTool": "retry_gamepad",
+          "gate": "input",
+          "notes": "Receiver-owned local recovery is available in the CLI; the named MCP recovery tool is not implemented."
+        },
+        {
+          "id": "runtime.gamepad.test",
+          "cli": ["gamepad test"],
+          "status": "partial",
+          "mcpTool": "press_control",
+          "gate": "input",
+          "notes": "MCP supports opt-in installed-control taps, including controller-only controls. Down/up holds remain local CLI-only."
+        },
+        {
           "id": "runtime.monitor",
           "cli": [
             "monitor",

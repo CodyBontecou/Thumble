@@ -6,6 +6,7 @@ VERSION="${VERSION:-0.1.0}"
 BUILD_NUMBER="${BUILD_NUMBER:-1}"
 OUTPUT_DIR="${OUTPUT_DIR:-}"
 SIGNING_IDENTITY="${SIGNING_IDENTITY:-}"
+HID_PROFILE="${HID_PROFILE:-}"
 NOTARYTOOL_KEYCHAIN_PROFILE="${NOTARYTOOL_KEYCHAIN_PROFILE:-}"
 RUST_TOOLCHAIN="${RUST_TOOLCHAIN:-1.88.0}"
 
@@ -18,11 +19,15 @@ Usage: scripts/release/macos-host.sh [options]
   --build-number NUMBER      Bundle build number (default: 1)
   --output DIR               Release output directory
   --sign IDENTITY            Developer ID Application identity (default: ad-hoc)
+  --hid-profile PATH         Matching HID-enabled Developer ID provisioning profile;
+                             required with --sign (embedded in the host app only)
   --notary-profile PROFILE   notarytool keychain profile; requires --sign
 
 The script builds arm64 and x86_64 host, MCP, standalone CLI, constrained CLI authority bridge,
 and constrained Swift bridge binaries, combines them with lipo, creates a background-only app bundle, signs it (ad-hoc by default),
-optionally notarizes it, and emits a ZIP plus SHA-256 checksum.
+optionally notarizes it, and emits a ZIP plus SHA-256 checksum. Ad-hoc builds
+claim no restricted entitlements and remain controller-unverified. Developer ID
+builds must pass final-artifact HID/profile verification before notarization.
 USAGE
 }
 
@@ -32,13 +37,14 @@ while [[ $# -gt 0 ]]; do
     --build-number) BUILD_NUMBER="$2"; shift 2 ;;
     --output) OUTPUT_DIR="$2"; shift 2 ;;
     --sign) SIGNING_IDENTITY="$2"; shift 2 ;;
+    --hid-profile) HID_PROFILE="$2"; shift 2 ;;
     --notary-profile) NOTARYTOOL_KEYCHAIN_PROFILE="$2"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
   esac
 done
 
-for command in rustup lipo ditto plutil shasum codesign xcodegen xcodebuild; do
+for command in rustup lipo ditto plutil shasum codesign xcodegen xcodebuild python3 security; do
   command -v "$command" >/dev/null || { echo "Missing required command: $command" >&2; exit 1; }
 done
 
@@ -46,6 +52,19 @@ OUTPUT_DIR="${OUTPUT_DIR:-$ROOT_DIR/.release/thumble-host-$VERSION}"
 
 if [[ -n "$NOTARYTOOL_KEYCHAIN_PROFILE" && -z "$SIGNING_IDENTITY" ]]; then
   echo "--notary-profile requires --sign" >&2
+  exit 2
+fi
+
+HID_VERIFIER="$ROOT_DIR/scripts/verify-hid-signing.py"
+HID_ENTITLEMENTS="$ROOT_DIR/Resources/Host/ThumbleHost.entitlements"
+if [[ -n "$SIGNING_IDENTITY" ]]; then
+  [[ "$SIGNING_IDENTITY" != "-" ]] || { echo "For ad-hoc builds, omit --sign and --hid-profile" >&2; exit 2; }
+  [[ -n "$HID_PROFILE" ]] || { echo "--sign requires --hid-profile for managed HID authorization" >&2; exit 2; }
+  [[ -f "$HID_ENTITLEMENTS" ]] || { echo "Missing host entitlement file" >&2; exit 1; }
+  python3 "$HID_VERIFIER" --profile-only "$HID_PROFILE" \
+    --bundle-id com.codybontecou.ThumbleHost --team-id 67KC823C9A --distribution developer-id
+elif [[ -n "$HID_PROFILE" ]]; then
+  echo "--hid-profile requires --sign with a Developer ID Application identity" >&2
   exit 2
 fi
 
@@ -128,11 +147,14 @@ chmod 755 "$RESOURCES_DIR/install-relay-launch-agent.sh"
 bash -n "$RESOURCES_DIR/install-relay-launch-agent.sh"
 
 if [[ -n "$SIGNING_IDENTITY" ]]; then
+  # Embed before sealing; only the main receiver claims managed HID privileges.
+  cp "$HID_PROFILE" "$APP_DIR/Contents/embedded.provisionprofile"
   codesign --force --options runtime --timestamp --sign "$SIGNING_IDENTITY" "$MACOS_DIR/thumble-mcp"
   codesign --force --options runtime --timestamp --sign "$SIGNING_IDENTITY" "$MACOS_DIR/thumble"
   codesign --force --options runtime --timestamp --sign "$SIGNING_IDENTITY" "$MACOS_DIR/thumble-cli-bridge"
   codesign --force --options runtime --timestamp --sign "$SIGNING_IDENTITY" "$MACOS_DIR/thumble-bridge"
-  codesign --force --options runtime --timestamp --sign "$SIGNING_IDENTITY" "$APP_DIR"
+  codesign --force --options runtime --timestamp --sign "$SIGNING_IDENTITY" \
+    --entitlements "$HID_ENTITLEMENTS" "$APP_DIR"
 else
   # Ad-hoc signing makes local/debug bundles structurally complete. Stable
   # Accessibility approval and distribution still require Developer ID signing.
@@ -142,7 +164,16 @@ else
   codesign --force --options runtime --sign - "$MACOS_DIR/thumble-bridge"
   codesign --force --options runtime --sign - "$APP_DIR"
 fi
-codesign --verify --deep --strict --verbose=2 "$APP_DIR"
+verify_final_artifact() {
+  if [[ -n "$SIGNING_IDENTITY" ]]; then
+    python3 "$HID_VERIFIER" "$APP_DIR" --require-hid \
+      --bundle-id com.codybontecou.ThumbleHost --team-id 67KC823C9A --distribution developer-id
+  else
+    python3 "$HID_VERIFIER" "$APP_DIR" --diagnose-ad-hoc \
+      --bundle-id com.codybontecou.ThumbleHost
+  fi
+}
+verify_final_artifact
 
 ZIP_PATH="$OUTPUT_DIR/ThumbleHost-$VERSION-macOS-universal.zip"
 ditto -c -k --keepParent "$APP_DIR" "$ZIP_PATH"
@@ -150,6 +181,7 @@ ditto -c -k --keepParent "$APP_DIR" "$ZIP_PATH"
 if [[ -n "$NOTARYTOOL_KEYCHAIN_PROFILE" ]]; then
   xcrun notarytool submit "$ZIP_PATH" --keychain-profile "$NOTARYTOOL_KEYCHAIN_PROFILE" --wait
   xcrun stapler staple "$APP_DIR"
+  verify_final_artifact
   rm -f "$ZIP_PATH"
   ditto -c -k --keepParent "$APP_DIR" "$ZIP_PATH"
 fi

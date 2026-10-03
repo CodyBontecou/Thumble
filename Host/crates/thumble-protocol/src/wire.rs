@@ -228,6 +228,7 @@ impl ControllerWireCodec {
             || message.element_part.is_some()
             || message.gamepad_customization.is_some()
             || message.gamepad_profiles.is_some()
+            || message.virtual_gamepad_status.is_some()
             || message.skin_packages.is_some()
             || message.skin_reference.is_some()
             || message.binding_presentations.is_some()

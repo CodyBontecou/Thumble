@@ -171,6 +171,15 @@ xcodebuild -exportArchive \
 app_path="$(find "$export_dir" -maxdepth 1 -type d -name '*.app' -print -quit)"
 [[ -n "$app_path" ]] || die "export did not produce a .app in $export_dir"
 
+verify_final_artifact() {
+  # Export can re-sign the archive. Gate the actual shipped receiver, not just
+  # Xcode settings; never confer HID privileges on CLI or other nested helpers.
+  python3 "$repo_root/scripts/verify-hid-signing.py" "$app_path" --require-hid \
+    --bundle-id com.codybontecou.PocketPadMac --team-id 67KC823C9A --distribution developer-id
+}
+log "Verifying exported HID signature and embedded profile"
+verify_final_artifact
+
 log "Creating notarization zip"
 ditto -c -k --keepParent "$app_path" "$notary_zip"
 
@@ -202,6 +211,8 @@ else
   echo "warning: skipping notarization; Gatekeeper will warn users for this artifact" >&2
 fi
 
+log "Verifying final app before download packaging/upload"
+verify_final_artifact
 log "Creating final download zip"
 rm -f "$final_zip"
 ditto -c -k --sequesterRsrc --keepParent "$app_path" "$final_zip"

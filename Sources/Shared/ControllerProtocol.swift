@@ -139,6 +139,8 @@ public enum ThumbleMacCLICommand: String, Codable, Sendable {
     case promptAccessibility
     case openAccessibilitySettings
     case releaseAll
+    case retryGamepad
+    case testGamepad
     case testDown
     case testUp
 }
@@ -347,17 +349,26 @@ public struct ThumbleMacCLICommandPayload: Codable, Sendable {
     public var button: GameButton?
     public var elementInput: KeypadElementInputID?
     public var reason: String?
+    public var requestID: String?
+    public var holdMilliseconds: Int?
+    public var runtimeInstanceID: String?
 
     public init(
         command: ThumbleMacCLICommand,
         button: GameButton? = nil,
         elementInput: KeypadElementInputID? = nil,
-        reason: String? = nil
+        reason: String? = nil,
+        requestID: String? = nil,
+        holdMilliseconds: Int? = nil,
+        runtimeInstanceID: String? = nil
     ) {
         self.command = command
         self.button = button
         self.elementInput = elementInput
         self.reason = reason
+        self.requestID = requestID
+        self.holdMilliseconds = holdMilliseconds
+        self.runtimeInstanceID = runtimeInstanceID
     }
 }
 
@@ -424,6 +435,10 @@ public struct ThumbleMacRuntimeStatus: Codable, Sendable {
     public var virtualGamepadLeftTrigger: Double?
     public var virtualGamepadRightTrigger: Double?
     public var captureLogPath: String?
+    public var virtualGamepadStatus: VirtualGamepadStatus?
+    public var runtimeProcessID: Int32?
+    public var runtimeInstanceID: String?
+    public var runtimeStatusRequestID: String?
 
     public init(
         updatedAt: Int64,
@@ -479,7 +494,11 @@ public struct ThumbleMacRuntimeStatus: Codable, Sendable {
         virtualGamepadRightStickY: Double? = nil,
         virtualGamepadLeftTrigger: Double? = nil,
         virtualGamepadRightTrigger: Double? = nil,
-        captureLogPath: String? = nil
+        captureLogPath: String? = nil,
+        virtualGamepadStatus: VirtualGamepadStatus? = nil,
+        runtimeProcessID: Int32? = nil,
+        runtimeInstanceID: String? = nil,
+        runtimeStatusRequestID: String? = nil
     ) {
         self.updatedAt = updatedAt
         self.statusText = statusText
@@ -535,6 +554,10 @@ public struct ThumbleMacRuntimeStatus: Codable, Sendable {
         self.virtualGamepadLeftTrigger = virtualGamepadLeftTrigger
         self.virtualGamepadRightTrigger = virtualGamepadRightTrigger
         self.captureLogPath = captureLogPath
+        self.virtualGamepadStatus = virtualGamepadStatus
+        self.runtimeProcessID = runtimeProcessID
+        self.runtimeInstanceID = runtimeInstanceID
+        self.runtimeStatusRequestID = runtimeStatusRequestID
     }
 }
 
@@ -644,6 +667,7 @@ public struct ControllerMessage: Codable, Sendable {
     public var profileArtifactAdoptionChunkIndex: Int?
     public var profileArtifactAdoptionChunkData: Data?
     public var profileArtifactAdoptionResult: ProfileArtifactAdoptionResult?
+    public var virtualGamepadStatus: VirtualGamepadStatus?
 
     public init(
         type: ControllerMessageType,
@@ -687,7 +711,8 @@ public struct ControllerMessage: Codable, Sendable {
         profileArtifactAdoptionOperationID: UUID? = nil,
         profileArtifactAdoptionChunkIndex: Int? = nil,
         profileArtifactAdoptionChunkData: Data? = nil,
-        profileArtifactAdoptionResult: ProfileArtifactAdoptionResult? = nil
+        profileArtifactAdoptionResult: ProfileArtifactAdoptionResult? = nil,
+        virtualGamepadStatus: VirtualGamepadStatus? = nil
     ) {
         self.type = type
         self.button = button
@@ -731,6 +756,7 @@ public struct ControllerMessage: Codable, Sendable {
         self.profileArtifactAdoptionChunkIndex = profileArtifactAdoptionChunkIndex
         self.profileArtifactAdoptionChunkData = profileArtifactAdoptionChunkData
         self.profileArtifactAdoptionResult = profileArtifactAdoptionResult
+        self.virtualGamepadStatus = virtualGamepadStatus
     }
 }
 
@@ -1067,6 +1093,7 @@ public enum ControllerWireCodec {
               message.elementPart == nil,
               message.gamepadCustomization == nil,
               message.gamepadProfiles == nil,
+              message.virtualGamepadStatus == nil,
               message.skinPackages == nil,
               message.skinReference == nil,
               message.bindingPresentations == nil,

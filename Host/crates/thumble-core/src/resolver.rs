@@ -8,7 +8,7 @@ impl PersistentState {
     /// Resolve the active profile's output map, overlaying profile-specific maps
     /// on the portable global fallback maps.
     pub fn resolve_button_output(&self, button: GameButton) -> Option<OutputBinding> {
-        resolve_legacy_button(self, button)
+        resolve_legacy_button(self, button).map(|output| self.filter_output_mode(output))
     }
 
     /// Resolve an element from any of the active profile's primary, landscape,
@@ -43,7 +43,7 @@ impl PersistentState {
                 }
 
                 if let Some(direct) = direct_output(element, part) {
-                    return Some(parse_output_binding(direct));
+                    return Some(self.filter_output_mode(parse_output_binding(direct)));
                 }
                 if legacy_button.is_none() {
                     legacy_button = legacy_button_for_part(element, part);
@@ -51,7 +51,14 @@ impl PersistentState {
             }
         }
 
-        legacy_button.and_then(|button| resolve_legacy_button(self, button))
+        legacy_button.and_then(|button| self.resolve_button_output(button))
+    }
+
+    pub(crate) fn filter_output_mode(&self, mut output: OutputBinding) -> OutputBinding {
+        if self.gamepad_output_disabled() {
+            output.gamepad_buttons.clear();
+        }
+        output
     }
 }
 

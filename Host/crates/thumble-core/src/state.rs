@@ -237,6 +237,46 @@ impl PersistentState {
         self.profile(&self.active_profile_id)
     }
 
+    pub(crate) fn gamepad_output_disabled(&self) -> bool {
+        self.active_profile()
+            .and_then(|profile| profile.get("outputMode"))
+            .and_then(Value::as_str)
+            == Some("keyboard")
+    }
+
+    /// Whether the active profile requests a controller. Keyboard mode gates
+    /// every path, including direct element bindings and orientation variants.
+    /// Missing legacy outputMode preserves custom mixed-output behavior.
+    pub fn needs_virtual_gamepad(&self) -> bool {
+        if self.gamepad_output_disabled() {
+            return false;
+        }
+        if self
+            .active_profile()
+            .and_then(|profile| profile.get("outputMode"))
+            .and_then(Value::as_str)
+            == Some("controller")
+        {
+            return true;
+        }
+        if GameButton::ALL.into_iter().any(|button| {
+            self.resolve_button_output(button)
+                .is_some_and(|output| output.supported_gamepad_buttons().next().is_some())
+        }) {
+            return true;
+        }
+        self.active_profile().is_some_and(|profile| {
+            [
+                "customization",
+                "landscapeCustomization",
+                "portraitCustomization",
+            ]
+            .into_iter()
+            .filter_map(|name| profile.get(name))
+            .any(customization_needs_gamepad)
+        })
+    }
+
     pub fn active_customization(&self) -> Value {
         self.active_profile()
             .and_then(Value::as_object)
@@ -276,6 +316,58 @@ impl PersistentState {
             .ok_or(StateError::ConfigurationRevisionExhausted)?;
         Ok(self.configuration_revision)
     }
+}
+
+fn customization_needs_gamepad(customization: &Value) -> bool {
+    ["elements", "customButtons"].into_iter().any(|name| {
+        customization
+            .get(name)
+            .and_then(Value::as_array)
+            .is_some_and(|controls| controls.iter().any(control_needs_gamepad))
+    })
+}
+
+fn control_needs_gamepad(control: &Value) -> bool {
+    let kind = control
+        .get("kind")
+        .or_else(|| control.get("controlKind"))
+        .and_then(Value::as_str);
+    if kind == Some("trigger") {
+        return true;
+    }
+    if kind == Some("joystick")
+        && matches!(
+            control
+                .get("joystickOutputSettings")
+                .and_then(|settings| settings.get("analogTarget"))
+                .and_then(Value::as_str),
+            Some("left_stick" | "right_stick")
+        )
+    {
+        return true;
+    }
+    if control.get("output").is_some_and(output_needs_gamepad) {
+        return true;
+    }
+    match control.get("partOutputs") {
+        Some(Value::Object(outputs)) => outputs.values().any(output_needs_gamepad),
+        Some(Value::Array(outputs)) => outputs
+            .chunks_exact(2)
+            .any(|pair| output_needs_gamepad(&pair[1])),
+        _ => false,
+    }
+}
+
+fn output_needs_gamepad(output: &Value) -> bool {
+    output
+        .get("gamepadButtons")
+        .and_then(Value::as_array)
+        .is_some_and(|buttons| {
+            buttons
+                .iter()
+                .filter_map(Value::as_str)
+                .any(|name| crate::VirtualGamepadButton::from_name(name).is_some())
+        })
 }
 
 const fn initial_configuration_revision() -> u64 {

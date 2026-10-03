@@ -2,57 +2,154 @@ import Darwin
 import Foundation
 import IOKit
 import IOKit.hidsystem
+import Security
+
+/// The only mockable seam is the OS device. Tests never need HID privileges.
+protocol VirtualGamepadHIDDevice: AnyObject {
+    func sendReport(_ bytes: [UInt8]) -> IOReturn
+    func cancel()
+}
+
+/// A separate lock is essential: GetReport can run while HandleReport is waiting
+/// with the injector lock held. The callback must never re-enter the injector.
+final class VirtualGamepadHIDReportBuffer {
+    private let lock = NSLock()
+    private var bytes = VirtualGamepadReportState().reportBytes
+
+    func update(_ bytes: [UInt8]) {
+        lock.lock()
+        self.bytes = bytes
+        lock.unlock()
+    }
+
+    func copyInputReport(
+        type: IOHIDReportType,
+        reportID: UInt32,
+        destination: UnsafeMutablePointer<UInt8>,
+        length: UnsafeMutablePointer<Int>
+    ) -> IOReturn {
+        let capacity = length.pointee
+        length.pointee = 0
+        guard type == kIOHIDReportTypeInput,
+              reportID == UInt32(VirtualGamepadReport.reportID) else { return kIOReturnUnsupported }
+        guard capacity >= 0 else { return kIOReturnBadArgument }
+        lock.lock()
+        defer { lock.unlock() }
+        guard capacity >= bytes.count else {
+            length.pointee = bytes.count
+            return kIOReturnNoSpace
+        }
+        bytes.withUnsafeBufferPointer { destination.update(from: $0.baseAddress!, count: $0.count) }
+        length.pointee = bytes.count
+        return kIOReturnSuccess
+    }
+}
+
+private final class IOKitVirtualGamepadDevice: VirtualGamepadHIDDevice {
+    private let device: IOHIDUserDevice
+    private let reportBuffer: VirtualGamepadHIDReportBuffer
+    private var cancelled = false
+
+    static func create(queue: DispatchQueue, onCancelled: @escaping () -> Void) -> VirtualGamepadHIDDevice? {
+        let properties: [String: Any] = [
+            kIOHIDReportDescriptorKey as String: Data(VirtualGamepadReport.descriptor),
+            kIOHIDVendorIDKey as String: VirtualGamepadReport.vendorID,
+            kIOHIDProductIDKey as String: VirtualGamepadReport.productID,
+            kIOHIDVersionNumberKey as String: 1,
+            kIOHIDTransportKey as String: "Virtual",
+            kIOHIDManufacturerKey as String: "Thumble",
+            kIOHIDProductKey as String: "Thumble Virtual Gamepad",
+            kIOHIDSerialNumberKey as String: "PocketPad-Gamepad-1",
+            kIOHIDPrimaryUsagePageKey as String: 0x01,
+            kIOHIDPrimaryUsageKey as String: 0x05
+        ]
+        guard let device = IOHIDUserDeviceCreateWithProperties(kCFAllocatorDefault, properties as CFDictionary, 1)
+        else { return nil }
+        return IOKitVirtualGamepadDevice(device: device, queue: queue, onCancelled: onCancelled)
+    }
+
+    private init(device: IOHIDUserDevice, queue: DispatchQueue, onCancelled: @escaping () -> Void) {
+        self.device = device
+        let buffer = VirtualGamepadHIDReportBuffer()
+        reportBuffer = buffer
+        IOHIDUserDeviceRegisterGetReportBlock(device) { type, id, report, length in
+            buffer.copyInputReport(type: type, reportID: id, destination: report, length: length)
+        }
+        // v1 intentionally has no output/feature reports or rumble contract.
+        IOHIDUserDeviceRegisterSetReportBlock(device) { _, _, _, _ in kIOReturnUnsupported }
+        IOHIDUserDeviceSetDispatchQueue(device, queue)
+        // A dispatch cancel is asynchronous. An extra CF retain, not a capture
+        // cycle, keeps the device alive until IOKit finishes all its callbacks.
+        let cancellationRetain = Unmanaged.passRetained(device)
+        IOHIDUserDeviceSetCancelHandler(device) {
+            cancellationRetain.release()
+            onCancelled()
+        }
+        IOHIDUserDeviceActivate(device)
+    }
+
+    func sendReport(_ bytes: [UInt8]) -> IOReturn {
+        reportBuffer.update(bytes)
+        return bytes.withUnsafeBufferPointer {
+            IOHIDUserDeviceHandleReportWithTimeStamp(device, mach_absolute_time(), $0.baseAddress!, $0.count)
+        }
+    }
+
+    func cancel() {
+        guard !cancelled else { return }
+        cancelled = true
+        IOHIDUserDeviceCancel(device)
+    }
+}
 
 final class VirtualGamepadInjector {
-    struct Status: Codable, Equatable, Sendable {
-        var isAvailable: Bool
-        var isActive: Bool
-        var lastError: String?
-        var pressedButtons: [VirtualGamepadButton]
-        var leftStickX: Double
-        var leftStickY: Double
-        var rightStickX: Double
-        var rightStickY: Double
-        var leftTrigger: Double
-        var rightTrigger: Double
-    }
-
-    private struct State: Equatable {
-        var buttons: Set<VirtualGamepadButton> = []
-        var leftStickX: Double = 0
-        var leftStickY: Double = 0
-        var rightStickX: Double = 0
-        var rightStickY: Double = 0
-        var leftTrigger: Double = 0
-        var rightTrigger: Double = 0
-    }
+    typealias Status = VirtualGamepadStatus
+    typealias DeviceFactory = (DispatchQueue, @escaping () -> Void) -> VirtualGamepadHIDDevice?
 
     private let lock = NSLock()
     private let deviceQueue = DispatchQueue(label: "Thumble.VirtualGamepadHID", qos: .userInteractive)
-    private var virtualDevice: IOHIDUserDevice?
-    private var state = State()
-    private(set) var lastError: String?
+    private let entitlementProvider: () -> Bool?
+    private let deviceFactory: DeviceFactory
+    private let uptime: () -> UInt64
+    private var virtualDevice: VirtualGamepadHIDDevice?
+    private var retiringDevices = 0
+    private var state = VirtualGamepadReportState()
+    private var phase: VirtualGamepadPhase = .inactive
+    private var entitlementGranted: Bool?
+    private var lastError: String?
+    private var lastReportResult: UInt32?
+    private var lastReportUptimeNanoseconds: UInt64?
+    private var reportCount: UInt64 = 0
+    private var retryAfter: UInt64 = 0
 
-    var isActive: Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        return virtualDevice != nil
+    init(
+        entitlementProvider: @escaping () -> Bool? = VirtualGamepadInjector.currentEntitlement,
+        deviceFactory: @escaping DeviceFactory = IOKitVirtualGamepadDevice.create,
+        uptime: @escaping () -> UInt64 = { DispatchTime.now().uptimeNanoseconds }
+    ) {
+        self.entitlementProvider = entitlementProvider
+        self.deviceFactory = deviceFactory
+        self.uptime = uptime
     }
+
+    deinit { stop() }
+
+    var isActive: Bool { status().isActive }
 
     func status() -> Status {
         lock.lock()
         defer { lock.unlock() }
         return Status(
-            isAvailable: virtualDevice != nil || lastError == nil,
-            isActive: virtualDevice != nil,
+            phase: phase,
+            entitlementGranted: entitlementGranted,
             lastError: lastError,
-            pressedButtons: state.buttons.sortedForDisplay,
-            leftStickX: state.leftStickX,
-            leftStickY: state.leftStickY,
-            rightStickX: state.rightStickX,
-            rightStickY: state.rightStickY,
-            leftTrigger: state.leftTrigger,
-            rightTrigger: state.rightTrigger
+            lastReportResult: lastReportResult,
+            lastReportUptimeNanoseconds: lastReportUptimeNanoseconds,
+            reportCount: reportCount,
+            pressedButtons: VirtualGamepadButton.allCases.filter { state.buttons.contains($0) },
+            leftStickX: state.leftStickX, leftStickY: state.leftStickY,
+            rightStickX: state.rightStickX, rightStickY: state.rightStickY,
+            leftTrigger: state.effectiveLeftTrigger, rightTrigger: state.effectiveRightTrigger
         )
     }
 
@@ -63,257 +160,142 @@ final class VirtualGamepadInjector {
         return startLocked()
     }
 
+    /// Explicit recovery is still performed by the current receiver, never CLI.
+    @discardableResult
+    func retry() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        state = VirtualGamepadReportState()
+        retryAfter = 0
+        if virtualDevice != nil { return sendReportLocked() }
+        guard retiringDevices == 0 else { return false }
+        phase = .inactive
+        return startLocked()
+    }
+
     func stop() {
         lock.lock()
-        let device = virtualDevice
-        virtualDevice = nil
-        state = State()
-        lock.unlock()
-
-        if let device {
-            IOHIDUserDeviceCancel(device)
-        }
+        defer { lock.unlock() }
+        state = VirtualGamepadReportState()
+        if virtualDevice != nil { _ = sendReportLocked() }
+        retireDeviceLocked()
+        phase = .inactive
+        lastError = nil
+        retryAfter = 0
     }
 
     func reset() {
         lock.lock()
-        state = State()
-        sendReportLocked()
-        lock.unlock()
+        defer { lock.unlock() }
+        state = VirtualGamepadReportState()
+        if virtualDevice != nil { _ = sendReportLocked() }
     }
 
     func setButton(_ button: VirtualGamepadButton, pressed: Bool) {
         lock.lock()
-        guard startLocked() else {
-            lock.unlock()
-            return
-        }
-        if pressed {
-            state.buttons.insert(button)
-        } else {
-            state.buttons.remove(button)
-        }
-        sendReportLocked()
-        lock.unlock()
+        defer { lock.unlock() }
+        // A release must not create a new device after shutdown or failure.
+        guard pressed || virtualDevice != nil, startLocked() else { return }
+        if pressed { state.buttons.insert(button) } else { state.buttons.remove(button) }
+        _ = sendReportLocked()
     }
 
     func setStick(_ stick: VirtualGamepadStick, x: Double, y: Double) {
+        guard x.isFinite, y.isFinite else { return }
         lock.lock()
-        guard startLocked() else {
-            lock.unlock()
-            return
-        }
-        let x = Self.clamp(x, lower: -1, upper: 1)
-        let y = Self.clamp(y, lower: -1, upper: 1)
+        defer { lock.unlock() }
+        guard x != 0 || y != 0 || virtualDevice != nil, startLocked() else { return }
         switch stick {
-        case .left:
-            state.leftStickX = x
-            state.leftStickY = y
-        case .right:
-            state.rightStickX = x
-            state.rightStickY = y
+        case .left: state.leftStickX = min(1, max(-1, x)); state.leftStickY = min(1, max(-1, y))
+        case .right: state.rightStickX = min(1, max(-1, x)); state.rightStickY = min(1, max(-1, y))
         }
-        sendReportLocked()
-        lock.unlock()
+        _ = sendReportLocked()
     }
 
     func setTrigger(_ trigger: VirtualGamepadTrigger, value: Double) {
+        guard value.isFinite else { return }
         lock.lock()
-        guard startLocked() else {
-            lock.unlock()
-            return
-        }
-        let value = Self.clamp(value, lower: 0, upper: 1)
+        defer { lock.unlock() }
+        guard value != 0 || virtualDevice != nil, startLocked() else { return }
         switch trigger {
-        case .left:
-            state.leftTrigger = value
-        case .right:
-            state.rightTrigger = value
+        case .left: state.leftTrigger = min(1, max(0, value))
+        case .right: state.rightTrigger = min(1, max(0, value))
         }
-        sendReportLocked()
-        lock.unlock()
+        _ = sendReportLocked()
     }
 
     private func startLocked() -> Bool {
-        if virtualDevice != nil { return true }
-
-        let properties: [String: Any] = [
-            kIOHIDReportDescriptorKey as String: Data(Self.reportDescriptor),
-            kIOHIDVendorIDKey as String: 0xCB01,
-            kIOHIDProductIDKey as String: 0x5050,
-            kIOHIDVersionNumberKey as String: 1,
-            kIOHIDTransportKey as String: "Virtual",
-            kIOHIDManufacturerKey as String: "Thumble",
-            kIOHIDProductKey as String: "Thumble Virtual Gamepad",
-            kIOHIDSerialNumberKey as String: "PocketPad-Gamepad-1",
-            kIOHIDPrimaryUsagePageKey as String: 0x01,
-            kIOHIDPrimaryUsageKey as String: 0x05
-        ]
-
-        guard let createdDevice = IOHIDUserDeviceCreateWithProperties(
-            kCFAllocatorDefault,
-            properties as CFDictionary,
-            IOOptionBits(1)
-        ) else {
-            lastError = "Could not create IOHIDUserDevice. macOS requires the com.apple.developer.hid.virtual.device entitlement for virtual gamepad output."
+        if virtualDevice != nil { return phase == .ready }
+        // Failed devices stay latched until owner-controlled recovery releases
+        // captured input and explicitly retries; partial automatic restoration
+        // would disagree with the server's still-held reference counts.
+        guard phase == .inactive, retiringDevices == 0, uptime() >= retryAfter else { return false }
+        entitlementGranted = entitlementProvider()
+        guard entitlementGranted == true else {
+            phase = entitlementGranted == false ? .missingEntitlement : .creationFailed
+            lastError = entitlementGranted == false
+                ? "This receiver is not signed with com.apple.developer.hid.virtual.device. Check its provisioning profile."
+                : "Could not inspect this receiver's signed HID entitlement."
+            retryAfter = uptime() &+ 3_000_000_000
             return false
         }
-
-        IOHIDUserDeviceRegisterGetReportBlock(createdDevice) { _, _, report, reportLength in
-            let fallbackReport = [UInt8](repeating: 0, count: 10)
-            let copyCount = min(Int(reportLength.pointee), fallbackReport.count)
-            if copyCount > 0 {
-                fallbackReport.withUnsafeBufferPointer { source in
-                    report.update(from: source.baseAddress!, count: copyCount)
-                }
-            }
-            reportLength.pointee = copyCount
-            return kIOReturnSuccess
+        guard let created = deviceFactory(deviceQueue, { [weak self] in
+            guard let self else { return }
+            self.lock.lock()
+            self.retiringDevices -= 1
+            self.lock.unlock()
+        }) else {
+            phase = .creationFailed
+            lastError = "IOHIDUserDevice creation failed despite the signed HID entitlement; inspect provisioning, OS policy and IOKit logs."
+            retryAfter = uptime() &+ 3_000_000_000
+            return false
         }
-        IOHIDUserDeviceRegisterSetReportBlock(createdDevice) { _, _, _, _ in
-            kIOReturnSuccess
-        }
-        IOHIDUserDeviceSetDispatchQueue(createdDevice, deviceQueue)
-        IOHIDUserDeviceActivate(createdDevice)
-
-        virtualDevice = createdDevice
-        lastError = nil
-        sendReportLocked()
-        return true
+        virtualDevice = created
+        state = VirtualGamepadReportState()
+        // Do not publish readiness until the mandatory neutral report succeeds.
+        return sendReportLocked()
     }
 
-    private func sendReportLocked() {
+    @discardableResult
+    private func sendReportLocked() -> Bool {
+        guard let device = virtualDevice else { return false }
+        let result = device.sendReport(state.reportBytes)
+        lastReportResult = UInt32(bitPattern: result)
+        lastReportUptimeNanoseconds = uptime()
+        if result == kIOReturnSuccess {
+            reportCount &+= 1
+            phase = .ready
+            lastError = nil
+            return true
+        }
+        phase = .reportFailed
+        lastError = "IOHIDUserDevice report failed: 0x\(String(UInt32(bitPattern: result), radix: 16)). Device retired; retry controller output."
+        state = VirtualGamepadReportState()
+        // Best effort neutralization precedes cancellation. Preserve the original
+        // failure even if this last report succeeds; readiness remains false.
+        _ = device.sendReport(state.reportBytes)
+        retryAfter = uptime() &+ 3_000_000_000
+        retireDeviceLocked()
+        return false
+    }
+
+    private func retireDeviceLocked() {
         guard let device = virtualDevice else { return }
-        let report = reportBytes(for: state)
-        let result = report.withUnsafeBufferPointer { pointer in
-            IOHIDUserDeviceHandleReportWithTimeStamp(
-                device,
-                mach_absolute_time(),
-                pointer.baseAddress!,
-                pointer.count
-            )
-        }
-        if result != kIOReturnSuccess {
-            lastError = "IOHIDUserDevice report dispatch failed: 0x\(String(UInt32(bitPattern: result), radix: 16))"
-        }
+        virtualDevice = nil
+        retiringDevices += 1
+        // Never let even a synchronous test-system cancel callback re-enter lock.
+        // The closure also retains the wrapper through the call to Cancel.
+        deviceQueue.async { device.cancel() }
     }
 
-    private func reportBytes(for state: State) -> [UInt8] {
-        var buttons: UInt16 = 0
-        for button in state.buttons {
-            guard let bit = Self.buttonBitIndex(for: button) else { continue }
-            buttons |= UInt16(1) << UInt16(bit)
-        }
-
-        return [
-            0x01,
-            UInt8(buttons & 0x00ff),
-            UInt8((buttons >> 8) & 0x00ff),
-            Self.hatValue(for: state.buttons),
-            Self.signedAxisByte(state.leftStickX),
-            Self.signedAxisByte(state.leftStickY),
-            Self.signedAxisByte(state.rightStickX),
-            Self.signedAxisByte(state.rightStickY),
-            Self.unsignedAxisByte(state.leftTrigger),
-            Self.unsignedAxisByte(state.rightTrigger)
-        ]
+    private static func currentEntitlement() -> Bool? {
+        guard let task = SecTaskCreateFromSelf(kCFAllocatorDefault) else { return nil }
+        var error: Unmanaged<CFError>?
+        let value = SecTaskCopyValueForEntitlement(task, "com.apple.developer.hid.virtual.device" as CFString, &error)
+        defer { _ = error?.takeRetainedValue() }
+        // Only a Boolean true grants this managed entitlement.
+        guard let value else { return error == nil ? false : nil }
+        guard CFGetTypeID(value) == CFBooleanGetTypeID() else { return false }
+        return CFBooleanGetValue(unsafeBitCast(value, to: CFBoolean.self))
     }
-
-    private static func buttonBitIndex(for button: VirtualGamepadButton) -> Int? {
-        switch button {
-        case .south: 0
-        case .east: 1
-        case .west: 2
-        case .north: 3
-        case .leftShoulder: 4
-        case .rightShoulder: 5
-        case .leftTriggerButton: 6
-        case .rightTriggerButton: 7
-        case .select: 8
-        case .start: 9
-        case .home: 10
-        case .leftStickPress: 11
-        case .rightStickPress: 12
-        case .dpadUp, .dpadDown, .dpadLeft, .dpadRight: nil
-        }
-    }
-
-    private static func hatValue(for buttons: Set<VirtualGamepadButton>) -> UInt8 {
-        let up = buttons.contains(.dpadUp)
-        let down = buttons.contains(.dpadDown)
-        let left = buttons.contains(.dpadLeft)
-        let right = buttons.contains(.dpadRight)
-
-        switch (up, down, left, right) {
-        case (true, false, false, false): return 0
-        case (true, false, false, true): return 1
-        case (false, false, false, true): return 2
-        case (false, true, false, true): return 3
-        case (false, true, false, false): return 4
-        case (false, true, true, false): return 5
-        case (false, false, true, false): return 6
-        case (true, false, true, false): return 7
-        default: return 8
-        }
-    }
-
-    private static func signedAxisByte(_ value: Double) -> UInt8 {
-        let clamped = clamp(value, lower: -1, upper: 1)
-        let scaled = Int(round(clamped * 127))
-        return UInt8(bitPattern: Int8(max(-127, min(127, scaled))))
-    }
-
-    private static func unsignedAxisByte(_ value: Double) -> UInt8 {
-        UInt8(max(0, min(255, Int(round(clamp(value, lower: 0, upper: 1) * 255)))))
-    }
-
-    private static func clamp(_ value: Double, lower: Double, upper: Double) -> Double {
-        guard value.isFinite else { return lower }
-        return min(max(value, lower), upper)
-    }
-
-    private static let reportDescriptor: [UInt8] = [
-        0x05, 0x01,
-        0x09, 0x05,
-        0xA1, 0x01,
-        0x85, 0x01,
-        0x05, 0x09,
-        0x19, 0x01,
-        0x29, 0x10,
-        0x15, 0x00,
-        0x25, 0x01,
-        0x75, 0x01,
-        0x95, 0x10,
-        0x81, 0x02,
-        0x05, 0x01,
-        0x09, 0x39,
-        0x15, 0x00,
-        0x25, 0x08,
-        0x35, 0x00,
-        0x46, 0x3B, 0x01,
-        0x65, 0x14,
-        0x75, 0x04,
-        0x95, 0x01,
-        0x81, 0x42,
-        0x75, 0x04,
-        0x95, 0x01,
-        0x81, 0x03,
-        0x09, 0x30,
-        0x09, 0x31,
-        0x09, 0x32,
-        0x09, 0x35,
-        0x15, 0x81,
-        0x25, 0x7F,
-        0x75, 0x08,
-        0x95, 0x04,
-        0x81, 0x02,
-        0x09, 0x33,
-        0x09, 0x34,
-        0x15, 0x00,
-        0x26, 0xFF, 0x00,
-        0x75, 0x08,
-        0x95, 0x02,
-        0x81, 0x02,
-        0xC0
-    ]
 }

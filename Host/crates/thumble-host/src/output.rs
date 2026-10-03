@@ -1,3 +1,4 @@
+use crate::gamepad::{GamepadOutput, GamepadSnapshot};
 use crate::platform;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -6,14 +7,14 @@ use std::io::Write;
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
-use thumble_core::{Effect, KeyBinding, KeyStroke};
+use thumble_core::{Effect, KeyBinding, KeyStroke, VirtualGamepadButton};
 use thumble_protocol::ControllerPointerButton;
 
 const RECENT_EVENT_LIMIT: usize = 64;
 const MINIMUM_TAP_DURATION: Duration = Duration::from_millis(22);
 const MINIMUM_INTER_TAP_GAP: Duration = Duration::from_millis(18);
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OutputSnapshot {
     pub mode: String,
@@ -23,6 +24,8 @@ pub struct OutputSnapshot {
     pub held_pointer_buttons: Vec<String>,
     pub pending_pointer_releases: Vec<String>,
     pub recent_events: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub virtual_gamepad_status: Option<GamepadSnapshot>,
 }
 
 pub struct OutputExecutor {
@@ -36,6 +39,8 @@ pub struct OutputExecutor {
     events_executed: u64,
     recent_events: Vec<String>,
     recording_path: Option<PathBuf>,
+    gamepad: GamepadOutput,
+    held_gamepad_started: BTreeMap<VirtualGamepadButton, Instant>,
 }
 
 impl OutputExecutor {
@@ -51,7 +56,42 @@ impl OutputExecutor {
             events_executed: 0,
             recent_events: Vec::new(),
             recording_path: (!input_enabled).then_some(recording_path).flatten(),
+            gamepad: GamepadOutput::new(input_enabled),
+            held_gamepad_started: BTreeMap::new(),
         }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn with_test_gamepad(gamepad: GamepadOutput) -> Self {
+        let mut output = Self::new(false, None);
+        output.gamepad = gamepad;
+        output
+    }
+
+    pub fn set_gamepad_enabled(&mut self, enabled: bool) -> Result<(), String> {
+        let before = self.gamepad.snapshot().phase;
+        let result = self.gamepad.set_enabled(enabled);
+        if !enabled {
+            self.held_gamepad_started.clear();
+        }
+        result?;
+        if before != self.gamepad.snapshot().phase {
+            self.record(format!(
+                "gamepad_{}",
+                if enabled { "enabled" } else { "disabled" }
+            ))?;
+        }
+        Ok(())
+    }
+
+    pub fn gamepad_status(&self) -> GamepadSnapshot {
+        self.gamepad.snapshot()
+    }
+
+    pub fn retry_gamepad(&mut self) -> Result<(), String> {
+        self.held_gamepad_started.clear();
+        self.gamepad.retry()?;
+        self.record("gamepad_retry".to_owned())
     }
 
     pub fn execute(&mut self, effect: &Effect) -> Result<(), String> {
@@ -173,6 +213,38 @@ impl OutputExecutor {
                     if *pressed { "down" } else { "up" }
                 ))
             }
+            Effect::GamepadButton { button, pressed } => {
+                if !pressed && self.input_enabled {
+                    if let Some(started) = self.held_gamepad_started.get(button) {
+                        if let Some(remaining) = MINIMUM_TAP_DURATION.checked_sub(started.elapsed())
+                        {
+                            std::thread::sleep(remaining);
+                        }
+                    }
+                }
+                self.gamepad.set_button(*button, *pressed)?;
+                if *pressed {
+                    self.held_gamepad_started
+                        .entry(*button)
+                        .or_insert_with(Instant::now);
+                } else {
+                    self.held_gamepad_started.remove(button);
+                }
+                self.record(format!("gamepad_button:{button:?}:{pressed}"))
+            }
+            Effect::GamepadStick { stick, x, y } => {
+                self.gamepad.set_stick(*stick, *x, *y)?;
+                self.record(format!("gamepad_stick:{stick:?}:{x:.3}:{y:.3}"))
+            }
+            Effect::GamepadTrigger { trigger, value } => {
+                self.gamepad.set_trigger(*trigger, *value)?;
+                self.record(format!("gamepad_trigger:{trigger:?}:{value:.3}"))
+            }
+            Effect::GamepadReset => {
+                self.held_gamepad_started.clear();
+                self.gamepad.reset()?;
+                self.record("gamepad_reset".to_owned())
+            }
             _ => Ok(()),
         }
     }
@@ -229,6 +301,15 @@ impl OutputExecutor {
                     self.pending_pointer_releases.insert(name);
                     errors.push(error);
                 }
+            }
+        }
+        self.held_gamepad_started.clear();
+        if matches!(
+            self.gamepad.snapshot().phase.as_str(),
+            "ready" | "recording"
+        ) {
+            if let Err(error) = self.execute(&Effect::GamepadReset) {
+                errors.push(error);
             }
         }
         if errors.is_empty() {
@@ -316,6 +397,7 @@ impl OutputExecutor {
             held_pointer_buttons: self.held_pointer_buttons.iter().cloned().collect(),
             pending_pointer_releases: self.pending_pointer_releases.iter().cloned().collect(),
             recent_events: self.recent_events.clone(),
+            virtual_gamepad_status: Some(self.gamepad.snapshot()),
         }
     }
 
@@ -340,7 +422,11 @@ impl OutputExecutor {
             .map_err(|error| format!("open output recording: {error}"))?;
         fs::set_permissions(path, fs::Permissions::from_mode(0o600))
             .map_err(|error| format!("protect output recording: {error}"))?;
-        let json = serde_json::to_string(&serde_json::json!({"event": event}))
+        let mut frame = serde_json::json!({"event": event});
+        if event.starts_with("gamepad_") {
+            frame["gamepadReport"] = serde_json::json!(self.gamepad.report_bytes());
+        }
+        let json = serde_json::to_string(&frame)
             .map_err(|error| format!("encode output recording: {error}"))?;
         file.write_all(json.as_bytes())
             .and_then(|()| file.write_all(b"\n"))

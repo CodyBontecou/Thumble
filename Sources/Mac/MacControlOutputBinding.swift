@@ -22,6 +22,13 @@ struct MacControlOutputBinding: Codable, Equatable, Hashable, Sendable {
         KeypadBindingFormatter.format(sharedBinding)?.accessibilityText ?? "Unmapped"
     }
 
+    /// Filter before press-time capture, including direct element/part outputs.
+    /// Release still uses the captured binding even if the mode later changes.
+    func filtered(for mode: GamepadProfileOutputMode) -> MacControlOutputBinding {
+        guard mode == .keyboard else { return self }
+        return MacControlOutputBinding(keyboard: keyboard)
+    }
+
     func withAdditionalModifiers(_ modifiers: MacKeyModifiers) -> MacControlOutputBinding {
         guard let keyboard else { return self }
         var copy = self

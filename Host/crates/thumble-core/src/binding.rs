@@ -86,8 +86,8 @@ impl KeyBinding {
 /// The lossless portable subset of `MacControlOutputBinding` and
 /// `KeypadElementOutputBinding`.
 ///
-/// Gamepad button names are retained for migration even though this milestone
-/// intentionally emits no virtual-gamepad effects or capabilities.
+/// Gamepad button names remain lossless strings for forward compatibility.
+/// Execution uses only supported typed buttons.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct OutputBinding {
@@ -98,6 +98,14 @@ pub struct OutputBinding {
 }
 
 impl OutputBinding {
+    pub fn supported_gamepad_buttons(
+        &self,
+    ) -> impl Iterator<Item = crate::VirtualGamepadButton> + '_ {
+        self.gamepad_buttons
+            .iter()
+            .filter_map(|name| crate::VirtualGamepadButton::from_name(name))
+    }
+
     pub fn keyboard(binding: KeyBinding) -> Self {
         Self {
             keyboard: Some(binding),

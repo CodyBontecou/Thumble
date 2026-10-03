@@ -128,6 +128,9 @@ pub struct OutputStatusResult {
     pub pending_key_release_count: usize,
     pub held_pointer_buttons: Vec<String>,
     pub pending_pointer_releases: Vec<String>,
+    /// Optional receiver HID telemetry; never a consumer compatibility claim.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub virtual_gamepad_status: Option<Value>,
 }
 
 #[derive(Debug, Clone, Serialize, JsonSchema)]
@@ -192,6 +195,10 @@ impl HostStatusResult {
                 pending_key_release_count: status.output.pending_key_release_count,
                 held_pointer_buttons: status.output.held_pointer_buttons,
                 pending_pointer_releases: status.output.pending_pointer_releases,
+                virtual_gamepad_status: status
+                    .output
+                    .virtual_gamepad_status
+                    .and_then(|status| serde_json::to_value(status).ok()),
             },
         }
     }
@@ -4809,7 +4816,7 @@ impl ThumbleMcp {
     }
 
     #[tool(
-        description = "List the active profile's executable keyboard controls. Use the returned opaque controlId verbatim with press_control; never guess or construct an ID. Raw key codes are never returned.",
+        description = "List the active profile's executable keyboard/controller controls. Use the returned opaque controlId verbatim with press_control; never guess or construct an ID. Raw key codes are never returned.",
         annotations(
             title = "List active Thumble controls",
             read_only_hint = true,

@@ -1,4 +1,6 @@
 #[cfg(target_os = "macos")]
+pub(crate) mod gamepad_macos;
+#[cfg(target_os = "macos")]
 mod macos;
 #[cfg(not(target_os = "macos"))]
 mod portable;

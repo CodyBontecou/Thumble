@@ -27,6 +27,7 @@ final class MacControllerServer: ObservableObject {
     @Published private(set) var pendingPairingClientName: String?
     @Published private(set) var clientName: String = "No client"
     @Published private(set) var clientDeviceInfo: ControllerClientDeviceInfo?
+    @Published private(set) var virtualGamepadStatus = VirtualGamepadStatus()
     @Published private(set) var editorDeliveryState: ThumbleEditorDeliveryState = .offline
     @Published private(set) var editorDeliveryDetail = "No iPhone connected"
     @Published private(set) var editorDeliveryUpdatedAt = Date.currentMilliseconds
@@ -178,6 +179,8 @@ final class MacControllerServer: ObservableObject {
     private let injector = KeyboardInjector()
     private let pointerInjector = PointerInjector()
     private let virtualGamepadInjector = VirtualGamepadInjector()
+    private let runtimeInstanceID = UUID().uuidString
+    private var runtimeStatusRequestID: String?
     private let debugLogURL = URL(fileURLWithPath: "/tmp/thumble-mac-events.log")
     private let captureLogURL = URL(fileURLWithPath: ThumbleMacIPC.captureLogPath)
     private let logQueue = DispatchQueue(label: "Thumble.DebugLog", qos: .utility)
@@ -402,6 +405,7 @@ final class MacControllerServer: ObservableObject {
     private var anonymousPressCountsByElementInput: [KeypadElementInputID: Int] = [:]
     private var anonymousPressLastSeenByElementInput: [KeypadElementInputID: UInt64] = [:]
     private var localTestPressIdentifiersByElementInput: [KeypadElementInputID: Set<UInt64>] = [:]
+    private var localTestPressIdentifiersByButton: [GameButton: Set<UInt64>] = [:]
     private var nextLocalTestPressIdentifier: UInt64 = 0xFFFF_FFFE_0000_0000
     private var activeInputGeneration: UInt64?
     private var releasedInputGeneration: UInt64?
@@ -416,6 +420,8 @@ final class MacControllerServer: ObservableObject {
     private var externalDefaultsObserver: NSObjectProtocol?
     private var externalSkinStoreObserver: NSObjectProtocol?
     private var cliCommandObserver: NSObjectProtocol?
+    private var systemPowerObservers: [NSObjectProtocol] = []
+    private var restartAfterSystemSleep = false
 
     private struct ExternalStoredProfileState: Codable {
         var profiles: [GamepadConfigurationProfile]
@@ -536,11 +542,31 @@ final class MacControllerServer: ObservableObject {
         ) { [weak self] _ in
             self?.refreshInstalledSkinState(sendToClient: true)
         }
+        let workspace = NSWorkspace.shared.notificationCenter
+        systemPowerObservers = [
+            workspace.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
+                guard let self else { return }
+                self.restartAfterSystemSleep = self.isRunning
+                self.stop(finalStatusText: "Sleeping", releaseReason: "System sleeping")
+                self.virtualGamepadInjector.stop()
+                self.publishRuntimeStatus()
+            },
+            workspace.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
+                guard let self, self.restartAfterSystemSleep else { return }
+                self.restartAfterSystemSleep = false
+                self.start()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
+                    guard let self, self.isRunning else { return }
+                    self.refreshVirtualGamepadMaterialization(reason: "system_wake", publish: true)
+                }
+            }
+        ]
         refreshVirtualGamepadMaterialization(reason: "startup", publish: false)
         publishRuntimeStatus()
     }
 
     deinit {
+        for observer in systemPowerObservers { NSWorkspace.shared.notificationCenter.removeObserver(observer) }
         if let cliCommandObserver {
             DistributedNotificationCenter.default().removeObserver(cliCommandObserver)
         }
@@ -720,6 +746,11 @@ final class MacControllerServer: ObservableObject {
 
         do {
             let payload = try JSONDecoder().decode(ThumbleMacCLICommandPayload.self, from: commandData)
+            guard payload.command == .publishStatus || payload.runtimeInstanceID == runtimeInstanceID else {
+                lastReceivedEvent = "Ignored CLI command: receiver instance changed or was not verified"
+                publishRuntimeStatus(synchronize: true)
+                return
+            }
             handleCLICommand(payload)
         } catch {
             lastReceivedEvent = "Ignored CLI command: invalid payload"
@@ -729,6 +760,9 @@ final class MacControllerServer: ObservableObject {
     }
 
     private func handleCLICommand(_ payload: ThumbleMacCLICommandPayload) {
+        if let requestID = payload.requestID, UUID(uuidString: requestID) != nil {
+            runtimeStatusRequestID = requestID
+        }
         defer { publishRuntimeStatus(synchronize: true) }
 
         switch payload.command {
@@ -758,6 +792,17 @@ final class MacControllerServer: ObservableObject {
 
         case .releaseAll:
             releaseAllAndNotifyClient(reason: payload.reason?.nilIfEmpty ?? "CLI release all")
+
+        case .retryGamepad:
+            retryVirtualGamepad()
+
+        case .testGamepad:
+            let hold = min(1_000, max(0, payload.holdMilliseconds ?? 120))
+            if let input = payload.elementInput {
+                sendTestTap(input, holdMilliseconds: hold)
+            } else if let button = payload.button {
+                sendTestTap(button, holdMilliseconds: hold)
+            }
 
         case .testDown:
             if let input = payload.elementInput {
@@ -1999,16 +2044,48 @@ final class MacControllerServer: ObservableObject {
         publishRuntimeStatus()
     }
 
+    func sendTestTap(_ button: GameButton, holdMilliseconds: Int = 120) {
+        let hold = min(1_000, max(0, holdMilliseconds))
+        asyncOnNetworkQueue { [weak self] in
+            guard let self else { return }
+            let identifier = self.beginLocalTestPressOnNetworkQueue(button)
+            self.networkQueue.asyncAfter(deadline: .now() + .milliseconds(hold)) { [weak self] in
+                self?.endLocalTestPressOnNetworkQueue(button, identifier: identifier)
+            }
+        }
+    }
+
     func sendTestDown(_ button: GameButton) {
         asyncOnNetworkQueue { [weak self] in
-            self?.handleButtonOnNetworkQueue(button, state: .down, source: "Local test")
+            _ = self?.beginLocalTestPressOnNetworkQueue(button)
         }
     }
 
     func sendTestUp(_ button: GameButton) {
         asyncOnNetworkQueue { [weak self] in
-            self?.handleButtonOnNetworkQueue(button, state: .up, source: "Local test")
+            guard let self, let identifier = self.localTestPressIdentifiersByButton[button]?.first else { return }
+            self.endLocalTestPressOnNetworkQueue(button, identifier: identifier)
         }
+    }
+
+    @discardableResult
+    private func beginLocalTestPressOnNetworkQueue(_ button: GameButton) -> UInt64 {
+        nextLocalTestPressIdentifier = nextLocalTestPressIdentifier == UInt64.max
+            ? 0xFFFF_FFFE_0000_0000 : nextLocalTestPressIdentifier + 1
+        let identifier = nextLocalTestPressIdentifier
+        localTestPressIdentifiersByButton[button, default: []].insert(identifier)
+        _ = handleRealtimeInputOnNetworkQueue(button, state: .down, source: "Local editor test", pressIdentifier: identifier)
+        networkQueue.asyncAfter(deadline: .now() + .nanoseconds(Int(Self.localTestHoldTimeoutNanoseconds))) { [weak self] in
+            self?.endLocalTestPressOnNetworkQueue(button, identifier: identifier)
+        }
+        return identifier
+    }
+
+    private func endLocalTestPressOnNetworkQueue(_ button: GameButton, identifier: UInt64) {
+        guard localTestPressIdentifiersByButton[button]?.contains(identifier) == true else { return }
+        localTestPressIdentifiersByButton[button]?.remove(identifier)
+        if localTestPressIdentifiersByButton[button]?.isEmpty == true { localTestPressIdentifiersByButton[button] = nil }
+        _ = handleRealtimeInputOnNetworkQueue(button, state: .up, source: "Local editor test", pressIdentifier: identifier)
     }
 
     func sendTestDown(_ input: KeypadElementInputID) {
@@ -2050,6 +2127,9 @@ final class MacControllerServer: ObservableObject {
             source: "Local editor test",
             pressIdentifier: identifier
         )
+        networkQueue.asyncAfter(deadline: .now() + .nanoseconds(Int(Self.localTestHoldTimeoutNanoseconds))) { [weak self] in
+            self?.endLocalTestPressOnNetworkQueue(input, identifier: identifier)
+        }
         return identifier
     }
 
@@ -2681,7 +2761,9 @@ final class MacControllerServer: ObservableObject {
         case .hello:
             handleHelloOnNetworkQueue(message, from: connection)
         case .ping:
-            if isPaired { send(.init(type: .pong, timestamp: message.timestamp), on: connection) }
+            if isPaired {
+                send(.init(type: .pong, timestamp: message.timestamp, virtualGamepadStatus: virtualGamepadInjector.status()), on: connection)
+            }
         case .pong:
             if isPaired, let latency = roundTripLatencyMilliseconds(from: message.timestamp) {
                 publishEstimatedLatency(latency, from: connection)
@@ -3279,7 +3361,8 @@ final class MacControllerServer: ObservableObject {
                 gamepadProfileID: realtimeActiveGamepadProfileID,
                 defaultGamepadProfileID: realtimeDefaultGamepadProfileID,
                 capabilities: Array(Self.advertisedCapabilities).sorted { $0.rawValue < $1.rawValue },
-                inputProtocolVersion: ControllerWireCodec.currentInputProtocolVersion
+                inputProtocolVersion: ControllerWireCodec.currentInputProtocolVersion,
+                virtualGamepadStatus: virtualGamepadInjector.status()
             ),
             on: connection
         ) { [weak self, weak connection] error in
@@ -3547,12 +3630,13 @@ final class MacControllerServer: ObservableObject {
             return
         }
 
+        guard (message.analogStick != nil) != (message.analogTrigger != nil) else { return }
         if let stick = message.analogStick {
+            guard let rawX = message.analogX, let rawY = message.analogY,
+                  rawX.isFinite, rawY.isFinite else { return }
+            let x = min(1, max(-1, rawX)), y = min(1, max(-1, rawY))
             let sequenceKey = "stick.\(stick.rawValue)"
             guard acceptAnalogSequence(message.analogSequence, key: sequenceKey, source: source) else { return }
-
-            let x = message.analogX ?? 0
-            let y = message.analogY ?? 0
             if abs(x) < 0.001 && abs(y) < 0.001 {
                 activeAnalogStickLastSeenByStick[stick] = nil
             } else {
@@ -3578,10 +3662,10 @@ final class MacControllerServer: ObservableObject {
         }
 
         if let trigger = message.analogTrigger {
+            guard let rawValue = message.analogValue, rawValue.isFinite else { return }
+            let value = min(1, max(0, rawValue))
             let sequenceKey = "trigger.\(trigger.rawValue)"
             guard acceptAnalogSequence(message.analogSequence, key: sequenceKey, source: source) else { return }
-
-            let value = message.analogValue ?? 0
             if value < 0.001 {
                 activeAnalogTriggerLastSeenByTrigger[trigger] = nil
             } else {
@@ -3609,13 +3693,16 @@ final class MacControllerServer: ObservableObject {
     }
 
     private func acceptAnalogSequence(_ sequence: UInt64?, key: String, source: String) -> Bool {
-        guard let sequence else { return true }
-        if let lastSequence = lastAnalogSequenceNumberByKey[key],
-           sequence <= lastSequence,
-           lastSequence - sequence < ControllerWireCodec.maximumButtonSequenceNumber / 2
-        {
-            logInputEvent("gamepad_analog_stale source=\(source) key=\(key) sequence=\(sequence) last=\(lastSequence)")
-            return false
+        guard let sequence else { return activeInputGeneration == nil }
+        guard (1...ControllerWireCodec.maximumButtonSequenceNumber).contains(sequence) else { return false }
+        if let lastSequence = lastAnalogSequenceNumberByKey[key] {
+            let distance = sequence >= lastSequence
+                ? sequence - lastSequence
+                : ControllerWireCodec.maximumButtonSequenceNumber - lastSequence + sequence
+            guard distance > 0, distance <= ControllerWireCodec.maximumButtonSequenceNumber / 2 else {
+                logInputEvent("gamepad_analog_stale source=\(source) key=\(key) sequence=\(sequence) last=\(lastSequence)")
+                return false
+            }
         }
         lastAnalogSequenceNumberByKey[key] = sequence
         return true
@@ -4066,7 +4153,7 @@ final class MacControllerServer: ObservableObject {
     }
 
     private func elementOutputBindingOnNetworkQueue(for input: KeypadElementInputID) -> MacControlOutputBinding? {
-        resolvedElementInputs[input]?.output
+        resolvedElementInputs[input]?.output?.filtered(for: realtimeOutputMode)
     }
 
     private static func legacyButton(for part: KeypadElementInputPart, element: KeypadElement) -> GameButton? {
@@ -4571,7 +4658,7 @@ final class MacControllerServer: ObservableObject {
         inputTimingKey: InputTimingKey? = nil
     ) {
         let lookupStartedAt = DispatchTime.now().uptimeNanoseconds
-        guard let baseOutput = realtimeOutputBindings[button] ?? realtimeKeyBindings[button].map({ MacControlOutputBinding.keyboard($0) }),
+        guard let baseOutput = (realtimeOutputBindings[button] ?? realtimeKeyBindings[button].map({ MacControlOutputBinding.keyboard($0) }))?.filtered(for: realtimeOutputMode),
               !baseOutput.isEmpty
         else {
             let lookupCompletedAt = DispatchTime.now().uptimeNanoseconds
@@ -4766,6 +4853,7 @@ final class MacControllerServer: ObservableObject {
         anonymousPressCountsByElementInput.removeAll()
         anonymousPressLastSeenByElementInput.removeAll()
         localTestPressIdentifiersByElementInput.removeAll()
+        localTestPressIdentifiersByButton.removeAll()
     }
 
     private func recordPhysicalPressBeganOnNetworkQueue(
@@ -4897,8 +4985,6 @@ final class MacControllerServer: ObservableObject {
     }
 
     private func expireStalePhysicalHoldsOnNetworkQueue() {
-        guard pairedConnection != nil else { return }
-
         let now = DispatchTime.now().uptimeNanoseconds
         var buttonsNeedingRelease: [GameButton] = []
         var elementInputsNeedingRelease: [KeypadElementInputID] = []
@@ -4911,7 +4997,9 @@ final class MacControllerServer: ObservableObject {
             {
                 let expiredIdentifiers = identifiers.filter { identifier in
                     guard let lastSeen = lastSeenByIdentifier[identifier], now >= lastSeen else { return false }
-                    return now - lastSeen > Self.physicalHoldRefreshTimeoutNanoseconds
+                    let timeout = localTestPressIdentifiersByButton[button]?.contains(identifier) == true
+                        ? Self.localTestHoldTimeoutNanoseconds : Self.physicalHoldRefreshTimeoutNanoseconds
+                    return now - lastSeen > timeout
                 }
 
                 if !expiredIdentifiers.isEmpty {
@@ -4920,7 +5008,9 @@ final class MacControllerServer: ObservableObject {
                     for identifier in expiredIdentifiers {
                         identifiers.remove(identifier)
                         nextLastSeenByIdentifier[identifier] = nil
+                        localTestPressIdentifiersByButton[button]?.remove(identifier)
                     }
+                    if localTestPressIdentifiersByButton[button]?.isEmpty == true { localTestPressIdentifiersByButton[button] = nil }
 
                     activePressIdentifiersByButton[button] = identifiers.isEmpty ? nil : identifiers
                     nextLastSeenByIdentifier = nextLastSeenByIdentifier.filter { identifiers.contains($0.key) }
@@ -5181,6 +5271,7 @@ final class MacControllerServer: ObservableObject {
     }
 
     private func pressGamepadButton(_ button: VirtualGamepadButton) {
+        guard realtimeOutputMode != .keyboard else { return }
         let currentCount = heldGamepadButtonCounts[button, default: 0]
         heldGamepadButtonCounts[button] = currentCount + 1
         if currentCount == 0 {
@@ -5337,7 +5428,8 @@ final class MacControllerServer: ObservableObject {
                 bindingPresentations: realtimeBindingPresentations,
                 gamepadProfileID: realtimeActiveGamepadProfileID,
                 defaultGamepadProfileID: realtimeDefaultGamepadProfileID,
-                capabilities: Array(Self.advertisedCapabilities).sorted { $0.rawValue < $1.rawValue }
+                capabilities: Array(Self.advertisedCapabilities).sorted { $0.rawValue < $1.rawValue },
+                virtualGamepadStatus: virtualGamepadInjector.status()
             ),
             on: pairedConnection
         ) { [weak self] error in
@@ -5386,7 +5478,8 @@ final class MacControllerServer: ObservableObject {
                 bindingPresentations: realtimeBindingPresentations,
                 gamepadProfileID: realtimeActiveGamepadProfileID,
                 defaultGamepadProfileID: realtimeDefaultGamepadProfileID,
-                capabilities: Array(Self.advertisedCapabilities).sorted { $0.rawValue < $1.rawValue }
+                capabilities: Array(Self.advertisedCapabilities).sorted { $0.rawValue < $1.rawValue },
+                virtualGamepadStatus: virtualGamepadInjector.status()
             ),
             on: pairedConnection
         ) { [weak self] error in
@@ -5627,7 +5720,7 @@ final class MacControllerServer: ObservableObject {
         else { return }
         lastPingUptime = now
         send(
-            .init(type: .ping, timestamp: Int64(now / 1_000_000)),
+            .init(type: .ping, timestamp: Int64(now / 1_000_000), virtualGamepadStatus: virtualGamepadInjector.status()),
             on: pairedConnection
         )
     }
@@ -5846,7 +5939,7 @@ final class MacControllerServer: ObservableObject {
                 let error = virtualGamepadInjector.status().lastError ?? "unknown"
                 logDebug("virtual_gamepad_start_failed reason=\(reason) error=\(error)")
             }
-        } else if virtualGamepadInjector.isActive {
+        } else if virtualGamepadInjector.status().phase != .inactive {
             virtualGamepadInjector.stop()
             logDebug("virtual_gamepad_stopped reason=\(reason)")
         }
@@ -5861,28 +5954,26 @@ final class MacControllerServer: ObservableObject {
         outputBindings: [GameButton: MacControlOutputBinding],
         customization: GamepadCustomization
     ) -> Bool {
-        if outputMode != .keyboard,
-           outputBindings.values.contains(where: { !$0.gamepadButtons.isEmpty }) {
-            return true
-        }
+        VirtualGamepadOutputPolicy.needsDevice(
+            outputMode: outputMode,
+            hasMappedGamepadButtons: outputBindings.values.contains { !$0.gamepadButtons.isEmpty },
+            customization: customization
+        )
+    }
 
-        let normalizedCustomization = customization.normalized
-        if normalizedCustomization.elements.contains(where: { element in
-            element.output?.gamepadButtons.isEmpty == false
-                || element.partOutputs.values.contains { !$0.gamepadButtons.isEmpty }
-        }) {
-            return true
+    func retryVirtualGamepad() {
+        guard Self.needsVirtualGamepadMaterialization(
+            outputMode: activeGamepadOutputMode, outputBindings: outputBindings, customization: gamepadCustomization
+        ) else {
+            lastReceivedEvent = "Controller output is off in the active profile"
+            publishRuntimeStatus()
+            return
         }
-
-        return normalizedCustomization.customButtons.contains { customButton in
-            let normalizedButton = customButton.normalized
-            if normalizedButton.isTrigger {
-                return true
-            }
-            if normalizedButton.isJoystick {
-                return (normalizedButton.joystickOutputSettings ?? .defaultValue).normalized.analogTarget.stick != nil
-            }
-            return false
+        releaseAllAndNotifyClient(reason: "Controller output recovery")
+        _ = virtualGamepadInjector.retry()
+        publishRuntimeStatus(synchronize: true)
+        asyncOnNetworkQueue { [weak self] in
+            self?.sendGamepadProfileStateOnNetworkQueue()
         }
     }
 
@@ -5925,6 +6016,13 @@ final class MacControllerServer: ObservableObject {
     private func writeRuntimeStatusSnapshotOnMain(synchronize: Bool) {
         runtimeStatusPublishTask = nil
         let snapshot = runtimeStatusSnapshot()
+        if let status = snapshot.virtualGamepadStatus,
+           status.phase != virtualGamepadStatus.phase || status.lastError != virtualGamepadStatus.lastError ||
+           status.entitlementGranted != virtualGamepadStatus.entitlementGranted {
+            // Readiness changes invalidate UI; high-rate report/axis telemetry
+            // stays in the runtime snapshot rather than rebuilding the editor.
+            virtualGamepadStatus = status
+        }
         guard let data = try? JSONEncoder().encode(snapshot) else { return }
         UserDefaults.standard.set(data, forKey: ThumbleMacIPC.runtimeStatusDefaultsKey)
         lastRuntimeStatusPublishUptime = DispatchTime.now().uptimeNanoseconds
@@ -6033,7 +6131,11 @@ final class MacControllerServer: ObservableObject {
             virtualGamepadRightStickY: virtualGamepadStatus.rightStickY,
             virtualGamepadLeftTrigger: virtualGamepadStatus.leftTrigger,
             virtualGamepadRightTrigger: virtualGamepadStatus.rightTrigger,
-            captureLogPath: captureLogURL.path
+            captureLogPath: captureLogURL.path,
+            virtualGamepadStatus: virtualGamepadStatus,
+            runtimeProcessID: ProcessInfo.processInfo.processIdentifier,
+            runtimeInstanceID: runtimeInstanceID,
+            runtimeStatusRequestID: runtimeStatusRequestID
         )
     }
 

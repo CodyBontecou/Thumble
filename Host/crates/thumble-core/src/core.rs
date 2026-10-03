@@ -1,5 +1,9 @@
+use crate::gamepad::{AnalogAxis, AnalogTarget};
 use crate::resolver::element_part_name;
-use crate::{KeyBinding, KeyStroke, PersistentState, StateError, TrustedClient};
+use crate::{
+    KeyBinding, KeyStroke, OutputBinding, PersistentState, StateError, TrustedClient,
+    VirtualGamepadButton,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{BTreeMap, HashMap, VecDeque};
@@ -8,6 +12,7 @@ use std::fmt;
 use thumble_protocol::{
     ButtonPressState, ControllerMessage, ControllerMessageType, ControllerPointerButton,
     ControllerPointerEventKind, ControllerWireCodec, GameButton, KeypadElementInputPart,
+    VirtualGamepadStick, VirtualGamepadTrigger,
 };
 
 pub type ConnectionId = u64;
@@ -69,6 +74,20 @@ pub enum Effect {
         button: ControllerPointerButton,
         pressed: bool,
     },
+    GamepadButton {
+        button: VirtualGamepadButton,
+        pressed: bool,
+    },
+    GamepadStick {
+        stick: VirtualGamepadStick,
+        x: f64,
+        y: f64,
+    },
+    GamepadTrigger {
+        trigger: VirtualGamepadTrigger,
+        value: f64,
+    },
+    GamepadReset,
     StatusChanged(Box<StatusSnapshot>),
 }
 
@@ -115,6 +134,23 @@ impl fmt::Debug for Effect {
                 .field("button", button)
                 .field("pressed", pressed)
                 .finish(),
+            Self::GamepadButton { button, pressed } => formatter
+                .debug_struct("GamepadButton")
+                .field("button", button)
+                .field("pressed", pressed)
+                .finish(),
+            Self::GamepadStick { stick, x, y } => formatter
+                .debug_struct("GamepadStick")
+                .field("stick", stick)
+                .field("x", x)
+                .field("y", y)
+                .finish(),
+            Self::GamepadTrigger { trigger, value } => formatter
+                .debug_struct("GamepadTrigger")
+                .field("trigger", trigger)
+                .field("value", value)
+                .finish(),
+            Self::GamepadReset => formatter.write_str("GamepadReset"),
             Self::StatusChanged(status) => formatter
                 .debug_tuple("StatusChanged")
                 .field(status)
@@ -185,6 +221,7 @@ struct PendingPairing {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 enum InputIdentity {
     Button(GameButton),
+    LocalControl(String),
     Element {
         element_id: String,
         part: KeypadElementInputPart,
@@ -195,6 +232,7 @@ impl InputIdentity {
     fn sort_key(&self) -> String {
         match self {
             Self::Button(button) => format!("0:{:02}", button.compact_wire_code()),
+            Self::LocalControl(id) => format!("2:{id}"),
             Self::Element { element_id, part } => {
                 format!(
                     "1:{}#{}",
@@ -207,7 +245,7 @@ impl InputIdentity {
 
     fn element_storage_key(&self) -> Option<String> {
         match self {
-            Self::Button(_) => None,
+            Self::Button(_) | Self::LocalControl(_) => None,
             Self::Element { element_id, part } => {
                 Some(if *part == KeypadElementInputPart::Primary {
                     element_id.clone()
@@ -223,7 +261,7 @@ impl InputIdentity {
 struct PhysicalHold {
     identified_last_seen: HashMap<u64, i64>,
     anonymous_last_seen: Option<i64>,
-    binding: Option<KeyBinding>,
+    binding: Option<OutputBinding>,
 }
 
 impl PhysicalHold {
@@ -261,6 +299,8 @@ pub struct HostCore {
     last_pointer_sequence: Option<u64>,
     physical_holds: HashMap<InputIdentity, PhysicalHold>,
     held_key_counts: BTreeMap<KeyBinding, u32>,
+    held_gamepad_counts: BTreeMap<VirtualGamepadButton, u32>,
+    analog_axes: BTreeMap<AnalogTarget, AnalogAxis>,
     pointer_button_last_seen: HashMap<ControllerPointerButton, i64>,
     counters: StatusCounters,
 }
@@ -279,6 +319,7 @@ impl fmt::Debug for HostCore {
             .field("retired_generation_count", &self.retired_generations.len())
             .field("physical_hold_count", &self.physical_holds.len())
             .field("held_key_count", &self.held_key_counts.len())
+            .field("held_gamepad_count", &self.held_gamepad_counts.len())
             .field("pointer_button_count", &self.pointer_button_last_seen.len())
             .field("counters", &self.counters)
             .finish()
@@ -309,6 +350,8 @@ impl HostCore {
             last_pointer_sequence: None,
             physical_holds: HashMap::new(),
             held_key_counts: BTreeMap::new(),
+            held_gamepad_counts: BTreeMap::new(),
+            analog_axes: BTreeMap::new(),
             pointer_button_last_seen: HashMap::new(),
             counters: StatusCounters::default(),
         })
@@ -323,6 +366,65 @@ impl HostCore {
 
     pub fn persistent_state(&self) -> &PersistentState {
         &self.state
+    }
+
+    pub fn needs_virtual_gamepad(&self) -> bool {
+        self.state.needs_virtual_gamepad()
+    }
+
+    /// A bounded local-control tap respecting output mode and existing holds.
+    /// Gamepad taps never release a button held by a physical input. Adapters
+    /// execute the returned press/release effects in order.
+    pub fn tap_output_binding(&self, binding: &OutputBinding) -> Vec<Effect> {
+        let binding = self.state.filter_output_mode(binding.clone());
+        let mut effects = Vec::new();
+        if let Some(keyboard) = &binding.keyboard {
+            if keyboard.is_sequence()
+                || !self
+                    .held_key_counts
+                    .contains_key(&keyboard.canonical_held_binding())
+            {
+                effects.push(Effect::TapSequence(keyboard.strokes()));
+            } else {
+                self.pulse_binding(&OutputBinding::keyboard(keyboard.clone()), &mut effects);
+            }
+        }
+        let buttons = binding
+            .supported_gamepad_buttons()
+            .filter(|button| !self.held_gamepad_counts.contains_key(button))
+            .collect::<Vec<_>>();
+        for pressed in [true, false] {
+            for button in &buttons {
+                effects.push(Effect::GamepadButton {
+                    button: *button,
+                    pressed,
+                });
+            }
+        }
+        effects
+    }
+
+    /// Local editor/CLI holds use the same captured binding and reference counts
+    /// as phone input. They are receiver-owned and expire even if the caller dies.
+    pub fn set_local_output_binding(
+        &mut self,
+        control_id: &str,
+        binding: Option<OutputBinding>,
+        pressed: bool,
+        now_millis: i64,
+    ) -> Result<Vec<Effect>, LocalControlError> {
+        if control_id.is_empty() || control_id.len() > 512 {
+            return Err(LocalControlError::InvalidControlID);
+        }
+        let identity = InputIdentity::LocalControl(control_id.to_ascii_lowercase());
+        let mut effects = Vec::new();
+        if pressed {
+            let binding = binding.map(|output| self.state.filter_output_mode(output));
+            self.physical_down(identity, None, binding, now_millis, &mut effects);
+        } else {
+            self.physical_up(&identity, None, &mut effects);
+        }
+        Ok(effects)
     }
 
     pub fn pairing_code(&self) -> &str {
@@ -516,6 +618,14 @@ impl HostCore {
                     &mut effects,
                 );
             }
+            ControllerMessageType::GamepadAnalog => {
+                self.handle_gamepad_analog(
+                    connection_id,
+                    &message,
+                    time.monotonic_millis,
+                    &mut effects,
+                );
+            }
             ControllerMessageType::ReleaseAll => {
                 self.handle_release_all(connection_id, &message, &mut effects);
             }
@@ -530,7 +640,6 @@ impl HostCore {
             }
             ControllerMessageType::PairingChallenge
             | ControllerMessageType::PairingAccepted
-            | ControllerMessageType::GamepadAnalog
             | ControllerMessageType::SkinPackages
             | ControllerMessageType::SkinPackageRemoval
             | ControllerMessageType::GamepadProfileSkinSelection
@@ -551,13 +660,23 @@ impl HostCore {
         Ok(effects)
     }
 
-    /// Release every tracked keyboard and pointer hold without changing the
-    /// running or authentication state. Host control adapters use this for a
+    /// Release every tracked keyboard, pointer, and gamepad hold without
+    /// changing the running or authentication state. Host control adapters use this for a
     /// local emergency release command.
     pub fn release_all(&mut self) -> Vec<Effect> {
         let before = self.status();
         let mut effects = Vec::new();
         self.release_all_internal(&mut effects);
+        self.append_status_if_changed(before, &mut effects);
+        effects
+    }
+
+    /// A receiver-originated safety release also retires the input generation.
+    /// Late datagrams cannot reassert a hold before the phone receives the reset.
+    pub fn release_all_locally(&mut self) -> Vec<Effect> {
+        let before = self.status();
+        let mut effects = Vec::new();
+        self.release_all_and_notify_client(&mut effects);
         self.append_status_if_changed(before, &mut effects);
         effects
     }
@@ -600,8 +719,9 @@ impl HostCore {
     /// live state cannot diverge after the atomic rename succeeds.
     pub fn install_validated_persisted_state(&mut self, state: PersistentState) -> Vec<Effect> {
         let before = self.status();
-        self.state = state;
         let mut effects = Vec::new();
+        self.release_all_and_notify_client(&mut effects);
+        self.state = state;
         if let Some(connection_id) = self
             .active_client
             .as_ref()
@@ -641,8 +761,8 @@ impl HostCore {
         effects
     }
 
-    /// Expire individual physical press references and pointer buttons that have
-    /// not been refreshed within `maximum_age_millis`.
+    /// Expire individual physical press references, pointer buttons, and analog
+    /// axes not refreshed within `maximum_age_millis`.
     pub fn expire_holds(&mut self, now_millis: i64, maximum_age_millis: i64) -> Vec<Effect> {
         let before = self.status();
         let mut effects = Vec::new();
@@ -667,6 +787,11 @@ impl HostCore {
         identities.sort_by_key(InputIdentity::sort_key);
 
         for identity in identities {
+            let maximum_age_millis = if matches!(identity, InputIdentity::LocalControl(_)) {
+                30_000
+            } else {
+                maximum_age_millis
+            };
             let mut removed_count = 0_u64;
             let mut binding_to_release = None;
             let mut remove_identity = false;
@@ -711,6 +836,17 @@ impl HostCore {
                     button,
                     pressed: false,
                 });
+            }
+        }
+
+        for (target, axis) in &mut self.analog_axes {
+            if axis
+                .last_seen
+                .is_some_and(|last_seen| has_expired(now_millis, last_seen, maximum_age_millis))
+            {
+                axis.last_seen = None;
+                self.counters.expired_holds = self.counters.expired_holds.saturating_add(1);
+                effects.push(neutral_analog_effect(*target));
             }
         }
 
@@ -1031,9 +1167,7 @@ impl HostCore {
                 };
                 (
                     InputIdentity::Button(button),
-                    self.state
-                        .resolve_button_output(button)
-                        .and_then(|output| output.keyboard),
+                    self.state.resolve_button_output(button),
                 )
             }
             ControllerMessageType::ElementInput => {
@@ -1053,9 +1187,7 @@ impl HostCore {
                         element_id: element_id.to_owned(),
                         part,
                     },
-                    self.state
-                        .resolve_element_output(element_id, part)
-                        .and_then(|output| output.keyboard),
+                    self.state.resolve_element_output(element_id, part),
                 )
             }
             _ => return,
@@ -1070,6 +1202,107 @@ impl HostCore {
                 self.physical_up(&identity, press_identifier, effects);
             }
         }
+    }
+
+    fn handle_gamepad_analog(
+        &mut self,
+        connection_id: ConnectionId,
+        message: &ControllerMessage,
+        now_millis: i64,
+        effects: &mut Vec<Effect>,
+    ) {
+        if self.accept_generation(connection_id, message, effects) == GenerationAcceptance::Rejected
+        {
+            return;
+        }
+        let (target, effect, active) = match (message.analog_stick, message.analog_trigger) {
+            (Some(stick), None) => {
+                let (Some(x), Some(y)) = (message.analog_x, message.analog_y) else {
+                    self.reject_input(
+                        connection_id,
+                        "Analog stick coordinates are required",
+                        effects,
+                    );
+                    return;
+                };
+                if !x.is_finite() || !y.is_finite() || message.analog_value.is_some() {
+                    self.reject_input(connection_id, "Malformed analog stick coordinates", effects);
+                    return;
+                }
+                let (x, y) = (x.clamp(-1.0, 1.0), y.clamp(-1.0, 1.0));
+                (
+                    AnalogTarget::from(stick),
+                    Effect::GamepadStick { stick, x, y },
+                    x != 0.0 || y != 0.0,
+                )
+            }
+            (None, Some(trigger)) => {
+                let Some(value) = message.analog_value else {
+                    self.reject_input(connection_id, "Analog trigger value is required", effects);
+                    return;
+                };
+                if !value.is_finite() || message.analog_x.is_some() || message.analog_y.is_some() {
+                    self.reject_input(connection_id, "Malformed analog trigger value", effects);
+                    return;
+                }
+                let value = value.clamp(0.0, 1.0);
+                (
+                    AnalogTarget::from(trigger),
+                    Effect::GamepadTrigger { trigger, value },
+                    value != 0.0,
+                )
+            }
+            _ => {
+                self.reject_input(
+                    connection_id,
+                    "Exactly one analog target is required",
+                    effects,
+                );
+                return;
+            }
+        };
+        if self.active_generation.is_some() && message.analog_sequence.is_none() {
+            self.reject_input(connection_id, "Analog sequence is required", effects);
+            return;
+        }
+        if message.analog_sequence.is_some_and(|sequence| {
+            sequence == 0 || sequence > ControllerWireCodec::MAXIMUM_BUTTON_SEQUENCE_NUMBER
+        }) {
+            self.reject_input(
+                connection_id,
+                "Analog sequence is outside the compact range",
+                effects,
+            );
+            return;
+        }
+        if self.state.gamepad_output_disabled() {
+            self.counters.ignored_inputs = self.counters.ignored_inputs.saturating_add(1);
+            return;
+        }
+        let axis = self.analog_axes.entry(target).or_default();
+        if let Some(sequence) = message.analog_sequence {
+            // Only a positive modular forward distance of at most half a cycle
+            // is newer. Delayed pre-wrap packets must not restore old movement.
+            if axis.last_sequence.is_some_and(|last| {
+                let maximum = ControllerWireCodec::MAXIMUM_BUTTON_SEQUENCE_NUMBER;
+                let distance = if sequence >= last {
+                    sequence - last
+                } else {
+                    maximum - last + sequence
+                };
+                distance == 0 || distance > maximum / 2
+            }) {
+                self.counters.duplicate_sequences =
+                    self.counters.duplicate_sequences.saturating_add(1);
+                return;
+            }
+            axis.last_sequence = Some(sequence);
+        }
+        // Analog heartbeat repeats arrive as separate GamepadAnalog messages;
+        // a general heartbeat must not prolong a lost final-neutral packet.
+        axis.last_seen = active.then_some(now_millis);
+        self.counters.accepted_inputs = self.counters.accepted_inputs.saturating_add(1);
+        effects.push(effect);
     }
 
     fn handle_pointer_input(
@@ -1330,7 +1563,7 @@ impl HostCore {
             self.state
                 .bump_configuration_revision()
                 .map_err(|_| LocalControlError::ConfigurationRevisionExhausted)?;
-            self.release_all_internal(effects);
+            self.release_all_and_notify_client(effects);
             self.state.active_profile_id = profile_id;
             effects.push(Effect::PersistState);
         }
@@ -1419,8 +1652,8 @@ impl HostCore {
             self.retired_generations.pop_front();
         }
         self.active_generation = Some(generation);
-        self.reset_sequences();
         self.release_all_internal(effects);
+        self.reset_sequences();
         GenerationAcceptance::Transitioned
     }
 
@@ -1475,7 +1708,7 @@ impl HostCore {
         &mut self,
         identity: InputIdentity,
         press_identifier: Option<u64>,
-        binding: Option<KeyBinding>,
+        binding: Option<OutputBinding>,
         now_millis: i64,
         effects: &mut Vec<Effect>,
     ) {
@@ -1539,45 +1772,106 @@ impl HostCore {
         }
     }
 
-    fn activate_binding(&mut self, binding: &KeyBinding, effects: &mut Vec<Effect>) {
-        let strokes = binding.strokes();
-        if strokes.len() > 1 {
-            effects.push(Effect::TapSequence(strokes));
-            return;
+    fn activate_binding(&mut self, binding: &OutputBinding, effects: &mut Vec<Effect>) {
+        if let Some(keyboard) = &binding.keyboard {
+            if keyboard.is_sequence() {
+                effects.push(Effect::TapSequence(keyboard.strokes()));
+            } else {
+                let held = keyboard.canonical_held_binding();
+                let count = self.held_key_counts.entry(held.clone()).or_default();
+                if *count == 0 {
+                    effects.push(Effect::KeyDown(held));
+                }
+                *count = count.saturating_add(1);
+            }
         }
-        let held = binding.canonical_held_binding();
-        let count = self.held_key_counts.entry(held.clone()).or_default();
-        if *count == 0 {
-            effects.push(Effect::KeyDown(held));
+        for button in binding.supported_gamepad_buttons() {
+            let count = self.held_gamepad_counts.entry(button).or_default();
+            if *count == 0 {
+                effects.push(Effect::GamepadButton {
+                    button,
+                    pressed: true,
+                });
+            }
+            *count = count.saturating_add(1);
         }
-        *count = count.saturating_add(1);
     }
 
-    fn pulse_binding(&self, binding: &KeyBinding, effects: &mut Vec<Effect>) {
-        if binding.is_sequence() {
-            effects.push(Effect::TapSequence(binding.strokes()));
+    fn pulse_binding(&self, binding: &OutputBinding, effects: &mut Vec<Effect>) {
+        let Some(keyboard) = &binding.keyboard else {
+            return;
+        };
+        if keyboard.is_sequence() {
+            effects.push(Effect::TapSequence(keyboard.strokes()));
             return;
         }
-        let held = binding.canonical_held_binding();
+        let held = keyboard.canonical_held_binding();
         if self.held_key_counts.get(&held) == Some(&1) {
             effects.push(Effect::PulseKey(held));
         }
     }
 
-    fn deactivate_binding(&mut self, binding: &KeyBinding, effects: &mut Vec<Effect>) {
-        if binding.is_sequence() {
-            return;
+    fn deactivate_binding(&mut self, binding: &OutputBinding, effects: &mut Vec<Effect>) {
+        if let Some(keyboard) = binding
+            .keyboard
+            .as_ref()
+            .filter(|keyboard| !keyboard.is_sequence())
+        {
+            let held = keyboard.canonical_held_binding();
+            if let Some(count) = self.held_key_counts.get_mut(&held) {
+                if *count <= 1 {
+                    self.held_key_counts.remove(&held);
+                    effects.push(Effect::KeyUp(held));
+                } else {
+                    *count -= 1;
+                }
+            }
         }
-        let held = binding.canonical_held_binding();
-        let Some(count) = self.held_key_counts.get_mut(&held) else {
+        for button in binding.supported_gamepad_buttons() {
+            if let Some(count) = self.held_gamepad_counts.get_mut(&button) {
+                if *count <= 1 {
+                    self.held_gamepad_counts.remove(&button);
+                    effects.push(Effect::GamepadButton {
+                        button,
+                        pressed: false,
+                    });
+                } else {
+                    *count -= 1;
+                }
+            }
+        }
+    }
+
+    fn release_all_and_notify_client(&mut self, effects: &mut Vec<Effect>) {
+        self.release_all_internal(effects);
+        let Some(connection_id) = self
+            .active_client
+            .as_ref()
+            .map(|client| client.connection_id)
+        else {
             return;
         };
-        if *count <= 1 {
-            self.held_key_counts.remove(&held);
-            effects.push(Effect::KeyUp(held));
-        } else {
-            *count -= 1;
+        let mut message = ControllerMessage::new(ControllerMessageType::ReleaseAll, 0);
+        if let Some(generation) = self.active_generation {
+            let next = if generation == u64::MAX {
+                1
+            } else {
+                generation + 1
+            };
+            self.retired_generations.push_back(generation);
+            if self.retired_generations.len() > 64 {
+                self.retired_generations.pop_front();
+            }
+            self.active_generation = Some(next);
+            self.reset_sequences();
+            message.input_protocol_version =
+                Some(ControllerWireCodec::CURRENT_INPUT_PROTOCOL_VERSION);
+            message.input_generation = Some(next);
         }
+        effects.push(Effect::SendMessage {
+            connection_id,
+            message: Box::new(message),
+        });
     }
 
     fn release_all_internal(&mut self, effects: &mut Vec<Effect>) {
@@ -1593,8 +1887,27 @@ impl HostCore {
                 });
             }
         }
+        for button in self.held_gamepad_counts.keys() {
+            effects.push(Effect::GamepadButton {
+                button: *button,
+                pressed: false,
+            });
+        }
+        if !self.held_gamepad_counts.is_empty()
+            || self
+                .analog_axes
+                .values()
+                .any(|axis| axis.last_seen.is_some())
+            || self.needs_virtual_gamepad()
+        {
+            effects.push(Effect::GamepadReset);
+        }
         self.physical_holds.clear();
         self.held_key_counts.clear();
+        self.held_gamepad_counts.clear();
+        for axis in self.analog_axes.values_mut() {
+            axis.last_seen = None;
+        }
         self.pointer_button_last_seen.clear();
     }
 
@@ -1607,6 +1920,11 @@ impl HostCore {
     fn reset_sequences(&mut self) {
         self.last_digital_sequence = None;
         self.last_pointer_sequence = None;
+        // Establishing v2 must not forget an unexpired legacy analog hold.
+        // Lifecycle releases neutralize axes separately from sequence resets.
+        for axis in self.analog_axes.values_mut() {
+            axis.last_sequence = None;
+        }
     }
 
     fn is_authenticated(&self, connection_id: ConnectionId) -> bool {
@@ -1742,6 +2060,29 @@ fn pointer_buttons() -> [ControllerPointerButton; 3] {
     ]
 }
 
+fn neutral_analog_effect(target: AnalogTarget) -> Effect {
+    match target {
+        AnalogTarget::LeftStick => Effect::GamepadStick {
+            stick: VirtualGamepadStick::Left,
+            x: 0.0,
+            y: 0.0,
+        },
+        AnalogTarget::RightStick => Effect::GamepadStick {
+            stick: VirtualGamepadStick::Right,
+            x: 0.0,
+            y: 0.0,
+        },
+        AnalogTarget::LeftTrigger => Effect::GamepadTrigger {
+            trigger: VirtualGamepadTrigger::Left,
+            value: 0.0,
+        },
+        AnalogTarget::RightTrigger => Effect::GamepadTrigger {
+            trigger: VirtualGamepadTrigger::Right,
+            value: 0.0,
+        },
+    }
+}
+
 fn has_expired(now_millis: i64, last_seen: i64, maximum_age_millis: i64) -> bool {
     maximum_age_millis <= 0 || now_millis.saturating_sub(last_seen) >= maximum_age_millis
 }
@@ -1793,6 +2134,7 @@ fn message_type_name(message_type: ControllerMessageType) -> &'static str {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LocalControlError {
+    InvalidControlID,
     ProfileNotFound,
     ConfigurationRevisionExhausted,
 }
@@ -1800,6 +2142,7 @@ pub enum LocalControlError {
 impl fmt::Display for LocalControlError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::InvalidControlID => formatter.write_str("control ID must contain 1 to 512 bytes"),
             Self::ProfileNotFound => formatter.write_str("selected profile does not exist"),
             Self::ConfigurationRevisionExhausted => {
                 formatter.write_str("configuration revision is exhausted")

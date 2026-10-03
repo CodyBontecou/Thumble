@@ -153,7 +153,8 @@ fn profile_selection_changes_button_binding_and_releases_previous_profile_hold()
     next.button = Some(GameButton::Jump);
     next.state = Some(ButtonPressState::Down);
     next.input_protocol_version = Some(2);
-    next.input_generation = Some(1);
+    next.input_generation = core.status().active_generation;
+    assert_eq!(next.input_generation, Some(2));
     next.input_sequence = Some(2);
     next.press_identifier = Some(2);
     let effects = core.handle_message(1, next, 2, &mut no_tokens()).unwrap();
@@ -310,7 +311,7 @@ fn ping_pong_and_unsupported_capability_mutations_are_handled_reliably() {
     let effects = core.handle_message(1, analog, 0, &mut no_tokens()).unwrap();
     assert_eq!(
         diagnostic_text(&effects),
-        "gamepad_analog is not supported by this host"
+        "Exactly one analog target is required"
     );
     assert!(!effects.iter().any(|effect| matches!(
         effect,

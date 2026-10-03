@@ -1,6 +1,7 @@
 use crate::bonjour::BonjourInfo;
 use crate::cli_profile::{CliProfileRequest, CliProfileResponse, MAXIMUM_CLI_PROFILE_FRAME_BYTES};
 use crate::draft_operation::{ConfigurationOperation, ConfigurationOperationOutcome};
+use crate::gamepad::GamepadSnapshot;
 use crate::output::OutputSnapshot;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -109,6 +110,13 @@ pub enum ControlRequest {
         #[serde(rename = "controlID")]
         control_id: String,
     },
+    TestControl {
+        #[serde(rename = "controlID")]
+        control_id: String,
+        pressed: bool,
+    },
+    GamepadStatus,
+    GamepadRetry,
     ReleaseAll,
     Stop,
 }
@@ -240,6 +248,8 @@ pub struct ControlResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<HostStatus>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub virtual_gamepad_status: Option<GamepadSnapshot>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub pairing_code: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rotated: Option<bool>,
@@ -295,6 +305,7 @@ impl ControlResponse {
             actual_revision: None,
             conflict_paths: None,
             status: None,
+            virtual_gamepad_status: None,
             pairing_code: None,
             rotated: None,
             accessibility_trusted: None,

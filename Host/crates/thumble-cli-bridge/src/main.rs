@@ -1,3 +1,5 @@
+mod runtime;
+
 use std::fs;
 use std::io::{self, Read, Write};
 use std::os::unix::fs::{FileTypeExt, MetadataExt, PermissionsExt};
@@ -22,9 +24,29 @@ fn main() {
         std::process::exit(2);
     }
 
-    let mut request = match read_request()
-        .and_then(|data| serde_json::from_slice::<CliProfileRequest>(&data).map_err(|_| ()))
+    let data = match read_request() {
+        Ok(data) => data,
+        Err(()) => {
+            emit(&CliProfileResponse::transport_failure(
+                Uuid::new_v4(),
+                "none",
+                "invalid_request",
+                "CLI helper requires one bounded newline-terminated typed JSON request",
+            ));
+            std::process::exit(2);
+        }
+    };
+    // Runtime envelopes are deliberately separate and must not enter profile
+    // decoding or any offline-authority path, even when malformed.
+    if serde_json::from_slice::<serde_json::Value>(&data)
+        .is_ok_and(|value| value.get("runtimeCommand").is_some())
     {
+        if !runtime::run(&data) {
+            std::process::exit(1);
+        }
+        return;
+    }
+    let mut request = match serde_json::from_slice::<CliProfileRequest>(&data).map_err(|_| ()) {
         Ok(request) => request,
         Err(()) => {
             emit(&CliProfileResponse::transport_failure(
@@ -46,13 +68,7 @@ fn main() {
     // The helper accepts no caller-selected state/control paths. Retain only a
     // securely owned, non-symlink HOME so tests and standard account homes can
     // derive the canonical Application Support location; clear everything else.
-    let safe_home = sanitized_home();
-    for key in std::env::vars_os().map(|(key, _)| key).collect::<Vec<_>>() {
-        std::env::remove_var(key);
-    }
-    if let Some(home) = safe_home {
-        std::env::set_var("HOME", home);
-    }
+    sanitize_environment();
     let paths = match HostPaths::discover() {
         Ok(paths) => paths,
         Err(_) => {
@@ -168,6 +184,16 @@ fn unsupported_schema_response(
             "CLI profile helper schema version is unsupported",
         )
     })
+}
+
+fn sanitize_environment() {
+    let safe_home = sanitized_home();
+    for key in std::env::vars_os().map(|(key, _)| key).collect::<Vec<_>>() {
+        std::env::remove_var(key);
+    }
+    if let Some(home) = safe_home {
+        std::env::set_var("HOME", home);
+    }
 }
 
 fn sanitized_home() -> Option<std::path::PathBuf> {

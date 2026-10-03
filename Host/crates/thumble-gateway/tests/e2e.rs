@@ -211,6 +211,7 @@ fn host_status_snapshot() -> thumble_host::control::HostStatus {
             held_pointer_buttons: Vec::new(),
             pending_pointer_releases: Vec::new(),
             recent_events: Vec::new(),
+            virtual_gamepad_status: None,
         },
     }
 }

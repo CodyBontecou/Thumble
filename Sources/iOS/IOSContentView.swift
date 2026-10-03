@@ -2499,7 +2499,7 @@ private struct ControllerPadTopChrome: View {
             activationFrame: context.customization.topBarActivationFrame(in: context.size),
             collapsedTitle: client.isPracticeModeEnabled
                 ? "Practice • Input Off"
-                : (client.isConnected ? "Connected" : "Saved keypad")
+                : (client.isConnected ? controllerConnectionTitle : "Saved keypad")
         ) {
             ControllerPadTopBar(
                 context: context,
@@ -2513,6 +2513,15 @@ private struct ControllerPadTopChrome: View {
         }
         .onChange(of: pinsTopBar) { _, isPinned in
             if isPinned { isTopBarVisible = true }
+        }
+    }
+
+    private var controllerConnectionTitle: String {
+        switch client.virtualGamepadStatus?.phase {
+        case .missingEntitlement, .creationFailed, .reportFailed: "Connected • Controller unavailable"
+        case .recording: "Connected • Input off"
+        case .ready: "Connected • HID ready"
+        case .inactive, nil: "Connected"
         }
     }
 

@@ -34,7 +34,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use thumble_core::{
-    ConnectionId, ControllerSnapshot, CoreTime, Effect, HostCore, KeyBinding, PersistentState,
+    ConnectionId, ControllerSnapshot, CoreTime, Effect, HostCore, OutputBinding, PersistentState,
     TokenSource,
 };
 use thumble_protocol::{
@@ -121,6 +121,7 @@ struct RuntimeInner {
     connections: HashMap<ConnectionId, mpsc::Sender<Outbound>>,
     output: OutputExecutor,
     control_press_times: VecDeque<Instant>,
+    input_liveness: crate::input_liveness::InputLiveness,
 }
 
 struct SharedRuntime {
@@ -133,7 +134,7 @@ struct SharedRuntime {
     configuration_write_enabled: bool,
     bonjour: Arc<BonjourRegistration>,
     shutdown: watch::Sender<bool>,
-    started_at: Instant,
+    started_at: crate::input_liveness::InputClock,
 }
 
 impl SharedRuntime {
@@ -151,6 +152,10 @@ impl SharedRuntime {
         message: ControllerMessage,
     ) -> Result<(), String> {
         let mut inner = self.inner.lock().expect("runtime mutex poisoned");
+        self.guard_input_liveness(&mut inner);
+        if !inner.connections.contains_key(&connection_id) {
+            return Err("input connection retired after receiver suspension or disconnect".into());
+        }
         let time = CoreTime::new(unix_millis(), self.monotonic_millis());
         let RuntimeInner { core, tokens, .. } = &mut *inner;
         let effects = core
@@ -178,6 +183,7 @@ impl SharedRuntime {
 
     fn expire_holds(&self) {
         let mut inner = self.inner.lock().expect("runtime mutex poisoned");
+        self.guard_input_liveness(&mut inner);
         let effects = inner
             .core
             .expire_holds(self.monotonic_millis(), HOLD_EXPIRY_AGE_MILLIS);
@@ -189,9 +195,34 @@ impl SharedRuntime {
         }
     }
 
+    fn guard_input_liveness(&self, inner: &mut RuntimeInner) {
+        if !inner
+            .input_liveness
+            .observe(self.monotonic_millis(), HOLD_EXPIRY_AGE_MILLIS)
+        {
+            return;
+        }
+        self.log("receiver resumed after scheduling gap; retiring input sessions and neutralizing output");
+        // Close legacy as well as v2 sessions: queued pre-suspend frames must
+        // reauthenticate, not restore a hold just released by the safety clock.
+        let connections = inner.connections.drain().collect::<Vec<_>>();
+        for (id, sender) in connections {
+            let _ = sender.try_send(Outbound::Close(
+                "Receiver resumed; reconnect required".into(),
+            ));
+            let effects = inner.core.disconnect(id);
+            let _ = self.execute_effects(inner, effects);
+        }
+        let effects = inner.core.release_all_locally();
+        let _ = self.execute_effects(inner, effects);
+        if let Err(error) = inner.output.release_tracked() {
+            self.log(&format!("resume neutralization remains pending: {error}"));
+        }
+    }
+
     fn release_all(&self) -> Result<(), String> {
         let mut inner = self.inner.lock().expect("runtime mutex poisoned");
-        let effects = inner.core.release_all();
+        let effects = inner.core.release_all_locally();
         self.execute_effects(&mut inner, effects)?;
         inner.output.release_tracked()
     }
@@ -343,27 +374,51 @@ impl SharedRuntime {
         if !self.input_enabled {
             return Err("host input is disabled".to_owned());
         }
-        if !platform::accessibility_trusted() {
-            return Err("macOS Accessibility permission is required".to_owned());
-        }
         if control_id.is_empty() || control_id.len() > 512 {
             return Err("control ID must contain between 1 and 512 bytes".to_owned());
         }
 
         let mut inner = self.inner.lock().expect("runtime mutex poisoned");
+        self.guard_input_liveness(&mut inner);
         let installed = installed_controls(inner.core.persistent_state())
             .into_iter()
-            .find(|installed| installed.summary.control_id == control_id)
+            .find(|installed| {
+                installed
+                    .summary
+                    .control_id
+                    .eq_ignore_ascii_case(control_id)
+            })
             .ok_or_else(|| "control is not installed in the active profile".to_owned())?;
-        if installed.binding.strokes().len() > MAXIMUM_CONTROL_SEQUENCE_STROKES {
-            return Err("control sequence exceeds the 32-stroke safety limit".to_owned());
+        if installed.binding.keyboard.is_some() && !platform::accessibility_trusted() {
+            return Err(
+                "macOS Accessibility permission is required for this control's keyboard output"
+                    .to_owned(),
+            );
         }
-
         allow_control_press(&mut inner.control_press_times, Instant::now())?;
-
-        inner
-            .output
-            .execute(&Effect::TapSequence(installed.binding.strokes()))?;
+        let needs_gamepad = inner.core.needs_virtual_gamepad();
+        // A controller-only tap never requires Accessibility. Continue through
+        // every release even if one component of a mixed tap fails.
+        let mut errors = Vec::new();
+        if let Err(error) = inner.output.set_gamepad_enabled(needs_gamepad) {
+            if installed
+                .binding
+                .supported_gamepad_buttons()
+                .next()
+                .is_some()
+            {
+                errors.push(error);
+            }
+        }
+        let effects = inner.core.tap_output_binding(&installed.binding);
+        for effect in effects {
+            if let Err(error) = inner.output.execute(&effect) {
+                errors.push(error);
+            }
+        }
+        if !errors.is_empty() {
+            return Err(errors.join("; "));
+        }
         let auth_tokens = inner
             .core
             .persistent_state()
@@ -372,6 +427,76 @@ impl SharedRuntime {
             .map(String::as_str)
             .collect::<Vec<_>>();
         Ok(redacted(&installed.summary.control_id, &auth_tokens))
+    }
+
+    fn test_control(&self, control_id: &str, pressed: bool) -> Result<String, String> {
+        if control_id.is_empty() || control_id.len() > 512 {
+            return Err("control ID must contain 1 to 512 bytes".to_owned());
+        }
+        let mut inner = self.inner.lock().expect("runtime mutex poisoned");
+        self.guard_input_liveness(&mut inner);
+        let binding = if pressed {
+            if !self.input_enabled {
+                return Err("host input is disabled".to_owned());
+            }
+            let control = installed_controls(inner.core.persistent_state())
+                .into_iter()
+                .find(|control| control.summary.control_id.eq_ignore_ascii_case(control_id))
+                .ok_or_else(|| "control is not installed in the active profile".to_owned())?;
+            if control.binding.keyboard.is_some() && !platform::accessibility_trusted() {
+                return Err(
+                    "macOS Accessibility permission is required for keyboard output".to_owned(),
+                );
+            }
+            allow_control_press(&mut inner.control_press_times, Instant::now())?;
+            if control.binding.supported_gamepad_buttons().next().is_some() {
+                let enabled = inner.core.needs_virtual_gamepad();
+                inner.output.set_gamepad_enabled(enabled)?;
+            }
+            Some(control.binding)
+        } else {
+            None
+        };
+        let effects = inner
+            .core
+            .set_local_output_binding(control_id, binding, pressed, self.monotonic_millis())
+            .map_err(|error| error.to_string())?;
+        if let Err(error) = self.execute_effects_with_output_errors(&mut inner, effects, true) {
+            if pressed {
+                let cleanup = inner
+                    .core
+                    .set_local_output_binding(control_id, None, false, self.monotonic_millis())
+                    .map_err(|error| error.to_string())?;
+                let _ = self.execute_effects(&mut inner, cleanup);
+            }
+            return Err(error);
+        }
+        let tokens = inner
+            .core
+            .persistent_state()
+            .trusted_clients
+            .keys()
+            .map(String::as_str)
+            .collect::<Vec<_>>();
+        Ok(redacted(control_id, &tokens))
+    }
+
+    fn gamepad_status(&self) -> crate::gamepad::GamepadSnapshot {
+        self.inner
+            .lock()
+            .expect("runtime mutex poisoned")
+            .output
+            .gamepad_status()
+    }
+
+    fn retry_gamepad(&self) -> Result<crate::gamepad::GamepadSnapshot, String> {
+        self.release_all()?;
+        let mut inner = self.inner.lock().expect("runtime mutex poisoned");
+        if !inner.core.needs_virtual_gamepad() {
+            return Err("controller output is off in the active profile".to_owned());
+        }
+        inner.output.retry_gamepad()?;
+        Ok(inner.output.gamepad_status())
     }
 
     fn status(&self) -> HostStatus {
@@ -414,13 +539,49 @@ impl SharedRuntime {
         inner: &mut RuntimeInner,
         effects: Vec<Effect>,
     ) -> Result<(), String> {
+        self.execute_effects_with_output_errors(inner, effects, false)
+    }
+
+    fn execute_effects_with_output_errors(
+        &self,
+        inner: &mut RuntimeInner,
+        effects: Vec<Effect>,
+        strict_outputs: bool,
+    ) -> Result<(), String> {
+        let mut output_errors = Vec::new();
+        let previous_phase = inner.output.gamepad_status().phase;
+        if let Err(error) = inner
+            .output
+            .set_gamepad_enabled(inner.core.needs_virtual_gamepad())
+        {
+            if previous_phase != inner.output.gamepad_status().phase {
+                self.log(&format!(
+                    "controller output unavailable (keyboard/pointer remain independent): {error}"
+                ));
+            }
+        }
         for effect in effects {
             match &effect {
                 Effect::SendMessage {
                     connection_id,
                     message,
                 } => {
-                    let encoded = ControllerWireCodec::encode(message)
+                    let mut outgoing = message.as_ref().clone();
+                    if matches!(
+                        outgoing.message_type,
+                        ControllerMessageType::Hello
+                            | ControllerMessageType::PairingAccepted
+                            | ControllerMessageType::Ping
+                            | ControllerMessageType::Pong
+                            | ControllerMessageType::GamepadProfiles
+                            | ControllerMessageType::GamepadCustomization
+                    ) {
+                        outgoing.virtual_gamepad_status = Some(Box::new(
+                            serde_json::to_value(inner.output.gamepad_status())
+                                .map_err(|error| format!("encode gamepad readiness: {error}"))?,
+                        ));
+                    }
+                    let encoded = ControllerWireCodec::encode(&outgoing)
                         .map_err(|error| format!("encode controller response: {error}"))?;
                     if let Some(sender) = inner.connections.get(connection_id) {
                         if sender.try_send(Outbound::Binary(encoded)).is_err() {
@@ -453,21 +614,42 @@ impl SharedRuntime {
                 | Effect::TapSequence(_)
                 | Effect::PointerMove { .. }
                 | Effect::PointerScroll { .. }
-                | Effect::PointerButton { .. } => {
+                | Effect::PointerButton { .. }
+                | Effect::GamepadButton { .. }
+                | Effect::GamepadStick { .. }
+                | Effect::GamepadTrigger { .. }
+                | Effect::GamepadReset => {
+                    let phase = inner.output.gamepad_status().phase;
                     if let Err(error) = inner.output.execute(&effect) {
-                        self.log(&format!(
-                            "output effect remains pending or was skipped: {error}"
-                        ));
+                        if !matches!(
+                            effect,
+                            Effect::GamepadButton { .. }
+                                | Effect::GamepadStick { .. }
+                                | Effect::GamepadTrigger { .. }
+                                | Effect::GamepadReset
+                        ) || phase != inner.output.gamepad_status().phase
+                        {
+                            self.log(&format!(
+                                "output effect remains pending or was skipped: {error}"
+                            ));
+                        }
+                        if strict_outputs {
+                            output_errors.push(error);
+                        }
                     }
                 }
                 Effect::StatusChanged(_) => {}
             }
         }
-        Ok(())
+        if output_errors.is_empty() {
+            Ok(())
+        } else {
+            Err(output_errors.join("; "))
+        }
     }
 
     fn monotonic_millis(&self) -> i64 {
-        i64::try_from(self.started_at.elapsed().as_millis()).unwrap_or(i64::MAX)
+        self.started_at.elapsed_millis()
     }
 
     fn log(&self, line: &str) {
@@ -492,20 +674,25 @@ fn allow_control_press(press_times: &mut VecDeque<Instant>, now: Instant) -> Res
 
 struct InstalledControl {
     summary: ControlSummary,
-    binding: KeyBinding,
+    binding: OutputBinding,
+}
+
+fn testable_output(binding: &OutputBinding) -> bool {
+    binding
+        .keyboard
+        .as_ref()
+        .is_none_or(|keyboard| keyboard.strokes().len() <= MAXIMUM_CONTROL_SEQUENCE_STROKES)
+        && (binding.keyboard.is_some() || binding.supported_gamepad_buttons().next().is_some())
 }
 
 fn installed_controls(state: &thumble_core::PersistentState) -> Vec<InstalledControl> {
     let mut controls = BTreeMap::<String, InstalledControl>::new();
 
     for button in GameButton::ALL {
-        let Some(binding) = state
-            .resolve_button_output(button)
-            .and_then(|output| output.keyboard)
-        else {
+        let Some(binding) = state.resolve_button_output(button) else {
             continue;
         };
-        if binding.strokes().len() > MAXIMUM_CONTROL_SEQUENCE_STROKES {
+        if !testable_output(&binding) {
             continue;
         }
         let name = game_button_name(button);
@@ -566,13 +753,10 @@ fn installed_controls(state: &thumble_core::PersistentState) -> Vec<InstalledCon
                 .filter(|label| !label.is_empty())
                 .unwrap_or("Unnamed control");
             for part in parts {
-                let Some(binding) = state
-                    .resolve_element_output(element_id, *part)
-                    .and_then(|output| output.keyboard)
-                else {
+                let Some(binding) = state.resolve_element_output(element_id, *part) else {
                     continue;
                 };
-                if binding.strokes().len() > MAXIMUM_CONTROL_SEQUENCE_STROKES {
+                if !testable_output(&binding) {
                     continue;
                 }
                 let suffix = match part {
@@ -1380,6 +1564,31 @@ impl ControlHandler for SharedRuntime {
                 }
                 Err(error) => ControlResponse::error(error),
             },
+            ControlRequest::TestControl {
+                control_id,
+                pressed,
+            } => match self.test_control(&control_id, pressed) {
+                Ok(id) => {
+                    let mut response = ControlResponse::success();
+                    response.pressed_control_id = Some(id);
+                    response.virtual_gamepad_status = Some(self.gamepad_status());
+                    response
+                }
+                Err(error) => ControlResponse::error(error),
+            },
+            ControlRequest::GamepadStatus => {
+                let mut response = ControlResponse::success();
+                response.virtual_gamepad_status = Some(self.gamepad_status());
+                response
+            }
+            ControlRequest::GamepadRetry => match self.retry_gamepad() {
+                Ok(status) => {
+                    let mut response = ControlResponse::success();
+                    response.virtual_gamepad_status = Some(status);
+                    response
+                }
+                Err(error) => ControlResponse::error(error),
+            },
             ControlRequest::ReleaseAll => match self.release_all() {
                 Ok(()) => {
                     let mut response = ControlResponse::success();
@@ -1424,6 +1633,7 @@ pub async fn run_runtime(paths: HostPaths, options: RuntimeOptions) -> Result<()
             connections: HashMap::new(),
             output: OutputExecutor::new(options.input, Some(paths.output_recording_file.clone())),
             control_press_times: VecDeque::new(),
+            input_liveness: Default::default(),
         }),
         paths: paths.clone(),
         requested_port: options.port,
@@ -1433,9 +1643,13 @@ pub async fn run_runtime(paths: HostPaths, options: RuntimeOptions) -> Result<()
         configuration_write_enabled: options.configuration_write,
         bonjour: Arc::new(bonjour),
         shutdown: shutdown_tx.clone(),
-        started_at: Instant::now(),
+        started_at: crate::input_liveness::InputClock::now(),
     });
 
+    {
+        let mut inner = shared.inner.lock().expect("runtime mutex poisoned");
+        shared.execute_effects(&mut inner, Vec::new())?;
+    }
     let metadata = RuntimeMetadata {
         pid: std::process::id(),
         version: env!("CARGO_PKG_VERSION").to_owned(),
@@ -2049,6 +2263,170 @@ mod tests {
         assert_ne!(listener.local_addr().unwrap().port(), 0);
     }
 
+    struct FailingHid;
+    impl crate::gamepad::HidBackend for FailingHid {
+        fn entitlement(&mut self) -> Result<bool, String> {
+            Ok(true)
+        }
+        fn start(&mut self) -> Result<(), String> {
+            Ok(())
+        }
+        fn report(&mut self, bytes: [u8; 10]) -> Result<(u32, u64), String> {
+            if bytes == crate::gamepad::NEUTRAL_REPORT {
+                Ok((0, 1))
+            } else {
+                Err("mock HID report failed".into())
+            }
+        }
+        fn stop(&mut self) {}
+    }
+
+    fn failing_controller_runtime(paths: HostPaths) -> SharedRuntime {
+        let mut state = thumble_core::PersistentState::minimal("server").unwrap();
+        state.profiles[0]["outputMode"] = serde_json::json!("custom");
+        state.profiles[0]["customization"]["elements"] = serde_json::json!([{
+            "id":"controller", "label":"Controller", "kind":"button",
+            "output":{"gamepadButtons":["south"]}
+        }]);
+        state.normalize().unwrap();
+        let (shutdown, _) = watch::channel(false);
+        SharedRuntime {
+            inner: Mutex::new(RuntimeInner {
+                core: HostCore::new(state, "123456").unwrap(),
+                tokens: SecureTokens,
+                connections: HashMap::new(),
+                control_press_times: VecDeque::new(),
+                input_liveness: Default::default(),
+                output: OutputExecutor::with_test_gamepad(
+                    crate::gamepad::GamepadOutput::with_backend(Box::new(FailingHid)),
+                ),
+            }),
+            paths,
+            requested_port: 0,
+            actual_port: 0,
+            service_name: "Test".into(),
+            input_enabled: true,
+            configuration_write_enabled: false,
+            bonjour: Arc::new(BonjourRegistration::disabled("Test".into())),
+            shutdown,
+            started_at: crate::input_liveness::InputClock::now(),
+        }
+    }
+
+    #[test]
+    fn explicit_controller_hold_does_not_acknowledge_failed_output_or_keep_a_local_hold() {
+        let directory = tempdir().unwrap();
+        let shared = failing_controller_runtime(HostPaths::new(
+            directory.path().into(),
+            directory.path().join("control.sock"),
+        ));
+        let request = || ControlRequest::TestControl {
+            control_id: "element:controller".into(),
+            pressed: true,
+        };
+        for _ in 0..2 {
+            let response = shared.handle(request());
+            assert!(!response.ok);
+            assert!(response.error.unwrap().contains("mock HID report failed"));
+            let mut inner = shared.inner.lock().unwrap();
+            assert!(inner
+                .core
+                .set_local_output_binding("element:controller", None, false, 2)
+                .unwrap()
+                .is_empty());
+            assert_eq!(inner.output.gamepad_status().phase, "report-failed");
+            assert!(inner.output.gamepad_status().pressed_buttons.is_empty());
+        }
+    }
+
+    #[test]
+    fn installed_taps_accept_swift_uuid_case_without_acknowledging_hid_failure() {
+        let directory = tempdir().unwrap();
+        let shared = failing_controller_runtime(HostPaths::new(
+            directory.path().into(),
+            directory.path().join("control.sock"),
+        ));
+        let response = shared.handle(ControlRequest::PressControl {
+            control_id: "element:CONTROLLER".into(),
+        });
+        assert!(!response.ok);
+        assert!(response.error.unwrap().contains("mock HID report failed"));
+    }
+
+    #[test]
+    fn resume_gap_neutralizes_mixed_holds_and_retires_even_legacy_queued_connections() {
+        let directory = tempdir().unwrap();
+        let shared = failing_controller_runtime(HostPaths::new(
+            directory.path().into(),
+            directory.path().join("control.sock"),
+        ));
+        let (sender, mut receiver) = mpsc::channel(8);
+        shared.register_connection(1, sender);
+        {
+            let mut inner = shared.inner.lock().unwrap();
+            inner.output = OutputExecutor::new(false, None);
+            let effects = inner
+                .core
+                .set_local_output_binding(
+                    "held",
+                    Some(OutputBinding {
+                        keyboard: Some(thumble_core::KeyBinding::new(36, 0)),
+                        gamepad_buttons: ["south".into()].into(),
+                    }),
+                    true,
+                    0,
+                )
+                .unwrap();
+            shared.execute_effects(&mut inner, effects).unwrap();
+            assert_eq!(inner.output.snapshot().held_key_count, 1);
+            inner
+                .input_liveness
+                .observe(-10_000, HOLD_EXPIRY_AGE_MILLIS);
+        }
+        let mut old = ControllerMessage::new(ControllerMessageType::Button, 0);
+        old.button = Some(GameButton::Jump);
+        old.state = Some(thumble_protocol::ButtonPressState::Down);
+        assert!(shared
+            .handle_message(1, old)
+            .unwrap_err()
+            .contains("retired"));
+        assert!(matches!(receiver.try_recv().unwrap(), Outbound::Close(_)));
+        let mut inner = shared.inner.lock().unwrap();
+        assert!(inner.connections.is_empty());
+        assert_eq!(inner.output.snapshot().held_key_count, 0);
+        assert!(inner.output.gamepad_status().pressed_buttons.is_empty());
+        assert!(inner
+            .core
+            .set_local_output_binding("held", None, false, 2)
+            .unwrap()
+            .is_empty());
+    }
+
+    #[test]
+    fn strict_output_failure_still_executes_every_mixed_cleanup_effect() {
+        let directory = tempdir().unwrap();
+        let shared = failing_controller_runtime(HostPaths::new(
+            directory.path().into(),
+            directory.path().join("control.sock"),
+        ));
+        let mut inner = shared.inner.lock().unwrap();
+        let binding = thumble_core::KeyBinding::new(36, 0);
+        let effects = vec![
+            Effect::KeyDown(binding.clone()),
+            Effect::GamepadButton {
+                button: thumble_core::VirtualGamepadButton::South,
+                pressed: true,
+            },
+            Effect::KeyUp(binding),
+        ];
+        assert!(shared
+            .execute_effects_with_output_errors(&mut inner, effects, true)
+            .is_err());
+        assert_eq!(inner.output.snapshot().held_key_count, 0);
+        assert_eq!(inner.output.snapshot().pending_key_release_count, 0);
+        assert_eq!(inner.output.gamepad_status().phase, "report-failed");
+    }
+
     #[test]
     fn status_urls_always_include_loopback_and_actual_port() {
         let urls = websocket_urls(43210);
@@ -2209,6 +2587,7 @@ mod tests {
                 connections: HashMap::new(),
                 output: OutputExecutor::new(false, None),
                 control_press_times: VecDeque::new(),
+                input_liveness: Default::default(),
             }),
             paths: paths.clone(),
             requested_port: 0,
@@ -2218,7 +2597,7 @@ mod tests {
             configuration_write_enabled: true,
             bonjour: Arc::new(BonjourRegistration::disabled("Test".to_owned())),
             shutdown,
-            started_at: Instant::now(),
+            started_at: crate::input_liveness::InputClock::now(),
         };
         let response = shared.cli_profile_transaction(&CliProfileRequest {
             schema_version: cli_profile::CLI_PROFILE_SCHEMA_VERSION,
@@ -2270,6 +2649,7 @@ mod tests {
                 connections: HashMap::new(),
                 output: OutputExecutor::new(false, None),
                 control_press_times: VecDeque::new(),
+                input_liveness: Default::default(),
             }),
             paths,
             requested_port: 0,
@@ -2279,7 +2659,7 @@ mod tests {
             configuration_write_enabled: false,
             bonjour: Arc::new(BonjourRegistration::disabled("Test".to_owned())),
             shutdown,
-            started_at: Instant::now(),
+            started_at: crate::input_liveness::InputClock::now(),
         };
 
         assert!(matches!(
@@ -2351,6 +2731,7 @@ mod tests {
                 connections: HashMap::new(),
                 output: OutputExecutor::new(false, None),
                 control_press_times: VecDeque::new(),
+                input_liveness: Default::default(),
             }),
             paths,
             requested_port: 0,
@@ -2360,7 +2741,7 @@ mod tests {
             configuration_write_enabled: true,
             bonjour: Arc::new(BonjourRegistration::disabled("Test".to_owned())),
             shutdown,
-            started_at: Instant::now(),
+            started_at: crate::input_liveness::InputClock::now(),
         };
         let draft = shared.begin_configuration_draft(1).unwrap();
         let operation = ConfigurationOperation::ProfileRename {

@@ -1819,6 +1819,7 @@ mod tests {
                             held_pointer_buttons: Vec::new(),
                             pending_pointer_releases: Vec::new(),
                             recent_events: Vec::new(),
+                            virtual_gamepad_status: None,
                         },
                     });
                     response

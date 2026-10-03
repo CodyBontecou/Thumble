@@ -23,6 +23,7 @@ final class StackSafetyRegressionTests: XCTestCase {
         assertInlineSize(GamepadConfigurationProfile.self, atMost: 512)
         assertInlineSize(PendingKeypadLayoutEdit.self, atMost: 4 * 1024)
         assertInlineSize(ControllerMessage.self, atMost: 4 * 1024)
+        assertInlineSize(VirtualGamepadStatus.self, atMost: 8)
         assertInlineSize(ThumbleSkin.self, atMost: 1024)
         assertInlineSize(ThumbleSkinPackage.self, atMost: 1024)
         assertInlineSize(ThumbleSkinAppearance.self, atMost: 1024)
@@ -54,6 +55,18 @@ final class StackSafetyRegressionTests: XCTestCase {
             file: file,
             line: line
         )
+    }
+
+    func testGamepadReadinessWireRoundTripOn512KiBStack() throws {
+        let status = VirtualGamepadStatus(phase: .ready, entitlementGranted: true, reportCount: 3, pressedButtons: [.south])
+        let message = ControllerMessage(type: .ping, timestamp: 42, virtualGamepadStatus: status)
+        try runOnThread(stackSize: 512 * 1024) {
+            let data = try ControllerWireCodec.encode(message, using: JSONEncoder())
+            let decoded = try ControllerWireCodec.decode(data, using: JSONDecoder())
+            guard decoded.type == .ping, decoded.virtualGamepadStatus == status else {
+                throw StackTestError.unexpectedDecodedState
+            }
+        }
     }
 
     func testBoxedProfileCustomizationsPreserveValueSemantics() throws {

@@ -869,6 +869,7 @@ final class ControllerClient: ObservableObject {
     @Published private(set) var state: ConnectionState = .disconnected
     @Published private(set) var lastSentEvent = "None"
     @Published private(set) var lastError: String?
+    @Published private(set) var virtualGamepadStatus: VirtualGamepadStatus?
     @Published private(set) var gamepadCustomization: GamepadCustomization
     @Published private(set) var gamepadProfiles: [GamepadConfigurationProfile]
     @Published private(set) var installedSkins: [ThumbleInstalledSkin]
@@ -1382,6 +1383,7 @@ final class ControllerClient: ObservableObject {
     }
 
     private func closeConnection(sendReleaseAll: Bool) {
+        virtualGamepadStatus = nil
         if sendReleaseAll {
             releaseAll()
         }
@@ -2278,6 +2280,10 @@ final class ControllerClient: ObservableObject {
     private func handleIncoming(_ data: Data, from messageConnection: NWConnection) {
         guard connection === messageConnection else { return }
         guard let decoded = try? ControllerWireCodec.decode(data, using: decoder) else { return }
+        if let status = decoded.virtualGamepadStatus,
+           state == .connected || decoded.type == .pairingAccepted || decoded.type == .hello {
+            virtualGamepadStatus = status
+        }
         if handlePairingMessage(decoded, from: messageConnection) { return }
         if handleProfileStateMessage(decoded) { return }
         _ = handleRuntimeMessage(decoded)
