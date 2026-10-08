@@ -121,11 +121,13 @@ final class ThumbleCLIBackendTests: XCTestCase {
         XCTAssertEqual(parsed.invocationID, invocationID)
         XCTAssertTrue(parsed.dryRun)
         XCTAssertTrue(parsed.printJSON)
-        var invalids = [
-            Array(valid.dropLast(2)), valid + ["--expected-revision", "22"],
-            valid + ["other-manifest.json"], valid + ["--current"], valid + ["--json", "--json"],
-            valid + ["--invocation-id", "invalid"]
-        ]
+        var invalids: [[String]] = []
+        invalids.append(Array(valid.dropLast(2)))
+        invalids.append(valid + ["--expected-revision", "22"])
+        invalids.append(valid + ["other-manifest.json"])
+        invalids.append(valid + ["--current"])
+        invalids.append(valid + ["--json", "--json"])
+        invalids.append(valid + ["--invocation-id", "invalid"])
         for profile in ["active", "default", "globalstore", "League"] {
             var invalid = valid
             invalid[2] = profile
