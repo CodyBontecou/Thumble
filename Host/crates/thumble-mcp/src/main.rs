@@ -1,5 +1,6 @@
 use clap::Parser;
 use futures::StreamExt;
+use rmcp::model::{ClientRequest, JsonRpcMessage};
 use rmcp::service::{RxJsonRpcMessage, TxJsonRpcMessage};
 use rmcp::transport::async_rw::JsonRpcMessageCodec;
 use rmcp::{RoleServer, ServiceExt};
@@ -7,13 +8,37 @@ use std::path::PathBuf;
 use thumble_host::paths::HostPaths;
 use thumble_mcp::relay::{run_doctor, run_link, run_relay, run_relink, run_revoke, RelayConfig};
 use thumble_mcp::{environment_allows_input_with_legacy, ThumbleMcp};
-use tokio_util::codec::{FramedRead, FramedWrite};
+use tokio_util::codec::{FramedRead, FramedWrite, LinesCodec};
 
 const INPUT_ENV: &str = "THUMBLE_MCP_ALLOW_INPUT";
 const LEGACY_INPUT_ENV: &str = "POCKETPAD_MCP_ALLOW_INPUT";
 const CONFIG_WRITE_ENV: &str = "THUMBLE_MCP_ALLOW_CONFIG_WRITE";
 const LEGACY_CONFIG_WRITE_ENV: &str = "POCKETPAD_MCP_ALLOW_CONFIG_WRITE";
 const MAXIMUM_MCP_REQUEST_BYTES: usize = 256 * 1024;
+const MAXIMUM_MCP_ATTACHMENT_REQUEST_BYTES: usize = 8 * 1024 * 1024;
+
+/// The line codec bounds allocation before JSON parsing. Only the typed local
+/// attachment request receives the larger window needed for inline PNG bytes.
+fn decode_mcp_request(frame: &str) -> Result<RxJsonRpcMessage<RoleServer>, &'static str> {
+    if frame.len() > MAXIMUM_MCP_ATTACHMENT_REQUEST_BYTES {
+        return Err("MCP request exceeds the attachment frame limit");
+    }
+    // Preserve the SDK's leading-BOM compatibility without its parse-error log,
+    // which includes the complete request and could expose image payloads.
+    let json = frame.strip_prefix('\u{feff}').unwrap_or(frame);
+    let message: RxJsonRpcMessage<RoleServer> =
+        serde_json::from_str(json).map_err(|_| "invalid MCP request")?;
+    let is_attachment = matches!(
+        &message,
+        JsonRpcMessage::Request(request)
+            if matches!(&request.request, ClientRequest::CallToolRequest(call)
+                if call.params.name == "attach_game_controller_assets")
+    );
+    if frame.len() > MAXIMUM_MCP_REQUEST_BYTES && !is_attachment {
+        return Err("MCP request exceeds the ordinary frame limit");
+    }
+    Ok(message)
+}
 
 #[derive(Debug, Parser)]
 #[command(
@@ -214,12 +239,13 @@ async fn run() -> Result<(), String> {
         );
         let input = FramedRead::new(
             tokio::io::stdin(),
-            JsonRpcMessageCodec::<RxJsonRpcMessage<RoleServer>>::new_with_max_length(
-                MAXIMUM_MCP_REQUEST_BYTES,
-            ),
+            LinesCodec::new_with_max_length(MAXIMUM_MCP_ATTACHMENT_REQUEST_BYTES),
         )
         .filter_map(|result| {
-            futures::future::ready(match result {
+            let decoded = result
+                .map_err(|_| "invalid or oversized MCP frame")
+                .and_then(|frame| decode_mcp_request(&frame));
+            futures::future::ready(match decoded {
                 Ok(message) => Some(message),
                 Err(_) => {
                     eprintln!("thumble-mcp rejected an invalid or oversized request");
@@ -241,5 +267,136 @@ async fn run() -> Result<(), String> {
             .map_err(|error| format!("serve MCP stdio session: {error}"))?;
         eprintln!("thumble-mcp stopped transport=stdio");
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+    use tokio_util::bytes::BytesMut;
+    use tokio_util::codec::Decoder;
+
+    fn tool_request(name: &str, payload_bytes: usize) -> String {
+        json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {
+                "name": name,
+                "arguments": {
+                    "images": [{"assetID": "ability-q", "pngBase64": "A".repeat(payload_bytes)}]
+                }
+            }
+        })
+        .to_string()
+    }
+
+    fn framed_request(frame: &str) -> Result<RxJsonRpcMessage<RoleServer>, &'static str> {
+        let mut bytes = BytesMut::from(frame.as_bytes());
+        bytes.extend_from_slice(b"\n");
+        let mut codec = LinesCodec::new_with_max_length(MAXIMUM_MCP_ATTACHMENT_REQUEST_BYTES);
+        let line = codec
+            .decode(&mut bytes)
+            .map_err(|_| "framing rejected request")?
+            .ok_or("incomplete request")?;
+        decode_mcp_request(&line)
+    }
+
+    #[test]
+    fn accepts_small_ordinary_request_and_bom() {
+        let ping = r#"{"jsonrpc":"2.0","id":1,"method":"ping"}"#;
+        assert!(framed_request(ping).is_ok());
+        assert!(framed_request(&format!("\u{feff}{ping}")).is_ok());
+    }
+
+    #[test]
+    fn accepts_large_attachment_request_through_bounded_framing() {
+        let frame = tool_request("attach_game_controller_assets", MAXIMUM_MCP_REQUEST_BYTES);
+        assert!(frame.len() > MAXIMUM_MCP_REQUEST_BYTES);
+        assert!(framed_request(&frame).is_ok());
+    }
+
+    #[test]
+    fn attachment_accepts_exact_hard_frame_limit() {
+        let overhead = tool_request("attach_game_controller_assets", 0).len();
+        let frame = tool_request(
+            "attach_game_controller_assets",
+            MAXIMUM_MCP_ATTACHMENT_REQUEST_BYTES - overhead,
+        );
+        assert_eq!(frame.len(), MAXIMUM_MCP_ATTACHMENT_REQUEST_BYTES);
+        assert!(framed_request(&frame).is_ok());
+    }
+
+    #[test]
+    fn rejects_large_ordinary_tool_request() {
+        let frame = tool_request("plan_game_controller", MAXIMUM_MCP_REQUEST_BYTES);
+        assert_eq!(
+            framed_request(&frame).unwrap_err(),
+            "MCP request exceeds the ordinary frame limit"
+        );
+    }
+
+    #[test]
+    fn ordinary_limit_counts_raw_whitespace() {
+        let mut frame = r#"{"jsonrpc":"2.0","id":1,"method":"ping"}"#.to_owned();
+        frame.push_str(&" ".repeat(MAXIMUM_MCP_REQUEST_BYTES - frame.len()));
+        assert!(framed_request(&frame).is_ok());
+        frame.push(' ');
+        assert_eq!(
+            framed_request(&frame).unwrap_err(),
+            "MCP request exceeds the ordinary frame limit"
+        );
+    }
+
+    #[test]
+    fn rejects_attachment_over_hard_frame_limit_before_parsing() {
+        let frame = tool_request(
+            "attach_game_controller_assets",
+            MAXIMUM_MCP_ATTACHMENT_REQUEST_BYTES,
+        );
+        assert_eq!(
+            framed_request(&frame).unwrap_err(),
+            "framing rejected request"
+        );
+        let mut codec = LinesCodec::new_with_max_length(MAXIMUM_MCP_ATTACHMENT_REQUEST_BYTES);
+        let mut unterminated = BytesMut::from(frame.as_bytes());
+        assert!(codec.decode(&mut unterminated).is_err());
+        assert_eq!(
+            decode_mcp_request(&frame).unwrap_err(),
+            "MCP request exceeds the attachment frame limit"
+        );
+    }
+
+    #[test]
+    fn malformed_request_error_contains_no_payload() {
+        let mut frame = tool_request("attach_game_controller_assets", MAXIMUM_MCP_REQUEST_BYTES);
+        frame.pop();
+        assert_eq!(framed_request(&frame).unwrap_err(), "invalid MCP request");
+    }
+
+    #[test]
+    fn larger_window_requires_exact_tool_call_request() {
+        let padding = "A".repeat(MAXIMUM_MCP_REQUEST_BYTES);
+        let notification = json!({
+            "jsonrpc":"2.0", "method":"tools/call",
+            "params":{"name":"attach_game_controller_assets", "arguments":{"payload":padding}},
+        })
+        .to_string();
+        assert!(framed_request(&notification).is_err());
+        let other_method = json!({
+            "jsonrpc":"2.0", "id":1, "method":"other/call",
+            "params":{"name":"attach_game_controller_assets", "arguments":{"payload":padding}},
+        })
+        .to_string();
+        assert_eq!(
+            framed_request(&other_method).unwrap_err(),
+            "MCP request exceeds the ordinary frame limit"
+        );
+        assert!(framed_request(&tool_request(
+            "attach_game_controller_assets_extra",
+            MAXIMUM_MCP_REQUEST_BYTES,
+        ))
+        .is_err());
     }
 }

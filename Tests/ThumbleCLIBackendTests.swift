@@ -90,6 +90,193 @@ final class ThumbleCLIBackendTests: XCTestCase {
         }
     }
 
+    func testControllerAssetAttachmentRequestContainsOnlyInlineSortedImagesAndRevision() throws {
+        let attachment = ThumbleCLIProfileBackend.ControllerAssetAttachment(
+            manifestJSON: "{}", profileID: invocationID,
+            images: [
+                .init(assetID: "z-icon", pngBase64: "eg=="),
+                .init(assetID: "a-icon", pngBase64: "YQ==")
+            ]
+        )
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        let request = ThumbleCLIProfileBackend.Request(
+            command: .controllerAssetsAttach(attachment, dryRun: true), invocationID: invocationID,
+            expectedConfigurationRevision: 21
+        )
+        let data = try encoder.encode(request)
+        XCTAssertEqual(
+            String(decoding: data, as: UTF8.self),
+            #"{"command":{"attachment":{"images":[{"assetID":"a-icon","pngBase64":"YQ=="},{"assetID":"z-icon","pngBase64":"eg=="}],"manifestJSON":"{}","profileID":"AAAAAAAA-BBBB-5CCC-8DDD-EEEEEEEEEEEE"},"dryRun":true,"type":"controller.assets.attach"},"expectedConfigurationRevision":21,"invocationID":"AAAAAAAA-BBBB-5CCC-8DDD-EEEEEEEEEEEE","schemaVersion":8}"#
+        )
+    }
+
+    func testControllerAttachmentArgumentsRequireExplicitProfileAndPositiveRevision() throws {
+        let valid = ["manifest.json", "--profile", invocationID.uuidString, "--asset-map", "assets.json", "--expected-revision", "21"]
+        let parsed = try ThumbleCLIProfileBackend.ControllerAssetAttachmentArguments.parse(
+            valid + ["--dry-run", "--json", "--invocation-id", invocationID.uuidString]
+        )
+        XCTAssertEqual(parsed.profileID, invocationID)
+        XCTAssertEqual(parsed.expectedRevision, 21)
+        XCTAssertEqual(parsed.invocationID, invocationID)
+        XCTAssertTrue(parsed.dryRun)
+        XCTAssertTrue(parsed.printJSON)
+        var invalids = [
+            Array(valid.dropLast(2)), valid + ["--expected-revision", "22"],
+            valid + ["other-manifest.json"], valid + ["--current"], valid + ["--json", "--json"],
+            valid + ["--invocation-id", "invalid"]
+        ]
+        for profile in ["active", "default", "globalstore", "League"] {
+            var invalid = valid
+            invalid[2] = profile
+            invalids.append(invalid)
+        }
+        for revision in ["0", "-1", "+1", "1.0", "18446744073709551616", "", " 21"] {
+            var invalid = valid
+            invalid[6] = revision
+            invalids.append(invalid)
+        }
+        for arguments in invalids {
+            XCTAssertThrowsError(try ThumbleCLIProfileBackend.ControllerAssetAttachmentArguments.parse(arguments)) {
+                XCTAssertEqual($0 as? ThumbleCLIProfileBackend.ControllerAssetInputError, .invalidArguments)
+            }
+        }
+    }
+
+    func testControllerAssetMapRejectsDuplicateKeysIncludingEscapedDuplicatesAndNonStringValues() throws {
+        let map = try ThumbleCLIProfileBackend.ControllerAssetAttachment.parseAssetMap(Data(#"{"ability-q":"icons/q.png","ability-w":"../w.png"}"#.utf8))
+        XCTAssertEqual(map, ["ability-q": "icons/q.png", "ability-w": "../w.png"])
+        let escaped = try ThumbleCLIProfileBackend.ControllerAssetAttachment.parseAssetMap(Data(#"{"q":"icons/quote\"-\u00e9.png"}"#.utf8))
+        XCTAssertEqual(escaped, ["q": "icons/quote\"-é.png"])
+        for invalid in [
+            #"{"q":"one.png","q":"two.png"}"#, #"{"q":"one.png","\u0071":"two.png"}"#,
+            #"{"q":42}"#, #"{"q":{"path":"q.png"}}"#, #"{"Q":"q.png"}"#,
+            #"{"q--icon":"q.png"}"#, #"{"q":""}"#, #"{"q":"bad\u0000.png"}"#,
+            #"{"q":"q.png",}"#, #"{"q":"q.png"} []"#, #"["q.png"]"#
+        ] {
+            XCTAssertThrowsError(try ThumbleCLIProfileBackend.ControllerAssetAttachment.parseAssetMap(Data(invalid.utf8))) {
+                XCTAssertEqual($0 as? ThumbleCLIProfileBackend.ControllerAssetInputError, .invalidAssetMap)
+            }
+        }
+        XCTAssertThrowsError(
+            try ThumbleCLIProfileBackend.ControllerAssetAttachment.parseAssetMap(Data(repeating: 0x20, count: 64 * 1024 + 1))
+        ) { XCTAssertEqual($0 as? ThumbleCLIProfileBackend.ControllerAssetInputError, .fileTooLarge) }
+    }
+
+    func testControllerAttachmentLoadsImagesRelativeToMapAndRejectsFinalSymlinks() throws {
+        let directory = try makeControllerAssetDirectory()
+        let manifest = directory.appendingPathComponent("manifest.json")
+        let map = directory.appendingPathComponent("map.json")
+        let image = directory.appendingPathComponent("q.png")
+        try Data("{}".utf8).write(to: manifest)
+        try Data(#"{"q":"q.png"}"#.utf8).write(to: map)
+        let bytes = Data([0x89, 0x50, 0x4E, 0x47])
+        try bytes.write(to: image)
+        let attachment = try ThumbleCLIProfileBackend.ControllerAssetAttachment.load(
+            manifestURL: manifest, profileID: invocationID, assetMapURL: map
+        )
+        XCTAssertEqual(attachment.images, [.init(assetID: "q", pngBase64: bytes.base64EncodedString())])
+        let symlink = directory.appendingPathComponent("linked.png")
+        try FileManager.default.createSymbolicLink(at: symlink, withDestinationURL: image)
+        try Data(#"{"q":"linked.png"}"#.utf8).write(to: map)
+        XCTAssertThrowsError(try ThumbleCLIProfileBackend.ControllerAssetAttachment.load(
+            manifestURL: manifest, profileID: invocationID, assetMapURL: map
+        )) { XCTAssertEqual($0 as? ThumbleCLIProfileBackend.ControllerAssetInputError, .unsafeFile) }
+        XCTAssertThrowsError(try ThumbleCLIProfileBackend.ControllerAssetAttachment.load(
+            manifestURL: directory, profileID: invocationID, assetMapURL: map
+        )) { XCTAssertEqual($0 as? ThumbleCLIProfileBackend.ControllerAssetInputError, .unsafeFile) }
+        let fifo = directory.appendingPathComponent("image.pipe")
+        XCTAssertEqual(mkfifo(fifo.path, 0o600), 0)
+        try Data(#"{"q":"image.pipe"}"#.utf8).write(to: map)
+        XCTAssertThrowsError(try ThumbleCLIProfileBackend.ControllerAssetAttachment.load(
+            manifestURL: manifest, profileID: invocationID, assetMapURL: map
+        )) { XCTAssertEqual($0 as? ThumbleCLIProfileBackend.ControllerAssetInputError, .unsafeFile) }
+    }
+
+    func testControllerAttachmentInputEnforcesEveryFileAndCombinedImageBound() throws {
+        let directory = try makeControllerAssetDirectory()
+        let manifest = directory.appendingPathComponent("manifest.json")
+        let map = directory.appendingPathComponent("map.json")
+        let image = directory.appendingPathComponent("q.png")
+        try Data("{}".utf8).write(to: manifest)
+        try Data(#"{"q":"q.png"}"#.utf8).write(to: map)
+        try Data(repeating: 0, count: 2_500_001).write(to: image)
+        XCTAssertThrowsError(try ThumbleCLIProfileBackend.ControllerAssetAttachment.load(
+            manifestURL: manifest, profileID: invocationID, assetMapURL: map
+        )) { XCTAssertEqual($0 as? ThumbleCLIProfileBackend.ControllerAssetInputError, .fileTooLarge) }
+        try Data(repeating: 0, count: 2_500_000).write(to: image)
+        try Data(#"{"q":"q.png","w":"q.png"}"#.utf8).write(to: map)
+        XCTAssertThrowsError(try ThumbleCLIProfileBackend.ControllerAssetAttachment.load(
+            manifestURL: manifest, profileID: invocationID, assetMapURL: map
+        )) { XCTAssertEqual($0 as? ThumbleCLIProfileBackend.ControllerAssetInputError, .imagesTooLarge) }
+        try Data(repeating: 0x20, count: 256 * 1024 + 1).write(to: manifest)
+        XCTAssertThrowsError(try ThumbleCLIProfileBackend.ControllerAssetAttachment.load(
+            manifestURL: manifest, profileID: invocationID, assetMapURL: map
+        )) { XCTAssertEqual($0 as? ThumbleCLIProfileBackend.ControllerAssetInputError, .fileTooLarge) }
+        try Data("{}".utf8).write(to: manifest)
+        try Data(repeating: 0x20, count: 64 * 1024 + 1).write(to: map)
+        XCTAssertThrowsError(try ThumbleCLIProfileBackend.ControllerAssetAttachment.load(
+            manifestURL: manifest, profileID: invocationID, assetMapURL: map
+        )) { XCTAssertEqual($0 as? ThumbleCLIProfileBackend.ControllerAssetInputError, .fileTooLarge) }
+    }
+
+    func testControllerAttachmentBoundsAreRejectedBeforeHelperLaunch() throws {
+        let helper = try makeHelper(body: "exit 99")
+        let backend = try ThumbleCLIProfileBackend(executableURL: helper)
+        let invalidAttachments = [
+            ThumbleCLIProfileBackend.ControllerAssetAttachment(
+                manifestJSON: String(repeating: "x", count: 256 * 1024 + 1), profileID: invocationID, images: []
+            ),
+            ThumbleCLIProfileBackend.ControllerAssetAttachment(
+                manifestJSON: "{}", profileID: invocationID, images: [.init(assetID: "q", pngBase64: "not base64")]
+            ),
+            ThumbleCLIProfileBackend.ControllerAssetAttachment(
+                manifestJSON: "{}", profileID: invocationID,
+                images: [.init(assetID: "q", pngBase64: "YQ=="), .init(assetID: "q", pngBase64: "Yg==")]
+            )
+        ]
+        for attachment in invalidAttachments {
+            XCTAssertThrowsError(try backend.perform(.controllerAssetsAttach(attachment, dryRun: true), invocationID: invocationID)) {
+                XCTAssertEqual($0 as? ThumbleCLIProfileBackend.BackendError, .invalidControllerAssetAttachment)
+            }
+        }
+    }
+
+    func testControllerAttachmentSummaryDecodesAndRejectsUnsafeFields() throws {
+        let summary = #"{"configurationRevision":21,"dryRun":true,"changed":true,"profileID":"AAAAAAAA-BBBB-5CCC-8DDD-EEEEEEEEEEEE","manifestID":"league","descriptorDigest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","assetMappings":[{"assetID":"q","nativeAssetID":"game-controller-q","sha256":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","byteCount":100}],"attachedControlCount":1,"updatedVariantCount":1}"#
+        for (object, isValid) in [
+            (summary, true),
+            (summary.replacingOccurrences(of: #""byteCount":100"#, with: #""byteCount":2500001"#), false),
+            (summary.replacingOccurrences(of: #""attachedControlCount":1"#, with: #""attachedControlCount":19"#), false),
+            (summary.replacingOccurrences(of: #""manifestID":"league""#, with: #""manifestID":"league","filename":"private.png""#), false)
+        ] {
+            let helper = try makeHelper(body: """
+            IFS= read -r line || exit 3
+            printf '%s\\n' '{"schemaVersion":8,"ok":true,"invocationID":"AAAAAAAA-BBBB-5CCC-8DDD-EEEEEEEEEEEE","authorityMode":"offline","controllerAssetAttachment":\(object)}'
+            """)
+            let backend = try ThumbleCLIProfileBackend(executableURL: helper)
+            let command = ThumbleCLIProfileBackend.Command.controllerAssetsAttach(
+                .init(manifestJSON: "{}", profileID: invocationID, images: []), dryRun: true
+            )
+            if isValid {
+                let response = try backend.perform(command, invocationID: invocationID, expectedConfigurationRevision: 21)
+                XCTAssertEqual(response.controllerAssetAttachment?.manifestID, "league")
+                XCTAssertEqual(response.controllerAssetAttachment?.assetMappings.first?.byteCount, 100)
+            } else {
+                XCTAssertThrowsError(try backend.perform(command, invocationID: invocationID, expectedConfigurationRevision: 21)) {
+                    XCTAssertEqual($0 as? ThumbleCLIProfileBackend.BackendError, .malformedResponse)
+                }
+            }
+        }
+    }
+
+    private func makeControllerAssetDirectory() throws -> URL {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("thumble-controller-assets-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
+        addTeardownBlock { try? FileManager.default.removeItem(at: directory) }
+        return directory
+    }
+
     func testImportRequestJSONHasExactKeysAndPreservesRawArtifactString() throws {
         let artifactJSON = "{\n  \"future\": {\"unknown\": true}\n}"
         let encoded = try encodedRequestText(

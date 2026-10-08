@@ -19,11 +19,12 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use thumble_core::{
-    canonical_default_profile_key_bindings, plan_generation_spec, ButtonBindings,
-    ConfigurationDocument, ControllerControlBarItemSnapshot, ControllerGroupSnapshot,
-    ControllerLayerSnapshot, ControllerStyleSnapshot, GenerationSpecError, GenerationSpecPlan,
-    KeyBinding, OutputBinding, PersistentState, ProfileArtifact, ProfileArtifactContentHash,
-    ProfileArtifactError, ProfileArtifactSelection,
+    attach_game_controller_assets, canonical_default_profile_key_bindings, plan_generation_spec,
+    validate_game_controller_asset_attachment, ButtonBindings, ConfigurationDocument,
+    ControllerControlBarItemSnapshot, ControllerGroupSnapshot, ControllerLayerSnapshot,
+    ControllerStyleSnapshot, GameControllerAssetAttachment, GameControllerAssetAttachmentSummary,
+    GenerationSpecError, GenerationSpecPlan, KeyBinding, OutputBinding, PersistentState,
+    ProfileArtifact, ProfileArtifactContentHash, ProfileArtifactError, ProfileArtifactSelection,
 };
 use thumble_protocol::{GameButton, KeypadElementInputPart};
 use uuid::Uuid;
@@ -69,6 +70,12 @@ pub enum CliProfileCommand {
         select: bool,
         #[serde(rename = "makeDefault")]
         make_default: bool,
+    },
+    #[serde(rename = "controller.assets.attach")]
+    ControllerAssetsAttach {
+        attachment: GameControllerAssetAttachment,
+        #[serde(rename = "dryRun")]
+        dry_run: bool,
     },
     #[serde(rename = "profile.select")]
     Select { target: ProfileSelector },
@@ -480,6 +487,7 @@ impl CliProfileCommand {
             Self::List => "profile.list",
             Self::Export { .. } => "profile.export",
             Self::Import { .. } => "profile.import",
+            Self::ControllerAssetsAttach { .. } => "controller.assets.attach",
             Self::Select { .. } => "profile.select",
             Self::SetDefault { .. } => "profile.default",
             Self::Rename { .. } => "profile.rename",
@@ -870,6 +878,18 @@ pub struct CliGenerationPlan {
     pub layout_quality: CliGenerationLayoutQuality,
 }
 
+/// Safe metadata for a planned or committed attachment. Image bytes and the
+/// complete authoritative document never leave the transaction in a response.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliControllerAssetAttachment {
+    pub configuration_revision: u64,
+    pub dry_run: bool,
+    pub changed: bool,
+    #[serde(flatten)]
+    pub summary: GameControllerAssetAttachmentSummary,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CliProfileOutcome {
@@ -921,6 +941,8 @@ pub struct CliProfileResponse {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub generation_plan: Option<CliGenerationPlan>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub controller_asset_attachment: Option<CliControllerAssetAttachment>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub orientation: Option<CliOrientationSummary>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub projection: Option<CliBindingOutputProjection>,
@@ -953,6 +975,7 @@ impl CliProfileResponse {
             catalog: None,
             artifact: None,
             generation_plan: None,
+            controller_asset_attachment: None,
             orientation: None,
             projection: None,
             control_bar: None,
@@ -989,6 +1012,7 @@ impl CliProfileResponse {
             catalog: result.catalog,
             artifact: result.artifact,
             generation_plan: result.generation_plan,
+            controller_asset_attachment: result.controller_asset_attachment,
             orientation: result.orientation,
             projection: result.projection,
             control_bar: result.control_bar,
@@ -1012,6 +1036,7 @@ impl CliProfileResponse {
             catalog: None,
             artifact: None,
             generation_plan: None,
+            controller_asset_attachment: None,
             orientation: None,
             projection: None,
             control_bar: None,
@@ -1064,6 +1089,7 @@ struct TransactionResult {
     catalog: Option<CliProfileCatalog>,
     artifact: Option<CliProfileArtifact>,
     generation_plan: Option<CliGenerationPlan>,
+    controller_asset_attachment: Option<CliControllerAssetAttachment>,
     orientation: Option<CliOrientationSummary>,
     projection: Option<CliBindingOutputProjection>,
     control_bar: Option<CliControlBarProjection>,
@@ -1327,6 +1353,19 @@ where
         validate_request(request)?;
         validate_request_credentials(&request.command, state)?;
         let catalog = catalog_from_state(state)?;
+        if matches!(
+            request.command,
+            CliProfileCommand::ControllerAssetsAttach { .. }
+        ) {
+            return execute_controller_asset_attachment(
+                paths,
+                state,
+                request,
+                &catalog,
+                invocation_id,
+                &mut save,
+            );
+        }
         if let CliProfileCommand::GenerationPlanSpec {
             spec_json,
             requested_game_name,
@@ -1726,6 +1765,276 @@ where
         Ok(result) => CliProfileResponse::success(invocation_id, authority_mode, result),
         Err(failure) => CliProfileResponse::failure(invocation_id, authority_mode, failure),
     }
+}
+
+fn controller_asset_attachment_failure() -> TransactionFailure {
+    TransactionFailure::new(
+        "invalid_controller_asset_attachment",
+        "controller attachment failed manifest, image, or destination validation",
+    )
+}
+
+fn execute_controller_asset_attachment<F>(
+    paths: &HostPaths,
+    state: &PersistentState,
+    request: &CliProfileRequest,
+    catalog: &CliProfileCatalog,
+    invocation_id: Uuid,
+    save: &mut F,
+) -> Result<TransactionResult, TransactionFailure>
+where
+    F: FnMut(&str, u64, u64, &str, &str) -> Result<ConfigurationSaveSummary, TransactionFailure>,
+{
+    let CliProfileCommand::ControllerAssetsAttach {
+        attachment,
+        dry_run,
+    } = &request.command
+    else {
+        unreachable!("attachment routing accepts only controller.assets.attach")
+    };
+    let dry_run = *dry_run;
+    let expected_revision = request.expected_configuration_revision.ok_or_else(|| {
+        TransactionFailure::new(
+            "configuration_revision_required",
+            "controller attachment requires the exact authoritative configuration revision",
+        )
+    })?;
+    // Validate and fingerprint caller input independently of installed state.
+    // Replays remain valid after later profile edits, and the recorded semantic
+    // descriptor contains asset hashes rather than image payloads or paths.
+    let input_summary = validate_game_controller_asset_attachment(attachment)
+        .map_err(|_| controller_asset_attachment_failure())?;
+    let descriptor = serde_json::json!({
+        "operation": "controller.assets.attach",
+        "attachment": input_summary,
+    });
+    let request_digest = descriptor_digest(&descriptor)?;
+    let draft_id = deterministic_uuid(invocation_id, "configuration-draft");
+    let commit_id = deterministic_uuid(invocation_id, "configuration-commit");
+    if !dry_run {
+        if let Some(record) = state.recent_configuration_commit(&commit_id.hyphenated().to_string())
+        {
+            if record.draft_id != draft_id.hyphenated().to_string()
+                || record.client_request_digest.as_deref() != Some(request_digest.as_str())
+                || expected_revision != record.base_configuration_revision
+            {
+                return Err(TransactionFailure::new(
+                    "commit_id_conflict",
+                    "invocation ID was already used for different controller attachment content",
+                ));
+            }
+            let changed =
+                record.result_configuration_revision != record.base_configuration_revision;
+            return Ok(TransactionResult {
+                controller_asset_attachment: Some(CliControllerAssetAttachment {
+                    configuration_revision: record.result_configuration_revision,
+                    dry_run: false,
+                    changed,
+                    summary: input_summary,
+                }),
+                outcome: Some(CliProfileOutcome {
+                    operation: "controller.assets.attach".to_owned(),
+                    profile_names: replay_attachment_profile_names(attachment, catalog),
+                    destination: None,
+                    removed_every_profile: false,
+                    changed,
+                    configuration_revision: record.result_configuration_revision,
+                    draft_id,
+                    commit_id,
+                    idempotent_replay: true,
+                }),
+                ..TransactionResult::default()
+            });
+        }
+    }
+    if expected_revision != catalog.configuration_revision {
+        return Err(TransactionFailure::new(
+            "configuration_revision_conflict",
+            "authoritative configuration changed after the revision-tagged read",
+        )
+        .with_revision(expected_revision, catalog.configuration_revision));
+    }
+    let document = ConfigurationDocument::from_state(state)
+        .map_err(|_| controller_asset_attachment_failure())?;
+    let plan = attach_game_controller_assets(&document, attachment)
+        .map_err(|_| controller_asset_attachment_failure())?;
+    let changed = document != plan.document;
+    if dry_run {
+        return Ok(TransactionResult {
+            controller_asset_attachment: Some(CliControllerAssetAttachment {
+                configuration_revision: catalog.configuration_revision,
+                dry_run: true,
+                changed,
+                summary: plan.summary,
+            }),
+            ..TransactionResult::default()
+        });
+    }
+    // Complete all result validation before making a private draft or saving.
+    let _ = catalog_from_document(&plan.document, catalog.configuration_revision, state)?;
+    let store = DraftStore::new(paths);
+    let mut draft = store
+        .begin_with_id(
+            state,
+            catalog.configuration_revision,
+            &draft_id.hyphenated().to_string(),
+            now_millis(),
+        )
+        .map_err(draft_failure)?;
+    let operation_id = deterministic_uuid(invocation_id, "controller.assets.attach:operation")
+        .hyphenated()
+        .to_string();
+    if draft
+        .operation_log
+        .iter()
+        .any(|record| record.operation_id != operation_id)
+        || (draft.operation_log.is_empty() && draft.working_document != document)
+    {
+        return Err(TransactionFailure::new(
+            "operation_id_conflict",
+            "invocation draft contains edits outside this controller attachment",
+        )
+        .with_draft(&draft));
+    }
+    let expected_draft_revision = draft
+        .operation_log
+        .iter()
+        .find(|record| record.operation_id == operation_id)
+        .map_or(draft.draft_revision, |record| record.base_draft_revision);
+    let candidate = plan.document;
+    let expected_candidate = &candidate;
+    let changed_paths = if changed {
+        let original_profile = document
+            .profiles
+            .iter()
+            .find(|profile| {
+                profile["id"]
+                    .as_str()
+                    .is_some_and(|id| id.eq_ignore_ascii_case(&input_summary.profile_id))
+            })
+            .expect("validated attachment destination");
+        let candidate_profile = candidate
+            .profiles
+            .iter()
+            .find(|profile| {
+                profile["id"]
+                    .as_str()
+                    .is_some_and(|id| id.eq_ignore_ascii_case(&input_summary.profile_id))
+            })
+            .expect("validated attachment destination");
+        [
+            "customization",
+            "portraitCustomization",
+            "landscapeCustomization",
+        ]
+        .into_iter()
+        .filter(|variant| original_profile.get(*variant) != candidate_profile.get(*variant))
+        .map(|variant| format!("profiles/{}/{variant}", input_summary.profile_id))
+        .collect()
+    } else {
+        Vec::new()
+    };
+    let operation = crate::draft_operation::ConfigurationOperationOutcome {
+        changed,
+        changed_paths,
+    };
+    draft = store
+        .edit_with_descriptor(
+            &draft.draft_id,
+            expected_draft_revision,
+            &operation_id,
+            &descriptor,
+            now_millis(),
+            move |_| Ok((expected_candidate.clone(), operation)),
+        )
+        .map_err(|error| draft_failure(error).with_draft(&draft))?
+        .draft;
+    if draft.working_document != candidate {
+        return Err(TransactionFailure::new(
+            "operation_id_conflict",
+            "invocation draft differs from the validated controller attachment",
+        )
+        .with_draft(&draft));
+    }
+    let persisted = save(
+        &draft.draft_id,
+        draft.draft_revision,
+        catalog.configuration_revision,
+        &commit_id.hyphenated().to_string(),
+        &request_digest,
+    )
+    .map_err(|failure| failure.with_draft(&draft))?;
+    Ok(TransactionResult {
+        controller_asset_attachment: Some(CliControllerAssetAttachment {
+            configuration_revision: persisted.configuration_revision,
+            dry_run: false,
+            changed: persisted.changed,
+            summary: plan.summary,
+        }),
+        outcome: Some(CliProfileOutcome {
+            operation: "controller.assets.attach".to_owned(),
+            profile_names: replay_attachment_profile_names(attachment, catalog),
+            destination: None,
+            removed_every_profile: false,
+            changed: persisted.changed,
+            configuration_revision: persisted.configuration_revision,
+            draft_id,
+            commit_id,
+            idempotent_replay: persisted.idempotent_replay,
+        }),
+        ..TransactionResult::default()
+    })
+}
+
+fn replay_attachment_profile_names(
+    attachment: &GameControllerAssetAttachment,
+    catalog: &CliProfileCatalog,
+) -> Vec<String> {
+    catalog
+        .profiles
+        .iter()
+        .find(|profile| {
+            profile
+                .profile_id
+                .to_string()
+                .eq_ignore_ascii_case(&attachment.profile_id)
+        })
+        .map(|profile| vec![profile.name.clone()])
+        .unwrap_or_default()
+}
+
+pub fn execute_offline_controller_assets_plan(
+    paths: &HostPaths,
+    request: &CliProfileRequest,
+) -> CliProfileResponse {
+    let invocation_id = request.invocation_id.unwrap_or_else(Uuid::new_v4);
+    if !matches!(
+        &request.command,
+        CliProfileCommand::ControllerAssetsAttach { dry_run: true, .. }
+    ) {
+        return CliProfileResponse::transport_failure(
+            invocation_id,
+            "offline",
+            "invalid_request",
+            "read-only controller attachment planning requires dryRun",
+        );
+    }
+    // Read only: never migrate state, acquire/create an authority lock, or seed
+    // fallback profiles just to inspect an attachment for an installed target.
+    let state = match storage::load(&paths.state_file) {
+        Ok(state) => state,
+        Err(_) => {
+            return CliProfileResponse::transport_failure(
+                invocation_id,
+                "offline",
+                "state_load_failed",
+                "Rust authority state could not be loaded read-only",
+            )
+        }
+    };
+    execute_profile_transaction(paths, &state, request, "offline", |_, _, _, _, _| {
+        unreachable!("controller attachment planning cannot persist a transaction")
+    })
 }
 
 pub fn execute_offline_generation_plan(
@@ -3047,6 +3356,7 @@ fn plan_transaction(
         CliProfileCommand::List
         | CliProfileCommand::Export { .. }
         | CliProfileCommand::Import { .. }
+        | CliProfileCommand::ControllerAssetsAttach { .. }
         | CliProfileCommand::GenerationPlanSpec { .. }
         | CliProfileCommand::AuthorityStatus
         | CliProfileCommand::OrientationGet { .. }
@@ -5514,6 +5824,7 @@ fn replay_profile_names(
         | CliProfileCommand::List
         | CliProfileCommand::Export { .. }
         | CliProfileCommand::Import { .. }
+        | CliProfileCommand::ControllerAssetsAttach { .. }
         | CliProfileCommand::GenerationPlanSpec { .. }
         | CliProfileCommand::OrientationGet { .. }
         | CliProfileCommand::BindingList { .. }
@@ -5648,7 +5959,7 @@ fn now_millis() -> i64 {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use tempfile::tempdir;
 
@@ -5658,6 +5969,269 @@ mod tests {
             invocation_id: Some(Uuid::parse_str("aaaaaaaa-bbbb-5ccc-8ddd-eeeeeeeeeeee").unwrap()),
             expected_configuration_revision: None,
             command,
+        }
+    }
+
+    pub(crate) fn controller_asset_fixture() -> (PersistentState, GameControllerAssetAttachment) {
+        let manifest_json = serde_json::json!({
+            "schemaVersion": 1,
+            "id": "asset-controller",
+            "name": "Asset Controller",
+            "game": {"id": "example-game", "name": "Example Game"},
+            "outputMode": "keyboard",
+            "actions": [{"id": "cast-q", "label": "Q", "output": {"key": "Q"}}],
+            "controls": [{"id": "cast-q-button", "actionID": "cast-q", "kind": "button",
+                "role": "primary", "visual": {"iconAssetID": "cast-q-icon"}}],
+            "assets": [{"id": "cast-q-icon", "alt": "Q artwork"}],
+        })
+        .to_string();
+        let plan = thumble_core::plan_game_controller(manifest_json.as_bytes()).unwrap();
+        let mut state = PersistentState::minimal("server").unwrap();
+        let import = decode_profile_import(
+            &plan.artifact_json,
+            true,
+            false,
+            false,
+            Uuid::parse_str("12345678-1234-5678-9234-567812345678").unwrap(),
+        )
+        .unwrap();
+        let document = ConfigurationDocument::from_state(&state).unwrap();
+        plan_profile_import(&document, &import, 1)
+            .unwrap()
+            .candidate
+            .install_into(&mut state)
+            .unwrap();
+        state.configuration_revision = 7;
+        let attachment = serde_json::from_value(serde_json::json!({
+            "manifestJSON": manifest_json,
+            "profileID": state.profiles[1]["id"],
+            "images": [{"assetID": "cast-q-icon",
+                "pngBase64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg=="}],
+        }))
+        .unwrap();
+        (state, attachment)
+    }
+
+    fn controller_asset_request(
+        attachment: GameControllerAssetAttachment,
+        dry_run: bool,
+    ) -> CliProfileRequest {
+        let mut request = request(CliProfileCommand::ControllerAssetsAttach {
+            attachment,
+            dry_run,
+        });
+        request.expected_configuration_revision = Some(7);
+        request
+    }
+
+    #[test]
+    fn controller_attachment_schema_requires_dry_run_and_rejects_unknown_payload_fields() {
+        let (_, attachment) = controller_asset_fixture();
+        let request = controller_asset_request(attachment, true);
+        let mut value = serde_json::to_value(&request).unwrap();
+        assert_eq!(value["command"]["type"], "controller.assets.attach");
+        assert_eq!(value["command"]["dryRun"], true);
+        assert!(serde_json::from_value::<CliProfileRequest>(value.clone()).is_ok());
+        value["command"].as_object_mut().unwrap().remove("dryRun");
+        assert!(serde_json::from_value::<CliProfileRequest>(value).is_err());
+        let mut value = serde_json::to_value(&request).unwrap();
+        value["command"]["attachment"]["path"] = serde_json::json!("/private/image.png");
+        assert!(serde_json::from_value::<CliProfileRequest>(value).is_err());
+    }
+
+    #[test]
+    fn controller_attachment_dry_run_is_revision_exact_and_creates_no_artifacts() {
+        let directory = tempdir().unwrap();
+        let paths = HostPaths::new(
+            directory.path().join("state"),
+            directory.path().join("socket"),
+        );
+        let (state, attachment) = controller_asset_fixture();
+        storage::save_atomic(&paths.state_file, &state).unwrap();
+        let before = std::fs::read(&paths.state_file).unwrap();
+        let mut request = controller_asset_request(attachment, true);
+        let response = execute_offline_controller_assets_plan(&paths, &request);
+        assert!(response.ok, "{:?}", response.error);
+        assert!(response.outcome.is_none());
+        let summary = response.controller_asset_attachment.unwrap();
+        assert_eq!(summary.configuration_revision, 7);
+        assert!(summary.dry_run);
+        assert!(summary.changed);
+        assert_eq!(summary.summary.asset_mappings.len(), 1);
+        assert!(!serde_json::to_string(&summary)
+            .unwrap()
+            .contains("pngBase64"));
+        request.expected_configuration_revision = Some(6);
+        let conflict = execute_offline_controller_assets_plan(&paths, &request);
+        assert_eq!(
+            conflict.error.unwrap().code,
+            "configuration_revision_conflict"
+        );
+        request.expected_configuration_revision = None;
+        let missing = execute_offline_controller_assets_plan(&paths, &request);
+        assert_eq!(
+            missing.error.unwrap().code,
+            "configuration_revision_required"
+        );
+        assert_eq!(std::fs::read(&paths.state_file).unwrap(), before);
+        assert!(!paths.drafts_dir.exists());
+        assert!(!paths.lock_file.exists());
+        assert!(!paths.artifacts_dir.exists());
+    }
+
+    #[test]
+    fn controller_attachment_persists_without_changing_bindings_and_replays_without_writes() {
+        let directory = tempdir().unwrap();
+        let paths = HostPaths::new(
+            directory.path().join("state"),
+            directory.path().join("socket"),
+        );
+        let (state, attachment) = controller_asset_fixture();
+        storage::save_atomic(&paths.state_file, &state).unwrap();
+        let request = controller_asset_request(attachment.clone(), false);
+        let committed = execute_offline_authority(&paths, &request);
+        assert!(committed.ok, "{:?}", committed.error);
+        assert_eq!(
+            committed.outcome.as_ref().unwrap().configuration_revision,
+            8
+        );
+        assert!(!committed.outcome.unwrap().idempotent_replay);
+        let persisted = storage::load(&paths.state_file).unwrap();
+        assert_eq!(persisted.active_profile_id, state.active_profile_id);
+        assert_eq!(persisted.default_profile_id, state.default_profile_id);
+        assert_eq!(persisted.key_bindings, state.key_bindings);
+        assert_eq!(persisted.profile_key_bindings, state.profile_key_bindings);
+        assert_eq!(persisted.output_bindings, state.output_bindings);
+        assert_eq!(
+            persisted.profile_output_bindings,
+            state.profile_output_bindings
+        );
+        assert_eq!(persisted.profiles[0], state.profiles[0]);
+        assert!(
+            persisted.profiles[1]["customization"]["assetLibrary"]["assets"][0]["data"].is_string()
+        );
+        let before = std::fs::read(&paths.state_file).unwrap();
+        let replay =
+            execute_profile_transaction(&paths, &persisted, &request, "test", |_, _, _, _, _| {
+                panic!("a committed replay cannot save")
+            });
+        assert!(replay.ok, "{:?}", replay.error);
+        assert!(replay.outcome.unwrap().idempotent_replay);
+        assert_eq!(std::fs::read(&paths.state_file).unwrap(), before);
+
+        let mut changed_content = request.clone();
+        let CliProfileCommand::ControllerAssetsAttach {
+            attachment: changed_attachment,
+            ..
+        } = &mut changed_content.command
+        else {
+            unreachable!()
+        };
+        let mut manifest: serde_json::Value =
+            serde_json::from_str(&changed_attachment.manifest_json).unwrap();
+        manifest["assets"][0]["alt"] = serde_json::json!("Changed Q artwork");
+        changed_attachment.manifest_json = manifest.to_string();
+        let conflict = execute_profile_transaction(
+            &paths,
+            &persisted,
+            &changed_content,
+            "test",
+            |_, _, _, _, _| panic!("a conflicting replay cannot save"),
+        );
+        assert_eq!(conflict.error.unwrap().code, "commit_id_conflict");
+
+        // A fresh operation that already matches stores a replay receipt while
+        // retaining the same configuration revision and controls.
+        let mut no_op = controller_asset_request(attachment.clone(), false);
+        no_op.invocation_id = Some(Uuid::new_v4());
+        no_op.expected_configuration_revision = Some(8);
+        let result = execute_offline_authority(&paths, &no_op);
+        assert!(result.ok, "{:?}", result.error);
+        assert!(!result.outcome.as_ref().unwrap().changed);
+        assert_eq!(result.outcome.unwrap().configuration_revision, 8);
+    }
+
+    #[test]
+    fn controller_attachment_corruption_and_failed_save_leave_authoritative_state_unchanged() {
+        let directory = tempdir().unwrap();
+        let paths = HostPaths::new(
+            directory.path().join("state"),
+            directory.path().join("socket"),
+        );
+        let (state, attachment) = controller_asset_fixture();
+        storage::save_atomic(&paths.state_file, &state).unwrap();
+        let before = std::fs::read(&paths.state_file).unwrap();
+        let mut corrupt = serde_json::to_value(&attachment).unwrap();
+        corrupt["images"][0]["pngBase64"] = serde_json::json!("AAAA");
+        let corrupt = controller_asset_request(serde_json::from_value(corrupt).unwrap(), false);
+        let result = execute_offline_authority(&paths, &corrupt);
+        assert_eq!(
+            result.error.unwrap().code,
+            "invalid_controller_asset_attachment"
+        );
+        assert!(!paths.drafts_dir.exists());
+        let request = controller_asset_request(attachment, false);
+        let failed =
+            execute_profile_transaction(&paths, &state, &request, "test", |_, _, _, _, _| {
+                Err(TransactionFailure::new(
+                    "configuration_persistence_failed",
+                    "test save failure",
+                ))
+            });
+        assert_eq!(
+            failed.error.unwrap().code,
+            "configuration_persistence_failed"
+        );
+        assert_eq!(std::fs::read(&paths.state_file).unwrap(), before);
+        assert_eq!(storage::load(&paths.state_file).unwrap(), state);
+        let retry = execute_offline_authority(&paths, &request);
+        assert!(retry.ok, "{:?}", retry.error);
+        assert_eq!(retry.outcome.unwrap().configuration_revision, 8);
+    }
+
+    #[test]
+    fn controller_attachment_retry_rejects_a_retained_draft_with_unrelated_edits() {
+        for add_operation in [false, true] {
+            let directory = tempdir().unwrap();
+            let paths = HostPaths::new(
+                directory.path().join("state"),
+                directory.path().join("socket"),
+            );
+            let (state, attachment) = controller_asset_fixture();
+            storage::save_atomic(&paths.state_file, &state).unwrap();
+            let request = controller_asset_request(attachment, false);
+            let failed =
+                execute_profile_transaction(&paths, &state, &request, "test", |_, _, _, _, _| {
+                    Err(TransactionFailure::new(
+                        "configuration_persistence_failed",
+                        "test save failure",
+                    ))
+                });
+            let failure = failed.error.unwrap();
+            let draft_id = failure.draft_id.unwrap().to_string();
+            let store = DraftStore::new(&paths);
+            let mut draft = store.get(&draft_id, now_millis()).unwrap();
+            if add_operation {
+                store
+                    .edit(
+                        &draft_id,
+                        draft.draft_revision,
+                        "aaaaaaaa-bbbb-5ccc-8ddd-eeeeeeeeeed1",
+                        &ConfigurationOperation::ProfileRename {
+                            profile_id: state.active_profile_id.clone(),
+                            name: "Unrelated edit".to_owned(),
+                        },
+                        now_millis(),
+                    )
+                    .unwrap();
+            } else {
+                draft.working_document.profiles[0]["name"] = serde_json::json!("Unrelated edit");
+                store.save(&draft).unwrap();
+            }
+            let before = std::fs::read(&paths.state_file).unwrap();
+            let retry = execute_offline_authority(&paths, &request);
+            assert_eq!(retry.error.unwrap().code, "operation_id_conflict");
+            assert_eq!(std::fs::read(&paths.state_file).unwrap(), before);
         }
     }
 

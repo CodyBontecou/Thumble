@@ -4002,6 +4002,8 @@ struct ThumbleCLI {
         guard let subcommand = arguments.first else { throw CLIError.message("Missing asset subcommand") }
         let rest = Array(arguments.dropFirst())
         switch subcommand {
+        case "attach-controller":
+            try attachControllerAssets(arguments: rest)
         case "list", "ls":
             let store = loadStore()
             let profile = try resolveProfile(optionValue("--profile", in: rest), in: store)
@@ -4056,6 +4058,33 @@ struct ThumbleCLI {
         default:
             throw CLIError.message("Unknown asset subcommand: \(subcommand)")
         }
+    }
+
+    private static func attachControllerAssets(arguments: [String]) throws {
+        let parsed = try ThumbleCLIProfileBackend.ControllerAssetAttachmentArguments.parse(arguments)
+        let attachment = try ThumbleCLIProfileBackend.ControllerAssetAttachment.load(
+            manifestURL: URL(fileURLWithPath: parsed.manifestPath),
+            profileID: parsed.profileID,
+            assetMapURL: URL(fileURLWithPath: parsed.assetMapPath)
+        )
+        let response = try profileBackend().perform(
+            .controllerAssetsAttach(attachment, dryRun: parsed.dryRun),
+            invocationID: parsed.invocationID,
+            expectedConfigurationRevision: parsed.expectedRevision
+        )
+        guard let summary = response.controllerAssetAttachment else {
+            throw CLIError.message("Rust authority returned no controller asset attachment summary")
+        }
+        if parsed.printJSON {
+            try printJSON(summary)
+        } else if response.outcome?.idempotentReplay == true {
+            print("Attachment already committed for profile \(summary.profileID.uuidString) at configuration revision \(summary.configurationRevision).")
+        } else {
+            let operation = summary.dryRun ? "Validated" : "Attached"
+            print("\(operation) \(summary.assetMappings.count) controller images for \(summary.attachedControlCount) controls across \(summary.updatedVariantCount) variants.")
+            print("Profile: \(summary.profileID.uuidString) · Configuration revision: \(summary.configurationRevision) · Changed: \(summary.changed)")
+        }
+        printProfileInvocation(response)
     }
 
     private struct LayerSummary: Codable {
@@ -8708,6 +8737,7 @@ struct ThumbleCLI {
           thumble asset import ./icon.png --role icon --name SoulOrb
           thumble asset show ASSET_ID
           thumble asset set ASSET_ID --name "Soul Orb" --role texture
+          thumble asset attach-controller MANIFEST --profile UUID --asset-map MAP.json --expected-revision N [--dry-run] [--invocation-id UUID] [--json]
 
         Runtime:
           thumble app open|quit|replay-onboarding

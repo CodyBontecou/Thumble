@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://thumble.app/schemas/game-controller-asset-attachment-v1.schema.json",
+  "title": "Thumble game controller asset attachment v1",
+  "description": "Bounded native attachment input for an already installed manifest-generated controller. Carries PNG bytes and opaque manifest asset IDs, never local paths, URLs, native asset IDs, bindings, or arbitrary profile edits. Authority and MCP revision/idempotency fields wrap this object separately. Rust additionally validates the manifest, exact asset coverage, decoded image bounds, and destination control mappings before applying any change.",
+  "type": "object",
+  "required": [
+    "manifestJSON",
+    "profileID",
+    "images"
+  ],
+  "properties": {
+    "manifestJSON": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 262144,
+      "contentMediaType": "application/json",
+      "description": "Original game-controller manifest v1 as JSON text. Must pass plan_game_controller validation. Rust enforces a 256 KiB UTF-8 byte limit; JSON Schema maxLength alone counts characters."
+    },
+    "profileID": {
+      "$ref": "#/$defs/profileID"
+    },
+    "images": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 90,
+      "items": {
+        "$ref": "#/$defs/image"
+      },
+      "description": "Exactly one image per declared manifest asset ID. Duplicate, missing, or undeclared IDs fail Rust validation. Combined decoded PNG file bytes are bounded to 4 MiB and combined image pixels to 16,777,216."
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "profileID": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+      "description": "Authoritative destination profile UUID. Use the installed UUID returned by profile import/list, which may differ from the planner's source profileID."
+    },
+    "assetID": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "pngBase64": {
+      "type": "string",
+      "minLength": 4,
+      "maxLength": 3333336,
+      "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$(?![\\s\\S])",
+      "contentEncoding": "base64",
+      "contentMediaType": "image/png",
+      "description": "Canonical standard Base64 including required padding, without a data-URL prefix or whitespace. Rust enforces zero padding bits and fully decodes a static PNG with CRC checks, at most 2,500,000 file bytes and 2048 pixels on either axis. Animated PNGs are rejected."
+    },
+    "image": {
+      "type": "object",
+      "required": [
+        "assetID",
+        "pngBase64"
+      ],
+      "properties": {
+        "assetID": {
+          "$ref": "#/$defs/assetID"
+        },
+        "pngBase64": {
+          "$ref": "#/$defs/pngBase64"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

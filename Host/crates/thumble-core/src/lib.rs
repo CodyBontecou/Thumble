@@ -8,6 +8,8 @@ mod binding;
 mod configuration;
 mod controller_snapshot;
 mod core;
+mod game_controller;
+mod game_controller_assets;
 mod gamepad;
 mod generation_spec;
 mod profile_artifact;
@@ -34,6 +36,24 @@ pub use controller_snapshot::{
 pub use core::{
     ConnectionId, CoreError, CoreTime, Effect, HostCore, LocalControlError, StatusCounters,
     StatusSnapshot, TokenSource,
+};
+pub use game_controller::{
+    plan_game_controller, GameControllerAction, GameControllerAsset, GameControllerControl,
+    GameControllerControlKind, GameControllerControlMapping, GameControllerError,
+    GameControllerGame, GameControllerManifest, GameControllerModifier, GameControllerOutput,
+    GameControllerOutputMode, GameControllerPlan, GameControllerRole, GameControllerStateAssetIDs,
+    GameControllerVisual, GameControllerVisualAttachment, GAME_CONTROLLER_PLANNER_REVISION,
+    GAME_CONTROLLER_SCHEMA_VERSION, MAXIMUM_GAME_CONTROLLER_ACTIONS,
+    MAXIMUM_GAME_CONTROLLER_ASSETS, MAXIMUM_GAME_CONTROLLER_BYTES,
+    MAXIMUM_GAME_CONTROLLER_CONTROLS,
+};
+pub use game_controller_assets::{
+    attach_game_controller_assets, validate_game_controller_asset_attachment,
+    GameControllerAssetAttachment, GameControllerAssetAttachmentError,
+    GameControllerAssetAttachmentPlan, GameControllerAssetAttachmentSummary,
+    GameControllerAssetImage, GameControllerAssetMapping, MAXIMUM_GAME_CONTROLLER_IMAGE_BYTES,
+    MAXIMUM_GAME_CONTROLLER_IMAGE_DIMENSION, MAXIMUM_GAME_CONTROLLER_TOTAL_IMAGE_BYTES,
+    MAXIMUM_GAME_CONTROLLER_TOTAL_IMAGE_PIXELS,
 };
 pub use gamepad::VirtualGamepadButton;
 pub use generation_spec::{

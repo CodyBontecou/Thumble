@@ -1,0 +1,406 @@
+{
+  "schemaVersion": 1,
+  "id": "world-of-warcraft-starter",
+  "name": "World of Warcraft Starter",
+  "game": {
+    "id": "world-of-warcraft",
+    "name": "World of Warcraft"
+  },
+  "outputMode": "keyboard",
+  "actions": [
+    {
+      "id": "actionbar-1",
+      "label": "Action 1",
+      "output": {
+        "key": "1"
+      }
+    },
+    {
+      "id": "actionbar-2",
+      "label": "Action 2",
+      "output": {
+        "key": "2"
+      }
+    },
+    {
+      "id": "actionbar-3",
+      "label": "Action 3",
+      "output": {
+        "key": "3"
+      }
+    },
+    {
+      "id": "actionbar-4",
+      "label": "Action 4",
+      "output": {
+        "key": "4"
+      }
+    },
+    {
+      "id": "actionbar-5",
+      "label": "Action 5",
+      "output": {
+        "key": "5"
+      }
+    },
+    {
+      "id": "actionbar-6",
+      "label": "Action 6",
+      "output": {
+        "key": "6"
+      }
+    },
+    {
+      "id": "actionbar-7",
+      "label": "Action 7",
+      "output": {
+        "key": "7"
+      }
+    },
+    {
+      "id": "actionbar-8",
+      "label": "Action 8",
+      "output": {
+        "key": "8"
+      }
+    },
+    {
+      "id": "actionbar-9",
+      "label": "Action 9",
+      "output": {
+        "key": "9"
+      }
+    },
+    {
+      "id": "actionbar-10",
+      "label": "Action 10",
+      "output": {
+        "key": "0"
+      }
+    },
+    {
+      "id": "actionbar-11",
+      "label": "Action 11",
+      "output": {
+        "key": "-"
+      }
+    },
+    {
+      "id": "actionbar-12",
+      "label": "Action 12",
+      "output": {
+        "key": "="
+      }
+    },
+    {
+      "id": "move-forward",
+      "label": "Forward",
+      "output": {
+        "key": "W"
+      }
+    },
+    {
+      "id": "turn-left",
+      "label": "Turn left",
+      "output": {
+        "key": "A"
+      }
+    },
+    {
+      "id": "move-backward",
+      "label": "Backward",
+      "output": {
+        "key": "S"
+      }
+    },
+    {
+      "id": "turn-right",
+      "label": "Turn right",
+      "output": {
+        "key": "D"
+      }
+    },
+    {
+      "id": "target-next",
+      "label": "Next target",
+      "output": {
+        "key": "Tab"
+      }
+    },
+    {
+      "id": "jump",
+      "label": "Jump",
+      "output": {
+        "key": "Space"
+      }
+    }
+  ],
+  "controls": [
+    {
+      "id": "actionbar-1-button",
+      "actionID": "actionbar-1",
+      "kind": "button",
+      "role": "primary",
+      "x": 0.47,
+      "y": 0.26,
+      "visual": {
+        "iconAssetID": "actionbar-1-icon"
+      },
+      "widthScale": 1,
+      "heightScale": 1
+    },
+    {
+      "id": "actionbar-2-button",
+      "actionID": "actionbar-2",
+      "kind": "button",
+      "role": "primary",
+      "x": 0.6,
+      "y": 0.26,
+      "visual": {
+        "iconAssetID": "actionbar-2-icon"
+      },
+      "widthScale": 1,
+      "heightScale": 1
+    },
+    {
+      "id": "actionbar-3-button",
+      "actionID": "actionbar-3",
+      "kind": "button",
+      "role": "primary",
+      "x": 0.73,
+      "y": 0.26,
+      "visual": {
+        "iconAssetID": "actionbar-3-icon"
+      },
+      "widthScale": 1,
+      "heightScale": 1
+    },
+    {
+      "id": "actionbar-4-button",
+      "actionID": "actionbar-4",
+      "kind": "button",
+      "role": "primary",
+      "x": 0.86,
+      "y": 0.26,
+      "visual": {
+        "iconAssetID": "actionbar-4-icon"
+      },
+      "widthScale": 1,
+      "heightScale": 1
+    },
+    {
+      "id": "actionbar-5-button",
+      "actionID": "actionbar-5",
+      "kind": "button",
+      "role": "primary",
+      "x": 0.47,
+      "y": 0.5,
+      "visual": {
+        "iconAssetID": "actionbar-5-icon"
+      },
+      "widthScale": 1,
+      "heightScale": 1
+    },
+    {
+      "id": "actionbar-6-button",
+      "actionID": "actionbar-6",
+      "kind": "button",
+      "role": "primary",
+      "x": 0.6,
+      "y": 0.5,
+      "visual": {
+        "iconAssetID": "actionbar-6-icon"
+      },
+      "widthScale": 1,
+      "heightScale": 1
+    },
+    {
+      "id": "actionbar-7-button",
+      "actionID": "actionbar-7",
+      "kind": "button",
+      "role": "primary",
+      "x": 0.73,
+      "y": 0.5,
+      "visual": {
+        "iconAssetID": "actionbar-7-icon"
+      },
+      "widthScale": 1,
+      "heightScale": 1
+    },
+    {
+      "id": "actionbar-8-button",
+      "actionID": "actionbar-8",
+      "kind": "button",
+      "role": "primary",
+      "x": 0.86,
+      "y": 0.5,
+      "visual": {
+        "iconAssetID": "actionbar-8-icon"
+      },
+      "widthScale": 1,
+      "heightScale": 1
+    },
+    {
+      "id": "actionbar-9-button",
+      "actionID": "actionbar-9",
+      "kind": "button",
+      "role": "primary",
+      "x": 0.47,
+      "y": 0.74,
+      "visual": {
+        "iconAssetID": "actionbar-9-icon"
+      },
+      "widthScale": 1,
+      "heightScale": 1
+    },
+    {
+      "id": "actionbar-10-button",
+      "actionID": "actionbar-10",
+      "kind": "button",
+      "role": "primary",
+      "x": 0.6,
+      "y": 0.74,
+      "visual": {
+        "iconAssetID": "actionbar-10-icon"
+      },
+      "widthScale": 1,
+      "heightScale": 1
+    },
+    {
+      "id": "actionbar-11-button",
+      "actionID": "actionbar-11",
+      "kind": "button",
+      "role": "primary",
+      "x": 0.73,
+      "y": 0.74,
+      "visual": {
+        "iconAssetID": "actionbar-11-icon"
+      },
+      "widthScale": 1,
+      "heightScale": 1
+    },
+    {
+      "id": "actionbar-12-button",
+      "actionID": "actionbar-12",
+      "kind": "button",
+      "role": "primary",
+      "x": 0.86,
+      "y": 0.74,
+      "visual": {
+        "iconAssetID": "actionbar-12-icon"
+      },
+      "widthScale": 1,
+      "heightScale": 1
+    },
+    {
+      "id": "forward-button",
+      "actionID": "move-forward",
+      "kind": "button",
+      "role": "movement",
+      "x": 0.22,
+      "y": 0.29,
+      "widthScale": 1,
+      "heightScale": 1
+    },
+    {
+      "id": "left-button",
+      "actionID": "turn-left",
+      "kind": "button",
+      "role": "movement",
+      "x": 0.08,
+      "y": 0.53,
+      "widthScale": 1,
+      "heightScale": 1
+    },
+    {
+      "id": "backward-button",
+      "actionID": "move-backward",
+      "kind": "button",
+      "role": "movement",
+      "x": 0.22,
+      "y": 0.53,
+      "widthScale": 1,
+      "heightScale": 1
+    },
+    {
+      "id": "right-button",
+      "actionID": "turn-right",
+      "kind": "button",
+      "role": "movement",
+      "x": 0.36,
+      "y": 0.53,
+      "widthScale": 1,
+      "heightScale": 1
+    },
+    {
+      "id": "target-button",
+      "actionID": "target-next",
+      "kind": "button",
+      "role": "utility",
+      "x": 0.14,
+      "y": 0.8,
+      "widthScale": 1,
+      "heightScale": 1
+    },
+    {
+      "id": "jump-button",
+      "actionID": "jump",
+      "kind": "button",
+      "role": "secondary",
+      "x": 0.31,
+      "y": 0.8,
+      "widthScale": 1,
+      "heightScale": 1
+    }
+  ],
+  "assets": [
+    {
+      "id": "actionbar-1-icon",
+      "alt": "Placeholder for action bar slot 1 artwork"
+    },
+    {
+      "id": "actionbar-2-icon",
+      "alt": "Placeholder for action bar slot 2 artwork"
+    },
+    {
+      "id": "actionbar-3-icon",
+      "alt": "Placeholder for action bar slot 3 artwork"
+    },
+    {
+      "id": "actionbar-4-icon",
+      "alt": "Placeholder for action bar slot 4 artwork"
+    },
+    {
+      "id": "actionbar-5-icon",
+      "alt": "Placeholder for action bar slot 5 artwork"
+    },
+    {
+      "id": "actionbar-6-icon",
+      "alt": "Placeholder for action bar slot 6 artwork"
+    },
+    {
+      "id": "actionbar-7-icon",
+      "alt": "Placeholder for action bar slot 7 artwork"
+    },
+    {
+      "id": "actionbar-8-icon",
+      "alt": "Placeholder for action bar slot 8 artwork"
+    },
+    {
+      "id": "actionbar-9-icon",
+      "alt": "Placeholder for action bar slot 9 artwork"
+    },
+    {
+      "id": "actionbar-10-icon",
+      "alt": "Placeholder for action bar slot 10 artwork"
+    },
+    {
+      "id": "actionbar-11-icon",
+      "alt": "Placeholder for action bar slot 11 artwork"
+    },
+    {
+      "id": "actionbar-12-icon",
+      "alt": "Placeholder for action bar slot 12 artwork"
+    }
+  ]
+}

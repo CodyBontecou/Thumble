@@ -2557,6 +2557,129 @@ mod tests {
     }
 
     #[test]
+    fn controller_artwork_sync_is_queued_only_after_a_successful_authority_save() {
+        for (write_enabled, fail_persistence) in [(false, false), (true, false), (true, true)] {
+            let directory = tempdir().unwrap();
+            let paths = HostPaths::new(
+                directory.path().join("state"),
+                directory.path().join("state/control.sock"),
+            );
+            let (mut state, attachment) = crate::cli_profile::tests::controller_asset_fixture();
+            let auth_token = "test-attachment-client-auth";
+            state.trusted_clients.insert(
+                auth_token.to_owned(),
+                thumble_core::TrustedClient {
+                    name: "Test iPhone".to_owned(),
+                    created_at: 0,
+                    last_seen_at: 0,
+                },
+            );
+            storage::save_atomic(&paths.state_file, &state).unwrap();
+            let core = HostCore::new(state, "123456").unwrap();
+            let (shutdown, _) = watch::channel(false);
+            let mut shared = SharedRuntime {
+                inner: Mutex::new(RuntimeInner {
+                    core,
+                    tokens: SecureTokens,
+                    connections: HashMap::new(),
+                    output: OutputExecutor::new(false, None),
+                    control_press_times: VecDeque::new(),
+                    input_liveness: Default::default(),
+                }),
+                paths,
+                requested_port: 0,
+                actual_port: 0,
+                service_name: "Test".to_owned(),
+                input_enabled: false,
+                configuration_write_enabled: write_enabled,
+                bonjour: Arc::new(BonjourRegistration::disabled("Test".to_owned())),
+                shutdown,
+                started_at: crate::input_liveness::InputClock::now(),
+            };
+            let (sender, mut receiver) = mpsc::channel(16);
+            shared.register_connection(1, sender);
+            let mut hello = ControllerMessage::new(ControllerMessageType::Hello, 0);
+            hello.auth_token = Some(auth_token.to_owned());
+            hello.server_id = Some("server".to_owned());
+            shared.handle_message(1, hello).unwrap();
+            assert!(shared.inner.lock().unwrap().core.status().paired);
+            while receiver.try_recv().is_ok() {}
+            let before = shared.inner.lock().unwrap().core.persistent_state().clone();
+            let before_disk = std::fs::read(&shared.paths.state_file).unwrap();
+            let mut request = CliProfileRequest {
+                schema_version: cli_profile::CLI_PROFILE_SCHEMA_VERSION,
+                invocation_id: Some(Uuid::new_v4()),
+                expected_configuration_revision: Some(before.configuration_revision),
+                command: cli_profile::CliProfileCommand::ControllerAssetsAttach {
+                    attachment,
+                    dry_run: true,
+                },
+            };
+            let dry_run = shared.cli_profile_transaction(&request);
+            assert!(dry_run.ok, "{:?}", dry_run.error);
+            assert_eq!(
+                shared.inner.lock().unwrap().core.persistent_state(),
+                &before
+            );
+            assert_eq!(
+                std::fs::read(&shared.paths.state_file).unwrap(),
+                before_disk
+            );
+            assert!(receiver.try_recv().is_err());
+            assert!(!shared.paths.drafts_dir.exists());
+            if fail_persistence {
+                let blocked = directory.path().join("blocked-state-file");
+                std::fs::create_dir(&blocked).unwrap();
+                shared.paths.state_file = blocked;
+            }
+            let cli_profile::CliProfileCommand::ControllerAssetsAttach { dry_run, .. } =
+                &mut request.command
+            else {
+                unreachable!()
+            };
+            *dry_run = false;
+            let written = shared.cli_profile_transaction(&request);
+            if !write_enabled || fail_persistence {
+                assert!(!written.ok);
+                assert_eq!(
+                    written.error.unwrap().code,
+                    if !write_enabled {
+                        "configuration_write_disabled"
+                    } else {
+                        "configuration_persistence_failed"
+                    }
+                );
+                assert_eq!(
+                    shared.inner.lock().unwrap().core.persistent_state(),
+                    &before
+                );
+                assert!(receiver.try_recv().is_err());
+            } else {
+                assert!(written.ok, "{:?}", written.error);
+                let persisted = storage::load(&shared.paths.state_file).unwrap();
+                assert_eq!(
+                    shared.inner.lock().unwrap().core.persistent_state(),
+                    &persisted
+                );
+                assert_eq!(
+                    persisted.configuration_revision,
+                    before.configuration_revision + 1
+                );
+                let mut delivered_profile_state = None;
+                while let Ok(message) = receiver.try_recv() {
+                    if let Outbound::Binary(bytes) = message {
+                        let message = ControllerWireCodec::decode(&bytes).unwrap();
+                        if message.message_type == ControllerMessageType::GamepadProfiles {
+                            delivered_profile_state = message.gamepad_profiles;
+                        }
+                    }
+                }
+                assert_eq!(delivered_profile_state, Some(persisted.profiles));
+            }
+        }
+    }
+
+    #[test]
     fn online_legacy_profile_import_uses_the_same_draft_and_cas_path_as_offline_import() {
         let directory = tempdir().unwrap();
         let paths = HostPaths::new(

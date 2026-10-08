@@ -1,0 +1,735 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://thumble.app/schemas/game-controller-manifest-v1.schema.json",
+  "title": "Thumble game controller manifest v1",
+  "description": "Pure planning input. Asset IDs are opaque placeholders; this contract carries no files, images, URLs, skin packages, credentials, or authority state. Referential integrity and executable output rules are also validated by plan_game_controller.",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "id",
+    "name",
+    "game",
+    "outputMode",
+    "actions",
+    "controls"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "id": {
+      "$ref": "#/$defs/id"
+    },
+    "name": {
+      "$ref": "#/$defs/displayText"
+    },
+    "game": {
+      "$ref": "#/$defs/game"
+    },
+    "outputMode": {
+      "enum": [
+        "keyboard",
+        "controller",
+        "custom"
+      ]
+    },
+    "actions": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 18,
+      "items": {
+        "$ref": "#/$defs/action"
+      }
+    },
+    "controls": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 18,
+      "items": {
+        "$ref": "#/$defs/control"
+      },
+      "contains": {
+        "properties": {
+          "kind": {
+            "const": "trackpad"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "minContains": 0,
+      "maxContains": 1
+    },
+    "assets": {
+      "type": "array",
+      "maxItems": 90,
+      "items": {
+        "$ref": "#/$defs/asset"
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "outputMode": {
+            "const": "keyboard"
+          }
+        },
+        "required": [
+          "outputMode"
+        ]
+      },
+      "then": {
+        "properties": {
+          "actions": {
+            "items": {
+              "properties": {
+                "output": {
+                  "if": {
+                    "type": "object"
+                  },
+                  "then": {
+                    "required": [
+                      "key"
+                    ],
+                    "properties": {
+                      "key": {
+                        "type": "string"
+                      },
+                      "gamepadButton": {
+                        "type": "null"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "outputMode": {
+            "const": "controller"
+          }
+        },
+        "required": [
+          "outputMode"
+        ]
+      },
+      "then": {
+        "properties": {
+          "actions": {
+            "items": {
+              "properties": {
+                "output": {
+                  "if": {
+                    "type": "object"
+                  },
+                  "then": {
+                    "required": [
+                      "gamepadButton"
+                    ],
+                    "properties": {
+                      "key": {
+                        "type": "null"
+                      },
+                      "gamepadButton": {
+                        "type": "string"
+                      },
+                      "modifiers": {
+                        "maxItems": 0
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "outputMode": {
+            "const": "custom"
+          }
+        },
+        "required": [
+          "outputMode"
+        ]
+      },
+      "then": {
+        "properties": {
+          "actions": {
+            "items": {
+              "properties": {
+                "output": {
+                  "if": {
+                    "type": "object"
+                  },
+                  "then": {
+                    "anyOf": [
+                      {
+                        "required": [
+                          "key"
+                        ],
+                        "properties": {
+                          "key": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      {
+                        "required": [
+                          "gamepadButton"
+                        ],
+                        "properties": {
+                          "gamepadButton": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "description": "Stable lowercase slug. IDs are opaque tokens, never locations."
+    },
+    "displayText": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "allOf": [
+        {
+          "pattern": "\\S"
+        },
+        {
+          "not": {
+            "pattern": "[\\u0000-\\u001f\\u007f-\\u009f]"
+          }
+        }
+      ]
+    },
+    "game": {
+      "type": "object",
+      "required": [
+        "id",
+        "name"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "name": {
+          "$ref": "#/$defs/displayText"
+        }
+      },
+      "additionalProperties": false
+    },
+    "action": {
+      "type": "object",
+      "required": [
+        "id",
+        "label"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "label": {
+          "$ref": "#/$defs/displayText"
+        },
+        "output": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/output"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "description": "A named gameplay intent with one executable binding for a button, or no output for a native trackpad. Each action must be referenced by exactly one control."
+    },
+    "output": {
+      "type": "object",
+      "minProperties": 1,
+      "properties": {
+        "key": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/semanticKey"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "modifiers": {
+          "type": "array",
+          "maxItems": 4,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "ctrl",
+              "shift",
+              "option",
+              "command"
+            ]
+          }
+        },
+        "gamepadButton": {
+          "enum": [
+            "south",
+            "east",
+            "west",
+            "north",
+            "leftShoulder",
+            "rightShoulder",
+            "leftTriggerButton",
+            "rightTriggerButton",
+            "select",
+            "start",
+            "home",
+            "leftStickPress",
+            "rightStickPress",
+            "dpadUp",
+            "dpadDown",
+            "dpadLeft",
+            "dpadRight",
+            null
+          ]
+        }
+      },
+      "anyOf": [
+        {
+          "required": [
+            "key"
+          ],
+          "properties": {
+            "key": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "required": [
+            "gamepadButton"
+          ],
+          "properties": {
+            "gamepadButton": {
+              "type": "string"
+            }
+          }
+        }
+      ],
+      "additionalProperties": false,
+      "description": "One held semantic key chord and/or one digital gamepad button. The selected outputMode constrains allowed output channels. Nonempty modifiers require a key; an empty list is equivalent to absence. Numeric key codes, sequences and mouse button mappings are excluded.",
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "modifiers"
+            ],
+            "properties": {
+              "modifiers": {
+                "minItems": 1
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "key"
+            ],
+            "properties": {
+              "key": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "semanticKey": {
+      "type": "string",
+      "enum": [
+        "A",
+        "S",
+        "D",
+        "F",
+        "H",
+        "G",
+        "Z",
+        "X",
+        "C",
+        "V",
+        "B",
+        "Q",
+        "W",
+        "E",
+        "R",
+        "Y",
+        "T",
+        "1",
+        "2",
+        "3",
+        "4",
+        "6",
+        "5",
+        "=",
+        "9",
+        "7",
+        "-",
+        "8",
+        "0",
+        "]",
+        "O",
+        "U",
+        "[",
+        "I",
+        "P",
+        "Return",
+        "L",
+        "J",
+        "'",
+        "K",
+        ";",
+        "\\",
+        ",",
+        "/",
+        "N",
+        "M",
+        ".",
+        "Tab",
+        "Space",
+        "`",
+        "Delete",
+        "Esc",
+        "Right Command",
+        "Command",
+        "Shift",
+        "Caps Lock",
+        "Option",
+        "Control",
+        "Right Shift",
+        "Right Option",
+        "Right Control",
+        "Fn",
+        "F17",
+        "Keypad .",
+        "Keypad *",
+        "Keypad +",
+        "Clear",
+        "Keypad /",
+        "Keypad Enter",
+        "Keypad -",
+        "Keypad =",
+        "Keypad 0",
+        "Keypad 1",
+        "Keypad 2",
+        "Keypad 3",
+        "Keypad 4",
+        "Keypad 5",
+        "Keypad 6",
+        "Keypad 7",
+        "Keypad 8",
+        "Keypad 9",
+        "F5",
+        "F6",
+        "F7",
+        "F3",
+        "F8",
+        "F9",
+        "F11",
+        "F13",
+        "F16",
+        "F14",
+        "F10",
+        "F12",
+        "F15",
+        "Help",
+        "Home",
+        "PageUp",
+        "ForwardDelete",
+        "F4",
+        "End",
+        "F2",
+        "PageDown",
+        "F1",
+        "LeftArrow",
+        "RightArrow",
+        "DownArrow",
+        "UpArrow",
+        "←",
+        "→",
+        "↓",
+        "↑",
+        "Escape",
+        "Backspace",
+        "Forward Delete",
+        "Page Up",
+        "Page Down"
+      ],
+      "description": "Case-sensitive semantic_key_code vocabulary and its documented aliases."
+    },
+    "control": {
+      "type": "object",
+      "required": [
+        "id",
+        "actionID",
+        "kind",
+        "role"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "actionID": {
+          "$ref": "#/$defs/id"
+        },
+        "kind": {
+          "enum": [
+            "button",
+            "trackpad"
+          ]
+        },
+        "role": {
+          "enum": [
+            "primary",
+            "secondary",
+            "utility",
+            "system",
+            "movement"
+          ]
+        },
+        "x": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Native normalized center x coordinate."
+        },
+        "y": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Native normalized center y coordinate."
+        },
+        "widthScale": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0.001,
+          "maximum": 12,
+          "description": "Native per-kind/per-slot width multiplier, not a fraction of canvas width."
+        },
+        "heightScale": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0.001,
+          "maximum": 12,
+          "description": "Native per-kind/per-slot height multiplier, not a fraction of canvas height."
+        },
+        "visual": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/visual"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "description": "A physical touch target. Buttons require their referenced action to have nonnull output. The single optional trackpad requires its referenced action to omit output or set it to null; it uses native pointer gestures."
+    },
+    "visual": {
+      "type": "object",
+      "minProperties": 1,
+      "properties": {
+        "iconAssetID": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "backgroundAssetID": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "stateAssetIDs": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/stateAssetIDs"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "description": "Visual attachment sidecar. Every reference must resolve to assets[].id. The planner emits no image bytes; the separate native asset attachment API applies validated PNGs after profile import.",
+      "anyOf": [
+        {
+          "required": [
+            "iconAssetID"
+          ],
+          "properties": {
+            "iconAssetID": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "required": [
+            "backgroundAssetID"
+          ],
+          "properties": {
+            "backgroundAssetID": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "required": [
+            "stateAssetIDs"
+          ],
+          "properties": {
+            "stateAssetIDs": {
+              "type": "object"
+            }
+          }
+        }
+      ]
+    },
+    "stateAssetIDs": {
+      "type": "object",
+      "minProperties": 1,
+      "properties": {
+        "pressed": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "active": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "disabled": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "description": "Native pressed, active, and disabled appearance associations applied by the separate asset attachment API. Live game-state updates require a future runtime feed.",
+      "anyOf": [
+        {
+          "required": [
+            "pressed"
+          ],
+          "properties": {
+            "pressed": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "required": [
+            "active"
+          ],
+          "properties": {
+            "active": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "required": [
+            "disabled"
+          ],
+          "properties": {
+            "disabled": {
+              "type": "string"
+            }
+          }
+        }
+      ]
+    },
+    "asset": {
+      "type": "object",
+      "required": [
+        "id",
+        "alt"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "alt": {
+          "$ref": "#/$defs/displayText"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Asset metadata only. All declared assets must be referenced. alt supplies descriptive fallback text; PNG bytes are supplied separately to the native asset attachment API."
+    }
+  }
+}
