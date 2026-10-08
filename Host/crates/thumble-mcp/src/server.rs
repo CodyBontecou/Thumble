@@ -66,6 +66,13 @@ const CONFIGURATION_OPERATION_SCHEMA_JSON: &str =
     include_str!("../../../../docs/mcp/configuration-operation-v1.schema.json");
 const CLI_CAPABILITIES_URI: &str = "thumble://capabilities/v1";
 const CLI_CAPABILITIES_JSON: &str = include_str!("../../../../docs/mcp/cli-capabilities-v1.json");
+const GAME_CONTROLLER_SCHEMA_URI: &str = "thumble://schemas/game-controller-manifest-v1";
+const GAME_CONTROLLER_SCHEMA_JSON: &str =
+    include_str!("../../../../docs/controllers/game-controller-manifest-v1.schema.json");
+const GAME_CONTROLLER_ASSET_SCHEMA_URI: &str =
+    "thumble://schemas/game-controller-asset-attachment-v1";
+const GAME_CONTROLLER_ASSET_SCHEMA_JSON: &str =
+    include_str!("../../../../docs/controllers/asset-attachment-v1.schema.json");
 const CONTROLLER_TEMPLATE_CATALOG_JSON: &str =
     include_str!("../../../../docs/mcp/controller-templates-v1.json");
 const DEVICE_FRAME_CATALOG_JSON: &str = include_str!("../../../../docs/mcp/device-frames-v1.json");
@@ -4097,6 +4104,51 @@ pub struct ThumbleMcp {
     press_limiter: Arc<Mutex<PressRateLimiter>>,
 }
 
+#[derive(Debug, Clone, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PlanGameControllerParams {
+    /// Bounded JSON conforming to thumble://schemas/game-controller-manifest-v1.
+    /// Asset references are opaque placeholders; paths, URLs, and image data are unsupported.
+    #[serde(rename = "manifestJSON")]
+    #[schemars(length(max = 262144))]
+    pub manifest_json: String,
+}
+
+#[derive(Clone, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct GameControllerAssetImageInput {
+    #[serde(rename = "assetID")]
+    #[schemars(length(min = 1, max = 64))]
+    pub asset_id: String,
+    /// Canonical padded standard Base64 containing one complete still PNG.
+    #[serde(rename = "pngBase64")]
+    #[schemars(length(min = 1, max = 3333336))]
+    pub png_base64: String,
+}
+
+#[derive(Clone, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AttachGameControllerAssetsParams {
+    /// JSON conforming to the game-controller manifest v1 schema resource.
+    #[serde(rename = "manifestJSON")]
+    #[schemars(length(max = 262144))]
+    pub manifest_json: String,
+    /// Exact installed destination profile UUID. Imports may remap the source UUID.
+    #[serde(rename = "profileID")]
+    pub profile_id: String,
+    /// Exactly one image for every asset declared in the manifest.
+    #[schemars(length(min = 1, max = 90))]
+    pub images: Vec<GameControllerAssetImageInput>,
+    /// Exact current authoritative revision from configuration_status.
+    pub expected_configuration_revision: u64,
+    /// Caller-generated UUID reused only for retries of this exact attachment.
+    #[serde(rename = "invocationID")]
+    pub invocation_id: String,
+    /// Validate against the destination and return a summary without saving.
+    #[serde(default)]
+    pub dry_run: bool,
+}
+
 impl std::fmt::Debug for ThumbleMcp {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
@@ -4135,6 +4187,109 @@ impl ThumbleMcp {
             allow_config_write,
             press_limiter: Arc::new(Mutex::new(PressRateLimiter::new())),
         }
+    }
+
+    #[tool(
+        description = "Plan a custom game controller from game-controller manifest v1 JSON. Read the thumble://schemas/game-controller-manifest-v1 resource first. Returns an importable asset-free profile artifact and an action/control/asset attachment sidecar. This local-only, deterministic planner works without a running host, never installs or selects a profile, never loads images, and never sends input. Use attach_game_controller_assets after importing the profile to supply local PNG artwork.",
+        annotations(
+            title = "Plan custom game controller",
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
+    )]
+    pub async fn plan_game_controller(
+        &self,
+        Parameters(params): Parameters<PlanGameControllerParams>,
+    ) -> Result<Json<Value>, String> {
+        let plan = thumble_core::plan_game_controller(params.manifest_json.as_bytes())
+            .map_err(|error| error.to_string())?;
+        serde_json::to_value(plan)
+            .map(Json)
+            .map_err(|_| "game controller plan encoding failed".to_owned())
+    }
+
+    #[tool(
+        description = "Attach validated still PNG artwork to an installed game controller through one revision-safe authority transaction. Local-only. Read thumble://schemas/game-controller-asset-attachment-v1 first. Supply manifestJSON, the exact installed profileID, each declared assetID with pngBase64, expectedConfigurationRevision, and a retry-stable invocationID UUID. dryRun validates without saving. Saving requires both host and MCP --allow-config-write. Preserves geometry, bindings, selection, and default; never sends input or loads caller paths/URLs. Returns only attachment metadata, not image bytes.",
+        annotations(
+            title = "Attach game controller artwork",
+            read_only_hint = false,
+            destructive_hint = true,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
+    )]
+    pub async fn attach_game_controller_assets(
+        &self,
+        Parameters(params): Parameters<AttachGameControllerAssetsParams>,
+    ) -> Result<Json<Value>, String> {
+        if !params.dry_run && !self.allow_config_write {
+            audit("attach_game_controller_assets", "rejected");
+            return Err("MCP configuration writes are disabled; restart thumble-mcp with --allow-config-write after explicit user approval".to_owned());
+        }
+        if params.expected_configuration_revision == 0 {
+            return Err(
+                "expectedConfigurationRevision must be a current positive revision".to_owned(),
+            );
+        }
+        let invocation_id = params
+            .invocation_id
+            .parse()
+            .map_err(|_| "invocationID must be a UUID".to_owned())?;
+        let attachment = thumble_core::GameControllerAssetAttachment {
+            manifest_json: params.manifest_json,
+            profile_id: params.profile_id,
+            images: params
+                .images
+                .into_iter()
+                .map(|image| thumble_core::GameControllerAssetImage {
+                    asset_id: image.asset_id,
+                    png_base64: image.png_base64,
+                })
+                .collect(),
+        };
+        thumble_core::validate_game_controller_asset_attachment(&attachment)
+            .map_err(|error| error.to_string())?;
+        let response = self
+            .request(
+                "attach_game_controller_assets",
+                ControlRequest::CliProfileTransaction {
+                    request: thumble_host::cli_profile::CliProfileRequest {
+                        schema_version: thumble_host::cli_profile::CLI_PROFILE_SCHEMA_VERSION,
+                        invocation_id: Some(invocation_id),
+                        expected_configuration_revision: Some(
+                            params.expected_configuration_revision,
+                        ),
+                        command:
+                            thumble_host::cli_profile::CliProfileCommand::ControllerAssetsAttach {
+                                attachment,
+                                dry_run: params.dry_run,
+                            },
+                    },
+                },
+            )
+            .await?;
+        let result = response
+            .cli_profile
+            .ok_or_else(|| "Thumble Host returned no controller asset transaction".to_owned())?;
+        if !result.ok {
+            let error = result.error.ok_or_else(|| {
+                "Thumble Host rejected the controller asset transaction".to_owned()
+            })?;
+            return Err(format!("{} [code={}]", error.message, error.code));
+        }
+        let summary = result.controller_asset_attachment.ok_or_else(|| {
+            "Thumble Host returned no controller asset attachment summary".to_owned()
+        })?;
+        let mut value = serde_json::to_value(summary)
+            .map_err(|_| "controller asset summary encoding failed".to_owned())?;
+        value["invocationID"] = serde_json::json!(result.invocation_id);
+        value["idempotentReplay"] = serde_json::json!(result
+            .outcome
+            .as_ref()
+            .is_some_and(|outcome| outcome.idempotent_replay));
+        Ok(Json(value))
     }
 
     #[tool(
@@ -5022,7 +5177,7 @@ impl ServerHandler for ThumbleMcp {
         )
         .with_server_info(thumble_server_implementation())
         .with_instructions(
-            "Control a running local Thumble Host through installed profiles and revision-safe private configuration drafts. Call configuration_status before beginning draft work and pass every exact revision returned by the host. Use render_controller for the authoritative read-only visual preview. Input injection is disabled unless the server was explicitly launched with --allow-input. Always call list_controls before press_control, never guess IDs, and use release_all if control state is uncertain. Authentication tokens, raw key codes, arbitrary process arguments, typed input text, and shell execution are not exposed.",
+            "Control a running local Thumble Host through installed profiles and revision-safe private configuration drafts. Call configuration_status before beginning draft work and pass every exact revision returned by the host. Use render_controller for the authoritative read-only visual preview. Input injection is disabled unless the server was explicitly launched with --allow-input. Always call list_controls before press_control, never guess IDs, and use release_all if control state is uncertain. Authentication tokens, caller-supplied numeric key codes, arbitrary process arguments, typed input text, and shell execution are not supported. Local clients can plan custom game controllers with plan_game_controller after reading its schema resource; the validated portable artifact contains generated native key codes and must be explicitly imported through the CLI to install.",
         )
     }
 
@@ -5066,6 +5221,16 @@ impl ServerHandler for ThumbleMcp {
                 )
                 .with_mime_type("application/json")
                 .with_size(capabilities_size),
+            Resource::new(GAME_CONTROLLER_SCHEMA_URI, "thumble-game-controller-manifest-schema")
+                .with_title("Thumble Game Controller Manifest v1")
+                .with_description("Semantic actions, touch controls, outputs, and passive asset placeholders for the local planner")
+                .with_mime_type("application/schema+json")
+                .with_size(u64::try_from(GAME_CONTROLLER_SCHEMA_JSON.len()).unwrap_or(u64::MAX)),
+            Resource::new(GAME_CONTROLLER_ASSET_SCHEMA_URI, "thumble-game-controller-asset-attachment-schema")
+                .with_title("Thumble Game Controller Asset Attachment v1")
+                .with_description("Bounded local PNG payloads for revision-safe native artwork attachment")
+                .with_mime_type("application/schema+json")
+                .with_size(u64::try_from(GAME_CONTROLLER_ASSET_SCHEMA_JSON.len()).unwrap_or(u64::MAX)),
         ]))
     }
 
@@ -5082,6 +5247,10 @@ impl ServerHandler for ThumbleMcp {
                 "application/schema+json",
             ),
             CLI_CAPABILITIES_URI => (CLI_CAPABILITIES_JSON, "application/json"),
+            GAME_CONTROLLER_SCHEMA_URI => (GAME_CONTROLLER_SCHEMA_JSON, "application/schema+json"),
+            GAME_CONTROLLER_ASSET_SCHEMA_URI => {
+                (GAME_CONTROLLER_ASSET_SCHEMA_JSON, "application/schema+json")
+            }
             _ => {
                 return Err(ErrorData::resource_not_found(
                     "controller UI resource not found",
@@ -5534,7 +5703,7 @@ mod tests {
     }
 
     #[test]
-    fn tool_router_exposes_only_the_twenty_one_curated_tools() {
+    fn tool_router_exposes_only_the_twenty_three_curated_tools() {
         let server = ThumbleMcp::new(PathBuf::from("/tmp/not-used"), false, false);
         let tools = server.tool_router.list_all();
         let schema_json = serde_json::to_string(&tools).unwrap();
@@ -5542,7 +5711,7 @@ mod tests {
         assert!(!schema_json.contains("keyCode"));
         assert!(!schema_json.contains("PocketPad"));
         assert!(!schema_json.contains("pocketpad-"));
-        assert_eq!(tools.len(), 21);
+        assert_eq!(tools.len(), 23);
         assert!(tools
             .iter()
             .any(|tool| tool.name == "preview_skin_workspace"));
@@ -5594,6 +5763,14 @@ mod tests {
             .iter()
             .find(|tool| tool.name == "render_controller")
             .unwrap();
+        let planner = tools
+            .iter()
+            .find(|tool| tool.name == "plan_game_controller")
+            .unwrap();
+        let planner_annotations = planner.annotations.as_ref().unwrap();
+        assert_eq!(planner_annotations.read_only_hint, Some(true));
+        assert_eq!(planner_annotations.idempotent_hint, Some(true));
+        assert_eq!(planner_annotations.open_world_hint, Some(false));
         assert_eq!(
             render
                 .annotations
@@ -5638,6 +5815,7 @@ mod tests {
             names,
             vec![
                 "accessibility_status",
+                "attach_game_controller_assets",
                 "begin_configuration_draft",
                 "configuration_status",
                 "discard_configuration_draft",
@@ -5648,6 +5826,7 @@ mod tests {
                 "list_controls",
                 "list_profiles",
                 "pairing_code",
+                "plan_game_controller",
                 "press_control",
                 "preview_configuration_draft",
                 "preview_skin_workspace",
@@ -5710,6 +5889,217 @@ mod tests {
         assert!(ConfigurationOperation::from(out_of_bounds)
             .validate_bridge_input()
             .is_err());
+    }
+
+    #[tokio::test]
+    async fn game_controller_planning_needs_no_host_or_write_optin() {
+        let server = ThumbleMcp::new(
+            PathBuf::from("/definitely/missing/control.sock"),
+            false,
+            false,
+        );
+        let Json(plan) = server
+            .plan_game_controller(Parameters(PlanGameControllerParams {
+                manifest_json: include_str!(
+                    "../../../../docs/controllers/examples/league-of-legends.json"
+                )
+                .to_owned(),
+            }))
+            .await
+            .unwrap();
+        let artifact_json = plan["artifactJSON"].as_str().unwrap();
+        thumble_core::ProfileArtifact::decode_json(artifact_json.as_bytes()).unwrap();
+        assert!(!plan["visualAttachments"].as_array().unwrap().is_empty());
+        assert!(
+            serde_json::from_value::<PlanGameControllerParams>(serde_json::json!({
+                "manifestJSON": "{}", "path": "/tmp/controller.json"
+            }))
+            .is_err()
+        );
+        assert!(server
+            .plan_game_controller(Parameters(PlanGameControllerParams {
+                manifest_json: "x".repeat(262145),
+            }))
+            .await
+            .is_err());
+    }
+
+    fn controller_artwork_params(dry_run: bool) -> AttachGameControllerAssetsParams {
+        let manifest_json =
+            include_str!("../../../../docs/controllers/examples/league-of-legends.json").to_owned();
+        let plan = thumble_core::plan_game_controller(manifest_json.as_bytes()).unwrap();
+        AttachGameControllerAssetsParams {
+            manifest_json,
+            profile_id: plan.profile_id,
+            images: plan.assets.into_iter().map(|asset| GameControllerAssetImageInput {
+                asset_id: asset.id,
+                png_base64: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==".to_owned(),
+            }).collect(),
+            expected_configuration_revision: 7,
+            invocation_id: "00000000-0000-0000-0000-000000000123".to_owned(),
+            dry_run,
+        }
+    }
+
+    #[derive(Default)]
+    struct ArtworkChannel {
+        requests: std::sync::Mutex<Vec<ControlRequest>>,
+        reject: bool,
+    }
+
+    impl crate::channel::HostChannel for ArtworkChannel {
+        fn request(&self, request: ControlRequest) -> crate::channel::BoxedHostRequestFuture<'_> {
+            self.requests.lock().unwrap().push(request.clone());
+            Box::pin(async move {
+                let ControlRequest::CliProfileTransaction { request } = request else {
+                    panic!("artwork must use the existing CLI authority transaction");
+                };
+                let thumble_host::cli_profile::CliProfileCommand::ControllerAssetsAttach {
+                    attachment,
+                    dry_run,
+                } = request.command
+                else {
+                    panic!("unexpected authority command");
+                };
+                let invocation_id = request.invocation_id.unwrap();
+                let result = if self.reject {
+                    thumble_host::cli_profile::CliProfileResponse::transport_failure(
+                        invocation_id,
+                        "live",
+                        "configuration_revision_conflict",
+                        "revision changed",
+                    )
+                } else {
+                    let mut summary =
+                        thumble_core::validate_game_controller_asset_attachment(&attachment)
+                            .unwrap();
+                    summary.updated_variant_count = 1;
+                    let mut result =
+                        thumble_host::cli_profile::CliProfileResponse::authority_status(
+                            invocation_id,
+                            true,
+                        );
+                    result.controller_asset_attachment =
+                        Some(thumble_host::cli_profile::CliControllerAssetAttachment {
+                            configuration_revision: if dry_run { 7 } else { 8 },
+                            dry_run,
+                            changed: true,
+                            summary,
+                        });
+                    result
+                };
+                let mut response = ControlResponse::success();
+                response.cli_profile = Some(result);
+                Ok(response)
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn controller_artwork_uses_authority_and_returns_only_metadata() {
+        for dry_run in [true, false] {
+            let channel = Arc::new(ArtworkChannel::default());
+            let server = ThumbleMcp::with_channel(channel.clone(), false, !dry_run);
+            let params = controller_artwork_params(dry_run);
+            let Json(result) = server
+                .attach_game_controller_assets(Parameters(params.clone()))
+                .await
+                .unwrap();
+            assert_eq!(result["dryRun"], dry_run);
+            assert_eq!(result["profileID"], params.profile_id);
+            assert_eq!(result["invocationID"], params.invocation_id);
+            assert_eq!(result["idempotentReplay"], false);
+            assert_eq!(result["configurationRevision"], if dry_run { 7 } else { 8 });
+            assert_eq!(
+                result["assetMappings"].as_array().unwrap().len(),
+                params.images.len()
+            );
+            let encoded = result.to_string();
+            assert!(!encoded.contains("pngBase64"));
+            assert!(!encoded.contains("manifestJSON"));
+            assert!(!encoded.contains(&params.images[0].png_base64));
+            let requests = channel.requests.lock().unwrap();
+            assert_eq!(requests.len(), 1);
+            let ControlRequest::CliProfileTransaction { request } = &requests[0] else {
+                panic!("authority request missing")
+            };
+            assert_eq!(request.expected_configuration_revision, Some(7));
+            assert_eq!(
+                request.invocation_id.unwrap().to_string(),
+                params.invocation_id
+            );
+            let thumble_host::cli_profile::CliProfileCommand::ControllerAssetsAttach {
+                attachment,
+                dry_run: forwarded,
+            } = &request.command
+            else {
+                panic!("attachment command missing")
+            };
+            assert_eq!(*forwarded, dry_run);
+            assert_eq!(attachment.profile_id, params.profile_id);
+            assert_eq!(attachment.images[0].png_base64, params.images[0].png_base64);
+        }
+    }
+
+    #[tokio::test]
+    async fn controller_artwork_rejects_disabled_writes_and_bad_bytes_before_host_io() {
+        let channel = Arc::new(ArtworkChannel::default());
+        let server = ThumbleMcp::with_channel(channel.clone(), false, false);
+        let error = server
+            .attach_game_controller_assets(Parameters(controller_artwork_params(false)))
+            .await
+            .err()
+            .expect("attachment should fail");
+        assert!(error.contains("writes are disabled"));
+        let mut params = controller_artwork_params(true);
+        params.images[0].png_base64 = "aW52YWxpZA==".to_owned();
+        let error = server
+            .attach_game_controller_assets(Parameters(params))
+            .await
+            .err()
+            .expect("attachment should fail");
+        assert!(error.contains("PNG"));
+        let mut params = controller_artwork_params(true);
+        params.expected_configuration_revision = 0;
+        assert!(server
+            .attach_game_controller_assets(Parameters(params))
+            .await
+            .err()
+            .expect("attachment should fail")
+            .contains("positive revision"));
+        let mut params = controller_artwork_params(true);
+        params.invocation_id = "invalid".to_owned();
+        assert!(server
+            .attach_game_controller_assets(Parameters(params))
+            .await
+            .err()
+            .expect("attachment should fail")
+            .contains("UUID"));
+        assert!(channel.requests.lock().unwrap().is_empty());
+        assert!(
+            serde_json::from_value::<AttachGameControllerAssetsParams>(serde_json::json!({
+                "manifestJSON":"{}", "profileID":"00000000-0000-0000-0000-000000000123",
+                "images":[], "expectedConfigurationRevision":1,
+                "invocationID":"00000000-0000-0000-0000-000000000123", "path":"/tmp/art.png"
+            }))
+            .is_err()
+        );
+    }
+
+    #[tokio::test]
+    async fn controller_artwork_surfaces_inner_authority_failure() {
+        let channel = Arc::new(ArtworkChannel {
+            reject: true,
+            ..ArtworkChannel::default()
+        });
+        let server = ThumbleMcp::with_channel(channel.clone(), false, true);
+        let error = server
+            .attach_game_controller_assets(Parameters(controller_artwork_params(false)))
+            .await
+            .err()
+            .expect("attachment should fail");
+        assert!(error.contains("configuration_revision_conflict"));
+        assert_eq!(channel.requests.lock().unwrap().len(), 1);
     }
 
     #[tokio::test]
@@ -5925,17 +6315,39 @@ mod tests {
             Some(["1024x1024".to_owned()].as_slice())
         );
         let tools = client.list_all_tools().await.unwrap();
-        assert_eq!(tools.len(), 21);
+        assert_eq!(tools.len(), 23);
         assert!(tools
             .iter()
             .any(|tool| tool.name == "preview_skin_workspace"));
 
         let resources = client.list_all_resources().await.unwrap();
-        assert_eq!(resources.len(), 4);
+        assert_eq!(resources.len(), 6);
         assert_eq!(resources[0].uri, CONTROLLER_UI_URI);
         assert_eq!(resources[1].uri, CONTROLLER_EDITOR_UI_URI);
         assert_eq!(resources[2].uri, CONFIGURATION_OPERATION_SCHEMA_URI);
         assert_eq!(resources[3].uri, CLI_CAPABILITIES_URI);
+        assert_eq!(resources[4].uri, GAME_CONTROLLER_SCHEMA_URI);
+        assert_eq!(resources[5].uri, GAME_CONTROLLER_ASSET_SCHEMA_URI);
+        let schema = client
+            .read_resource(ReadResourceRequestParams::new(GAME_CONTROLLER_SCHEMA_URI))
+            .await
+            .unwrap();
+        let schema_json = serde_json::to_value(&schema.contents[0]).unwrap();
+        let schema_text = schema_json["text"].as_str().unwrap();
+        serde_json::from_str::<Value>(schema_text).unwrap();
+        assert!(schema_text.contains("actionID"));
+        let planned = client.call_tool(
+            CallToolRequestParams::new("plan_game_controller").with_arguments(
+                serde_json::json!({"manifestJSON": include_str!("../../../../docs/controllers/examples/league-of-legends.json")})
+                    .as_object().unwrap().clone()
+            )
+        ).await.unwrap();
+        assert_ne!(planned.is_error, Some(true));
+        let planned_json = planned.structured_content.as_ref().unwrap();
+        thumble_core::ProfileArtifact::decode_json(
+            planned_json["artifactJSON"].as_str().unwrap().as_bytes(),
+        )
+        .unwrap();
         assert_eq!(
             resources[0].mime_type.as_deref(),
             Some(CONTROLLER_UI_MIME_TYPE)

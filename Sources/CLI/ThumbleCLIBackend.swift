@@ -10,6 +10,11 @@ final class ThumbleCLIProfileBackend {
     static let maximumProfileArtifactBytes = 8 * 1024 * 1024
     static let maximumGenerationSpecBytes = 256 * 1024
     static let maximumGenerationOutputBytes = 8 * 1024 * 1024
+    static let maximumControllerManifestBytes = 256 * 1024
+    static let maximumControllerAssetMapBytes = 64 * 1024
+    static let maximumControllerImageBytes = 2_500_000
+    static let maximumControllerImageTotalBytes = 4 * 1024 * 1024
+    static let maximumControllerAssets = 90
     static let maximumStderrBytes = 16 * 1024
 
     enum ProfileSelector: Encodable, Equatable {
@@ -564,6 +569,210 @@ final class ThumbleCLIProfileBackend {
         }
     }
 
+    struct ControllerAssetImage: Codable, Equatable {
+        var assetID: String
+        var pngBase64: String
+    }
+
+    /// Only inline image bytes cross the bridge. Local paths are never encoded.
+    final class ControllerAssetAttachment: Encodable {
+        let manifestJSON: String
+        let profileID: UUID
+        let images: [ControllerAssetImage]
+
+        init(manifestJSON: String, profileID: UUID, images: [ControllerAssetImage]) {
+            self.manifestJSON = manifestJSON
+            self.profileID = profileID
+            self.images = images.sorted { $0.assetID < $1.assetID }
+        }
+
+        static func load(manifestURL: URL, profileID: UUID, assetMapURL: URL) throws -> ControllerAssetAttachment {
+            let manifest = try readRegularFile(manifestURL, maximumBytes: ThumbleCLIProfileBackend.maximumControllerManifestBytes)
+            guard let manifestJSON = String(data: manifest, encoding: .utf8) else {
+                throw ControllerAssetInputError.invalidManifestUTF8
+            }
+            let map = try parseAssetMap(readRegularFile(assetMapURL, maximumBytes: ThumbleCLIProfileBackend.maximumControllerAssetMapBytes))
+            let mapDirectory = assetMapURL.deletingLastPathComponent()
+            var images: [ControllerAssetImage] = []
+            var totalBytes = 0
+            for assetID in map.keys.sorted() {
+                guard let filename = map[assetID] else { continue }
+                let imageURL = URL(fileURLWithPath: filename, relativeTo: mapDirectory).absoluteURL
+                let image = try readRegularFile(imageURL, maximumBytes: ThumbleCLIProfileBackend.maximumControllerImageBytes)
+                guard image.count <= ThumbleCLIProfileBackend.maximumControllerImageTotalBytes - totalBytes else {
+                    throw ControllerAssetInputError.imagesTooLarge
+                }
+                totalBytes += image.count
+                images.append(ControllerAssetImage(assetID: assetID, pngBase64: image.base64EncodedString()))
+            }
+            return ControllerAssetAttachment(manifestJSON: manifestJSON, profileID: profileID, images: images)
+        }
+
+        /// Parse the narrow string-to-string JSON grammar, rejecting duplicate keys
+        /// before a JSON dictionary decoder could silently discard an entry.
+        static func parseAssetMap(_ data: Data) throws -> [String: String] {
+            guard data.count <= ThumbleCLIProfileBackend.maximumControllerAssetMapBytes else { throw ControllerAssetInputError.fileTooLarge }
+            let bytes = [UInt8](data)
+            var index = 0
+            func skipWhitespace() {
+                while index < bytes.count, [0x20, 0x09, 0x0A, 0x0D].contains(bytes[index]) { index += 1 }
+            }
+            func consume(_ byte: UInt8) -> Bool {
+                skipWhitespace()
+                guard index < bytes.count, bytes[index] == byte else { return false }
+                index += 1
+                return true
+            }
+            func string() throws -> String {
+                skipWhitespace()
+                guard index < bytes.count, bytes[index] == 0x22 else { throw ControllerAssetInputError.invalidAssetMap }
+                let start = index
+                index += 1
+                while index < bytes.count {
+                    let byte = bytes[index]
+                    index += 1
+                    if byte == 0x5C {
+                        guard index < bytes.count else { throw ControllerAssetInputError.invalidAssetMap }
+                        index += 1
+                    } else if byte == 0x22 {
+                        guard let value = try? JSONDecoder().decode(String.self, from: Data(bytes[start ..< index])) else {
+                            throw ControllerAssetInputError.invalidAssetMap
+                        }
+                        return value
+                    }
+                }
+                throw ControllerAssetInputError.invalidAssetMap
+            }
+            guard consume(0x7B) else { throw ControllerAssetInputError.invalidAssetMap }
+            var map: [String: String] = [:]
+            if !consume(0x7D) {
+                while true {
+                    let assetID = try string()
+                    guard ThumbleCLIProfileBackend.isControllerAssetID(assetID), map[assetID] == nil, consume(0x3A) else {
+                        throw ControllerAssetInputError.invalidAssetMap
+                    }
+                    let filename = try string()
+                    guard !filename.isEmpty, filename.utf8.count <= 4096,
+                          !filename.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }),
+                          map.count < ThumbleCLIProfileBackend.maximumControllerAssets
+                    else { throw ControllerAssetInputError.invalidAssetMap }
+                    map[assetID] = filename
+                    if consume(0x7D) { break }
+                    guard consume(0x2C) else { throw ControllerAssetInputError.invalidAssetMap }
+                }
+            }
+            skipWhitespace()
+            guard index == bytes.count else { throw ControllerAssetInputError.invalidAssetMap }
+            return map
+        }
+
+        private static func readRegularFile(_ url: URL, maximumBytes: Int) throws -> Data {
+            guard !url.path.utf8.contains(0) else { throw ControllerAssetInputError.unsafeFile }
+            let descriptor = Darwin.open(url.path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK)
+            guard descriptor >= 0 else { throw ControllerAssetInputError.unsafeFile }
+            defer { _ = Darwin.close(descriptor) }
+            var status = stat()
+            guard Darwin.fstat(descriptor, &status) == 0, status.st_mode & S_IFMT == S_IFREG else {
+                throw ControllerAssetInputError.unsafeFile
+            }
+            guard status.st_size >= 0, UInt64(status.st_size) <= UInt64(maximumBytes) else {
+                throw ControllerAssetInputError.fileTooLarge
+            }
+            var data = Data()
+            data.reserveCapacity(Int(status.st_size))
+            let chunkSize = 64 * 1024
+            var buffer = [UInt8](repeating: 0, count: chunkSize)
+            while true {
+                let remaining = maximumBytes - data.count
+                let count = buffer.withUnsafeMutableBytes {
+                    Darwin.read(descriptor, $0.baseAddress, min(chunkSize, remaining + 1))
+                }
+                if count < 0 {
+                    if errno == EINTR { continue }
+                    throw ControllerAssetInputError.unsafeFile
+                }
+                if count == 0 { break }
+                guard count <= remaining else { throw ControllerAssetInputError.fileTooLarge }
+                data.append(buffer, count: count)
+            }
+            return data
+        }
+    }
+
+    struct ControllerAssetAttachmentArguments {
+        let manifestPath: String
+        let profileID: UUID
+        let assetMapPath: String
+        let expectedRevision: UInt64
+        let dryRun: Bool
+        let invocationID: UUID?
+        let printJSON: Bool
+
+        static func parse(_ arguments: [String]) throws -> ControllerAssetAttachmentArguments {
+            var values: [String: String] = [:]
+            var flags = Set<String>()
+            var manifestPath: String?
+            var index = 0
+            while index < arguments.count {
+                let argument = arguments[index]
+                switch argument {
+                case "--profile", "--asset-map", "--expected-revision", "--invocation-id":
+                    guard values[argument] == nil, index + 1 < arguments.count,
+                          !arguments[index + 1].hasPrefix("-")
+                    else { throw ControllerAssetInputError.invalidArguments }
+                    values[argument] = arguments[index + 1]
+                    index += 2
+                case "--dry-run", "--json":
+                    guard flags.insert(argument).inserted else { throw ControllerAssetInputError.invalidArguments }
+                    index += 1
+                default:
+                    guard !argument.hasPrefix("-"), manifestPath == nil else { throw ControllerAssetInputError.invalidArguments }
+                    manifestPath = argument
+                    index += 1
+                }
+            }
+            guard let manifestPath, !manifestPath.isEmpty,
+                  let profileValue = values["--profile"], let profileID = UUID(uuidString: profileValue),
+                  let assetMapPath = values["--asset-map"], !assetMapPath.isEmpty,
+                  let revisionValue = values["--expected-revision"], !revisionValue.isEmpty,
+                  revisionValue.utf8.allSatisfy({ (0x30 ... 0x39).contains($0) }),
+                  let expectedRevision = UInt64(revisionValue), expectedRevision > 0
+            else { throw ControllerAssetInputError.invalidArguments }
+            let invocationID: UUID?
+            if let invocationValue = values["--invocation-id"] {
+                guard let id = UUID(uuidString: invocationValue) else { throw ControllerAssetInputError.invalidArguments }
+                invocationID = id
+            } else { invocationID = nil }
+            return ControllerAssetAttachmentArguments(
+                manifestPath: manifestPath, profileID: profileID, assetMapPath: assetMapPath,
+                expectedRevision: expectedRevision, dryRun: flags.contains("--dry-run"),
+                invocationID: invocationID, printJSON: flags.contains("--json")
+            )
+        }
+    }
+
+    enum ControllerAssetInputError: LocalizedError, Equatable {
+        case invalidArguments, invalidManifestUTF8, invalidAssetMap, unsafeFile, fileTooLarge, imagesTooLarge
+
+        var errorDescription: String? {
+            switch self {
+            case .invalidArguments:
+                return "Usage: thumble asset attach-controller MANIFEST --profile UUID --asset-map MAP.json --expected-revision N [--dry-run] [--invocation-id UUID] [--json]"
+            case .invalidManifestUTF8: return "Controller manifest must contain valid UTF-8."
+            case .invalidAssetMap: return "Asset map must be a JSON object of unique semantic asset IDs to local filenames."
+            case .unsafeFile: return "Controller input must be a safely opened regular file without a final symlink."
+            case .fileTooLarge: return "Controller input exceeds its manifest, asset-map, or PNG byte limit."
+            case .imagesTooLarge: return "Controller images exceed the combined 4 MiB limit."
+            }
+        }
+    }
+
+    private static func isControllerAssetID(_ id: String) -> Bool {
+        !id.isEmpty && id.utf8.count <= 64 && id.split(separator: "-", omittingEmptySubsequences: false).allSatisfy {
+            !$0.isEmpty && $0.utf8.allSatisfy { (0x61 ... 0x7A).contains($0) || (0x30 ... 0x39).contains($0) }
+        }
+    }
+
     enum Command: Encodable {
         case authorityStatus
         case list
@@ -578,6 +787,7 @@ final class ThumbleCLIProfileBackend {
         case move([ProfileSelector], MoveDestination)
         case generationGenerate(select: Bool, makeDefault: Bool)
         case generationPlanSpec(specJSON: String, requestedGameName: String?)
+        case controllerAssetsAttach(ControllerAssetAttachment, dryRun: Bool)
         case templateInstall(ControllerTemplate, name: String?, select: Bool, makeDefault: Bool)
         case customizationSet(ProfileSelector, ConfigurationVariant, [CustomizationChanges], frameID: String?)
         case customizationFix(ProfileSelector, ConfigurationVariant, LayoutRepairTarget, LayoutRepairCanvas, includeLocked: Bool)
@@ -639,6 +849,7 @@ final class ThumbleCLIProfileBackend {
             case type, target, name, targets, destination, preference, source, automaticallyArrange
             case artifactJSON, appendAsCopies
             case specJSON, requestedGameName
+            case attachment, dryRun
             case template, select, makeDefault, styleID, elementID, appearance
             case button, sequence, mode, keyboardEdit, gamepadEdit
             case variant, frameID, items, item, direction, changes
@@ -707,6 +918,10 @@ final class ThumbleCLIProfileBackend {
                 try container.encode("generation.plan-spec", forKey: .type)
                 try container.encode(specJSON, forKey: .specJSON)
                 try container.encodeIfPresent(requestedGameName, forKey: .requestedGameName)
+            case .controllerAssetsAttach(let attachment, let dryRun):
+                try container.encode("controller.assets.attach", forKey: .type)
+                try container.encode(attachment, forKey: .attachment)
+                try container.encode(dryRun, forKey: .dryRun)
             case .templateInstall(let template, let name, let select, let makeDefault):
                 try container.encode("template.install", forKey: .type)
                 try container.encode(template, forKey: .template)
@@ -1261,6 +1476,35 @@ final class ThumbleCLIProfileBackend {
         }
     }
 
+    struct ControllerAssetMapping: Codable, Equatable {
+        var assetID: String
+        var nativeAssetID: String
+        var sha256: String
+        var byteCount: Int
+    }
+
+    // Keep the optional response behind a reference to preserve inline-size budgets.
+    final class ControllerAssetAttachmentSummary: Codable, Equatable {
+        let configurationRevision: UInt64
+        let dryRun: Bool
+        let changed: Bool
+        let profileID: UUID
+        let manifestID: String
+        let descriptorDigest: String
+        let assetMappings: [ControllerAssetMapping]
+        let attachedControlCount: Int
+        let updatedVariantCount: Int
+
+        static func == (lhs: ControllerAssetAttachmentSummary, rhs: ControllerAssetAttachmentSummary) -> Bool {
+            lhs.configurationRevision == rhs.configurationRevision
+                && lhs.dryRun == rhs.dryRun && lhs.changed == rhs.changed
+                && lhs.profileID == rhs.profileID && lhs.manifestID == rhs.manifestID
+                && lhs.descriptorDigest == rhs.descriptorDigest && lhs.assetMappings == rhs.assetMappings
+                && lhs.attachedControlCount == rhs.attachedControlCount
+                && lhs.updatedVariantCount == rhs.updatedVariantCount
+        }
+    }
+
     struct Outcome: Codable, Equatable {
         var operation: String
         var profileNames: [String]
@@ -1292,6 +1536,7 @@ final class ThumbleCLIProfileBackend {
         var catalog: Catalog?
         var artifact: ProfileArtifactResponse?
         var generationPlan: GenerationPlan?
+        var controllerAssetAttachment: ControllerAssetAttachmentSummary?
         var orientation: OrientationSummary?
         var projection: BindingOutputProjection?
         var controlBar: ControlBarProjection?
@@ -1311,6 +1556,7 @@ final class ThumbleCLIProfileBackend {
         case requestTooLarge
         case generationSpecTooLarge
         case requestedGameNameTooLong
+        case invalidControllerAssetAttachment
         case launchFailed
         case timeout
         case inputWriteFailed
@@ -1333,6 +1579,8 @@ final class ThumbleCLIProfileBackend {
                 return "Generation spec JSON exceeds its 256 KiB UTF-8 size limit."
             case .requestedGameNameTooLong:
                 return "Requested game name exceeds its 256-character limit."
+            case .invalidControllerAssetAttachment:
+                return "Controller attachment exceeds its bounds or contains invalid inline image data."
             case .launchFailed:
                 return "Could not launch the validated CLI profile bridge."
             case .timeout:
@@ -1407,14 +1655,30 @@ final class ThumbleCLIProfileBackend {
     }
 
     private static func validateBeforeLaunch(_ command: Command) throws {
-        guard case .generationPlanSpec(let specJSON, let requestedGameName) = command else {
-            return
-        }
-        guard specJSON.utf8.count <= maximumGenerationSpecBytes else {
-            throw BackendError.generationSpecTooLarge
-        }
-        guard requestedGameName.map({ $0.unicodeScalars.count <= 256 }) ?? true else {
-            throw BackendError.requestedGameNameTooLong
+        switch command {
+        case .generationPlanSpec(let specJSON, let requestedGameName):
+            guard specJSON.utf8.count <= maximumGenerationSpecBytes else {
+                throw BackendError.generationSpecTooLarge
+            }
+            guard requestedGameName.map({ $0.unicodeScalars.count <= 256 }) ?? true else {
+                throw BackendError.requestedGameNameTooLong
+            }
+        case .controllerAssetsAttach(let attachment, _):
+            guard attachment.manifestJSON.utf8.count <= maximumControllerManifestBytes,
+                  attachment.images.count <= maximumControllerAssets,
+                  Set(attachment.images.map(\.assetID)).count == attachment.images.count
+            else { throw BackendError.invalidControllerAssetAttachment }
+            var totalBytes = 0
+            for image in attachment.images {
+                guard isControllerAssetID(image.assetID),
+                      image.pngBase64.utf8.count <= ((maximumControllerImageBytes + 2) / 3) * 4,
+                      let data = Data(base64Encoded: image.pngBase64),
+                      data.count <= maximumControllerImageBytes,
+                      data.count <= maximumControllerImageTotalBytes - totalBytes
+                else { throw BackendError.invalidControllerAssetAttachment }
+                totalBytes += data.count
+            }
+        default: break
         }
     }
 
@@ -1577,6 +1841,24 @@ final class ThumbleCLIProfileBackend {
         }
         if let generationPlan = response.generationPlan {
             guard boundedGenerationPlan(generationPlan) else { return false }
+        }
+        if let attachment = response.controllerAssetAttachment {
+            guard attachment.configurationRevision > 0,
+                  isControllerAssetID(attachment.manifestID),
+                  isLowercaseSHA256(attachment.descriptorDigest),
+                  attachment.assetMappings.count <= maximumControllerAssets,
+                  (0 ... 18).contains(attachment.attachedControlCount),
+                  (0 ... 3).contains(attachment.updatedVariantCount),
+                  Set(attachment.assetMappings.map(\.assetID)).count == attachment.assetMappings.count
+            else { return false }
+            var totalBytes = 0
+            for mapping in attachment.assetMappings {
+                guard isControllerAssetID(mapping.assetID), safeText(mapping.nativeAssetID, 128),
+                      isLowercaseSHA256(mapping.sha256), (1 ... maximumControllerImageBytes).contains(mapping.byteCount),
+                      mapping.byteCount <= maximumControllerImageTotalBytes - totalBytes
+                else { return false }
+                totalBytes += mapping.byteCount
+            }
         }
         if let catalog = response.catalog {
             guard catalog.profiles.count <= 256,
@@ -1775,7 +2057,7 @@ final class ThumbleCLIProfileBackend {
         }
         try requireOnly(root, [
             "schemaVersion", "ok", "invocationID", "authorityMode", "authorityPresent",
-            "catalog", "artifact", "generationPlan", "orientation", "projection", "controlBar",
+            "catalog", "artifact", "generationPlan", "controllerAssetAttachment", "orientation", "projection", "controlBar",
             "controlBarItem", "device", "styles", "layers", "groups", "outcome", "error"
         ])
         if let artifact = root["artifact"] as? [String: Any] {
@@ -1784,6 +2066,16 @@ final class ThumbleCLIProfileBackend {
                 throw BackendError.malformedResponse
             }
             try requireOnly(contentHash, ["algorithm", "canonicalization", "value"])
+        }
+        if let attachment = root["controllerAssetAttachment"] as? [String: Any] {
+            try requireOnly(attachment, [
+                "configurationRevision", "dryRun", "changed", "profileID", "manifestID", "descriptorDigest",
+                "assetMappings", "attachedControlCount", "updatedVariantCount"
+            ])
+            guard let mappings = attachment["assetMappings"] as? [[String: Any]], mappings.count <= maximumControllerAssets else {
+                throw BackendError.malformedResponse
+            }
+            for mapping in mappings { try requireOnly(mapping, ["assetID", "nativeAssetID", "sha256", "byteCount"]) }
         }
         if let plan = root["generationPlan"] as? [String: Any] {
             try requireOnly(plan, [

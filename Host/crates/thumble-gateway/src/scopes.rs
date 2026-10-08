@@ -15,7 +15,17 @@ pub const SCOPE_OFFLINE_ACCESS: &str = "offline_access";
 /// Tools that are never reachable through the remote relay regardless of
 /// granted scope: `pairing_code` and `release_all` belong to the local
 /// phone/lifecycle flow, and input injection is not grantable in v1.
-const REMOTE_BLOCKED: &[&str] = &["pairing_code", "press_control", "release_all"];
+const REMOTE_BLOCKED: &[&str] = &[
+    "pairing_code",
+    "press_control",
+    "release_all",
+    // Artifact-producing planning ships locally first; remote artifact transport
+    // and acceptance remain a separate capability from sanitized host reads.
+    "plan_game_controller",
+    // Local image uploads have their own byte validation and authority command.
+    // Remote asset delivery is a separate capability.
+    "attach_game_controller_assets",
+];
 
 fn tool_scope(tool: &str) -> Option<&'static str> {
     Some(match tool {
@@ -171,7 +181,13 @@ mod tests {
 
     #[test]
     fn local_only_tools_are_blocked_at_any_scope() {
-        for tool in ["pairing_code", "press_control", "release_all"] {
+        for tool in [
+            "pairing_code",
+            "press_control",
+            "release_all",
+            "plan_game_controller",
+            "attach_game_controller_assets",
+        ] {
             assert!(tool_allowed(tool, SCOPE_CONFIG).is_err());
             assert!(tool_allowed(tool, SCOPE_INPUT).is_err());
         }

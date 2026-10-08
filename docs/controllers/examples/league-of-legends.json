@@ -1,0 +1,321 @@
+{
+  "schemaVersion": 1,
+  "id": "league-of-legends-starter",
+  "name": "League of Legends Starter",
+  "game": {
+    "id": "league-of-legends",
+    "name": "League of Legends"
+  },
+  "outputMode": "keyboard",
+  "actions": [
+    {
+      "id": "cast-q",
+      "label": "Q",
+      "output": {
+        "key": "Q"
+      }
+    },
+    {
+      "id": "cast-w",
+      "label": "W",
+      "output": {
+        "key": "W"
+      }
+    },
+    {
+      "id": "cast-e",
+      "label": "E",
+      "output": {
+        "key": "E"
+      }
+    },
+    {
+      "id": "cast-r",
+      "label": "R",
+      "output": {
+        "key": "R"
+      }
+    },
+    {
+      "id": "summoner-d",
+      "label": "Summoner D",
+      "output": {
+        "key": "D"
+      }
+    },
+    {
+      "id": "summoner-f",
+      "label": "Summoner F",
+      "output": {
+        "key": "F"
+      }
+    },
+    {
+      "id": "recall",
+      "label": "Recall",
+      "output": {
+        "key": "B"
+      }
+    },
+    {
+      "id": "center-camera",
+      "label": "Camera",
+      "output": {
+        "key": "Space"
+      }
+    },
+    {
+      "id": "stop",
+      "label": "Stop",
+      "output": {
+        "key": "S"
+      }
+    },
+    {
+      "id": "attack-move",
+      "label": "Attack move",
+      "output": {
+        "key": "A"
+      }
+    },
+    {
+      "id": "scoreboard",
+      "label": "Scoreboard",
+      "output": {
+        "key": "Tab"
+      }
+    },
+    {
+      "id": "trinket",
+      "label": "Trinket",
+      "output": {
+        "key": "4"
+      }
+    },
+    {
+      "id": "item-one",
+      "label": "Item 1",
+      "output": {
+        "key": "1"
+      }
+    },
+    {
+      "id": "pointer",
+      "label": "Pointer"
+    }
+  ],
+  "controls": [
+    {
+      "id": "pointer-pad",
+      "actionID": "pointer",
+      "kind": "trackpad",
+      "role": "movement",
+      "x": 0.25,
+      "y": 0.35,
+      "visual": {
+        "backgroundAssetID": "pointer-surface"
+      },
+      "widthScale": 1.25,
+      "heightScale": 1
+    },
+    {
+      "id": "cast-q-button",
+      "actionID": "cast-q",
+      "kind": "button",
+      "role": "primary",
+      "x": 0.58,
+      "y": 0.3,
+      "visual": {
+        "iconAssetID": "cast-q-icon",
+        "stateAssetIDs": {
+          "pressed": "cast-q-pressed"
+        }
+      },
+      "widthScale": 1,
+      "heightScale": 1
+    },
+    {
+      "id": "cast-w-button",
+      "actionID": "cast-w",
+      "kind": "button",
+      "role": "primary",
+      "x": 0.74,
+      "y": 0.3,
+      "visual": {
+        "iconAssetID": "cast-w-icon"
+      },
+      "widthScale": 1,
+      "heightScale": 1
+    },
+    {
+      "id": "cast-e-button",
+      "actionID": "cast-e",
+      "kind": "button",
+      "role": "primary",
+      "x": 0.58,
+      "y": 0.49,
+      "visual": {
+        "iconAssetID": "cast-e-icon"
+      },
+      "widthScale": 1,
+      "heightScale": 1
+    },
+    {
+      "id": "cast-r-button",
+      "actionID": "cast-r",
+      "kind": "button",
+      "role": "primary",
+      "x": 0.74,
+      "y": 0.49,
+      "visual": {
+        "iconAssetID": "cast-r-icon"
+      },
+      "widthScale": 1,
+      "heightScale": 1
+    },
+    {
+      "id": "summoner-d-button",
+      "actionID": "summoner-d",
+      "kind": "button",
+      "role": "secondary",
+      "x": 0.58,
+      "y": 0.69,
+      "visual": {
+        "iconAssetID": "summoner-d-icon"
+      },
+      "widthScale": 1,
+      "heightScale": 1
+    },
+    {
+      "id": "summoner-f-button",
+      "actionID": "summoner-f",
+      "kind": "button",
+      "role": "secondary",
+      "x": 0.74,
+      "y": 0.69,
+      "visual": {
+        "iconAssetID": "summoner-f-icon"
+      },
+      "widthScale": 1,
+      "heightScale": 1
+    },
+    {
+      "id": "recall-button",
+      "actionID": "recall",
+      "kind": "button",
+      "role": "utility",
+      "x": 0.09,
+      "y": 0.9,
+      "widthScale": 1,
+      "heightScale": 1
+    },
+    {
+      "id": "center-camera-button",
+      "actionID": "center-camera",
+      "kind": "button",
+      "role": "utility",
+      "x": 0.215,
+      "y": 0.9,
+      "widthScale": 1,
+      "heightScale": 1
+    },
+    {
+      "id": "stop-button",
+      "actionID": "stop",
+      "kind": "button",
+      "role": "utility",
+      "x": 0.33999999999999997,
+      "y": 0.9,
+      "widthScale": 1,
+      "heightScale": 1
+    },
+    {
+      "id": "attack-move-button",
+      "actionID": "attack-move",
+      "kind": "button",
+      "role": "utility",
+      "x": 0.46499999999999997,
+      "y": 0.9,
+      "widthScale": 1,
+      "heightScale": 1
+    },
+    {
+      "id": "scoreboard-button",
+      "actionID": "scoreboard",
+      "kind": "button",
+      "role": "system",
+      "x": 0.59,
+      "y": 0.9,
+      "widthScale": 1,
+      "heightScale": 1
+    },
+    {
+      "id": "trinket-button",
+      "actionID": "trinket",
+      "kind": "button",
+      "role": "utility",
+      "x": 0.715,
+      "y": 0.9,
+      "visual": {
+        "iconAssetID": "trinket-icon"
+      },
+      "widthScale": 1,
+      "heightScale": 1
+    },
+    {
+      "id": "item-one-button",
+      "actionID": "item-one",
+      "kind": "button",
+      "role": "utility",
+      "x": 0.84,
+      "y": 0.9,
+      "visual": {
+        "iconAssetID": "item-one-icon"
+      },
+      "widthScale": 1,
+      "heightScale": 1
+    }
+  ],
+  "assets": [
+    {
+      "id": "pointer-surface",
+      "alt": "Placeholder for the pointer surface background"
+    },
+    {
+      "id": "cast-q-icon",
+      "alt": "Placeholder for cast q artwork"
+    },
+    {
+      "id": "cast-w-icon",
+      "alt": "Placeholder for cast w artwork"
+    },
+    {
+      "id": "cast-e-icon",
+      "alt": "Placeholder for cast e artwork"
+    },
+    {
+      "id": "cast-r-icon",
+      "alt": "Placeholder for cast r artwork"
+    },
+    {
+      "id": "summoner-d-icon",
+      "alt": "Placeholder for summoner d artwork"
+    },
+    {
+      "id": "summoner-f-icon",
+      "alt": "Placeholder for summoner f artwork"
+    },
+    {
+      "id": "trinket-icon",
+      "alt": "Placeholder for trinket artwork"
+    },
+    {
+      "id": "item-one-icon",
+      "alt": "Placeholder for item one artwork"
+    },
+    {
+      "id": "cast-q-pressed",
+      "alt": "Placeholder for the pressed Q ability artwork"
+    }
+  ]
+}

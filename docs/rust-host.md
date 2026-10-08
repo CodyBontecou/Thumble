@@ -97,9 +97,9 @@ Use `run --port 0 --no-bonjour --no-input` for an isolated development receiver.
 
 ## MCP adapter
 
-`thumble-mcp` is a stateless adapter between a local MCP client and the running host's user-only control socket. It never reads `state.json`, owns the receiver lifecycle, accepts shell commands, or exposes authentication tokens and raw key codes. The single deliberate exception is `preview_skin_workspace`: it validates every parameter, then runs the locally installed `thumble` CLI (found via `THUMBLE_MCP_SKIN_CLI` or `PATH`) with a fixed argument vector to render one native controller-view frame of an arbitrary review package into a private temp directory, because the Swift skin engine is the single source of truth for native appearance. It accepts no caller-supplied command text, touches no host state, and is bounded by render size, output size, and a deadline. It uses the official Rust SDK and supports both the legacy MCP `2025-11-25` initialization lifecycle and modern MCP `2026-07-28` per-request discovery metadata; local stdio remains newline-framed.
+`thumble-mcp` is a stateless adapter between a local MCP client and the running host's user-only control socket. It never reads `state.json`, owns the receiver lifecycle, accepts shell commands, or exposes authentication tokens and raw key codes. The native-render exception is `preview_skin_workspace`: it validates every parameter, then runs the locally installed `thumble` CLI (found via `THUMBLE_MCP_SKIN_CLI` or `PATH`) with a fixed argument vector to render one native controller-view frame of an arbitrary review package into a private temp directory, because the Swift skin engine is the single source of truth for native appearance. It accepts no caller-supplied command text, touches no host state, and is bounded by render size, output size, and a deadline. It uses the official Rust SDK and supports both the legacy MCP `2025-11-25` initialization lifecycle and modern MCP `2026-07-28` per-request discovery metadata; local stdio remains newline-framed.
 
-Start `thumble-host` before the MCP client launches the adapter. The server currently exposes twenty-one tools:
+Start `thumble-host` for installed-controller operations. The local-only `plan_game_controller` works without a host and returns a deterministic portable profile artifact plus passive asset attachment metadata; it uses the same pure Rust planner as the offline example binary. It accepts bounded `manifestJSON` text and semantic keys/buttons, with no numeric key-code input, file paths, image payloads, installation, or input injection. Read its schema at `thumble://schemas/game-controller-manifest-v1` and see the [custom controller interface](controllers/README.md). After import, `attach_game_controller_assets` accepts the manifest, installed profile UUID, bounded still PNG Base64 images, exact configuration revision, and invocation UUID. It validates a dry run or commits through the existing local authority with both write opt-ins. Images are bounded to 2,500,000 bytes each, 4 MiB combined, and 2048 pixels per dimension; binding checks and whole-document validation precede saving. Ordinary local MCP requests retain the 256 KiB limit; only this tool may use an 8 MiB request frame. Read its schema at `thumble://schemas/game-controller-asset-attachment-v1` and the [attachment guide](controllers/asset-attachment-v1.md). The server currently exposes twenty-three tools:
 
 | Tool | Behavior |
 |---|---|
@@ -117,6 +117,8 @@ Start `thumble-host` before the MCP client launches the adapter. The server curr
 | `save_configuration_draft` | Atomically compare-and-swap a draft into authoritative state |
 | `discard_configuration_draft` | Delete unsaved work using its exact draft revision |
 | `query_catalog` | Bounded built-in controller-template metadata or exact supported device-frame IDs and display geometry |
+| `plan_game_controller` | Local read-only game-action/control planner; returns validated `artifactJSON` for explicit import and a visual attachment sidecar |
+| `attach_game_controller_assets` | Local validated PNG attachment to an installed controller; dry run or one revision-safe authority commit, preserving bindings and geometry |
 | `list_profiles` | Curated installed profile IDs and names plus configuration revision |
 | `list_controls` | Active-profile opaque control IDs; no key codes |
 | `render_controller` | Read-only active-controller geometry plus an interactive SVG MCP App |
@@ -191,10 +193,10 @@ ChatGPT ─HTTPS (Streamable HTTP, OAuth 2.1)→ thumble-gateway (cloud)
   forwards already-sanitized MCP JSON and enforces per-tool scopes before
   forwarding. It holds no profiles, bindings, pairing data, or credentials,
   and never becomes a configuration authority.
-- The Mac keeps serving the ordinary twenty-one-tool `ThumbleMcp` handler over
+- The Mac keeps serving the ordinary twenty-three-tool `ThumbleMcp` handler over
   per-session tunnels; drafts, revisions, commits, the Swift bridge, and
   phone delivery remain entirely local.
-- `pairing_code`, `press_control`, and `release_all` are never reachable
+- `pairing_code`, `press_control`, `release_all`, the artifact-producing `plan_game_controller`, and `attach_game_controller_assets` are never reachable
   remotely. Input injection is not grantable in v1 at any scope.
 - Scopes: `thumble.read`, `thumble.draft`, `thumble.config`, plus OAuth's
   `offline_access` for refresh tokens. The RFC 9728 challenge requests all

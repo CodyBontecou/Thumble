@@ -20,6 +20,8 @@ silently synchronized in both directions with host state.
 
 ## Files
 
+The additive [game-controller manifest v1](../controllers/README.md) separates stable game actions, native touch controls, output bindings, and passive asset placeholders. Its pure Rust compiler and local `plan_game_controller` MCP tool emit an existing portable profile artifact and a visual attachment sidecar; imports continue through the existing authority transaction. [Controller asset attachment v1](../controllers/asset-attachment-v1.md) supplies validated still PNGs to the installed profile through `thumble asset attach-controller` or local `attach_game_controller_assets`. Dry runs validate without drafts or saves. Writes require the exact configuration revision, a retry-stable invocation UUID, and both existing configuration-write opt-ins. The attachment schema is available at `thumble://schemas/game-controller-asset-attachment-v1`. Planning and image attachment remain outside hosted-builder capabilities and remote relay access.
+
 - `cli-capabilities-v1.json` maps every current canonical CLI operation to its
   executor, permission gate, phone effect, intended MCP tool, and implementation
   status. `planned`, `foundation`, and `partial` entries are not claims that the

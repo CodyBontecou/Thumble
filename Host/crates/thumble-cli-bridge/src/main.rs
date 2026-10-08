@@ -4,9 +4,9 @@ use std::fs;
 use std::io::{self, Read, Write};
 use std::os::unix::fs::{FileTypeExt, MetadataExt, PermissionsExt};
 use thumble_host::cli_profile::{
-    execute_offline_authority, execute_offline_generation_plan, CliProfileCommand,
-    CliProfileRequest, CliProfileResponse, CLI_PROFILE_SCHEMA_VERSION,
-    MAXIMUM_CLI_PROFILE_FRAME_BYTES,
+    execute_offline_authority, execute_offline_controller_assets_plan,
+    execute_offline_generation_plan, CliProfileCommand, CliProfileRequest, CliProfileResponse,
+    CLI_PROFILE_SCHEMA_VERSION, MAXIMUM_CLI_PROFILE_FRAME_BYTES,
 };
 use thumble_host::control::{send_request, ControlRequest};
 use thumble_host::paths::HostPaths;
@@ -140,6 +140,12 @@ fn execute_after_online_failure(
     paths: &HostPaths,
     request: &CliProfileRequest,
 ) -> CliProfileResponse {
+    if matches!(
+        &request.command,
+        CliProfileCommand::ControllerAssetsAttach { dry_run: true, .. }
+    ) {
+        return execute_offline_controller_assets_plan(paths, request);
+    }
     if matches!(
         &request.command,
         CliProfileCommand::GenerationPlanSpec { .. }
@@ -291,6 +297,28 @@ fn encode_fallback_response(original: &CliProfileResponse, code: &str, message: 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn attachment_dry_run_offline_fallback_never_creates_authority_state_or_locks() {
+        let directory = tempfile::tempdir().unwrap();
+        let paths = HostPaths::new(
+            directory.path().join("missing-state"),
+            directory.path().join("missing-state/control.sock"),
+        );
+        let request: CliProfileRequest = serde_json::from_value(serde_json::json!({
+            "schemaVersion": CLI_PROFILE_SCHEMA_VERSION,
+            "expectedConfigurationRevision": 1,
+            "command": {"type": "controller.assets.attach", "dryRun": true,
+                "attachment": {"manifestJSON": "{}", "profileID": Uuid::nil().to_string(), "images": []}},
+        }))
+        .unwrap();
+        let response = execute_after_online_failure(&paths, &request);
+        assert!(!response.ok);
+        assert_eq!(response.error.unwrap().code, "state_load_failed");
+        assert!(!paths.state_dir.exists());
+        assert!(!paths.lock_file.exists());
+        assert!(!paths.drafts_dir.exists());
+    }
 
     #[test]
     fn request_frame_accepts_exact_newline_inclusive_bound_and_rejects_invalid_frames() {

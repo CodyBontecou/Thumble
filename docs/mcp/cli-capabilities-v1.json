@@ -1172,6 +1172,18 @@
       "phoneEffect": "saved bounded assets synchronize only with supported transfer",
       "operations": [
         {
+          "id": "controller.assets.attach",
+          "cli": [
+            "asset attach-controller"
+          ],
+          "status": "current",
+          "mcpTool": "attach_game_controller_assets",
+          "executor": "rust-host-core",
+          "gate": "configuration-write",
+          "phoneEffect": "complete authoritative state including native asset libraries synchronizes from host",
+          "notes": "Local-only bounded PNG attachment to an installed manifest-generated profile. Exact revision and retry UUID use the existing atomic authority transaction; dry-run validates without writes or input. Generic asset import remains planned."
+        },
+        {
           "id": "asset.list",
           "cli": [
             "asset list",

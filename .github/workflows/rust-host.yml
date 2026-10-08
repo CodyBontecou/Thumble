@@ -263,7 +263,7 @@ jobs:
           process.stdin.write('{"jsonrpc":"2.0","method":"notifications/initialized"}\n')
           process.stdin.flush()
           tools = request(2, "tools/list", {})["tools"]
-          assert len(tools) == 21
+          assert len(tools) == 23
           render = next(tool for tool in tools if tool["name"] == "render_controller")
           uri = render["_meta"]["ui"]["resourceUri"]
           assert uri == "ui://thumble/controller-builder-v1.html"
