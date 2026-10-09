@@ -6,8 +6,9 @@ implementation is `Host/crates/thumble-core/src/profile_artifact.rs`.
 
 ## Envelope
 
-The artifact is an additive extension of the existing keypad export envelope,
-so legacy Swift readers still recognize its profile fields:
+The artifact extends the current version-4 keypad export envelope. Controls
+must declare independent element UUIDs and explicit owned outputs; named-slot
+readers and obsolete configuration schemas are not compatible:
 
 ```json
 {
@@ -85,18 +86,24 @@ and imports through one deterministic draft/CAS/atomic-save transaction:
   case-insensitive name;
 - `--append` creates deterministic UUIDv5 copies and unique names;
 - replacement keeps the destination UUID;
-- supplied binding maps replace destination maps; absent maps preserve an
-  existing destination or use canonical defaults for a new profile;
+- validate every supplied profile/map reference before filtering or mutation;
+- supplied binding maps replace destination maps; absent maps derive only from
+  the incoming profile's declared controls and owned outputs, never destination
+  maps or starter defaults; explicit empty outputs remain clears;
 - `--no-select` preserves the active profile;
 - `--default` maps the imported default, otherwise imported active/first;
 - identical invocation ID + semantic artifact/options replays; changed content
   or options with the same invocation ID fails with `commit_id_conflict`.
 
-Legacy keypad envelopes with schema versions 1–4 are upgraded to hashed artifact
-v1 in Rust. Schema-less generated-profile, raw-profile, profile-array, and
-customization JSON are adapted by Swift into a legacy envelope, then enter the
-same Rust authority path. A current artifact carrying `artifactVersion` never
-falls back after hash/version failure.
+Only current version-4 keypad envelopes and artifact v1 are accepted. Versions
+1–3, schema-less envelopes, named input slots and obsolete routing fields reject
+without migration, aliases, recovery or replacement writes. Current raw UUID
+profiles, profile arrays, generated profiles and customizations may be wrapped
+by Swift in a current envelope after strict declaration/reference validation;
+this does not translate obsolete identities. A hashed artifact never falls back
+after hash/version failure. Literal, escaped and Unicode-equivalent duplicate
+object keys, duplicate UUID entries, undeclared mirror/map owners and repeated
+part-output entries reject before decoding can collapse them.
 
 ## Bounds and verification
 

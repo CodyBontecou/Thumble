@@ -4,9 +4,9 @@ use std::error::Error;
 use std::fmt;
 pub(crate) use thumble_core::{semantic_key_code, semantic_key_name};
 use thumble_core::{
-    ConfigurationDocument, KeyBinding, KeyStroke, MAXIMUM_CONFIGURATION_BINDING_STROKES,
+    ConfigurationDocument, KeyBinding, KeyStroke, OutputBinding, MAXIMUM_CONFIGURATION_BINDING_STROKES,
 };
-use thumble_protocol::GameButton;
+use thumble_protocol::KeypadElementID;
 use uuid::Uuid;
 
 const MAXIMUM_OPERATION_ID_BYTES: usize = 128;
@@ -32,12 +32,6 @@ pub enum ConfigurationOperation {
         #[serde(rename = "elementID")]
         element_id: String,
         kind: ElementKind,
-        #[serde(
-            rename = "mappedButton",
-            default,
-            skip_serializing_if = "Option::is_none"
-        )]
-        mapped_button: Option<GameButton>,
         changes: Box<ElementChanges>,
     },
     #[serde(rename = "element.set")]
@@ -53,20 +47,20 @@ pub enum ConfigurationOperation {
     BindingSet {
         #[serde(rename = "profileID")]
         profile_id: String,
-        button: GameButton,
+        button: KeypadElementID,
         sequence: Vec<SemanticKeyStroke>,
     },
     #[serde(rename = "binding.clear")]
     BindingClear {
         #[serde(rename = "profileID")]
         profile_id: String,
-        button: GameButton,
+        button: KeypadElementID,
     },
     #[serde(rename = "binding.reset")]
     BindingReset {
         #[serde(rename = "profileID")]
         profile_id: String,
-        button: GameButton,
+        button: KeypadElementID,
     },
     #[serde(rename = "binding.reset-all")]
     BindingResetAll {
@@ -83,7 +77,7 @@ pub enum ConfigurationOperation {
     OutputSet {
         #[serde(rename = "profileID")]
         profile_id: String,
-        button: GameButton,
+        button: KeypadElementID,
         #[serde(rename = "keyboardEdit")]
         keyboard_edit: KeyboardOutputEdit,
         #[serde(rename = "gamepadEdit")]
@@ -93,7 +87,7 @@ pub enum ConfigurationOperation {
     OutputReset {
         #[serde(rename = "profileID")]
         profile_id: String,
-        button: GameButton,
+        button: KeypadElementID,
     },
     #[serde(rename = "output.reset-all")]
     OutputResetAll {
@@ -466,6 +460,23 @@ pub enum ConfigurationOperation {
         select: bool,
         #[serde(rename = "makeDefault")]
         make_default: bool,
+    },
+    #[serde(rename = "design.apply")]
+    DesignApply {
+        #[serde(rename = "profileID")]
+        profile_id: String,
+        #[serde(rename = "packageBase64")]
+        package_base64: String,
+        #[serde(rename = "packageSHA256")]
+        package_sha256: String,
+        #[serde(rename = "profileSHA256")]
+        profile_sha256: String,
+        #[serde(rename = "evidenceSHA256")]
+        evidence_sha256: String,
+        #[serde(rename = "baseProfileSHA256", default, skip_serializing_if = "Option::is_none")]
+        base_profile_sha256: Option<String>,
+        #[serde(rename = "layoutEditsJSON", default, skip_serializing_if = "Option::is_none")]
+        layout_edits_json: Option<String>,
     },
     #[serde(rename = "theme.apply")]
     ThemeApply {
@@ -1329,10 +1340,18 @@ pub enum ElementJoystickVisualStyle {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ElementJoystickMapping {
-    pub up: GameButton,
-    pub down: GameButton,
-    pub left: GameButton,
-    pub right: GameButton,
+    #[serde(serialize_with = "serialize_shared_element_output")]
+    pub up: OutputBinding,
+    #[serde(serialize_with = "serialize_shared_element_output")]
+    pub down: OutputBinding,
+    #[serde(serialize_with = "serialize_shared_element_output")]
+    pub left: OutputBinding,
+    #[serde(serialize_with = "serialize_shared_element_output")]
+    pub right: OutputBinding,
+}
+
+fn serialize_shared_element_output<S: serde::Serializer>(binding: &OutputBinding, serializer: S) -> Result<S::Ok, S::Error> {
+    binding.element_value().serialize(serializer)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -1427,17 +1446,21 @@ pub struct ElementOutputChanges {
     pub gamepad_edit: GamepadOutputEdit,
 }
 
+pub use thumble_core::ElementPresentation;
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ElementChanges {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub presentation: Option<ElementPresentation>,
+    #[serde(default)]
+    pub clear_presentation: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub label: Option<String>,
     #[serde(default)]
     pub clear_label: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub kind: Option<ElementKind>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub mapped_button: Option<GameButton>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub visual_role: Option<ElementVisualRole>,
     #[serde(default)]
@@ -1537,6 +1560,16 @@ pub struct ElementChanges {
 }
 
 impl ElementChanges {
+    pub fn is_presentation_only(&self) -> bool {
+        let mut remainder = self.clone();
+        remainder.presentation = None; remainder.clear_presentation = false;
+        (self.presentation.is_some() || self.clear_presentation) && remainder == Self::default()
+    }
+    pub fn is_output_only(&self) -> bool {
+        let mut remainder = self.clone();
+        remainder.output = None;
+        self.output.is_some() && remainder == Self::default()
+    }
     fn is_empty(&self) -> bool {
         self == &Self::default()
     }
@@ -1651,9 +1684,61 @@ pub struct ConfigurationOperationOutcome {
     pub changed_paths: Vec<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DesignLayoutEdit {
+    pub variant: ConfigurationVariant,
+    #[serde(rename = "controlID")] pub control_id: String,
+    pub center_x: Option<f64>, pub center_y: Option<f64>,
+    pub width_scale: Option<f64>, pub height_scale: Option<f64>,
+    pub rotation_degrees: Option<f64>,
+    pub presentation: Option<ElementPresentation>,
+    #[serde(default)] pub clear_presentation: bool,
+    pub visual_role: Option<ElementVisualRole>,
+    #[serde(default)] pub clear_visual_role: bool,
+}
+
+pub(crate) const DESIGN_REVEAL_CONTROL_ID: &str = "system.top_bar_activation";
+
+pub(crate) fn decode_design_layout_plan(raw: &str) -> Result<Vec<DesignLayoutEdit>, ConfigurationOperationError> {
+    if raw.len() > 64 * 1024 { return Err(ConfigurationOperationError::InvalidOutput); }
+    let edits: Vec<DesignLayoutEdit> = thumble_protocol::decode_unique_json(raw.as_bytes())
+        .map_err(|_| ConfigurationOperationError::InvalidOutput)?;
+    if edits.is_empty() || edits.len() > 256 { return Err(ConfigurationOperationError::InvalidOutput); }
+    let mut identities = std::collections::BTreeSet::new();
+    for edit in &edits {
+        let identity = edit.control_id == DESIGN_REVEAL_CONTROL_ID || edit.control_id.split_once('.')
+            .is_some_and(|(prefix, id)| ["builtin", "custom"].contains(&prefix) && Uuid::parse_str(id).is_ok());
+        if !identity || !identities.insert(format!("{:?}:{}", edit.variant, edit.control_id))
+            || ([edit.center_x, edit.center_y, edit.width_scale, edit.height_scale, edit.rotation_degrees].iter().all(Option::is_none) && edit.presentation.is_none() && !edit.clear_presentation && edit.visual_role.is_none() && !edit.clear_visual_role)
+            || edit.presentation.as_ref().is_some_and(|p| !p.is_valid())
+            || (edit.presentation.is_some() && edit.clear_presentation)
+            || (edit.visual_role.is_some() && edit.clear_visual_role)
+            || (edit.control_id == DESIGN_REVEAL_CONTROL_ID && (edit.presentation.is_some() || edit.clear_presentation || edit.visual_role.is_some() || edit.clear_visual_role))
+            || [edit.center_x, edit.center_y].into_iter().flatten().any(|n| !n.is_finite() || !(0.0..=1.0).contains(&n))
+            || [edit.width_scale, edit.height_scale].into_iter().flatten().any(|n| !n.is_finite() || !(0.1..=8.0).contains(&n))
+            || edit.rotation_degrees.is_some_and(|n| !n.is_finite() || !(-180.0..=180.0).contains(&n)) {
+            return Err(ConfigurationOperationError::InvalidOutput);
+        }
+    }
+    Ok(edits)
+}
+
 impl ConfigurationOperation {
     pub fn validate_bridge_input(&self) -> Result<(), ConfigurationOperationError> {
         match self {
+            Self::DesignApply { profile_id, package_base64, package_sha256, profile_sha256, evidence_sha256, base_profile_sha256, layout_edits_json } => {
+                validate_profile_id(profile_id)?;
+                match (base_profile_sha256, layout_edits_json) {
+                    (Some(hash), Some(plan)) if hash.len() == 64 && hash.bytes().all(|b| b.is_ascii_hexdigit()) => { decode_design_layout_plan(plan)?; }
+                    (None, None) => {},
+                    _ => return Err(ConfigurationOperationError::InvalidOutput),
+                }
+                if package_base64.is_empty() || package_base64.len() > 12 * 1024 * 1024
+                    || [package_sha256, profile_sha256, evidence_sha256].iter().any(|hash| hash.len() != 64 || !hash.bytes().all(|b| b.is_ascii_hexdigit())) {
+                    return Err(ConfigurationOperationError::InvalidOutput);
+                }
+            }
             Self::ElementAdd {
                 profile_id,
                 element_id,
@@ -2123,6 +2208,7 @@ impl ConfigurationOperation {
                 | Self::ProfileMove { .. }
                 | Self::ProfileCreate { .. }
                 | Self::ThemeApply { .. }
+                | Self::DesignApply { .. }
                 | Self::OrientationCopy { .. }
                 | Self::ElementDuplicate { .. }
                 | Self::ElementAlign { .. }
@@ -2222,6 +2308,7 @@ impl ConfigurationOperation {
             | Self::ProfileDelete { profile_id, .. }
             | Self::ProfileMove { profile_id, .. }
             | Self::ThemeApply { profile_id, .. }
+            | Self::DesignApply { profile_id, .. }
             | Self::OrientationCopy { profile_id, .. }
             | Self::ElementDuplicate { profile_id, .. }
             | Self::ElementAlign { profile_id, .. }
@@ -2257,7 +2344,7 @@ fn apply_profile_rename(
 fn apply_binding_set(
     document: &mut ConfigurationDocument,
     profile_id: &str,
-    button: GameButton,
+    button: KeypadElementID,
     sequence: &[SemanticKeyStroke],
     _now_millis: i64,
 ) -> Result<Vec<String>, ConfigurationOperationError> {
@@ -2305,8 +2392,7 @@ fn apply_binding_set(
         document.output_bindings.insert(button, active_output);
     }
 
-    let output_value =
-        serde_json::to_value(&output).map_err(|_| ConfigurationOperationError::EncodingFailed)?;
+    let output_value = output.element_value();
     let profile = profile_object_mut(document, &canonical_profile_id)?;
     for customization_key in [
         "customization",
@@ -2322,10 +2408,7 @@ fn apply_binding_set(
             continue;
         };
         for element in elements {
-            let mapped = element
-                .get("legacySlot")
-                .or_else(|| element.get("builtInButton"))
-                .and_then(|value| serde_json::from_value::<GameButton>(value.clone()).ok());
+            let mapped = element.get("id").and_then(Value::as_str).and_then(KeypadElementID::parse);
             if mapped == Some(button) {
                 if let Some(element) = element.as_object_mut() {
                     element.insert("output".to_owned(), output_value.clone());
@@ -2596,6 +2679,10 @@ fn validate_element_changes(
 ) -> Result<(), ConfigurationOperationError> {
     if !allow_empty && changes.is_empty() {
         return Err(ConfigurationOperationError::EmptyChanges);
+    }
+    if changes.presentation.as_ref().is_some_and(|p| !p.is_valid())
+        || changes.presentation.is_some() && changes.clear_presentation {
+        return Err(ConfigurationOperationError::InvalidElementLabel);
     }
     if changes.label.as_ref().is_some_and(|label| {
         label.chars().count() > MAXIMUM_ELEMENT_LABEL_CHARACTERS
@@ -2936,6 +3023,30 @@ impl Error for ConfigurationOperationError {}
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn design_layout_plan_uses_native_reveal_identity_and_rejects_system_semantics() {
+        let valid = serde_json::json!([{"variant":"portrait", "controlID":"system.top_bar_activation", "centerY":0.08924485125858124}]);
+        let decoded = decode_design_layout_plan(&valid.to_string()).unwrap();
+        assert_eq!(decoded[0].control_id, DESIGN_REVEAL_CONTROL_ID);
+        assert_eq!(decoded[0].center_y, Some(0.08924485125858124));
+        for forbidden in [
+            serde_json::json!({"visualRole":"utility"}),
+            serde_json::json!({"clearVisualRole":true}),
+            serde_json::json!({"presentation":{"schemaVersion":1,"legend":"Reveal"}}),
+            serde_json::json!({"clearPresentation":true}),
+        ] {
+            let mut invalid = valid.clone();
+            invalid[0].as_object_mut().unwrap().extend(forbidden.as_object().unwrap().clone());
+            assert!(decode_design_layout_plan(&invalid.to_string()).is_err());
+        }
+        for unknown in ["system.topBarActivation", "system.not_a_surface", "system.top_bar_activation.extra"] {
+            let mut invalid = valid.clone();
+            invalid[0]["controlID"] = serde_json::json!(unknown);
+            assert!(decode_design_layout_plan(&invalid.to_string()).is_err());
+        }
+    }
+
     use thumble_core::{ConfigurationDocument, PersistentState};
 
     fn document() -> ConfigurationDocument {
@@ -2990,7 +3101,7 @@ mod tests {
         let profile_id = document.active_profile_id.clone();
         let operation = ConfigurationOperation::BindingSet {
             profile_id: profile_id.clone(),
-            button: GameButton::Jump,
+            button: KeypadElementID::preset(5),
             sequence: vec![
                 SemanticKeyStroke {
                     key: "B".to_owned(),
@@ -3042,7 +3153,7 @@ mod tests {
         let profile_id = document().active_profile_id;
         let empty = ConfigurationOperation::OutputSet {
             profile_id: profile_id.clone(),
-            button: GameButton::Jump,
+            button: KeypadElementID::preset(5),
             keyboard_edit: KeyboardOutputEdit::Keep,
             gamepad_edit: GamepadOutputEdit::Keep,
         };
@@ -3053,7 +3164,7 @@ mod tests {
 
         let raw_key = ConfigurationOperation::OutputSet {
             profile_id,
-            button: GameButton::Jump,
+            button: KeypadElementID::preset(5),
             keyboard_edit: KeyboardOutputEdit::Set {
                 sequence: vec![SemanticKeyStroke {
                     key: "36".to_owned(),
@@ -3504,7 +3615,6 @@ mod tests {
                 variant: ConfigurationVariant::Primary,
                 element_id: format!("00000000-0000-0000-0000-0000000009{:02}", index + 1),
                 kind,
-                mapped_button: None,
                 changes: Box::new(ElementChanges::default()),
             };
             assert_eq!(operation.validate_bridge_input(), Ok(()));
@@ -3515,7 +3625,6 @@ mod tests {
             variant: ConfigurationVariant::Primary,
             element_id: "00000000-0000-0000-0000-0000000009F1".to_owned(),
             kind: ElementKind::Text,
-            mapped_button: None,
             changes: Box::new(ElementChanges {
                 output: Some(ElementOutputChanges {
                     part: ElementInputPart::Primary,
@@ -3658,7 +3767,7 @@ mod tests {
         );
         let raw_key = ConfigurationOperation::BindingSet {
             profile_id,
-            button: GameButton::Jump,
+            button: KeypadElementID::preset(5),
             sequence: vec![SemanticKeyStroke {
                 key: "36".to_owned(),
                 modifiers: vec![],

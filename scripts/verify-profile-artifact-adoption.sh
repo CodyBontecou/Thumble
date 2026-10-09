@@ -11,7 +11,16 @@ XCODEBUILD_ARGS=(
   -jobs 2
 )
 
-xcodegen generate
+# Opt in to the existing project when local project/scheme edits must be kept.
+case "${PROFILE_ARTIFACT_ADOPTION_SKIP_PROJECT_GENERATION:-0}" in
+  0) xcodegen generate ;;
+  1) echo "Using existing Thumble.xcodeproj; project generation explicitly skipped." ;;
+  *) echo "PROFILE_ARTIFACT_ADOPTION_SKIP_PROJECT_GENERATION must be 0 or 1" >&2; exit 2 ;;
+esac
+if [[ -n "${PROFILE_ARTIFACT_ADOPTION_DERIVED_DATA_PATH:-}" ]]; then
+  XCODEBUILD_ARGS+=(-derivedDataPath "$PROFILE_ARTIFACT_ADOPTION_DERIVED_DATA_PATH")
+  export STACK_SAFETY_DERIVED_DATA_PATH="${STACK_SAFETY_DERIVED_DATA_PATH:-$PROFILE_ARTIFACT_ADOPTION_DERIVED_DATA_PATH}"
+fi
 
 xcodebuild test \
   "${XCODEBUILD_ARGS[@]}" \

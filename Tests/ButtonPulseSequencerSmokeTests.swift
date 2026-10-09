@@ -76,18 +76,18 @@ struct ButtonPulseSequencerSmokeTests {
         var sequencer = makeSequencer()
 
         expect(
-            sequencer.setButton(.jump, pressed: true, now: 0),
-            [.send(.jump, .down)],
+            sequencer.setButton(.preset(5), pressed: true, now: 0),
+            [.send(.preset(5), .down)],
             "single fast tap down"
         )
         expect(
-            sequencer.setButton(.jump, pressed: false, now: 5_000_000),
-            [.scheduleRelease(.jump, delayNanoseconds: 30_000_000)],
+            sequencer.setButton(.preset(5), pressed: false, now: 5_000_000),
+            [.scheduleRelease(.preset(5), delayNanoseconds: 30_000_000)],
             "single fast tap schedules minimum hold"
         )
         expect(
-            sequencer.releaseTimerFired(for: .jump, now: minTap),
-            [.send(.jump, .up)],
+            sequencer.releaseTimerFired(for: .preset(5), now: minTap),
+            [.send(.preset(5), .up)],
             "single fast tap releases after minimum hold"
         )
     }
@@ -96,24 +96,24 @@ struct ButtonPulseSequencerSmokeTests {
         var sequencer = makeSequencer()
 
         expect(
-            sequencer.setButton(.attack, pressed: true, now: 0),
-            [.send(.attack, .down)],
+            sequencer.setButton(.preset(6), pressed: true, now: 0),
+            [.send(.preset(6), .down)],
             "direct action retap starts first press"
         )
         expect(
-            sequencer.setButton(.attack, pressed: false, now: 40_000_000),
-            [.send(.attack, .up)],
+            sequencer.setButton(.preset(6), pressed: false, now: 40_000_000),
+            [.send(.preset(6), .up)],
             "direct action retap releases first press"
         )
-        sequencer.recordOutputReleaseCompleted(for: .attack, now: 42_000_000)
+        sequencer.recordOutputReleaseCompleted(for: .preset(6), now: 42_000_000)
         expect(
-            sequencer.setButton(.attack, pressed: true, now: 45_000_000),
-            [.schedulePress(.attack, delayNanoseconds: 17_000_000)],
+            sequencer.setButton(.preset(6), pressed: true, now: 45_000_000),
+            [.schedulePress(.preset(6), delayNanoseconds: 17_000_000)],
             "direct action retap waits from actual output release completion"
         )
         expect(
-            sequencer.pressTimerFired(for: .attack, now: 62_000_000),
-            [.send(.attack, .down)],
+            sequencer.pressTimerFired(for: .preset(6), now: 62_000_000),
+            [.send(.preset(6), .down)],
             "direct action retap starts when the full output gap has elapsed"
         )
     }
@@ -121,23 +121,23 @@ struct ButtonPulseSequencerSmokeTests {
     private static func testDirectActionRetapReleasedBeforeScheduledPressStillEmits() {
         var sequencer = makeSequencer()
 
-        _ = sequencer.setButton(.jump, pressed: true, pressIdentifier: 101, now: 0)
-        _ = sequencer.setButton(.jump, pressed: false, pressIdentifier: 101, now: 40_000_000)
+        _ = sequencer.setButton(.preset(5), pressed: true, pressIdentifier: 101, now: 0)
+        _ = sequencer.setButton(.preset(5), pressed: false, pressIdentifier: 101, now: 40_000_000)
         expect(
-            sequencer.setButton(.jump, pressed: true, pressIdentifier: 202, now: 45_000_000),
-            [.schedulePress(.jump, delayNanoseconds: 15_000_000)],
+            sequencer.setButton(.preset(5), pressed: true, pressIdentifier: 202, now: 45_000_000),
+            [.schedulePress(.preset(5), delayNanoseconds: 15_000_000)],
             "released direct retap schedules its down after the action gap"
         )
         expect(
-            sequencer.setButton(.jump, pressed: false, pressIdentifier: 202, now: 50_000_000),
+            sequencer.setButton(.preset(5), pressed: false, pressIdentifier: 202, now: 50_000_000),
             [],
             "released direct retap remains pending"
         )
         expect(
-            sequencer.pressTimerFired(for: .jump, now: 60_000_000),
+            sequencer.pressTimerFired(for: .preset(5), now: 60_000_000),
             [
-                .send(.jump, .down),
-                .scheduleRelease(.jump, delayNanoseconds: minTap)
+                .send(.preset(5), .down),
+                .scheduleRelease(.preset(5), delayNanoseconds: minTap)
             ],
             "released direct retap still emits a complete synthetic pulse"
         )
@@ -148,19 +148,19 @@ struct ButtonPulseSequencerSmokeTests {
             minimumTapDurationNanoseconds: minTap,
             minimumInterTapGapNanoseconds: minGap,
             shouldEnforceMinimumInterTapGap: { button in
-                button != .left && button != .right && button != .up && button != .down
+                button != .preset(3) && button != .preset(4) && button != .preset(1) && button != .preset(2)
             }
         )
 
-        _ = sequencer.setButton(.left, pressed: true, now: 0)
+        _ = sequencer.setButton(.preset(3), pressed: true, now: 0)
         expect(
-            sequencer.setButton(.left, pressed: false, now: 40_000_000),
-            [.send(.left, .up)],
+            sequencer.setButton(.preset(3), pressed: false, now: 40_000_000),
+            [.send(.preset(3), .up)],
             "directional retap releases immediately"
         )
         expect(
-            sequencer.setButton(.left, pressed: true, now: 41_000_000),
-            [.send(.left, .down)],
+            sequencer.setButton(.preset(3), pressed: true, now: 41_000_000),
+            [.send(.preset(3), .down)],
             "directional retap does not wait for an action inter-tap gap"
         )
     }
@@ -170,26 +170,26 @@ struct ButtonPulseSequencerSmokeTests {
             minimumTapDurationNanoseconds: minTap,
             minimumInterTapGapNanoseconds: minGap,
             shouldEnforceMinimumInterTapGap: { button in
-                button != .left && button != .right && button != .up && button != .down
+                button != .preset(3) && button != .preset(4) && button != .preset(1) && button != .preset(2)
             }
         )
 
-        _ = sequencer.setButton(.right, pressed: true, now: 0)
-        _ = sequencer.setButton(.right, pressed: false, now: 5_000_000)
-        _ = sequencer.setButton(.right, pressed: true, now: 10_000_000)
-        _ = sequencer.setButton(.right, pressed: false, now: 15_000_000)
+        _ = sequencer.setButton(.preset(4), pressed: true, now: 0)
+        _ = sequencer.setButton(.preset(4), pressed: false, now: 5_000_000)
+        _ = sequencer.setButton(.preset(4), pressed: true, now: 10_000_000)
+        _ = sequencer.setButton(.preset(4), pressed: false, now: 15_000_000)
         expect(
-            sequencer.releaseTimerFired(for: .right, now: minTap),
+            sequencer.releaseTimerFired(for: .preset(4), now: minTap),
             [
-                .send(.right, .up),
-                .send(.right, .down),
-                .scheduleRelease(.right, delayNanoseconds: minTap)
+                .send(.preset(4), .up),
+                .send(.preset(4), .down),
+                .scheduleRelease(.preset(4), delayNanoseconds: minTap)
             ],
             "queued directional retap skips the action gap but preserves its release"
         )
         expect(
-            sequencer.releaseTimerFired(for: .right, now: minTap * 2),
-            [.send(.right, .up)],
+            sequencer.releaseTimerFired(for: .preset(4), now: minTap * 2),
+            [.send(.preset(4), .up)],
             "queued directional retap completes its synthetic pulse"
         )
     }
@@ -231,37 +231,37 @@ struct ButtonPulseSequencerSmokeTests {
     private static func testRepeatedFastTapsProduceTwoPulses() {
         var sequencer = makeSequencer()
 
-        _ = sequencer.setButton(.attack, pressed: true, now: 0)
-        _ = sequencer.setButton(.attack, pressed: false, now: 5_000_000)
+        _ = sequencer.setButton(.preset(6), pressed: true, now: 0)
+        _ = sequencer.setButton(.preset(6), pressed: false, now: 5_000_000)
         expect(
-            sequencer.setButton(.attack, pressed: true, now: 10_000_000),
+            sequencer.setButton(.preset(6), pressed: true, now: 10_000_000),
             [],
             "second fast tap queues while first release is pending"
         )
         expect(
-            sequencer.setButton(.attack, pressed: false, now: 15_000_000),
+            sequencer.setButton(.preset(6), pressed: false, now: 15_000_000),
             [],
             "second fast tap release waits for queued pulse"
         )
         expect(
-            sequencer.releaseTimerFired(for: .attack, now: minTap),
+            sequencer.releaseTimerFired(for: .preset(6), now: minTap),
             [
-                .send(.attack, .up),
-                .schedulePress(.attack, delayNanoseconds: minGap)
+                .send(.preset(6), .up),
+                .schedulePress(.preset(6), delayNanoseconds: minGap)
             ],
             "first fast tap releases and schedules second pulse"
         )
         expect(
-            sequencer.pressTimerFired(for: .attack, now: minTap + minGap),
+            sequencer.pressTimerFired(for: .preset(6), now: minTap + minGap),
             [
-                .send(.attack, .down),
-                .scheduleRelease(.attack, delayNanoseconds: minTap)
+                .send(.preset(6), .down),
+                .scheduleRelease(.preset(6), delayNanoseconds: minTap)
             ],
             "second fast tap emits a separate down pulse"
         )
         expect(
-            sequencer.releaseTimerFired(for: .attack, now: minTap + minGap + minTap),
-            [.send(.attack, .up)],
+            sequencer.releaseTimerFired(for: .preset(6), now: minTap + minGap + minTap),
+            [.send(.preset(6), .up)],
             "second fast tap releases after its own minimum hold"
         )
     }
@@ -270,44 +270,44 @@ struct ButtonPulseSequencerSmokeTests {
         var sequencer = makeSequencer()
 
         expect(
-            sequencer.setButton(.jump, pressed: true, now: 0),
-            [.send(.jump, .down)],
+            sequencer.setButton(.preset(5), pressed: true, now: 0),
+            [.send(.preset(5), .down)],
             "raw iOS first down reaches Mac immediately"
         )
         expect(
-            sequencer.setButton(.jump, pressed: false, now: 4_000_000),
-            [.scheduleRelease(.jump, delayNanoseconds: 31_000_000)],
+            sequencer.setButton(.preset(5), pressed: false, now: 4_000_000),
+            [.scheduleRelease(.preset(5), delayNanoseconds: 31_000_000)],
             "raw iOS first fast up is held long enough for the game"
         )
         expect(
-            sequencer.setButton(.jump, pressed: true, now: 8_000_000),
+            sequencer.setButton(.preset(5), pressed: true, now: 8_000_000),
             [],
             "raw iOS in-order second down queues while first pulse is still held"
         )
         expect(
-            sequencer.setButton(.jump, pressed: false, now: 12_000_000),
+            sequencer.setButton(.preset(5), pressed: false, now: 12_000_000),
             [],
             "raw iOS second fast up remains queued"
         )
         expect(
-            sequencer.releaseTimerFired(for: .jump, now: minTap),
+            sequencer.releaseTimerFired(for: .preset(5), now: minTap),
             [
-                .send(.jump, .up),
-                .schedulePress(.jump, delayNanoseconds: minGap)
+                .send(.preset(5), .up),
+                .schedulePress(.preset(5), delayNanoseconds: minGap)
             ],
             "Mac releases first raw iOS tap and schedules the second"
         )
         expect(
-            sequencer.pressTimerFired(for: .jump, now: minTap + minGap),
+            sequencer.pressTimerFired(for: .preset(5), now: minTap + minGap),
             [
-                .send(.jump, .down),
-                .scheduleRelease(.jump, delayNanoseconds: minTap)
+                .send(.preset(5), .down),
+                .scheduleRelease(.preset(5), delayNanoseconds: minTap)
             ],
             "Mac emits a separate down for the second raw iOS tap"
         )
         expect(
-            sequencer.releaseTimerFired(for: .jump, now: minTap + minGap + minTap),
-            [.send(.jump, .up)],
+            sequencer.releaseTimerFired(for: .preset(5), now: minTap + minGap + minTap),
+            [.send(.preset(5), .up)],
             "Mac releases the second raw iOS tap"
         )
     }
@@ -315,25 +315,25 @@ struct ButtonPulseSequencerSmokeTests {
     private static func testSecondFastTapCanBecomeHeldPress() {
         var sequencer = makeSequencer()
 
-        _ = sequencer.setButton(.dash, pressed: true, now: 0)
-        _ = sequencer.setButton(.dash, pressed: false, now: 5_000_000)
-        _ = sequencer.setButton(.dash, pressed: true, now: 10_000_000)
+        _ = sequencer.setButton(.preset(7), pressed: true, now: 0)
+        _ = sequencer.setButton(.preset(7), pressed: false, now: 5_000_000)
+        _ = sequencer.setButton(.preset(7), pressed: true, now: 10_000_000)
         expect(
-            sequencer.releaseTimerFired(for: .dash, now: minTap),
+            sequencer.releaseTimerFired(for: .preset(7), now: minTap),
             [
-                .send(.dash, .up),
-                .schedulePress(.dash, delayNanoseconds: minGap)
+                .send(.preset(7), .up),
+                .schedulePress(.preset(7), delayNanoseconds: minGap)
             ],
             "held second tap waits for first pulse to end"
         )
         expect(
-            sequencer.pressTimerFired(for: .dash, now: minTap + minGap),
-            [.send(.dash, .down)],
+            sequencer.pressTimerFired(for: .preset(7), now: minTap + minGap),
+            [.send(.preset(7), .down)],
             "held second tap starts without scheduling synthetic release"
         )
         expect(
-            sequencer.setButton(.dash, pressed: false, now: minTap + minGap + minTap),
-            [.send(.dash, .up)],
+            sequencer.setButton(.preset(7), pressed: false, now: minTap + minGap + minTap),
+            [.send(.preset(7), .up)],
             "held second tap releases on physical up"
         )
     }
@@ -342,41 +342,41 @@ struct ButtonPulseSequencerSmokeTests {
         var sequencer = makeSequencer()
 
         expect(
-            sequencer.setButton(.attack, pressed: true, now: 0),
-            [.send(.attack, .down)],
+            sequencer.setButton(.preset(6), pressed: true, now: 0),
+            [.send(.preset(6), .down)],
             "first overlapping touch starts the first pulse"
         )
         expect(
-            sequencer.setButton(.attack, pressed: true, now: 10_000_000),
-            [.scheduleRelease(.attack, delayNanoseconds: 25_000_000)],
+            sequencer.setButton(.preset(6), pressed: true, now: 10_000_000),
+            [.scheduleRelease(.preset(6), delayNanoseconds: 25_000_000)],
             "second overlapping touch queues another pulse and ends the first"
         )
         expect(
-            sequencer.setButton(.attack, pressed: false, now: 12_000_000),
+            sequencer.setButton(.preset(6), pressed: false, now: 12_000_000),
             [],
             "lifting the first overlapping touch keeps the second physically active"
         )
         expect(
-            sequencer.releaseTimerFired(for: .attack, now: minTap),
+            sequencer.releaseTimerFired(for: .preset(6), now: minTap),
             [
-                .send(.attack, .up),
-                .schedulePress(.attack, delayNanoseconds: minGap)
+                .send(.preset(6), .up),
+                .schedulePress(.preset(6), delayNanoseconds: minGap)
             ],
             "first overlapping pulse releases before the second starts"
         )
         expect(
-            sequencer.pressTimerFired(for: .attack, now: minTap + minGap),
-            [.send(.attack, .down)],
+            sequencer.pressTimerFired(for: .preset(6), now: minTap + minGap),
+            [.send(.preset(6), .down)],
             "second overlapping touch becomes the active held pulse"
         )
         expect(
-            sequencer.setButton(.attack, pressed: false, now: minTap + minGap + 15_000_000),
-            [.scheduleRelease(.attack, delayNanoseconds: 20_000_000)],
+            sequencer.setButton(.preset(6), pressed: false, now: minTap + minGap + 15_000_000),
+            [.scheduleRelease(.preset(6), delayNanoseconds: 20_000_000)],
             "second overlapping touch release still respects minimum tap time"
         )
         expect(
-            sequencer.releaseTimerFired(for: .attack, now: minTap + minGap + minTap),
-            [.send(.attack, .up)],
+            sequencer.releaseTimerFired(for: .preset(6), now: minTap + minGap + minTap),
+            [.send(.preset(6), .up)],
             "second overlapping pulse releases cleanly"
         )
     }
@@ -384,29 +384,29 @@ struct ButtonPulseSequencerSmokeTests {
     private static func testOverlappingTouchReleasedBeforeSyntheticPress() {
         var sequencer = makeSequencer()
 
-        _ = sequencer.setButton(.jump, pressed: true, now: 0)
-        _ = sequencer.setButton(.jump, pressed: true, now: 8_000_000)
-        _ = sequencer.setButton(.jump, pressed: false, now: 10_000_000)
-        _ = sequencer.setButton(.jump, pressed: false, now: 12_000_000)
+        _ = sequencer.setButton(.preset(5), pressed: true, now: 0)
+        _ = sequencer.setButton(.preset(5), pressed: true, now: 8_000_000)
+        _ = sequencer.setButton(.preset(5), pressed: false, now: 10_000_000)
+        _ = sequencer.setButton(.preset(5), pressed: false, now: 12_000_000)
         expect(
-            sequencer.releaseTimerFired(for: .jump, now: minTap),
+            sequencer.releaseTimerFired(for: .preset(5), now: minTap),
             [
-                .send(.jump, .up),
-                .schedulePress(.jump, delayNanoseconds: minGap)
+                .send(.preset(5), .up),
+                .schedulePress(.preset(5), delayNanoseconds: minGap)
             ],
             "overlapping quick tap schedules a synthetic second down"
         )
         expect(
-            sequencer.pressTimerFired(for: .jump, now: minTap + minGap),
+            sequencer.pressTimerFired(for: .preset(5), now: minTap + minGap),
             [
-                .send(.jump, .down),
-                .scheduleRelease(.jump, delayNanoseconds: minTap)
+                .send(.preset(5), .down),
+                .scheduleRelease(.preset(5), delayNanoseconds: minTap)
             ],
             "released overlapping touch still produces its own minimum pulse"
         )
         expect(
-            sequencer.releaseTimerFired(for: .jump, now: minTap + minGap + minTap),
-            [.send(.jump, .up)],
+            sequencer.releaseTimerFired(for: .preset(5), now: minTap + minGap + minTap),
+            [.send(.preset(5), .up)],
             "released overlapping synthetic pulse finishes"
         )
     }
@@ -415,57 +415,57 @@ struct ButtonPulseSequencerSmokeTests {
         var sequencer = makeSequencer()
 
         expect(
-            sequencer.setButton(.attack, pressed: true, pressIdentifier: 101, now: 0),
-            [.send(.attack, .down)],
+            sequencer.setButton(.preset(6), pressed: true, pressIdentifier: 101, now: 0),
+            [.send(.preset(6), .down)],
             "identified active touch starts first pulse"
         )
         expect(
-            sequencer.setButton(.attack, pressed: true, pressIdentifier: 202, now: 8_000_000),
-            [.scheduleRelease(.attack, delayNanoseconds: 27_000_000)],
+            sequencer.setButton(.preset(6), pressed: true, pressIdentifier: 202, now: 8_000_000),
+            [.scheduleRelease(.preset(6), delayNanoseconds: 27_000_000)],
             "identified second touch queues another same-button pulse"
         )
         expect(
-            sequencer.setButton(.attack, pressed: false, pressIdentifier: 202, now: 12_000_000),
+            sequencer.setButton(.preset(6), pressed: false, pressIdentifier: 202, now: 12_000_000),
             [],
             "identified second touch release clears the queued hold, not the active hold"
         )
         expectEqual(
-            sequencer.hasPhysicalPress(.attack),
+            sequencer.hasPhysicalPress(.preset(6)),
             true,
             "identified active touch remains physically held after queued touch releases"
         )
         expect(
-            sequencer.releaseTimerFired(for: .attack, now: minTap),
+            sequencer.releaseTimerFired(for: .preset(6), now: minTap),
             [
-                .send(.attack, .up),
-                .schedulePress(.attack, delayNanoseconds: minGap)
+                .send(.preset(6), .up),
+                .schedulePress(.preset(6), delayNanoseconds: minGap)
             ],
             "identified first pulse releases and schedules released queued tap"
         )
         expect(
-            sequencer.pressTimerFired(for: .attack, now: minTap + minGap),
+            sequencer.pressTimerFired(for: .preset(6), now: minTap + minGap),
             [
-                .send(.attack, .down),
-                .scheduleRelease(.attack, delayNanoseconds: minTap)
+                .send(.preset(6), .down),
+                .scheduleRelease(.preset(6), delayNanoseconds: minTap)
             ],
             "identified released queued tap becomes a synthetic pulse"
         )
         expect(
-            sequencer.releaseTimerFired(for: .attack, now: minTap * 2 + minGap),
+            sequencer.releaseTimerFired(for: .preset(6), now: minTap * 2 + minGap),
             [
-                .send(.attack, .up),
-                .schedulePress(.attack, delayNanoseconds: minGap)
+                .send(.preset(6), .up),
+                .schedulePress(.preset(6), delayNanoseconds: minGap)
             ],
             "identified synthetic queued tap releases and schedules original hold resume"
         )
         expect(
-            sequencer.pressTimerFired(for: .attack, now: minTap * 2 + minGap * 2),
-            [.send(.attack, .down)],
+            sequencer.pressTimerFired(for: .preset(6), now: minTap * 2 + minGap * 2),
+            [.send(.preset(6), .down)],
             "identified original hold resumes after queued tap"
         )
         expect(
-            sequencer.setButton(.attack, pressed: false, pressIdentifier: 101, now: minTap * 2 + minGap * 2 + minTap),
-            [.send(.attack, .up)],
+            sequencer.setButton(.preset(6), pressed: false, pressIdentifier: 101, now: minTap * 2 + minGap * 2 + minTap),
+            [.send(.preset(6), .up)],
             "identified resumed hold releases normally"
         )
     }
@@ -473,37 +473,37 @@ struct ButtonPulseSequencerSmokeTests {
     private static func testIdentifiedInterruptedHoldReleaseCancelsResume() {
         var sequencer = makeSequencer()
 
-        _ = sequencer.setButton(.attack, pressed: true, pressIdentifier: 101, now: 0)
-        _ = sequencer.setButton(.attack, pressed: true, pressIdentifier: 202, now: 8_000_000)
-        _ = sequencer.setButton(.attack, pressed: false, pressIdentifier: 202, now: 12_000_000)
+        _ = sequencer.setButton(.preset(6), pressed: true, pressIdentifier: 101, now: 0)
+        _ = sequencer.setButton(.preset(6), pressed: true, pressIdentifier: 202, now: 8_000_000)
+        _ = sequencer.setButton(.preset(6), pressed: false, pressIdentifier: 202, now: 12_000_000)
         expect(
-            sequencer.setButton(.attack, pressed: false, pressIdentifier: 101, now: 14_000_000),
+            sequencer.setButton(.preset(6), pressed: false, pressIdentifier: 101, now: 14_000_000),
             [],
             "identified interrupted hold release waits for scheduled game-visible up"
         )
         expect(
-            sequencer.releaseTimerFired(for: .attack, now: minTap),
+            sequencer.releaseTimerFired(for: .preset(6), now: minTap),
             [
-                .send(.attack, .up),
-                .schedulePress(.attack, delayNanoseconds: minGap)
+                .send(.preset(6), .up),
+                .schedulePress(.preset(6), delayNanoseconds: minGap)
             ],
             "identified first pulse releases and schedules queued tap without a hold resume"
         )
         expect(
-            sequencer.pressTimerFired(for: .attack, now: minTap + minGap),
+            sequencer.pressTimerFired(for: .preset(6), now: minTap + minGap),
             [
-                .send(.attack, .down),
-                .scheduleRelease(.attack, delayNanoseconds: minTap)
+                .send(.preset(6), .down),
+                .scheduleRelease(.preset(6), delayNanoseconds: minTap)
             ],
             "identified released queued tap still emits"
         )
         expect(
-            sequencer.releaseTimerFired(for: .attack, now: minTap * 2 + minGap),
-            [.send(.attack, .up)],
+            sequencer.releaseTimerFired(for: .preset(6), now: minTap * 2 + minGap),
+            [.send(.preset(6), .up)],
             "identified interrupted hold does not emit a phantom resume"
         )
         expect(
-            sequencer.pressTimerFired(for: .attack, now: minTap * 2 + minGap * 2),
+            sequencer.pressTimerFired(for: .preset(6), now: minTap * 2 + minGap * 2),
             [],
             "identified interrupted hold leaves no hidden queued resume"
         )
@@ -512,10 +512,10 @@ struct ButtonPulseSequencerSmokeTests {
     private static func testResetClearsInterruptedHoldAndQueuedTapState() {
         var sequencer = makeSequencer()
 
-        _ = sequencer.setButton(.attack, pressed: true, pressIdentifier: 101, now: 0)
-        _ = sequencer.setButton(.attack, pressed: true, pressIdentifier: 202, now: 8_000_000)
+        _ = sequencer.setButton(.preset(6), pressed: true, pressIdentifier: 101, now: 0)
+        _ = sequencer.setButton(.preset(6), pressed: true, pressIdentifier: 202, now: 8_000_000)
         expectEqual(
-            sequencer.hasPhysicalPress(.attack),
+            sequencer.hasPhysicalPress(.preset(6)),
             true,
             "reset setup has active physical press"
         )
@@ -523,28 +523,28 @@ struct ButtonPulseSequencerSmokeTests {
         sequencer.reset()
 
         expectEqual(
-            sequencer.hasPhysicalPress(.attack),
+            sequencer.hasPhysicalPress(.preset(6)),
             false,
             "reset clears physical press state"
         )
         expect(
-            sequencer.releaseTimerFired(for: .attack, now: minTap),
+            sequencer.releaseTimerFired(for: .preset(6), now: minTap),
             [],
             "reset cancels pending release state"
         )
         expect(
-            sequencer.pressTimerFired(for: .attack, now: minTap + minGap),
+            sequencer.pressTimerFired(for: .preset(6), now: minTap + minGap),
             [],
             "reset cancels queued press state"
         )
         expect(
-            sequencer.setButton(.attack, pressed: true, pressIdentifier: 303, now: minTap + minGap),
-            [.send(.attack, .down)],
+            sequencer.setButton(.preset(6), pressed: true, pressIdentifier: 303, now: minTap + minGap),
+            [.send(.preset(6), .down)],
             "reset allows next tap to start cleanly"
         )
         expect(
-            sequencer.setButton(.attack, pressed: false, pressIdentifier: 303, now: minTap * 2 + minGap),
-            [.send(.attack, .up)],
+            sequencer.setButton(.preset(6), pressed: false, pressIdentifier: 303, now: minTap * 2 + minGap),
+            [.send(.preset(6), .up)],
             "reset allows next tap to release cleanly"
         )
     }
@@ -553,70 +553,70 @@ struct ButtonPulseSequencerSmokeTests {
         var sequencer = makeSequencer()
 
         expect(
-            sequencer.setButton(.attack, pressed: true, now: 0),
-            [.send(.attack, .down)],
+            sequencer.setButton(.preset(6), pressed: true, now: 0),
+            [.send(.preset(6), .down)],
             "burst first tap starts immediately"
         )
         expect(
-            sequencer.setButton(.attack, pressed: false, now: 5_000_000),
-            [.scheduleRelease(.attack, delayNanoseconds: 30_000_000)],
+            sequencer.setButton(.preset(6), pressed: false, now: 5_000_000),
+            [.scheduleRelease(.preset(6), delayNanoseconds: 30_000_000)],
             "burst first tap schedules release"
         )
         expect(
-            sequencer.setButton(.attack, pressed: true, now: 10_000_000),
+            sequencer.setButton(.preset(6), pressed: true, now: 10_000_000),
             [],
             "burst second tap queues during first hold"
         )
         expect(
-            sequencer.setButton(.attack, pressed: false, now: 15_000_000),
+            sequencer.setButton(.preset(6), pressed: false, now: 15_000_000),
             [],
             "burst second tap release waits"
         )
         expect(
-            sequencer.setButton(.attack, pressed: true, now: 20_000_000),
+            sequencer.setButton(.preset(6), pressed: true, now: 20_000_000),
             [],
             "burst third tap queues during first hold"
         )
         expect(
-            sequencer.setButton(.attack, pressed: false, now: 25_000_000),
+            sequencer.setButton(.preset(6), pressed: false, now: 25_000_000),
             [],
             "burst third tap release waits"
         )
         expect(
-            sequencer.releaseTimerFired(for: .attack, now: minTap),
+            sequencer.releaseTimerFired(for: .preset(6), now: minTap),
             [
-                .send(.attack, .up),
-                .schedulePress(.attack, delayNanoseconds: minGap)
+                .send(.preset(6), .up),
+                .schedulePress(.preset(6), delayNanoseconds: minGap)
             ],
             "burst first pulse releases and schedules second"
         )
         expect(
-            sequencer.pressTimerFired(for: .attack, now: minTap + minGap),
+            sequencer.pressTimerFired(for: .preset(6), now: minTap + minGap),
             [
-                .send(.attack, .down),
-                .scheduleRelease(.attack, delayNanoseconds: minTap)
+                .send(.preset(6), .down),
+                .scheduleRelease(.preset(6), delayNanoseconds: minTap)
             ],
             "burst second pulse starts"
         )
         expect(
-            sequencer.releaseTimerFired(for: .attack, now: minTap * 2 + minGap),
+            sequencer.releaseTimerFired(for: .preset(6), now: minTap * 2 + minGap),
             [
-                .send(.attack, .up),
-                .schedulePress(.attack, delayNanoseconds: minGap)
+                .send(.preset(6), .up),
+                .schedulePress(.preset(6), delayNanoseconds: minGap)
             ],
             "burst second pulse releases and schedules third"
         )
         expect(
-            sequencer.pressTimerFired(for: .attack, now: minTap * 2 + minGap * 2),
+            sequencer.pressTimerFired(for: .preset(6), now: minTap * 2 + minGap * 2),
             [
-                .send(.attack, .down),
-                .scheduleRelease(.attack, delayNanoseconds: minTap)
+                .send(.preset(6), .down),
+                .scheduleRelease(.preset(6), delayNanoseconds: minTap)
             ],
             "burst third pulse starts"
         )
         expect(
-            sequencer.releaseTimerFired(for: .attack, now: minTap * 3 + minGap * 2),
-            [.send(.attack, .up)],
+            sequencer.releaseTimerFired(for: .preset(6), now: minTap * 3 + minGap * 2),
+            [.send(.preset(6), .up)],
             "burst third pulse releases"
         )
     }
@@ -624,55 +624,55 @@ struct ButtonPulseSequencerSmokeTests {
     private static func testTapDuringPendingPressQueuesAnotherPulse() {
         var sequencer = makeSequencer()
 
-        _ = sequencer.setButton(.jump, pressed: true, now: 0)
-        _ = sequencer.setButton(.jump, pressed: false, now: 5_000_000)
-        _ = sequencer.setButton(.jump, pressed: true, now: 10_000_000)
-        _ = sequencer.setButton(.jump, pressed: false, now: 15_000_000)
+        _ = sequencer.setButton(.preset(5), pressed: true, now: 0)
+        _ = sequencer.setButton(.preset(5), pressed: false, now: 5_000_000)
+        _ = sequencer.setButton(.preset(5), pressed: true, now: 10_000_000)
+        _ = sequencer.setButton(.preset(5), pressed: false, now: 15_000_000)
         expect(
-            sequencer.releaseTimerFired(for: .jump, now: minTap),
+            sequencer.releaseTimerFired(for: .preset(5), now: minTap),
             [
-                .send(.jump, .up),
-                .schedulePress(.jump, delayNanoseconds: minGap)
+                .send(.preset(5), .up),
+                .schedulePress(.preset(5), delayNanoseconds: minGap)
             ],
             "pending press schedules the second pulse"
         )
         expect(
-            sequencer.setButton(.jump, pressed: true, now: minTap + 5_000_000),
+            sequencer.setButton(.preset(5), pressed: true, now: minTap + 5_000_000),
             [],
             "tap during pending press queues a third pulse"
         )
         expect(
-            sequencer.setButton(.jump, pressed: false, now: minTap + 10_000_000),
+            sequencer.setButton(.preset(5), pressed: false, now: minTap + 10_000_000),
             [],
             "tap during pending press release waits"
         )
         expect(
-            sequencer.pressTimerFired(for: .jump, now: minTap + minGap),
+            sequencer.pressTimerFired(for: .preset(5), now: minTap + minGap),
             [
-                .send(.jump, .down),
-                .scheduleRelease(.jump, delayNanoseconds: minTap)
+                .send(.preset(5), .down),
+                .scheduleRelease(.preset(5), delayNanoseconds: minTap)
             ],
             "pending second pulse still emits"
         )
         expect(
-            sequencer.releaseTimerFired(for: .jump, now: minTap * 2 + minGap),
+            sequencer.releaseTimerFired(for: .preset(5), now: minTap * 2 + minGap),
             [
-                .send(.jump, .up),
-                .schedulePress(.jump, delayNanoseconds: minGap)
+                .send(.preset(5), .up),
+                .schedulePress(.preset(5), delayNanoseconds: minGap)
             ],
             "queued third pulse is not lost"
         )
         expect(
-            sequencer.pressTimerFired(for: .jump, now: minTap * 2 + minGap * 2),
+            sequencer.pressTimerFired(for: .preset(5), now: minTap * 2 + minGap * 2),
             [
-                .send(.jump, .down),
-                .scheduleRelease(.jump, delayNanoseconds: minTap)
+                .send(.preset(5), .down),
+                .scheduleRelease(.preset(5), delayNanoseconds: minTap)
             ],
             "queued third pulse starts"
         )
         expect(
-            sequencer.releaseTimerFired(for: .jump, now: minTap * 3 + minGap * 2),
-            [.send(.jump, .up)],
+            sequencer.releaseTimerFired(for: .preset(5), now: minTap * 3 + minGap * 2),
+            [.send(.preset(5), .up)],
             "queued third pulse releases"
         )
     }
@@ -685,12 +685,12 @@ struct ButtonPulseSequencerSmokeTests {
         for tapIndex in 0..<8 {
             let tapStart = UInt64(tapIndex) * 4_000_000
             countSends(
-                sequencer.setButton(.attack, pressed: true, now: tapStart),
+                sequencer.setButton(.preset(6), pressed: true, now: tapStart),
                 sentDownCount: &sentDownCount,
                 sentUpCount: &sentUpCount
             )
             countSends(
-                sequencer.setButton(.attack, pressed: false, now: tapStart + 2_000_000),
+                sequencer.setButton(.preset(6), pressed: false, now: tapStart + 2_000_000),
                 sentDownCount: &sentDownCount,
                 sentUpCount: &sentUpCount
             )
@@ -698,7 +698,7 @@ struct ButtonPulseSequencerSmokeTests {
 
         var releaseTime = minTap
         countSends(
-            sequencer.releaseTimerFired(for: .attack, now: releaseTime),
+            sequencer.releaseTimerFired(for: .preset(6), now: releaseTime),
             sentDownCount: &sentDownCount,
             sentUpCount: &sentUpCount
         )
@@ -706,14 +706,14 @@ struct ButtonPulseSequencerSmokeTests {
         for _ in 1..<8 {
             let pressTime = releaseTime + minGap
             countSends(
-                sequencer.pressTimerFired(for: .attack, now: pressTime),
+                sequencer.pressTimerFired(for: .preset(6), now: pressTime),
                 sentDownCount: &sentDownCount,
                 sentUpCount: &sentUpCount
             )
 
             releaseTime = pressTime + minTap
             countSends(
-                sequencer.releaseTimerFired(for: .attack, now: releaseTime),
+                sequencer.releaseTimerFired(for: .preset(6), now: releaseTime),
                 sentDownCount: &sentDownCount,
                 sentUpCount: &sentUpCount
             )
@@ -722,7 +722,7 @@ struct ButtonPulseSequencerSmokeTests {
         expectEqual(sentDownCount, 8, "eight-tap burst emits every down")
         expectEqual(sentUpCount, 8, "eight-tap burst emits every up")
         expect(
-            sequencer.pressTimerFired(for: .attack, now: releaseTime + minGap),
+            sequencer.pressTimerFired(for: .preset(6), now: releaseTime + minGap),
             [],
             "eight-tap burst leaves no hidden queued pulse"
         )
@@ -741,12 +741,12 @@ struct ButtonPulseSequencerSmokeTests {
         for tapIndex in 0..<4 {
             let tapStart = UInt64(tapIndex) * 4_000_000
             countSends(
-                sequencer.setButton(.attack, pressed: true, pressIdentifier: UInt64(tapIndex + 1), now: tapStart),
+                sequencer.setButton(.preset(6), pressed: true, pressIdentifier: UInt64(tapIndex + 1), now: tapStart),
                 sentDownCount: &sentDownCount,
                 sentUpCount: &sentUpCount
             )
             countSends(
-                sequencer.setButton(.attack, pressed: false, pressIdentifier: UInt64(tapIndex + 1), now: tapStart + 2_000_000),
+                sequencer.setButton(.preset(6), pressed: false, pressIdentifier: UInt64(tapIndex + 1), now: tapStart + 2_000_000),
                 sentDownCount: &sentDownCount,
                 sentUpCount: &sentUpCount
             )
@@ -754,7 +754,7 @@ struct ButtonPulseSequencerSmokeTests {
 
         var releaseTime = tapDuration
         countSends(
-            sequencer.releaseTimerFired(for: .attack, now: releaseTime),
+            sequencer.releaseTimerFired(for: .preset(6), now: releaseTime),
             sentDownCount: &sentDownCount,
             sentUpCount: &sentUpCount
         )
@@ -762,14 +762,14 @@ struct ButtonPulseSequencerSmokeTests {
         for _ in 1..<4 {
             let pressTime = releaseTime + gapDuration
             countSends(
-                sequencer.pressTimerFired(for: .attack, now: pressTime),
+                sequencer.pressTimerFired(for: .preset(6), now: pressTime),
                 sentDownCount: &sentDownCount,
                 sentUpCount: &sentUpCount
             )
 
             releaseTime = pressTime + tapDuration
             countSends(
-                sequencer.releaseTimerFired(for: .attack, now: releaseTime),
+                sequencer.releaseTimerFired(for: .preset(6), now: releaseTime),
                 sentDownCount: &sentDownCount,
                 sentUpCount: &sentUpCount
             )
@@ -835,10 +835,10 @@ struct ButtonPulseSequencerSmokeTests {
 
                 if firesRelease {
                     pendingReleaseTime = nil
-                    handle(sequencer.releaseTimerFired(for: .attack, now: nextTime), now: nextTime)
+                    handle(sequencer.releaseTimerFired(for: .preset(6), now: nextTime), now: nextTime)
                 } else {
                     pendingPressTime = nil
-                    handle(sequencer.pressTimerFired(for: .attack, now: nextTime), now: nextTime)
+                    handle(sequencer.pressTimerFired(for: .preset(6), now: nextTime), now: nextTime)
                 }
             }
         }
@@ -869,7 +869,7 @@ struct ButtonPulseSequencerSmokeTests {
             }
             handle(
                 sequencer.setButton(
-                    .attack,
+                    .preset(6),
                     pressed: event.pressed,
                     pressIdentifier: event.identifier,
                     now: event.time
@@ -887,7 +887,7 @@ struct ButtonPulseSequencerSmokeTests {
 
         expectEqual(pendingReleaseTime, nil, "mixed stress drains pending release timer")
         expectEqual(pendingPressTime, nil, "mixed stress drains pending press timer")
-        expectEqual(sequencer.hasPhysicalPress(.attack), false, "mixed stress ends without physical holds")
+        expectEqual(sequencer.hasPhysicalPress(.preset(6)), false, "mixed stress ends without physical holds")
         expectEqual(sentDownCount, sentUpCount, "mixed stress emits balanced visible down/up pulses")
         guard sentDownCount >= physicalPressCount else {
             fatalError("mixed stress dropped visible presses. Expected at least \(physicalPressCount), got \(sentDownCount)")
@@ -897,40 +897,40 @@ struct ButtonPulseSequencerSmokeTests {
     private static func testHeldPressDuringPendingPressStartsAfterQueuedPulse() {
         var sequencer = makeSequencer()
 
-        _ = sequencer.setButton(.jump, pressed: true, now: 0)
-        _ = sequencer.setButton(.jump, pressed: false, now: 5_000_000)
-        _ = sequencer.setButton(.jump, pressed: true, now: 10_000_000)
-        _ = sequencer.setButton(.jump, pressed: false, now: 15_000_000)
-        _ = sequencer.releaseTimerFired(for: .jump, now: minTap)
+        _ = sequencer.setButton(.preset(5), pressed: true, now: 0)
+        _ = sequencer.setButton(.preset(5), pressed: false, now: 5_000_000)
+        _ = sequencer.setButton(.preset(5), pressed: true, now: 10_000_000)
+        _ = sequencer.setButton(.preset(5), pressed: false, now: 15_000_000)
+        _ = sequencer.releaseTimerFired(for: .preset(5), now: minTap)
         expect(
-            sequencer.setButton(.jump, pressed: true, now: minTap + 5_000_000),
+            sequencer.setButton(.preset(5), pressed: true, now: minTap + 5_000_000),
             [],
             "held press during pending press queues behind already scheduled pulse"
         )
         expect(
-            sequencer.pressTimerFired(for: .jump, now: minTap + minGap),
+            sequencer.pressTimerFired(for: .preset(5), now: minTap + minGap),
             [
-                .send(.jump, .down),
-                .scheduleRelease(.jump, delayNanoseconds: minTap)
+                .send(.preset(5), .down),
+                .scheduleRelease(.preset(5), delayNanoseconds: minTap)
             ],
             "already scheduled pulse stays synthetic despite later held press"
         )
         expect(
-            sequencer.releaseTimerFired(for: .jump, now: minTap * 2 + minGap),
+            sequencer.releaseTimerFired(for: .preset(5), now: minTap * 2 + minGap),
             [
-                .send(.jump, .up),
-                .schedulePress(.jump, delayNanoseconds: minGap)
+                .send(.preset(5), .up),
+                .schedulePress(.preset(5), delayNanoseconds: minGap)
             ],
             "held press gets its own queued pulse after synthetic pulse releases"
         )
         expect(
-            sequencer.pressTimerFired(for: .jump, now: minTap * 2 + minGap * 2),
-            [.send(.jump, .down)],
+            sequencer.pressTimerFired(for: .preset(5), now: minTap * 2 + minGap * 2),
+            [.send(.preset(5), .down)],
             "held press starts as separate held pulse"
         )
         expect(
-            sequencer.setButton(.jump, pressed: false, now: minTap * 2 + minGap * 2 + minTap),
-            [.send(.jump, .up)],
+            sequencer.setButton(.preset(5), pressed: false, now: minTap * 2 + minGap * 2 + minTap),
+            [.send(.preset(5), .up)],
             "held press releases normally after its own pulse"
         )
     }
@@ -938,43 +938,43 @@ struct ButtonPulseSequencerSmokeTests {
     private static func testHeldPressBeforeFirstReleaseDoesNotStealOlderQueuedTap() {
         var sequencer = makeSequencer()
 
-        _ = sequencer.setButton(.jump, pressed: true, now: 0)
-        _ = sequencer.setButton(.jump, pressed: false, now: 5_000_000)
-        _ = sequencer.setButton(.jump, pressed: true, now: 10_000_000)
-        _ = sequencer.setButton(.jump, pressed: false, now: 15_000_000)
-        _ = sequencer.setButton(.jump, pressed: true, now: 20_000_000)
+        _ = sequencer.setButton(.preset(5), pressed: true, now: 0)
+        _ = sequencer.setButton(.preset(5), pressed: false, now: 5_000_000)
+        _ = sequencer.setButton(.preset(5), pressed: true, now: 10_000_000)
+        _ = sequencer.setButton(.preset(5), pressed: false, now: 15_000_000)
+        _ = sequencer.setButton(.preset(5), pressed: true, now: 20_000_000)
         expect(
-            sequencer.releaseTimerFired(for: .jump, now: minTap),
+            sequencer.releaseTimerFired(for: .preset(5), now: minTap),
             [
-                .send(.jump, .up),
-                .schedulePress(.jump, delayNanoseconds: minGap)
+                .send(.preset(5), .up),
+                .schedulePress(.preset(5), delayNanoseconds: minGap)
             ],
             "first pulse release schedules the older queued tap first"
         )
         expect(
-            sequencer.pressTimerFired(for: .jump, now: minTap + minGap),
+            sequencer.pressTimerFired(for: .preset(5), now: minTap + minGap),
             [
-                .send(.jump, .down),
-                .scheduleRelease(.jump, delayNanoseconds: minTap)
+                .send(.preset(5), .down),
+                .scheduleRelease(.preset(5), delayNanoseconds: minTap)
             ],
             "older queued tap remains synthetic despite the newer held press"
         )
         expect(
-            sequencer.releaseTimerFired(for: .jump, now: minTap * 2 + minGap),
+            sequencer.releaseTimerFired(for: .preset(5), now: minTap * 2 + minGap),
             [
-                .send(.jump, .up),
-                .schedulePress(.jump, delayNanoseconds: minGap)
+                .send(.preset(5), .up),
+                .schedulePress(.preset(5), delayNanoseconds: minGap)
             ],
             "newer held press waits behind the older queued tap"
         )
         expect(
-            sequencer.pressTimerFired(for: .jump, now: minTap * 2 + minGap * 2),
-            [.send(.jump, .down)],
+            sequencer.pressTimerFired(for: .preset(5), now: minTap * 2 + minGap * 2),
+            [.send(.preset(5), .down)],
             "newer held press starts as the next pulse"
         )
         expect(
-            sequencer.setButton(.jump, pressed: false, now: minTap * 2 + minGap * 2 + minTap),
-            [.send(.jump, .up)],
+            sequencer.setButton(.preset(5), pressed: false, now: minTap * 2 + minGap * 2 + minTap),
+            [.send(.preset(5), .up)],
             "newer held press releases normally"
         )
     }
@@ -983,31 +983,31 @@ struct ButtonPulseSequencerSmokeTests {
         var sequencer = makeSequencer()
 
         expect(
-            sequencer.setButton(.attack, pressed: true, now: 0),
-            [.send(.attack, .down)],
+            sequencer.setButton(.preset(6), pressed: true, now: 0),
+            [.send(.preset(6), .down)],
             "duplicate recovery first down starts immediately"
         )
         expect(
-            sequencer.recoverMissingReleaseBeforePress(.attack, now: 15_000_000),
-            [.scheduleRelease(.attack, delayNanoseconds: 20_000_000)],
+            sequencer.recoverMissingReleaseBeforePress(.preset(6), now: 15_000_000),
+            [.scheduleRelease(.preset(6), delayNanoseconds: 20_000_000)],
             "missing release recovery schedules release instead of disappearing"
         )
         expect(
-            sequencer.releaseTimerFired(for: .attack, now: minTap),
+            sequencer.releaseTimerFired(for: .preset(6), now: minTap),
             [
-                .send(.attack, .up),
-                .schedulePress(.attack, delayNanoseconds: minGap)
+                .send(.preset(6), .up),
+                .schedulePress(.preset(6), delayNanoseconds: minGap)
             ],
             "missing release recovery releases first pulse and schedules replacement down"
         )
         expect(
-            sequencer.pressTimerFired(for: .attack, now: minTap + minGap),
-            [.send(.attack, .down)],
+            sequencer.pressTimerFired(for: .preset(6), now: minTap + minGap),
+            [.send(.preset(6), .down)],
             "missing release recovery replacement down remains held while physically active"
         )
         expect(
-            sequencer.setButton(.attack, pressed: false, now: minTap + minGap + minTap),
-            [.send(.attack, .up)],
+            sequencer.setButton(.preset(6), pressed: false, now: minTap + minGap + minTap),
+            [.send(.preset(6), .up)],
             "missing release recovery held pulse releases normally"
         )
     }
@@ -1015,37 +1015,37 @@ struct ButtonPulseSequencerSmokeTests {
     private static func testMissingReleaseRecoveryWhileReleasePendingProducesPulse() {
         var sequencer = makeSequencer()
 
-        _ = sequencer.setButton(.attack, pressed: true, now: 0)
-        _ = sequencer.setButton(.attack, pressed: false, now: 5_000_000)
+        _ = sequencer.setButton(.preset(6), pressed: true, now: 0)
+        _ = sequencer.setButton(.preset(6), pressed: false, now: 5_000_000)
         expect(
-            sequencer.recoverMissingReleaseBeforePress(.attack, now: 10_000_000),
+            sequencer.recoverMissingReleaseBeforePress(.preset(6), now: 10_000_000),
             [],
             "missing release recovery queues while release timer is pending"
         )
         expect(
-            sequencer.setButton(.attack, pressed: false, now: 12_000_000),
+            sequencer.setButton(.preset(6), pressed: false, now: 12_000_000),
             [],
             "missing release recovery quick release waits for pending release"
         )
         expect(
-            sequencer.releaseTimerFired(for: .attack, now: minTap),
+            sequencer.releaseTimerFired(for: .preset(6), now: minTap),
             [
-                .send(.attack, .up),
-                .schedulePress(.attack, delayNanoseconds: minGap)
+                .send(.preset(6), .up),
+                .schedulePress(.preset(6), delayNanoseconds: minGap)
             ],
             "missing release recovery pending release schedules replacement pulse"
         )
         expect(
-            sequencer.pressTimerFired(for: .attack, now: minTap + minGap),
+            sequencer.pressTimerFired(for: .preset(6), now: minTap + minGap),
             [
-                .send(.attack, .down),
-                .scheduleRelease(.attack, delayNanoseconds: minTap)
+                .send(.preset(6), .down),
+                .scheduleRelease(.preset(6), delayNanoseconds: minTap)
             ],
             "missing release recovery pending release emits replacement down"
         )
         expect(
-            sequencer.releaseTimerFired(for: .attack, now: minTap + minGap + minTap),
-            [.send(.attack, .up)],
+            sequencer.releaseTimerFired(for: .preset(6), now: minTap + minGap + minTap),
+            [.send(.preset(6), .up)],
             "missing release recovery pending release replacement pulse finishes"
         )
     }
@@ -1053,41 +1053,41 @@ struct ButtonPulseSequencerSmokeTests {
     private static func testIdentifiedMissingReleaseRecoveryPreservesUnrelatedHeldPress() {
         var sequencer = makeSequencer()
 
-        _ = sequencer.setButton(.attack, pressed: true, pressIdentifier: 101, now: 0)
+        _ = sequencer.setButton(.preset(6), pressed: true, pressIdentifier: 101, now: 0)
         expect(
-            sequencer.recoverMissingReleaseBeforePress(.attack, pressIdentifier: 202, now: 8_000_000),
-            [.scheduleRelease(.attack, delayNanoseconds: 27_000_000)],
+            sequencer.recoverMissingReleaseBeforePress(.preset(6), pressIdentifier: 202, now: 8_000_000),
+            [.scheduleRelease(.preset(6), delayNanoseconds: 27_000_000)],
             "identified missing release recovery interrupts active hold for new press"
         )
         expect(
-            sequencer.releaseTimerFired(for: .attack, now: minTap),
+            sequencer.releaseTimerFired(for: .preset(6), now: minTap),
             [
-                .send(.attack, .up),
-                .schedulePress(.attack, delayNanoseconds: minGap)
+                .send(.preset(6), .up),
+                .schedulePress(.preset(6), delayNanoseconds: minGap)
             ],
             "identified missing release recovery schedules new press first"
         )
         expect(
-            sequencer.pressTimerFired(for: .attack, now: minTap + minGap),
-            [.send(.attack, .down)],
+            sequencer.pressTimerFired(for: .preset(6), now: minTap + minGap),
+            [.send(.preset(6), .down)],
             "identified recovered new press is held while physically active"
         )
         expect(
-            sequencer.setButton(.attack, pressed: false, pressIdentifier: 202, now: minTap + minGap + minTap),
+            sequencer.setButton(.preset(6), pressed: false, pressIdentifier: 202, now: minTap + minGap + minTap),
             [
-                .send(.attack, .up),
-                .schedulePress(.attack, delayNanoseconds: minGap)
+                .send(.preset(6), .up),
+                .schedulePress(.preset(6), delayNanoseconds: minGap)
             ],
             "identified recovered new press release schedules original hold resume"
         )
         expect(
-            sequencer.pressTimerFired(for: .attack, now: minTap + minGap * 2 + minTap),
-            [.send(.attack, .down)],
+            sequencer.pressTimerFired(for: .preset(6), now: minTap + minGap * 2 + minTap),
+            [.send(.preset(6), .down)],
             "identified original hold resumes after recovered press"
         )
         expect(
-            sequencer.setButton(.attack, pressed: false, pressIdentifier: 101, now: minTap * 2 + minGap * 2 + minTap),
-            [.send(.attack, .up)],
+            sequencer.setButton(.preset(6), pressed: false, pressIdentifier: 101, now: minTap * 2 + minGap * 2 + minTap),
+            [.send(.preset(6), .up)],
             "identified original hold releases after resume"
         )
     }
@@ -1095,19 +1095,19 @@ struct ButtonPulseSequencerSmokeTests {
     private static func testMissingPressRecoveryProducesPulse() {
         var sequencer = makeSequencer()
 
-        expectEqual(sequencer.hasPhysicalPress(.jump), false, "missing press starts without physical count")
+        expectEqual(sequencer.hasPhysicalPress(.preset(5)), false, "missing press starts without physical count")
         expect(
-            sequencer.recoverMissingPressBeforeRelease(.jump, now: 12_000_000),
+            sequencer.recoverMissingPressBeforeRelease(.preset(5), now: 12_000_000),
             [
-                .send(.jump, .down),
-                .scheduleRelease(.jump, delayNanoseconds: minTap)
+                .send(.preset(5), .down),
+                .scheduleRelease(.preset(5), delayNanoseconds: minTap)
             ],
             "missing press recovery synthesizes a game-visible tap"
         )
-        expectEqual(sequencer.hasPhysicalPress(.jump), false, "missing press recovery does not leave a physical hold")
+        expectEqual(sequencer.hasPhysicalPress(.preset(5)), false, "missing press recovery does not leave a physical hold")
         expect(
-            sequencer.releaseTimerFired(for: .jump, now: 12_000_000 + minTap),
-            [.send(.jump, .up)],
+            sequencer.releaseTimerFired(for: .preset(5), now: 12_000_000 + minTap),
+            [.send(.preset(5), .up)],
             "missing press recovery releases the synthetic tap"
         )
     }
@@ -1115,33 +1115,33 @@ struct ButtonPulseSequencerSmokeTests {
     private static func testMissingPressRecoveryWhileReleasePendingProducesQueuedPulse() {
         var sequencer = makeSequencer()
 
-        _ = sequencer.setButton(.attack, pressed: true, now: 0)
-        _ = sequencer.setButton(.attack, pressed: false, now: 4_000_000)
-        expectEqual(sequencer.hasPhysicalPress(.attack), false, "first fast tap is no longer physically held")
+        _ = sequencer.setButton(.preset(6), pressed: true, now: 0)
+        _ = sequencer.setButton(.preset(6), pressed: false, now: 4_000_000)
+        expectEqual(sequencer.hasPhysicalPress(.preset(6)), false, "first fast tap is no longer physically held")
         expect(
-            sequencer.recoverMissingPressBeforeRelease(.attack, now: 8_000_000),
+            sequencer.recoverMissingPressBeforeRelease(.preset(6), now: 8_000_000),
             [],
             "missing press recovery queues while the prior release timer is pending"
         )
         expect(
-            sequencer.releaseTimerFired(for: .attack, now: minTap),
+            sequencer.releaseTimerFired(for: .preset(6), now: minTap),
             [
-                .send(.attack, .up),
-                .schedulePress(.attack, delayNanoseconds: minGap)
+                .send(.preset(6), .up),
+                .schedulePress(.preset(6), delayNanoseconds: minGap)
             ],
             "missing press recovery schedules a queued synthetic press"
         )
         expect(
-            sequencer.pressTimerFired(for: .attack, now: minTap + minGap),
+            sequencer.pressTimerFired(for: .preset(6), now: minTap + minGap),
             [
-                .send(.attack, .down),
-                .scheduleRelease(.attack, delayNanoseconds: minTap)
+                .send(.preset(6), .down),
+                .scheduleRelease(.preset(6), delayNanoseconds: minTap)
             ],
             "missing press recovery queued pulse starts and schedules release"
         )
         expect(
-            sequencer.releaseTimerFired(for: .attack, now: minTap + minGap + minTap),
-            [.send(.attack, .up)],
+            sequencer.releaseTimerFired(for: .preset(6), now: minTap + minGap + minTap),
+            [.send(.preset(6), .up)],
             "missing press recovery queued pulse releases"
         )
     }
@@ -1149,50 +1149,50 @@ struct ButtonPulseSequencerSmokeTests {
     private static func testIdentifiedMissingPressRecoveryWhileOtherHoldActiveProducesTap() {
         var sequencer = makeSequencer()
 
-        _ = sequencer.setButton(.attack, pressed: true, pressIdentifier: 101, now: 0)
+        _ = sequencer.setButton(.preset(6), pressed: true, pressIdentifier: 101, now: 0)
         expectEqual(
-            sequencer.hasPhysicalPress(.attack),
+            sequencer.hasPhysicalPress(.preset(6)),
             true,
             "identified held press is active before missing tap recovery"
         )
         expectEqual(
-            sequencer.hasPhysicalPress(.attack, pressIdentifier: 202),
+            sequencer.hasPhysicalPress(.preset(6), pressIdentifier: 202),
             false,
             "missing tap identifier is not physically active yet"
         )
         expect(
-            sequencer.recoverMissingPressBeforeRelease(.attack, pressIdentifier: 202, now: 8_000_000),
-            [.scheduleRelease(.attack, delayNanoseconds: 27_000_000)],
+            sequencer.recoverMissingPressBeforeRelease(.preset(6), pressIdentifier: 202, now: 8_000_000),
+            [.scheduleRelease(.preset(6), delayNanoseconds: 27_000_000)],
             "identified missing tap recovery interrupts the unrelated active hold"
         )
         expect(
-            sequencer.setButton(.attack, pressed: false, pressIdentifier: 101, now: 12_000_000),
+            sequencer.setButton(.preset(6), pressed: false, pressIdentifier: 101, now: 12_000_000),
             [],
             "identified unrelated hold release cancels its later resume"
         )
         expect(
-            sequencer.releaseTimerFired(for: .attack, now: minTap),
+            sequencer.releaseTimerFired(for: .preset(6), now: minTap),
             [
-                .send(.attack, .up),
-                .schedulePress(.attack, delayNanoseconds: minGap)
+                .send(.preset(6), .up),
+                .schedulePress(.preset(6), delayNanoseconds: minGap)
             ],
             "identified unrelated hold releases and schedules recovered missing tap"
         )
         expect(
-            sequencer.pressTimerFired(for: .attack, now: minTap + minGap),
+            sequencer.pressTimerFired(for: .preset(6), now: minTap + minGap),
             [
-                .send(.attack, .down),
-                .scheduleRelease(.attack, delayNanoseconds: minTap)
+                .send(.preset(6), .down),
+                .scheduleRelease(.preset(6), delayNanoseconds: minTap)
             ],
             "identified missing tap emits a synthetic down"
         )
         expect(
-            sequencer.releaseTimerFired(for: .attack, now: minTap * 2 + minGap),
-            [.send(.attack, .up)],
+            sequencer.releaseTimerFired(for: .preset(6), now: minTap * 2 + minGap),
+            [.send(.preset(6), .up)],
             "identified missing tap synthetic pulse releases"
         )
         expect(
-            sequencer.pressTimerFired(for: .attack, now: minTap * 2 + minGap * 2),
+            sequencer.pressTimerFired(for: .preset(6), now: minTap * 2 + minGap * 2),
             [],
             "identified unrelated released hold leaves no hidden resume"
         )
@@ -1202,7 +1202,7 @@ struct ButtonPulseSequencerSmokeTests {
         var tracker = ButtonSequenceTracker()
 
         expectEqual(
-            tracker.inspect(buttonMessage(.jump, .down, sequenceNumber: 1)),
+            tracker.inspect(buttonMessage(.preset(5), .down, sequenceNumber: 1)),
             ButtonSequenceInspection(
                 hasSequence: true,
                 missedFrameBeforeButton: false,
@@ -1215,7 +1215,7 @@ struct ButtonPulseSequencerSmokeTests {
             "sequence tracker first in-order edge"
         )
         expectEqual(
-            tracker.inspect(buttonMessage(.jump, .up, sequenceNumber: 2)),
+            tracker.inspect(buttonMessage(.preset(5), .up, sequenceNumber: 2)),
             ButtonSequenceInspection(
                 hasSequence: true,
                 missedFrameBeforeButton: false,
@@ -1228,7 +1228,7 @@ struct ButtonPulseSequencerSmokeTests {
             "sequence tracker second in-order edge"
         )
         expectEqual(
-            tracker.inspect(buttonMessage(.jump, .down, sequenceNumber: 3)),
+            tracker.inspect(buttonMessage(.preset(5), .down, sequenceNumber: 3)),
             ButtonSequenceInspection(
                 hasSequence: true,
                 missedFrameBeforeButton: false,
@@ -1246,7 +1246,7 @@ struct ButtonPulseSequencerSmokeTests {
         var tracker = ButtonSequenceTracker()
 
         expectEqual(
-            tracker.inspect(buttonMessage(.attack, .up, sequenceNumber: 2)),
+            tracker.inspect(buttonMessage(.preset(6), .up, sequenceNumber: 2)),
             ButtonSequenceInspection(
                 hasSequence: true,
                 missedFrameBeforeButton: true,
@@ -1262,10 +1262,10 @@ struct ButtonPulseSequencerSmokeTests {
 
     private static func testButtonSequenceTrackerReportsMidstreamGap() {
         var tracker = ButtonSequenceTracker()
-        _ = tracker.inspect(buttonMessage(.dash, .down, sequenceNumber: 1))
+        _ = tracker.inspect(buttonMessage(.preset(7), .down, sequenceNumber: 1))
 
         expectEqual(
-            tracker.inspect(buttonMessage(.dash, .up, sequenceNumber: 4)),
+            tracker.inspect(buttonMessage(.preset(7), .up, sequenceNumber: 4)),
             ButtonSequenceInspection(
                 hasSequence: true,
                 missedFrameBeforeButton: true,
@@ -1278,7 +1278,7 @@ struct ButtonPulseSequencerSmokeTests {
             "sequence tracker reports midstream missing frames"
         )
         expectEqual(
-            tracker.inspect(buttonMessage(.jump, .down, sequenceNumber: 6)),
+            tracker.inspect(buttonMessage(.preset(5), .down, sequenceNumber: 6)),
             ButtonSequenceInspection(
                 hasSequence: true,
                 missedFrameBeforeButton: true,
@@ -1294,10 +1294,10 @@ struct ButtonPulseSequencerSmokeTests {
 
     private static func testButtonSequenceTrackerTreatsOlderSequenceAsReset() {
         var tracker = ButtonSequenceTracker()
-        _ = tracker.inspect(buttonMessage(.dash, .down, sequenceNumber: 4))
+        _ = tracker.inspect(buttonMessage(.preset(7), .down, sequenceNumber: 4))
 
         expectEqual(
-            tracker.inspect(buttonMessage(.dash, .up, sequenceNumber: 2)),
+            tracker.inspect(buttonMessage(.preset(7), .up, sequenceNumber: 2)),
             ButtonSequenceInspection(
                 hasSequence: true,
                 missedFrameBeforeButton: false,
@@ -1310,7 +1310,7 @@ struct ButtonPulseSequencerSmokeTests {
             "sequence tracker treats older sequence as reset instead of more loss"
         )
         expectEqual(
-            tracker.inspect(buttonMessage(.dash, .up, sequenceNumber: 5)),
+            tracker.inspect(buttonMessage(.preset(7), .up, sequenceNumber: 5)),
             ButtonSequenceInspection(
                 hasSequence: true,
                 missedFrameBeforeButton: false,
@@ -1326,12 +1326,12 @@ struct ButtonPulseSequencerSmokeTests {
 
     private static func testButtonSequenceTrackerCanRebaseAfterReleaseAll() {
         var tracker = ButtonSequenceTracker()
-        _ = tracker.inspect(buttonMessage(.jump, .down, sequenceNumber: 12))
+        _ = tracker.inspect(buttonMessage(.preset(5), .down, sequenceNumber: 12))
 
         tracker.resetAcceptingNextSequenceAsBaseline()
 
         expectEqual(
-            tracker.inspect(buttonMessage(.attack, .down, sequenceNumber: 40)),
+            tracker.inspect(buttonMessage(.preset(6), .down, sequenceNumber: 40)),
             ButtonSequenceInspection(
                 hasSequence: true,
                 missedFrameBeforeButton: false,
@@ -1344,7 +1344,7 @@ struct ButtonPulseSequencerSmokeTests {
             "sequence tracker rebases first post-reset button without phantom loss"
         )
         expectEqual(
-            tracker.inspect(buttonMessage(.attack, .up, sequenceNumber: 42)),
+            tracker.inspect(buttonMessage(.preset(6), .up, sequenceNumber: 42)),
             ButtonSequenceInspection(
                 hasSequence: true,
                 missedFrameBeforeButton: true,
@@ -1359,14 +1359,14 @@ struct ButtonPulseSequencerSmokeTests {
     }
 
     private static func testCompactButtonSequenceRoundTrip() {
-        let data = ControllerWireCodec.encodeButton(.dash, state: .down, sequenceNumber: 42)
+        let data = ControllerWireCodec.encodeButton(.preset(7), state: .down, sequenceNumber: 42)
         let decoded = tryOrFail(
             try ControllerWireCodec.decode(data, using: JSONDecoder()),
             "sequence button decode"
         )
 
         expectEqual(decoded.type, .button, "sequence button type")
-        expectEqual(decoded.button, .dash, "sequence button")
+        expectEqual(decoded.button, .preset(7), "sequence button")
         expectEqual(decoded.state, .down, "sequence state")
         expectEqual(
             ControllerWireCodec.buttonSequenceNumber(from: decoded),
@@ -1376,7 +1376,7 @@ struct ButtonPulseSequencerSmokeTests {
 
         let unsequenced = tryOrFail(
             try ControllerWireCodec.decode(
-                ControllerWireCodec.encodeButton(.dash, state: .up),
+                ControllerWireCodec.encodeButton(.preset(7), state: .up),
                 using: JSONDecoder()
             ),
             "unsequenced button decode"
@@ -1395,7 +1395,7 @@ struct ButtonPulseSequencerSmokeTests {
 
     private static func testCompactButtonPressIdentifierRoundTrip() {
         let data = ControllerWireCodec.encodeButton(
-            .attack,
+            .preset(6),
             state: .up,
             sequenceNumber: 77,
             pressIdentifier: 1234
@@ -1406,7 +1406,7 @@ struct ButtonPulseSequencerSmokeTests {
         )
 
         expectEqual(decoded.type, .button, "identified sequence button type")
-        expectEqual(decoded.button, .attack, "identified sequence button")
+        expectEqual(decoded.button, .preset(6), "identified sequence button")
         expectEqual(decoded.state, .up, "identified sequence state")
         expectEqual(
             ControllerWireCodec.buttonSequenceNumber(from: decoded),
@@ -1428,7 +1428,7 @@ struct ButtonPulseSequencerSmokeTests {
     }
 
     private static func buttonMessage(
-        _ button: GameButton,
+        _ button: KeypadElementID,
         _ state: ButtonPressState,
         sequenceNumber: UInt64
     ) -> ControllerMessage {

@@ -264,7 +264,7 @@ final class ThumbleCLIRuntimeBackend {
             let runtimeStatusRequestID: UUID
         }
         guard data.count <= maximumFrameBytes,
-              let identity = try? JSONDecoder().decode(Identity.self, from: data),
+              let identity = try? JSONDecoder().decodeUnique(Identity.self, from: data),
               identity.runtimeStatusRequestID == requestID,
               identity.runtimeProcessID > 0,
               identity.updatedAt <= now + 1000, identity.updatedAt >= now - 3000,

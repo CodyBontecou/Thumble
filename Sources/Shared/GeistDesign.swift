@@ -143,6 +143,10 @@ enum Geist {
         }
     }
 
+    static func rgba(_ token: ColorToken, scheme: ColorScheme) -> GamepadRGBAColor {
+        GamepadRGBAColor(hexString: hex(for: token, scheme: scheme)) ?? .defaultValue
+    }
+
     static func color(_ token: ColorToken, scheme: ColorScheme) -> Color {
         Color(geistHex: hex(for: token, scheme: scheme))
     }
@@ -225,33 +229,39 @@ enum GeistInterfaceTone {
     case error
     case accent
 
-    func foreground(scheme: ColorScheme) -> Color {
+    func foreground(scheme: ColorScheme) -> Color { foregroundRGBA(scheme: scheme).swiftUIColor }
+
+    func foregroundRGBA(scheme: ColorScheme) -> GamepadRGBAColor {
         switch self {
-        case .neutral: Geist.color(.gray900, scheme: scheme)
-        case .success: Geist.color(.blue900, scheme: scheme)
-        case .warning: Geist.color(.gray1000, scheme: scheme)
-        case .error: Geist.color(.red900, scheme: scheme)
-        case .accent: Geist.color(.blue900, scheme: scheme)
+        case .neutral: Geist.rgba(.gray900, scheme: scheme)
+        case .success: Geist.rgba(.blue900, scheme: scheme)
+        case .warning: Geist.rgba(.gray1000, scheme: scheme)
+        case .error: Geist.rgba(.red900, scheme: scheme)
+        case .accent: Geist.rgba(.blue900, scheme: scheme)
         }
     }
 
-    func background(scheme: ColorScheme) -> Color {
+    func background(scheme: ColorScheme) -> Color { backgroundRGBA(scheme: scheme).swiftUIColor }
+
+    func backgroundRGBA(scheme: ColorScheme) -> GamepadRGBAColor {
         switch self {
-        case .neutral: Geist.color(.gray100, scheme: scheme)
-        case .success: Geist.color(.blue100, scheme: scheme)
-        case .warning: Geist.color(.gray100, scheme: scheme)
-        case .error: Geist.color(.red100, scheme: scheme)
-        case .accent: Geist.color(.blue100, scheme: scheme)
+        case .neutral: Geist.rgba(.gray100, scheme: scheme)
+        case .success: Geist.rgba(.blue100, scheme: scheme)
+        case .warning: Geist.rgba(.gray100, scheme: scheme)
+        case .error: Geist.rgba(.red100, scheme: scheme)
+        case .accent: Geist.rgba(.blue100, scheme: scheme)
         }
     }
 
-    func border(scheme: ColorScheme) -> Color {
+    func border(scheme: ColorScheme) -> Color { borderRGBA(scheme: scheme).swiftUIColor }
+
+    func borderRGBA(scheme: ColorScheme) -> GamepadRGBAColor {
         switch self {
-        case .neutral: Geist.color(.grayAlpha400, scheme: scheme)
-        case .success: Geist.color(.blue400, scheme: scheme)
-        case .warning: Geist.color(.grayAlpha600, scheme: scheme)
-        case .error: Geist.color(.red400, scheme: scheme)
-        case .accent: Geist.color(.blue400, scheme: scheme)
+        case .neutral: Geist.rgba(.grayAlpha400, scheme: scheme)
+        case .success: Geist.rgba(.blue400, scheme: scheme)
+        case .warning: Geist.rgba(.grayAlpha600, scheme: scheme)
+        case .error: Geist.rgba(.red400, scheme: scheme)
+        case .accent: Geist.rgba(.blue400, scheme: scheme)
         }
     }
 }

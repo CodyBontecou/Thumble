@@ -1,79 +1,106 @@
 {
   "schema": "com.codybontecou.pocketpad.wire-fixtures",
-  "version": 1,
   "vectors": [
     {
-      "name": "v1-attack-up-negative-timestamp",
+      "hex": "50500301f14d99d406904f01a733688b616b0d7600020000000000000000000000000000000000000000000000000000d6ffffffffffffff",
       "kind": "compact",
-      "hex": "50500101d6ffffffffffffff0602",
       "message": {
-        "type": "button",
-        "button": "attack",
+        "button": "F14D99D4-0690-4F01-A733-688B616B0D76",
         "state": "up",
-        "timestamp": -42
-      }
+        "timestamp": -42,
+        "type": "button"
+      },
+      "name": "v3-button-up-negative-timestamp"
     },
     {
-      "name": "v1-release-all",
-      "kind": "compact",
       "hex": "5050010215cd5b0700000000ffff",
+      "kind": "compact",
       "message": {
-        "type": "release_all",
-        "timestamp": 123456789
-      }
+        "timestamp": 123456789,
+        "type": "release_all"
+      },
+      "name": "v1-release-all"
     },
     {
-      "name": "v2-custom8-down-full-width",
+      "hex": "5050030166fa21c94d004b11889097d157f7881a00010f000807060504030201887766554433221111223344556677880000000000000000",
       "kind": "compact",
-      "hex": "5050020112010100080706050403020188776655443322111122334455667788",
       "message": {
-        "type": "button",
-        "button": "custom8",
+        "button": "66FA21C9-4D00-4B11-8890-97D157F7881A",
+        "inputGeneration": 72623859790382856,
+        "inputProtocolVersion": 3,
+        "inputSequence": 1234605616436508552,
+        "pressIdentifier": 9833440827789222417,
         "state": "down",
         "timestamp": 0,
-        "inputProtocolVersion": 2,
-        "inputGeneration": 72623859790382856,
-        "inputSequence": 1234605616436508552,
-        "pressIdentifier": 9833440827789222417
-      }
+        "type": "button"
+      },
+      "name": "v3-independent-button-down-full-width"
     },
     {
-      "name": "json-pairing-request",
-      "kind": "json",
       "json": {
-        "type": "pairing_request",
-        "timestamp": 0,
-        "clientName": "Fixture iPhone",
         "clientDeviceInfo": {
           "deviceName": "Fixture iPhone",
-          "systemName": "iOS",
-          "systemVersion": "26.0",
-          "screenBoundsWidth": 393,
-          "screenBoundsHeight": 852,
-          "nativeBoundsWidth": 1179,
-          "nativeBoundsHeight": 2556,
-          "scale": 3,
-          "nativeScale": 3,
           "futureField": {
             "kept": true
-          }
-        }
-      }
+          },
+          "nativeBoundsHeight": 2556,
+          "nativeBoundsWidth": 1179,
+          "nativeScale": 3,
+          "scale": 3,
+          "screenBoundsHeight": 852,
+          "screenBoundsWidth": 393,
+          "systemName": "iOS",
+          "systemVersion": "26.0"
+        },
+        "clientName": "Fixture iPhone",
+        "timestamp": 0,
+        "type": "pairing_request"
+      },
+      "kind": "json",
+      "name": "json-pairing-request"
     },
     {
-      "name": "json-element-input-v2",
-      "kind": "json",
-      "json": {
-        "type": "element_input",
-        "elementID": "00000000-0000-0000-0000-000000000105",
+      "hex": "5050030666fa21c94d004b11889097d157f7881a00010f005b000000000000002a0000000000000007000000000000000000000000000000",
+      "kind": "compact",
+      "message": {
+        "elementID": "66FA21C9-4D00-4B11-8890-97D157F7881A",
         "elementPart": "primary",
+        "inputGeneration": 91,
+        "inputProtocolVersion": 3,
+        "inputSequence": 42,
+        "pressIdentifier": 7,
         "state": "down",
         "timestamp": 0,
-        "inputProtocolVersion": 2,
-        "inputGeneration": 91,
-        "inputSequence": 42,
-        "pressIdentifier": 7
-      }
+        "type": "element_input"
+      },
+      "name": "v3-element-primary"
+    },
+    {
+      "hex": "50500306d57e214fcb0141439cb663418c5ae8e103020f005c000000000000002b00000000000000080000000000000040e2010000000000",
+      "kind": "compact",
+      "message": {
+        "elementID": "D57E214F-CB01-4143-9CB6-63418C5AE8E1",
+        "elementPart": "joystick_left",
+        "inputGeneration": 92,
+        "inputProtocolVersion": 3,
+        "inputSequence": 43,
+        "pressIdentifier": 8,
+        "state": "up",
+        "timestamp": 123456,
+        "type": "element_input"
+      },
+      "name": "v3-independent-joystick-left"
+    },
+    {
+      "hex": "50500101d6ffffffffffffff0602",
+      "kind": "rejected",
+      "name": "reject-v1-slot-button"
+    },
+    {
+      "hex": "5050020112010100080706050403020188776655443322111122334455667788",
+      "kind": "rejected",
+      "name": "reject-v2-slot-button"
     }
-  ]
+  ],
+  "version": 1
 }

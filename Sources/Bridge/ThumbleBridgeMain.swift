@@ -9,7 +9,7 @@ private enum ThumbleBridgeMain {
         }
         do {
             let requestData = try readSingleBoundedRequest()
-            let request = try JSONDecoder().decode(ThumbleConfigurationBridgeRequest.self, from: requestData)
+            let request = try JSONDecoder().decodeUnique(ThumbleConfigurationBridgeRequest.self, from: requestData)
             let response = try ThumbleConfigurationBridge.transform(request)
             try emit(response)
         } catch let error as ThumbleConfigurationBridgeError {

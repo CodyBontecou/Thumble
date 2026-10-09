@@ -1,36 +1,49 @@
 {
   "aliasesBasic": {
-    "descriptorDigest": "6bdfa3705c7653204ed81c147f49a028d2994e2d04de11ffe42a1f245bfa9492",
-    "profileID": "d8620521-07b3-51ab-b44e-1aefc030e84e",
-    "artifactContentHash": "217a99b93f63fc4ceb0b6aa2830f1c433241ec23b6e9e23b0b964ed62b74463b",
-    "assignedButtons": ["up", "jump"],
-    "generatedSemantic": {
-      "requestedGameName": "Requested Override",
-      "resolvedGameName": "Alias Arcade",
-      "keyBindingButtons": ["up", "jump"]
-    },
+    "artifactContentHash": "d30322960a0749ff82a36674aa8d6be5f50ee07f4fd7729f12f36196877fb61b",
     "artifactSemantic": {
-      "schemaVersion": 4,
       "artifactVersion": 1,
       "exportedAt": 0,
-      "profileCount": 1
-    }
+      "profileCount": 1,
+      "schemaVersion": 4
+    },
+    "assignedButtons": [
+      "D673535A-975B-4D72-93BE-FDF87C93001A",
+      "F3AE856B-4F4D-46E4-898F-6F97DA70002A"
+    ],
+    "descriptorDigest": "5a022853158c0877eb816bc73e5d42f4d504e1027c2394bae5472b226f4394b8",
+    "generatedSemantic": {
+      "keyBindingButtons": [
+        "D673535A-975B-4D72-93BE-FDF87C93001A",
+        "F3AE856B-4F4D-46E4-898F-6F97DA70002A"
+      ],
+      "requestedGameName": "Requested Override",
+      "resolvedGameName": "Alias Arcade"
+    },
+    "profileID": "79815752-59c4-5cb7-921a-83d7a76f63bf"
   },
   "mixedControls": {
-    "descriptorDigest": "de77e40ab8357247c979462c577b379af104e2152fc820f969dc16f0c9fbad86",
-    "profileID": "b03088b5-705c-5592-bccc-8222d8dddc3b",
-    "artifactContentHash": "aeccf1f9e3b197c23d93bb3fdddf47c1edfea8a8de8a1a632c9d8910a3bf08d4",
-    "assignedButtons": ["custom1", "custom2", "custom3", "custom4"],
-    "generatedSemantic": {
-      "requestedGameName": "Mixed Controls",
-      "resolvedGameName": "Mixed Controls",
-      "keyBindingButtons": ["custom1"]
-    },
+    "artifactContentHash": "b302b42f0220df4aaebb74a4dd952a2ab5c7712fdeb43cf9f8d7bce350f87798",
     "artifactSemantic": {
-      "schemaVersion": 4,
       "artifactVersion": 1,
       "exportedAt": 0,
-      "profileCount": 1
-    }
+      "profileCount": 1,
+      "schemaVersion": 4
+    },
+    "assignedButtons": [
+      "BD60BD75-DACE-5AB7-A2DC-021A6CCEC3F5",
+      "3E65E0AD-EFF7-57B1-ADFC-374EDA9CB6F8",
+      "C471B730-F90A-5DBB-AA81-733B4188A070",
+      "68A2A521-19E4-5DBC-A493-E5B6F9C32657"
+    ],
+    "descriptorDigest": "a41b68852197d71e8bec24ec57badc153933e4fc6d87903b09cc4f201388bb25",
+    "generatedSemantic": {
+      "keyBindingButtons": [
+        "BD60BD75-DACE-5AB7-A2DC-021A6CCEC3F5"
+      ],
+      "requestedGameName": "Mixed Controls",
+      "resolvedGameName": "Mixed Controls"
+    },
+    "profileID": "9bf8e737-ff96-5cff-82b6-1257dafd6ab0"
   }
 }

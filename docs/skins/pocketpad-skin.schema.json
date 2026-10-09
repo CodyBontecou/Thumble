@@ -181,7 +181,7 @@
             "required": ["button", "appearance"],
             "properties": {
               "button": {
-                "enum": ["up", "down", "left", "right", "jump", "attack", "dash", "focus", "map", "pause", "custom1", "custom2", "custom3", "custom4", "custom5", "custom6", "custom7", "custom8"]
+                "type": "string", "format": "uuid", "pattern": "^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$", "description": "Actual control UUID; named input slots are not supported."
               },
               "appearance": { "$ref": "#/$defs/controlAppearance" }
             },

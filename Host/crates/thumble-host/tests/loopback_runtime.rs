@@ -9,7 +9,7 @@ use thumble_host::runtime::{run_runtime, RuntimeOptions};
 use thumble_host::storage::save_atomic;
 use thumble_protocol::{
     ButtonPressState, ControllerMessage, ControllerMessageType, ControllerPointerEventKind,
-    ControllerWireCodec, GameButton,
+    ControllerWireCodec, KeypadElementID,
 };
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream};
@@ -304,7 +304,7 @@ async fn current_ios_loopback_pairs_reconnects_records_input_and_releases_on_shu
     let controls = control_response.controls.unwrap();
     assert!(controls
         .iter()
-        .any(|control| control.control_id == "button:jump"));
+        .any(|control| control.control_id == "element:00000000-0000-0000-0000-000000000105"));
     assert!(controls
         .iter()
         .all(|control| !control.control_id.to_ascii_lowercase().contains("keycode")));
@@ -322,7 +322,7 @@ async fn current_ios_loopback_pairs_reconnects_records_input_and_releases_on_shu
     assert_eq!(controller.canvas.height, 402.0);
     assert_eq!(controller.elements.len(), 10);
     let encoded_controller = serde_json::to_string(&controller).unwrap();
-    for forbidden in ["authToken", "keyCode", "modifiers", "partOutputs"] {
+    for forbidden in ["authToken", "keyCode", "modifiersRawValue", "partOutputs"] {
         assert!(!encoded_controller.contains(forbidden));
     }
     let select = successful(
@@ -339,7 +339,7 @@ async fn current_ios_loopback_pairs_reconnects_records_input_and_releases_on_shu
     let disabled_press = send_request(
         &paths.control_socket,
         &ControlRequest::PressControl {
-            control_id: "button:jump".to_owned(),
+            control_id: "element:00000000-0000-0000-0000-000000000105".to_owned(),
         },
     )
     .await
@@ -384,7 +384,7 @@ async fn current_ios_loopback_pairs_reconnects_records_input_and_releases_on_shu
         .await
         .unwrap();
     let accepted = receive_type(&mut first, ControllerMessageType::PairingAccepted).await;
-    assert_eq!(accepted.input_protocol_version, Some(2));
+    assert_eq!(accepted.input_protocol_version, Some(3));
     assert_eq!(accepted.realtime_token, None);
     assert_eq!(accepted.capabilities, Some(Vec::new()));
     assert_eq!(
@@ -449,7 +449,7 @@ async fn current_ios_loopback_pairs_reconnects_records_input_and_releases_on_shu
     first
         .send(Message::Binary(
             ControllerWireCodec::encode_button_with_sequence(
-                GameButton::Jump,
+                KeypadElementID::preset(5),
                 ButtonPressState::Down,
                 1,
                 Some(10),
@@ -462,7 +462,7 @@ async fn current_ios_loopback_pairs_reconnects_records_input_and_releases_on_shu
     first
         .send(Message::Binary(
             ControllerWireCodec::encode_button_with_sequence(
-                GameButton::Jump,
+                KeypadElementID::preset(5),
                 ButtonPressState::Up,
                 2,
                 Some(10),
@@ -476,7 +476,7 @@ async fn current_ios_loopback_pairs_reconnects_records_input_and_releases_on_shu
     pointer.pointer_event = Some(ControllerPointerEventKind::Move);
     pointer.delta_x = Some(12.5);
     pointer.delta_y = Some(-3.0);
-    pointer.input_protocol_version = Some(2);
+    pointer.input_protocol_version = Some(3);
     pointer.input_generation = Some(7);
     pointer.input_sequence = Some(1);
     first
@@ -502,7 +502,7 @@ async fn current_ios_loopback_pairs_reconnects_records_input_and_releases_on_shu
         .unwrap();
     let reaccepted = receive_type(&mut second, ControllerMessageType::PairingAccepted).await;
     assert_eq!(reaccepted.server_id.as_deref(), Some(server_id.as_str()));
-    assert_eq!(reaccepted.input_protocol_version, Some(2));
+    assert_eq!(reaccepted.input_protocol_version, Some(3));
     assert_eq!(reaccepted.realtime_token, None);
 
     let unsupported = ControllerMessage::new(ControllerMessageType::LaunchProfileTarget, 5);
@@ -537,7 +537,7 @@ async fn current_ios_loopback_pairs_reconnects_records_input_and_releases_on_shu
     second
         .send(Message::Binary(
             ControllerWireCodec::encode_button_with_sequence(
-                GameButton::Jump,
+                KeypadElementID::preset(5),
                 ButtonPressState::Down,
                 1,
                 Some(20),
@@ -550,7 +550,7 @@ async fn current_ios_loopback_pairs_reconnects_records_input_and_releases_on_shu
     second
         .send(Message::Binary(
             ControllerWireCodec::encode_button_with_sequence(
-                GameButton::Jump,
+                KeypadElementID::preset(5),
                 ButtonPressState::Down,
                 2,
                 Some(21),
@@ -563,7 +563,7 @@ async fn current_ios_loopback_pairs_reconnects_records_input_and_releases_on_shu
     assert_ping_round_trip(&mut second, 56).await;
     let active_status = wait_for_status(&paths).await;
     assert!(active_status.core.paired);
-    assert_eq!(active_status.core.pressed_buttons, vec![GameButton::Jump]);
+    assert_eq!(active_status.core.pressed_buttons, vec![KeypadElementID::preset(5)]);
     assert_eq!(active_status.output.held_key_count, 1);
     assert!(active_status
         .output

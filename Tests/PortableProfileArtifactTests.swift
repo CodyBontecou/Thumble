@@ -132,6 +132,53 @@ final class PortableProfileArtifactTests: XCTestCase {
         XCTAssertEqual(XCTAssertThrowsPortable(Data(malformedBinding.utf8)), .invalidBindingMap)
     }
 
+    func testBindingMapsMustReferenceDeclaredControlsNotJustUUIDs() throws {
+        var root = try XCTUnwrap(JSONSerialization.jsonObject(with: fixtureData()) as? [String: Any])
+        var profiles = try XCTUnwrap(root["profiles"] as? [[String: Any]])
+        var customization = try XCTUnwrap(profiles[0]["customization"] as? [String: Any])
+        customization["elements"] = []
+        profiles[0]["customization"] = customization
+        root["profiles"] = profiles
+        XCTAssertThrowsError(try PortableProfileArtifact(validating: sealedData(root)))
+    }
+
+    func testIndependentOrientationDeclarationsSupportAll384BindingOwners() throws {
+        var root = try XCTUnwrap(JSONSerialization.jsonObject(with: fixtureData()) as? [String: Any])
+        var profiles = try XCTUnwrap(root["profiles"] as? [[String: Any]])
+        var keys: [String: Any] = [:]
+        var outputs: [String: Any] = [:]
+        let keyboard: [String: Any] = ["keyCode": 49, "modifiersRawValue": 8]
+        let output: [String: Any] = ["keyboard": keyboard, "gamepadButtons": []]
+        for (variant, field) in ["customization", "landscapeCustomization", "portraitCustomization"].enumerated() {
+            var elements: [[String: Any]] = []
+            for ordinal in 0..<128 {
+                let id = String(format: "368C1C47-7233-40C4-93E6-%012X", variant * 128 + ordinal)
+                elements.append(["id": id, "kind": "button", "label": "Independent", "output": output])
+                keys[id] = keyboard
+                outputs[id] = output
+            }
+            profiles[0][field] = ["elements": elements]
+        }
+        root["profiles"] = profiles
+        let profileID = try XCTUnwrap(profiles[0]["id"] as? String)
+        root["profileKeyBindings"] = [profileID: keys]
+        root["profileOutputBindings"] = [profileID: outputs]
+        let artifact = try PortableProfileArtifact(validating: sealedData(root))
+        XCTAssertEqual(artifact.profiles[0].customization.elements.count, 128)
+        XCTAssertEqual(artifact.profiles[0].landscapeCustomization?.elements.count, 128)
+        XCTAssertEqual(artifact.profiles[0].portraitCustomization?.elements.count, 128)
+        XCTAssertEqual(artifact.profiles[0].initialMacOutputBindings.count, 384)
+    }
+
+    private func sealedData(_ value: [String: Any]) throws -> Data {
+        var root = value
+        let data = try JSONSerialization.data(withJSONObject: root, options: [.sortedKeys])
+        let canonical = try PortableArtifactCanonicalizer.canonicalize(data)
+        let digest = SHA256.hash(data: canonical).map { String(format: "%02x", $0) }.joined()
+        root["contentHash"] = ["algorithm": "sha256", "canonicalization": "rfc8785", "value": digest]
+        return try JSONSerialization.data(withJSONObject: root, options: [.sortedKeys])
+    }
+
     func testWrapperInlineSizeBudget() {
         XCTAssertLessThanOrEqual(MemoryLayout<PortableProfileArtifact>.size, 64)
     }

@@ -10,8 +10,8 @@ import Foundation
 ///
 /// Supported language (profile `thumble-css-core-1`):
 /// - Qualified rules with type (`controller`, `control`, `button`, `joystick`, `trigger`,
-///   `trackpad`, `text`, `decoration`), ID (`#jump`), attribute (`[kind="button"]`,
-///   `[role~="primary_action"]`, `[button="jump"]`), and `:root` selectors, plus the
+///   `trackpad`, `text`, `decoration`), ID (`#builtin-00000000-0000-0000-0000-000000000105`), attribute (`[kind="button"]`,
+///   `[role~="primary_action"]`, `[button="00000000-0000-0000-0000-000000000105"]`), and `:root` selectors, plus the
 ///   descendant combinator.
 /// - State pseudo-classes `:normal`, `:pressed`, `:active`, `:disabled`.
 /// - Custom properties with inheritance from the controller root and `var()` fallbacks.
@@ -31,14 +31,16 @@ public enum ThumbleCSSProfile {
     ]
     public static let statePseudoClasses = ["normal", "pressed", "active", "disabled"]
     public static let otherPseudoClasses = ["root"]
-    public static let attributeNames = ["id", "kind", "role", "button"]
+    public static let attributeNames = ["id", "kind", "role", "button", "action", "purpose", "group"]
     public static let mediaFeatures = ["prefers-color-scheme", "orientation"]
 
     public static let properties = [
         "background", "background-color", "background-image", "color",
         "border", "border-width", "border-color", "border-radius",
         "box-shadow", "opacity", "transform", "filter",
-        "-thumble-glow-color", "-thumble-glow-radius", "-thumble-knob-color", "-thumble-haptic-style"
+        "-thumble-glow-color", "-thumble-glow-radius", "-thumble-knob-color", "-thumble-haptic-style",
+        "-thumble-icon", "-thumble-icon-symbol", "-thumble-icon-placement", "-thumble-icon-scale", "-thumble-icon-tint", "-thumble-icon-rendering", "-thumble-legend", "font-size", "font-weight", "-thumble-font-design", "letter-spacing", "-thumble-line-limit", "text-align", "-thumble-label-padding", "-thumble-label-placement", "-thumble-trackpad-frame", "-thumble-trackpad-cursor", "-thumble-trackpad-indicators", "-thumble-joystick-ring", "-thumble-joystick-knob-ratio", "-thumble-joystick-knob-stroke-width",
+        "-thumble-trackpad-frame-color", "-thumble-trackpad-cursor-color", "-thumble-trackpad-indicator-color", "-thumble-trackpad-secondary-indicator-color", "-thumble-joystick-ring-color", "-thumble-joystick-knob-fill", "-thumble-joystick-knob-stroke", "-thumble-trackpad-frame-stroke-width", "-thumble-joystick-ring-stroke-width"
     ]
 
     /// Hard resource limits keep stylesheets deterministic and compile-time bounded.
@@ -980,6 +982,14 @@ final class ThumbleCSSParser {
             return nil
         }
         _ = advance()
+        if operation == "~" {
+            guard let equals = current, equals.kind == .delim("=") else {
+                issue(.error, "unsupported-attribute-operator", "Token membership requires `~=`.", next)
+                skipSelector()
+                return nil
+            }
+            _ = advance()
+        }
         guard let valueToken = current else {
             issue(.error, "invalid-selector", "Expected an attribute value.", opening)
             return nil
@@ -1116,24 +1126,26 @@ public struct ThumbleCSSControlElement: Codable, Equatable, Sendable {
     public var label: String
     public var kind: GamepadCustomControlKind
     public var role: GamepadVisualRole
-    public var button: GameButton
+    public var button: KeypadElementID?
+    public var semantics: ThumbleSkinControlSemantics?
 
-    public init(id: String, label: String, kind: GamepadCustomControlKind, role: GamepadVisualRole, button: GameButton) {
+    public init(id: String, label: String, kind: GamepadCustomControlKind, role: GamepadVisualRole, button: KeypadElementID?, semantics: ThumbleSkinControlSemantics? = nil) {
         self.id = id
         self.label = label
         self.kind = kind
         self.role = role
         self.button = button
+        self.semantics = semantics
     }
 
     /// Synthesized control used to compute role-level and default styles.
-    public static func synthetic(kind: GamepadCustomControlKind?, role: GamepadVisualRole?, button: GameButton?) -> ThumbleCSSControlElement {
+    public static func synthetic(kind: GamepadCustomControlKind?, role: GamepadVisualRole?, button: KeypadElementID?) -> ThumbleCSSControlElement {
         ThumbleCSSControlElement(
             id: "",
             label: "",
             kind: kind ?? .button,
             role: role ?? .custom,
-            button: button ?? .custom1
+            button: button
         )
     }
 
@@ -1157,6 +1169,10 @@ struct ThumbleCSSDocument: Sendable {
 enum ThumbleCSSDocumentBuilder {
     /// Stable, CSS-friendly element IDs: `builtin.leftShoulder` → `builtin-left-shoulder`.
     static func kebabIdentifier(_ value: String) -> String {
+        let suffix = String(value.suffix(36))
+        if UUID(uuidString: suffix) != nil, value.count > 36 {
+            return value.dropLast(36).lowercased().replacingOccurrences(of: ".", with: "-") + suffix.lowercased()
+        }
         var result = ""
         var previousWasBoundary = true
         for character in value {
@@ -1175,7 +1191,7 @@ enum ThumbleCSSDocumentBuilder {
         return result.trimmingCharacters(in: CharacterSet(charactersIn: "-"))
     }
 
-    static func documents(for artboard: ThumbleSkinArtboard, orientations: [ThumbleSkinOrientation]) -> [ThumbleCSSDocument] {
+    static func documents(for artboard: ThumbleSkinArtboard, orientations: [ThumbleSkinOrientation], semantics: [ThumbleSkinControlSemantics] = []) -> [ThumbleCSSDocument] {
         orientations.compactMap { orientation in
             guard let variant = artboard.variants.first(where: { $0.orientation == orientation }) else { return nil }
             let controls = variant.controls.map { control in
@@ -1184,7 +1200,9 @@ enum ThumbleCSSDocumentBuilder {
                     label: control.label,
                     kind: control.kind,
                     role: control.visualRole,
-                    button: control.mappedButton
+                    button: control.inputID,
+                    semantics: semantics.first { $0.controlID == control.id }
+                        ?? control.presentation.map { .init(controlID: control.id, action: $0.actionID, purpose: $0.purposeID, groups: $0.groupIDs) }
                 )
             }
             return ThumbleCSSDocument(orientation: orientation, controls: controls)
@@ -1250,11 +1268,27 @@ enum ThumbleCSSSelectorMatcher {
                 case "role":
                     if element.isRoot { return false }
                     actual = element.control?.role.rawValue ?? ""
+                case "action":
+                    guard let action = element.control?.semantics?.action else { return false }
+                    actual = action
+                case "purpose":
+                    guard let purpose = element.control?.semantics?.purpose else { return false }
+                    actual = purpose
+                case "group":
+                    guard let groups = element.control?.semantics?.groups, !groups.isEmpty else { return false }
+                    actual = groups.joined(separator: " ")
                 case "button":
-                    guard let control = element.control else { return false }
-                    actual = control.button.rawValue
+                    guard let button = element.control?.button else { return false }
+                    actual = button.rawValue
                 default:
                     return false
+                }
+                if ["action", "purpose", "group"].contains(name) {
+                    let matched = operation == "~"
+                        ? actual.split(whereSeparator: { $0.isWhitespace }).contains { $0 == value }
+                        : actual == value
+                    guard matched else { return false }
+                    continue
                 }
                 let normalizedActual = kebab(actual)
                 let matchesValue: Bool
@@ -1302,6 +1336,10 @@ struct ThumbleCSSCascadedDeclaration: Sendable {
     var value: [ThumbleCSSToken]
     var specificity: (Int, Int, Int)
     var order: Int
+    var declarationOrder: Int = 0
+    var priority: (Int, Int, Int, Int, Int) {
+        (specificity.0, specificity.1, specificity.2, order, declarationOrder)
+    }
 }
 
 final class ThumbleCSSCascade {
@@ -1407,7 +1445,7 @@ final class ThumbleCSSCascade {
                 )
                 guard matchesElement || matchesRoot else { continue }
                 let specificity = selector.specificity
-                for declaration in rule.declarations {
+                for (declarationOrder, declaration) in rule.declarations.enumerated() {
                     if declaration.name.hasPrefix("--") {
                         if matchesElement, !element.isRoot {
                             ownCustom[declaration.name] = declaration.value
@@ -1419,11 +1457,10 @@ final class ThumbleCSSCascade {
                             name: declaration.name,
                             value: declaration.value,
                             specificity: specificity,
-                            order: order
+                            order: order, declarationOrder: declarationOrder
                         )
                         if let existing = applied[declaration.name],
-                           (candidate.specificity.0, candidate.specificity.1, candidate.specificity.2, candidate.order)
-                            < (existing.specificity.0, existing.specificity.1, existing.specificity.2, existing.order) {
+                           candidate.priority < existing.priority {
                             continue
                         }
                         applied[declaration.name] = candidate
@@ -1447,8 +1484,11 @@ final class ThumbleCSSCascade {
             let resolved = resolveVarReferences(environment[name] ?? [], environment: environment, stack: [name])
             declarations.append(ThumbleCSSDeclaration(name: name, value: resolved, important: false, line: 0, column: 0))
         }
-        for name in applied.keys.sorted() {
-            let resolved = resolveVarReferences(applied[name]!.value, environment: environment, stack: [name])
+        // Longhands and shorthands can lower into the same native field. Apply them
+        // in cascade priority, never alphabetically by property name.
+        for entry in applied.values.sorted(by: { $0.priority < $1.priority }) {
+            let name = entry.name
+            let resolved = resolveVarReferences(entry.value, environment: environment, stack: [name])
             declarations.append(ThumbleCSSDeclaration(
                 name: name,
                 value: resolved,
@@ -1611,6 +1651,50 @@ extension ThumbleCSSComplexSelector {
 // MARK: - Value parsing
 
 struct ThumbleCSSParsedValues {
+    var pointingColors: [String: GamepadRGBAColor] = [:]
+    var pointingWidths: [String: CGFloat] = [:]
+    var nativePointingPaint: GamepadPointingPaint? {
+        guard !pointingColors.isEmpty || !pointingWidths.isEmpty else { return nil }
+        return GamepadPointingPaint(
+            trackpadFrameColor: pointingColors["-thumble-trackpad-frame-color"],
+            trackpadCursorColor: pointingColors["-thumble-trackpad-cursor-color"],
+            trackpadIndicatorColor: pointingColors["-thumble-trackpad-indicator-color"],
+            trackpadSecondaryIndicatorColor: pointingColors["-thumble-trackpad-secondary-indicator-color"],
+            joystickRingColor: pointingColors["-thumble-joystick-ring-color"],
+            joystickKnobFillColor: pointingColors["-thumble-joystick-knob-fill"],
+            joystickKnobStrokeColor: pointingColors["-thumble-joystick-knob-stroke"],
+            trackpadFrameStrokeWidth: pointingWidths["-thumble-trackpad-frame-stroke-width"],
+            joystickRingStrokeWidth: pointingWidths["-thumble-joystick-ring-stroke-width"]
+        )
+    }
+    var fontSize: CGFloat?
+    var iconAsset: String?
+    var iconSymbol: String?
+    var iconPlacement: GamepadControlIconPlacement?
+    var iconScale: CGFloat?
+    var iconTint: GamepadRGBAColor?
+    var iconRendering: GamepadControlIconRenderingMode?
+    var nativeIcon: GamepadControlIcon? {
+        guard let value = iconAsset ?? iconSymbol else { return nil }
+        return GamepadControlIcon(source: iconAsset == nil ? .sfSymbol : .asset, value: value,
+            placement: iconPlacement ?? .center, scale: iconScale ?? 1, tintColor: iconTint,
+            renderingMode: iconRendering ?? .template)
+    }
+    var legend: String?
+    var fontWeight: GamepadControlContentStyle.Weight?
+    var fontDesign: GamepadControlContentStyle.Design?
+    var tracking: CGFloat?
+    var lineLimit: Int?
+    var alignment: GamepadControlContentStyle.Alignment?
+    var labelPadding: CGFloat?
+    var labelPlacement: GamepadControlContentStyle.Placement?
+    var trackpadFrameVisible: Bool?
+    var trackpadCursorVisible: Bool?
+    var trackpadIndicatorsVisible: Bool?
+    var joystickRingVisible: Bool?
+    var joystickKnobRatio: CGFloat?
+    var joystickKnobStrokeWidth: CGFloat?
+
     var fillStyle: GamepadFillStyle?
     var foregroundColor: GamepadRGBAColor?
     var strokeColor: GamepadRGBAColor?
@@ -1656,6 +1740,52 @@ enum ThumbleCSSValueParser {
             _ = message
         }
         switch declaration.name {
+        case "-thumble-icon":
+            values.iconAsset = parseImageFill(tokens)?.assetID
+        case "-thumble-icon-symbol":
+            if tokens.count == 1, case .string(let text) = tokens[0].kind { values.iconSymbol = text }
+        case "-thumble-icon-placement":
+            if tokens.count == 1, case .ident(let name) = tokens[0].kind { values.iconPlacement = GamepadControlIconPlacement(rawValue: name) }
+        case "-thumble-icon-scale":
+            values.iconScale = parseNumberOrPercent(tokens, range: 0.2...3)
+        case "-thumble-icon-tint":
+            values.iconTint = parseColor(tokens, currentColor: currentColor)
+        case "-thumble-icon-rendering":
+            if tokens.count == 1, case .ident(let name) = tokens[0].kind { values.iconRendering = GamepadControlIconRenderingMode(rawValue: name) }
+        case "-thumble-legend":
+            if tokens.count == 1, case .string(let text) = tokens[0].kind { values.legend = text }
+        case "font-size":
+            if let value = parseSingleLength(tokens), (8...72).contains(value) { values.fontSize = value }
+        case "font-weight":
+            if tokens.count == 1, case .ident(let name) = tokens[0].kind { values.fontWeight = GamepadControlContentStyle.Weight(rawValue: name) }
+        case "-thumble-font-design":
+            if tokens.count == 1, case .ident(let name) = tokens[0].kind { values.fontDesign = GamepadControlContentStyle.Design(rawValue: name) }
+        case "letter-spacing":
+            if let value = parseSingleLength(tokens), (-4...12).contains(value) { values.tracking = value }
+        case "-thumble-line-limit":
+            if let value = parseNumberOrPercent(tokens, range: 1...4), (1...4).contains(value), value.rounded() == value { values.lineLimit = Int(value) }
+        case "text-align":
+            if tokens.count == 1, case .ident(let name) = tokens[0].kind { values.alignment = GamepadControlContentStyle.Alignment(rawValue: name) }
+        case "-thumble-label-padding":
+            if let value = parseSingleLength(tokens), (0...32).contains(value) { values.labelPadding = value }
+        case "-thumble-label-placement":
+            if tokens.count == 1, case .ident(let name) = tokens[0].kind { values.labelPlacement = GamepadControlContentStyle.Placement(rawValue: name) }
+        case "-thumble-trackpad-frame-color", "-thumble-trackpad-cursor-color", "-thumble-trackpad-indicator-color", "-thumble-trackpad-secondary-indicator-color", "-thumble-joystick-ring-color", "-thumble-joystick-knob-fill", "-thumble-joystick-knob-stroke":
+            values.pointingColors[declaration.name] = parseColor(tokens, currentColor: currentColor)
+        case "-thumble-trackpad-frame-stroke-width", "-thumble-joystick-ring-stroke-width":
+            if let value = parseSingleLength(tokens), (0...12).contains(value) { values.pointingWidths[declaration.name] = value }
+        case "-thumble-trackpad-frame":
+            if tokens.count == 1, case .ident(let name) = tokens[0].kind { values.trackpadFrameVisible = name == "visible" }
+        case "-thumble-trackpad-cursor":
+            if tokens.count == 1, case .ident(let name) = tokens[0].kind { values.trackpadCursorVisible = name == "visible" }
+        case "-thumble-trackpad-indicators":
+            if tokens.count == 1, case .ident(let name) = tokens[0].kind { values.trackpadIndicatorsVisible = name == "visible" }
+        case "-thumble-joystick-ring":
+            if tokens.count == 1, case .ident(let name) = tokens[0].kind { values.joystickRingVisible = name == "visible" }
+        case "-thumble-joystick-knob-ratio":
+            if let value = parseNumberOrPercent(tokens, range: 0.2...0.9), (0.2...0.9).contains(value) { values.joystickKnobRatio = value }
+        case "-thumble-joystick-knob-stroke-width":
+            if let value = parseSingleLength(tokens), (0...12).contains(value) { values.joystickKnobStrokeWidth = value }
         case "background", "background-color", "background-image":
             if let gradient = parseGradientFunction(tokens) {
                 values.fillStyle = gradient
@@ -2281,7 +2411,7 @@ public enum ThumbleCSSCompiler {
         sourceRoot: URL,
         fileManager: FileManager = .default
     ) throws -> ThumbleCSSCompilation {
-        guard let artboard = ThumbleSkinArtboardCatalog.resolve(workspace.artboardID) else {
+        guard let artboard = workspace.resolvedArtboard else {
             throw ThumbleCSSCompilerError.missingArtboard(workspace.artboardID)
         }
         guard !workspace.stylesheets.isEmpty else {
@@ -2292,7 +2422,8 @@ public enum ThumbleCSSCompiler {
         let cascade = ThumbleCSSCascade(rules: parsed.stylesheet.rules)
         let documents = ThumbleCSSDocumentBuilder.documents(
             for: artboard,
-            orientations: artboard.variants.map(\.orientation)
+            orientations: artboard.variants.map(\.orientation),
+            semantics: workspace.controlSemantics
         )
         cascade.reportUnmatchedSelectors(documents: documents)
         var report = ThumbleCSSReport(issues: parsed.issues)
@@ -2358,7 +2489,7 @@ public enum ThumbleCSSCompiler {
         sourceRoot: URL,
         fileManager: FileManager = .default
     ) -> ThumbleCSSReport {
-        guard let artboard = ThumbleSkinArtboardCatalog.resolve(workspace.artboardID) else {
+        guard let artboard = workspace.resolvedArtboard else {
             return ThumbleCSSReport(issues: [
                 ThumbleCSSIssue(severity: .error, code: "missing-artboard", message: "Unknown artboard \(workspace.artboardID).")
             ])
@@ -2386,7 +2517,8 @@ public enum ThumbleCSSCompiler {
         let cascade = ThumbleCSSCascade(rules: parsed.stylesheet.rules)
         let documents = ThumbleCSSDocumentBuilder.documents(
             for: artboard,
-            orientations: artboard.variants.map(\.orientation)
+            orientations: artboard.variants.map(\.orientation),
+            semantics: workspace.controlSemantics
         )
         cascade.reportUnmatchedSelectors(documents: documents)
         // Resolve the full computed matrix so var() resolution errors surface during lint.
@@ -2423,7 +2555,7 @@ public enum ThumbleCSSCompiler {
         public var label: String
         public var kind: String
         public var role: String
-        public var button: String
+        public var button: String?
         public var states: [StateDeclarations]
     }
 
@@ -2439,7 +2571,7 @@ public enum ThumbleCSSCompiler {
         sourceRoot: URL,
         fileManager: FileManager = .default
     ) throws -> [ComputedDocument] {
-        guard let artboard = ThumbleSkinArtboardCatalog.resolve(workspace.artboardID) else {
+        guard let artboard = workspace.resolvedArtboard else {
             throw ThumbleCSSCompilerError.missingArtboard(workspace.artboardID)
         }
         let texts = try loadStylesheets(workspace, sourceRoot: sourceRoot, fileManager: fileManager)
@@ -2447,7 +2579,8 @@ public enum ThumbleCSSCompiler {
         let cascade = ThumbleCSSCascade(rules: parsed.stylesheet.rules)
         let documents = ThumbleCSSDocumentBuilder.documents(
             for: artboard,
-            orientations: artboard.variants.map(\.orientation)
+            orientations: artboard.variants.map(\.orientation),
+            semantics: workspace.controlSemantics
         )
         var results: [ComputedDocument] = []
         for document in documents {
@@ -2484,7 +2617,7 @@ public enum ThumbleCSSCompiler {
                         label: control.label,
                         kind: control.kind.rawValue,
                         role: control.role.rawValue,
-                        button: control.button.rawValue,
+                        button: control.button?.rawValue,
                         states: states
                     )
                 }
@@ -2598,8 +2731,11 @@ public enum ThumbleCSSCompiler {
             .sorted { $0.rawValue < $1.rawValue }
         for role in roles {
             let dominantKind = dominantKind(for: role, in: documentsToUse)
+            // The reveal handle is the only system control without an element UUID.
+            // Element-owned system buttons receive their own exact rules below.
+            let systemHandle = role == .system ? documentsToUse.flatMap(\.controls).first { $0.id == "system-top-bar-activation" } : nil
             let element = ThumbleCSSDocumentElement(
-                control: ThumbleCSSControlElement.synthetic(kind: dominantKind, role: role, button: nil)
+                control: systemHandle ?? ThumbleCSSControlElement.synthetic(kind: dominantKind, role: role, button: nil)
             )
             let computed = computeElementStyle(
                 element: element,
@@ -2636,17 +2772,19 @@ public enum ThumbleCSSCompiler {
         }
 
         // Button styles: exact cascade per built-in face button on the artboard.
-        var buttons = Set<GameButton>()
+        var buttons = Set<KeypadElementID>()
         for document in documentsToUse {
-            for control in document.controls where control.kind == .button {
-                buttons.insert(control.button)
+            for control in document.controls {
+                if let button = control.button {
+                    buttons.insert(button)
+                }
             }
         }
         for button in buttons.sorted(by: { $0.rawValue < $1.rawValue }) {
             guard let document = documentsToUse.first(where: { document in
-                document.controls.contains { $0.kind == .button && $0.button == button }
+                document.controls.contains { $0.button == button }
             }) else { continue }
-            guard let control = document.controls.first(where: { $0.kind == .button && $0.button == button }) else { continue }
+            guard let control = document.controls.first(where: { $0.button == button }) else { continue }
             let element = ThumbleCSSDocumentElement(control: control)
             let computed = computeElementStyle(
                 element: element,
@@ -2713,6 +2851,9 @@ public enum ThumbleCSSCompiler {
         func collectAppearance(_ appearance: ThumbleSkinAppearance) {
             collect(appearance.backgroundFillStyle)
             for style in appearance.styleLibrary.styles {
+                for state in GamepadControlPresentationState.allCases {
+                    if let icon = style.visualStyle.stateStyle(for: state).content?.icon, icon.source == .asset { ids.insert(icon.value) }
+                }
                 collect(style.visualStyle.normal.fillStyle)
                 collect(style.visualStyle.pressed?.fillStyle)
                 collect(style.visualStyle.active?.fillStyle)
@@ -2793,7 +2934,26 @@ public enum ThumbleCSSCompiler {
                 innerShadowY: values.innerShadowY,
                 opacity: values.opacity,
                 scale: values.scale,
-                blurRadius: values.blurRadius
+                blurRadius: values.blurRadius,
+                content: GamepadControlContentStyle(
+                    icon: values.nativeIcon,
+                    legend: values.legend,
+                    fontSize: values.fontSize,
+                    fontWeight: values.fontWeight,
+                    fontDesign: values.fontDesign,
+                    tracking: values.tracking,
+                    lineLimit: values.lineLimit,
+                    alignment: values.alignment,
+                    labelPadding: values.labelPadding,
+                    labelPlacement: values.labelPlacement,
+                    trackpadFrameVisible: values.trackpadFrameVisible,
+                    trackpadCursorVisible: values.trackpadCursorVisible,
+                    trackpadIndicatorsVisible: values.trackpadIndicatorsVisible,
+                    joystickRingVisible: values.joystickRingVisible,
+                    joystickKnobRatio: values.joystickKnobRatio,
+                    joystickKnobStrokeWidth: values.joystickKnobStrokeWidth,
+                    pointing: values.nativePointingPaint
+                )
             )
             return style.isEmpty ? nil : style
         }
@@ -2868,6 +3028,89 @@ public enum ThumbleCSSCompiler {
             )
         }
         switch declaration.name {
+        case "-thumble-icon":
+            guard ThumbleCSSValueParser.parseImageFill(tokens) != nil else { return [error("invalid-value", "`-thumble-icon` requires url(#declared-asset). ")] }
+        case "-thumble-icon-symbol":
+            guard tokens.count == 1, case .string(let text) = tokens[0].kind, !text.isEmpty, text.count <= 80,
+                  text.unicodeScalars.allSatisfy({ CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-").contains($0) }) else { return [error("invalid-value", "`-thumble-icon-symbol` requires a quoted native symbol name.")] }
+        case "-thumble-icon-placement":
+            guard tokens.count == 1, case .ident(let name) = tokens[0].kind, GamepadControlIconPlacement(rawValue: name) != nil else { return [error("invalid-value", "Invalid native icon placement.")] }
+        case "-thumble-icon-scale":
+            guard let value = ThumbleCSSValueParser.parseNumberOrPercent(tokens, range: 0.2...3), value.isFinite, (0.2...3).contains(value) else { return [error("invalid-value", "Native icon scale requires 0.2...3.")] }
+        case "-thumble-icon-tint":
+            guard ThumbleCSSValueParser.parseColor(tokens, currentColor: currentColor) != nil else { return [error("invalid-value", "Native icon tint requires a color.")] }
+        case "-thumble-icon-rendering":
+            guard tokens.count == 1, case .ident(let name) = tokens[0].kind, GamepadControlIconRenderingMode(rawValue: name) != nil else { return [error("invalid-value", "Native icon rendering requires template, multicolor or original.")] }
+        case "-thumble-legend":
+            guard tokens.count == 1, case .string(let text) = tokens[0].kind,
+                  !text.isEmpty, text.count <= 64,
+                  !text.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) else {
+                return [error("invalid-value", "`-thumble-legend` requires a nonempty quoted legend of at most 64 characters without control characters.")]
+            }
+        case "font-size":
+            guard let value = ThumbleCSSValueParser.parseSingleLength(tokens), value.isFinite, (8...72).contains(value) else {
+                return [error("invalid-value", "`font-size` requires a pixel length between 8 and 72. ")]
+            }
+        case "font-weight":
+            guard tokens.count == 1, case .ident(let name) = tokens[0].kind, ["regular", "medium", "semibold", "bold"].contains(name) else {
+                return [error("invalid-value", "`font-weight` requires regular, medium, semibold, bold.")]
+            }
+        case "-thumble-font-design":
+            guard tokens.count == 1, case .ident(let name) = tokens[0].kind, ["system", "rounded", "serif", "monospaced"].contains(name) else {
+                return [error("invalid-value", "`-thumble-font-design` requires system, rounded, serif, monospaced.")]
+            }
+        case "letter-spacing":
+            guard let value = ThumbleCSSValueParser.parseSingleLength(tokens), value.isFinite, (-4...12).contains(value) else {
+                return [error("invalid-value", "`letter-spacing` requires a pixel length between -4 and 12. ")]
+            }
+        case "-thumble-line-limit":
+            guard let value = ThumbleCSSValueParser.parseNumberOrPercent(tokens, range: 1...4), value.isFinite, (1...4).contains(value), value.rounded() == value else {
+                return [error("invalid-value", "`-thumble-line-limit` requires an integer between 1 and 4. ")]
+            }
+        case "text-align":
+            guard tokens.count == 1, case .ident(let name) = tokens[0].kind, ["leading", "center", "trailing"].contains(name) else {
+                return [error("invalid-value", "`text-align` requires leading, center, trailing.")]
+            }
+        case "-thumble-label-padding":
+            guard let value = ThumbleCSSValueParser.parseSingleLength(tokens), value.isFinite, (0...32).contains(value) else {
+                return [error("invalid-value", "`-thumble-label-padding` requires a pixel length between 0 and 32. ")]
+            }
+        case "-thumble-label-placement":
+            guard tokens.count == 1, case .ident(let name) = tokens[0].kind, ["center", "top", "bottom", "leading", "trailing"].contains(name) else {
+                return [error("invalid-value", "`-thumble-label-placement` requires center, top, bottom, leading, trailing.")]
+            }
+        case "-thumble-trackpad-frame-color", "-thumble-trackpad-cursor-color", "-thumble-trackpad-indicator-color", "-thumble-trackpad-secondary-indicator-color", "-thumble-joystick-ring-color", "-thumble-joystick-knob-fill", "-thumble-joystick-knob-stroke":
+            guard ThumbleCSSValueParser.parseColor(tokens, currentColor: currentColor) != nil else {
+                return [error("invalid-value", "Native pointing paint requires a color.")]
+            }
+        case "-thumble-trackpad-frame-stroke-width", "-thumble-joystick-ring-stroke-width":
+            guard let value = ThumbleCSSValueParser.parseSingleLength(tokens), value.isFinite, (0...12).contains(value) else {
+                return [error("invalid-value", "Native pointing stroke requires a pixel length between 0 and 12.")]
+            }
+        case "-thumble-trackpad-frame":
+            guard tokens.count == 1, case .ident(let name) = tokens[0].kind, ["visible", "none"].contains(name) else {
+                return [error("invalid-value", "`-thumble-trackpad-frame` requires visible, none.")]
+            }
+        case "-thumble-trackpad-cursor":
+            guard tokens.count == 1, case .ident(let name) = tokens[0].kind, ["visible", "none"].contains(name) else {
+                return [error("invalid-value", "`-thumble-trackpad-cursor` requires visible, none.")]
+            }
+        case "-thumble-trackpad-indicators":
+            guard tokens.count == 1, case .ident(let name) = tokens[0].kind, ["visible", "none"].contains(name) else {
+                return [error("invalid-value", "`-thumble-trackpad-indicators` requires visible, none.")]
+            }
+        case "-thumble-joystick-ring":
+            guard tokens.count == 1, case .ident(let name) = tokens[0].kind, ["visible", "none"].contains(name) else {
+                return [error("invalid-value", "`-thumble-joystick-ring` requires visible, none.")]
+            }
+        case "-thumble-joystick-knob-ratio":
+            guard let value = ThumbleCSSValueParser.parseNumberOrPercent(tokens, range: 0.2...0.9), value.isFinite, (0.2...0.9).contains(value) else {
+                return [error("invalid-value", "`-thumble-joystick-knob-ratio` requires a number between 0.2 and 0.9. ")]
+            }
+        case "-thumble-joystick-knob-stroke-width":
+            guard let value = ThumbleCSSValueParser.parseSingleLength(tokens), value.isFinite, (0...12).contains(value) else {
+                return [error("invalid-value", "`-thumble-joystick-knob-stroke-width` requires a pixel length between 0 and 12. ")]
+            }
         case "background", "background-color":
             if ThumbleCSSValueParser.parseGradientFunction(tokens) == nil,
                ThumbleCSSValueParser.parseImageFill(tokens) == nil,
@@ -2980,6 +3223,36 @@ public struct ThumbleCSSCapabilities: Codable, Sendable {
     public static let current = ThumbleCSSCapabilities(
         profile: ThumbleCSSProfile.identifier,
         properties: [
+            PropertyCapability(name: "-thumble-icon", syntax: "url(#declared-asset)", appliesTo: "native icons"),
+            PropertyCapability(name: "-thumble-icon-symbol", syntax: "quoted SF Symbol name", appliesTo: "native icons"),
+            PropertyCapability(name: "-thumble-icon-placement", syntax: "leading | trailing | top | bottom | center | background", appliesTo: "native icons"),
+            PropertyCapability(name: "-thumble-icon-scale", syntax: "0.2...3", appliesTo: "native icons"),
+            PropertyCapability(name: "-thumble-icon-tint", syntax: "color", appliesTo: "native icons"),
+            PropertyCapability(name: "-thumble-icon-rendering", syntax: "template | multicolor | original", appliesTo: "native icons"),
+            PropertyCapability(name: "-thumble-legend", syntax: "quoted text, 1...64 characters", appliesTo: "native visual legends; preserves accessibility and routing"),
+            PropertyCapability(name: "font-size", syntax: "8...72px", appliesTo: "native legends"),
+            PropertyCapability(name: "font-weight", syntax: "regular | medium | semibold | bold", appliesTo: "native legends"),
+            PropertyCapability(name: "-thumble-font-design", syntax: "system | rounded | serif | monospaced", appliesTo: "native legends"),
+            PropertyCapability(name: "letter-spacing", syntax: "-4...12px", appliesTo: "native legends"),
+            PropertyCapability(name: "-thumble-line-limit", syntax: "1...4", appliesTo: "native legends"),
+            PropertyCapability(name: "text-align", syntax: "leading | center | trailing", appliesTo: "native legends"),
+            PropertyCapability(name: "-thumble-label-padding", syntax: "0...32px", appliesTo: "native legends"),
+            PropertyCapability(name: "-thumble-label-placement", syntax: "center | top | bottom | leading | trailing", appliesTo: "native legends"),
+            PropertyCapability(name: "-thumble-trackpad-frame-color", syntax: "color", appliesTo: "trackpad"),
+            PropertyCapability(name: "-thumble-trackpad-cursor-color", syntax: "color", appliesTo: "trackpad"),
+            PropertyCapability(name: "-thumble-trackpad-indicator-color", syntax: "color", appliesTo: "trackpad"),
+            PropertyCapability(name: "-thumble-trackpad-secondary-indicator-color", syntax: "color", appliesTo: "trackpad"),
+            PropertyCapability(name: "-thumble-joystick-ring-color", syntax: "color", appliesTo: "joystick"),
+            PropertyCapability(name: "-thumble-joystick-knob-fill", syntax: "color", appliesTo: "joystick"),
+            PropertyCapability(name: "-thumble-joystick-knob-stroke", syntax: "color", appliesTo: "joystick"),
+            PropertyCapability(name: "-thumble-trackpad-frame-stroke-width", syntax: "0...12px", appliesTo: "trackpad"),
+            PropertyCapability(name: "-thumble-joystick-ring-stroke-width", syntax: "0...12px", appliesTo: "joystick"),
+            PropertyCapability(name: "-thumble-trackpad-frame", syntax: "visible | none", appliesTo: "trackpad"),
+            PropertyCapability(name: "-thumble-trackpad-cursor", syntax: "visible | none", appliesTo: "trackpad"),
+            PropertyCapability(name: "-thumble-trackpad-indicators", syntax: "visible | none", appliesTo: "trackpad"),
+            PropertyCapability(name: "-thumble-joystick-ring", syntax: "visible | none", appliesTo: "joystick"),
+            PropertyCapability(name: "-thumble-joystick-knob-ratio", syntax: "0.2...0.9", appliesTo: "joystick"),
+            PropertyCapability(name: "-thumble-joystick-knob-stroke-width", syntax: "0...12px", appliesTo: "joystick"),
             PropertyCapability(name: "background", syntax: "<color> | <gradient> | url(#asset)", appliesTo: "controller, controls"),
             PropertyCapability(name: "background-color", syntax: "<color>", appliesTo: "controller, controls"),
             PropertyCapability(name: "background-image", syntax: "linear-gradient() | radial-gradient() | url(#asset)", appliesTo: "controller, controls"),
@@ -2999,7 +3272,7 @@ public struct ThumbleCSSCapabilities: Codable, Sendable {
         ],
         selectors: [
             "controller", "control", "button", "joystick", "trigger", "trackpad", "text", "decoration",
-            "#<element-id>", "[kind=…]", "[role=…]", "[role~=…]", "[button=…]", "descendant (space)"
+            "#<element-id>", "[kind=…]", "[role=…]", "[role~=…]", "[button=…]", "[action=…]", "[purpose=…]", "[group~=…]", "descendant (space)"
         ],
         pseudoClasses: [":root", ":normal", ":pressed", ":active", ":disabled"],
         mediaFeatures: ["prefers-color-scheme: light|dark", "orientation: portrait|landscape"],

@@ -3,6 +3,7 @@ mod rate_limit;
 pub mod relay;
 pub mod server;
 mod skin_preview;
+mod controller_design;
 
 pub use channel::{HostChannel, SharedHostChannel, UnixHostChannel};
 

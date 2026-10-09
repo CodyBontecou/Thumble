@@ -1,97 +1,80 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum GameButton {
-    Up,
-    Down,
-    Left,
-    Right,
-    Jump,
-    Attack,
-    Dash,
-    Focus,
-    Map,
-    Pause,
-    Custom1,
-    Custom2,
-    Custom3,
-    Custom4,
-    Custom5,
-    Custom6,
-    Custom7,
-    Custom8,
+/// Identity of an actual keypad element, with no action semantics or slot pool.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct KeypadElementID(pub [u8; 16]);
+
+impl KeypadElementID {
+    pub fn parse(raw: &str) -> Option<Self> {
+        let raw = raw.as_bytes();
+        if raw.len() != 36 || [8, 13, 18, 23].into_iter().any(|i| raw[i] != b'-') {
+            return None;
+        }
+        let mut bytes = [0; 16];
+        let mut index = 0;
+        let mut high = None;
+        for (position, byte) in raw.iter().copied().enumerate() {
+            if [8, 13, 18, 23].contains(&position) { continue; }
+            let nibble = match byte {
+                b'0'..=b'9' => byte - b'0',
+                b'a'..=b'f' => byte - b'a' + 10,
+                b'A'..=b'F' => byte - b'A' + 10,
+                _ => return None,
+            };
+            if let Some(value) = high.take() {
+                bytes[index] = value * 16 + nibble;
+                index += 1;
+            } else {
+                high = Some(nibble);
+            }
+        }
+        Some(Self(bytes))
+    }
+
+    /// Stable identities for the starter layout only. Never used as an allocator.
+    pub const fn preset(number: u16) -> Self {
+        let mut bytes = [0; 16];
+        let suffix = 0x100 + number;
+        bytes[14] = (suffix >> 8) as u8;
+        bytes[15] = suffix as u8;
+        Self(bytes)
+    }
+
+    pub fn starter_index(self) -> Option<usize> {
+        (1..=10).find(|number| self == Self::preset(*number)).map(usize::from)
+    }
 }
 
-impl GameButton {
-    pub const ALL: [Self; 18] = [
-        Self::Up,
-        Self::Down,
-        Self::Left,
-        Self::Right,
-        Self::Jump,
-        Self::Attack,
-        Self::Dash,
-        Self::Focus,
-        Self::Map,
-        Self::Pause,
-        Self::Custom1,
-        Self::Custom2,
-        Self::Custom3,
-        Self::Custom4,
-        Self::Custom5,
-        Self::Custom6,
-        Self::Custom7,
-        Self::Custom8,
-    ];
-
-    pub const fn compact_wire_code(self) -> u8 {
-        match self {
-            Self::Up => 1,
-            Self::Down => 2,
-            Self::Left => 3,
-            Self::Right => 4,
-            Self::Jump => 5,
-            Self::Attack => 6,
-            Self::Dash => 7,
-            Self::Focus => 8,
-            Self::Map => 9,
-            Self::Pause => 10,
-            Self::Custom1 => 11,
-            Self::Custom2 => 12,
-            Self::Custom3 => 13,
-            Self::Custom4 => 14,
-            Self::Custom5 => 15,
-            Self::Custom6 => 16,
-            Self::Custom7 => 17,
-            Self::Custom8 => 18,
+impl std::fmt::Display for KeypadElementID {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for (i, byte) in self.0.iter().enumerate() {
+            if [4, 6, 8, 10].contains(&i) { formatter.write_str("-")?; }
+            write!(formatter, "{byte:02X}")?;
         }
+        Ok(())
     }
+}
 
-    pub const fn from_compact_wire_code(code: u8) -> Option<Self> {
-        match code {
-            1 => Some(Self::Up),
-            2 => Some(Self::Down),
-            3 => Some(Self::Left),
-            4 => Some(Self::Right),
-            5 => Some(Self::Jump),
-            6 => Some(Self::Attack),
-            7 => Some(Self::Dash),
-            8 => Some(Self::Focus),
-            9 => Some(Self::Map),
-            10 => Some(Self::Pause),
-            11 => Some(Self::Custom1),
-            12 => Some(Self::Custom2),
-            13 => Some(Self::Custom3),
-            14 => Some(Self::Custom4),
-            15 => Some(Self::Custom5),
-            16 => Some(Self::Custom6),
-            17 => Some(Self::Custom7),
-            18 => Some(Self::Custom8),
-            _ => None,
-        }
+impl Serialize for KeypadElementID {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.to_string())
     }
+}
+
+impl<'de> Deserialize<'de> for KeypadElementID {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let raw = String::deserialize(deserializer)?;
+        Self::parse(&raw).ok_or_else(|| serde::de::Error::custom("expected an element UUID; named input slots are no longer supported"))
+    }
+}
+
+fn deserialize_optional_element_id<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<Option<String>, D::Error> {
+    let raw = Option::<String>::deserialize(deserializer)?;
+    if raw.as_deref().is_some_and(|value| KeypadElementID::parse(value).is_none()) {
+        return Err(serde::de::Error::custom("elementID must be a UUID; named input slots are not supported"));
+    }
+    Ok(raw)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -239,6 +222,7 @@ impl ControllerMessageType {
     pub(crate) const fn compact_wire_code(self) -> Option<u8> {
         match self {
             Self::Button => Some(1),
+            Self::ElementInput => Some(6),
             Self::ReleaseAll => Some(2),
             Self::Heartbeat => Some(3),
             Self::Ping => Some(4),
@@ -250,6 +234,7 @@ impl ControllerMessageType {
     pub(crate) const fn from_compact_wire_code(code: u8) -> Option<Self> {
         match code {
             1 => Some(Self::Button),
+            6 => Some(Self::ElementInput),
             2 => Some(Self::ReleaseAll),
             3 => Some(Self::Heartbeat),
             4 => Some(Self::Ping),
@@ -293,8 +278,8 @@ pub struct ControllerMessage {
     #[serde(rename = "type")]
     pub message_type: ControllerMessageType,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub button: Option<GameButton>,
-    #[serde(rename = "elementID", skip_serializing_if = "Option::is_none")]
+    pub button: Option<KeypadElementID>,
+    #[serde(rename = "elementID", default, deserialize_with = "deserialize_optional_element_id", skip_serializing_if = "Option::is_none")]
     pub element_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub element_part: Option<KeypadElementInputPart>,
@@ -421,15 +406,16 @@ mod tests {
     use super::*;
 
     #[test]
-    fn every_game_button_code_is_stable_and_reversible() {
-        for (index, button) in GameButton::ALL.into_iter().enumerate() {
-            let code = (index + 1) as u8;
-            assert_eq!(button.compact_wire_code(), code);
-            assert_eq!(GameButton::from_compact_wire_code(code), Some(button));
+    fn arbitrary_element_uuids_round_trip_and_named_slots_are_rejected() {
+        for number in 1..=128 {
+            let id = KeypadElementID::preset(number);
+            let json = serde_json::to_string(&id).unwrap();
+            assert_eq!(serde_json::from_str::<KeypadElementID>(&json).unwrap(), id);
+            assert_eq!(KeypadElementID::parse(&id.to_string().to_lowercase()), Some(id));
         }
-        assert_eq!(GameButton::from_compact_wire_code(0), None);
-        assert_eq!(GameButton::from_compact_wire_code(19), None);
-        assert_eq!(GameButton::from_compact_wire_code(u8::MAX), None);
+        for name in ["up", "down", "left", "right", "jump", "attack", "dash", "focus", "map", "pause", "custom1", "custom8"] {
+            assert!(serde_json::from_value::<KeypadElementID>(serde_json::json!(name)).is_err());
+        }
     }
 
     #[test]
@@ -451,6 +437,7 @@ mod tests {
             (ControllerMessageType::Heartbeat, 3),
             (ControllerMessageType::Ping, 4),
             (ControllerMessageType::Pong, 5),
+            (ControllerMessageType::ElementInput, 6),
         ];
         for (message_type, code) in compact {
             assert_eq!(message_type.compact_wire_code(), Some(code));
@@ -460,6 +447,6 @@ mod tests {
             );
         }
         assert_eq!(ControllerMessageType::from_compact_wire_code(0), None);
-        assert_eq!(ControllerMessageType::from_compact_wire_code(6), None);
+        assert_eq!(ControllerMessageType::from_compact_wire_code(7), None);
     }
 }

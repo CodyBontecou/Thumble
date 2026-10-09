@@ -2,7 +2,7 @@ mod common;
 
 use common::{core, error_text, no_tokens, pair, sent_message, ScriptedTokens};
 use thumble_core::{CoreTime, Effect, HostCore, KeyBinding, PersistentState, TrustedClient};
-use thumble_protocol::{ButtonPressState, ControllerMessage, ControllerMessageType, GameButton};
+use thumble_protocol::{ButtonPressState, ControllerMessage, ControllerMessageType, KeypadElementID};
 
 #[test]
 fn explicit_pairing_code_rotation_is_validated_and_preserves_state() {
@@ -48,7 +48,7 @@ fn pairing_request_rotates_code_and_pairing_acceptance_is_websocket_only() {
     assert_eq!(accepted.realtime_token, None);
     assert_eq!(accepted.binding_presentations, Some(Vec::new()));
     assert_eq!(accepted.capabilities, Some(Vec::new()));
-    assert_eq!(accepted.input_protocol_version, Some(2));
+    assert_eq!(accepted.input_protocol_version, Some(3));
     assert_eq!(accepted.gamepad_profiles.as_ref().unwrap().len(), 1);
     assert_eq!(
         accepted.gamepad_profile_id.as_deref(),
@@ -202,9 +202,9 @@ fn trusted_same_token_replaces_connection_and_releases_held_output() {
     pair(&mut core, 1, "same-secret");
 
     let mut down = ControllerMessage::new(ControllerMessageType::Button, 0);
-    down.button = Some(GameButton::Jump);
+    down.button = Some(KeypadElementID::preset(5));
     down.state = Some(ButtonPressState::Down);
-    down.input_protocol_version = Some(2);
+    down.input_protocol_version = Some(3);
     down.input_generation = Some(7);
     down.input_sequence = Some(1);
     down.press_identifier = Some(9);

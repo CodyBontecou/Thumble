@@ -16,16 +16,17 @@ use crate::drafts::{ConfigurationDraft, DraftError, DraftStore};
 use crate::paths::HostPaths;
 use crate::storage;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use thumble_core::{
-    canonical_default_profile_key_bindings, plan_generation_spec, ButtonBindings,
+    plan_generation_spec, ButtonBindings,
     ConfigurationDocument, ControllerControlBarItemSnapshot, ControllerGroupSnapshot,
     ControllerLayerSnapshot, ControllerStyleSnapshot, GenerationSpecError, GenerationSpecPlan,
     KeyBinding, OutputBinding, PersistentState, ProfileArtifact, ProfileArtifactContentHash,
     ProfileArtifactError, ProfileArtifactSelection,
 };
-use thumble_protocol::{GameButton, KeypadElementInputPart};
+use thumble_protocol::{KeypadElementID, KeypadElementInputPart};
 use uuid::Uuid;
 
 pub const CLI_PROFILE_SCHEMA_VERSION: u32 = 8;
@@ -55,6 +56,36 @@ pub enum CliProfileCommand {
     AuthorityStatus,
     #[serde(rename = "profile.list")]
     List,
+    #[serde(rename = "design.apply")]
+    DesignApply {
+        target: ProfileSelector,
+        #[serde(rename = "draftID", default, skip_serializing_if = "Option::is_none")]
+        draft_id: Option<Uuid>,
+        #[serde(rename = "expectedDraftRevision", default, skip_serializing_if = "Option::is_none")]
+        expected_draft_revision: Option<u64>,
+        #[serde(rename = "packageBase64")]
+        package_base64: String,
+        #[serde(rename = "packageSHA256")]
+        package_sha256: String,
+        #[serde(rename = "profileSHA256")]
+        profile_sha256: String,
+        #[serde(rename = "evidenceSHA256")]
+        evidence_sha256: String,
+        #[serde(rename = "baseProfileSHA256", default, skip_serializing_if = "Option::is_none")]
+        base_profile_sha256: Option<String>,
+        #[serde(rename = "layoutEditsJSON", default, skip_serializing_if = "Option::is_none")]
+        layout_edits_json: Option<String>,
+    },
+    #[serde(rename = "design.snapshot")]
+    DesignSnapshot {
+        target: ProfileSelector,
+        #[serde(rename = "createDraft", default, skip_serializing_if = "std::ops::Not::not")]
+        create_draft: bool,
+        #[serde(rename = "draftID", default, skip_serializing_if = "Option::is_none")]
+        draft_id: Option<Uuid>,
+        #[serde(rename = "expectedDraftRevision", default, skip_serializing_if = "Option::is_none")]
+        expected_draft_revision: Option<u64>,
+    },
     #[serde(rename = "profile.export")]
     Export {
         #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -344,18 +375,18 @@ pub enum CliProfileCommand {
     #[serde(rename = "binding.set")]
     BindingSet {
         target: ProfileSelector,
-        button: GameButton,
+        button: KeypadElementID,
         sequence: Vec<SemanticKeyStroke>,
     },
     #[serde(rename = "binding.clear")]
     BindingClear {
         target: ProfileSelector,
-        button: GameButton,
+        button: KeypadElementID,
     },
     #[serde(rename = "binding.reset")]
     BindingReset {
         target: ProfileSelector,
-        button: GameButton,
+        button: KeypadElementID,
     },
     #[serde(rename = "binding.reset-all")]
     BindingResetAll { target: ProfileSelector },
@@ -371,7 +402,7 @@ pub enum CliProfileCommand {
     #[serde(rename = "output.set")]
     OutputSet {
         target: ProfileSelector,
-        button: GameButton,
+        button: KeypadElementID,
         #[serde(rename = "keyboardEdit")]
         keyboard_edit: KeyboardOutputEdit,
         #[serde(rename = "gamepadEdit")]
@@ -380,7 +411,7 @@ pub enum CliProfileCommand {
     #[serde(rename = "output.reset")]
     OutputReset {
         target: ProfileSelector,
-        button: GameButton,
+        button: KeypadElementID,
     },
     #[serde(rename = "output.reset-all")]
     OutputResetAll { target: ProfileSelector },
@@ -479,6 +510,8 @@ impl CliProfileCommand {
             Self::AuthorityStatus => "authority.status",
             Self::List => "profile.list",
             Self::Export { .. } => "profile.export",
+            Self::DesignSnapshot { .. } => "design.snapshot",
+            Self::DesignApply { .. } => "design.apply",
             Self::Import { .. } => "profile.import",
             Self::Select { .. } => "profile.select",
             Self::SetDefault { .. } => "profile.default",
@@ -623,7 +656,7 @@ pub struct CliSemanticOutput {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CliBindingOutputRow {
-    pub button: GameButton,
+    pub button: KeypadElementID,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub output: Option<CliSemanticOutput>,
 }
@@ -801,6 +834,22 @@ pub struct CliProfileArtifact {
     pub content_hash: ProfileArtifactContentHash,
 }
 
+/// Credential-free exact render input, including local raster assets. Unlike portable export,
+/// this is a private design capture and never rewrites profile identity or appearance geometry.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CliDesignSnapshot {
+    pub configuration_revision: u64,
+    #[serde(rename = "draftID", default, skip_serializing_if = "Option::is_none")]
+    pub draft_id: Option<Uuid>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub draft_revision: Option<u64>,
+    #[serde(rename = "profileJSON")]
+    pub profile_json: String,
+    #[serde(rename = "bindingJSON")]
+    pub binding_json: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CliGenerationWarning {
@@ -919,6 +968,8 @@ pub struct CliProfileResponse {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub artifact: Option<CliProfileArtifact>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub design_snapshot: Option<CliDesignSnapshot>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub generation_plan: Option<CliGenerationPlan>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub orientation: Option<CliOrientationSummary>,
@@ -952,6 +1003,7 @@ impl CliProfileResponse {
             authority_present: Some(present),
             catalog: None,
             artifact: None,
+            design_snapshot: None,
             generation_plan: None,
             orientation: None,
             projection: None,
@@ -988,6 +1040,7 @@ impl CliProfileResponse {
             authority_present: None,
             catalog: result.catalog,
             artifact: result.artifact,
+            design_snapshot: result.design_snapshot,
             generation_plan: result.generation_plan,
             orientation: result.orientation,
             projection: result.projection,
@@ -1011,6 +1064,7 @@ impl CliProfileResponse {
             authority_present: None,
             catalog: None,
             artifact: None,
+            design_snapshot: None,
             generation_plan: None,
             orientation: None,
             projection: None,
@@ -1063,6 +1117,7 @@ impl TransactionFailure {
 struct TransactionResult {
     catalog: Option<CliProfileCatalog>,
     artifact: Option<CliProfileArtifact>,
+    design_snapshot: Option<CliDesignSnapshot>,
     generation_plan: Option<CliGenerationPlan>,
     orientation: Option<CliOrientationSummary>,
     projection: Option<CliBindingOutputProjection>,
@@ -1096,8 +1151,7 @@ fn generation_plan_projection(
                 && warning.source_ordinal < thumble_core::MAXIMUM_GENERATION_SOURCE_CONTROLS
         })
         && plan.assigned_controls.iter().all(|control| {
-            control.button.len() <= 32
-                && control.element_id.len() <= 64
+            KeypadElementID::parse(&control.button).is_some_and(|id| Some(id) == KeypadElementID::parse(&control.element_id))
                 && control.kind.len() <= 32
                 && control.source_ordinal < thumble_core::MAXIMUM_GENERATION_SOURCE_CONTROLS
         })
@@ -1325,6 +1379,12 @@ where
     let invocation_id = request.invocation_id.unwrap_or_else(Uuid::new_v4);
     let result = (|| -> Result<TransactionResult, TransactionFailure> {
         validate_request(request)?;
+        state.validate().map_err(|_| {
+            TransactionFailure::new(
+                "invalid_configuration",
+                "authoritative configuration is invalid or obsolete; no configuration was read or changed",
+            )
+        })?;
         validate_request_credentials(&request.command, state)?;
         let catalog = catalog_from_state(state)?;
         if let CliProfileCommand::GenerationPlanSpec {
@@ -1353,6 +1413,50 @@ where
                 catalog: Some(catalog),
                 ..TransactionResult::default()
             });
+        }
+        if let CliProfileCommand::DesignSnapshot { target, draft_id, expected_draft_revision, create_draft } = &request.command {
+            if request.expected_configuration_revision != Some(catalog.configuration_revision) {
+                return Err(TransactionFailure::new("configuration_revision_conflict", "design capture requires the exact current configuration revision"));
+            }
+            if *create_draft && (draft_id.is_some() || expected_draft_revision.is_some()) {
+                return Err(TransactionFailure::new("invalid_request", "createDraft cannot resume an existing draft"));
+            }
+            let (document, captured_id, draft_revision) = if *create_draft {
+                let draft = DraftStore::new(paths).begin(state, catalog.configuration_revision, now_millis()).map_err(draft_failure)?;
+                (draft.working_document, Some(Uuid::parse_str(&draft.draft_id).map_err(|_| TransactionFailure::new("design_capture_failed", "private draft identity is invalid"))?), Some(draft.draft_revision))
+            } else if let Some(id) = draft_id {
+                let draft = DraftStore::new(paths).get(&id.to_string(), now_millis()).map_err(|_| TransactionFailure::new("design_draft_unavailable", "design draft is unavailable"))?;
+                if draft.base_configuration_revision != catalog.configuration_revision {
+                    return Err(TransactionFailure::new("configuration_revision_conflict", "design capture requires a draft based on the current configuration; rebase explicitly first"));
+                }
+                if *expected_draft_revision != Some(draft.draft_revision) {
+                    return Err(TransactionFailure::new("draft_revision_conflict", "design capture requires the exact draft revision"));
+                }
+                (draft.working_document, Some(*id), Some(draft.draft_revision))
+            } else {
+                if expected_draft_revision.is_some() { return Err(TransactionFailure::new("invalid_request", "draft revision requires draftID")); }
+                (ConfigurationDocument::from_state(state).map_err(|_| TransactionFailure::new("design_capture_failed", "configuration could not be captured safely"))?, None, None)
+            };
+            document.validate().map_err(|_| TransactionFailure::new("design_capture_failed", "design snapshot configuration is invalid"))?;
+            let snapshot_catalog = catalog_from_document(&document, catalog.configuration_revision, state)?;
+            let selected = resolve_selector(target, &snapshot_catalog)?;
+            let raw = document.profiles.iter().find(|p| p.get("id").and_then(Value::as_str).is_some_and(|id| id.eq_ignore_ascii_case(&selected.profile_id.to_string())))
+                .ok_or_else(|| TransactionFailure::new("profile_not_found", "design target does not exist"))?;
+            let profile_json = serde_json::to_string(raw).map_err(|_| TransactionFailure::new("design_capture_failed", "profile encoding failed"))?;
+            let find_keys = document.profile_key_bindings.iter().find(|(id, _)| id.eq_ignore_ascii_case(&selected.profile_id.to_string())).map(|(_, v)| v);
+            let find_outputs = document.profile_output_bindings.iter().find(|(id, _)| id.eq_ignore_ascii_case(&selected.profile_id.to_string())).map(|(_, v)| v);
+            let binding_json = serde_json::to_string(&serde_json::json!({
+                "profileID": selected.profile_id,
+                "keyBindings": find_keys.or_else(|| selected.active.then_some(&document.key_bindings)).cloned().unwrap_or_default(),
+                "outputBindings": find_outputs.or_else(|| selected.active.then_some(&document.output_bindings)).cloned().unwrap_or_default(),
+                "inputSettings": design_input_settings(raw),
+                "outputMode": raw.get("outputMode")
+            })).map_err(|_| TransactionFailure::new("design_capture_failed", "binding encoding failed"))?;
+            if profile_json.len() > 8 * 1024 * 1024 || binding_json.len() > 8 * 1024 * 1024 {
+                return Err(TransactionFailure::new("design_capture_too_large", "design snapshot exceeded its bounded size"));
+            }
+            return Ok(TransactionResult { design_snapshot: Some(CliDesignSnapshot { configuration_revision: catalog.configuration_revision,
+                draft_id: captured_id, draft_revision, profile_json, binding_json }), ..TransactionResult::default() });
         }
         if let CliProfileCommand::Export { target } = &request.command {
             let document = ConfigurationDocument::from_state(state).map_err(|_| {
@@ -1494,7 +1598,10 @@ where
             )?),
             _ => None,
         };
-        let draft_id = deterministic_uuid(invocation_id, "configuration-draft");
+        let draft_id = match &request.command {
+            CliProfileCommand::DesignApply { draft_id: Some(id), .. } => *id,
+            _ => deterministic_uuid(invocation_id, "configuration-draft"),
+        };
         let commit_id = deterministic_uuid(invocation_id, "configuration-commit");
         let request_digest = match &decoded_import {
             Some(import) => descriptor_digest(&import.descriptor)?,
@@ -1548,10 +1655,24 @@ where
             }
         }
 
+        let captured_draft = if let CliProfileCommand::DesignApply { draft_id: Some(id), expected_draft_revision, .. } = &request.command {
+            let draft = DraftStore::new(paths).get(&id.to_string(), now_millis()).map_err(draft_failure)?;
+            if draft.base_configuration_revision != catalog.configuration_revision {
+                return Err(TransactionFailure::new("configuration_revision_conflict", "captured draft base changed; rebase explicitly and begin a new design"));
+            }
+            let operation_id = deterministic_uuid(invocation_id, "design.apply:operation:0").to_string();
+            let own_retry = draft.operation_log.iter().any(|record| record.operation_id == operation_id
+                && Some(record.base_draft_revision) == *expected_draft_revision && record.result_draft_revision == draft.draft_revision);
+            if *expected_draft_revision != Some(draft.draft_revision) && !own_retry {
+                return Err(TransactionFailure::new("draft_revision_conflict", "captured draft changed since review"));
+            }
+            Some(draft)
+        } else { None };
+        let design_catalog = captured_draft.as_ref().map(|draft| catalog_from_document(&draft.working_document, catalog.configuration_revision, state)).transpose()?;
         let plan = if decoded_import.is_none() {
             Some(plan_transaction(
                 &request.command,
-                &catalog,
+                design_catalog.as_ref().unwrap_or(&catalog),
                 &state.profiles,
                 invocation_id,
             )?)
@@ -1572,7 +1693,7 @@ where
             .transpose()?;
         let store = DraftStore::new(paths);
         let draft_id_text = draft_id.hyphenated().to_string();
-        let mut draft = store
+        let mut draft = if let Some(draft) = captured_draft { draft } else { store
             .begin_with_id(
                 state,
                 catalog.configuration_revision,
@@ -1585,7 +1706,7 @@ where
                     Ok(existing) => failure.with_draft(&existing),
                     Err(_) => failure,
                 }
-            })?;
+            })? };
 
         if let (Some(import), Some(import_plan)) = (&decoded_import, import_plan.as_ref()) {
             let operation_id = deterministic_uuid(invocation_id, "profile.import:operation")
@@ -1780,6 +1901,14 @@ pub fn execute_offline_authority(
     request: &CliProfileRequest,
 ) -> CliProfileResponse {
     let invocation_id = request.invocation_id.unwrap_or_else(Uuid::new_v4);
+    // Reject the supplied configuration before an absent store can be initialized.
+    // Failed imports must not author replacement profiles, revisions, or drafts.
+    let preflight = validate_request(request).and_then(|()| {
+        if let CliProfileCommand::Import { artifact_json, append_as_copies, select, make_default } = &request.command {
+            decode_profile_import(artifact_json, *append_as_copies, *select, *make_default, invocation_id).map(|_| ())
+        } else { Ok(()) }
+    });
+    if let Err(failure) = preflight { return CliProfileResponse::failure(invocation_id, "offline", failure); }
     let state = match storage::load_or_migrate(paths) {
         Ok(state) => state,
         Err(_) => {
@@ -1854,6 +1983,28 @@ pub(crate) fn commit_failure(error: ConfigurationCommitError) -> TransactionFail
     }
 }
 
+fn design_input_settings(profile: &Value) -> Value {
+    let mut variants = serde_json::Map::new();
+    for key in ["customization", "landscapeCustomization", "portraitCustomization"] {
+        if let Some(customization) = profile.get(key) {
+            let mut inputs = Vec::new();
+            for collection in ["elements", "customButtons"] {
+                if let Some(elements) = customization.get(collection).and_then(Value::as_array) {
+                    for element in elements {
+                        let mut fields = serde_json::Map::new();
+                        for name in ["id", "inputID", "kind", "controlKind", "output", "defaultOutput", "joystickMapping", "joystickOutputSettings", "triggerSettings", "trackpadSettings"] {
+                            if let Some(value) = element.get(name) { fields.insert(name.to_owned(), value.clone()); }
+                        }
+                        inputs.push(Value::Object(fields));
+                    }
+                }
+            }
+            variants.insert(key.to_owned(), Value::Array(inputs));
+        }
+    }
+    Value::Object(variants)
+}
+
 fn validate_request_credentials(
     command: &CliProfileCommand,
     state: &PersistentState,
@@ -1922,6 +2073,14 @@ fn validate_request(request: &CliProfileRequest) -> Result<(), TransactionFailur
             "invalid_request",
             "expected configuration revision is accepted only for mutations",
         ));
+    }
+    if let CliProfileCommand::DesignApply { draft_id, expected_draft_revision, .. } = &request.command {
+        if draft_id.is_some() != expected_draft_revision.is_some() || expected_draft_revision == &Some(0) {
+            return Err(TransactionFailure::new("invalid_design_apply", "draft apply requires exact draft ID and revision together"));
+        }
+    }
+    if matches!(&request.command, CliProfileCommand::DesignApply { .. }) && request.expected_configuration_revision.is_none() {
+        return Err(TransactionFailure::new("invalid_design_apply", "design apply requires an authoritative expected revision"));
     }
     match &request.command {
         CliProfileCommand::GenerationPlanSpec {
@@ -2197,6 +2356,16 @@ fn plan_transaction(
     invocation_id: Uuid,
 ) -> Result<PlannedTransaction, TransactionFailure> {
     match command {
+        CliProfileCommand::DesignApply { target, package_base64, package_sha256, profile_sha256, evidence_sha256, base_profile_sha256, layout_edits_json, .. } => {
+            let profile = resolve_selector(target, catalog)?;
+            let operation = ConfigurationOperation::DesignApply { profile_id: profile.profile_id.to_string(),
+                package_base64: package_base64.clone(), package_sha256: package_sha256.clone(),
+                profile_sha256: profile_sha256.clone(), evidence_sha256: evidence_sha256.clone(),
+                base_profile_sha256: base_profile_sha256.clone(), layout_edits_json: layout_edits_json.clone() };
+            operation.validate_bridge_input().map_err(|_| TransactionFailure::new("invalid_design_apply", "design apply contains an invalid artifact or layout plan"))?;
+            Ok(plan_one(operation, profile.name.clone()))
+        }
+
         CliProfileCommand::Select { target } => {
             let profile = resolve_selector(target, catalog)?;
             Ok(plan_one(
@@ -3046,6 +3215,7 @@ fn plan_transaction(
         }
         CliProfileCommand::List
         | CliProfileCommand::Export { .. }
+        | CliProfileCommand::DesignSnapshot { .. }
         | CliProfileCommand::Import { .. }
         | CliProfileCommand::GenerationPlanSpec { .. }
         | CliProfileCommand::AuthorityStatus
@@ -3173,12 +3343,7 @@ fn resolve_cli_element_id(
                 .get("label")
                 .and_then(serde_json::Value::as_str)
                 .unwrap_or_default();
-            let mapped = button
-                .get("mappedButton")
-                .and_then(serde_json::Value::as_str)
-                .unwrap_or_default();
-            (normalized_lookup(label) == normalized || normalized_lookup(mapped) == normalized)
-                .then_some(id)
+            (normalized_lookup(label) == normalized).then_some(id)
         })
         .collect::<Vec<_>>();
     matches.sort_unstable();
@@ -4113,25 +4278,15 @@ fn binding_output_projection_from_state(
     })?;
     let mode = profile_output_mode(raw_profile)?;
     let profile_id = profile.profile_id.hyphenated().to_string();
-    // Legacy Swift profiles may predate per-profile maps. Match the standalone
-    // CLI's bounded default-map fallback without materializing or exposing it
-    // until a real transaction writes that selected profile.
-    let fallback_keys = crate::bridge::default_recommended_keys();
-    let key_bindings = state
-        .profile_key_bindings
-        .iter()
-        .find(|(id, _)| id.eq_ignore_ascii_case(&profile_id))
-        .map(|(_, bindings)| bindings)
-        .unwrap_or(&fallback_keys);
-    let mut fallback_outputs = thumble_core::ButtonBindings::default();
-    crate::bridge::replace_with_keyboard_outputs(&mut fallback_outputs, key_bindings);
-    let custom_outputs = state
-        .profile_output_bindings
-        .iter()
-        .find(|(id, _)| id.eq_ignore_ascii_case(&profile_id))
-        .map(|(_, bindings)| bindings)
-        .unwrap_or(&fallback_outputs);
-    let effective_outputs = effective_output_map(mode, key_bindings, custom_outputs);
+    let owned_outputs = state.resolved_profile_output_bindings(&profile_id).ok_or_else(|| {
+        TransactionFailure::new("unsafe_profile_catalog", "binding/output profile is missing")
+    })?;
+    let mut owned_keys = ButtonBindings::default();
+    for (id, output) in owned_outputs.iter_ids() {
+        if let Some(keyboard) = &output.keyboard { owned_keys.insert(id, keyboard.clone()); }
+    }
+    let key_bindings = &owned_keys;
+    let effective_outputs = effective_output_map(mode, key_bindings, &owned_outputs);
     let (kind, rows, display_groups) = match command {
         CliProfileCommand::BindingList { .. } => (
             CliProjectionKind::BindingList,
@@ -4168,7 +4323,7 @@ fn profile_output_mode(
     match profile
         .get("outputMode")
         .and_then(serde_json::Value::as_str)
-        .unwrap_or("custom")
+        .unwrap_or("keyboard")
     {
         "keyboard" => Ok(ConfigurationOutputMode::Keyboard),
         "controller" => Ok(ConfigurationOutputMode::Controller),
@@ -4180,64 +4335,27 @@ fn profile_output_mode(
     }
 }
 
-fn effective_output_map(
-    mode: ConfigurationOutputMode,
-    keys: &thumble_core::ButtonBindings<KeyBinding>,
-    custom: &thumble_core::ButtonBindings<OutputBinding>,
-) -> thumble_core::ButtonBindings<OutputBinding> {
-    match mode {
-        ConfigurationOutputMode::Keyboard => keyboard_output_map(keys),
-        ConfigurationOutputMode::Controller => controller_output_map(),
-        ConfigurationOutputMode::Custom if custom.is_empty() => keyboard_output_map(keys),
-        ConfigurationOutputMode::Custom => custom.clone(),
-    }
-}
-
-fn keyboard_output_map(
-    keys: &thumble_core::ButtonBindings<KeyBinding>,
-) -> thumble_core::ButtonBindings<OutputBinding> {
-    let mut outputs = thumble_core::ButtonBindings::default();
-    for button in GameButton::ALL {
-        if let Some(binding) = keys.get(&button) {
-            outputs.insert(button, OutputBinding::keyboard(binding.clone()));
-        }
+fn effective_output_map(_mode: ConfigurationOutputMode, keys: &thumble_core::ButtonBindings<KeyBinding>, custom: &thumble_core::ButtonBindings<OutputBinding>) -> thumble_core::ButtonBindings<OutputBinding> {
+    let mut outputs = custom.clone();
+    for (raw_id, binding) in keys.iter() {
+        let id = KeypadElementID::parse(raw_id).unwrap();
+        if outputs.get(&id).is_none() { outputs.insert(id, OutputBinding::keyboard(binding.clone())); }
     }
     outputs
 }
 
-fn controller_output_map() -> thumble_core::ButtonBindings<OutputBinding> {
+fn keyboard_output_map(keys: &thumble_core::ButtonBindings<KeyBinding>) -> thumble_core::ButtonBindings<OutputBinding> {
     let mut outputs = thumble_core::ButtonBindings::default();
-    for (button, gamepad) in [
-        (GameButton::Up, "dpadUp"),
-        (GameButton::Down, "dpadDown"),
-        (GameButton::Left, "dpadLeft"),
-        (GameButton::Right, "dpadRight"),
-        (GameButton::Jump, "south"),
-        (GameButton::Attack, "east"),
-        (GameButton::Dash, "west"),
-        (GameButton::Focus, "north"),
-        (GameButton::Map, "select"),
-        (GameButton::Pause, "start"),
-        (GameButton::Custom1, "leftShoulder"),
-        (GameButton::Custom2, "rightShoulder"),
-        (GameButton::Custom3, "leftStickPress"),
-        (GameButton::Custom4, "rightStickPress"),
-        (GameButton::Custom5, "leftTriggerButton"),
-        (GameButton::Custom6, "rightTriggerButton"),
-        (GameButton::Custom7, "home"),
-    ] {
-        let mut output = OutputBinding::default();
-        output.gamepad_buttons.insert(gamepad.to_owned());
-        outputs.insert(button, output);
-    }
+    for (raw_id, binding) in keys.iter() { outputs.insert(KeypadElementID::parse(raw_id).unwrap(), OutputBinding::keyboard(binding.clone())); }
     outputs
 }
+
+
 
 fn binding_rows(
     bindings: &thumble_core::ButtonBindings<KeyBinding>,
 ) -> Result<Vec<CliBindingOutputRow>, TransactionFailure> {
-    GameButton::ALL
-        .into_iter()
+    bindings.iter().filter_map(|(raw_id, _)| KeypadElementID::parse(raw_id))
         .map(|button| {
             Ok(CliBindingOutputRow {
                 button,
@@ -4253,8 +4371,7 @@ fn binding_rows(
 fn output_rows(
     bindings: &thumble_core::ButtonBindings<OutputBinding>,
 ) -> Result<Vec<CliBindingOutputRow>, TransactionFailure> {
-    GameButton::ALL
-        .into_iter()
+    bindings.iter().filter_map(|(raw_id, _)| KeypadElementID::parse(raw_id))
         .map(|button| {
             Ok(CliBindingOutputRow {
                 button,
@@ -4353,13 +4470,16 @@ fn binding_display_groups(
     profile: &serde_json::Value,
     effective_outputs: &thumble_core::ButtonBindings<OutputBinding>,
 ) -> Result<Vec<CliBindingDisplayGroup>, TransactionFailure> {
+    let mode = profile_output_mode(profile)?;
     let landscape = binding_display_entries(
         orientation_customization(profile, OrientationVariant::Landscape)?,
         effective_outputs,
+        mode,
     )?;
     let portrait = binding_display_entries(
         orientation_customization(profile, OrientationVariant::Portrait)?,
         effective_outputs,
+        mode,
     )?;
     if landscape == portrait {
         Ok(vec![CliBindingDisplayGroup {
@@ -4403,6 +4523,7 @@ fn orientation_customization(
 fn binding_display_entries(
     customization: &serde_json::Value,
     effective_outputs: &thumble_core::ButtonBindings<OutputBinding>,
+    mode: ConfigurationOutputMode,
 ) -> Result<Vec<CliBindingDisplayEntry>, TransactionFailure> {
     let elements = normalized_binding_elements(customization)?;
     let mut entries = Vec::new();
@@ -4459,18 +4580,20 @@ fn binding_display_entries(
                     .get("output")
                     .map(parse_safe_output)
                     .transpose()?
-                    .filter(|output| {
-                        output.keyboard.is_some() || !output.gamepad_buttons.is_empty()
-                    })
             } else {
                 explicit_parts.get(&part).cloned()
             };
             let output = match direct {
                 Some(output) => Some(output),
-                None => legacy_button_for_part(&element, part)?
+                None => element_id_for_primary(&element, part)?
                     .and_then(|button| effective_outputs.get(&button).cloned()),
             };
-            let Some(output) = output else { continue };
+            let Some(mut output) = output else { continue };
+            match mode {
+                ConfigurationOutputMode::Keyboard => output.gamepad_buttons.clear(),
+                ConfigurationOutputMode::Controller => output.keyboard = None,
+                ConfigurationOutputMode::Custom => {}
+            }
             let output = semantic_output(
                 output.keyboard.as_ref(),
                 output.gamepad_buttons.iter().map(String::as_str),
@@ -4544,28 +4667,6 @@ fn normalized_binding_elements(
         }
         result.push(element);
     }
-    for button in [
-        GameButton::Up,
-        GameButton::Down,
-        GameButton::Left,
-        GameButton::Right,
-        GameButton::Jump,
-        GameButton::Attack,
-        GameButton::Dash,
-        GameButton::Focus,
-        GameButton::Map,
-        GameButton::Pause,
-    ] {
-        let id = built_in_element_id(button);
-        if seen.insert(id) {
-            result.push(serde_json::json!({
-                "id": id.hyphenated().to_string(),
-                "builtInButton": button,
-                "legacySlot": button,
-                "kind": "button"
-            }));
-        }
-    }
     if let Some(custom_buttons) = object
         .get("customButtons")
         .and_then(serde_json::Value::as_array)
@@ -4590,7 +4691,6 @@ fn normalized_binding_elements(
             if seen.insert(id) {
                 result.push(serde_json::json!({
                     "id": id.hyphenated().to_string(),
-                    "legacySlot": custom.get("mappedButton").cloned().unwrap_or(serde_json::json!("jump")),
                     "kind": custom.get("controlKind").cloned().unwrap_or(serde_json::json!("button")),
                     "joystickMapping": custom.get("joystickMapping").cloned()
                 }));
@@ -4695,44 +4795,8 @@ fn safe_keyboard_json(value: &serde_json::Value) -> bool {
     })
 }
 
-fn legacy_button_for_part(
-    element: &serde_json::Value,
-    part: KeypadElementInputPart,
-) -> Result<Option<GameButton>, TransactionFailure> {
-    let value = match part {
-        KeypadElementInputPart::Primary | KeypadElementInputPart::TriggerDigital => element
-            .get("legacySlot")
-            .or_else(|| element.get("builtInButton"))
-            .cloned(),
-        KeypadElementInputPart::JoystickUp
-        | KeypadElementInputPart::JoystickDown
-        | KeypadElementInputPart::JoystickLeft
-        | KeypadElementInputPart::JoystickRight => {
-            let key = match part {
-                KeypadElementInputPart::JoystickUp => "up",
-                KeypadElementInputPart::JoystickDown => "down",
-                KeypadElementInputPart::JoystickLeft => "left",
-                KeypadElementInputPart::JoystickRight => "right",
-                _ => unreachable!(),
-            };
-            element
-                .get("joystickMapping")
-                .and_then(serde_json::Value::as_object)
-                .and_then(|mapping| mapping.get(key))
-                .cloned()
-                .or_else(|| Some(serde_json::Value::String(key.to_owned())))
-        }
-    };
-    value
-        .map(|value| {
-            serde_json::from_value(value).map_err(|_| {
-                TransactionFailure::new(
-                    "unsafe_binding_projection",
-                    "element legacy mapping uses an unsupported button",
-                )
-            })
-        })
-        .transpose()
+fn element_id_for_primary(element: &serde_json::Value, part: KeypadElementInputPart) -> Result<Option<KeypadElementID>, TransactionFailure> {
+    Ok((part == KeypadElementInputPart::Primary).then(|| element.get("id").and_then(serde_json::Value::as_str).and_then(KeypadElementID::parse)).flatten())
 }
 
 const fn element_part_order(part: KeypadElementInputPart) -> u8 {
@@ -4746,29 +4810,7 @@ const fn element_part_order(part: KeypadElementInputPart) -> u8 {
     }
 }
 
-fn built_in_element_id(button: GameButton) -> Uuid {
-    let suffix = match button {
-        GameButton::Up => 101,
-        GameButton::Down => 102,
-        GameButton::Left => 103,
-        GameButton::Right => 104,
-        GameButton::Jump => 105,
-        GameButton::Attack => 106,
-        GameButton::Dash => 107,
-        GameButton::Focus => 108,
-        GameButton::Map => 109,
-        GameButton::Pause => 110,
-        GameButton::Custom1 => 111,
-        GameButton::Custom2 => 112,
-        GameButton::Custom3 => 113,
-        GameButton::Custom4 => 114,
-        GameButton::Custom5 => 115,
-        GameButton::Custom6 => 116,
-        GameButton::Custom7 => 117,
-        GameButton::Custom8 => 118,
-    };
-    Uuid::parse_str(&format!("00000000-0000-0000-0000-{suffix:012}")).expect("fixed UUID")
-}
+fn built_in_element_id(button: KeypadElementID) -> Uuid { Uuid::from_bytes(button.0) }
 
 fn orientation_source_exists(profile: &serde_json::Value, source: OrientationVariant) -> bool {
     let source_key = match source {
@@ -5079,7 +5121,7 @@ fn plan_profile_import(
                 })
         };
 
-        let (destination_id, is_new) = if import.descriptor.append_as_copies {
+        let (destination_id, _is_new) = if import.descriptor.append_as_copies {
             let id = import
                 .descriptor
                 .generated_profile_ids
@@ -5132,12 +5174,12 @@ fn plan_profile_import(
                 &destination_id,
                 bindings.clone(),
             );
-        } else if is_new {
-            replace_binding_map(
-                &mut candidate.profile_key_bindings,
-                &destination_id,
-                canonical_default_profile_key_bindings(),
-            );
+        } else {
+            let mut keys = ButtonBindings::default();
+            for (id, output) in thumble_core::profile_owned_outputs(source).iter_ids() {
+                if let Some(keyboard) = &output.keyboard { keys.insert(id, keyboard.clone()); }
+            }
+            replace_binding_map(&mut candidate.profile_key_bindings, &destination_id, keys);
         }
 
         if let Some(bindings) =
@@ -5148,15 +5190,14 @@ fn plan_profile_import(
                 &destination_id,
                 bindings.clone(),
             );
-        } else if is_new {
-            let keys = map_value_case_insensitive(&candidate.profile_key_bindings, &destination_id)
-                .cloned()
-                .unwrap_or_else(canonical_default_profile_key_bindings);
-            replace_binding_map(
-                &mut candidate.profile_output_bindings,
-                &destination_id,
-                output_bindings_from_keys(&keys),
-            );
+        } else {
+            let mut outputs = thumble_core::profile_owned_outputs(source);
+            if let Some(keys) = map_value_case_insensitive(&candidate.profile_key_bindings, &destination_id) {
+                for (id, keyboard) in keys.iter_ids() {
+                    if outputs.get(&id).is_none() { outputs.insert(id, thumble_core::OutputBinding::keyboard(keyboard.clone())); }
+                }
+            }
+            replace_binding_map(&mut candidate.profile_output_bindings, &destination_id, outputs);
         }
     }
 
@@ -5185,6 +5226,7 @@ fn plan_profile_import(
             .unwrap_or(selected_destination);
     }
 
+    candidate.refresh_global_binding_mirrors().map_err(|_| import_profile_failure())?;
     candidate.validate().map_err(|_| {
         TransactionFailure::new(
             "invalid_profile_import",
@@ -5201,6 +5243,8 @@ fn plan_profile_import(
     if candidate.default_profile_id != destination.default_profile_id {
         changed_paths.push("/defaultProfileID".to_owned());
     }
+    if candidate.key_bindings != destination.key_bindings { changed_paths.push("/keyBindings".to_owned()); }
+    if candidate.output_bindings != destination.output_bindings { changed_paths.push("/outputBindings".to_owned()); }
     if candidate.profile_key_bindings != destination.profile_key_bindings {
         changed_paths.push("/profileKeyBindings".to_owned());
     }
@@ -5305,14 +5349,6 @@ fn replace_binding_map<T>(map: &mut BTreeMap<String, T>, id: &str, value: T) {
         map.remove(&existing);
     }
     map.insert(id.to_owned(), value);
-}
-
-fn output_bindings_from_keys(keys: &ButtonBindings<KeyBinding>) -> ButtonBindings<OutputBinding> {
-    let mut outputs = ButtonBindings::default();
-    for (button, binding) in keys.iter() {
-        outputs.insert_raw(button, OutputBinding::keyboard(binding.clone()));
-    }
-    outputs
 }
 
 fn replay_import_profile_names(
@@ -5493,6 +5529,7 @@ fn replay_profile_names(
         | CliProfileCommand::BindingReset { target, .. }
         | CliProfileCommand::BindingResetAll { target }
         | CliProfileCommand::OutputMode { target, .. }
+        | CliProfileCommand::DesignApply { target, .. }
         | CliProfileCommand::OutputSet { target, .. }
         | CliProfileCommand::OutputReset { target, .. }
         | CliProfileCommand::OutputResetAll { target }
@@ -5513,6 +5550,7 @@ fn replay_profile_names(
         CliProfileCommand::AuthorityStatus
         | CliProfileCommand::List
         | CliProfileCommand::Export { .. }
+        | CliProfileCommand::DesignSnapshot { .. }
         | CliProfileCommand::Import { .. }
         | CliProfileCommand::GenerationPlanSpec { .. }
         | CliProfileCommand::OrientationGet { .. }
@@ -5639,7 +5677,7 @@ fn draft_failure(error: DraftError) -> TransactionFailure {
     }
 }
 
-fn now_millis() -> i64 {
+pub(crate) fn now_millis() -> i64 {
     use std::time::{SystemTime, UNIX_EPOCH};
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -5658,6 +5696,157 @@ mod tests {
             invocation_id: Some(Uuid::parse_str("aaaaaaaa-bbbb-5ccc-8ddd-eeeeeeeeeeee").unwrap()),
             expected_configuration_revision: None,
             command,
+        }
+    }
+
+    #[test]
+    fn design_snapshot_preserves_native_profile_assets_and_requires_exact_revisions() {
+        let directory = tempdir().unwrap();
+        let paths = HostPaths::new(directory.path().join("state.json"), directory.path().join("control.sock"));
+        let mut state = PersistentState::minimal("design-test").unwrap();
+        state.profiles[0]["customization"]["designCaptureSentinel"] = serde_json::json!({"pngBase64":"private-local-asset"});
+        state.normalize().unwrap();
+        let before = serde_json::to_vec(&state).unwrap();
+        let mut req = request(CliProfileCommand::DesignSnapshot { target: ProfileSelector::Active, create_draft: false,
+            draft_id: None, expected_draft_revision: None });
+        let stale = execute_profile_transaction(&paths, &state, &req, "test", |_, _, _, _, _| panic!("capture cannot save"));
+        assert_eq!(stale.error.unwrap().code, "configuration_revision_conflict");
+        req.expected_configuration_revision = Some(state.configuration_revision);
+        let response = execute_profile_transaction(&paths, &state, &req, "test", |_, _, _, _, _| panic!("capture cannot save"));
+        assert!(response.ok, "{:?}", response.error);
+        let snapshot = response.design_snapshot.unwrap();
+        let raw: Value = serde_json::from_str(&snapshot.profile_json).unwrap();
+        assert_eq!(raw, state.profiles[0]);
+        assert!(snapshot.profile_json.contains("private-local-asset"));
+        assert!(!snapshot.profile_json.contains("trustedClients"));
+        assert_eq!(snapshot.configuration_revision, state.configuration_revision);
+        assert_eq!(before, serde_json::to_vec(&state).unwrap());
+        assert!(!paths.drafts_dir.exists());
+        assert!(!paths.state_file.exists());
+    }
+
+    #[test]
+    fn design_draft_commands_use_native_camel_case_wire_fields() {
+        let id = Uuid::new_v4();
+        let command = CliProfileCommand::DesignSnapshot { target: ProfileSelector::Active, create_draft: false,
+            draft_id: Some(id), expected_draft_revision: Some(7) };
+        let wire = serde_json::to_value(&command).unwrap();
+        assert_eq!(wire["expectedDraftRevision"], 7);
+        assert!(wire.get("expected_draft_revision").is_none());
+        assert_eq!(serde_json::from_value::<CliProfileCommand>(wire).unwrap(), command);
+        let apply = CliProfileCommand::DesignApply { target: ProfileSelector::Active,
+            draft_id: Some(id), expected_draft_revision: Some(7), package_base64: "AA==".into(),
+            package_sha256: "a".repeat(64), profile_sha256: "b".repeat(64), evidence_sha256: "c".repeat(64),
+            base_profile_sha256: None, layout_edits_json: None };
+        let wire = serde_json::to_value(&apply).unwrap();
+        assert_eq!(wire["expectedDraftRevision"], 7);
+        assert_eq!(serde_json::from_value::<CliProfileCommand>(wire).unwrap(), apply);
+    }
+
+    #[test]
+    fn design_draft_capture_requires_exact_draft_and_base_revisions() {
+        let directory = tempdir().unwrap();
+        let paths = HostPaths::new(directory.path().join("authority"), directory.path().join("control.sock"));
+        let state = PersistentState::minimal("design-draft-test").unwrap();
+        let draft = DraftStore::new(&paths).begin(&state, state.configuration_revision, now_millis()).unwrap();
+        let mut req = request(CliProfileCommand::DesignSnapshot { target: ProfileSelector::Active, create_draft: false,
+            draft_id: Some(Uuid::parse_str(&draft.draft_id).unwrap()), expected_draft_revision: Some(draft.draft_revision) });
+        req.expected_configuration_revision = Some(state.configuration_revision);
+        let response = execute_profile_transaction(&paths, &state, &req, "test", |_, _, _, _, _| panic!("capture cannot save"));
+        assert!(response.ok, "{:?}", response.error);
+        assert_eq!(response.design_snapshot.unwrap().draft_revision, Some(draft.draft_revision));
+        if let CliProfileCommand::DesignSnapshot { expected_draft_revision, .. } = &mut req.command {
+            *expected_draft_revision = Some(draft.draft_revision + 1);
+        }
+        let stale = execute_profile_transaction(&paths, &state, &req, "test", |_, _, _, _, _| panic!("capture cannot save"));
+        assert_eq!(stale.error.unwrap().code, "draft_revision_conflict");
+        let mut newer = state.clone();
+        newer.configuration_revision += 1;
+        req.expected_configuration_revision = Some(newer.configuration_revision);
+        let stale = execute_profile_transaction(&paths, &newer, &req, "test", |_, _, _, _, _| panic!("capture cannot save"));
+        assert_eq!(stale.error.unwrap().code, "configuration_revision_conflict");
+    }
+
+    #[test]
+    fn borrowed_transactions_reject_whole_invalid_state_before_reads_and_replay() {
+        let directory = tempdir().unwrap();
+        let paths = HostPaths::new(
+            directory.path().join("authority/state.json"),
+            directory.path().join("authority/control.sock"),
+        );
+        let rename = request(CliProfileCommand::Rename {
+            target: ProfileSelector::Active,
+            name: "Renamed".to_owned(),
+        });
+        let mut source = PersistentState::minimal("server").unwrap();
+        source.recent_configuration_commits.push(thumble_core::ConfigurationCommitRecord {
+            commit_id: deterministic_uuid(rename.invocation_id.unwrap(), "configuration-commit")
+                .hyphenated().to_string(),
+            draft_id: deterministic_uuid(rename.invocation_id.unwrap(), "configuration-draft")
+                .hyphenated().to_string(),
+            base_configuration_revision: 1,
+            result_configuration_revision: 2,
+            draft_revision: 2,
+            draft_digest: "0".repeat(64),
+            client_request_digest: Some(request_digest(&rename.command).unwrap()),
+            committed_at: 1,
+        });
+        source.configuration_revision = 2;
+        source.normalize().unwrap();
+        let valid_replay = execute_profile_transaction(&paths, &source, &rename, "test", |_, _, _, _, _| {
+            panic!("acknowledged replay must not invoke persistence")
+        });
+        assert!(valid_replay.ok, "{:?}", valid_replay.error);
+        assert!(valid_replay.outcome.unwrap().idempotent_replay);
+        let mut orphan_global = source.clone();
+        let orphan = KeypadElementID::parse("81C296ED-309D-4F05-BB11-F5A2E2027801").unwrap();
+        orphan_global.output_bindings.insert(orphan, OutputBinding::keyboard(KeyBinding::new(49, 0)));
+        let mut orphan_profile = source.clone();
+        orphan_profile.profile_key_bindings.entry(source.active_profile_id.clone()).or_default()
+            .insert(orphan, KeyBinding::new(49, 0));
+        let mut invalid_inactive = source.clone();
+        let mut inactive = source.profiles[0].clone();
+        inactive["id"] = serde_json::json!(Uuid::new_v4().hyphenated().to_string());
+        inactive["customization"]["elements"][0]["mappedButton"] = serde_json::Value::Null;
+        invalid_inactive.profiles.push(inactive);
+        let mut old_schema = source.clone();
+        old_schema.schema_version = 2;
+        let mut zero_revision = source.clone();
+        zero_revision.configuration_revision = 0;
+        let mut invalid_mode = source.clone();
+        invalid_mode.profiles[0]["outputMode"] = serde_json::json!("gamepad");
+        let mut invalid_inactive_mode = source.clone();
+        let mut inactive = source.profiles[0].clone();
+        inactive["id"] = serde_json::json!(Uuid::new_v4().hyphenated().to_string());
+        inactive["outputMode"] = serde_json::json!(1);
+        invalid_inactive_mode.profiles.push(inactive);
+        for state in [
+            orphan_global,
+            orphan_profile,
+            invalid_inactive,
+            old_schema,
+            zero_revision,
+            invalid_mode,
+            invalid_inactive_mode,
+        ] {
+            let before = serde_json::to_value(&state).unwrap();
+            for command in [
+                request(CliProfileCommand::List),
+                generation_request(include_str!("../../../fixtures/generation-spec/v1/aliases-basic.json"), None),
+                rename.clone(),
+            ] {
+                let response = execute_profile_transaction(&paths, &state, &command, "test", |_, _, _, _, _| {
+                    panic!("invalid borrowed configuration must not invoke persistence")
+                });
+                assert!(!response.ok, "invalid state reached {}", command.command.kind());
+                assert_eq!(response.error.unwrap().code, "invalid_configuration");
+                assert!(response.catalog.is_none());
+                assert!(response.generation_plan.is_none());
+                assert!(response.outcome.is_none());
+                assert!(!paths.state_file.exists());
+                assert!(!paths.drafts_dir.exists());
+                assert_eq!(serde_json::to_value(&state).unwrap(), before);
+            }
         }
     }
 
@@ -6350,13 +6539,13 @@ mod tests {
         name_match["name"] = serde_json::json!("By Name");
         destination.profiles.push(name_match);
         let mut preserved_keys = ButtonBindings::default();
-        preserved_keys.insert(GameButton::Jump, KeyBinding::new(77, 2));
+        preserved_keys.insert(KeypadElementID::preset(5), KeyBinding::new(77, 2));
         destination
             .profile_key_bindings
             .insert(name_match_id.to_owned(), preserved_keys.clone());
         let mut preserved_outputs = ButtonBindings::default();
         preserved_outputs.insert(
-            GameButton::Jump,
+            KeypadElementID::preset(5),
             OutputBinding::keyboard(KeyBinding::new(78, 1)),
         );
         destination
@@ -6427,15 +6616,15 @@ mod tests {
         assert!(update_times.iter().next().unwrap() > &0);
         assert!(imported.profile_key_bindings[thumble_core::DEFAULT_PROFILE_ID].is_empty());
         assert!(imported.profile_output_bindings[thumble_core::DEFAULT_PROFILE_ID].is_empty());
-        assert_eq!(imported.profile_key_bindings[name_match_id], preserved_keys);
-        assert_eq!(
-            imported.profile_output_bindings[name_match_id],
-            preserved_outputs
-        );
+        let target_owned = thumble_core::profile_owned_outputs(&imported.profiles[1]);
+        assert_eq!(imported.profile_output_bindings[name_match_id], target_owned);
+        assert_eq!(imported.profile_key_bindings[name_match_id].len(), 10);
+        assert_ne!(imported.profile_key_bindings[name_match_id], preserved_keys);
+        assert_ne!(imported.profile_output_bindings[name_match_id], preserved_outputs);
         assert_eq!(imported.profile_key_bindings[new_id].len(), 10);
         assert_eq!(imported.profile_output_bindings[new_id].len(), 10);
-        assert_eq!(imported.key_bindings, destination.key_bindings);
-        assert_eq!(imported.output_bindings, destination.output_bindings);
+        assert_eq!(imported.output_bindings, thumble_core::profile_owned_outputs(&imported.profiles[0]));
+        assert_eq!(imported.key_bindings.len(), 10);
         let draft_id = deterministic_uuid(invocation, "configuration-draft")
             .hyphenated()
             .to_string();
@@ -6616,6 +6805,11 @@ mod tests {
         second["id"] = serde_json::json!(second_id);
         second["name"] = serde_json::json!("Pad");
         source.profiles.push(second);
+        source.profile_key_bindings.clear();
+        source.profile_output_bindings.clear();
+        for profile in &source.profiles {
+            source.profile_output_bindings.insert(profile["id"].as_str().unwrap().to_owned(), thumble_core::profile_owned_outputs(profile));
+        }
         source.normalize().unwrap();
         let invocation = Uuid::parse_str("33333333-4444-5555-8666-777777777777").unwrap();
         let request = CliProfileRequest {
@@ -6728,6 +6922,31 @@ mod tests {
         );
         assert_eq!(oversized.error.unwrap().code, "profile_artifact_too_large");
         assert!(!paths.drafts_dir.exists());
+    }
+
+    #[test]
+    fn rejected_offline_imports_never_initialize_or_rewrite_configuration() {
+        for artifact_json in [
+            "{}",
+            r#"{"schemaVersion":1,"profiles":[]}"#,
+            r#"{"schemaVersion":4,"profiles":[{"id":"00000000-0000-0000-0000-000000000201","name":"Obsolete","customization":{"elements":[{"id":"jump","kind":"button"}]}}]}"#,
+            r#"{"schemaVersion":4,"schemaVersion":4,"profiles":[]}"#,
+        ] {
+            let directory = tempdir().unwrap();
+            let paths = HostPaths::new(directory.path().join("state"), directory.path().join("control.sock"));
+            let request = request(CliProfileCommand::Import {
+                artifact_json: artifact_json.to_owned(), append_as_copies: false, select: true, make_default: false,
+            });
+            let response = execute_offline_authority(&paths, &request);
+            assert!(!response.ok, "obsolete or ambiguous import must reject");
+            assert!(!paths.state_file.exists(), "rejected import authored replacement state");
+            assert!(!paths.drafts_dir.exists(), "rejected import authored a draft");
+
+            storage::save_atomic(&paths.state_file, &PersistentState::minimal("keep-existing").unwrap()).unwrap();
+            let before = std::fs::read(&paths.state_file).unwrap();
+            assert!(!execute_offline_authority(&paths, &request).ok);
+            assert_eq!(std::fs::read(&paths.state_file).unwrap(), before);
+        }
     }
 
     #[test]
@@ -6961,7 +7180,7 @@ mod tests {
         let projection = binding.projection.unwrap();
         assert_eq!(projection.configuration_revision, 12);
         assert_eq!(projection.kind, CliProjectionKind::BindingList);
-        assert_eq!(projection.rows.as_ref().unwrap().len(), 18);
+        assert_eq!(projection.rows.as_ref().unwrap().len(), state.profiles[0]["customization"]["elements"].as_array().unwrap().len());
         let json = serde_json::to_string(&projection).unwrap();
         assert!(!json.to_ascii_lowercase().contains("keycode"));
         assert!(!json.contains("secret-binding-token"));
@@ -7001,7 +7220,7 @@ mod tests {
             .rows
             .unwrap()
             .into_iter()
-            .find(|row| row.button == GameButton::Jump)
+            .find(|row| row.button == KeypadElementID::preset(5))
             .and_then(|row| row.output)
             .unwrap();
         assert_eq!(jump.keyboard[0].key, "Return");
@@ -7010,7 +7229,15 @@ mod tests {
             .profile_key_bindings
             .get_mut(thumble_core::DEFAULT_PROFILE_ID)
             .unwrap()
-            .insert(GameButton::Jump, KeyBinding::new(u16::MAX, 0));
+            .insert(KeypadElementID::preset(5), KeyBinding::new(u16::MAX, 0));
+        let stale_projection = execute_profile_transaction(
+            &paths, &state, &request(CliProfileCommand::BindingList { target: ProfileSelector::Active }),
+            "test", |_, _, _, _, _| unreachable!(),
+        );
+        assert!(stale_projection.ok, "stale sidecars cannot replace an owned binding");
+        state.profiles[0]["customization"]["elements"].as_array_mut().unwrap().iter_mut()
+            .find(|element| element["id"].as_str() == Some("00000000-0000-0000-0000-000000000105")).unwrap()["output"]
+            = serde_json::json!({"keyboard":{"keyCode":u16::MAX,"modifiersRawValue":0},"gamepadButtons":[]});
         let unsafe_projection = execute_profile_transaction(
             &paths,
             &state,
@@ -7025,6 +7252,33 @@ mod tests {
             unsafe_projection.error.unwrap().code,
             "unsafe_binding_projection"
         );
+    }
+
+    #[test]
+    fn binding_display_filters_disabled_channels_for_primary_and_parts_without_rebinding() {
+        let both = serde_json::json!({"keyboard":{"keyCode":49,"modifiersRawValue":8},"gamepadButtons":["south"]});
+        let mut profile = serde_json::json!({
+            "id":"00000000-0000-0000-0000-000000000201","name":"Modes",
+            "customization":{"elements":[
+                {"id":"417A9EB2-0D3E-4F64-86EE-34A761075061","kind":"button","label":"Same","output":both},
+                {"id":"417A9EB2-0D3E-4F64-86EE-34A761075062","kind":"joystick","label":"Same","output":{},"partOutputs":["joystick_up",both]},
+                {"id":"417A9EB2-0D3E-4F64-86EE-34A761075063","kind":"trigger","label":"Same","output":{},"partOutputs":["trigger_digital",both]},
+                {"id":"417A9EB2-0D3E-4F64-86EE-34A761075064","kind":"button","label":"Key only","output":{"keyboard":{"keyCode":48,"modifiersRawValue":0}}},
+                {"id":"417A9EB2-0D3E-4F64-86EE-34A761075065","kind":"button","label":"Pad only","output":{"gamepadButtons":["west"]}}
+            ]}
+        });
+        let original = profile["customization"].clone();
+        for mode in ["keyboard", "controller", "custom"] {
+            profile["outputMode"] = serde_json::json!(mode);
+            let groups = binding_display_groups(&profile, &Default::default()).unwrap();
+            assert_eq!(groups.len(), 1);
+            assert_eq!(groups[0].entries.len(), if mode == "custom" { 5 } else { 4 });
+            for entry in &groups[0].entries {
+                if mode == "keyboard" { assert!(entry.output.gamepad_buttons.is_empty(), "disabled gamepad output leaked into binding display"); }
+                if mode == "controller" { assert!(entry.output.keyboard.is_empty(), "disabled keyboard output leaked into binding display"); }
+            }
+            assert_eq!(profile["customization"], original, "display must never rebind owned outputs");
+        }
     }
 
     #[test]
@@ -7096,6 +7350,7 @@ mod tests {
         let mut state = PersistentState::minimal("server").unwrap();
         state.configuration_revision = 19;
         state.profiles[0]["portraitCustomization"] = serde_json::json!({
+            "elements": [],
             "deviceCanvas":{"frameID":"iphone-16-pro-portrait"},
             "futurePath":"/private/not-projected"
         });
@@ -7197,6 +7452,7 @@ mod tests {
         let mut state = PersistentState::minimal("server").unwrap();
         state.configuration_revision = 14;
         state.profiles[0]["landscapeCustomization"] = serde_json::json!({
+            "elements": [],
             "controlBarItems": ["settings", "home"],
             "controlBarItemCustomizations": [{
                 "item": "settings",
@@ -7402,9 +7658,13 @@ mod tests {
         let mut state = PersistentState::minimal("server").unwrap();
         state.profiles[0]["customization"]["customButtons"] = serde_json::json!([{
             "id":"00000000-0000-0000-0000-000000000701",
-            "mappedButton":"custom1",
+            "controlKind":"joystick", "layout":{},
             "label":"Right Stick"
         }]);
+        state.profiles[0]["customization"]["elements"].as_array_mut().unwrap().push(serde_json::json!({
+            "id":"00000000-0000-0000-0000-000000000701", "kind":"joystick", "layout":{}, "label":"Right Stick"
+        }));
+        state.normalize().unwrap();
         let catalog = catalog_from_state(&state).unwrap();
         let command = CliProfileCommand::CustomizationSet {
             target: ProfileSelector::Active,
@@ -7616,7 +7876,7 @@ mod tests {
                 "id": "00000000-0000-0000-0000-000000000801",
                 "name": "Actions",
                 "children": [
-                    {"kind": "builtin", "button": "jump"},
+                    {"kind": "builtin", "button": "00000000-0000-0000-0000-000000000105"},
                     {"kind": "custom", "id": "00000000-0000-0000-0000-000000000701"}
                 ],
                 "isLocked": false,
@@ -7655,6 +7915,8 @@ mod tests {
         let mut portrait_layers = state.profiles[0]["customization"].clone();
         portrait_layers["customButtons"][0]["label"] =
             serde_json::Value::String("Portrait Stick".to_owned());
+        portrait_layers["elements"].as_array_mut().unwrap().iter_mut()
+            .find(|element| element["id"] == "00000000-0000-0000-0000-000000000701").unwrap()["label"] = serde_json::json!("Portrait Stick");
         state.profiles[0]["portraitCustomization"] = portrait_layers;
         let layer_projection = execute_profile_transaction(
             &HostPaths::new(
@@ -7674,7 +7936,7 @@ mod tests {
         assert_eq!(layer_projection.variant, ConfigurationVariant::Portrait);
         let layers = layer_projection.layers;
         assert!(layers.len() <= 128);
-        assert!(layers.iter().any(|layer| layer.stable_id == "builtin.jump"));
+        assert!(layers.iter().any(|layer| layer.stable_id == "builtin.00000000-0000-0000-0000-000000000105"));
         assert!(layers.iter().any(|layer| layer.label == "Portrait Stick"));
         let encoded = serde_json::to_string(&layers).unwrap();
         assert!(!encoded.contains("keyCode"));
@@ -7701,7 +7963,7 @@ mod tests {
         assert_eq!(
             groups.groups[0].child_stable_ids,
             vec![
-                "builtin.jump",
+                "builtin.00000000-0000-0000-0000-000000000105",
                 "custom.00000000-0000-0000-0000-000000000701"
             ]
         );

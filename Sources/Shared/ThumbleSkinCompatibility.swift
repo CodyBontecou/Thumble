@@ -3,6 +3,7 @@ import Foundation
 public enum ThumbleSkinCompatibilityMode: String, Codable, CaseIterable, Identifiable, Sendable {
     case universal
     case templateAligned = "template_aligned"
+    case capturedController = "captured_controller"
 
     public var id: String { rawValue }
 }
@@ -43,7 +44,60 @@ public enum ThumbleSkinRenderingFeature: String, Codable, CaseIterable, Identifi
     public var id: String { rawValue }
 }
 
+/// Exact captured appearance geometry, behind immutable storage. No output mappings,
+/// profile names, credentials or binding digests enter a skin compatibility contract.
+public final class ThumbleSkinCapturedGeometry: Codable, Equatable, Sendable {
+    public let variants: [ThumbleSkinArtboardVariant]
+    public init(variants: [ThumbleSkinArtboardVariant]) {
+        // Native baseline matrices belong to the hashed workspace contract and
+        // review evidence. Runtime compatibility consumes exact geometry only;
+        // repeating those matrices in the pretty-printed package manifest can
+        // exhaust its bounded entry size without adding a compatibility check.
+        self.variants = variants.map { variant in
+            var geometry = variant
+            geometry.nativeLayout = nil
+            return geometry
+        }
+    }
+    public static func == (lhs: ThumbleSkinCapturedGeometry, rhs: ThumbleSkinCapturedGeometry) -> Bool { lhs.variants == rhs.variants }
+    public var isValid: Bool {
+        !variants.isEmpty && variants.count <= 2 && Set(variants.map(\.orientation)).count == variants.count && variants.allSatisfy { variant in
+            variant.canvasWidth.isFinite && variant.canvasHeight.isFinite && (240...1800).contains(variant.canvasWidth)
+                && (240...1800).contains(variant.canvasHeight) && variant.controls.count <= 256
+                && Set(variant.controls.map(\.id)).count == variant.controls.count
+                && [variant.safeAreaInsets.top, variant.safeAreaInsets.leading, variant.safeAreaInsets.bottom, variant.safeAreaInsets.trailing]
+                    .allSatisfy { $0.isFinite && (0...0.45).contains($0) }
+                && variant.controls.allSatisfy { control in
+                    let f = control.frame
+                    return !control.id.isEmpty && control.id.utf8.count <= 128
+                        && [f.x, f.y, f.width, f.height].allSatisfy { $0.isFinite }
+                        && f.x >= 0 && f.y >= 0 && f.width > 0 && f.height > 0
+                        && f.x + f.width <= 1.000001 && f.y + f.height <= 1.000001
+                        && (control.rotationDegrees.map { $0.isFinite && (-180...180).contains($0) } ?? true)
+                        && (control.presentation?.isValid ?? true)
+                }
+        }
+    }
+    func matches(_ customization: GamepadCustomization, orientation: ThumbleSkinOrientation) -> Bool {
+        guard isValid, let variant = variants.first(where: { $0.orientation == orientation }) else { return false }
+        let size = customization.deviceCanvas.editorDeviceFrame.screenRect.size
+        guard abs(size.width - variant.canvasWidth) < 0.001, abs(size.height - variant.canvasHeight) < 0.001 else { return false }
+        let controls = customization.resolvedControls(in: size).filter { !$0.layoutCustomization.isHidden }
+        guard Set(controls.map { $0.id.id }) == Set(variant.controls.map(\.id)) else { return false }
+        for expected in variant.controls {
+            guard let control = controls.first(where: { $0.id.id == expected.id }), control.controlKind == expected.kind,
+                  abs(control.frame.minX / size.width - expected.frame.x) < 0.000001,
+                  abs(control.frame.minY / size.height - expected.frame.y) < 0.000001,
+                  abs(control.frame.width / size.width - expected.frame.width) < 0.000001,
+                  abs(control.frame.height / size.height - expected.frame.height) < 0.000001,
+                  expected.rotationDegrees.map({ abs(control.rotationDegrees - $0) < 0.000001 }) ?? true else { return false }
+        }
+        return true
+    }
+}
+
 public struct ThumbleSkinCompatibility: Codable, Equatable, Sendable {
+    public var capturedGeometry: ThumbleSkinCapturedGeometry?
     public var mode: ThumbleSkinCompatibilityMode
     public var templates: [ThumbleSkinTemplateRequirement]
     public var orientations: [ThumbleSkinOrientation]
@@ -59,8 +113,10 @@ public struct ThumbleSkinCompatibility: Codable, Equatable, Sendable {
         minimumAspectRatio: CGFloat? = nil,
         maximumAspectRatio: CGFloat? = nil,
         requiredRoles: [GamepadVisualRole] = [],
-        requiredFeatures: [ThumbleSkinRenderingFeature] = []
+        requiredFeatures: [ThumbleSkinRenderingFeature] = [],
+        capturedGeometry: ThumbleSkinCapturedGeometry? = nil
     ) {
+        self.capturedGeometry = capturedGeometry
         self.mode = mode
         self.templates = templates
         self.orientations = orientations
@@ -87,7 +143,8 @@ public struct ThumbleSkinCompatibility: Codable, Equatable, Sendable {
             minimumAspectRatio: minimum,
             maximumAspectRatio: maximum,
             requiredRoles: roles,
-            requiredFeatures: features
+            requiredFeatures: features,
+            capturedGeometry: capturedGeometry
         )
     }
 
@@ -170,6 +227,12 @@ public enum ThumbleSkinCompatibilityEvaluator {
             incompatible = true
         }
 
+        if value.mode == .capturedController {
+            guard let captured = value.capturedGeometry, captured.matches(customization, orientation: orientation) else {
+                issues.append(.init(code: "captured-geometry-mismatch", message: "The controller differs from the captured appearance contract; aligned artwork is hidden."))
+                return .init(status: .incompatible, issues: issues)
+            }
+        }
         if value.mode == .templateAligned {
             let metadata = customization.designMetadata
             guard let templateID = metadata?.sourceTemplateID, let revision = metadata?.sourceTemplateRevision else {

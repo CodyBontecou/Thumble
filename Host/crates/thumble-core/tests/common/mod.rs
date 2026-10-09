@@ -1,8 +1,25 @@
 #![allow(dead_code)]
 
 use std::collections::VecDeque;
-use thumble_core::{Effect, HostCore, PersistentState, TokenSource};
-use thumble_protocol::{ControllerMessage, ControllerMessageType};
+use thumble_core::{Effect, HostCore, OutputBinding, PersistentState, TokenSource};
+use thumble_protocol::{ControllerMessage, ControllerMessageType, KeypadElementID};
+
+/// Edit the installed control, not a routing/sidecar map. Tests deliberately
+/// keep sidecars unchanged so input execution must honor the owned output.
+pub fn set_owned_output(state: &mut PersistentState, profile_id: &str, id: KeypadElementID, output: OutputBinding) {
+    let profile = state.profile_mut(profile_id).expect("installed profile");
+    let mut found = false;
+    for customization in ["customization", "landscapeCustomization", "portraitCustomization"] {
+        let Some(elements) = profile.get_mut(customization).and_then(|c| c.get_mut("elements")).and_then(serde_json::Value::as_array_mut) else { continue; };
+        for element in elements {
+            if element.get("id").and_then(serde_json::Value::as_str).and_then(KeypadElementID::parse) == Some(id) {
+                element["output"] = output.element_value();
+                found = true;
+            }
+        }
+    }
+    assert!(found, "output edits require an installed control UUID");
+}
 
 pub struct ScriptedTokens {
     codes: VecDeque<String>,

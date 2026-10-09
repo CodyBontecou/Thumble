@@ -76,7 +76,7 @@ Schema-2 workspaces can style the entire controller with real CSS instead of mat
 thumble skin scaffold "My Skin" --identifier com.me.my-skin --css
 thumble skin css capabilities
 thumble skin css lint .
-thumble skin css computed . --control builtin-jump --scheme dark --state pressed
+thumble skin css computed . --control builtin-00000000-0000-0000-0000-000000000105 --scheme dark --state pressed
 thumble skin compile . --strict
 ```
 
@@ -119,7 +119,7 @@ Prefer role rules over profile UUIDs or labels:
 Users and creators can assign explicit roles in the Mac inspector or CLI:
 
 ```bash
-thumble element set jump --skin-role primary-action
+thumble element set UUID --skin-role primary-action
 thumble element set "Pause" --skin-role menu
 ```
 
@@ -145,10 +145,10 @@ Touch expansion belongs to the keypad profile, not the skin. It can be edited in
 
 ```bash
 # all edges
-thumble element set jump --hit-insets 16
+thumble element set UUID --hit-insets 16
 
 # top, leading, bottom, trailing
-thumble element set jump --hit-insets 10,18,14,18
+thumble element set UUID --hit-insets 10,18,14,18
 ```
 
 The Mac editor and iPhone skin preview can display dashed touch-target overlays.

@@ -1,56 +1,172 @@
 import Foundation
 
-public enum GameButton: String, Codable, CaseIterable, Identifiable, Hashable, Sendable {
-    case up
-    case down
-    case left
-    case right
-    case jump
-    case attack
-    case dash
-    case focus
-    case map
-    case pause
-    case custom1
-    case custom2
-    case custom3
-    case custom4
-    case custom5
-    case custom6
-    case custom7
-    case custom8
-
+/// The identity of one actual keypad element. It has no action semantics and
+/// no bounded pool of slots. Labels and outputs belong to the element itself.
+public struct KeypadElementID: RawRepresentable, Codable, Identifiable, Hashable, Sendable {
+    public let uuid: UUID
+    public var rawValue: String { uuid.uuidString }
     public var id: String { rawValue }
 
+    public init(_ uuid: UUID = UUID()) { self.uuid = uuid }
+
+    public init?(rawValue: String) {
+        guard let uuid = UUID(uuidString: rawValue) else { return nil }
+        self.uuid = uuid
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let raw = try container.decode(String.self)
+        guard let id = Self(rawValue: raw) else {
+            throw DecodingError.dataCorruptedError(
+                in: container,
+                debugDescription: "Expected a keypad element UUID. Named input slots are no longer supported."
+            )
+        }
+        self = id
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
+
+    /// Stable identities used only when constructing the built-in starter layout.
+    /// New controls always use their own UUID, never an available preset identity.
+    public static func preset(_ number: Int) -> Self {
+        Self(UUID(uuidString: String(format: "00000000-0000-0000-0000-%012X", 0x100 + number))!)
+    }
+
     public var displayName: String {
-        switch self {
-        case .up: "Up"
-        case .down: "Down"
-        case .left: "Left"
-        case .right: "Right"
-        case .jump: "Action 1"
-        case .attack: "Action 2"
-        case .dash: "Action 3"
-        case .focus: "Action 4"
-        case .map: "Menu"
-        case .pause: "Pause"
-        case .custom1: "Custom Key 1"
-        case .custom2: "Custom Key 2"
-        case .custom3: "Custom Key 3"
-        case .custom4: "Custom Key 4"
-        case .custom5: "Custom Key 5"
-        case .custom6: "Custom Key 6"
-        case .custom7: "Custom Key 7"
-        case .custom8: "Custom Key 8"
+        DefaultKeypadElements.titles[self] ?? "Button \(rawValue.prefix(8))"
+    }
+}
+
+/// Appearance anchors for the starter layout, not a routing or binding table.
+enum DefaultKeypadElements {
+    static let ids = (1...10).map(KeypadElementID.preset)
+    static let titles = Dictionary(uniqueKeysWithValues: zip(ids, [
+        "Up", "Down", "Left", "Right", "Action 1", "Action 2", "Action 3", "Action 4", "Menu", "Pause"
+    ]))
+
+    static func initialBinding(for id: KeypadElementID) -> KeypadElementOutputBinding? {
+        guard let index = ids.firstIndex(of: id) else { return nil }
+        let keys: [UInt16] = [126, 125, 123, 124, 36, 48, 40, 11, 35, 53]
+        let modifiers: [UInt8] = [0, 0, 0, 0, 0, 0, 1, 8, 3, 0]
+        let buttons: [VirtualGamepadButton] = [
+            .dpadUp, .dpadDown, .dpadLeft, .dpadRight, .south, .east, .west, .north, .select, .start
+        ]
+        return KeypadElementOutputBinding(
+            keyboard: KeypadKeyboardBinding(keyCode: keys[index], modifiersRawValue: modifiers[index]),
+            gamepadButtons: [buttons[index]]
+        )
+    }
+}
+
+enum KeypadElementSchema {
+    private struct Field: CodingKey {
+        let stringValue: String
+        var intValue: Int? { nil }
+        init?(stringValue: String) { self.stringValue = stringValue }
+        init?(intValue: Int) { return nil }
+    }
+
+    static func requireUUIDBindingKeys(from decoder: Decoder) throws {
+        let root = try decoder.container(keyedBy: Field.self)
+        func validate(_ decoder: Decoder) throws {
+            let map = try decoder.container(keyedBy: Field.self)
+            var seen = Set<UUID>()
+            for key in map.allKeys {
+                guard let id = KeypadElementID(rawValue: key.stringValue), seen.insert(id.uuid).inserted else {
+                    throw DecodingError.dataCorruptedError(forKey: key, in: map, debugDescription: "Binding keys must be element UUIDs. Named input slots are no longer supported.")
+                }
+            }
+        }
+        for name in ["keyBindings", "outputBindings"] {
+            let key = Field(stringValue: name)!
+            if root.contains(key), try !root.decodeNil(forKey: key) {
+                try validate(root.superDecoder(forKey: key))
+            }
+        }
+        for name in ["profileKeyBindings", "profileOutputBindings"] {
+            let key = Field(stringValue: name)!
+            guard root.contains(key), try !root.decodeNil(forKey: key) else { continue }
+            let maps = try root.nestedContainer(keyedBy: Field.self, forKey: key)
+            for profile in maps.allKeys { try validate(maps.superDecoder(forKey: profile)) }
         }
     }
 
-    static var builtInControls: [GameButton] {
-        [.up, .down, .left, .right, .jump, .attack, .dash, .focus, .map, .pause]
+    static func requireProfileBindingOwners(from decoder: Decoder, profiles: [GamepadConfigurationProfile]) throws {
+        let root = try decoder.container(keyedBy: Field.self)
+        let declared = Dictionary(uniqueKeysWithValues: profiles.map { profile in
+            var ids = Set(profile.customization.elements.map(\.id))
+            if let landscape = profile.landscapeCustomization { ids.formUnion(landscape.elements.map(\.id)) }
+            if let portrait = profile.portraitCustomization { ids.formUnion(portrait.elements.map(\.id)) }
+            return (profile.id, ids)
+        })
+        for name in ["keyBindings", "outputBindings"] {
+            let field = Field(stringValue: name)!
+            guard !root.contains(field) else {
+                throw DecodingError.dataCorruptedError(forKey: field, in: root, debugDescription: "Configuration envelopes use profile-owned binding maps, not authority-global maps.")
+            }
+        }
+        for name in ["profileKeyBindings", "profileOutputBindings"] {
+            let field = Field(stringValue: name)!
+            guard root.contains(field) else { continue }
+            let maps = try root.nestedContainer(keyedBy: Field.self, forKey: field)
+            var seenProfiles = Set<UUID>()
+            for key in maps.allKeys {
+                guard let profileID = UUID(uuidString: key.stringValue),
+                      let owners = declared[profileID], seenProfiles.insert(profileID).inserted else {
+                    throw DecodingError.dataCorruptedError(forKey: key, in: maps, debugDescription: "Binding maps must reference unique declared profile UUIDs.")
+                }
+                let entries = try maps.nestedContainer(keyedBy: Field.self, forKey: key)
+                var seen = Set<UUID>()
+                for element in entries.allKeys {
+                    guard let id = UUID(uuidString: element.stringValue), owners.contains(id), seen.insert(id).inserted else {
+                        throw DecodingError.dataCorruptedError(forKey: element, in: entries, debugDescription: "Binding maps must reference unique declared element UUIDs; incompatible references are not repaired.")
+                    }
+                }
+            }
+        }
     }
 
-    static var customSlots: [GameButton] {
-        [.custom1, .custom2, .custom3, .custom4, .custom5, .custom6, .custom7, .custom8]
+    static func requireDeclaredAppearanceKeys(from decoder: Decoder, declaredIDs: Set<UUID>) throws {
+        let root = try decoder.container(keyedBy: Field.self)
+        for name in ["labelOverrides", "buttonCustomizations"] {
+            let field = Field(stringValue: name)!
+            guard root.contains(field), try !root.decodeNil(forKey: field) else { continue }
+            let mapDecoder = try root.superDecoder(forKey: field)
+            var seen = Set<UUID>()
+            func validate(_ raw: String) throws {
+                guard let id = UUID(uuidString: raw), declaredIDs.contains(id), seen.insert(id).inserted else {
+                    throw DecodingError.dataCorruptedError(forKey: field, in: root, debugDescription: "Appearance maps must reference unique declared element UUIDs; incompatible references are not repaired.")
+                }
+            }
+            if var pairs = try? mapDecoder.unkeyedContainer() {
+                while !pairs.isAtEnd {
+                    try validate(pairs.decode(String.self))
+                    _ = try pairs.superDecoder()
+                }
+            } else {
+                let map = try mapDecoder.container(keyedBy: Field.self)
+                for key in map.allKeys { try validate(key.stringValue) }
+            }
+        }
+    }
+
+    static func requireIndependentIdentity(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: Field.self)
+        for name in ["button", "mappedButton", "builtInButton", "legacySlot", "inputID", "defaultControlID"] {
+            let field = Field(stringValue: name)!
+            if container.contains(field) {
+                throw DecodingError.dataCorruptedError(
+                    forKey: field,
+                    in: container,
+                    debugDescription: "Input-slot routing is no longer supported. Use an element id and explicit output bindings."
+                )
+            }
+        }
     }
 }
 
@@ -153,7 +269,7 @@ public struct ThumbleCaptureEvent: Codable, Sendable {
     public var kind: String
     public var source: String?
     public var messageType: ControllerMessageType?
-    public var button: GameButton?
+    public var button: KeypadElementID?
     public var elementInput: KeypadElementInputID?
     public var elementLabel: String?
     public var state: ButtonPressState?
@@ -183,7 +299,7 @@ public struct ThumbleCaptureEvent: Codable, Sendable {
     public var outputInjectionMS: Double?
     public var postInjectionMS: Double?
     public var outputDeferred: Bool?
-    public var pressedButtons: [GameButton]?
+    public var pressedButtons: [KeypadElementID]?
     public var pressedElementInputs: [String]?
     public var activePointerButtons: [ControllerPointerButton]?
     public var statusText: String?
@@ -199,7 +315,7 @@ public struct ThumbleCaptureEvent: Codable, Sendable {
         kind: String,
         source: String? = nil,
         messageType: ControllerMessageType? = nil,
-        button: GameButton? = nil,
+        button: KeypadElementID? = nil,
         elementInput: KeypadElementInputID? = nil,
         elementLabel: String? = nil,
         state: ButtonPressState? = nil,
@@ -229,7 +345,7 @@ public struct ThumbleCaptureEvent: Codable, Sendable {
         outputInjectionMS: Double? = nil,
         postInjectionMS: Double? = nil,
         outputDeferred: Bool? = nil,
-        pressedButtons: [GameButton]? = nil,
+        pressedButtons: [KeypadElementID]? = nil,
         pressedElementInputs: [String]? = nil,
         activePointerButtons: [ControllerPointerButton]? = nil,
         statusText: String? = nil,
@@ -346,7 +462,7 @@ public struct ControllerClientDeviceInfo: Codable, Equatable, Sendable {
 
 public struct ThumbleMacCLICommandPayload: Codable, Sendable {
     public var command: ThumbleMacCLICommand
-    public var button: GameButton?
+    public var button: KeypadElementID?
     public var elementInput: KeypadElementInputID?
     public var reason: String?
     public var requestID: String?
@@ -355,7 +471,7 @@ public struct ThumbleMacCLICommandPayload: Codable, Sendable {
 
     public init(
         command: ThumbleMacCLICommand,
-        button: GameButton? = nil,
+        button: KeypadElementID? = nil,
         elementInput: KeypadElementInputID? = nil,
         reason: String? = nil,
         requestID: String? = nil,
@@ -410,7 +526,7 @@ public struct ThumbleMacRuntimeStatus: Codable, Sendable {
     public var inputProtocolVersion: Int?
     public var activeInputGeneration: UInt64?
     public var staleInputGenerationDrops: Int?
-    public var pressedButtons: [GameButton]
+    public var pressedButtons: [KeypadElementID]
     public var pressedElementInputs: [KeypadElementInputID]?
     public var editorDeliveryState: ThumbleEditorDeliveryState?
     public var editorDeliveryDetail: String?
@@ -470,7 +586,7 @@ public struct ThumbleMacRuntimeStatus: Codable, Sendable {
         inputProtocolVersion: Int? = nil,
         activeInputGeneration: UInt64? = nil,
         staleInputGenerationDrops: Int? = nil,
-        pressedButtons: [GameButton],
+        pressedButtons: [KeypadElementID],
         pressedElementInputs: [KeypadElementInputID]? = nil,
         editorDeliveryState: ThumbleEditorDeliveryState? = nil,
         editorDeliveryDetail: String? = nil,
@@ -624,7 +740,7 @@ public enum ControllerMessageType: String, Codable, Sendable {
 
 public struct ControllerMessage: Codable, Sendable {
     public var type: ControllerMessageType
-    public var button: GameButton?
+    public var button: KeypadElementID?
     public var elementID: UUID?
     public var elementPart: KeypadElementInputPart?
     public var state: ButtonPressState?
@@ -671,7 +787,7 @@ public struct ControllerMessage: Codable, Sendable {
 
     public init(
         type: ControllerMessageType,
-        button: GameButton? = nil,
+        button: KeypadElementID? = nil,
         elementID: UUID? = nil,
         elementPart: KeypadElementInputPart? = nil,
         state: ButtonPressState? = nil,
@@ -883,7 +999,7 @@ public enum ControllerWireCodecError: LocalizedError, Equatable {
 }
 
 public enum ControllerWireCodec {
-    public static let currentInputProtocolVersion = 2
+    public static let currentInputProtocolVersion = 3
     public static let maximumInboundPayloadSize = 8 * 1024 * 1024
 
     private static let magic: [UInt8] = [0x50, 0x50] // "PP"
@@ -891,10 +1007,7 @@ public enum ControllerWireCodec {
     private static let inputVersion: UInt8 = UInt8(currentInputProtocolVersion)
     private static let emptyField: UInt8 = UInt8.max
     private static let compactMessageSize = 14
-    // v2 button: 0...1 magic, 2 version, 3 type, 4 button, 5 state, 6 flags,
-    // 7 reserved, 8...15 generation LE, 16...23 sequence LE, 24...31 press identifier LE.
-    private static let compactInputMessageSize = 32
-    private static let compactInputPressIdentifierPresent: UInt8 = 1 << 0
+    private static let compactInputMessageSize = 56
     private static let buttonSequenceMarker: UInt64 = UInt64(1) << 63
     private static let buttonSequenceBitCount: UInt64 = 48
     private static let buttonSequenceMask: UInt64 = (UInt64(1) << buttonSequenceBitCount) - 1
@@ -918,23 +1031,6 @@ public enum ControllerWireCodec {
     }
     public static let maximumButtonSequenceNumber = buttonSequenceMask
     public static let maximumButtonPressIdentifier = buttonPressIdentifierMask
-    private static let buttonDownFrames = GameButton.allCases.map {
-        compactData(
-            typeCode: ControllerMessageType.button.compactWireCode!,
-            timestamp: 0,
-            buttonCode: $0.compactWireCode,
-            stateCode: ButtonPressState.down.compactWireCode
-        )
-    }
-    private static let buttonUpFrames = GameButton.allCases.map {
-        compactData(
-            typeCode: ControllerMessageType.button.compactWireCode!,
-            timestamp: 0,
-            buttonCode: $0.compactWireCode,
-            stateCode: ButtonPressState.up.compactWireCode
-        )
-    }
-
     public static func encode(_ message: ControllerMessage, using encoder: JSONEncoder) throws -> Data {
         if let compactData = compactData(for: message) {
             return compactData
@@ -959,10 +1055,10 @@ public enum ControllerWireCodec {
         }
         if requiresExpandedStackForDecoding(data) {
             return try withExpandedCodableStack {
-                try decoder.decode(ControllerMessage.self, from: data)
+                try decoder.decodeUnique(ControllerMessage.self, from: data)
             }
         }
-        return try decoder.decode(ControllerMessage.self, from: data)
+        return try decoder.decodeUnique(ControllerMessage.self, from: data)
     }
 
     private static func requiresExpandedStack(for message: ControllerMessage) -> Bool {
@@ -1006,46 +1102,33 @@ public enum ControllerWireCodec {
         return try result.get()
     }
 
-    public static func encodeButton(_ button: GameButton, state: ButtonPressState) -> Data {
-        switch state {
-        case .down: buttonDownFrames[button.compactFrameIndex]
-        case .up: buttonUpFrames[button.compactFrameIndex]
-        }
+    public static func encodeButton(_ button: KeypadElementID, state: ButtonPressState) -> Data {
+        compactInputData(for: ControllerMessage(type: .button, button: button, state: state, timestamp: 0))!
     }
 
     public static func encodeButton(
-        _ button: GameButton,
+        _ button: KeypadElementID,
         state: ButtonPressState,
         sequenceNumber: UInt64,
         pressIdentifier: UInt64? = nil,
         generation: UInt64? = nil
     ) -> Data {
-        if let generation {
-            return compactInputData(
-                button: button,
-                state: state,
-                generation: generation,
-                sequenceNumber: sequenceNumber,
-                pressIdentifier: pressIdentifier
-            )
-        }
-
-        return compactData(
-            typeCode: ControllerMessageType.button.compactWireCode!,
-            timestamp: buttonSequenceTimestamp(
-                for: sequenceNumber,
-                pressIdentifier: pressIdentifier
-            ),
-            buttonCode: button.compactWireCode,
-            stateCode: state.compactWireCode
-        )
+        compactInputData(for: ControllerMessage(
+            type: .button,
+            button: button,
+            state: state,
+            timestamp: inputSequenceTimestamp(for: sequenceNumber, pressIdentifier: pressIdentifier),
+            inputProtocolVersion: currentInputProtocolVersion,
+            inputGeneration: generation,
+            inputSequence: sequenceNumber,
+            pressIdentifier: pressIdentifier
+        ))!
     }
 
-    public static func inputSequenceTimestamp(
-        for sequenceNumber: UInt64,
-        pressIdentifier: UInt64? = nil
-    ) -> Int64 {
-        buttonSequenceTimestamp(for: sequenceNumber, pressIdentifier: pressIdentifier)
+    public static func inputSequenceTimestamp(for sequenceNumber: UInt64, pressIdentifier: UInt64? = nil) -> Int64 {
+        let sequence = min(max(sequenceNumber, 1), maximumButtonSequenceNumber)
+        let identifier = min(pressIdentifier ?? 0, maximumButtonPressIdentifier)
+        return Int64(bitPattern: buttonSequenceMarker | (identifier << buttonPressIdentifierShift) | sequence)
     }
 
     public static func buttonSequenceNumber(from message: ControllerMessage) -> UInt64? {
@@ -1053,16 +1136,12 @@ public enum ControllerWireCodec {
     }
 
     public static func inputSequenceNumber(from message: ControllerMessage) -> UInt64? {
-        if let inputSequence = message.inputSequence {
-            return inputSequence
-        }
+        if let sequence = message.inputSequence { return sequence }
         guard message.type == .button || message.type == .elementInput else { return nil }
-
-        let timestampBits = UInt64(bitPattern: message.timestamp)
-        guard timestampBits & buttonSequenceMarker == buttonSequenceMarker else { return nil }
-
-        let sequenceNumber = timestampBits & buttonSequenceMask
-        return sequenceNumber == 0 ? nil : sequenceNumber
+        let bits = UInt64(bitPattern: message.timestamp)
+        guard bits & buttonSequenceMarker != 0 else { return nil }
+        let sequence = bits & buttonSequenceMask
+        return sequence == 0 ? nil : sequence
     }
 
     public static func buttonPressIdentifier(from message: ControllerMessage) -> UInt64? {
@@ -1070,27 +1149,22 @@ public enum ControllerWireCodec {
     }
 
     public static func inputPressIdentifier(from message: ControllerMessage) -> UInt64? {
-        if let pressIdentifier = message.pressIdentifier {
-            return pressIdentifier
-        }
+        if let identifier = message.pressIdentifier { return identifier }
         guard message.type == .button || message.type == .elementInput else { return nil }
-
-        let timestampBits = UInt64(bitPattern: message.timestamp)
-        guard timestampBits & buttonSequenceMarker == buttonSequenceMarker else { return nil }
-
-        let pressIdentifier = (timestampBits >> buttonPressIdentifierShift) & buttonPressIdentifierMask
-        return pressIdentifier == 0 ? nil : pressIdentifier
+        let bits = UInt64(bitPattern: message.timestamp)
+        guard bits & buttonSequenceMarker != 0 else { return nil }
+        let identifier = (bits >> buttonPressIdentifierShift) & buttonPressIdentifierMask
+        return identifier == 0 ? nil : identifier
     }
 
     private static func compactData(for message: ControllerMessage) -> Data? {
-        guard message.pairingCode == nil,
+        guard message.sentAt == nil,
+              message.pairingCode == nil,
               message.clientName == nil,
               message.message == nil,
               message.realtimeToken == nil,
               message.authToken == nil,
               message.serverID == nil,
-              message.elementID == nil,
-              message.elementPart == nil,
               message.gamepadCustomization == nil,
               message.gamepadProfiles == nil,
               message.virtualGamepadStatus == nil,
@@ -1112,193 +1186,123 @@ public enum ControllerWireCodec {
               message.analogY == nil,
               message.analogValue == nil,
               message.analogSequence == nil,
+              message.profileArtifactAdoptionMetadata == nil,
+              message.profileArtifactAdoptionOperationID == nil,
+              message.profileArtifactAdoptionChunkIndex == nil,
+              message.profileArtifactAdoptionChunkData == nil,
+              message.profileArtifactAdoptionResult == nil,
               let typeCode = message.type.compactWireCode
-        else {
-            return nil
+        else { return nil }
+
+        if message.type == .button || message.type == .elementInput {
+            return compactInputData(for: message)
         }
-
-        let hasInputProtocolFields = message.inputProtocolVersion != nil
-            || message.inputGeneration != nil
-            || message.inputSequence != nil
-            || message.pressIdentifier != nil
-        if hasInputProtocolFields {
-            guard message.type == .button,
-                  message.inputProtocolVersion == currentInputProtocolVersion,
-                  let button = message.button,
-                  let state = message.state,
-                  let generation = message.inputGeneration,
-                  let sequenceNumber = message.inputSequence
-            else {
-                return nil
-            }
-            return compactInputData(
-                button: button,
-                state: state,
-                generation: generation,
-                sequenceNumber: sequenceNumber,
-                pressIdentifier: message.pressIdentifier
-            )
-        }
-
-        if message.type == .button, (message.button == nil || message.state == nil) {
-            return nil
-        }
-
-        return compactData(
-            typeCode: typeCode,
-            timestamp: message.timestamp,
-            buttonCode: message.button?.compactWireCode,
-            stateCode: message.state?.compactWireCode
-        )
-    }
-
-    private static func compactData(
-        typeCode: UInt8,
-        timestamp: Int64,
-        buttonCode: UInt8?,
-        stateCode: UInt8?
-    ) -> Data {
+        guard message.button == nil, message.elementID == nil, message.elementPart == nil,
+              message.state == nil, message.inputProtocolVersion == nil,
+              message.inputGeneration == nil, message.inputSequence == nil,
+              message.pressIdentifier == nil
+        else { return nil }
         var data = Data(count: compactMessageSize)
-        data.withUnsafeMutableBytes { rawBuffer in
-            guard let bytes = rawBuffer.bindMemory(to: UInt8.self).baseAddress else { return }
-
-            bytes[0] = magic[0]
-            bytes[1] = magic[1]
-            bytes[2] = version
-            bytes[3] = typeCode
-
-            let timestampBits = UInt64(bitPattern: timestamp)
-            for offset in 0..<8 {
-                bytes[4 + offset] = UInt8(truncatingIfNeeded: timestampBits >> UInt64(offset * 8))
-            }
-
-            bytes[12] = buttonCode ?? emptyField
-            bytes[13] = stateCode ?? emptyField
+        data.withUnsafeMutableBytes { buffer in
+            let bytes = buffer.bindMemory(to: UInt8.self).baseAddress!
+            bytes[0] = magic[0]; bytes[1] = magic[1]; bytes[2] = version; bytes[3] = typeCode
+            writeLittleEndian(UInt64(bitPattern: message.timestamp), to: bytes, startingAt: 4)
+            bytes[12] = emptyField; bytes[13] = emptyField
         }
         return data
     }
 
-    private static func compactInputData(
-        button: GameButton,
-        state: ButtonPressState,
-        generation: UInt64,
-        sequenceNumber: UInt64,
-        pressIdentifier: UInt64?
-    ) -> Data {
+    // v3 UUID input: header 0...3, UUID 4...19, part 20, state 21, flags 22,
+    // reserved 23, generation 24...31, sequence 32...39, press 40...47,
+    // timestamp 48...55. Old slot-index input frames are intentionally rejected.
+    private static func compactInputData(for message: ControllerMessage) -> Data? {
+        guard let state = message.state,
+              message.inputProtocolVersion == nil || message.inputProtocolVersion == currentInputProtocolVersion
+        else { return nil }
+        let id: UUID
+        if message.type == .button {
+            guard let button = message.button, message.elementID == nil, message.elementPart == nil else { return nil }
+            id = button.uuid
+        } else {
+            guard message.type == .elementInput, let elementID = message.elementID, message.button == nil else { return nil }
+            id = elementID
+        }
+        let part = message.elementPart ?? .primary
+        let partCode = UInt8(KeypadElementInputPart.allCases.firstIndex(of: part)!)
         var data = Data(count: compactInputMessageSize)
-        data.withUnsafeMutableBytes { rawBuffer in
-            guard let bytes = rawBuffer.bindMemory(to: UInt8.self).baseAddress else { return }
-
-            bytes[0] = magic[0]
-            bytes[1] = magic[1]
-            bytes[2] = inputVersion
-            bytes[3] = ControllerMessageType.button.compactWireCode!
-            bytes[4] = button.compactWireCode
-            bytes[5] = state.compactWireCode
-            bytes[6] = pressIdentifier == nil ? 0 : compactInputPressIdentifierPresent
-            bytes[7] = 0
-            writeLittleEndian(generation, to: bytes, startingAt: 8)
-            writeLittleEndian(sequenceNumber, to: bytes, startingAt: 16)
-            writeLittleEndian(pressIdentifier ?? 0, to: bytes, startingAt: 24)
+        data.withUnsafeMutableBytes { buffer in
+            let bytes = buffer.bindMemory(to: UInt8.self).baseAddress!
+            bytes[0] = magic[0]; bytes[1] = magic[1]; bytes[2] = inputVersion
+            bytes[3] = message.type.compactWireCode!
+            var uuid = id.uuid
+            withUnsafeBytes(of: &uuid) { source in
+                for index in 0..<16 { bytes[4 + index] = source[index] }
+            }
+            bytes[20] = partCode; bytes[21] = state.compactWireCode
+            bytes[22] = (message.pressIdentifier == nil ? 0 : 1)
+                | (message.inputGeneration == nil ? 0 : 2)
+                | (message.inputSequence == nil ? 0 : 4)
+                | (message.inputProtocolVersion == nil ? 0 : 8)
+            bytes[23] = 0
+            writeLittleEndian(message.inputGeneration ?? 0, to: bytes, startingAt: 24)
+            writeLittleEndian(message.inputSequence ?? 0, to: bytes, startingAt: 32)
+            writeLittleEndian(message.pressIdentifier ?? 0, to: bytes, startingAt: 40)
+            writeLittleEndian(UInt64(bitPattern: message.timestamp), to: bytes, startingAt: 48)
         }
         return data
     }
 
-    private static func writeLittleEndian(
-        _ value: UInt64,
-        to bytes: UnsafeMutablePointer<UInt8>,
-        startingAt start: Int
-    ) {
-        for offset in 0..<8 {
-            bytes[start + offset] = UInt8(truncatingIfNeeded: value >> UInt64(offset * 8))
-        }
+    private static func writeLittleEndian(_ value: UInt64, to bytes: UnsafeMutablePointer<UInt8>, startingAt start: Int) {
+        for offset in 0..<8 { bytes[start + offset] = UInt8(truncatingIfNeeded: value >> UInt64(offset * 8)) }
     }
 
-    private static func readLittleEndian(
-        from bytes: UnsafePointer<UInt8>,
-        startingAt start: Int
-    ) -> UInt64 {
+    private static func readLittleEndian(from bytes: UnsafePointer<UInt8>, startingAt start: Int) -> UInt64 {
         var value: UInt64 = 0
-        for offset in 0..<8 {
-            value |= UInt64(bytes[start + offset]) << UInt64(offset * 8)
-        }
+        for offset in 0..<8 { value |= UInt64(bytes[start + offset]) << UInt64(offset * 8) }
         return value
     }
 
-    private static func buttonSequenceTimestamp(
-        for sequenceNumber: UInt64,
-        pressIdentifier: UInt64?
-    ) -> Int64 {
-        let boundedSequenceNumber = min(max(sequenceNumber, 1), maximumButtonSequenceNumber)
-        let boundedPressIdentifier = min(pressIdentifier ?? 0, maximumButtonPressIdentifier)
-        let pressIdentifierBits = boundedPressIdentifier << buttonPressIdentifierShift
-        return Int64(bitPattern: buttonSequenceMarker | pressIdentifierBits | boundedSequenceNumber)
-    }
-
     private static func compactMessage(from data: Data) -> ControllerMessage? {
-        if data.count == compactInputMessageSize {
-            return compactInputMessage(from: data)
-        }
+        if data.count == compactInputMessageSize { return compactInputMessage(from: data) }
         guard data.count == compactMessageSize else { return nil }
-
-        return data.withUnsafeBytes { rawBuffer -> ControllerMessage? in
-            guard let bytes = rawBuffer.bindMemory(to: UInt8.self).baseAddress,
-                  bytes[0] == magic[0],
-                  bytes[1] == magic[1],
-                  bytes[2] == version,
-                  let type = ControllerMessageType(compactWireCode: bytes[3])
-            else {
-                return nil
-            }
-
-            var timestampBits: UInt64 = 0
-            for offset in 0..<8 {
-                timestampBits |= UInt64(bytes[4 + offset]) << UInt64(offset * 8)
-            }
-
-            let button = bytes[12] == emptyField ? nil : GameButton(compactWireCode: bytes[12])
-            let state = bytes[13] == emptyField ? nil : ButtonPressState(compactWireCode: bytes[13])
-
-            if type == .button, (button == nil || state == nil) {
-                return nil
-            }
-
-            return ControllerMessage(
-                type: type,
-                button: button,
-                state: state,
-                timestamp: Int64(bitPattern: timestampBits)
-            )
+        return data.withUnsafeBytes { buffer in
+            let bytes = buffer.bindMemory(to: UInt8.self).baseAddress!
+            guard bytes[0] == magic[0], bytes[1] == magic[1], bytes[2] == version,
+                  let type = ControllerMessageType(compactWireCode: bytes[3]),
+                  type != .button, type != .elementInput,
+                  bytes[12] == emptyField, bytes[13] == emptyField
+            else { return nil }
+            return ControllerMessage(type: type, timestamp: Int64(bitPattern: readLittleEndian(from: bytes, startingAt: 4)))
         }
     }
 
     private static func compactInputMessage(from data: Data) -> ControllerMessage? {
-        data.withUnsafeBytes { rawBuffer -> ControllerMessage? in
-            guard let bytes = rawBuffer.bindMemory(to: UInt8.self).baseAddress,
-                  bytes[0] == magic[0],
-                  bytes[1] == magic[1],
-                  bytes[2] == inputVersion,
-                  bytes[3] == ControllerMessageType.button.compactWireCode!,
-                  bytes[6] & ~compactInputPressIdentifierPresent == 0,
-                  bytes[7] == 0,
-                  let button = GameButton(compactWireCode: bytes[4]),
-                  let state = ButtonPressState(compactWireCode: bytes[5])
-            else {
-                return nil
-            }
-
-            let hasPressIdentifier = bytes[6] & compactInputPressIdentifierPresent != 0
+        data.withUnsafeBytes { buffer in
+            let bytes = buffer.bindMemory(to: UInt8.self).baseAddress!
+            guard bytes[0] == magic[0], bytes[1] == magic[1], bytes[2] == inputVersion,
+                  let type = ControllerMessageType(compactWireCode: bytes[3]),
+                  type == .button || type == .elementInput,
+                  Int(bytes[20]) < KeypadElementInputPart.allCases.count,
+                  type != .button || bytes[20] == 0,
+                  let state = ButtonPressState(compactWireCode: bytes[21]),
+                  bytes[22] & ~15 == 0, bytes[23] == 0
+            else { return nil }
+            let uuid = UUID(uuid: (
+                bytes[4], bytes[5], bytes[6], bytes[7], bytes[8], bytes[9], bytes[10], bytes[11],
+                bytes[12], bytes[13], bytes[14], bytes[15], bytes[16], bytes[17], bytes[18], bytes[19]
+            ))
+            let flags = bytes[22]
             return ControllerMessage(
-                type: .button,
-                button: button,
+                type: type,
+                button: type == .button ? KeypadElementID(uuid) : nil,
+                elementID: type == .elementInput ? uuid : nil,
+                elementPart: type == .elementInput ? KeypadElementInputPart.allCases[Int(bytes[20])] : nil,
                 state: state,
-                timestamp: 0,
-                inputProtocolVersion: currentInputProtocolVersion,
-                inputGeneration: readLittleEndian(from: bytes, startingAt: 8),
-                inputSequence: readLittleEndian(from: bytes, startingAt: 16),
-                pressIdentifier: hasPressIdentifier
-                    ? readLittleEndian(from: bytes, startingAt: 24)
-                    : nil
+                timestamp: Int64(bitPattern: readLittleEndian(from: bytes, startingAt: 48)),
+                inputProtocolVersion: flags & 8 == 0 ? nil : currentInputProtocolVersion,
+                inputGeneration: flags & 2 == 0 ? nil : readLittleEndian(from: bytes, startingAt: 24),
+                inputSequence: flags & 4 == 0 ? nil : readLittleEndian(from: bytes, startingAt: 32),
+                pressIdentifier: flags & 1 == 0 ? nil : readLittleEndian(from: bytes, startingAt: 40)
             )
         }
     }
@@ -1308,74 +1312,23 @@ private extension ControllerMessageType {
     var compactWireCode: UInt8? {
         switch self {
         case .button: 1
+        case .elementInput: 6
         case .releaseAll: 2
         case .heartbeat: 3
         case .ping: 4
         case .pong: 5
-        case .hello, .pairingRequest, .pairingChallenge, .pairingAccepted, .elementInput, .pointer, .gamepadAnalog, .gamepadCustomization, .gamepadProfiles, .skinPackages, .skinPackageRemoval, .gamepadProfileSkinSelection, .gamepadProfileSelection, .gamepadDefaultProfile, .gamepadProfileOrientationPreferenceMutation, .launchProfileTarget, .profileArtifactAdoptionBegin, .profileArtifactAdoptionChunk, .profileArtifactAdoptionCommit, .profileArtifactAdoptionCancel, .profileArtifactAdoptionResult, .error: nil
+        case .hello, .pairingRequest, .pairingChallenge, .pairingAccepted, .pointer, .gamepadAnalog, .gamepadCustomization, .gamepadProfiles, .skinPackages, .skinPackageRemoval, .gamepadProfileSkinSelection, .gamepadProfileSelection, .gamepadDefaultProfile, .gamepadProfileOrientationPreferenceMutation, .launchProfileTarget, .profileArtifactAdoptionBegin, .profileArtifactAdoptionChunk, .profileArtifactAdoptionCommit, .profileArtifactAdoptionCancel, .profileArtifactAdoptionResult, .error: nil
         }
     }
 
     init?(compactWireCode: UInt8) {
         switch compactWireCode {
         case 1: self = .button
+        case 6: self = .elementInput
         case 2: self = .releaseAll
         case 3: self = .heartbeat
         case 4: self = .ping
         case 5: self = .pong
-        default: return nil
-        }
-    }
-}
-
-private extension GameButton {
-    var compactFrameIndex: Int {
-        Int(compactWireCode - 1)
-    }
-
-    var compactWireCode: UInt8 {
-        switch self {
-        case .up: 1
-        case .down: 2
-        case .left: 3
-        case .right: 4
-        case .jump: 5
-        case .attack: 6
-        case .dash: 7
-        case .focus: 8
-        case .map: 9
-        case .pause: 10
-        case .custom1: 11
-        case .custom2: 12
-        case .custom3: 13
-        case .custom4: 14
-        case .custom5: 15
-        case .custom6: 16
-        case .custom7: 17
-        case .custom8: 18
-        }
-    }
-
-    init?(compactWireCode: UInt8) {
-        switch compactWireCode {
-        case 1: self = .up
-        case 2: self = .down
-        case 3: self = .left
-        case 4: self = .right
-        case 5: self = .jump
-        case 6: self = .attack
-        case 7: self = .dash
-        case 8: self = .focus
-        case 9: self = .map
-        case 10: self = .pause
-        case 11: self = .custom1
-        case 12: self = .custom2
-        case 13: self = .custom3
-        case 14: self = .custom4
-        case 15: self = .custom5
-        case 16: self = .custom6
-        case 17: self = .custom7
-        case 18: self = .custom8
         default: return nil
         }
     }

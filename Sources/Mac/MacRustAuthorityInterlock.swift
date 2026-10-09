@@ -12,6 +12,7 @@ final class MacLegacyAuthorityLease {
     }
 
     private let descriptor: Int32
+    let stateDirectory: URL
 
     static func acquire() throws -> MacLegacyAuthorityLease {
         try acquire(stateDirectory: canonicalStateDirectory())
@@ -40,11 +41,12 @@ final class MacLegacyAuthorityLease {
             close(descriptor)
             throw LeaseError.authorityHeld
         }
-        return MacLegacyAuthorityLease(descriptor: descriptor)
+        return MacLegacyAuthorityLease(descriptor: descriptor, stateDirectory: stateDirectory)
     }
 
-    private init(descriptor: Int32) {
+    private init(descriptor: Int32, stateDirectory: URL) {
         self.descriptor = descriptor
+        self.stateDirectory = stateDirectory
     }
 
     deinit {

@@ -104,8 +104,16 @@ PY
 "$THUMBLE" generate --spec "$EXHAUSTION_SPEC" --json --dry-run \
   --skip-layout-validation >"$STDOUT_FILE" 2>"$STDERR_FILE"
 assert_one_json_document "$STDOUT_FILE"
-grep -Fq '[slot-exhaustion]' "$STDERR_FILE"
-grep -Fq 'control dropped' "$STDERR_FILE"
+grep -Fq '[reused-role-layout-default]' "$STDERR_FILE"
+! grep -Fq 'slot-exhaustion' "$STDERR_FILE"
+python3 - "$STDOUT_FILE" <<'PY'
+import json, sys, uuid
+value = json.load(open(sys.argv[1], encoding="utf-8"))
+elements = value["profile"]["customization"]["elements"]
+assert len(elements) == 20
+assert len({uuid.UUID(element["id"]) for element in elements}) == 20
+assert all("output" in element for element in elements)
+PY
 ! grep -Fq 'Generation warnings' "$STDOUT_FILE"
 
 # Dry-run output is the exact checked-in generated profile, with no summary.
@@ -197,7 +205,9 @@ import sys
 generated = json.load(open(sys.argv[1], encoding="utf-8"))
 element = generated["profile"]["customization"]["elements"][0]
 layout = element["layout"]
-assert element["builtInButton"] == "focus"
+import uuid
+uuid.UUID(element["id"])
+assert not {"button", "builtInButton", "mappedButton", "legacySlot", "inputID"}.intersection(element)
 assert layout["icon"] == {
     "placement": "center", "renderingMode": "template", "scale": 1.0,
     "source": "sf_symbol", "value": "sparkles",
@@ -260,17 +270,17 @@ width, height = struct.unpack(">II", png[16:24])
 assert width > 0 and height > 0
 PY
 
-# Strict warning handling aborts between planning and import, so the catalog is unchanged.
+# Repeated-role layout warnings abort strict planning before import; no finite slot pool exists.
 set +e
 "$THUMBLE" generate --spec "$EXHAUSTION_SPEC" --strict-layout \
   --invocation-id "$STRICT_INVOCATION" >"$STDOUT_FILE" 2>"$STDERR_FILE"
 STRICT_STATUS=$?
 set -e
 [[ $STRICT_STATUS -ne 0 ]] || {
-  echo "Strict exhaustion generation unexpectedly succeeded" >&2
+  echo "Strict repeated-layout generation unexpectedly succeeded" >&2
   exit 1
 }
-grep -Fq '[slot-exhaustion]' "$STDOUT_FILE"
+grep -Fq '[reused-role-layout-default]' "$STDOUT_FILE"
 grep -Fq 'Rust generation reported warnings in strict layout mode.' "$STDERR_FILE"
 assert_catalog 2
 

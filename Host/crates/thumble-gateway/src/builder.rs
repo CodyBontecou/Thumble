@@ -750,11 +750,11 @@ fn operation_schema() -> Value {
         layout,
         variant("control.remove", &["elementID"], serde_json::json!({"elementID":{"type":"string","minLength":1,"maxLength":128}})),
         variant("binding.set", &["button","key"], serde_json::json!({
-            "button":{"type":"string","enum":["up","down","left","right","jump","attack","dash","focus","map","pause","custom1","custom2","custom3","custom4","custom5","custom6","custom7","custom8"]},
+            "button":{"type":"string","format":"uuid"},
             "key":{"type":"string","minLength":1,"maxLength":128},
             "modifiers":{"type":"array","maxItems":16,"items":{"type":"string","enum":["cmd","command","meta","shift","opt","option","alt","ctrl","control"]}}
         })),
-        variant("binding.clear", &["button"], serde_json::json!({"button":{"type":"string","enum":["up","down","left","right","jump","attack","dash","focus","map","pause","custom1","custom2","custom3","custom4","custom5","custom6","custom7","custom8"]}})),
+        variant("binding.clear", &["button"], serde_json::json!({"button":{"type":"string","format":"uuid"}})),
         variant("output.mode", &["mode"], serde_json::json!({"mode":{"type":"string","enum":["keyboard","controller","custom"]}}))
     ]})
 }

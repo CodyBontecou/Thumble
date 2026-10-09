@@ -1,10 +1,11 @@
 import CryptoKit
 import Foundation
+import SwiftUI
 
 public enum ThumbleSkinWorkspaceSchema {
     public static let identifier = "com.codybontecou.pocketpad.skin-source"
-    /// Schema 1: material/component authoring. Schema 2 adds optional CSS stylesheets.
-    public static let currentVersion = 2
+    /// Schema 1: materials. Schema 2: CSS. Schema 3: captured controller artboards.
+    public static let currentVersion = 3
 }
 
 public struct ThumbleNormalizedRect: Codable, Equatable, Sendable {
@@ -243,7 +244,7 @@ public struct ThumbleSkinComponentSpec: Codable, Equatable, Identifiable, Sendab
     public var kind: ThumbleSkinComponentKind
     public var materialID: String
     public var role: GamepadVisualRole?
-    public var button: GameButton?
+    public var button: KeypadElementID?
     public var frame: ThumbleNormalizedRect?
     public var shape: GamepadButtonShapeStyle?
     public var zIndex: Int
@@ -255,7 +256,7 @@ public struct ThumbleSkinComponentSpec: Codable, Equatable, Identifiable, Sendab
         kind: ThumbleSkinComponentKind,
         materialID: String,
         role: GamepadVisualRole? = nil,
-        button: GameButton? = nil,
+        button: KeypadElementID? = nil,
         frame: ThumbleNormalizedRect? = nil,
         shape: GamepadButtonShapeStyle? = nil,
         zIndex: Int = 0,
@@ -292,7 +293,103 @@ public enum ThumbleSkinAssetPurpose: String, Codable, CaseIterable, Identifiable
     public var id: String { rawValue }
 }
 
+/// A compile-time passive-artwork anchor. It references appearance identity, never routing.
+public final class ThumbleSkinArtworkAnchor: Codable, Equatable, Sendable {
+    public let controlID: String?
+    public let action: String?
+    public let group: String?
+    public let scaleX: CGFloat
+    public let scaleY: CGFloat
+    public let offsetX: CGFloat
+    public let offsetY: CGFloat
+    public let plane: ThumbleSkinArtworkPlane
+    public let opacity: CGFloat
+    public let zIndex: Int
+
+    public init(controlID: String? = nil, action: String? = nil, group: String? = nil,
+                scaleX: CGFloat = 1, scaleY: CGFloat = 1, offsetX: CGFloat = 0, offsetY: CGFloat = 0,
+                plane: ThumbleSkinArtworkPlane = .underlay, opacity: CGFloat = 1, zIndex: Int = 0) {
+        self.controlID = controlID; self.action = action; self.group = group
+        self.scaleX = scaleX; self.scaleY = scaleY; self.offsetX = offsetX; self.offsetY = offsetY
+        self.plane = plane; self.opacity = opacity; self.zIndex = zIndex
+    }
+    public static func == (lhs: ThumbleSkinArtworkAnchor, rhs: ThumbleSkinArtworkAnchor) -> Bool {
+        lhs.controlID == rhs.controlID && lhs.action == rhs.action && lhs.group == rhs.group
+            && lhs.scaleX == rhs.scaleX && lhs.scaleY == rhs.scaleY && lhs.offsetX == rhs.offsetX
+            && lhs.offsetY == rhs.offsetY && lhs.plane == rhs.plane && lhs.opacity == rhs.opacity && lhs.zIndex == rhs.zIndex
+    }
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case controlID, action, group, scaleX, scaleY, offsetX, offsetY, plane, opacity, zIndex
+    }
+    private struct Key: CodingKey {
+        let stringValue: String; let intValue: Int? = nil
+        init?(stringValue: String) { self.stringValue = stringValue }
+        init?(intValue: Int) { return nil }
+    }
+    public convenience init(from decoder: Decoder) throws {
+        let all = try decoder.container(keyedBy: Key.self)
+        guard Set(all.allKeys.map(\.stringValue)).isSubset(of: Set(CodingKeys.allCases.map(\.rawValue))) else {
+            throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "Unsupported artwork anchor field."))
+        }
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(controlID: try c.decodeIfPresent(String.self, forKey: .controlID),
+            action: try c.decodeIfPresent(String.self, forKey: .action), group: try c.decodeIfPresent(String.self, forKey: .group),
+            scaleX: try c.decodeIfPresent(CGFloat.self, forKey: .scaleX) ?? 1,
+            scaleY: try c.decodeIfPresent(CGFloat.self, forKey: .scaleY) ?? 1,
+            offsetX: try c.decodeIfPresent(CGFloat.self, forKey: .offsetX) ?? 0,
+            offsetY: try c.decodeIfPresent(CGFloat.self, forKey: .offsetY) ?? 0,
+            plane: try c.decodeIfPresent(ThumbleSkinArtworkPlane.self, forKey: .plane) ?? .underlay,
+            opacity: try c.decodeIfPresent(CGFloat.self, forKey: .opacity) ?? 1,
+            zIndex: try c.decodeIfPresent(Int.self, forKey: .zIndex) ?? 0)
+    }
+
+    public func resolvedFrame(in variant: ThumbleSkinArtboardVariant,
+                              semantics: [ThumbleSkinControlSemantics]) throws -> ThumbleNormalizedRect {
+        guard variant.controls.count <= 256, semantics.count <= 256,
+              [controlID, action, group].compactMap({ $0 }).count == 1,
+              [scaleX, scaleY].allSatisfy({ $0.isFinite && (0.25...4).contains($0) }),
+              [offsetX, offsetY].allSatisfy({ $0.isFinite && (-1...1).contains($0) }),
+              opacity.isFinite, (0...1).contains(opacity), (-10_000...10_000).contains(zIndex),
+              controlID.map({ !$0.isEmpty && $0.utf8.count <= 128 }) ?? true,
+              [action, group].compactMap({ $0 }).allSatisfy({ tag in
+                  !tag.isEmpty && tag.utf8.count <= 64 && tag.unicodeScalars.allSatisfy {
+                      $0.value >= 97 && $0.value <= 122 || $0.value >= 48 && $0.value <= 57 || [45, 46, 95].contains($0.value)
+                  }
+              }) else { throw ThumbleSkinAnchorError.invalid("Artwork anchors require one exact target and bounded finite transforms.") }
+        let ids: Set<String>
+        if let controlID { ids = [controlID] }
+        else {
+            let effective = variant.controls.compactMap { control in
+                semantics.first { $0.controlID == control.id }
+                    ?? control.presentation.map { ThumbleSkinControlSemantics(controlID: control.id, action: $0.actionID, purpose: $0.purposeID, groups: $0.groupIDs) }
+            }
+            ids = Set(effective.filter { action != nil ? $0.action == action : $0.groups.contains(group ?? "") }.map(\.controlID))
+        }
+        let controls = variant.controls.filter { ids.contains($0.id) }
+        guard !controls.isEmpty, controls.count <= 32 else {
+            throw ThumbleSkinAnchorError.invalid("Artwork anchor targets must resolve to 1...32 visible controls in every selected orientation.")
+        }
+        let left = controls.map { $0.frame.x }.min() ?? 0
+        let top = controls.map { $0.frame.y }.min() ?? 0
+        let right = controls.map { $0.frame.x + $0.frame.width }.max() ?? 0
+        let bottom = controls.map { $0.frame.y + $0.frame.height }.max() ?? 0
+        let width = right - left, height = bottom - top
+        let frame = ThumbleNormalizedRect(x: left + width * (0.5 + offsetX - scaleX / 2),
+            y: top + height * (0.5 + offsetY - scaleY / 2), width: width * scaleX, height: height * scaleY)
+        guard frame.width > 0, frame.height > 0, frame.x >= 0, frame.y >= 0,
+              frame.x + frame.width <= 1.000001, frame.y + frame.height <= 1.000001 else {
+            throw ThumbleSkinAnchorError.invalid("Anchored artwork must remain within the captured canvas; transforms are never silently clamped.")
+        }
+        return frame
+    }
+}
+public enum ThumbleSkinAnchorError: LocalizedError {
+    case invalid(String)
+    public var errorDescription: String? { switch self { case .invalid(let message): message } }
+}
+
 public struct ThumbleSkinSourceAsset: Codable, Equatable, Identifiable, Sendable {
+    public var anchor: ThumbleSkinArtworkAnchor?
     public var id: String
     public var path: String
     public var purpose: ThumbleSkinAssetPurpose
@@ -312,8 +409,10 @@ public struct ThumbleSkinSourceAsset: Codable, Equatable, Identifiable, Sendable
         format: ThumbleSkinRasterFormat = .png,
         nineSliceInsets: ThumbleNormalizedInsets? = nil,
         orientation: ThumbleSkinOrientation? = nil,
-        colorScheme: ThumbleSkinColorScheme? = nil
+        colorScheme: ThumbleSkinColorScheme? = nil,
+        anchor: ThumbleSkinArtworkAnchor? = nil
     ) {
+        self.anchor = anchor
         self.id = id
         self.path = path
         self.purpose = purpose
@@ -328,13 +427,13 @@ public struct ThumbleSkinSourceAsset: Codable, Equatable, Identifiable, Sendable
 
 public struct ThumbleSemanticStyleAssignment: Codable, Equatable, Sendable {
     public var role: GamepadVisualRole?
-    public var button: GameButton?
+    public var button: KeypadElementID?
     public var materialID: String
     public var componentID: String?
 
     public init(
         role: GamepadVisualRole? = nil,
-        button: GameButton? = nil,
+        button: KeypadElementID? = nil,
         materialID: String,
         componentID: String? = nil
     ) {
@@ -379,6 +478,22 @@ public struct ThumblePreviewRequest: Codable, Equatable, Identifiable, Sendable 
     }
 }
 
+/// Appearance selection metadata, attached to exact artboard identities. These tags never
+/// participate in input routing or executable output mappings.
+public struct ThumbleSkinControlSemantics: Codable, Equatable, Sendable {
+    public var controlID: String
+    public var action: String?
+    public var purpose: String?
+    public var groups: [String]
+
+    public init(controlID: String, action: String? = nil, purpose: String? = nil, groups: [String] = []) {
+        self.controlID = controlID
+        self.action = action
+        self.purpose = purpose
+        self.groups = groups
+    }
+}
+
 public struct ThumbleSkinWorkspace: Codable, Equatable, Sendable {
     public var schema: String
     public var schemaVersion: Int
@@ -399,6 +514,9 @@ public struct ThumbleSkinWorkspace: Codable, Equatable, Sendable {
     /// CSS authoring (schema 2): paths relative to the workspace root, under `styles/`.
     public var stylesheets: [String]
     public var previews: [ThumblePreviewRequest]
+    /// Source-only exact artboard. Array storage keeps the large contract off the stack.
+    public var capturedArtboards: [ThumbleSkinArtboard]
+    public var controlSemantics: [ThumbleSkinControlSemantics]
 
     public init(
         schema: String = ThumbleSkinWorkspaceSchema.identifier,
@@ -418,7 +536,9 @@ public struct ThumbleSkinWorkspace: Codable, Equatable, Sendable {
         assignments: [ThumbleSemanticStyleAssignment] = [],
         sourceAssets: [ThumbleSkinSourceAsset] = [],
         stylesheets: [String] = [],
-        previews: [ThumblePreviewRequest] = []
+        previews: [ThumblePreviewRequest] = [],
+        capturedArtboards: [ThumbleSkinArtboard] = [],
+        controlSemantics: [ThumbleSkinControlSemantics] = []
     ) {
         self.schema = schema
         self.schemaVersion = schemaVersion
@@ -438,15 +558,25 @@ public struct ThumbleSkinWorkspace: Codable, Equatable, Sendable {
         self.sourceAssets = sourceAssets
         self.stylesheets = stylesheets
         self.previews = previews
+        self.capturedArtboards = capturedArtboards
+        self.controlSemantics = controlSemantics
     }
 
     private enum CodingKeys: String, CodingKey {
         case schema, schemaVersion, identifier, version, name, author, summary, license, artboardID
         case orientations, colorSchemes, palette, materials, components, assignments, sourceAssets
-        case stylesheets, previews
+        case stylesheets, previews, capturedArtboards, controlSemantics
     }
 
     public var usesCSSAuthoring: Bool { !stylesheets.isEmpty }
+
+    public var resolvedArtboard: ThumbleSkinArtboard? {
+        if !capturedArtboards.isEmpty {
+            guard capturedArtboards.count == 1, capturedArtboards[0].id == artboardID else { return nil }
+            return capturedArtboards[0]
+        }
+        return ThumbleSkinArtboardCatalog.resolve(artboardID)
+    }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -468,6 +598,8 @@ public struct ThumbleSkinWorkspace: Codable, Equatable, Sendable {
         sourceAssets = try container.decodeIfPresent([ThumbleSkinSourceAsset].self, forKey: .sourceAssets) ?? []
         stylesheets = try container.decodeIfPresent([String].self, forKey: .stylesheets) ?? []
         previews = try container.decodeIfPresent([ThumblePreviewRequest].self, forKey: .previews) ?? []
+        capturedArtboards = try container.decodeIfPresent([ThumbleSkinArtboard].self, forKey: .capturedArtboards) ?? []
+        controlSemantics = try container.decodeIfPresent([ThumbleSkinControlSemantics].self, forKey: .controlSemantics) ?? []
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -492,6 +624,8 @@ public struct ThumbleSkinWorkspace: Codable, Equatable, Sendable {
             try container.encode(stylesheets, forKey: .stylesheets)
         }
         try container.encode(previews, forKey: .previews)
+        if !capturedArtboards.isEmpty { try container.encode(capturedArtboards, forKey: .capturedArtboards) }
+        if !controlSemantics.isEmpty { try container.encode(controlSemantics, forKey: .controlSemantics) }
     }
 
     public static func starter(name: String, identifier: String, artboardID: String) -> ThumbleSkinWorkspace {
@@ -655,32 +789,277 @@ public struct ThumbleSkinWorkspace: Codable, Equatable, Sendable {
     }
 }
 
+/// Box native interaction geometry so captured contracts do not grow control
+/// aggregates on constrained Swift threads. This is a resolver rectangle, not a
+/// replacement for native gesture routing or hit-shape behavior.
+public final class ThumbleSkinArtboardNativeGeometry: Codable, Equatable, Sendable {
+    public let hitFrame: ThumbleNormalizedRect
+    public let scope: String
+    public init(hitFrame: ThumbleNormalizedRect) {
+        self.hitFrame = hitFrame
+        scope = "normalized native resolver hit rectangle; canvas coordinates before separate control rotation; not gesture ownership or an exact hit shape; bounds may extend beyond the viewport"
+    }
+    public static func == (lhs: ThumbleSkinArtboardNativeGeometry, rhs: ThumbleSkinArtboardNativeGeometry) -> Bool {
+        lhs.hitFrame == rhs.hitFrame && lhs.scope == rhs.scope
+    }
+}
+
+/// Immutable baseline surface contract. Native flow boxes are measured at review;
+/// primitive boxes are local control points, before parent scale and rotation.
+public final class ThumbleSkinArtboardNativeSurfaces: Codable, Equatable, Sendable {
+    public struct Sample: Codable, Equatable, Sendable {
+        public let colorScheme: ThumbleSkinColorScheme
+        public let state: GamepadControlPresentationState
+        public let surfaceIDs: [String]
+        public let localFrames: [String: CGRect]
+        public let effectiveFaceScale: CGFloat
+        public let fixedProperties: [String: CGFloat]
+    }
+    public let schemaVersion: Int
+    public let samples: [Sample]
+    public let potentialSurfaceIDs: [String]
+    public let supportedProperties: [String: [String]]
+    public let limitations: [String]
+    init(control: GamepadResolvedControl, customization: GamepadCustomization) {
+        var captured: [Sample] = []
+        for scheme in ThumbleSkinColorScheme.allCases {
+            for state in GamepadControlPresentationState.allCases {
+                let appearance = customization.resolvedPresentation(for: control, state: state,
+                    scheme: scheme == .dark ? .dark : .light)
+                let native = GamepadNativeContentPresentation(control: control,
+                    showsButtonLabels: customization.showsButtonLabels, content: appearance.content,
+                    icon: appearance.icon, state: state, scheme: scheme == .dark ? .dark : .light,
+                    authoredScale: appearance.scale, foregroundColor: appearance.foregroundColor,
+                    profileAccentStyle: customization.accentStyle)
+                var frames = native.localSurfaceFrames
+                if !control.isText { frames["face"] = CGRect(origin: .zero, size: control.size) }
+                captured.append(.init(colorScheme: scheme, state: state, surfaceIDs: native.visibleSurfaceIDs,
+                    localFrames: frames, effectiveFaceScale: native.effectiveFaceScale ?? appearance.scale, fixedProperties: native.fixedProperties))
+            }
+        }
+        schemaVersion = 1
+        samples = captured
+        var potential = Set(captured.flatMap(\.surfaceIDs))
+        if !control.isDecoration {
+            potential.insert("legend")
+            if control.presentationMetadata?.caption?.isEmpty == false { potential.insert("caption") }
+            if control.inputID != nil && !control.isText { potential.insert("binding-hint") }
+        }
+        if !control.isText && !control.isJoystick && !control.isTrackpad { potential.insert("icon") }
+        if control.isJoystick { potential.insert("joystick-well-ring") }
+        if control.isTrackpad { potential.formUnion(["trackpad-frame", "trackpad-cursor", "trackpad-indicators"]) }
+        potentialSurfaceIDs = potential.sorted()
+        let face = ["fillStyle", "foregroundColor", "strokeColor", "strokeWidth", "opacity", "scale", "blurRadius", "shadows", "shadowColor", "shadowRadius", "shadowX", "shadowY", "glowColor", "glowRadius", "innerShadowColor", "innerShadowRadius", "innerShadowX", "innerShadowY", "highlightColor", "highlightRadius", "highlightX", "highlightY", "highlightOpacity", "bevelHighlightColor", "bevelShadowColor", "bevelWidth", "indexColor", "indexWidth"]
+        let inherited = ["face.foregroundColor", "face.opacity", "face.scale", "face.blurRadius"]
+        let properties: [String: [String]] = [
+            "face": face,
+            "legend": ["legend", "fontSize", "fontWeight", "fontDesign", "tracking", "lineLimit", "alignment", "labelPadding", "labelPlacement"] + inherited,
+            "caption": inherited,
+            "binding-hint": inherited,
+            "icon": ["icon.source", "icon.value", "icon.placement", "icon.scale", "icon.tintColor", "icon.renderingMode"] + inherited,
+            "joystick-puck": ["joystickKnobRatio", "joystickKnobStrokeWidth", "joystickKnobFillColor", "joystickKnobStrokeColor", "face.opacity", "face.scale"],
+            "joystick-well-ring": ["joystickRingVisible", "joystickRingColor", "joystickRingStrokeWidth", "face.opacity", "face.scale"],
+            "trackpad-frame": ["trackpadFrameVisible", "trackpadFrameColor", "trackpadFrameStrokeWidth", "face.opacity", "face.scale"],
+            "trackpad-cursor": ["trackpadCursorVisible", "trackpadCursorColor", "face.opacity", "face.scale"],
+            "trackpad-indicators": ["trackpadIndicatorsVisible", "trackpadIndicatorColor", "trackpadSecondaryIndicatorColor", "face.opacity", "face.scale"],
+            "trigger-fill": ["face.foregroundColor", "face.opacity", "face.scale"]]
+        supportedProperties = properties.filter { potential.contains($0.key) }
+        limitations = [
+            "baseline frozen profile appearance in both schemes and four settled states; source skin edits can alter eligibility and style",
+            "surface IDs describe eligible native paint before alpha or inter-layer occlusion; prefix IDs with the owning control ID",
+            "localFrames are primitive layout in control points before parent state/authored scale and rotation; native capture stores baseline flow frames in variant.nativeLayout; source-edited flow frames require native review",
+            "optional binding hints depend on separate frozen outputs and review input; hint text is excluded from this appearance contract",
+            "property names refer to the native model; inherited face properties affect the whole control",
+            "caption and binding-hint font size 10, medium monospaced, line limit 1, minimum scale 0.5 and foreground opacity 0.76 are fixed",
+            "native ring diameter, cursor font size, indicator geometry, trigger opacity and touch-count feedback retain fixed native rules",
+            "icon fit/mask/padding, scripts, remote fonts and CSS hit testing are unsupported; selected fonts and exact gesture ownership are unmeasured"]
+    }
+    public static func == (lhs: ThumbleSkinArtboardNativeSurfaces, rhs: ThumbleSkinArtboardNativeSurfaces) -> Bool {
+        lhs.schemaVersion == rhs.schemaVersion && lhs.samples == rhs.samples && lhs.potentialSurfaceIDs == rhs.potentialSurfaceIDs
+            && lhs.supportedProperties == rhs.supportedProperties && lhs.limitations == rhs.limitations
+    }
+}
+
 public struct ThumbleSkinArtboardControl: Codable, Equatable, Identifiable, Sendable {
+    public var presentation: GamepadControlPresentation? = nil
+    public var nativeGeometry: ThumbleSkinArtboardNativeGeometry? = nil
+    public var nativeSurfaces: ThumbleSkinArtboardNativeSurfaces? = nil
     public var id: String
     public var label: String
     public var kind: GamepadCustomControlKind
     public var visualRole: GamepadVisualRole
-    public var mappedButton: GameButton
+    public var inputID: KeypadElementID?
     public var frame: ThumbleNormalizedRect
+    public var rotationDegrees: CGFloat? = nil
 
     public init(
         id: String,
         label: String,
         kind: GamepadCustomControlKind,
         visualRole: GamepadVisualRole,
-        mappedButton: GameButton,
-        frame: ThumbleNormalizedRect
+        inputID: KeypadElementID?,
+        frame: ThumbleNormalizedRect,
+        rotationDegrees: CGFloat? = nil,
+        presentation: GamepadControlPresentation? = nil,
+        nativeGeometry: ThumbleSkinArtboardNativeGeometry? = nil,
+        nativeSurfaces: ThumbleSkinArtboardNativeSurfaces? = nil
     ) {
         self.id = id
         self.label = label
         self.kind = kind
         self.visualRole = visualRole
-        self.mappedButton = mappedButton
+        self.inputID = inputID
         self.frame = frame
+        self.rotationDegrees = rotationDegrees
+        self.presentation = presentation
+        self.nativeGeometry = nativeGeometry
+        self.nativeSurfaces = nativeSurfaces
+    }
+}
+
+/// Baseline viewport and native chrome inventory. Dynamic native layout is
+/// measured by review; these identifiers never become executable input aliases.
+public final class ThumbleSkinArtboardNativeChrome: Codable, Equatable, Sendable {
+    public struct Visibility: Codable, Equatable, Sendable {
+        public let isConnected: Bool
+        public let isEditing: Bool
+        public let requestedClosedResolvesOpen: Bool
+        public let requestedOpenResolvesOpen: Bool
+    }
+    public let schemaVersion: Int
+    public let canvasFrame: CGRect
+    public let canvasFills: [String: GamepadFillStyle]
+    public let containerPresentation: [String: GamepadNativeBarContainerPresentation]?
+    public let revealControlID: String?
+    public let revealArtboardFrame: CGRect?
+    public let revealSurfaces: ThumbleSkinArtboardNativeSurfaces?
+    public let surfaceIDs: [String]
+    public let potentialSurfaceIDs: [String]
+    public let visibleBarItems: [GamepadControlBarItem]
+    public let drawerVisibility: [Visibility]
+    public let baselineDrawerPadding: [String: CGFloat]
+    public let supportedProperties: [String: [String]]
+    public let limitations: [String]
+    init(customization: GamepadCustomization, orientation: ThumbleSkinOrientation,
+         canvasSize: CGSize, safeAreaInsets: ThumbleNormalizedInsets, hasLaunchTarget: Bool) {
+        schemaVersion = 1
+        canvasFrame = CGRect(origin: .zero, size: canvasSize)
+        containerPresentation = Dictionary(uniqueKeysWithValues: ThumbleSkinColorScheme.allCases.map {
+            ($0.rawValue, GamepadNativeBarContainerPresentation(isLandscape: orientation == .landscape, colorScheme: $0 == .dark ? .dark : .light))
+        })
+        let normalized = customization.normalized
+        let reveal = normalized.resolvedControls(in: canvasSize).first { $0.id == .system(.topBarActivation) }
+        revealControlID = reveal?.id.id
+        revealArtboardFrame = reveal?.frame
+        revealSurfaces = reveal.map { ThumbleSkinArtboardNativeSurfaces(control: $0, customization: normalized) }
+        canvasFills = Dictionary(uniqueKeysWithValues: ThumbleSkinColorScheme.allCases.map {
+            ($0.rawValue, normalized.keypadBackgroundFillStyle(scheme: $0 == .dark ? .dark : .light))
+        })
+        let items = GamepadControllerPresentationRouting.visibleControlBarItems(normalized.controlBarItems,
+            hiddenItems: Set(normalized.controlBarItems.filter { normalized.controlBarItemCustomization(for: $0).isHidden }),
+            hasProfiles: true, hasLaunchTarget: hasLaunchTarget)
+        visibleBarItems = items
+        let painted = items.filter { $0 != .spacer }.map { "native-control-bar/" + $0.rawValue }
+        let leaves = GamepadControllerPresentationRouting.barLeafSurfaceIDs(items: items,
+            isLandscape: orientation == .landscape, customization: normalized)
+        let optionalConnectionIcon = items.contains(.connectionAction) ? ["native-control-bar/connection/icon"] : []
+        surfaceIDs = ["canvas", "native-control-bar", "native-drawer", "native-drawer/reveal"] + painted + leaves
+        potentialSurfaceIDs = Set(surfaceIDs + optionalConnectionIcon + ["canvas/artwork-underlay", "canvas/artwork-overlay"]).sorted()
+        var visibility: [Visibility] = []
+        for connected in [false, true] {
+            for editing in [false, true] {
+                visibility.append(.init(isConnected: connected, isEditing: editing,
+                    requestedClosedResolvesOpen: ControllerRuntimeChromePolicy.resolvedTopBarVisibility(
+                        requestedVisibility: false, isConnected: connected, isEditingLayout: editing),
+                    requestedOpenResolvesOpen: ControllerRuntimeChromePolicy.resolvedTopBarVisibility(
+                        requestedVisibility: true, isConnected: connected, isEditingLayout: editing)))
+            }
+        }
+        drawerVisibility = visibility
+        let layout = GamepadTopBarDrawerLayout(safeAreaInsets: EdgeInsets(
+            top: safeAreaInsets.top * canvasSize.height, leading: safeAreaInsets.leading * canvasSize.width,
+            bottom: safeAreaInsets.bottom * canvasSize.height, trailing: safeAreaInsets.trailing * canvasSize.width),
+            isLandscape: orientation == .landscape, minimumPortraitTopInset: 0)
+        baselineDrawerPadding = ["top": layout.topPadding, "leading": layout.leadingPadding, "trailing": layout.trailingPadding]
+        var properties: [String: [String]] = [
+            "canvas": ["backgroundFillStyle"],
+            "canvas/artwork-underlay": ["asset", "frame", "opacity", "zIndex", "plane"],
+            "canvas/artwork-overlay": ["asset", "frame", "opacity", "zIndex", "plane"],
+            "native-control-bar": [], "native-drawer": [], "native-drawer/reveal": []]
+        for id in painted {
+            properties[id] = ["appearance.shape", "appearance.cornerRadius", "appearance.cornerRadii", "appearance.accentStyle",
+                "appearance.fillStyle", "appearance.lightFillStyle", "appearance.darkFillStyle", "appearance.fillColor", "appearance.lightFillColor", "appearance.darkFillColor", "appearance.styleID",
+                "appearance.visualStyle", "appearance.widthScale", "appearance.heightScale", "appearance.shadowStrength"]
+        }
+        for id in painted where id != "native-control-bar/spacer" {
+            properties[id, default: []] += ["appearance.icon.source", "appearance.icon.value", "appearance.icon.scale",
+                "appearance.icon.tintColor", "appearance.icon.renderingMode"]
+        }
+        for id in potentialSurfaceIDs where id.hasSuffix("/legend") || id.hasSuffix("/icon") {
+            properties[id] = id.hasSuffix("/icon") ? ["appearance.icon.source", "appearance.icon.value", "appearance.icon.scale",
+                "appearance.icon.tintColor", "appearance.icon.renderingMode"] : []
+        }
+        supportedProperties = properties
+        limitations = [
+            "baseline viewport inventory; bar and drawer eligibility depends on visibility/context; spacers are layout-only",
+            "canvasFrame is viewport layout, not ink; artwork planes permit source-skin layers whose exact layer IDs and transforms are resolved in review",
+            "primitive inventory does not guess rectangles; native capture adds baseline bar/drawer/item layout in variant.nativeLayout; native capture also measures bar legend/icon leaves; source-edited placement and leaf layout require native review; ink, selected fonts and hit bounds remain separate",
+            "reveal paint uses the included exact system control ID and revealSurfaces when the resolver supplies it; a hidden region yields nil paint metadata while the drawer button layout remains; revealArtboardFrame is static geometry and the drawer repositions it",
+            "bar child property names refer to existing profile customization, not new CSS selectors; icons support SF symbols, text and local assets with scale/tint/rendering; placement is fixed by the native label tree, typography/content overrides are not consumed, and icon fit/mask/padding are not authored",
+            "bar container shape, scheme-dependent Geist fill/stroke, spacing/padding and drawer shadow are fixed native chrome",
+            "baseline drawer padding uses frozen safe areas and portrait minimum zero; review can explicitly sample a different minimum; live iPhone uses 54 and merges window insets",
+            "connection/default-profile context, menus, popovers, animation, accessibility adaptations and exact gestures are not frozen from live UI state"]
+    }
+    public static func == (lhs: ThumbleSkinArtboardNativeChrome, rhs: ThumbleSkinArtboardNativeChrome) -> Bool {
+        lhs.schemaVersion == rhs.schemaVersion && lhs.canvasFrame == rhs.canvasFrame && lhs.canvasFills == rhs.canvasFills
+            && lhs.containerPresentation == rhs.containerPresentation && lhs.revealControlID == rhs.revealControlID && lhs.revealArtboardFrame == rhs.revealArtboardFrame && lhs.revealSurfaces == rhs.revealSurfaces
+            && lhs.surfaceIDs == rhs.surfaceIDs && lhs.potentialSurfaceIDs == rhs.potentialSurfaceIDs
+            && lhs.visibleBarItems == rhs.visibleBarItems && lhs.drawerVisibility == rhs.drawerVisibility
+            && lhs.baselineDrawerPadding == rhs.baselineDrawerPadding && lhs.supportedProperties == rhs.supportedProperties
+            && lhs.limitations == rhs.limitations
+    }
+}
+
+/// Immutable baseline native measurements, captured before source authoring. Keeping the
+/// matrix behind one reference preserves the artboard variant's inline-size budget.
+public final class ThumbleSkinArtboardNativeLayout: Codable, Equatable, Sendable {
+    public struct ControlSample: Codable, Equatable, Sendable {
+        public let controlID: String
+        public let colorScheme: ThumbleSkinColorScheme
+        public let state: GamepadControlPresentationState
+        public let flowFrames: [String: CGRect]
+    }
+    public struct ChromeSample: Codable, Equatable, Sendable {
+        public var paint: GamepadNativeBarPaintEvidence? = nil
+        public let kind: String
+        public let colorScheme: ThumbleSkinColorScheme
+        public let isConnected: Bool
+        public let isEditing: Bool
+        public let requestedVisibility: Bool?
+        public let resolvedVisibility: Bool?
+        public let frames: [String: CGRect]
+        public let viewport: CGRect
+    }
+    public let schemaVersion: Int
+    public let rendererSHA256: String
+    public let renderScale: CGFloat
+    public let controlSamples: [ControlSample]
+    public let chromeSamples: [ChromeSample]
+    public let scope: String
+    init(rendererSHA256: String, controls: [ControlSample], chrome: [ChromeSample]) {
+        schemaVersion = 1; self.rendererSHA256 = rendererSHA256; renderScale = 1
+        controlSamples = controls; chromeSamples = chrome
+        scope = "frozen profile baseline at native 1x; flow leaf frames in canvas points including parent scale/rotation; standalone bar frames in bar-image points, drawer frames in canvas points; both schemes and four control states; connected/offline and editing on/off; drawer requested closed/open, opacity 1, portrait minimum 0, default-profile false; no binding hints, selected fonts, glyph ink, hit shapes, animations, menus or live device adaptations; source revisions are resolved separately in review"
+    }
+    public static func == (lhs: ThumbleSkinArtboardNativeLayout, rhs: ThumbleSkinArtboardNativeLayout) -> Bool {
+        lhs.schemaVersion == rhs.schemaVersion && lhs.rendererSHA256 == rhs.rendererSHA256 && lhs.renderScale == rhs.renderScale
+            && lhs.controlSamples == rhs.controlSamples && lhs.chromeSamples == rhs.chromeSamples && lhs.scope == rhs.scope
     }
 }
 
 public struct ThumbleSkinArtboardVariant: Codable, Equatable, Identifiable, Sendable {
+    public var nativeLayout: ThumbleSkinArtboardNativeLayout? = nil
+    public var nativeChrome: ThumbleSkinArtboardNativeChrome? = nil
     public var id: String
     public var orientation: ThumbleSkinOrientation
     public var canvasWidth: CGFloat
@@ -694,14 +1073,18 @@ public struct ThumbleSkinArtboardVariant: Codable, Equatable, Identifiable, Send
         canvasWidth: CGFloat,
         canvasHeight: CGFloat,
         safeAreaInsets: ThumbleNormalizedInsets,
-        controls: [ThumbleSkinArtboardControl]
+        controls: [ThumbleSkinArtboardControl],
+        nativeChrome: ThumbleSkinArtboardNativeChrome? = nil,
+        nativeLayout: ThumbleSkinArtboardNativeLayout? = nil
     ) {
+        self.nativeLayout = nativeLayout
         self.id = id
         self.orientation = orientation
         self.canvasWidth = canvasWidth
         self.canvasHeight = canvasHeight
         self.safeAreaInsets = safeAreaInsets
         self.controls = controls
+        self.nativeChrome = nativeChrome
     }
 }
 
@@ -774,7 +1157,31 @@ public enum ThumbleSkinArtboardCatalog {
         guard let artboard = resolve(artboardID),
               let template = GamepadControllerTemplate.allCases.first(where: { $0.rawValue == artboard.templateID })
         else { return nil }
-        return stabilized(completingOrientations(template.makeProfile()), seed: artboard.id)
+        return catalogProfile(template: template, id: artboard.id)
+    }
+
+    /// Preserve the two published catalog designs' authored role declarations. This is
+    /// fixture metadata, not a fallback for arbitrary profiles or remapped controls.
+    private static func catalogProfile(template: GamepadControllerTemplate, id: String) -> GamepadConfigurationProfile {
+        var profile = stabilized(completingOrientations(template.makeProfile()), seed: id)
+        guard ["showcase-controller-v1", "classic-16-bit-v1"].contains(id) else { return profile }
+        let declarations: [KeypadElementID: GamepadVisualRole] = [
+            .preset(1): .movement, .preset(2): .movement, .preset(3): .movement, .preset(4): .movement,
+            .preset(5): .primaryAction, .preset(6): .primaryAction,
+            .preset(7): .secondaryAction, .preset(8): .secondaryAction,
+            .preset(9): .utility, .preset(10): .menu]
+        func declaring(_ source: GamepadCustomization) -> GamepadCustomization {
+            var result = source
+            for index in result.elements.indices {
+                if let identity = result.elements[index].defaultControlID,
+                   let role = declarations[identity] { result.elements[index].visualRole = role }
+            }
+            return result.normalized
+        }
+        profile.customization = declaring(profile.customization)
+        if let landscape = profile.landscapeCustomization { profile.landscapeCustomization = declaring(landscape) }
+        if let portrait = profile.portraitCustomization { profile.portraitCustomization = declaring(portrait) }
+        return profile
     }
 
     private static func makeArtboard(
@@ -783,7 +1190,7 @@ public enum ThumbleSkinArtboardCatalog {
         name: String,
         summary: String
     ) -> ThumbleSkinArtboard {
-        let profile = stabilized(completingOrientations(template.makeProfile()), seed: id)
+        let profile = catalogProfile(template: template, id: id)
         let availableOrientations: [(ThumbleSkinOrientation, GamepadCustomization)] = {
             var values: [(ThumbleSkinOrientation, GamepadCustomization)] = []
             if let landscape = profile.landscapeCustomization {
@@ -832,12 +1239,12 @@ public enum ThumbleSkinArtboardCatalog {
                 case .system(let system): stableID = "system.\(system.rawValue)"
                 case .controlBarItem(let item): stableID = "control-bar.\(item.rawValue)"
                 }
-                return ThumbleSkinArtboardControl(
+        return ThumbleSkinArtboardControl(
                     id: stableID,
                     label: control.label,
                     kind: control.controlKind,
                     visualRole: control.visualRole,
-                    mappedButton: control.mappedButton,
+                    inputID: control.inputID,
                     frame: ThumbleNormalizedRect(
                         x: frame.minX / max(size.width, 1),
                         y: frame.minY / max(size.height, 1),
@@ -896,9 +1303,14 @@ public enum ThumbleSkinArtboardCatalog {
         var replacements: [UUID: UUID] = [:]
         for index in customization.customButtons.indices {
             let oldID = customization.customButtons[index].id
-            let newID = deterministicUUID("\(seed):custom:\(index):\(customization.customButtons[index].controlKind.rawValue):\(customization.customButtons[index].mappedButton.rawValue)")
+            let newID = deterministicUUID("\(seed):custom:\(index):\(customization.customButtons[index].controlKind.rawValue)")
             customization.customButtons[index].id = newID
             replacements[oldID] = newID
+        }
+        customization.elements = customization.elements.map { element in
+            var copy = element
+            if let replacement = replacements[element.id] { copy.id = replacement }
+            return copy
         }
         if var metadata = customization.designMetadata {
             metadata.layerOrder = metadata.layerOrder.map { identity in
@@ -1167,5 +1579,77 @@ public enum ThumbleSkinScaffolder {
           }
         }
         """ + "\n"
+    }
+}
+
+public enum ThumbleSkinArtboardCaptureError: LocalizedError {
+    case missingSafeArea(ThumbleSkinOrientation)
+    case invalidIdentifier
+    case invalidViewport(ThumbleSkinOrientation)
+
+    public var errorDescription: String? {
+        switch self {
+        case .missingSafeArea(let orientation):
+            "Supply the render viewport's safe area for \(orientation.rawValue); capture never guesses device insets."
+        case .invalidIdentifier: "A captured artboard requires a bounded nonempty identifier."
+        case .invalidViewport(let orientation): "Captured \(orientation.rawValue) viewport or safe area is invalid."
+        }
+    }
+}
+
+extension ThumbleSkinArtboard {
+    /// Capture authored variants only. UUIDs and resolved geometry are never synthesized
+    /// from a template or enumeration order. Outputs do not enter the appearance contract.
+    public static func capture(
+        profile: GamepadConfigurationProfile,
+        identifier: String,
+        safeAreas: [ThumbleSkinOrientation: ThumbleNormalizedInsets]
+    ) throws -> ThumbleSkinArtboard {
+        guard !identifier.isEmpty, identifier.utf8.count <= 100 else {
+            throw ThumbleSkinArtboardCaptureError.invalidIdentifier
+        }
+        var authored: [(ThumbleSkinOrientation, GamepadCustomization)] = []
+        let base = profile.customization
+        let baseOrientation: ThumbleSkinOrientation = base.deviceCanvas.editorDeviceFrame.orientation == .portrait ? .portrait : .landscape
+        if let landscape = profile.landscapeCustomization { authored.append((.landscape, landscape)) }
+        if let portrait = profile.portraitCustomization { authored.append((.portrait, portrait)) }
+        if !authored.contains(where: { $0.0 == baseOrientation }) { authored.append((baseOrientation, base)) }
+        var variants: [ThumbleSkinArtboardVariant] = []
+        for (orientation, customization) in authored {
+            guard let safeArea = safeAreas[orientation] else {
+                throw ThumbleSkinArtboardCaptureError.missingSafeArea(orientation)
+            }
+            let size = customization.deviceCanvas.editorDeviceFrame.screenRect.size
+            let actual: ThumbleSkinOrientation = customization.deviceCanvas.editorDeviceFrame.orientation == .portrait ? .portrait : .landscape
+            guard actual == orientation, [safeArea.top, safeArea.leading, safeArea.bottom, safeArea.trailing].allSatisfy({ $0.isFinite && (0...0.45).contains($0) }),
+                  size.width.isFinite, size.height.isFinite, (240...1800).contains(size.width), (240...1800).contains(size.height) else {
+                throw ThumbleSkinArtboardCaptureError.invalidViewport(orientation)
+            }
+            let controls = customization.resolvedControls(in: size).filter { !$0.layoutCustomization.isHidden }.map { control in
+                ThumbleSkinArtboardControl(
+                    id: control.id.id,
+                    label: control.label,
+                    kind: control.controlKind,
+                    visualRole: control.visualRole,
+                    inputID: control.inputID,
+                    frame: ThumbleNormalizedRect(x: control.frame.minX / size.width, y: control.frame.minY / size.height,
+                                                width: control.frame.width / size.width, height: control.frame.height / size.height),
+                    rotationDegrees: control.rotationDegrees,
+                    presentation: control.presentationMetadata,
+                    nativeGeometry: .init(hitFrame: .init(x: control.hitFrame.minX / size.width, y: control.hitFrame.minY / size.height,
+                        width: control.hitFrame.width / size.width, height: control.hitFrame.height / size.height)),
+                    nativeSurfaces: .init(control: control, customization: customization)
+                )
+            }
+            variants.append(ThumbleSkinArtboardVariant(id: "\(orientation.rawValue)-captured", orientation: orientation,
+                canvasWidth: size.width, canvasHeight: size.height, safeAreaInsets: safeArea, controls: controls,
+                nativeChrome: .init(customization: customization, orientation: orientation, canvasSize: size,
+                    safeAreaInsets: safeArea, hasLaunchTarget: profile.launchTarget != nil)))
+        }
+        variants.sort { $0.orientation.rawValue < $1.orientation.rawValue }
+        return ThumbleSkinArtboard(id: identifier, revision: 1,
+            templateID: base.designMetadata?.sourceTemplateID ?? "custom", name: profile.name,
+            summary: "Exact authored controller geometry captured for native design review.", variants: variants,
+            expectedRoles: Array(Set(variants.flatMap { $0.controls.map(\.visualRole) })).sorted { $0.rawValue < $1.rawValue })
     }
 }

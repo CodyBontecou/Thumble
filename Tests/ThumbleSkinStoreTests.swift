@@ -72,6 +72,16 @@ final class ThumbleSkinStoreTests: XCTestCase {
         }
     }
 
+    func testInstallIntoPrivateTmpAliasUsesCanonicalContainment() throws {
+        let alias = URL(fileURLWithPath: "/private/tmp/ThumbleSkinStoreAlias-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: alias) }
+        let store = try ThumbleSkinStore(rootURL: alias)
+        let package = makePackage(version: "1.0.0", shape: .circle)
+        let reference = ThumbleSkinReference(identifier: package.manifest.identifier, version: "1.0.0")
+        XCTAssertEqual(try store.install(package: package), .installed(reference))
+        XCTAssertEqual(try store.package(for: reference).skin, package.skin?.normalized)
+    }
+
     func testBundledThemesUseThePackageStore() throws {
         let store = try ThumbleSkinStore(rootURL: temporaryDirectory)
         try store.installBundledSkinsIfNeeded()
@@ -88,16 +98,16 @@ final class ThumbleSkinStoreTests: XCTestCase {
     func testProfileBaselinePreservesOnlyUserAppearanceOverrides() throws {
         let originalPackage = makePackage(version: "1.0.0", shape: .rectangle)
         var profile = GamepadConfigurationProfile(name: "Player One", customization: .defaultValue)
-        let originalJumpCenterX = profile.customization.buttonCustomization(for: .jump).centerX ?? 0
+        let originalJumpCenterX = profile.customization.buttonCustomization(for: .preset(5)).centerX ?? 0
         profile.applySkin(originalPackage)
 
         XCTAssertEqual(profile.skinReference?.version, "1.0.0")
-        XCTAssertEqual(profile.customization.buttonCustomization(for: .attack).shape, .rectangle)
+        XCTAssertEqual(profile.customization.buttonCustomization(for: .preset(6)).shape, .rectangle)
 
-        var jump = profile.customization.buttonCustomization(for: .jump)
+        var jump = profile.customization.buttonCustomization(for: .preset(5))
         jump.shape = .circle
         jump.centerX = 0.82
-        profile.customization.setButtonCustomization(jump, for: .jump)
+        profile.customization.setButtonCustomization(jump, for: .preset(5))
 
         // A package update changes the inherited shape. Only the explicit jump override survives.
         var updatedPackage = makePackage(version: "1.0.0", shape: .capsule)
@@ -108,22 +118,22 @@ final class ThumbleSkinStoreTests: XCTestCase {
             skinPackage: updatedPackage
         )
 
-        XCTAssertEqual(rendered.buttonCustomization(for: .jump).shape, .circle)
-        XCTAssertEqual(rendered.buttonCustomization(for: .attack).shape, .capsule)
-        XCTAssertEqual(rendered.buttonCustomization(for: .jump).centerX ?? 0, 0.82, accuracy: 0.001)
-        XCTAssertNotEqual(rendered.buttonCustomization(for: .jump).centerX ?? 0, originalJumpCenterX)
+        XCTAssertEqual(rendered.buttonCustomization(for: .preset(5)).shape, .circle)
+        XCTAssertEqual(rendered.buttonCustomization(for: .preset(6)).shape, .capsule)
+        XCTAssertEqual(rendered.buttonCustomization(for: .preset(5)).centerX ?? 0, 0.82, accuracy: 0.001)
+        XCTAssertNotEqual(rendered.buttonCustomization(for: .preset(5)).centerX ?? 0, originalJumpCenterX)
 
         updatedPackage.manifest.version = "2.0.0"
         profile.applySkin(updatedPackage)
         XCTAssertEqual(profile.skinReference?.version, "2.0.0")
-        XCTAssertEqual(profile.customization.buttonCustomization(for: .jump).shape, .circle)
-        XCTAssertEqual(profile.customization.buttonCustomization(for: .attack).shape, .capsule)
-        XCTAssertEqual(profile.skinBaselineCustomization?.buttonCustomization(for: .jump).shape, .capsule)
+        XCTAssertEqual(profile.customization.buttonCustomization(for: .preset(5)).shape, .circle)
+        XCTAssertEqual(profile.customization.buttonCustomization(for: .preset(6)).shape, .capsule)
+        XCTAssertEqual(profile.skinBaselineCustomization?.buttonCustomization(for: .preset(5)).shape, .capsule)
 
         profile.detachSkin()
         XCTAssertNil(profile.skinReference)
         XCTAssertNil(profile.skinBaselineCustomization)
-        XCTAssertEqual(profile.customization.buttonCustomization(for: .jump).shape, .circle)
+        XCTAssertEqual(profile.customization.buttonCustomization(for: .preset(5)).shape, .circle)
     }
 
     func testProfileStoresPackageAssetReferencesWithoutDuplicatingBinaryData() throws {
@@ -181,12 +191,12 @@ final class ThumbleSkinStoreTests: XCTestCase {
         }
     }
 
-    func testProfileSkinFieldsAreBackwardCompatibleAndWirePayloadCarriesPackages() throws {
+    func testDeclaredProfileDefaultsSkinFieldsAndWirePayloadCarriesPackages() throws {
         let legacyJSON = """
         {
           "id": "11111111-1111-1111-1111-111111111111",
           "name": "Legacy",
-          "customization": {}
+          "customization": {"elements": []}
         }
         """.data(using: .utf8)!
         let legacy = try JSONDecoder().decode(GamepadConfigurationProfile.self, from: legacyJSON)

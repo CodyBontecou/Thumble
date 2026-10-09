@@ -4,15 +4,34 @@
     {
       "label": "Focus",
       "key": "F",
-      "button": "focus",
       "fill": "#111827",
       "pressedFill": "#38BDF8",
       "stroke": "#F8FAFC",
       "strokeWidth": 2,
       "foreground": "#7C61A8",
       "shadows": [
-        { "color": { "red": 1, "green": 1, "blue": 1, "alpha": 0.9 }, "radius": 12, "x": -6, "y": -6 },
-        { "color": { "red": 0.61, "green": 0.57, "blue": 0.67, "alpha": 0.24 }, "radius": 20, "x": 8, "y": 9 }
+        {
+          "color": {
+            "red": 1,
+            "green": 1,
+            "blue": 1,
+            "alpha": 0.9
+          },
+          "radius": 12,
+          "x": -6,
+          "y": -6
+        },
+        {
+          "color": {
+            "red": 0.61,
+            "green": 0.57,
+            "blue": 0.67,
+            "alpha": 0.24
+          },
+          "radius": 20,
+          "x": 8,
+          "y": 9
+        }
       ],
       "innerShadow": "#B8B2C2",
       "innerShadowRadius": 5,

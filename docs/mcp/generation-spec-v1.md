@@ -15,8 +15,10 @@ Top-level fields:
   `notes`;
 - required `controls` array.
 
-Control fields preserve the documented agent-spec aliases for semantic button,
-label/key/modifiers/role, geometry, shape/accent/colors, style tokens and rich
+Controls have an optional UUID `id` independent of their label and explicit
+key/modifier outputs. Named identities and routing fields such as `button`,
+`mappedButton`, and `inputID` are rejected. Other fields describe
+label/role, geometry, shape/accent/colors, style tokens and rich
 visual states, icons/haptics, control kind, joystick mapping/style, trigger,
 and trackpad settings. Unknown fields fail closed. Asset/image/tile fills,
 asset icons, paths, URLs, commands, embedded data, credentials, authority
@@ -26,7 +28,7 @@ Bounds:
 
 - raw spec: 256 KiB;
 - source controls: 128;
-- assigned game-button slots: 18;
+- independently identified controls: up to 128; no named-slot allocation pool;
 - generated artifact/output: 8 MiB each;
 - labels: normalized to 12 extended grapheme clusters;
 - profile names: 256 characters;
@@ -37,7 +39,12 @@ Bounds:
 `plan_generation_spec` canonicalizes the normalized spec, requested-name
 override, and the three revisions with RFC 8785, then records a SHA-256
 descriptor digest. A fixed generation namespace plus that digest derives UUIDv5
-profile/custom-element IDs. Built-in elements keep canonical IDs. All generated
+profile/element IDs. Explicit UUIDs are retained; repeated explicit IDs receive
+independent generated UUIDs with a warning. Labels never select another control.
+The direct native authoring helper also retains repeated requested UUID controls
+under fresh UUIDs and records the notice in `notes`. This applies only to new
+spec authoring; saved profiles and imports with duplicate declarations reject.
+All generated
 timestamps and artifact `exportedAt` are zero.
 
 The same normalized input therefore produces byte-identical:
@@ -47,10 +54,11 @@ The same normalized input therefore produces byte-identical:
 - assigned/dropped controls, warnings, and layout quality.
 
 Rust enforces Swift-normalized capacities (two joysticks, two triggers, one
-trackpad), slot assignment, role/kind inference, thumb-layout defaults,
+trackpad), independent UUID assignment, role/kind inference, thumb-layout defaults,
 12-grapheme labels, joystick circle normalization, trigger defaults, and
-trackpad normalization. Slot/capacity loss and reused layout defaults are
-reported explicitly rather than silently discarded.
+trackpad normalization. Each direction's mapping is an explicit output binding,
+not another control's identity. Specialized capacity loss, duplicate-ID authoring,
+and reused layout defaults are reported rather than silently discarded.
 
 Rich appearance supports safe solid/linear/radial fills, normal and interaction
 states, colors/strokes/shadows/glow/inner-shadow/highlight/bevel/opacity/scale,

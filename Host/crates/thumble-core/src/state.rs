@@ -4,9 +4,9 @@ use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt;
-use thumble_protocol::GameButton;
+use thumble_protocol::{KeypadElementID, KeypadElementInputPart};
 
-pub const CURRENT_SCHEMA_VERSION: u32 = 2;
+pub const CURRENT_SCHEMA_VERSION: u32 = 3;
 pub const INITIAL_CONFIGURATION_REVISION: u64 = 1;
 pub const MAXIMUM_RECENT_CONFIGURATION_COMMITS: usize = 32;
 pub const DEFAULT_PROFILE_ID: &str = "00000000-0000-0000-0000-000000000201";
@@ -136,16 +136,11 @@ impl PersistentState {
             return Err(StateError::EmptyServerId);
         }
 
+        let profile = minimal_default_profile();
         let key_bindings = canonical_default_profile_key_bindings();
-        let mut output_bindings = ButtonBindings::default();
-        for button in GameButton::ALL {
-            if let Some(binding) = key_bindings.get(&button).cloned() {
-                output_bindings.insert(button, OutputBinding::keyboard(binding));
-            }
-        }
+        let output_bindings = crate::profile_owned_outputs(&profile);
 
-        // Keep these maps independent: callers may replace only the global
-        // output map while retaining the migration-compatible keyboard map.
+        // Keep these maps independent so edits remain profile-scoped.
         let profile_key_bindings =
             BTreeMap::from([(DEFAULT_PROFILE_ID.to_owned(), key_bindings.clone())]);
         let profile_output_bindings =
@@ -158,7 +153,7 @@ impl PersistentState {
             configuration_revision: INITIAL_CONFIGURATION_REVISION,
             configuration_updated_at: 0,
             recent_configuration_commits: Vec::new(),
-            profiles: vec![minimal_default_profile()],
+            profiles: vec![profile],
             active_profile_id: DEFAULT_PROFILE_ID.to_owned(),
             default_profile_id: DEFAULT_PROFILE_ID.to_owned(),
             key_bindings,
@@ -168,12 +163,10 @@ impl PersistentState {
         })
     }
 
-    pub fn normalize(&mut self) -> Result<(), StateError> {
+    /// Check the complete configuration without canonicalizing or trimming it.
+    /// Borrowed transaction sources must pass this before reads or cached replay.
+    pub fn validate(&self) -> Result<(), StateError> {
         match self.schema_version {
-            1 => {
-                self.schema_version = CURRENT_SCHEMA_VERSION;
-                self.configuration_revision = self.configuration_revision.max(1);
-            }
             CURRENT_SCHEMA_VERSION => {
                 if self.configuration_revision == 0 {
                     return Err(StateError::InvalidConfigurationRevision);
@@ -184,39 +177,23 @@ impl PersistentState {
         if self.server_id.trim().is_empty() {
             return Err(StateError::EmptyServerId);
         }
+        if self.profiles.iter().any(|profile| !crate::validate_element_identities(profile)) {
+            return Err(StateError::UnsupportedInputSlots);
+        }
 
+        crate::configuration::validate_state(self).map_err(StateError::InvalidConfiguration)
+    }
+
+    pub fn normalize(&mut self) -> Result<(), StateError> {
+        // Invalid storage must not be repaired into another setup.
+        self.validate()?;
+        let active = self.canonical_profile_id(&self.active_profile_id).unwrap().to_owned();
+        let default = self.canonical_profile_id(&self.default_profile_id).unwrap().to_owned();
+        self.active_profile_id = active;
+        self.default_profile_id = default;
         if self.recent_configuration_commits.len() > MAXIMUM_RECENT_CONFIGURATION_COMMITS {
-            let remove =
-                self.recent_configuration_commits.len() - MAXIMUM_RECENT_CONFIGURATION_COMMITS;
+            let remove = self.recent_configuration_commits.len() - MAXIMUM_RECENT_CONFIGURATION_COMMITS;
             self.recent_configuration_commits.drain(..remove);
-        }
-
-        let mut profile_ids = self
-            .profiles
-            .iter()
-            .filter_map(profile_id)
-            .map(str::to_owned)
-            .collect::<Vec<_>>();
-        if profile_ids.is_empty() {
-            self.profiles.push(minimal_default_profile());
-            profile_ids.push(DEFAULT_PROFILE_ID.to_owned());
-        }
-
-        if let Some(canonical) = profile_ids
-            .iter()
-            .find(|profile_id| ids_equal(profile_id, &self.active_profile_id))
-        {
-            self.active_profile_id.clone_from(canonical);
-        } else {
-            self.active_profile_id.clone_from(&profile_ids[0]);
-        }
-        if let Some(canonical) = profile_ids
-            .iter()
-            .find(|profile_id| ids_equal(profile_id, &self.default_profile_id))
-        {
-            self.default_profile_id.clone_from(canonical);
-        } else {
-            self.default_profile_id.clone_from(&self.active_profile_id);
         }
         Ok(())
     }
@@ -241,12 +218,13 @@ impl PersistentState {
         self.active_profile()
             .and_then(|profile| profile.get("outputMode"))
             .and_then(Value::as_str)
-            == Some("keyboard")
+            .unwrap_or("keyboard")
+            == "keyboard"
     }
 
     /// Whether the active profile requests a controller. Keyboard mode gates
     /// every path, including direct element bindings and orientation variants.
-    /// Missing legacy outputMode preserves custom mixed-output behavior.
+    /// A missing outputMode has the same keyboard default as native profiles.
     pub fn needs_virtual_gamepad(&self) -> bool {
         if self.gamepad_output_disabled() {
             return false;
@@ -259,9 +237,16 @@ impl PersistentState {
         {
             return true;
         }
-        if GameButton::ALL.into_iter().any(|button| {
-            self.resolve_button_output(button)
-                .is_some_and(|output| output.supported_gamepad_buttons().next().is_some())
+        if self.active_profile().is_some_and(|profile| {
+            ["customization", "landscapeCustomization", "portraitCustomization"]
+                .into_iter().filter_map(|name| profile.get(name))
+                .filter_map(|customization| customization.get("elements").and_then(Value::as_array))
+                .flatten().filter_map(|element| element.get("id").and_then(Value::as_str).and_then(KeypadElementID::parse))
+                .any(|id| [KeypadElementInputPart::Primary, KeypadElementInputPart::JoystickUp,
+                    KeypadElementInputPart::JoystickDown, KeypadElementInputPart::JoystickLeft,
+                    KeypadElementInputPart::JoystickRight, KeypadElementInputPart::TriggerDigital]
+                    .into_iter().any(|part| self.resolve_element_output(&id.to_string(), part)
+                        .is_some_and(|output| output.supported_gamepad_buttons().next().is_some())))
         }) {
             return true;
         }
@@ -319,11 +304,9 @@ impl PersistentState {
 }
 
 fn customization_needs_gamepad(customization: &Value) -> bool {
-    ["elements", "customButtons"].into_iter().any(|name| {
-        customization
-            .get(name)
-            .and_then(Value::as_array)
-            .is_some_and(|controls| controls.iter().any(control_needs_gamepad))
+    customization.get("elements").and_then(Value::as_array).is_some_and(|controls| {
+        controls.iter().filter(|control| control.get("id").and_then(Value::as_str)
+            .and_then(KeypadElementID::parse).is_some()).any(control_needs_gamepad)
     })
 }
 
@@ -346,28 +329,9 @@ fn control_needs_gamepad(control: &Value) -> bool {
     {
         return true;
     }
-    if control.get("output").is_some_and(output_needs_gamepad) {
-        return true;
-    }
-    match control.get("partOutputs") {
-        Some(Value::Object(outputs)) => outputs.values().any(output_needs_gamepad),
-        Some(Value::Array(outputs)) => outputs
-            .chunks_exact(2)
-            .any(|pair| output_needs_gamepad(&pair[1])),
-        _ => false,
-    }
-}
-
-fn output_needs_gamepad(output: &Value) -> bool {
-    output
-        .get("gamepadButtons")
-        .and_then(Value::as_array)
-        .is_some_and(|buttons| {
-            buttons
-                .iter()
-                .filter_map(Value::as_str)
-                .any(|name| crate::VirtualGamepadButton::from_name(name).is_some())
-        })
+    // Digital outputs, including joystick directions, are checked through the
+    // resolver so explicit part clears beat direction defaults and sidecars.
+    false
 }
 
 const fn initial_configuration_revision() -> u64 {
@@ -385,35 +349,17 @@ pub fn minimal_default_profile() -> Value {
     })
 }
 
-/// Smallest useful customization that both the current Swift decoder and the
-/// Rust resolver understand without relying on a migration pass. The fixed IDs
-/// are the canonical built-in IDs from `KeypadElement.builtInID(for:)`.
+/// Starter elements own their identities and explicit default outputs.
 pub fn minimal_default_customization() -> Value {
-    let elements = [
-        ("00000000-0000-0000-0000-000000000101", "Up", "up"),
-        ("00000000-0000-0000-0000-000000000102", "Down", "down"),
-        ("00000000-0000-0000-0000-000000000103", "Left", "left"),
-        ("00000000-0000-0000-0000-000000000104", "Right", "right"),
-        ("00000000-0000-0000-0000-000000000105", "Action 1", "jump"),
-        ("00000000-0000-0000-0000-000000000106", "Action 2", "attack"),
-        ("00000000-0000-0000-0000-000000000107", "Action 3", "dash"),
-        ("00000000-0000-0000-0000-000000000108", "Action 4", "focus"),
-        ("00000000-0000-0000-0000-000000000109", "Menu", "map"),
-        ("00000000-0000-0000-0000-000000000110", "Pause", "pause"),
-    ]
-    .into_iter()
-    .map(|(id, label, button)| {
-        json!({
-            "id": id,
-            "label": label,
-            "kind": "button",
-            "layout": {},
-            "builtInButton": button,
-            "legacySlot": button,
-            "partOutputs": []
-        })
-    })
-    .collect::<Vec<_>>();
+    let labels = ["Up", "Down", "Left", "Right", "Action 1", "Action 2", "Action 3", "Action 4", "Menu", "Pause"];
+    let keys = canonical_default_profile_key_bindings();
+    let gamepad = ["dpadUp", "dpadDown", "dpadLeft", "dpadRight", "south", "east", "west", "north", "select", "start"];
+    let elements = (1..=10).map(|number| {
+        let id = KeypadElementID::preset(number);
+        let output = OutputBinding { keyboard: keys.get(&id).cloned(), gamepad_buttons: std::collections::BTreeSet::from([gamepad[number as usize - 1].to_owned()]) }.element_value();
+        let visual_role = match number { 1..=4 => "movement", 5..=6 => "primary_action", 7..=8 => "secondary_action", 9 => "utility", _ => "menu" };
+        json!({"id": id, "label": labels[number as usize - 1], "kind": "button", "visualRole": visual_role, "layout": {}, "output": output, "defaultOutput": output, "partOutputs": []})
+    }).collect::<Vec<_>>();
     json!({"elements": elements})
 }
 
@@ -425,21 +371,20 @@ pub(crate) fn ids_equal(left: &str, right: &str) -> bool {
     left.eq_ignore_ascii_case(right)
 }
 
-/// Canonical bindings installed for a newly imported profile that does not
-/// supply its own per-profile key map.
+/// Explicit keyboard bindings for constructing the starter layout.
 pub fn canonical_default_profile_key_bindings() -> ButtonBindings<KeyBinding> {
     let mut bindings = ButtonBindings::default();
     for (button, key_code, modifiers) in [
-        (GameButton::Left, 123, 0),
-        (GameButton::Right, 124, 0),
-        (GameButton::Up, 126, 0),
-        (GameButton::Down, 125, 0),
-        (GameButton::Jump, 36, 0),
-        (GameButton::Attack, 48, 0),
-        (GameButton::Dash, 40, 1),
-        (GameButton::Focus, 11, 8),
-        (GameButton::Map, 35, 3),
-        (GameButton::Pause, 53, 0),
+        (KeypadElementID::preset(3), 123, 0),
+        (KeypadElementID::preset(4), 124, 0),
+        (KeypadElementID::preset(1), 126, 0),
+        (KeypadElementID::preset(2), 125, 0),
+        (KeypadElementID::preset(5), 36, 0),
+        (KeypadElementID::preset(6), 48, 0),
+        (KeypadElementID::preset(7), 40, 1),
+        (KeypadElementID::preset(8), 11, 8),
+        (KeypadElementID::preset(9), 35, 3),
+        (KeypadElementID::preset(10), 53, 0),
     ] {
         bindings.insert(button, KeyBinding::new(key_code, modifiers));
     }
@@ -449,7 +394,9 @@ pub fn canonical_default_profile_key_bindings() -> ButtonBindings<KeyBinding> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StateError {
     EmptyServerId,
+    UnsupportedInputSlots,
     InvalidConfigurationRevision,
+    InvalidConfiguration(crate::ConfigurationDocumentError),
     ConfigurationRevisionExhausted,
     UnsupportedSchemaVersion(u32),
 }
@@ -457,9 +404,11 @@ pub enum StateError {
 impl fmt::Display for StateError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::UnsupportedInputSlots => formatter.write_str("controls must declare unique element UUIDs; named input slots and routing fields are no longer supported; recreate the setup with element UUIDs"),
             Self::EmptyServerId => {
                 formatter.write_str("the persistent server ID must not be empty")
             }
+            Self::InvalidConfiguration(error) => write!(formatter, "invalid saved configuration: {error}"),
             Self::InvalidConfigurationRevision => {
                 formatter.write_str("configuration revision must be at least one")
             }

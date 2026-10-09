@@ -120,6 +120,79 @@ public enum KeypadBindingFormatter {
     }
 
     private static func keyName(for keyCode: UInt16, accessible: Bool) -> String {
+        KeypadKeyboardKeyCatalog.formattedName(for: keyCode, accessible: accessible)
+    }
+}
+
+/// Platform-neutral macOS keyboard vocabulary for profile authoring and display.
+/// This describes outputs only; control UUIDs and visual labels never enter lookup.
+public enum KeypadKeyboardKeyCatalog {
+    public static func displayName(for keyCode: UInt16) -> String {
+        if let pair = specialKeyNames[keyCode] {
+            switch keyCode {
+            case 53, 63, 123...126: return pair.compact
+            default: return pair.accessible
+            }
+        }
+        return keyNames[keyCode] ?? "Key \(keyCode)"
+    }
+
+    public static func keyCode(named name: String) -> UInt16? {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        if let code = keyNames.first(where: { $0.value.caseInsensitiveCompare(trimmed) == .orderedSame })?.key {
+            return code
+        }
+        if let code = specialKeyNames.keys.first(where: { displayName(for: $0).caseInsensitiveCompare(trimmed) == .orderedSame }) {
+            return code
+        }
+        let normalized = normalizedName(trimmed)
+        switch normalized {
+        case "left", "leftarrow", "arrowleft": return 123
+        case "right", "rightarrow", "arrowright": return 124
+        case "up", "uparrow", "arrowup": return 126
+        case "down", "downarrow", "arrowdown": return 125
+        case "esc", "escape": return 53
+        case "return", "enter": return 36
+        case "space", "spacebar": return 49
+        case "delete", "backspace": return 51
+        case "forwarddelete": return 117
+        default: break
+        }
+        // Unknown punctuation must not accidentally match a punctuation key
+        // after both names normalize to the empty string.
+        if !normalized.isEmpty {
+            if let code = keyNames.first(where: { normalizedName($0.value) == normalized })?.key {
+                return code
+            }
+            if let code = specialKeyNames.keys.first(where: { normalizedName(displayName(for: $0)) == normalized }) {
+                return code
+            }
+        }
+        guard let code = UInt16(trimmed), keyNames[code] != nil || specialKeyNames[code] != nil else { return nil }
+        return code
+    }
+
+    public static func modifierMask(named names: [String]) -> UInt8? {
+        var result: UInt8 = 0
+        for name in names {
+            switch normalizedName(name) {
+            case "cmd", "command", "meta": result |= 1
+            case "shift": result |= 2
+            case "opt", "option", "alt": result |= 4
+            case "ctrl", "control": result |= 8
+            case "": continue
+            default: return nil
+            }
+        }
+        return result
+    }
+
+    private static func normalizedName(_ name: String) -> String {
+        name.lowercased().filter { $0.isLetter || $0.isNumber }
+    }
+
+    fileprivate static func formattedName(for keyCode: UInt16, accessible: Bool) -> String {
         if let pair = specialKeyNames[keyCode] {
             return accessible ? pair.accessible : pair.compact
         }
@@ -153,17 +226,45 @@ public enum KeypadBindingFormatter {
 }
 
 public enum KeypadBindingPresentationBuilder {
+    /// Mirrors native runtime duplicate suppression without coupling appearance to output routing.
+    public static func visibleHint(_ text: String?, label: String, icon: GamepadControlIcon? = nil) -> String? {
+        guard let text = text?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else { return nil }
+        func normalized(_ value: String) -> String {
+            value.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+                .filter { !$0.isWhitespace }
+        }
+        guard normalized(text) != normalized(label) else { return nil }
+        if let icon, icon.source == .text, normalized(text) == normalized(icon.value) { return nil }
+        return text
+    }
+
+    static func compactHint(for control: GamepadResolvedControl, entries: [KeypadBindingPresentation]) -> String? {
+        guard let id = control.elementID ?? control.inputID?.uuid else { return nil }
+        func text(_ part: KeypadElementInputPart) -> String? {
+            entries.first { $0.input == KeypadElementInputID(elementID: id, part: part) }?.compactText
+        }
+        if control.isJoystick {
+            let value = GamepadJoystickDirection.allCases.compactMap { direction in
+                text(KeypadElementInputPart(direction: direction)).map { direction.shortLabel + $0 }
+            }.joined(separator: " ")
+            return value.isEmpty ? nil : value
+        }
+        return text(control.isTrigger && control.elementID != nil ? .triggerDigital : .primary)
+    }
+
     public static func presentations(
         for profile: GamepadConfigurationProfile,
-        effectiveLegacyOutputs: [GameButton: KeypadElementOutputBinding]
+        elementOutputs: [KeypadElementID: KeypadElementOutputBinding]
     ) -> [GamepadProfileBindingPresentations] {
         let landscape = entries(
             customization: profile.customization(for: .landscape),
-            effectiveLegacyOutputs: effectiveLegacyOutputs
+            elementOutputs: elementOutputs,
+            outputMode: profile.outputMode
         )
         let portrait = entries(
             customization: profile.customization(for: .portrait),
-            effectiveLegacyOutputs: effectiveLegacyOutputs
+            elementOutputs: elementOutputs,
+            outputMode: profile.outputMode
         )
         if landscape == portrait {
             return [GamepadProfileBindingPresentations(profileID: profile.id, entries: landscape)]
@@ -176,7 +277,8 @@ public enum KeypadBindingPresentationBuilder {
 
     public static func entries(
         customization: GamepadCustomization,
-        effectiveLegacyOutputs: [GameButton: KeypadElementOutputBinding]
+        elementOutputs: [KeypadElementID: KeypadElementOutputBinding],
+        outputMode: GamepadProfileOutputMode = .custom
     ) -> [KeypadBindingPresentation] {
         var entries: [KeypadBindingPresentation] = []
         for element in customization.normalized.elements {
@@ -189,9 +291,14 @@ public enum KeypadBindingPresentationBuilder {
                 relevantParts.insert(.triggerDigital)
             }
             for part in KeypadElementInputPart.allCases where relevantParts.contains(part) {
-                let output = element.outputBinding(for: part)
-                    ?? legacyButton(for: part, element: element).flatMap { effectiveLegacyOutputs[$0] }
-                guard let output, let text = KeypadBindingFormatter.format(output) else { continue }
+                guard var output = element.outputBinding(for: part)
+                    ?? (part == .primary ? elementOutputs[element.inputID] : nil) else { continue }
+                switch outputMode {
+                case .keyboard: output.gamepadButtons.removeAll()
+                case .controller: output.keyboard = nil
+                case .custom: break
+                }
+                guard let text = KeypadBindingFormatter.format(output) else { continue }
                 entries.append(
                     KeypadBindingPresentation(
                         input: KeypadElementInputID(elementID: element.id, part: part),
@@ -204,15 +311,6 @@ public enum KeypadBindingPresentationBuilder {
         return entries.sorted { $0.input.storageKey < $1.input.storageKey }
     }
 
-    private static func legacyButton(for part: KeypadElementInputPart, element: KeypadElement) -> GameButton? {
-        switch part {
-        case .primary, .triggerDigital: element.legacySlot
-        case .joystickUp: element.joystickMapping?.up
-        case .joystickDown: element.joystickMapping?.down
-        case .joystickLeft: element.joystickMapping?.left
-        case .joystickRight: element.joystickMapping?.right
-        }
-    }
 }
 
 public enum KeypadBindingPresentationPersistence {

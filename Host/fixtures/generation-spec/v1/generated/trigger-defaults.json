@@ -1,7 +1,7 @@
 {
   "confidence": "low",
   "keyBindings": [
-    "custom1",
+    "4525B55A-EFF3-57FC-9266-E297196CB863",
     {
       "key": "R",
       "modifiers": []
@@ -13,114 +13,13 @@
   "profile": {
     "customization": {
       "accentStyle": "purple",
-      "buttonCustomizations": [
-        "up",
-        {
-          "heightScale": 1.0,
-          "isHidden": true,
-          "isLocationLocked": false,
-          "rotationDegrees": 0,
-          "shadowStrength": 1.0,
-          "widthScale": 1.0,
-          "zIndex": 0
-        },
-        "down",
-        {
-          "heightScale": 1.0,
-          "isHidden": true,
-          "isLocationLocked": false,
-          "rotationDegrees": 0,
-          "shadowStrength": 1.0,
-          "widthScale": 1.0,
-          "zIndex": 0
-        },
-        "left",
-        {
-          "heightScale": 1.0,
-          "isHidden": true,
-          "isLocationLocked": false,
-          "rotationDegrees": 0,
-          "shadowStrength": 1.0,
-          "widthScale": 1.0,
-          "zIndex": 0
-        },
-        "right",
-        {
-          "heightScale": 1.0,
-          "isHidden": true,
-          "isLocationLocked": false,
-          "rotationDegrees": 0,
-          "shadowStrength": 1.0,
-          "widthScale": 1.0,
-          "zIndex": 0
-        },
-        "jump",
-        {
-          "heightScale": 1.0,
-          "isHidden": true,
-          "isLocationLocked": false,
-          "rotationDegrees": 0,
-          "shadowStrength": 1.0,
-          "widthScale": 1.0,
-          "zIndex": 0
-        },
-        "attack",
-        {
-          "heightScale": 1.0,
-          "isHidden": true,
-          "isLocationLocked": false,
-          "rotationDegrees": 0,
-          "shadowStrength": 1.0,
-          "widthScale": 1.0,
-          "zIndex": 0
-        },
-        "dash",
-        {
-          "heightScale": 1.0,
-          "isHidden": true,
-          "isLocationLocked": false,
-          "rotationDegrees": 0,
-          "shadowStrength": 1.0,
-          "widthScale": 1.0,
-          "zIndex": 0
-        },
-        "focus",
-        {
-          "heightScale": 1.0,
-          "isHidden": true,
-          "isLocationLocked": false,
-          "rotationDegrees": 0,
-          "shadowStrength": 1.0,
-          "widthScale": 1.0,
-          "zIndex": 0
-        },
-        "map",
-        {
-          "heightScale": 1.0,
-          "isHidden": true,
-          "isLocationLocked": false,
-          "rotationDegrees": 0,
-          "shadowStrength": 1.0,
-          "widthScale": 1.0,
-          "zIndex": 0
-        },
-        "pause",
-        {
-          "heightScale": 1.0,
-          "isHidden": true,
-          "isLocationLocked": false,
-          "rotationDegrees": 0,
-          "shadowStrength": 1.0,
-          "widthScale": 1.0,
-          "zIndex": 0
-        }
-      ],
+      "buttonCustomizations": [],
       "colorSchemePreference": "system",
       "controlScale": "standard",
       "customButtons": [
         {
           "controlKind": "trigger",
-          "id": "1938d035-4098-5bfc-9c99-baa58e176420",
+          "id": "4525B55A-EFF3-57FC-9266-E297196CB863",
           "label": "Right Trigge",
           "layout": {
             "accentStyle": "monochrome",
@@ -141,7 +40,6 @@
             "widthScale": 1.12,
             "zIndex": 0
           },
-          "mappedButton": "custom1",
           "triggerSettings": {
             "deadZone": 0.03,
             "digitalThreshold": 0.5,
@@ -158,7 +56,7 @@
       },
       "elements": [
         {
-          "id": "1938d035-4098-5bfc-9c99-baa58e176420",
+          "id": "4525B55A-EFF3-57FC-9266-E297196CB863",
           "kind": "trigger",
           "label": "Right Trigge",
           "layout": {
@@ -180,7 +78,13 @@
             "widthScale": 1.12,
             "zIndex": 0
           },
-          "legacySlot": "custom1",
+          "output": {
+            "gamepadButtons": [],
+            "keyboard": {
+              "keyCode": 15,
+              "modifiersRawValue": 0
+            }
+          },
           "partOutputs": [],
           "triggerSettings": {
             "deadZone": 0.03,
@@ -198,7 +102,7 @@
       "showsButtonLabels": true,
       "updatedAt": 0
     },
-    "id": "2c6d329f-e7c2-5895-aa29-a290e42032d5",
+    "id": "bfc8f93f-b9d0-5cd3-8e1f-d93d75690610",
     "name": "Trigger Defaults",
     "orientationPreference": "automatic",
     "outputMode": "keyboard",

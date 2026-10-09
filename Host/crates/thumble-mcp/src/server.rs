@@ -43,7 +43,7 @@ use thumble_host::draft_operation::{
     ConfigurationGamepadButton, ConfigurationLayoutMode, ConfigurationOperation,
     ConfigurationOrientationPreference, ConfigurationOutputMode, ConfigurationRgbaColor,
     ConfigurationVariant, ControlAlignment, ControlBarItemChanges, ControlBarMoveDirection,
-    ControlDistribution, ControllerTemplate, CustomizationChanges, ElementChanges,
+    ControlDistribution, ControllerTemplate, CustomizationChanges, ElementChanges, ElementPresentation,
     ElementCornerRadii, ElementFill, ElementGradientStop, ElementGradientType, ElementHitInsets,
     ElementInputPart, ElementJoystickAnalogTarget, ElementJoystickMapping, ElementJoystickSettings,
     ElementJoystickVisualStyle, ElementKind, ElementOutputChanges, ElementShape,
@@ -54,7 +54,7 @@ use thumble_host::draft_operation::{
     SemanticKeyStroke, SemanticModifier, StyleAppearance, StyleHaptic, StyleHapticKind,
     StyleHapticPattern, StyleIcon, StyleIconSource, StyleMaterialPreset, StyleShadow,
 };
-use thumble_protocol::GameButton;
+use thumble_protocol::KeypadElementID;
 
 const CONTROLLER_UI_URI: &str = "ui://thumble/controller-builder-v1.html";
 const CONTROLLER_UI_MIME_TYPE: &str = "text/html;profile=mcp-app";
@@ -364,8 +364,6 @@ pub struct ControllerElementResult {
     pub label: String,
     pub kind: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub mapped_button: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub visual_role: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub accent_style: Option<String>,
@@ -653,7 +651,6 @@ impl RenderControllerResult {
                     id: element.id,
                     label: element.label,
                     kind: element.kind,
-                    mapped_button: element.mapped_button,
                     visual_role: element.visual_role,
                     accent_style: element.accent_style,
                     shape: element.shape,
@@ -1215,8 +1212,6 @@ pub enum ConfigurationOperationInput {
         #[serde(rename = "elementID")]
         element_id: String,
         kind: ElementKindInput,
-        #[serde(rename = "mappedButton")]
-        mapped_button: Option<GameButtonInput>,
         changes: Box<ElementChangesInput>,
     },
     #[serde(rename = "element.set")]
@@ -1235,7 +1230,7 @@ pub enum ConfigurationOperationInput {
         /// Exact profile UUID whose semantic button binding will change.
         #[serde(rename = "profileID")]
         profile_id: String,
-        button: GameButtonInput,
+        button: ElementIDInput,
         /// One through 32 semantic key strokes. Numeric key codes are rejected.
         sequence: Vec<SemanticKeyStrokeInput>,
     },
@@ -1243,13 +1238,13 @@ pub enum ConfigurationOperationInput {
     BindingClear {
         #[serde(rename = "profileID")]
         profile_id: String,
-        button: GameButtonInput,
+        button: ElementIDInput,
     },
     #[serde(rename = "binding.reset")]
     BindingReset {
         #[serde(rename = "profileID")]
         profile_id: String,
-        button: GameButtonInput,
+        button: ElementIDInput,
     },
     #[serde(rename = "binding.reset-all")]
     BindingResetAll {
@@ -1266,7 +1261,7 @@ pub enum ConfigurationOperationInput {
     OutputSet {
         #[serde(rename = "profileID")]
         profile_id: String,
-        button: GameButtonInput,
+        button: ElementIDInput,
         #[serde(rename = "keyboardEdit")]
         keyboard_edit: KeyboardOutputEditInput,
         #[serde(rename = "gamepadEdit")]
@@ -1276,7 +1271,7 @@ pub enum ConfigurationOperationInput {
     OutputReset {
         #[serde(rename = "profileID")]
         profile_id: String,
-        button: GameButtonInput,
+        button: ElementIDInput,
     },
     #[serde(rename = "output.reset-all")]
     OutputResetAll {
@@ -1775,14 +1770,12 @@ impl From<ConfigurationOperationInput> for ConfigurationOperation {
                 variant,
                 element_id,
                 kind,
-                mapped_button,
                 changes,
             } => Self::ElementAdd {
                 profile_id,
                 variant: variant.into(),
                 element_id,
                 kind: kind.into(),
-                mapped_button: mapped_button.map(Into::into),
                 changes: Box::new((*changes).into()),
             },
             ConfigurationOperationInput::ElementSet {
@@ -3277,7 +3270,7 @@ impl From<ElementKindInput> for ElementKind {
     }
 }
 
-#[derive(Debug, Clone, Copy, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ElementVisualRoleInput {
     Movement,
@@ -3550,10 +3543,70 @@ impl From<ElementJoystickVisualStyleInput> for ElementJoystickVisualStyle {
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ElementJoystickMappingInput {
-    pub up: GameButtonInput,
-    pub down: GameButtonInput,
-    pub left: GameButtonInput,
-    pub right: GameButtonInput,
+    pub up: ElementOutputBindingInput,
+    pub down: ElementOutputBindingInput,
+    pub left: ElementOutputBindingInput,
+    pub right: ElementOutputBindingInput,
+}
+
+/// Explicit semantic keyboard/gamepad outputs, never a reference to another input.
+#[derive(Debug, Clone, JsonSchema)]
+#[schemars(transparent)]
+pub struct ElementOutputBindingInput(#[schemars(with = "ElementOutputBindingSpecInput")] thumble_core::OutputBinding);
+
+#[derive(Debug, Clone, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[schemars(inline)]
+struct ElementOutputBindingSpecInput {
+    keyboard: Option<SemanticKeyStrokeInput>,
+    #[serde(default)]
+    #[schemars(length(max = 32), extend("uniqueItems" = true))]
+    gamepad_buttons: Vec<ConfigurationGamepadButtonInput>,
+}
+
+impl<'de> Deserialize<'de> for ElementOutputBindingInput {
+    fn deserialize<D: serde::Deserializer<'de>>(decoder: D) -> Result<Self, D::Error> {
+        let spec = ElementOutputBindingSpecInput::deserialize(decoder)?;
+        if spec.gamepad_buttons.len() > 32 {
+            return Err(serde::de::Error::custom("at most 32 gamepad output buttons are supported"));
+        }
+        let keyboard = spec.keyboard.map(|stroke| -> Result<thumble_core::KeyBinding, D::Error> {
+            let key_code = thumble_core::generated_semantic_key_code(&stroke.key)
+                .ok_or_else(|| serde::de::Error::custom("a supported semantic keyboard key is required"))?;
+            if stroke.modifiers.len() > 4 {
+                return Err(serde::de::Error::custom("at most four keyboard modifiers are supported"));
+            }
+            let mut mask = 0;
+            for modifier in stroke.modifiers {
+                let bit = match modifier {
+                    SemanticModifierInput::Command => 1,
+                    SemanticModifierInput::Shift => 2,
+                    SemanticModifierInput::Option => 4,
+                    SemanticModifierInput::Control => 8,
+                };
+                if mask & bit != 0 {
+                    return Err(serde::de::Error::custom("repeated keyboard modifiers are not supported"));
+                }
+                mask |= bit;
+            }
+            Ok(thumble_core::KeyBinding::new(key_code, mask))
+        }).transpose()?;
+        let gamepad_button_count = spec.gamepad_buttons.len();
+        let gamepad_buttons = spec.gamepad_buttons.into_iter().map(|button| {
+            let value = serde_json::to_value(ConfigurationGamepadButton::from(button))
+                .map_err(serde::de::Error::custom)?;
+            value.as_str().map(str::to_owned)
+                .ok_or_else(|| serde::de::Error::custom("a supported gamepad output button is required"))
+        }).collect::<Result<std::collections::BTreeSet<_>, D::Error>>()?;
+        if gamepad_buttons.len() != gamepad_button_count {
+            return Err(serde::de::Error::custom("repeated gamepad output buttons are not supported"));
+        }
+        Ok(Self(thumble_core::OutputBinding { keyboard, gamepad_buttons }))
+    }
+}
+
+impl From<ElementOutputBindingInput> for thumble_core::OutputBinding {
+    fn from(value: ElementOutputBindingInput) -> Self { value.0 }
 }
 impl From<ElementJoystickMappingInput> for ElementJoystickMapping {
     fn from(v: ElementJoystickMappingInput) -> Self {
@@ -3728,15 +3781,45 @@ impl From<ElementOutputChangesInput> for ElementOutputChanges {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ElementPresentationInput {
+    pub schema_version: Option<u32>,
+    #[schemars(length(min = 1, max = 64), regex(pattern = "^[a-z0-9._-]+$"))]
+    #[serde(rename = "actionID")]
+    pub action_id: Option<String>,
+    #[schemars(length(min = 1, max = 64), regex(pattern = "^[a-z0-9._-]+$"))]
+    #[serde(rename = "purposeID")]
+    pub purpose_id: Option<String>,
+    #[serde(default)]
+    #[schemars(length(max = 16))]
+    #[serde(rename = "groupIDs")]
+    pub group_ids: Vec<String>,
+    #[schemars(length(max = 64))]
+    pub legend: Option<String>,
+    #[schemars(length(max = 128))]
+    pub caption: Option<String>,
+    #[schemars(length(min = 1, max = 128))]
+    pub accessibility_name: Option<String>,
+}
+impl From<ElementPresentationInput> for ElementPresentation {
+    fn from(v: ElementPresentationInput) -> Self {
+        Self { schema_version: v.schema_version.unwrap_or(1), action_id: v.action_id, purpose_id: v.purpose_id,
+            group_ids: v.group_ids, legend: v.legend, caption: v.caption, accessibility_name: v.accessibility_name }
+    }
+}
+
 #[derive(Debug, Clone, Deserialize, JsonSchema, Default)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ElementChangesInput {
+    pub presentation: Option<ElementPresentationInput>,
+    #[serde(default)]
+    pub clear_presentation: bool,
     #[schemars(length(max = 64))]
     pub label: Option<String>,
     #[serde(default)]
     pub clear_label: bool,
     pub kind: Option<ElementKindInput>,
-    pub mapped_button: Option<GameButtonInput>,
     pub visual_role: Option<ElementVisualRoleInput>,
     #[serde(default)]
     pub clear_visual_role: bool,
@@ -3816,10 +3899,11 @@ pub struct ElementChangesInput {
 impl From<ElementChangesInput> for ElementChanges {
     fn from(v: ElementChangesInput) -> Self {
         Self {
+            presentation: v.presentation.map(Into::into),
+            clear_presentation: v.clear_presentation,
             label: v.label,
             clear_label: v.clear_label,
             kind: v.kind.map(Into::into),
-            mapped_button: v.mapped_button.map(Into::into),
             visual_role: v.visual_role.map(Into::into),
             clear_visual_role: v.clear_visual_role,
             center_x: v.center_x,
@@ -3909,52 +3993,14 @@ impl From<SemanticModifierInput> for SemanticModifier {
     }
 }
 
+/// UUID of the actual element being edited. Named input slots are rejected.
 #[derive(Debug, Clone, Copy, Deserialize, JsonSchema)]
-#[serde(rename_all = "lowercase")]
-pub enum GameButtonInput {
-    Up,
-    Down,
-    Left,
-    Right,
-    Jump,
-    Attack,
-    Dash,
-    Focus,
-    Map,
-    Pause,
-    Custom1,
-    Custom2,
-    Custom3,
-    Custom4,
-    Custom5,
-    Custom6,
-    Custom7,
-    Custom8,
-}
+#[serde(transparent)]
+#[schemars(transparent)]
+pub struct ElementIDInput(#[schemars(with = "String", extend("format" = "uuid"), regex(pattern = r"^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$"))] KeypadElementID);
 
-impl From<GameButtonInput> for GameButton {
-    fn from(value: GameButtonInput) -> Self {
-        match value {
-            GameButtonInput::Up => Self::Up,
-            GameButtonInput::Down => Self::Down,
-            GameButtonInput::Left => Self::Left,
-            GameButtonInput::Right => Self::Right,
-            GameButtonInput::Jump => Self::Jump,
-            GameButtonInput::Attack => Self::Attack,
-            GameButtonInput::Dash => Self::Dash,
-            GameButtonInput::Focus => Self::Focus,
-            GameButtonInput::Map => Self::Map,
-            GameButtonInput::Pause => Self::Pause,
-            GameButtonInput::Custom1 => Self::Custom1,
-            GameButtonInput::Custom2 => Self::Custom2,
-            GameButtonInput::Custom3 => Self::Custom3,
-            GameButtonInput::Custom4 => Self::Custom4,
-            GameButtonInput::Custom5 => Self::Custom5,
-            GameButtonInput::Custom6 => Self::Custom6,
-            GameButtonInput::Custom7 => Self::Custom7,
-            GameButtonInput::Custom8 => Self::Custom8,
-        }
-    }
+impl From<ElementIDInput> for KeypadElementID {
+    fn from(value: ElementIDInput) -> Self { value.0 }
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -4135,6 +4181,47 @@ impl ThumbleMcp {
             allow_config_write,
             press_limiter: Arc::new(Mutex::new(PressRateLimiter::new())),
         }
+    }
+
+    #[tool(description = "Return the installed native controller-design capabilities, including bounded typography/chrome properties, source budgets, exact authored orientation rules, and explicitly unsupported features.", annotations(read_only_hint = true, destructive_hint = false, idempotent_hint = true, open_world_hint = false))]
+    pub async fn controller_design_capabilities(&self) -> Result<Json<Value>, String> {
+        Ok(Json(crate::controller_design::capabilities().await?))
+    }
+
+    #[tool(description = "Record immutable structured agent critique against exact current native review hashes. Issues name exact controls, actions, artwork layers and frame titles, with severity, observations and requested corrections. Enforce independent criticOne, criticTwo, qa sequencing. Records never grant human publication approval or modify live controllers.", annotations(read_only_hint = false, destructive_hint = false, idempotent_hint = false, open_world_hint = false))]
+    pub async fn critique_controller_design(&self, Parameters(params): Parameters<crate::controller_design::CritiqueParams>) -> Result<Json<Value>, String> {
+        Ok(Json(crate::controller_design::critique(params).await?))
+    }
+
+    #[tool(description = "Inspect a controller-design workspace without changing it. Return the frozen artboard, exact control-to-CSS aliases, appearance action/purpose/group tags, source inventory and synchronization status, and installed native capabilities. This exposes no executable bindings or host credentials.", annotations(read_only_hint = true, destructive_hint = false, idempotent_hint = true, open_world_hint = false))]
+    pub async fn inspect_controller_design(&self, Parameters(params): Parameters<crate::controller_design::InspectParams>) -> Result<Json<Value>, String> {
+        Ok(Json(crate::controller_design::inspect(params).await?))
+    }
+
+    #[tool(description = "Begin an editable controller-design workspace from an exact authoritative profile or private draft at expected revisions. Freeze UUID geometry, explicit viewport safe areas, native assets and a separate binding snapshot. This writes only a local authoring workspace and never selects, applies, or saves a live profile.", annotations(read_only_hint = false, destructive_hint = false, idempotent_hint = false, open_world_hint = false))]
+    pub async fn begin_controller_design(&self, Parameters(params): Parameters<crate::controller_design::BeginParams>) -> Result<Json<Value>, String> {
+        Ok(Json(crate::controller_design::begin(params).await?))
+    }
+
+    #[tool(description = "Transactionally update bounded editable CSS/JSON/SVG/PNG sources against an expected design-session revision, or synchronize direct file edits with an empty edits array. Validate before replacement, preserve frozen input identity and previous evidence, and report stale reviews. No live controller changes.", annotations(read_only_hint = false, destructive_hint = false, idempotent_hint = false, open_world_hint = false))]
+    pub async fn update_controller_design(&self, Parameters(params): Parameters<crate::controller_design::UpdateParams>) -> Result<Json<Value>, String> {
+        Ok(Json(crate::controller_design::update(params).await?))
+    }
+
+    #[tool(description = "Apply the exact hashed native review package to its captured profile through an authoritative revision transaction. Reject changed source, evidence, images, renderer, profile or configuration. Preserve bindings and defaults, use an invocation UUID for replay, and return the save receipt. This is local application; it does not publish or grant human approval. Requires MCP config-write opt-in.", annotations(read_only_hint = false, destructive_hint = false, idempotent_hint = true, open_world_hint = false))]
+    pub async fn apply_controller_design(&self, Parameters(params): Parameters<crate::controller_design::ApplyParams>) -> Result<Json<Value>, String> {
+        if !self.allow_config_write { return Err("controller design apply requires --allow-config-write".into()); }
+        Ok(Json(crate::controller_design::apply(params).await?))
+    }
+
+    #[tool(description = "Compile an unsaved exact controller design once, render all authored orientations in light/dark and normal/pressed/active/disabled plus mixed states through the native app renderer, preserve numbered hashed evidence, and return controller, bar and measured drawer scene sheets inline (bar/drawer can be explicitly omitted). Diagnostics do not grant aesthetic approval. This never imports or applies the skin or changes live input state.", annotations(read_only_hint = false, destructive_hint = false, idempotent_hint = false, open_world_hint = false))]
+    pub async fn review_controller_design(&self, Parameters(params): Parameters<crate::controller_design::ReviewParams>) -> Result<CallToolResult, String> {
+        let (structured, images) = crate::controller_design::review(params).await?;
+        let mut content: Vec<ContentBlock> = images.into_iter().map(|image| ContentBlock::image(image, "image/png")).collect();
+        content.push(ContentBlock::text("Native exact-controller evidence, including bar and settled drawer scenes when requested. Independent visual critique and human publication approval remain pending."));
+        let mut call = CallToolResult::success(content);
+        call.structured_content = Some(structured);
+        Ok(call)
     }
 
     #[tool(
@@ -5066,6 +5153,8 @@ impl ServerHandler for ThumbleMcp {
                 )
                 .with_mime_type("application/json")
                 .with_size(capabilities_size),
+            Resource::new("thumble://design/capabilities-v1", "thumble-controller-design-capabilities")
+                .with_title("Installed Native Controller Design Capabilities v1").with_mime_type("application/json"),
         ]))
     }
 
@@ -5074,6 +5163,10 @@ impl ServerHandler for ThumbleMcp {
         request: ReadResourceRequestParams,
         _context: RequestContext<RoleServer>,
     ) -> Result<ReadResourceResponse, ErrorData> {
+        if request.uri == "thumble://design/capabilities-v1" {
+            let value = crate::controller_design::capabilities().await.map_err(|error| ErrorData::internal_error(error, None))?;
+            return Ok(ReadResourceResult::new(vec![ResourceContents::text(value.to_string(), request.uri).with_mime_type("application/json")]).into());
+        }
         let (content, mime_type) = match request.uri.as_str() {
             CONTROLLER_UI_URI => (CONTROLLER_UI_HTML, CONTROLLER_UI_MIME_TYPE),
             CONTROLLER_EDITOR_UI_URI => (CONTROLLER_EDITOR_UI_HTML, CONTROLLER_UI_MIME_TYPE),
@@ -5134,6 +5227,44 @@ mod tests {
         bind_control_socket, remove_control_socket, serve_control, ControlHandler,
     };
     use tokio::sync::watch;
+
+    #[test]
+    fn element_binding_inputs_reject_raw_keys_and_input_routing() {
+        for invalid in [
+            serde_json::json!({"keyboard":{"keyCode":49,"modifiers":0}}),
+            serde_json::json!({"mappedButton":null}),
+            serde_json::json!({"button":"00000000-0000-0000-0000-000000000105"}),
+            serde_json::json!({"keyboard":{"key":"10","modifiers":[]}}),
+            serde_json::json!({"keyboard":{"key":"Space","modifiers":["control","control"]}}),
+            serde_json::json!({"gamepadButtons":["unknown"]}),
+            serde_json::json!({"gamepadButtons":["south", "south"]}),
+            serde_json::json!({"gamepadButtons":vec!["south"; 33]}),
+        ] {
+            assert!(serde_json::from_value::<ElementOutputBindingInput>(invalid).is_err());
+        }
+        let input: ElementOutputBindingInput = serde_json::from_value(serde_json::json!({
+            "keyboard":{"key":"Space","modifiers":["control"]}, "gamepadButtons":["south"]
+        })).unwrap();
+        let binding: thumble_core::OutputBinding = input.into();
+        assert_eq!(binding.keyboard, Some(thumble_core::KeyBinding::new(49, 8)));
+        assert_eq!(binding.gamepad_buttons.into_iter().collect::<Vec<_>>(), ["south"]);
+        let empty: ElementOutputBindingInput = serde_json::from_value(serde_json::json!({})).unwrap();
+        assert_eq!(thumble_core::OutputBinding::from(empty), thumble_core::OutputBinding::default());
+    }
+
+    #[test]
+    fn published_operation_schema_contains_only_owned_uuid_bindings() {
+        let schema: Value = serde_json::from_str(CONFIGURATION_OPERATION_SCHEMA_JSON).unwrap();
+        assert!(!CONFIGURATION_OPERATION_SCHEMA_JSON.contains("mappedButton"));
+        assert_eq!(schema.pointer("/$defs/ElementIDInput/format").and_then(Value::as_str), Some("uuid"));
+        assert_eq!(schema.pointer("/$defs/ElementOutputBindingInput/additionalProperties"), Some(&Value::Bool(false)));
+        for operation in [
+            serde_json::json!({"type":"element.add","profileID":"00000000-0000-0000-0000-000000000201","variant":"primary","kind":"button","mappedButton":null,"changes":{}}),
+            serde_json::json!({"type":"element.set","profileID":"00000000-0000-0000-0000-000000000201","variant":"primary","elementID":"00000000-0000-0000-0000-000000000105","changes":{"mappedButton":null}}),
+        ] {
+            assert!(serde_json::from_value::<ConfigurationOperationInput>(operation).is_err());
+        }
+    }
 
     struct FakeHost;
 
@@ -5534,7 +5665,7 @@ mod tests {
     }
 
     #[test]
-    fn tool_router_exposes_only_the_twenty_one_curated_tools() {
+    fn tool_router_exposes_curated_controller_and_design_tools() {
         let server = ThumbleMcp::new(PathBuf::from("/tmp/not-used"), false, false);
         let tools = server.tool_router.list_all();
         let schema_json = serde_json::to_string(&tools).unwrap();
@@ -5542,7 +5673,10 @@ mod tests {
         assert!(!schema_json.contains("keyCode"));
         assert!(!schema_json.contains("PocketPad"));
         assert!(!schema_json.contains("pocketpad-"));
-        assert_eq!(tools.len(), 21);
+        assert_eq!(tools.len(), 28);
+        for name in ["controller_design_capabilities", "begin_controller_design", "update_controller_design", "review_controller_design", "apply_controller_design", "inspect_controller_design", "critique_controller_design"] {
+            assert!(tools.iter().any(|tool| tool.name == name), "missing design facade: {name}");
+        }
         assert!(tools
             .iter()
             .any(|tool| tool.name == "preview_skin_workspace"));
@@ -5638,13 +5772,18 @@ mod tests {
             names,
             vec![
                 "accessibility_status",
+                "apply_controller_design",
                 "begin_configuration_draft",
+                "begin_controller_design",
                 "configuration_status",
+                "controller_design_capabilities",
+                "critique_controller_design",
                 "discard_configuration_draft",
                 "edit_configuration_draft",
                 "export_controller_preview",
                 "get_configuration_draft",
                 "host_status",
+                "inspect_controller_design",
                 "list_controls",
                 "list_profiles",
                 "pairing_code",
@@ -5655,8 +5794,10 @@ mod tests {
                 "rebase_configuration_draft",
                 "release_all",
                 "render_controller",
+                "review_controller_design",
                 "save_configuration_draft",
                 "select_profile",
+                "update_controller_design",
                 "validate_configuration_draft",
             ]
         );
@@ -5925,13 +6066,13 @@ mod tests {
             Some(["1024x1024".to_owned()].as_slice())
         );
         let tools = client.list_all_tools().await.unwrap();
-        assert_eq!(tools.len(), 21);
+        assert_eq!(tools.len(), 28);
         assert!(tools
             .iter()
             .any(|tool| tool.name == "preview_skin_workspace"));
 
         let resources = client.list_all_resources().await.unwrap();
-        assert_eq!(resources.len(), 4);
+        assert_eq!(resources.len(), 5);
         assert_eq!(resources[0].uri, CONTROLLER_UI_URI);
         assert_eq!(resources[1].uri, CONTROLLER_EDITOR_UI_URI);
         assert_eq!(resources[2].uri, CONFIGURATION_OPERATION_SCHEMA_URI);

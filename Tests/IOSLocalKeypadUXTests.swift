@@ -101,9 +101,9 @@ final class IOSLocalKeypadUXTests: XCTestCase {
     func testPendingLayoutReconciliationPreservesOfflineEditUntilMacAcknowledges() throws {
         let profileID = UUID()
         var remote = GamepadCustomization.defaultValue
-        remote.setLabel("Remote", for: .jump)
+        remote.setLabel("Remote", for: .preset(5))
         var local = remote
-        local.setLabel("Offline Edit", for: .jump)
+        local.setLabel("Offline Edit", for: .preset(5))
         let profile = GamepadConfigurationProfile(
             id: profileID,
             name: "Work",
@@ -126,7 +126,7 @@ final class IOSLocalKeypadUXTests: XCTestCase {
         XCTAssertEqual(first.remainingEdits, [pending])
         XCTAssertEqual(first.editsToUpload, [pending])
         XCTAssertEqual(
-            try XCTUnwrap(first.profiles.first).customization(for: .landscape).visualLabel(for: .jump),
+            try XCTUnwrap(first.profiles.first).customization(for: .landscape).visualLabel(for: .preset(5)),
             "Offline Edit"
         )
 
@@ -145,7 +145,7 @@ final class IOSLocalKeypadUXTests: XCTestCase {
     func testPendingLayoutReconciliationRestoresProfileRemovedWhileOffline() throws {
         let profileID = UUID()
         var customization = GamepadCustomization.defaultValue
-        customization.setLabel("Recovered", for: .jump)
+        customization.setLabel("Recovered", for: .preset(5))
         let pending = PendingKeypadLayoutEdit(
             profileID: profileID,
             orientation: .portrait,
@@ -161,7 +161,7 @@ final class IOSLocalKeypadUXTests: XCTestCase {
         )
         let recovered = try XCTUnwrap(result.profiles.first(where: { $0.id == profileID }))
         XCTAssertEqual(recovered.name, "Recovered iPhone Layout")
-        XCTAssertEqual(recovered.customization(for: .portrait).visualLabel(for: .jump), "Recovered")
+        XCTAssertEqual(recovered.customization(for: .portrait).visualLabel(for: .preset(5)), "Recovered")
         XCTAssertEqual(result.remainingEdits, [pending])
         XCTAssertEqual(result.editsToUpload, [pending])
     }
@@ -196,7 +196,7 @@ final class IOSLocalKeypadUXTests: XCTestCase {
             updatedAt: 1
         )
         var changed = profile.customization(for: .portrait)
-        changed.setLabel("Changed", for: .jump)
+        changed.setLabel("Changed", for: .preset(5))
         let newer = PendingKeypadLayoutEdit(
             profileID: profile.id,
             orientation: .portrait,
@@ -207,9 +207,39 @@ final class IOSLocalKeypadUXTests: XCTestCase {
         let recorded = PendingKeypadLayoutReconciler.recording(newer, in: [older])
         XCTAssertEqual(recorded, [newer])
         PendingKeypadLayoutPersistence.save(recorded, defaults: defaults)
-        XCTAssertEqual(PendingKeypadLayoutPersistence.load(defaults: defaults), [newer])
+        XCTAssertEqual(try PendingKeypadLayoutPersistence.load(defaults: defaults), [newer])
         PendingKeypadLayoutPersistence.save([], defaults: defaults)
-        XCTAssertTrue(PendingKeypadLayoutPersistence.load(defaults: defaults).isEmpty)
+        XCTAssertTrue(try PendingKeypadLayoutPersistence.load(defaults: defaults).isEmpty)
+    }
+
+    func testPendingExecutableLayoutsRejectAmbiguityWithoutReplacingSavedBytes() throws {
+        let suite = "ThumblePendingStrict.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let profileID = UUID().uuidString
+        let owner = UUID().uuidString
+        let prefix = "[{\"profileID\":\"\(profileID)\",\"orientation\":\"landscape\",\"serverID\":\"trusted\",\"updatedAt\":1,\"customization\":{\"elements\":["
+        let suffix = "]}}]"
+        let valid = Data((prefix + "{\"id\":\"\(owner)\",\"kind\":\"button\",\"output\":{\"gamepadButtons\":[]}}" + suffix).utf8)
+        defaults.set(valid, forKey: PendingKeypadLayoutPersistence.defaultsKey)
+        let edit = try XCTUnwrap(PendingKeypadLayoutPersistence.load(defaults: defaults).first)
+        PendingKeypadLayoutPersistence.save([edit, edit], defaults: defaults)
+        XCTAssertEqual(defaults.data(forKey: PendingKeypadLayoutPersistence.defaultsKey), valid)
+        var duplicate = edit
+        duplicate.customization.elements.append(try XCTUnwrap(duplicate.customization.elements.first))
+        PendingKeypadLayoutPersistence.save([duplicate], defaults: defaults)
+        XCTAssertEqual(defaults.data(forKey: PendingKeypadLayoutPersistence.defaultsKey), valid)
+        let invalids = [
+            prefix + "{\"id\":\"\(owner)\",\"kind\":\"button\",\"output\":{},\"output\":{}}" + suffix,
+            prefix + "{\"id\":\"\(owner)\",\"\\u0069d\":\"\(owner)\",\"kind\":\"button\"}" + suffix,
+            prefix + "{\"id\":\"jump\",\"kind\":\"button\"}" + suffix
+        ]
+        for text in invalids {
+            let bytes = Data(text.utf8); defaults.set(bytes, forKey: PendingKeypadLayoutPersistence.defaultsKey)
+            XCTAssertThrowsError(try PendingKeypadLayoutPersistence.load(defaults: defaults))
+            PendingKeypadLayoutPersistence.save([], defaults: defaults)
+            XCTAssertEqual(defaults.data(forKey: PendingKeypadLayoutPersistence.defaultsKey), bytes)
+        }
     }
 
     func testCalibrationPersistenceKeyIncludesEveryIdentityDimension() throws {

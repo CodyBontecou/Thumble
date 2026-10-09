@@ -25,8 +25,11 @@ struct MacControlOutputBinding: Codable, Equatable, Hashable, Sendable {
     /// Filter before press-time capture, including direct element/part outputs.
     /// Release still uses the captured binding even if the mode later changes.
     func filtered(for mode: GamepadProfileOutputMode) -> MacControlOutputBinding {
-        guard mode == .keyboard else { return self }
-        return MacControlOutputBinding(keyboard: keyboard)
+        switch mode {
+        case .keyboard: return MacControlOutputBinding(keyboard: keyboard)
+        case .controller: return MacControlOutputBinding(gamepadButtons: gamepadButtons)
+        case .custom: return self
+        }
     }
 
     func withAdditionalModifiers(_ modifiers: MacKeyModifiers) -> MacControlOutputBinding {
@@ -93,8 +96,8 @@ extension MacKeyBinding {
     }
 }
 
-extension Dictionary where Key == GameButton, Value == MacControlOutputBinding {
-    var keyboardBindings: [GameButton: MacKeyBinding] {
+extension Dictionary where Key == KeypadElementID, Value == MacControlOutputBinding {
+    var keyboardBindings: [KeypadElementID: MacKeyBinding] {
         reduce(into: [:]) { partial, entry in
             if let keyboard = entry.value.keyboard {
                 partial[entry.key] = keyboard
@@ -113,88 +116,43 @@ extension Set where Element == VirtualGamepadButton {
     }
 }
 
-extension GamepadControllerTemplate {
-    /// Templates install a complete, predictable keyboard map atomically with
-    /// the profile rather than inheriting whichever profile happened to be active.
-    var recommendedMacOutputBindings: [GameButton: MacControlOutputBinding]? {
-        switch self {
-        case .productivityStarter, .productivityOneHandedLeft, .productivityOneHandedRight:
-            DefaultMacControlOutputMap.defaultBindings
-        case .nes, .snes, .nintendo64, .gameCube, .gameBoy, .gameBoyAdvance,
-             .genesisSixButton, .saturn, .dreamcast, .arcadeStick, .psp,
-             .playStation, .xbox, .softWhite:
-            DefaultMacControlOutputMap.gamingKeyboardBindings
-        }
-    }
-}
-
 extension GamepadConfigurationProfile {
-    /// Restores defaults appropriate to the template that created this setup.
-    /// Untagged/custom profiles retain the general-purpose keypad defaults.
-    var recommendedMacOutputBindings: [GameButton: MacControlOutputBinding] {
-        guard let templateID = customization.designMetadata?.sourceTemplateID,
-              let template = GamepadControllerTemplate.allCases.first(where: {
-                  $0.rawValue.caseInsensitiveCompare(templateID) == .orderedSame
-              }),
-              let bindings = template.recommendedMacOutputBindings
-        else {
-            return DefaultMacControlOutputMap.defaultBindings
+    /// Defaults are owned by the actual controls, not inherited from a shared
+    /// action table or from the currently selected profile.
+    var recommendedMacOutputBindings: [KeypadElementID: MacControlOutputBinding] {
+        macElementBindings(useDefaults: true)
+    }
+
+    var configuredMacOutputBindings: [KeypadElementID: MacControlOutputBinding] {
+        macElementBindings(useDefaults: false)
+    }
+
+    var initialMacOutputBindings: [KeypadElementID: MacControlOutputBinding] {
+        recommendedMacOutputBindings.merging(configuredMacOutputBindings) { _, configured in configured }
+    }
+
+    private func macElementBindings(useDefaults: Bool) -> [KeypadElementID: MacControlOutputBinding] {
+        var bindings: [KeypadElementID: MacControlOutputBinding] = [:]
+        for customization in [self.customization, landscapeCustomization, portraitCustomization].compactMap({ $0 }) {
+            for element in customization.normalized.elements {
+                let output = useDefaults ? element.defaultOutput : element.output
+                if bindings[element.inputID] == nil, let output {
+                    bindings[element.inputID] = MacControlOutputBinding(shared: output)
+                }
+            }
         }
         return bindings
     }
 }
 
 enum DefaultMacControlOutputMap {
-    static let defaultBindings: [GameButton: MacControlOutputBinding] = Dictionary(
-        uniqueKeysWithValues: DefaultKeypadKeyMap.defaultBindings.map { button, binding in
-            (button, MacControlOutputBinding.keyboard(binding))
+    static let defaultBindings: [KeypadElementID: MacControlOutputBinding] = Dictionary(
+        uniqueKeysWithValues: DefaultKeypadElements.ids.compactMap { id in
+            DefaultKeypadElements.initialBinding(for: id).map { (id, MacControlOutputBinding(shared: $0)) }
         }
     )
 
-    static func defaultBinding(for button: GameButton) -> MacControlOutputBinding? {
-        defaultBindings[button]
+    static func defaultBinding(for id: KeypadElementID) -> MacControlOutputBinding? {
+        defaultBindings[id]
     }
-
-    /// A usable keyboard fallback for controller-shaped templates. Games vary,
-    /// but this covers every legacy slot so a new setup works before tailoring.
-    static let gamingKeyboardBindings: [GameButton: MacControlOutputBinding] = [
-        .up: .keyboard(MacKeyBinding(keyCode: MacVirtualKey.w)),
-        .down: .keyboard(MacKeyBinding(keyCode: MacVirtualKey.s)),
-        .left: .keyboard(MacKeyBinding(keyCode: MacVirtualKey.a)),
-        .right: .keyboard(MacKeyBinding(keyCode: MacVirtualKey.d)),
-        .jump: .keyboard(MacKeyBinding(keyCode: MacVirtualKey.space)),
-        .attack: .keyboard(MacKeyBinding(keyCode: MacVirtualKey.j)),
-        .dash: .keyboard(.shiftKey),
-        .focus: .keyboard(MacKeyBinding(keyCode: MacVirtualKey.e)),
-        .map: .keyboard(MacKeyBinding(keyCode: MacVirtualKey.tab)),
-        .pause: .keyboard(MacKeyBinding(keyCode: MacVirtualKey.escape)),
-        .custom1: .keyboard(MacKeyBinding(keyCode: MacVirtualKey.upArrow)),
-        .custom2: .keyboard(MacKeyBinding(keyCode: MacVirtualKey.downArrow)),
-        .custom3: .keyboard(MacKeyBinding(keyCode: MacVirtualKey.leftArrow)),
-        .custom4: .keyboard(MacKeyBinding(keyCode: MacVirtualKey.rightArrow)),
-        .custom5: .keyboard(MacKeyBinding(keyCode: MacVirtualKey.q)),
-        .custom6: .keyboard(MacKeyBinding(keyCode: MacVirtualKey.r)),
-        .custom7: .keyboard(MacKeyBinding(keyCode: MacVirtualKey.z)),
-        .custom8: .keyboard(MacKeyBinding(keyCode: MacVirtualKey.x))
-    ]
-
-    static let xboxStyleBindings: [GameButton: MacControlOutputBinding] = [
-        .up: .gamepadButton(.dpadUp),
-        .down: .gamepadButton(.dpadDown),
-        .left: .gamepadButton(.dpadLeft),
-        .right: .gamepadButton(.dpadRight),
-        .jump: .gamepadButton(.south),
-        .attack: .gamepadButton(.east),
-        .dash: .gamepadButton(.west),
-        .focus: .gamepadButton(.north),
-        .map: .gamepadButton(.select),
-        .pause: .gamepadButton(.start),
-        .custom1: .gamepadButton(.leftShoulder),
-        .custom2: .gamepadButton(.rightShoulder),
-        .custom3: .gamepadButton(.leftStickPress),
-        .custom4: .gamepadButton(.rightStickPress),
-        .custom5: .gamepadButton(.leftTriggerButton),
-        .custom6: .gamepadButton(.rightTriggerButton),
-        .custom7: .gamepadButton(.home)
-    ]
 }

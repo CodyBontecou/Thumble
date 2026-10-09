@@ -1,16 +1,16 @@
 mod common;
 
-use common::{core, no_tokens, pair};
+use common::{core, no_tokens, pair, set_owned_output};
 use thumble_core::{
     CoreTime, Effect, HostCore, KeyBinding, OutputBinding, PersistentState, DEFAULT_PROFILE_ID,
 };
 use thumble_protocol::{
     ButtonPressState, ControllerMessage, ControllerMessageType, ControllerPointerButton,
-    ControllerPointerEventKind, GameButton,
+    ControllerPointerEventKind, KeypadElementID,
 };
 
 fn button_message(
-    button: GameButton,
+    button: KeypadElementID,
     state: ButtonPressState,
     generation: Option<u64>,
     sequence: Option<u64>,
@@ -20,7 +20,7 @@ fn button_message(
     message.button = Some(button);
     message.state = Some(state);
     if generation.is_some() {
-        message.input_protocol_version = Some(2);
+        message.input_protocol_version = Some(3);
     }
     message.input_generation = generation;
     message.input_sequence = sequence;
@@ -35,7 +35,7 @@ fn pointer_message(
 ) -> ControllerMessage {
     let mut message = ControllerMessage::new(ControllerMessageType::Pointer, 0);
     message.pointer_event = Some(event);
-    message.input_protocol_version = Some(2);
+    message.input_protocol_version = Some(3);
     message.input_generation = Some(generation);
     message.input_sequence = Some(sequence);
     message
@@ -58,14 +58,14 @@ fn legacy_v1_is_accepted_only_before_v2_establishes() {
     let mut core = core();
     pair(&mut core, 1, "token");
 
-    let legacy_down = button_message(GameButton::Jump, ButtonPressState::Down, None, None, None);
+    let legacy_down = button_message(KeypadElementID::preset(5), ButtonPressState::Down, None, None, None);
     let effects = core
         .handle_message(1, legacy_down, 0, &mut no_tokens())
         .unwrap();
     assert!(has_key_down(&effects, 36));
 
     let v2_down = button_message(
-        GameButton::Attack,
+        KeypadElementID::preset(6),
         ButtonPressState::Down,
         Some(10),
         Some(1),
@@ -76,7 +76,7 @@ fn legacy_v1_is_accepted_only_before_v2_establishes() {
     assert_eq!(core.status().active_generation, Some(10));
 
     let missing_generation =
-        button_message(GameButton::Pause, ButtonPressState::Down, None, None, None);
+        button_message(KeypadElementID::preset(10), ButtonPressState::Down, None, None, None);
     let effects = core
         .handle_message(1, missing_generation, 2, &mut no_tokens())
         .unwrap();
@@ -89,7 +89,7 @@ fn current_plus_one_generation_releases_then_transitions_and_retired_is_rejected
     let mut core = core();
     pair(&mut core, 1, "token");
     let first = button_message(
-        GameButton::Jump,
+        KeypadElementID::preset(5),
         ButtonPressState::Down,
         Some(4),
         Some(1),
@@ -98,7 +98,7 @@ fn current_plus_one_generation_releases_then_transitions_and_retired_is_rejected
     core.handle_message(1, first, 0, &mut no_tokens()).unwrap();
 
     let next = button_message(
-        GameButton::Jump,
+        KeypadElementID::preset(5),
         ButtonPressState::Down,
         Some(5),
         Some(1),
@@ -117,7 +117,7 @@ fn current_plus_one_generation_releases_then_transitions_and_retired_is_rejected
     assert_eq!(core.status().active_generation, Some(5));
 
     let retired = button_message(
-        GameButton::Attack,
+        KeypadElementID::preset(6),
         ButtonPressState::Down,
         Some(4),
         Some(2),
@@ -135,7 +135,7 @@ fn unexpected_generation_and_v2_missing_sequence_are_rejected() {
     let mut core = core();
     pair(&mut core, 1, "token");
     let initial = button_message(
-        GameButton::Jump,
+        KeypadElementID::preset(5),
         ButtonPressState::Down,
         Some(8),
         Some(1),
@@ -145,7 +145,7 @@ fn unexpected_generation_and_v2_missing_sequence_are_rejected() {
         .unwrap();
 
     let unexpected = button_message(
-        GameButton::Attack,
+        KeypadElementID::preset(6),
         ButtonPressState::Down,
         Some(10),
         Some(2),
@@ -157,7 +157,7 @@ fn unexpected_generation_and_v2_missing_sequence_are_rejected() {
     assert!(!has_key_down(&effects, 48));
 
     let missing_sequence = button_message(
-        GameButton::Attack,
+        KeypadElementID::preset(6),
         ButtonPressState::Down,
         Some(8),
         None,
@@ -175,7 +175,7 @@ fn reliable_sequences_are_monotonic_and_deduplicated() {
     let mut core = core();
     pair(&mut core, 1, "token");
     let first = button_message(
-        GameButton::Jump,
+        KeypadElementID::preset(5),
         ButtonPressState::Down,
         Some(1),
         Some(10),
@@ -188,7 +188,7 @@ fn reliable_sequences_are_monotonic_and_deduplicated() {
 
     for sequence in [10, 9] {
         let duplicate = button_message(
-            GameButton::Jump,
+            KeypadElementID::preset(5),
             ButtonPressState::Up,
             Some(1),
             Some(sequence),
@@ -200,7 +200,7 @@ fn reliable_sequences_are_monotonic_and_deduplicated() {
         assert!(!has_key_up(&effects, 36));
     }
     assert_eq!(core.status().counters.duplicate_sequences, 2);
-    assert_eq!(core.status().pressed_buttons, vec![GameButton::Jump]);
+    assert_eq!(core.status().pressed_buttons, vec![KeypadElementID::preset(5)]);
 }
 
 #[test]
@@ -209,7 +209,7 @@ fn heartbeat_refresh_dedupes_while_overlapping_press_ids_emit_distinct_pulse() {
     pair(&mut core, 1, "token");
 
     let down_one = button_message(
-        GameButton::Jump,
+        KeypadElementID::preset(5),
         ButtonPressState::Down,
         Some(2),
         Some(1),
@@ -221,7 +221,7 @@ fn heartbeat_refresh_dedupes_while_overlapping_press_ids_emit_distinct_pulse() {
     assert!(has_key_down(&effects, 36));
 
     let refresh = button_message(
-        GameButton::Jump,
+        KeypadElementID::preset(5),
         ButtonPressState::Down,
         Some(2),
         Some(2),
@@ -233,7 +233,7 @@ fn heartbeat_refresh_dedupes_while_overlapping_press_ids_emit_distinct_pulse() {
     assert!(!has_key_down(&effects, 36));
 
     let overlap = button_message(
-        GameButton::Jump,
+        KeypadElementID::preset(5),
         ButtonPressState::Down,
         Some(2),
         Some(3),
@@ -247,7 +247,7 @@ fn heartbeat_refresh_dedupes_while_overlapping_press_ids_emit_distinct_pulse() {
         .any(|effect| matches!(effect, Effect::PulseKey(binding) if binding.key_code == 36)));
 
     let up_one = button_message(
-        GameButton::Jump,
+        KeypadElementID::preset(5),
         ButtonPressState::Up,
         Some(2),
         Some(4),
@@ -259,7 +259,7 @@ fn heartbeat_refresh_dedupes_while_overlapping_press_ids_emit_distinct_pulse() {
     assert!(!has_key_up(&effects, 36));
 
     let up_two = button_message(
-        GameButton::Jump,
+        KeypadElementID::preset(5),
         ButtonPressState::Up,
         Some(2),
         Some(5),
@@ -275,19 +275,12 @@ fn heartbeat_refresh_dedupes_while_overlapping_press_ids_emit_distinct_pulse() {
 #[test]
 fn identical_bindings_are_reference_counted_across_inputs() {
     let mut state = PersistentState::minimal("server-1").unwrap();
-    let outputs = state
-        .profile_output_bindings
-        .get_mut(DEFAULT_PROFILE_ID)
-        .unwrap();
-    outputs.insert(
-        GameButton::Attack,
-        OutputBinding::keyboard(KeyBinding::new(36, 0)),
-    );
+    set_owned_output(&mut state, DEFAULT_PROFILE_ID, KeypadElementID::preset(6), OutputBinding::keyboard(KeyBinding::new(36, 0)));
     let mut core = HostCore::new(state, "111111").unwrap();
     pair(&mut core, 1, "token");
 
     let jump_down = button_message(
-        GameButton::Jump,
+        KeypadElementID::preset(5),
         ButtonPressState::Down,
         Some(3),
         Some(1),
@@ -300,7 +293,7 @@ fn identical_bindings_are_reference_counted_across_inputs() {
         36
     ));
     let attack_down = button_message(
-        GameButton::Attack,
+        KeypadElementID::preset(6),
         ButtonPressState::Down,
         Some(3),
         Some(2),
@@ -314,7 +307,7 @@ fn identical_bindings_are_reference_counted_across_inputs() {
     ));
 
     let jump_up = button_message(
-        GameButton::Jump,
+        KeypadElementID::preset(5),
         ButtonPressState::Up,
         Some(3),
         Some(3),
@@ -327,7 +320,7 @@ fn identical_bindings_are_reference_counted_across_inputs() {
         36
     ));
     let attack_up = button_message(
-        GameButton::Attack,
+        KeypadElementID::preset(6),
         ButtonPressState::Up,
         Some(3),
         Some(4),
@@ -384,7 +377,7 @@ fn pointer_move_scroll_button_dedupe_and_explicit_release_are_typed() {
         .any(|effect| matches!(effect, Effect::PointerButton { .. })));
 
     let mut release = ControllerMessage::new(ControllerMessageType::ReleaseAll, 0);
-    release.input_protocol_version = Some(2);
+    release.input_protocol_version = Some(3);
     release.input_generation = Some(4);
     let effects = core
         .handle_message(1, release, 4, &mut no_tokens())
@@ -404,7 +397,7 @@ fn disconnect_releases_every_key_and_pointer_button() {
     let mut core = core();
     pair(&mut core, 1, "token");
     let down = button_message(
-        GameButton::Jump,
+        KeypadElementID::preset(5),
         ButtonPressState::Down,
         Some(5),
         Some(1),
@@ -444,7 +437,7 @@ fn separate_wall_and_monotonic_timestamps_drive_persistence_and_expiry() {
     );
 
     let down = button_message(
-        GameButton::Jump,
+        KeypadElementID::preset(5),
         ButtonPressState::Down,
         Some(6),
         Some(1),
@@ -466,7 +459,7 @@ fn expiry_removes_individual_press_references_and_only_releases_last() {
     let mut core = core();
     pair(&mut core, 1, "token");
     let first = button_message(
-        GameButton::Jump,
+        KeypadElementID::preset(5),
         ButtonPressState::Down,
         Some(6),
         Some(1),
@@ -474,7 +467,7 @@ fn expiry_removes_individual_press_references_and_only_releases_last() {
     );
     core.handle_message(1, first, 0, &mut no_tokens()).unwrap();
     let second = button_message(
-        GameButton::Jump,
+        KeypadElementID::preset(5),
         ButtonPressState::Down,
         Some(6),
         Some(2),
@@ -491,10 +484,10 @@ fn expiry_removes_individual_press_references_and_only_releases_last() {
 
     let effects = core.expire_holds(100, 100);
     assert!(!has_key_up(&effects, 36));
-    assert_eq!(core.status().pressed_buttons, vec![GameButton::Jump]);
+    assert_eq!(core.status().pressed_buttons, vec![KeypadElementID::preset(5)]);
 
     let mut heartbeat = ControllerMessage::new(ControllerMessageType::Heartbeat, 0);
-    heartbeat.input_protocol_version = Some(2);
+    heartbeat.input_protocol_version = Some(3);
     heartbeat.input_generation = Some(6);
     core.handle_message(1, heartbeat, 150, &mut no_tokens())
         .unwrap();

@@ -549,7 +549,7 @@ impl DraftStore {
                 u64::try_from(data.len()).unwrap_or(u64::MAX),
             ));
         }
-        serde_json::from_slice(&data).map_err(|_| DraftError::Malformed)
+        thumble_core::decode_unique_json(&data).map_err(|_| DraftError::Malformed)
     }
 
     fn validate_loaded(
@@ -752,6 +752,28 @@ mod tests {
         let directory = tempdir().unwrap();
         let store = DraftStore::in_directory(directory.path().join("drafts"));
         (directory, store)
+    }
+
+    #[test]
+    fn ambiguous_saved_declarations_reject_without_rewriting_drafts() {
+        let (_directory, store) = store();
+        let state = PersistentState::minimal("server-id").unwrap();
+        let draft = store.begin(&state, 1, 1_000).unwrap();
+        let path = store.path(&draft.draft_id);
+        let encoded = serde_json::to_string(&draft).unwrap();
+        let ambiguous = encoded.replacen(
+            "\"kind\":\"button\"",
+            "\"kind\":\"joystick\",\"kind\":\"button\"",
+            1,
+        );
+        assert_ne!(ambiguous, encoded);
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&ambiguous).unwrap(),
+            serde_json::from_str::<serde_json::Value>(&encoded).unwrap()
+        );
+        fs::write(&path, &ambiguous).unwrap();
+        assert!(matches!(store.get(&draft.draft_id, 2_000), Err(DraftError::Malformed)));
+        assert_eq!(fs::read_to_string(&path).unwrap(), ambiguous);
     }
 
     #[test]

@@ -916,10 +916,13 @@ public struct ThumbleBridgeElementOutputChanges: Decodable, Sendable {
 
 /// Heap-backed because this input spans the complete safe non-file CLI element surface.
 public final class ThumbleBridgeElementChanges: Decodable, @unchecked Sendable {
+    public let presentation: GamepadControlPresentation?
+    public let clearPresentation: Bool
+    public let isPresentationOnly: Bool
+    public let isOutputOnly: Bool
     public let label: String?
     public let clearLabel: Bool
     public let kind: GamepadCustomControlKind?
-    public let mappedButton: GameButton?
     public let visualRole: GamepadVisualRole?
     public let clearVisualRole: Bool
     public let centerX: Double?
@@ -972,7 +975,7 @@ public final class ThumbleBridgeElementChanges: Decodable, @unchecked Sendable {
     public required init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: ThumbleBridgeCodingKey.self)
         try container.requireOnly([
-            "label", "clearLabel", "kind", "mappedButton", "visualRole", "clearVisualRole",
+            "label", "clearLabel", "kind", "visualRole", "clearVisualRole", "presentation", "clearPresentation",
             "centerX", "centerY", "widthScale", "heightScale", "rotationDegrees", "shape",
             "isHidden", "isLocationLocked", "showsIntegratedLabel", "zIndex", "hitInsets",
             "clearHitInsets", "cornerRadius", "cornerRadii", "shadowStrength", "fill", "clearFill",
@@ -984,9 +987,10 @@ public final class ThumbleBridgeElementChanges: Decodable, @unchecked Sendable {
             "joystickSettings", "triggerSettings", "trackpadSettings", "output"
         ])
         label = try container.decodeIfPresent(String.self, forKey: .init("label"))
+        presentation = try container.decodeIfPresent(GamepadControlPresentation.self, forKey: .init("presentation"))
+        clearPresentation = try container.decodeIfPresent(Bool.self, forKey: .init("clearPresentation")) ?? false
         clearLabel = try container.decodeIfPresent(Bool.self, forKey: .init("clearLabel")) ?? false
         kind = try container.decodeIfPresent(GamepadCustomControlKind.self, forKey: .init("kind"))
-        mappedButton = try container.decodeIfPresent(GameButton.self, forKey: .init("mappedButton"))
         visualRole = try container.decodeIfPresent(GamepadVisualRole.self, forKey: .init("visualRole"))
         clearVisualRole = try container.decodeIfPresent(Bool.self, forKey: .init("clearVisualRole")) ?? false
         centerX = try container.decodeIfPresent(Double.self, forKey: .init("centerX"))
@@ -1035,6 +1039,21 @@ public final class ThumbleBridgeElementChanges: Decodable, @unchecked Sendable {
         triggerSettings = try container.decodeIfPresent(ThumbleBridgeTriggerSettings.self, forKey: .init("triggerSettings"))
         trackpadSettings = try container.decodeIfPresent(ThumbleBridgeTrackpadSettings.self, forKey: .init("trackpadSettings"))
         output = try container.decodeIfPresent(ThumbleBridgeElementOutputChanges.self, forKey: .init("output"))
+        func containsOnly(_ field: String) throws -> Bool {
+            try container.allKeys.allSatisfy { key in
+                if key.stringValue == field { return true }
+                let value = try container.decode(ThumbleBridgeJSONValue.self, forKey: key)
+                return value == .null || (key.stringValue.hasPrefix("clear") && value == .bool(false))
+            }
+        }
+        let onlyMetadata = try container.allKeys.allSatisfy { key in
+            if ["presentation", "clearPresentation"].contains(key.stringValue) { return true }
+            let value = try container.decode(ThumbleBridgeJSONValue.self, forKey: key)
+            return value == .null || (key.stringValue.hasPrefix("clear") && value == .bool(false))
+        }
+        isPresentationOnly = (presentation != nil || clearPresentation) && onlyMetadata
+        let onlyOutput = try containsOnly("output")
+        isOutputOnly = output != nil && onlyOutput
     }
 }
 
@@ -1227,13 +1246,13 @@ public final class ThumbleBridgeCustomizationFixInput: Decodable, @unchecked Sen
 }
 
 public enum ThumbleBridgeOperation: Decodable, Sendable {
-    case bindingSet(profileID: String, button: GameButton, sequence: [ThumbleBridgeSemanticKeyStroke])
-    case bindingClear(profileID: String, button: GameButton)
-    case bindingReset(profileID: String, button: GameButton)
+    case bindingSet(profileID: String, button: KeypadElementID, sequence: [ThumbleBridgeSemanticKeyStroke])
+    case bindingClear(profileID: String, button: KeypadElementID)
+    case bindingReset(profileID: String, button: KeypadElementID)
     case bindingResetAll(profileID: String)
     case outputMode(profileID: String, mode: GamepadProfileOutputMode)
-    case outputSet(profileID: String, button: GameButton, keyboardEdit: ThumbleBridgeKeyboardOutputEdit, gamepadEdit: ThumbleBridgeGamepadOutputEdit)
-    case outputReset(profileID: String, button: GameButton)
+    case outputSet(profileID: String, button: KeypadElementID, keyboardEdit: ThumbleBridgeKeyboardOutputEdit, gamepadEdit: ThumbleBridgeGamepadOutputEdit)
+    case outputReset(profileID: String, button: KeypadElementID)
     case outputResetAll(profileID: String)
     case profileReset(profileID: String)
     case customizationSet(profileID: String, variant: ThumbleBridgeLayoutVariant, changes: ThumbleBridgeCustomizationChanges)
@@ -1279,9 +1298,10 @@ public enum ThumbleBridgeOperation: Decodable, Sendable {
     case profileDelete(profileID: String, replacementProfileID: String?)
     case profileMove(profileID: String, index: Int)
     case profileCreate(name: String, newProfileID: String, sourceProfileID: String?, select: Bool, makeDefault: Bool)
+    case designApply(profileID: String, packageBase64: String, packageSHA256: String, profileSHA256: String, evidenceSHA256: String, baseProfileSHA256: String?, layoutEditsJSON: String?)
     case themeApply(profileID: String, variant: ThumbleBridgeLayoutVariant, preset: String)
     case orientationCopy(profileID: String, source: GamepadProfileLayoutVariant, destination: GamepadProfileLayoutVariant, automaticallyArrange: Bool)
-    case elementAdd(profileID: String, variant: ThumbleBridgeLayoutVariant, elementID: String, kind: GamepadCustomControlKind, mappedButton: GameButton?, changes: ThumbleBridgeElementChanges)
+    case elementAdd(profileID: String, variant: ThumbleBridgeLayoutVariant, elementID: String, kind: GamepadCustomControlKind, changes: ThumbleBridgeElementChanges)
     case elementSet(profileID: String, variant: ThumbleBridgeLayoutVariant, elementID: String, changes: ThumbleBridgeElementChanges)
     case elementDuplicate(profileID: String, variant: ThumbleBridgeLayoutVariant, elementIDs: [String], newElementIDs: [String], offsetX: Double, offsetY: Double)
     case elementAlign(profileID: String, variant: ThumbleBridgeLayoutVariant, elementIDs: [String], alignment: String)
@@ -1298,20 +1318,20 @@ public enum ThumbleBridgeOperation: Decodable, Sendable {
             try container.requireOnly(["type", "profileID", "button", "sequence"])
             self = .bindingSet(
                 profileID: try container.decode(String.self, forKey: .init("profileID")),
-                button: try container.decode(GameButton.self, forKey: .init("button")),
+                button: try container.decode(KeypadElementID.self, forKey: .init("button")),
                 sequence: try container.decode([ThumbleBridgeSemanticKeyStroke].self, forKey: .init("sequence"))
             )
         case "binding.clear":
             try container.requireOnly(["type", "profileID", "button"])
             self = .bindingClear(
                 profileID: try container.decode(String.self, forKey: .init("profileID")),
-                button: try container.decode(GameButton.self, forKey: .init("button"))
+                button: try container.decode(KeypadElementID.self, forKey: .init("button"))
             )
         case "binding.reset":
             try container.requireOnly(["type", "profileID", "button"])
             self = .bindingReset(
                 profileID: try container.decode(String.self, forKey: .init("profileID")),
-                button: try container.decode(GameButton.self, forKey: .init("button"))
+                button: try container.decode(KeypadElementID.self, forKey: .init("button"))
             )
         case "binding.reset-all":
             try container.requireOnly(["type", "profileID"])
@@ -1328,7 +1348,7 @@ public enum ThumbleBridgeOperation: Decodable, Sendable {
             try container.requireOnly(["type", "profileID", "button", "keyboardEdit", "gamepadEdit"])
             self = .outputSet(
                 profileID: try container.decode(String.self, forKey: .init("profileID")),
-                button: try container.decode(GameButton.self, forKey: .init("button")),
+                button: try container.decode(KeypadElementID.self, forKey: .init("button")),
                 keyboardEdit: try container.decode(
                     ThumbleBridgeKeyboardOutputEdit.self,
                     forKey: .init("keyboardEdit")
@@ -1343,7 +1363,7 @@ public enum ThumbleBridgeOperation: Decodable, Sendable {
 
             self = .outputReset(
                 profileID: try container.decode(String.self, forKey: .init("profileID")),
-                button: try container.decode(GameButton.self, forKey: .init("button"))
+                button: try container.decode(KeypadElementID.self, forKey: .init("button"))
             )
         case "output.reset-all":
             try container.requireOnly(["type", "profileID"])
@@ -1630,6 +1650,15 @@ public enum ThumbleBridgeOperation: Decodable, Sendable {
                 select: try container.decodeIfPresent(Bool.self, forKey: .init("select")) ?? false,
                 makeDefault: try container.decodeIfPresent(Bool.self, forKey: .init("makeDefault")) ?? false
             )
+        case "design.apply":
+            try container.requireOnly(["type", "profileID", "packageBase64", "packageSHA256", "profileSHA256", "evidenceSHA256", "baseProfileSHA256", "layoutEditsJSON"])
+            self = .designApply(profileID: try container.decode(String.self, forKey: .init("profileID")),
+                packageBase64: try container.decode(String.self, forKey: .init("packageBase64")),
+                packageSHA256: try container.decode(String.self, forKey: .init("packageSHA256")),
+                profileSHA256: try container.decode(String.self, forKey: .init("profileSHA256")),
+                evidenceSHA256: try container.decode(String.self, forKey: .init("evidenceSHA256")),
+                baseProfileSHA256: try container.decodeIfPresent(String.self, forKey: .init("baseProfileSHA256")),
+                layoutEditsJSON: try container.decodeIfPresent(String.self, forKey: .init("layoutEditsJSON")))
         case "theme.apply":
             try container.requireOnly(["type", "profileID", "variant", "preset"])
             self = .themeApply(
@@ -1651,13 +1680,12 @@ public enum ThumbleBridgeOperation: Decodable, Sendable {
                 automaticallyArrange: try container.decodeIfPresent(Bool.self, forKey: .init("automaticallyArrange")) ?? true
             )
         case "element.add":
-            try container.requireOnly(["type", "profileID", "variant", "elementID", "kind", "mappedButton", "changes"])
+            try container.requireOnly(["type", "profileID", "variant", "elementID", "kind", "changes"])
             self = .elementAdd(
                 profileID: try container.decode(String.self, forKey: .init("profileID")),
                 variant: try container.decode(ThumbleBridgeLayoutVariant.self, forKey: .init("variant")),
                 elementID: try container.decode(String.self, forKey: .init("elementID")),
                 kind: try container.decode(GamepadCustomControlKind.self, forKey: .init("kind")),
-                mappedButton: try container.decodeIfPresent(GameButton.self, forKey: .init("mappedButton")),
                 changes: try container.decode(ThumbleBridgeElementChanges.self, forKey: .init("changes"))
             )
         case "element.set":
@@ -1890,7 +1918,7 @@ public enum ThumbleConfigurationBridge {
                     || (variant == .landscape && frame.orientation == .landscape)
                     || (variant == .portrait && frame.orientation == .portrait)
             else { throw ThumbleConfigurationBridgeError.invalidDeviceFrame }
-            return try mutateProfile(profileID, in: &document, nowMillis: nowMillis) { profile in
+            return try mutateProfile(profileID, in: &document, nowMillis: nowMillis, sourceVariant: variant) { profile in
                 var customization = customization(in: profile, variant: variant)
                 customization.deviceCanvas = GamepadDeviceCanvas(frameID: frame.id)
                 setCustomization(customization, in: &profile, variant: variant)
@@ -2164,22 +2192,24 @@ public enum ThumbleConfigurationBridge {
             var profile = generated.profile
             profile.updatedAt = nowMillis
             profile.customization.updatedAt = nowMillis
-            try assignCustomElementIDs(
+            let replacements = try assignCustomElementIDs(
                 newElementIDs,
                 expectedCount: preset.customElementIDCount,
                 to: &profile,
                 in: document
             )
             #if os(macOS)
-            var bindings = DefaultKeypadKeyMap.defaultBindings
+            var bindings = profile.initialMacOutputBindings.keyboardBindings
             for (button, specification) in generated.keyBindings {
                 guard let binding = MacKeyBinding(generatedSpec: specification) else {
                     throw ThumbleConfigurationBridgeError.invalidGeneratedBinding
                 }
-                bindings[button] = binding
+                let installedID = KeypadElementID(replacements[button.uuid] ?? button.uuid)
+                bindings[installedID] = binding
             }
-            let outputs = MacConfigurationBindings.keyboardOutputs(from: bindings)
+            var outputs = MacConfigurationBindings.applyingKeyboardBindings(bindings, to: profile.initialMacOutputBindings)
             MacConfigurationBindings.synchronizeElementOutputs(in: &profile, outputs: outputs)
+            outputs.merge(profile.configuredMacOutputBindings) { _, configured in configured }
             return try installGeneratedProfile(
                 profile,
                 keyBindings: bindings,
@@ -2207,11 +2237,12 @@ public enum ThumbleConfigurationBridge {
                 in: document
             )
             #if os(macOS)
-            guard let outputs = template.recommendedMacOutputBindings else {
-                throw ThumbleConfigurationBridgeError.invalidGeneratedBinding
-            }
-            let bindings = outputs.keyboardBindings
+            var outputs = profile.initialMacOutputBindings
             MacConfigurationBindings.synchronizeElementOutputs(in: &profile, outputs: outputs)
+            // Synchronization makes unbound primaries explicitly empty. Keep
+            // those owned clears in the maps too, not just in element records.
+            outputs.merge(profile.configuredMacOutputBindings) { _, configured in configured }
+            let bindings = outputs.keyboardBindings
             return try installGeneratedProfile(
                 profile,
                 keyBindings: bindings,
@@ -2267,8 +2298,8 @@ public enum ThumbleConfigurationBridge {
                 document.profiles = [encodedReplacement]
                 document.activeProfileID = replacementID
                 document.defaultProfileID = replacementID
-                document.profileKeyBindings[replacementID] = try defaultKeyBindings()
-                document.profileOutputBindings[replacementID] = try defaultOutputBindings()
+                document.profileKeyBindings[replacementID] = .object([:])
+                document.profileOutputBindings[replacementID] = .object([:])
             } else {
                 document.profiles.remove(at: index)
                 let fallback = try document.profiles[min(index, document.profiles.count - 1)].requiredString(forKey: "id")
@@ -2310,14 +2341,60 @@ public enum ThumbleConfigurationBridge {
                     primaryCustomization: .blankCanvas,
                     updatedAt: nowMillis
                 )
-                document.profileKeyBindings[newID] = try defaultKeyBindings()
-                document.profileOutputBindings[newID] = try defaultOutputBindings()
+                document.profileKeyBindings[newID] = .object([:])
+                document.profileOutputBindings[newID] = .object([:])
             }
-            document.profiles.append(try encodedJSONValue(profile))
+            var encodedProfile = try encodedJSONValue(profile)
+            try encodedProfile.setObjectValue(.string(newID), forKey: "id")
+            document.profiles.append(encodedProfile)
             if select { document.activeProfileID = newID }
             if makeDefault { document.defaultProfileID = newID }
             if select { try synchronizeActiveBindings(in: &document) }
             return ["/profiles", "/activeProfileID", "/defaultProfileID", "/keyBindings", "/outputBindings", "/profileKeyBindings", "/profileOutputBindings"]
+        case let .designApply(profileID, packageBase64, packageSHA256, profileSHA256, evidenceSHA256, baseProfileSHA256, layoutEditsJSON):
+            guard [packageSHA256, profileSHA256, evidenceSHA256].allSatisfy({ $0.count == 64 && $0.allSatisfy(\.isHexDigit) }),
+                  packageBase64.utf8.count <= 12 * 1024 * 1024,
+                  let packageData = Data(base64Encoded: packageBase64), packageData.count <= ControllerDesignWorkspace.maximumFileBytes,
+                  packageData.thumbleSHA256 == packageSHA256 else {
+                throw ControllerDesignError.invalid("reviewed package bytes do not match their digest")
+            }
+            let package = try ThumbleSkinPackageCodec.decode(packageData)
+            guard package.skin != nil, ThumbleSkinPackageValidator.validate(package).isValid else {
+                throw ControllerDesignError.invalid("reviewed package is not a valid native skin")
+            }
+            return try mutateProfile(profileID, in: &document, nowMillis: nowMillis) { profile in
+                guard try ControllerDesignWorkspace.digest(profile) == (baseProfileSHA256 ?? profileSHA256) else {
+                    throw ControllerDesignError.conflict("authoritative target differs from frozen design profile")
+                }
+                guard (baseProfileSHA256 == nil) == (layoutEditsJSON == nil) else {
+                    throw ControllerDesignError.invalid("layout plan and base profile hash must be paired")
+                }
+                if let baseProfileSHA256, let layoutEditsJSON {
+                    guard baseProfileSHA256.count == 64, baseProfileSHA256.allSatisfy(\.isHexDigit), layoutEditsJSON.utf8.count <= 64 * 1024 else {
+                        throw ControllerDesignError.invalid("layout plan or base hash exceeds bounds")
+                    }
+                    let edits = try JSONDecoder().decodeUnique([ControllerDesignLayoutEdit].self, from: Data(layoutEditsJSON.utf8))
+                    profile = try ControllerDesignLayout.applying(edits, to: profile)
+                    guard try ControllerDesignWorkspace.digest(profile) == profileSHA256 else {
+                        throw ControllerDesignError.conflict("typed layout plan differs from the reviewed candidate profile")
+                    }
+                }
+                let frozen = profile
+                profile.applySkin(package, colorScheme: .light)
+                for orientation in [GamepadEditorDeviceOrientation.landscape, .portrait] {
+                    let source = frozen.customization(for: orientation)
+                    let result = profile.customization(for: orientation)
+                    let size = source.deviceCanvas.editorDeviceFrame.screenRect.size
+                    let before = source.resolvedControls(in: size)
+                    let after = result.resolvedControls(in: size)
+                    guard before.count == after.count, before.allSatisfy({ control in
+                        guard let changed = after.first(where: { $0.id == control.id }) else { return false }
+                        return changed.frame == control.frame && changed.hitFrame == control.hitFrame
+                            && changed.rotationDegrees == control.rotationDegrees
+                            && changed.controlKind == control.controlKind && changed.label == control.label
+                    }) else { throw ControllerDesignError.conflict("skin attachment changed frozen native control geometry or identity") }
+                }
+            }
         case let .themeApply(profileID, variant, preset):
             guard let theme = GamepadThemePreset.resolve(preset) else { throw ThumbleConfigurationBridgeError.unknownTheme }
             return try mutateProfile(profileID, in: &document, nowMillis: nowMillis) { profile in
@@ -2335,7 +2412,7 @@ public enum ThumbleConfigurationBridge {
                 in: &document,
                 nowMillis: nowMillis
             )
-        case let .elementAdd(profileID, variant, elementID, kind, mappedButton, changes):
+        case let .elementAdd(profileID, variant, elementID, kind, changes):
             guard let id = UUID(uuidString: elementID), elementID.utf8.count <= 128 else {
                 throw ThumbleConfigurationBridgeError.invalidElementID
             }
@@ -2345,12 +2422,12 @@ public enum ThumbleConfigurationBridge {
                 let control = try makeStandaloneElement(
                     id: id,
                     kind: kind,
-                    mappedButton: mappedButton,
                     changes: changes,
                     in: customization
                 )
                 do {
                     try customization.addStandaloneCustomControl(control)
+                    try applyElementPresentation(changes, elementID: id, in: &customization)
                     try applyElementOutput(changes.output, to: .custom(id), in: &customization)
                 } catch {
                     throw ThumbleConfigurationBridgeError.invalidElementChanges
@@ -2359,6 +2436,10 @@ public enum ThumbleConfigurationBridge {
             }
         case let .elementSet(profileID, variant, elementID, changes):
             try validateElementIDs([elementID], minimum: 1)
+            if changes.isPresentationOnly || changes.isOutputOnly {
+                return try mutateRawElementFields(profileID: profileID, variant: variant, elementID: elementID,
+                    changes: changes, in: &document, nowMillis: nowMillis)
+            }
             return try mutateProfile(profileID, in: &document, nowMillis: nowMillis) { profile in
                 var customization = customization(in: profile, variant: variant)
                 let identity = try controlIdentity(elementID, in: customization)
@@ -2465,12 +2546,13 @@ public enum ThumbleConfigurationBridge {
         }
     }
 
+    @discardableResult
     private static func assignCustomElementIDs(
         _ values: [String],
         expectedCount: Int,
         to profile: inout GamepadConfigurationProfile,
         in document: ThumbleBridgeConfigurationDocument
-    ) throws {
+    ) throws -> [UUID: UUID] {
         guard values.count == expectedCount else {
             throw ThumbleConfigurationBridgeError.invalidGeneratedElementIDs
         }
@@ -2489,6 +2571,11 @@ public enum ThumbleConfigurationBridge {
         guard ids.allSatisfy({ !profileIDs.contains($0.uuidString.lowercased()) }) else {
             throw ThumbleConfigurationBridgeError.invalidGeneratedElementIDs
         }
+
+        let customizations = [Optional(profile.customization), profile.landscapeCustomization, profile.portraitCustomization].compactMap { $0 }
+        let remappedIDs = Set(customizations.flatMap { $0.customButtons.map(\.id) })
+        let retainedIDs = Set(customizations.flatMap { $0.elements.map(\.id) }).subtracting(remappedIDs)
+        guard retainedIDs.isDisjoint(with: ids) else { throw ThumbleConfigurationBridgeError.invalidGeneratedElementIDs }
 
         var replacements: [UUID: UUID] = [:]
         var nextIndex = 0
@@ -2546,13 +2633,14 @@ public enum ThumbleConfigurationBridge {
         guard nextIndex == ids.count else {
             throw ThumbleConfigurationBridgeError.invalidGeneratedElementIDs
         }
+        return replacements
     }
 
     #if os(macOS)
     private static func installGeneratedProfile(
         _ inputProfile: GamepadConfigurationProfile,
-        keyBindings: [GameButton: MacKeyBinding],
-        outputBindings: [GameButton: MacControlOutputBinding],
+        keyBindings: [KeypadElementID: MacKeyBinding],
+        outputBindings: [KeypadElementID: MacControlOutputBinding],
         destination: ThumbleBridgeProfileDestination,
         select: Bool,
         makeDefault: Bool,
@@ -2626,7 +2714,7 @@ public enum ThumbleConfigurationBridge {
         profileID: String,
         document: inout ThumbleBridgeConfigurationDocument,
         nowMillis: Int64,
-        change: (inout [GameButton: MacKeyBinding], GamepadConfigurationProfile) throws -> Void
+        change: (inout [KeypadElementID: MacKeyBinding], GamepadConfigurationProfile) throws -> Void
     ) throws -> [String] {
         try mutateMacConfiguration(
             profileID: profileID,
@@ -2634,21 +2722,10 @@ public enum ThumbleConfigurationBridge {
             nowMillis: nowMillis
         ) { profile, bindings, outputs in
             try change(&bindings, profile)
-            switch profile.outputMode {
-            case .keyboard:
-                outputs = MacConfigurationBindings.keyboardOutputs(from: bindings)
-            case .controller:
-                outputs = MacConfigurationBindings.effectiveOutputs(
-                    for: .controller,
-                    keyBindings: bindings,
-                    customOutputs: outputs
-                )
-            case .custom:
-                for (button, binding) in bindings {
-                    var output = outputs[button] ?? MacControlOutputBinding()
-                    output.keyboard = binding
-                    outputs[button] = output
-                }
+            for id in Set(outputs.keys).union(bindings.keys) {
+                var output = outputs[id] ?? MacControlOutputBinding()
+                output.keyboard = bindings[id]
+                outputs[id] = output
             }
         }
     }
@@ -2675,7 +2752,7 @@ public enum ThumbleConfigurationBridge {
 
     private static func applyOutputSet(
         profileID: String,
-        button: GameButton,
+        button: KeypadElementID,
         keyboardEdit: ThumbleBridgeKeyboardOutputEdit,
         gamepadEdit: ThumbleBridgeGamepadOutputEdit,
         document: inout ThumbleBridgeConfigurationDocument,
@@ -2713,7 +2790,7 @@ public enum ThumbleConfigurationBridge {
                let keyboard = bindings[button] {
                 output.keyboard = keyboard
             }
-            outputs[button] = output.isEmpty ? nil : output
+            outputs[button] = output
             profile.outputMode = .custom
             if outputs[button] != original {
                 bindings[button] = outputs[button]?.keyboard
@@ -2744,7 +2821,7 @@ public enum ThumbleConfigurationBridge {
 
     private static func applyOutputReset(
         profileID: String,
-        button: GameButton,
+        button: KeypadElementID,
         document: inout ThumbleBridgeConfigurationDocument,
         nowMillis: Int64
     ) throws -> [String] {
@@ -2784,8 +2861,8 @@ public enum ThumbleConfigurationBridge {
         nowMillis: Int64,
         mutate: (
             inout GamepadConfigurationProfile,
-            inout [GameButton: MacKeyBinding],
-            inout [GameButton: MacControlOutputBinding]
+            inout [KeypadElementID: MacKeyBinding],
+            inout [KeypadElementID: MacControlOutputBinding]
         ) throws -> Void
     ) throws -> [String] {
         let profileIndex = try profileIndex(profileID, in: document)
@@ -2800,29 +2877,27 @@ public enum ThumbleConfigurationBridge {
         if let rawKeyValue {
             rawKeys = try decoded(rawKeyValue)
         } else {
-            rawKeys = MacConfigurationBindings.rawKeyBindings(DefaultKeypadKeyMap.defaultBindings)
+            rawKeys = MacConfigurationBindings.rawKeyBindings(try rawElementOutputs(in: rawProfile, usesDefaults: true).keyboardBindings)
         }
-        var bindings = MacConfigurationBindings.decodedKeyBindings(rawKeys)
-            ?? DefaultKeypadKeyMap.defaultBindings
+        guard var bindings = MacConfigurationBindings.decodedKeyBindings(rawKeys) else {
+            throw ThumbleConfigurationBridgeError.invalidElementID
+        }
+        let beforeKeysCanonical = try encodedJSONValue(MacConfigurationBindings.rawKeyBindings(bindings))
         let rawOutputs: [String: MacControlOutputBinding]
         if let rawOutputValue {
             rawOutputs = try decoded(rawOutputValue)
         } else {
-            rawOutputs = MacConfigurationBindings.rawOutputs(
-                MacConfigurationBindings.keyboardOutputs(from: bindings)
-            )
+            rawOutputs = MacConfigurationBindings.rawOutputs(try rawElementOutputs(in: rawProfile, usesDefaults: true))
         }
-        var outputs = MacConfigurationBindings.decodedOutputs(rawOutputs)
-            ?? MacConfigurationBindings.keyboardOutputs(from: bindings)
-        // Compare only the typed, recognized semantic projection so keyed
-        // forward-compatible entries and nested unknown fields remain in the
-        // raw maps when canonical mutations are overlaid.
-        let beforeKeysCanonical = try encodedJSONValue(
-            MacConfigurationBindings.rawKeyBindings(bindings)
-        )
-        let beforeOutputsCanonical = try encodedJSONValue(
-            MacConfigurationBindings.rawOutputs(outputs)
-        )
+        guard var outputs = MacConfigurationBindings.decodedOutputs(rawOutputs) else {
+            throw ThumbleConfigurationBridgeError.invalidElementID
+        }
+        // Diff against the actual sidecars, not the owned projection. Otherwise
+        // an unchanged owned output can leave a conflicting raw sidecar intact.
+        // Unknown portable fields remain in the raw map during the overlay.
+        let beforeOutputsCanonical = try encodedJSONValue(MacConfigurationBindings.rawOutputs(outputs))
+        outputs.merge(try rawElementOutputs(in: rawProfile, usesDefaults: false)) { _, element in element }
+        bindings = outputs.keyboardBindings
 
         try mutate(&profile, &bindings, &outputs)
         MacConfigurationBindings.synchronizeElementOutputs(in: &profile, outputs: outputs)
@@ -2840,10 +2915,11 @@ public enum ThumbleConfigurationBridge {
 
         profile.updatedAt = nowMillis
         let afterProfileCanonical = try encodedJSONValue(profile.normalized)
-        document.profiles[profileIndex] = applyCanonicalChanges(
+        document.profiles[profileIndex] = try applyingBindingProfileChanges(
             raw: rawProfile,
             before: beforeProfileCanonical,
-            after: afterProfileCanonical
+            after: afterProfileCanonical,
+            outputs: outputs
         )
         let nextKeys = applyCanonicalChanges(
             raw: rawKeyValue ?? beforeKeysCanonical,
@@ -2872,6 +2948,74 @@ public enum ThumbleConfigurationBridge {
         }
         return changedPaths
     }
+
+    private static func rawElementOutputs(in profile: ThumbleBridgeJSONValue, usesDefaults: Bool) throws -> [KeypadElementID: MacControlOutputBinding] {
+        guard case .object(let profile) = profile else { throw ThumbleConfigurationBridgeError.invalidProfile }
+        var outputs: [KeypadElementID: MacControlOutputBinding] = [:]
+        for field in ["customization", "landscapeCustomization", "portraitCustomization"] {
+            guard case .object(let customization) = profile[field],
+                  case .array(let elements) = customization["elements"] else { continue }
+            for value in elements {
+                guard case .object(let element) = value,
+                      let id = try? value.requiredString(forKey: "id"), let inputID = KeypadElementID(rawValue: id) else { continue }
+                let configured = element["output"].flatMap { $0 == .null ? nil : $0 }
+                guard let output = configured ?? (usesDefaults ? element["defaultOutput"] : nil), output != .null else { continue }
+                let binding: KeypadElementOutputBinding = try decoded(output)
+                if outputs[inputID] == nil { outputs[inputID] = MacControlOutputBinding(shared: binding) }
+            }
+        }
+        return outputs
+    }
+
+    // Binding synchronization may normalize the typed profile's layout and
+    // element ordering. Only output fields belong to this operation; preserve
+    // the authored raw layout, ordering, defaults, and extension fields.
+    private static func applyingBindingProfileChanges(
+        raw: ThumbleBridgeJSONValue,
+        before: ThumbleBridgeJSONValue,
+        after: ThumbleBridgeJSONValue,
+        outputs: [KeypadElementID: MacControlOutputBinding]
+    ) throws -> ThumbleBridgeJSONValue {
+        guard case .object(var result) = raw,
+              case .object(let beforeProfile) = before,
+              case .object(let afterProfile) = after else {
+            throw ThumbleConfigurationBridgeError.invalidProfile
+        }
+        for field in ["updatedAt", "outputMode"] where beforeProfile[field] != afterProfile[field] {
+            result[field] = afterProfile[field]
+        }
+        for field in ["customization", "landscapeCustomization", "portraitCustomization"] {
+            guard case .object(var customization) = result[field],
+                  case .array(let elements) = customization["elements"],
+                  case .object(let beforeCustomization) = beforeProfile[field],
+                  case .array(let beforeElements) = beforeCustomization["elements"],
+                  case .object(let afterCustomization) = afterProfile[field],
+                  case .array(let afterElements) = afterCustomization["elements"],
+                  let beforeByID = keyed(beforeElements), let afterByID = keyed(afterElements) else { continue }
+            customization["elements"] = .array(try elements.map { value in
+                guard case .object(var element) = value,
+                      let id = try? value.requiredString(forKey: "id"),
+                      case .object(let beforeElement) = beforeByID[id.lowercased()],
+                      case .object = afterByID[id.lowercased()] else {
+                    throw ThumbleConfigurationBridgeError.invalidElementID
+                }
+                if let inputID = KeypadElementID(rawValue: id), let output = outputs[inputID] {
+                    let next = try encodedJSONValue(output.sharedBinding)
+                    element["output"] = applyCanonicalChanges(
+                        raw: element["output"] ?? beforeElement["output"] ?? next,
+                        before: beforeElement["output"] ?? .null,
+                        after: next
+                    )
+                } else {
+                    element.removeValue(forKey: "output")
+                }
+                return .object(element)
+            })
+            result[field] = .object(customization)
+        }
+        return .object(result)
+    }
+
     #endif
 
     private static func ensureElementIDIsAvailable(
@@ -2892,20 +3036,15 @@ public enum ThumbleConfigurationBridge {
     private static func makeStandaloneElement(
         id: UUID,
         kind: GamepadCustomControlKind,
-        mappedButton: GameButton?,
         changes: ThumbleBridgeElementChanges,
         in customization: GamepadCustomization
     ) throws -> GamepadCustomButton {
         try validateElementChanges(changes, permitsKind: false)
-        let passive = kind == .text || kind == .decoration
-        let mapped = mappedButton
-            ?? (kind == .joystick ? .up : (passive ? .custom8 : firstAvailableCustomSlot(in: customization) ?? .custom1))
         let triggerCount = customization.customButtons.filter { $0.normalized.isTrigger }.count
         let triggerTarget: VirtualGamepadTrigger = triggerCount == 0 ? .left : .right
         let label = changes.label ?? (kind == .trigger ? triggerTarget.shortName : kind.defaultElementLabel)
         var control = GamepadCustomButton(
             id: id,
-            mappedButton: mapped,
             label: label,
             controlKind: kind,
             joystickMapping: kind == .joystick ? .movement : nil,
@@ -2960,17 +3099,17 @@ public enum ThumbleConfigurationBridge {
         try validateElementChanges(changes, permitsKind: true)
         switch identity {
         case .builtin(let button):
-            guard changes.kind == nil, changes.mappedButton == nil,
+            guard changes.kind == nil,
                   changes.joystickMapping == nil, changes.joystickSettings == nil,
                   changes.triggerSettings == nil, changes.trackpadSettings == nil
             else { throw ThumbleConfigurationBridgeError.invalidElementChanges }
             if changes.clearLabel { customization.setLabel("", for: button) }
             else if let label = changes.label { customization.setLabel(label, for: button) }
             if changes.clearVisualRole,
-               let index = customization.elements.firstIndex(where: { $0.builtInButton == button }) {
+               let index = customization.elements.firstIndex(where: { $0.defaultControlID == button }) {
                 customization.elements[index].visualRole = nil
             } else if let visualRole = changes.visualRole,
-                      let index = customization.elements.firstIndex(where: { $0.builtInButton == button }) {
+                      let index = customization.elements.firstIndex(where: { $0.defaultControlID == button }) {
                 customization.elements[index].visualRole = visualRole
             }
             var layout = customization.buttonCustomization(for: button)
@@ -2979,7 +3118,7 @@ public enum ThumbleConfigurationBridge {
             customization = customization.normalized
         case .custom(let id):
             let fallback = customization.customButtons.first(where: { $0.id == id })
-                .map { customization.visualLabel(for: $0.mappedButton) } ?? "Button"
+                .map { customization.visualLabel(for: $0.inputID) } ?? "Button"
             let referenceCustomization = customization
             do {
                 try customization.mutateStandaloneCustomControl(id: id) { control in
@@ -2988,7 +3127,6 @@ public enum ThumbleConfigurationBridge {
                     } else if let label = changes.label {
                         control.label = label
                     }
-                    if let mappedButton = changes.mappedButton { control.mappedButton = mappedButton }
                     if let kind = changes.kind { control.controlKind = kind }
                     if changes.clearVisualRole { control.visualRole = nil }
                     else if let visualRole = changes.visualRole { control.visualRole = visualRole }
@@ -2999,7 +3137,7 @@ public enum ThumbleConfigurationBridge {
             }
         case .system(.topBarActivation):
             guard changes.label == nil, !changes.clearLabel, changes.kind == nil,
-                  changes.mappedButton == nil, changes.visualRole == nil, !changes.clearVisualRole,
+                  changes.visualRole == nil, !changes.clearVisualRole,
                   changes.joystickMapping == nil, changes.joystickSettings == nil,
                   changes.triggerSettings == nil, changes.trackpadSettings == nil,
                   changes.output == nil
@@ -3010,6 +3148,87 @@ public enum ThumbleConfigurationBridge {
             throw ThumbleConfigurationBridgeError.invalidElementID
         }
         try applyElementOutput(changes.output, to: identity, in: &customization)
+        if changes.presentation != nil || changes.clearPresentation {
+            let elementID: UUID
+            switch identity {
+            case .builtin(let button):
+                guard let element = customization.elements.first(where: { $0.defaultControlID == button }) else {
+                    throw ThumbleConfigurationBridgeError.invalidElementChanges
+                }
+                elementID = element.id
+            case .custom(let id): elementID = id
+            default: throw ThumbleConfigurationBridgeError.invalidElementChanges
+            }
+            try applyElementPresentation(changes, elementID: elementID, in: &customization)
+        }
+    }
+
+    private static func mutateRawElementFields(profileID: String, variant: ThumbleBridgeLayoutVariant, elementID: String,
+        changes: ThumbleBridgeElementChanges, in document: inout ThumbleBridgeConfigurationDocument, nowMillis: Int64) throws -> [String] {
+        try validateElementChanges(changes, permitsKind: false)
+        let index = try profileIndex(profileID, in: document)
+        guard case .object(var raw) = document.profiles[index] else { throw ThumbleConfigurationBridgeError.invalidProfile }
+        let typed: GamepadConfigurationProfile = try decoded(document.profiles[index])
+        let primaryOrientation = typed.customization.deviceCanvas.editorDeviceFrame.orientation
+        let targetOrientation = variant == .primary ? primaryOrientation : variant == .portrait ? .portrait : .landscape
+        let orientationKey = targetOrientation == .portrait ? "portraitCustomization" : "landscapeCustomization"
+        var keys: [String] = []
+        if primaryOrientation == targetOrientation { keys.append("customization") }
+        if case .object = raw[orientationKey] { keys.append(orientationKey) }
+        guard !keys.isEmpty, let id = UUID(uuidString: elementID) else { throw ThumbleConfigurationBridgeError.invalidElementID }
+        let presentation = try changes.presentation.map(encodedJSONValue)
+        var changed = false
+        for key in keys {
+            guard case .object(var customization) = raw[key], case .array(var elements) = customization["elements"],
+                  let owner = elements.firstIndex(where: { value in
+                      guard case .object(let element) = value, case .string(let stringID) = element["id"] else { return false }
+                      return UUID(uuidString: stringID) == id
+                  }), case .object(var element) = elements[owner] else { throw ThumbleConfigurationBridgeError.invalidElementID }
+            if changes.isOutputOnly {
+                var typedCustomization: GamepadCustomization = try decoded(.object(customization))
+                let beforeCanonical = try encodedJSONValue(typedCustomization)
+                let identity = try controlIdentity(elementID, in: typedCustomization)
+                try applyElementOutput(changes.output, to: identity, in: &typedCustomization)
+                let afterCanonical = try encodedJSONValue(typedCustomization.normalized)
+                func owner(in value: ThumbleBridgeJSONValue) throws -> [String: ThumbleBridgeJSONValue] {
+                    guard case .object(let fields) = value, case .array(let controls) = fields["elements"],
+                          let target = controls.first(where: { value in
+                              (try? value.requiredString(forKey: "id")).flatMap(UUID.init(uuidString:)) == id
+                          }), case .object(let target) = target else {
+                        throw ThumbleConfigurationBridgeError.invalidElementID
+                    }
+                    return target
+                }
+                let before = try owner(in: beforeCanonical), after = try owner(in: afterCanonical)
+                let original = element
+                for field in ["output", "partOutputs"] where before[field] != after[field] {
+                    if let next = after[field] {
+                        element[field] = applyCanonicalChanges(raw: element[field] ?? before[field] ?? .null,
+                            before: before[field] ?? .null, after: next)
+                    } else { element.removeValue(forKey: field) }
+                }
+                if element == original { continue }
+            } else {
+                let next = changes.clearPresentation ? nil : presentation
+                if element["presentation"] == next { continue }
+                element["presentation"] = next
+            }
+            elements[owner] = .object(element); customization["elements"] = .array(elements)
+            raw[key] = .object(customization); changed = true
+        }
+        guard changed else { return [] }
+        raw["updatedAt"] = .integer(nowMillis)
+        document.profiles[index] = .object(raw)
+        return ["/profiles/\(escapePointer(try document.profiles[index].requiredString(forKey: "id")))"]
+    }
+
+    private static func applyElementPresentation(_ changes: ThumbleBridgeElementChanges, elementID: UUID,
+                                                in customization: inout GamepadCustomization) throws {
+        guard changes.presentation != nil || changes.clearPresentation else { return }
+        guard let index = customization.elements.firstIndex(where: { $0.id == elementID }) else {
+            throw ThumbleConfigurationBridgeError.invalidElementChanges
+        }
+        customization.elements[index].presentation = changes.clearPresentation ? nil : changes.presentation
     }
 
     private static func applyChanges(
@@ -3025,7 +3244,11 @@ public enum ThumbleConfigurationBridge {
         if control.controlKind == .joystick || hasJoystickChanges {
             control.controlKind = .joystick
             if let mapping = changes.joystickMapping { control.joystickMapping = mapping }
-            control.joystickMapping = control.joystickMapping ?? .movement
+            // Defaults are authored when adding/converting a control, not when
+            // editing the appearance of an existing unbound joystick.
+            if !permitsKind || changes.kind == .joystick {
+                control.joystickMapping = control.joystickMapping ?? .movement
+            }
             if let settings = changes.joystickSettings {
                 control.joystickOutputSettings = try settings.applying(
                     to: control.joystickOutputSettings ?? .defaultValue
@@ -3046,7 +3269,11 @@ public enum ThumbleConfigurationBridge {
                 control.triggerSettings = control.triggerSettings ?? .defaultValue
             }
             control.trackpadSettings = nil
-            control.layout.shape = .capsule
+            if !permitsKind || changes.kind == .trigger {
+                control.layout.shape = .capsule
+            } else {
+                control.layout.shape = control.layout.shape ?? .capsule
+            }
         } else if control.controlKind == .trackpad || changes.trackpadSettings != nil {
             control.controlKind = .trackpad
             control.joystickMapping = nil
@@ -3064,12 +3291,18 @@ public enum ThumbleConfigurationBridge {
             control.triggerSettings = nil
             control.trackpadSettings = nil
             if control.controlKind == .text {
-                control.layout.shape = .rectangle
+                if !permitsKind || changes.kind == .text {
+                    control.layout.shape = .rectangle
+                } else {
+                    control.layout.shape = control.layout.shape ?? .rectangle
+                }
                 control.layout.shadowStrength = 0
                 control.layout.showsIntegratedLabel = false
             } else if control.controlKind == .decoration {
                 control.layout.shape = control.layout.shape ?? .roundedRectangle
-                control.layout.shadowStrength = 0
+                if !permitsKind || changes.kind == .decoration {
+                    control.layout.shadowStrength = 0
+                }
             }
         }
         try applyLayoutChanges(changes, to: &control.layout, in: customization)
@@ -3081,6 +3314,7 @@ public enum ThumbleConfigurationBridge {
     ) throws {
         guard permitsKind || changes.kind == nil,
               !(changes.label != nil && changes.clearLabel),
+              !(changes.presentation != nil && changes.clearPresentation),
               !(changes.visualRole != nil && changes.clearVisualRole),
               !(changes.hitInsets != nil && changes.clearHitInsets),
               !(changes.fill != nil && changes.clearFill),
@@ -3484,12 +3718,6 @@ public enum ThumbleConfigurationBridge {
         #endif
     }
 
-    private static func firstAvailableCustomSlot(in customization: GamepadCustomization) -> GameButton? {
-        GameButton.customSlots.first { slot in
-            !customization.customButtons.contains { $0.mappedButton == slot }
-        }
-    }
-
     private static func validateStyleID(_ styleID: String) throws {
         guard !styleID.isEmpty, styleID.utf8.count <= 128,
               styleID == GamepadStyleToken.normalizedIdentifier(styleID)
@@ -3574,6 +3802,7 @@ public enum ThumbleConfigurationBridge {
         _ profileID: String,
         in document: inout ThumbleBridgeConfigurationDocument,
         nowMillis: Int64,
+        sourceVariant: ThumbleBridgeLayoutVariant? = nil,
         mutate: (inout GamepadConfigurationProfile) throws -> Void
     ) throws -> [String] {
         let index = try profileIndex(profileID, in: document)
@@ -3586,7 +3815,11 @@ public enum ThumbleConfigurationBridge {
         guard mutatedCanonical != beforeCanonical else { return [] }
         afterProfile.updatedAt = nowMillis
         let afterCanonical = try encodedJSONValue(afterProfile.normalized)
-        let overlaid = applyCanonicalChanges(raw: raw, before: beforeCanonical, after: afterCanonical)
+        var overlaid = applyCanonicalChanges(raw: raw, before: beforeCanonical, after: afterCanonical)
+        if let sourceVariant {
+            overlaid = try preservingMirroredCustomizationSource(raw: raw, beforeProfile: beforeProfile,
+                after: afterCanonical, overlaid: overlaid, variant: sourceVariant)
+        }
         document.profiles[index] = compactAddedOrientationMirrors(
             raw: raw,
             before: beforeCanonical,
@@ -3595,6 +3828,28 @@ public enum ThumbleConfigurationBridge {
         )
         let canonicalID = try raw.requiredString(forKey: "id")
         return ["/profiles/\(escapePointer(canonicalID))"]
+    }
+
+    /// The current primary canvas mirrors the selected editor canvas. Its raw
+    /// metadata must follow that source too, not the previous primary or an
+    /// empty destination variant which happens to have the same control UUID.
+    private static func preservingMirroredCustomizationSource(raw: ThumbleBridgeJSONValue,
+        beforeProfile: GamepadConfigurationProfile, after: ThumbleBridgeJSONValue,
+        overlaid: ThumbleBridgeJSONValue, variant: ThumbleBridgeLayoutVariant) throws -> ThumbleBridgeJSONValue {
+        guard case .object(let rawFields) = raw, case .object(let afterFields) = after,
+              case .object(var result) = overlaid, let afterPrimary = afterFields["customization"] else {
+            throw ThumbleConfigurationBridgeError.invalidProfile
+        }
+        let sourceKey = variant == .landscape ? "landscapeCustomization" : (variant == .portrait ? "portraitCustomization" : "customization")
+        let selected = rawFields[sourceKey]
+        guard let source = (selected == .null ? nil : selected) ?? rawFields["customization"] else { throw ThumbleConfigurationBridgeError.invalidProfile }
+        let beforeSource = try encodedJSONValue(customization(in: beforeProfile, variant: variant))
+        let carried = applyCanonicalChanges(raw: source, before: beforeSource, after: afterPrimary)
+        result["customization"] = carried
+        let typedAfter: GamepadCustomization = try decoded(afterPrimary)
+        let targetKey = typedAfter.deviceCanvas.editorDeviceFrame.orientation == .landscape ? "landscapeCustomization" : "portraitCustomization"
+        if afterFields[targetKey] == afterPrimary { result[targetKey] = carried }
+        return .object(result)
     }
 
     private static func compactAddedOrientationMirrors(
@@ -3628,9 +3883,9 @@ public enum ThumbleConfigurationBridge {
         variant: ThumbleBridgeLayoutVariant
     ) -> GamepadCustomization {
         switch variant {
-        case .primary: profile.customization
-        case .landscape: profile.customization(for: .landscape)
-        case .portrait: profile.customization(for: .portrait)
+        case .primary: profile.customization.normalized
+        case .landscape: profile.customization(for: .landscape).normalized
+        case .portrait: profile.customization(for: .portrait).normalized
         }
     }
 
@@ -3649,11 +3904,12 @@ public enum ThumbleConfigurationBridge {
         }
     }
 
-    private static func validate(_ document: ThumbleBridgeConfigurationDocument) throws {
+    static func validate(_ document: ThumbleBridgeConfigurationDocument) throws {
         guard !document.profiles.isEmpty, document.profiles.count <= 256 else {
             throw ThumbleConfigurationBridgeError.invalidProfileCount
         }
         var ids = Set<String>()
+        var owners: [UUID: Set<UUID>] = [:]
         for profile in document.profiles {
             let id = try profile.requiredString(forKey: "id")
             guard UUID(uuidString: id) != nil, ids.insert(id.lowercased()).inserted else {
@@ -3663,13 +3919,91 @@ public enum ThumbleConfigurationBridge {
             guard case .object = try profile.requiredObjectValue(forKey: "customization") else {
                 throw ThumbleConfigurationBridgeError.invalidProfile
             }
-            let _: GamepadConfigurationProfile = try decoded(profile)
+            let typed: GamepadConfigurationProfile = try decoded(profile)
+            var declared = Set(typed.customization.elements.map(\.id))
+            if let landscape = typed.landscapeCustomization { declared.formUnion(landscape.elements.map(\.id)) }
+            if let portrait = typed.portraitCustomization { declared.formUnion(portrait.elements.map(\.id)) }
+            owners[typed.id] = declared
         }
         guard ids.contains(document.activeProfileID.lowercased()),
               ids.contains(document.defaultProfileID.lowercased())
         else { throw ThumbleConfigurationBridgeError.missingSelectedProfile }
         guard document.profileKeyBindings.count <= 512, document.profileOutputBindings.count <= 512 else {
             throw ThumbleConfigurationBridgeError.tooManyBindingMaps
+        }
+        func validateIDs(_ bindings: [String: ThumbleBridgeJSONValue], ownedBy declared: Set<UUID>, output: Bool) throws {
+            var elementIDs = Set<UUID>()
+            for key in bindings.keys {
+                guard let id = KeypadElementID(rawValue: key), elementIDs.insert(id.uuid).inserted else {
+                    throw ThumbleConfigurationBridgeError.invalidElementID
+                }
+                guard declared.contains(id.uuid) else { throw ThumbleConfigurationBridgeError.invalidBindingReference }
+                try validateBindingValue(bindings[key]!, output: output)
+            }
+        }
+        let active = owners[UUID(uuidString: document.activeProfileID)!]!
+        for (value, output) in [(document.keyBindings, false), (document.outputBindings, true)] {
+            guard case .object(let bindings) = value else {
+                throw ThumbleConfigurationBridgeError.invalidGeneratedBinding
+            }
+            try validateIDs(bindings, ownedBy: active, output: output)
+        }
+        for (maps, output) in [(document.profileKeyBindings, false), (document.profileOutputBindings, true)] {
+            var profileIDs = Set<UUID>()
+            for (key, value) in maps {
+                guard let id = UUID(uuidString: key), profileIDs.insert(id).inserted,
+                      let declared = owners[id] else { throw ThumbleConfigurationBridgeError.invalidBindingReference }
+                guard case .object(let bindings) = value else {
+                    throw ThumbleConfigurationBridgeError.invalidGeneratedBinding
+                }
+                try validateIDs(bindings, ownedBy: declared, output: output)
+            }
+        }
+    }
+
+    private static func validateBindingValue(_ value: ThumbleBridgeJSONValue, output: Bool) throws {
+        guard case .object(let binding) = value else { throw ThumbleConfigurationBridgeError.invalidGeneratedBinding }
+        if output {
+            if let keyboard = binding["keyboard"], keyboard != .null { try validateBindingValue(keyboard, output: false) }
+            if let buttons = binding["gamepadButtons"] {
+                guard case .array(let names) = buttons, names.count <= 32,
+                      names.allSatisfy({ if case .string = $0 { return true }; return false }) else {
+                    throw ThumbleConfigurationBridgeError.invalidGeneratedBinding
+                }
+            }
+        } else {
+            try validateKeyboardStroke(binding)
+            if let sequence = binding["sequence"], sequence != .null {
+                guard case .array(let strokes) = sequence, strokes.count <= 32 else {
+                    throw ThumbleConfigurationBridgeError.invalidGeneratedBinding
+                }
+                for stroke in strokes {
+                    guard case .object(let fields) = stroke else { throw ThumbleConfigurationBridgeError.invalidGeneratedBinding }
+                    try validateKeyboardStroke(fields)
+                }
+            }
+        }
+    }
+
+    private static func validateKeyboardStroke(_ fields: [String: ThumbleBridgeJSONValue]) throws {
+        func unsigned(_ value: ThumbleBridgeJSONValue?, maximum: Int64) -> Bool {
+            switch value {
+            case .integer(let number): number >= 0 && number <= maximum
+            case .number(let number): number.isFinite && number >= 0 && number <= Double(maximum) && number.rounded() == number
+            default: false
+            }
+        }
+        guard unsigned(fields["keyCode"], maximum: Int64(UInt16.max)),
+              fields["modifiers"] == nil || fields["modifiersRawValue"] == nil else {
+            throw ThumbleConfigurationBridgeError.invalidGeneratedBinding
+        }
+        if let modifiers = fields["modifiers"] ?? fields["modifiersRawValue"] {
+            let raw: ThumbleBridgeJSONValue
+            if case .object(let wrapper) = modifiers {
+                guard let value = wrapper["rawValue"] else { throw ThumbleConfigurationBridgeError.invalidGeneratedBinding }
+                raw = value
+            } else { raw = modifiers }
+            guard unsigned(raw, maximum: Int64(UInt8.max)) else { throw ThumbleConfigurationBridgeError.invalidGeneratedBinding }
         }
     }
 
@@ -3851,23 +4185,20 @@ public enum ThumbleConfigurationBridge {
         return bindings[key]
     }
 
-    private static func defaultKeyBindings() throws -> ThumbleBridgeJSONValue {
+    private static func initialBindingMaps(
+        for profileID: String,
+        in document: ThumbleBridgeConfigurationDocument
+    ) throws -> (ThumbleBridgeJSONValue, ThumbleBridgeJSONValue) {
         #if os(macOS)
-        return try encodedJSONValue(Dictionary(uniqueKeysWithValues: DefaultKeypadKeyMap.defaultBindings.map {
-            ($0.key.rawValue, $0.value)
-        }))
+        let index = try profileIndex(profileID, in: document)
+        let profile: GamepadConfigurationProfile = try decoded(document.profiles[index])
+        let outputs = profile.initialMacOutputBindings
+        return (
+            try encodedJSONValue(MacConfigurationBindings.rawKeyBindings(outputs.keyboardBindings)),
+            try encodedJSONValue(MacConfigurationBindings.rawOutputs(outputs))
+        )
         #else
-        return .object([:])
-        #endif
-    }
-
-    private static func defaultOutputBindings() throws -> ThumbleBridgeJSONValue {
-        #if os(macOS)
-        return try encodedJSONValue(Dictionary(uniqueKeysWithValues: DefaultMacControlOutputMap.defaultBindings.map {
-            ($0.key.rawValue, $0.value)
-        }))
-        #else
-        return .object([:])
+        return (.object([:]), .object([:]))
         #endif
     }
 
@@ -3876,15 +4207,7 @@ public enum ThumbleConfigurationBridge {
         to destinationID: String,
         in document: inout ThumbleBridgeConfigurationDocument
     ) throws {
-        let keyFallback: ThumbleBridgeJSONValue
-        let outputFallback: ThumbleBridgeJSONValue
-        if idsEqual(sourceID, document.activeProfileID) {
-            keyFallback = document.keyBindings
-            outputFallback = document.outputBindings
-        } else {
-            keyFallback = try defaultKeyBindings()
-            outputFallback = try defaultOutputBindings()
-        }
+        let (keyFallback, outputFallback) = try initialBindingMaps(for: sourceID, in: document)
         document.profileKeyBindings[destinationID] = bindingValue(
             for: sourceID,
             in: document.profileKeyBindings
@@ -3899,18 +4222,21 @@ public enum ThumbleConfigurationBridge {
         in document: inout ThumbleBridgeConfigurationDocument
     ) throws {
         let profileID = try existingProfileID(document.activeProfileID, in: document)
+        let initial = try initialBindingMaps(for: profileID, in: document)
         let keys: ThumbleBridgeJSONValue
         if let existing = bindingValue(for: profileID, in: document.profileKeyBindings) {
             keys = existing
         } else {
-            keys = try defaultKeyBindings()
+            keys = initial.0
         }
         let outputs: ThumbleBridgeJSONValue
         if let existing = bindingValue(for: profileID, in: document.profileOutputBindings) {
             outputs = existing
         } else {
-            outputs = try defaultOutputBindings()
+            outputs = initial.1
         }
+        removeBindingMap(for: profileID, from: &document.profileKeyBindings)
+        removeBindingMap(for: profileID, from: &document.profileOutputBindings)
         document.profileKeyBindings[profileID] = keys
         document.profileOutputBindings[profileID] = outputs
         document.keyBindings = keys
@@ -3943,6 +4269,13 @@ public enum ThumbleConfigurationBridge {
     private static func encodedJSONValue<T: Encodable>(_ value: T) throws -> ThumbleBridgeJSONValue {
         let data = try JSONEncoder.bridge.encode(value)
         return try JSONDecoder.bridge.decode(ThumbleBridgeJSONValue.self, from: data)
+    }
+
+    /// Keep safe future metadata and compact unchanged fields when an editor
+    /// writes a known model back into its already-validated source document.
+    static func preservingProfileMetadata(_ raw: ThumbleBridgeJSONValue, after profile: GamepadConfigurationProfile) throws -> ThumbleBridgeJSONValue {
+        let before: GamepadConfigurationProfile = try decoded(raw)
+        return applyCanonicalChanges(raw: raw, before: try encodedJSONValue(before), after: try encodedJSONValue(profile))
     }
 
     private static func applyCanonicalChanges(
@@ -4121,7 +4454,7 @@ public enum ThumbleConfigurationBridge {
         var order: [ThumbleBridgeJSONValue] = [
             .object(["kind": .string("system"), "system": .string("top_bar_activation")])
         ]
-        for button in GameButton.builtInControls {
+        for button in DefaultKeypadElements.ids {
             order.append(.object([
                 "kind": .string("builtin"),
                 "button": .string(button.rawValue)
@@ -4329,6 +4662,7 @@ public enum ThumbleConfigurationBridgeError: String, LocalizedError, Sendable {
     case revisionMismatch = "revision_mismatch"
     case invalidGeneratedElementIDs = "invalid_generated_element_ids"
     case invalidGeneratedBinding = "invalid_generated_binding"
+    case invalidBindingReference = "invalid_binding_reference"
 
     public var errorDescription: String? {
         switch self {
@@ -4370,6 +4704,7 @@ public enum ThumbleConfigurationBridgeError: String, LocalizedError, Sendable {
         case .revisionMismatch: "Requested preset or template revision is not installed"
         case .invalidGeneratedElementIDs: "Generated element IDs do not match the preset contract"
         case .invalidGeneratedBinding: "Generated bindings are invalid"
+        case .invalidBindingReference: "Binding maps must reference declared profile and element UUIDs"
         }
     }
 }

@@ -16,7 +16,7 @@ enum IOSKeypadPreferenceKeys {
 }
 
 enum ControllerInputPath: String, CaseIterable, Sendable {
-    case builtInButton
+    case defaultControlID
     case elementButton
     case analogStick
     case analogTrigger
@@ -232,19 +232,32 @@ enum PendingKeypadLayoutReconciler {
 enum PendingKeypadLayoutPersistence {
     static let defaultsKey = "PocketPad.iOS.pendingKeypadLayoutEdits.v1"
 
-    static func load(defaults: UserDefaults = .standard) -> [PendingKeypadLayoutEdit] {
-        guard let data = defaults.data(forKey: defaultsKey),
-              let edits = try? JSONDecoder().decode([PendingKeypadLayoutEdit].self, from: data)
-        else { return [] }
-        return edits
+    static func load(defaults: UserDefaults = .standard) throws -> [PendingKeypadLayoutEdit] {
+        guard let stored = defaults.object(forKey: defaultsKey) else { return [] }
+        guard let data = stored as? Data else { throw GamepadSavedConfigurationError.invalid("\(defaultsKey) must contain JSON data") }
+        do {
+            let edits = try JSONDecoder().decodeUnique([PendingKeypadLayoutEdit].self, from: data)
+            guard Set(edits.map(\.id)).count == edits.count else {
+                throw GamepadSavedConfigurationError.invalid("pending layouts must contain unique profile/orientation/server owners")
+            }
+            return edits
+        } catch {
+            throw GamepadSavedConfigurationError.invalid("\(defaultsKey): \(GamepadSavedConfigurationError.diagnostic(error))")
+        }
     }
 
     static func save(_ edits: [PendingKeypadLayoutEdit], defaults: UserDefaults = .standard) {
+        // A failed read is not an empty queue and cannot authorize a replacement.
+        guard (try? load(defaults: defaults)) != nil,
+              Set(edits.map(\.id)).count == edits.count,
+              edits.allSatisfy({ Set($0.customization.elements.map(\.id)).count == $0.customization.elements.count }) else { return }
         if edits.isEmpty {
             defaults.removeObject(forKey: defaultsKey)
             return
         }
-        guard let data = try? JSONEncoder().encode(edits) else { return }
+        guard let data = try? JSONEncoder().encode(edits),
+              let checked = try? JSONDecoder().decodeUnique([PendingKeypadLayoutEdit].self, from: data),
+              Set(checked.map(\.id)).count == checked.count else { return }
         defaults.set(data, forKey: defaultsKey)
     }
 }

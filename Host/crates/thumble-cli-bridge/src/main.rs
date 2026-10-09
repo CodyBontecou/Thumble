@@ -46,7 +46,7 @@ fn main() {
         }
         return;
     }
-    let mut request = match serde_json::from_slice::<CliProfileRequest>(&data).map_err(|_| ()) {
+    let mut request = match thumble_protocol::decode_unique_json::<CliProfileRequest>(&data).map_err(|_| ()) {
         Ok(request) => request,
         Err(()) => {
             emit(&CliProfileResponse::transport_failure(
@@ -81,6 +81,13 @@ fn main() {
             std::process::exit(1);
         }
     };
+
+    if thumble_host::native_configuration::endpoint_present(&paths) {
+        let response = thumble_host::native_configuration::execute(&paths, &request);
+        emit(&response);
+        if !response.ok { std::process::exit(1); }
+        return;
+    }
 
     if matches!(request.command, CliProfileCommand::AuthorityStatus) {
         emit(&CliProfileResponse::authority_status(
@@ -382,7 +389,7 @@ mod tests {
     }
 
     #[test]
-    fn offline_generation_planning_normalizes_outdated_state_only_in_memory() {
+    fn offline_generation_planning_rejects_outdated_state_without_modifying_it() {
         let home = tempfile::tempdir().unwrap();
         let state_dir = home.path().join("Library/Application Support/ThumbleHost");
         let paths = HostPaths::new(state_dir.clone(), state_dir.join("control.sock"));
@@ -396,7 +403,8 @@ mod tests {
 
         let response = execute_after_online_failure(&paths, &generation_request());
 
-        assert!(response.ok, "{:?}", response.error);
+        assert!(!response.ok, "obsolete state must not be normalized or migrated");
+        assert!(response.error.is_some());
         assert_eq!(fs::read(&paths.state_file).unwrap(), outdated);
         assert!(!paths.lock_file.exists());
         assert!(!paths.drafts_dir.exists());

@@ -70,6 +70,10 @@ fn shared_wire_vectors_encode_and_decode_exactly() {
                     fixture.name
                 );
             }
+            "rejected" => {
+                let bytes = decode_hex(fixture.hex.as_deref().expect("rejected fixture hex"));
+                assert!(ControllerWireCodec::decode(&bytes).is_err(), "{} must be rejected", fixture.name);
+            }
             other => panic!("unknown fixture kind {other:?}"),
         }
     }

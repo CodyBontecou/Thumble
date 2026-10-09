@@ -81,9 +81,67 @@ public enum ThumbleSkinSourceValidator {
         if workspace.summary.trimmingCharacters(in: .whitespacesAndNewlines).count < 20 {
             issue(.warning, "short-summary", "Describe the skin's visual direction and material language.", "summary")
         }
-        guard let artboard = ThumbleSkinArtboardCatalog.resolve(workspace.artboardID) else {
+        if !workspace.capturedArtboards.isEmpty {
+            if workspace.schemaVersion < 3 {
+                issue(.error, "captured-artboard-requires-schema-3", "Captured artboards require source schema 3.", "capturedArtboards")
+            }
+            if let captured = workspace.resolvedArtboard {
+                let variants = captured.variants
+                if variants.isEmpty || variants.count > 2 || Set(variants.map(\.orientation)).count != variants.count {
+                    issue(.error, "invalid-captured-variants", "A captured artboard requires one or two distinct authored orientations.", "capturedArtboards")
+                }
+                for variant in variants {
+                    if !variant.canvasWidth.isFinite || !variant.canvasHeight.isFinite
+                        || !(240...1800).contains(variant.canvasWidth) || !(240...1800).contains(variant.canvasHeight)
+                        || variant.controls.count > 256 || Set(variant.controls.map(\.id)).count != variant.controls.count {
+                        issue(.error, "invalid-captured-canvas", "Captured canvas dimensions or control identities exceed their bounds.", "capturedArtboards")
+                    }
+                    if ![variant.safeAreaInsets.top, variant.safeAreaInsets.leading, variant.safeAreaInsets.bottom, variant.safeAreaInsets.trailing]
+                        .allSatisfy({ $0.isFinite && (0...0.45).contains($0) }) {
+                        issue(.error, "invalid-captured-safe-area", "Captured safe areas must be finite normalized insets from 0 through 0.45.", "capturedArtboards")
+                    }
+                    for control in variant.controls {
+                        let f = control.frame
+                        if control.id.isEmpty || control.id.utf8.count > 128
+                            || ![f.x, f.y, f.width, f.height].allSatisfy({ $0.isFinite })
+                            || f.width < 0 || f.height < 0 || f.x < 0 || f.y < 0
+                            || f.x + f.width > 1.000001 || f.y + f.height > 1.000001
+                            || (control.rotationDegrees.map { !$0.isFinite || !(-180...180).contains($0) } ?? false)
+                            || control.presentation?.isValid == false {
+                            issue(.error, "invalid-captured-control", "Captured control frames must describe finite, in-canvas geometry.", "capturedArtboards")
+                        }
+                    }
+                }
+            }
+        }
+        guard let artboard = workspace.resolvedArtboard else {
             issue(.error, "missing-artboard", "Unknown canonical artboard \(workspace.artboardID).", "artboardID")
             return ThumbleSkinSourceValidationReport(issues: issues)
+        }
+
+        if !workspace.controlSemantics.isEmpty {
+            if workspace.schemaVersion < 3 || !workspace.usesCSSAuthoring {
+                issue(.error, "semantics-requires-css-schema-3", "Control semantics require CSS source schema 3.", "controlSemantics")
+            }
+            let controlIDs = Set(artboard.variants.flatMap { $0.controls.map(\.id) })
+            if workspace.controlSemantics.count > 256 {
+                issue(.error, "semantic-budget", "At most 256 semantic records are permitted.", "controlSemantics")
+            }
+            checkUnique(workspace.controlSemantics.map(\.controlID), path: "controlSemantics", issues: &issues)
+            for (index, semantic) in workspace.controlSemantics.enumerated() {
+                let path = "controlSemantics[\(index)]"
+                if !controlIDs.contains(semantic.controlID) {
+                    issue(.error, "unknown-semantic-control", "Semantic metadata must target an exact artboard control ID.", path)
+                }
+                let tags = [semantic.action, semantic.purpose].compactMap { $0 } + semantic.groups
+                if semantic.groups.count > 16 || Set(semantic.groups).count != semantic.groups.count || tags.contains(where: { tag in
+                    tag.isEmpty || tag.utf8.count > 64 || tag.unicodeScalars.contains { scalar in
+                        !(scalar.value >= 97 && scalar.value <= 122 || scalar.value >= 48 && scalar.value <= 57 || [45, 46, 95].contains(scalar.value))
+                    }
+                }) {
+                    issue(.error, "invalid-semantic-tag", "Tags require 1...64 lowercase ASCII letters, digits, dots, underscores or hyphens; at most 16 distinct groups.", path)
+                }
+            }
         }
 
         checkUnique(workspace.palette.map(\.id), path: "palette", issues: &issues)
@@ -178,6 +236,21 @@ public enum ThumbleSkinSourceValidator {
             issue(.warning, "incomplete-color-matrix", "Directory-quality skins should intentionally support light and dark.", "colorSchemes")
         }
         for (index, asset) in workspace.sourceAssets.enumerated() {
+            if let anchor = asset.anchor {
+                if workspace.schemaVersion < 3 || !workspace.usesCSSAuthoring || asset.purpose != .canvasArtwork
+                    || asset.id != GamepadStyleToken.normalizedIdentifier(asset.id) {
+                    issue(.error, "invalid-artwork-anchor", "Anchored artwork requires CSS schema 3, canvas_artwork purpose and an exact safe asset ID.", "sourceAssets[\(index)].anchor")
+                }
+                if asset.orientation.map({ !workspace.orientations.contains($0) }) ?? false
+                    || asset.colorScheme.map({ !workspace.colorSchemes.contains($0) }) ?? false {
+                    issue(.error, "inactive-artwork-anchor", "Anchored artwork must select an authored orientation and color scheme.", "sourceAssets[\(index)].anchor")
+                }
+                for variant in artboard.variants where workspace.orientations.contains(variant.orientation)
+                    && (asset.orientation == nil || asset.orientation == variant.orientation) {
+                    do { _ = try anchor.resolvedFrame(in: variant, semantics: workspace.controlSemantics) }
+                    catch { issue(.error, "invalid-artwork-anchor", error.localizedDescription, "sourceAssets[\(index)].anchor") }
+                }
+            }
             if !ThumbleSkinPackageCodec.isSafePackagePath(asset.path, requiredRoot: "sources") {
                 issue(.error, "unsafe-source-path", "Source assets must stay below sources/.", "sourceAssets[\(index)].path")
             }
@@ -190,6 +263,9 @@ public enum ThumbleSkinSourceValidator {
         }
         if workspace.previews.isEmpty {
             issue(.warning, "missing-preview-matrix", "Declare native preview requests for visual review.", "previews")
+        }
+        if workspace.sourceAssets.filter({ $0.anchor != nil }).count > 8 {
+            issue(.error, "artwork-anchor-budget", "At most eight anchored artwork assets are permitted.", "sourceAssets")
         }
         return ThumbleSkinSourceValidationReport(issues: issues)
     }
@@ -279,7 +355,7 @@ public enum ThumbleSkinCompiler {
         guard FileManager.default.fileExists(atPath: source.path) else {
             throw ThumbleSkinCompilerError.missingSource(source)
         }
-        let workspace = try JSONDecoder().decode(
+        let workspace = try JSONDecoder().decodeUnique(
             ThumbleSkinWorkspace.self,
             from: Data(contentsOf: source, options: [.mappedIfSafe])
         )
@@ -490,7 +566,7 @@ public enum ThumbleSkinCompiler {
                 sha256: canvas.data.thumbleSHA256
             )
         }
-        let artboard = ThumbleSkinArtboardCatalog.resolve(workspace.artboardID)
+        let artboard = workspace.resolvedArtboard
         let compatibleRoles = (artboard?.expectedRoles ?? [])
             .filter { ![GamepadVisualRole.system, .decoration, .custom].contains($0) }
         return ThumbleSkinPackage(
@@ -531,16 +607,30 @@ public enum ThumbleSkinCompiler {
         sourceRoot: URL,
         fileManager: FileManager
     ) throws -> ThumbleSkinPackage {
-        let variants = css.variants.map { lowered in
-            ThumbleSkinVariant(
+        let artboard = workspace.resolvedArtboard
+        let captured = workspace.capturedArtboards.isEmpty ? nil : artboard.map { ThumbleSkinCapturedGeometry(variants: $0.variants) }
+        let variants = try css.variants.map { lowered in
+            var appearance = lowered.appearance
+            if let orientation = lowered.orientation, let scheme = lowered.colorScheme,
+               let variant = artboard?.variants.first(where: { $0.orientation == orientation }) {
+                var layers = appearance.artworkLayers ?? []
+                for source in workspace.sourceAssets {
+                    guard let anchor = source.anchor,
+                          source.orientation == nil || source.orientation == orientation,
+                          source.colorScheme == nil || source.colorScheme == scheme else { continue }
+                    layers.append(ThumbleSkinArtworkLayer(id: source.id, plane: anchor.plane,
+                        frame: try anchor.resolvedFrame(in: variant, semantics: workspace.controlSemantics),
+                        fillStyle: .image(GamepadImageFill(assetID: source.id)), opacity: anchor.opacity, zIndex: anchor.zIndex))
+                }
+                appearance.artworkLayers = layers
+            } else if workspace.sourceAssets.contains(where: { $0.anchor != nil }) {
+                throw ThumbleSkinAnchorError.invalid("Anchored artwork requires an exact orientation and color scheme variant.")
+            }
+            return ThumbleSkinVariant(
                 id: "css-\(lowered.orientation?.rawValue ?? "any")-\(lowered.colorScheme?.rawValue ?? "any")",
-                orientation: lowered.orientation,
-                colorScheme: lowered.colorScheme,
-                appearance: lowered.appearance
-            )
+                orientation: lowered.orientation, colorScheme: lowered.colorScheme, appearance: appearance)
         }
         let skin = ThumbleSkin(base: css.base, variants: variants)
-        let artboard = ThumbleSkinArtboardCatalog.resolve(workspace.artboardID)
         let compatibleRoles = (artboard?.expectedRoles ?? [])
             .filter { ![GamepadVisualRole.system, .decoration, .custom].contains($0) }
 
@@ -551,12 +641,14 @@ public enum ThumbleSkinCompiler {
             sourceRoot: sourceRoot,
             fileManager: fileManager
         )
+        let anchoredAssetIDs = Set(workspace.sourceAssets.filter { $0.anchor != nil }.map(\.id))
         let assetDescriptors = compiledAssets.map { asset in
             ThumbleSkinResourceDescriptor(
                 id: asset.id,
                 path: "assets/\(asset.id).png",
                 contentType: "image/png",
-                role: asset.purpose == .canvasArtwork ? .background : (asset.purpose == .texture ? .texture : .icon),
+                role: anchoredAssetIDs.contains(asset.id) ? .texture
+                    : (asset.purpose == .canvasArtwork ? .background : (asset.purpose == .texture ? .texture : .icon)),
                 byteCount: asset.data.count,
                 sha256: asset.data.thumbleSHA256
             )
@@ -574,15 +666,16 @@ public enum ThumbleSkinCompiler {
                 assets: assetDescriptors,
                 previews: [],
                 compatibility: ThumbleSkinCompatibility(
-                    mode: .templateAligned,
-                    templates: artboard.map {
+                    mode: captured == nil ? .templateAligned : .capturedController,
+                    templates: captured == nil ? (artboard.map {
                         [ThumbleSkinTemplateRequirement(templateID: $0.templateID, minimumRevision: $0.revision, maximumRevision: $0.revision)]
-                    } ?? [],
+                    } ?? []) : [],
                     orientations: workspace.orientations,
-                    minimumAspectRatio: 0.4,
-                    maximumAspectRatio: 2.5,
+                    minimumAspectRatio: captured == nil ? 0.4 : nil,
+                    maximumAspectRatio: captured == nil ? 2.5 : nil,
                     requiredRoles: compatibleRoles,
-                    requiredFeatures: []
+                    requiredFeatures: workspace.sourceAssets.contains(where: { $0.anchor != nil }) ? [.artworkLayers] : [],
+                    capturedGeometry: captured
                 )
             ),
             skin: skin,

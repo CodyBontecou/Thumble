@@ -42,9 +42,10 @@ public struct ThumbleKeypadConfigurationExport: Codable, Equatable, Sendable {
     }
 
     public init(from decoder: Decoder) throws {
+        try KeypadElementSchema.requireUUIDBindingKeys(from: decoder)
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        schema = try container.decodeIfPresent(String.self, forKey: .schema) ?? Self.schemaIdentifier
-        version = try container.decodeIfPresent(Int.self, forKey: .version) ?? Self.currentVersion
+        schema = try container.decode(String.self, forKey: .schema)
+        version = try container.decode(Int.self, forKey: .version)
 
         guard schema == Self.schemaIdentifier else {
             throw DecodingError.dataCorruptedError(
@@ -53,7 +54,7 @@ public struct ThumbleKeypadConfigurationExport: Codable, Equatable, Sendable {
                 debugDescription: "Unsupported Thumble keypad configuration schema: \(schema)"
             )
         }
-        guard version >= 1 && version <= Self.currentVersion else {
+        guard version == Self.currentVersion else {
             throw DecodingError.dataCorruptedError(
                 forKey: .version,
                 in: container,
@@ -72,14 +73,51 @@ public struct ThumbleKeypadConfigurationExport: Codable, Equatable, Sendable {
         }
         let decodedActiveID = try container.decodeIfPresent(UUID.self, forKey: .activeProfileID)
         let decodedDefaultID = try container.decodeIfPresent(UUID.self, forKey: .defaultProfileID)
-        let state = GamepadConfigurationProfilePersistence.normalizedState(
-            profiles: decodedProfiles,
-            activeProfileID: decodedActiveID,
-            defaultProfileID: decodedDefaultID
-        )
-        profiles = state.profiles
-        activeProfileID = state.activeProfileID
-        defaultProfileID = state.defaultProfileID
+        try Self.validateProfileReferences(profiles: decodedProfiles, activeProfileID: decodedActiveID, defaultProfileID: decodedDefaultID)
+        try KeypadElementSchema.requireProfileBindingOwners(from: decoder, profiles: decodedProfiles)
+        profiles = decodedProfiles.map(\.normalized)
+        activeProfileID = decodedActiveID
+        defaultProfileID = decodedDefaultID
+    }
+
+    /// Shared native/CLI byte boundary. A failed envelope or artifact is never
+    /// reinterpreted as a raw profile just because its unknown fields disappear.
+    static func validateImportBoundary(_ data: Data) throws -> Bool {
+        guard data.count <= PortableProfileArtifact.maximumBytes else { throw PortableProfileArtifactError.tooLarge }
+        try JSONDecoder.validateUniqueKeys(in: data)
+        guard let shape = try? JSONDecoder().decode(ImportShape.self, from: data) else { return false }
+        if shape.hasArtifact { _ = try PortableProfileArtifact(validating: data) }
+        if shape.hasEnvelope { _ = try JSONDecoder().decode(Self.self, from: data) }
+        return shape.hasEnvelope
+    }
+
+    static func validateProfileReferences(
+        profiles: [GamepadConfigurationProfile],
+        activeProfileID: UUID?,
+        defaultProfileID: UUID?
+    ) throws {
+        let ids = Set(profiles.map(\.id))
+        guard !profiles.isEmpty, ids.count == profiles.count,
+              let activeProfileID, ids.contains(activeProfileID),
+              defaultProfileID.map(ids.contains) ?? true else {
+            throw DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "A configuration must contain unique profile UUIDs and declared active/default references; incompatible references are not repaired."))
+        }
+    }
+
+    private struct ImportShape: Decodable {
+        let hasArtifact: Bool
+        let hasEnvelope: Bool
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: Fields.self)
+            hasArtifact = container.contains(.artifactVersion) || container.contains(.contentHash) || container.contains(.catalogRevision)
+            hasEnvelope = !container.allKeys.isEmpty
+        }
+
+        private enum Fields: String, CodingKey {
+            case schema, version, profiles, activeProfileID, defaultProfileID
+            case profileKeyBindings, profileOutputBindings, artifactVersion, contentHash, catalogRevision
+        }
     }
 
     func normalizedProfileState(
@@ -142,7 +180,8 @@ public struct ThumbleKeypadConfigurationJSONDocument: FileDocument {
         guard let data = configuration.file.regularFileContents else {
             throw CocoaError(.fileReadCorruptFile)
         }
-        export = try JSONDecoder().decode(ThumbleKeypadConfigurationExport.self, from: data)
+        _ = try ThumbleKeypadConfigurationExport.validateImportBoundary(data)
+        export = try JSONDecoder().decodeUnique(ThumbleKeypadConfigurationExport.self, from: data)
     }
 
     public func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {

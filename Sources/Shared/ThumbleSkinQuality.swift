@@ -6,25 +6,43 @@ public enum ThumbleSkinQualitySeverity: String, Codable, Equatable, Sendable {
     case warning
 }
 
+/// Exact native targets when the evaluator has them; immutable storage keeps issues small.
+public final class ThumbleSkinQualityTarget: Codable, Equatable, Sendable {
+    public let controlID: String?
+    public let layerID: String?
+    public let styleID: String?
+    public let appearanceID: String?
+    public init(controlID: String? = nil, layerID: String? = nil, styleID: String? = nil, appearanceID: String? = nil) {
+        self.controlID = controlID; self.layerID = layerID; self.styleID = styleID; self.appearanceID = appearanceID
+    }
+    public static func == (lhs: ThumbleSkinQualityTarget, rhs: ThumbleSkinQualityTarget) -> Bool {
+        lhs.controlID == rhs.controlID && lhs.layerID == rhs.layerID && lhs.styleID == rhs.styleID && lhs.appearanceID == rhs.appearanceID
+    }
+}
+
 public struct ThumbleSkinQualityIssue: Codable, Equatable, Identifiable, Sendable {
     public var severity: ThumbleSkinQualitySeverity
     public var code: String
     public var message: String
     public var path: String?
+    public var target: ThumbleSkinQualityTarget? = nil
 
     public init(
         severity: ThumbleSkinQualitySeverity,
         code: String,
         message: String,
-        path: String? = nil
+        path: String? = nil, target: ThumbleSkinQualityTarget? = nil
     ) {
         self.severity = severity
         self.code = code
         self.message = message
-        self.path = path
+        self.path = path; self.target = target
     }
 
-    public var id: String { "\(severity.rawValue):\(code):\(path ?? ""):\(message)" }
+    public var id: String {
+        let base = "\(severity.rawValue):\(code):\(path ?? ""):\(message)"
+        return target.map { base + ":" + ($0.controlID ?? "") + ":" + ($0.layerID ?? "") + ":" + ($0.styleID ?? "") + ":" + ($0.appearanceID ?? "") } ?? base
+    }
 }
 
 public struct ThumbleSkinQualityReport: Codable, Equatable, Sendable {
@@ -52,12 +70,19 @@ public enum ThumbleSkinQualityEvaluator {
     public static func evaluate(
         package: ThumbleSkinPackage,
         workspace: ThumbleSkinWorkspace? = nil,
-        artboardID requestedArtboardID: String? = nil
+        artboardID requestedArtboardID: String? = nil,
+        capturedProfile: GamepadConfigurationProfile? = nil
     ) -> ThumbleSkinQualityReport {
         var issues: [ThumbleSkinQualityIssue] = []
         func add(_ severity: ThumbleSkinQualitySeverity, _ code: String, _ message: String, path: String? = nil) {
             guard !issues.contains(where: { $0.code == code && $0.path == path && $0.message == message }) else { return }
             issues.append(.init(severity: severity, code: code, message: message, path: path))
+        }
+
+        func targeted(_ severity: ThumbleSkinQualitySeverity, _ code: String, _ message: String,
+                      _ path: String?, _ target: ThumbleSkinQualityTarget) {
+            guard !issues.contains(where: { $0.code == code && $0.path == path && $0.message == message && $0.target == target }) else { return }
+            issues.append(.init(severity: severity, code: code, message: message, path: path, target: target))
         }
 
         let packageReport = ThumbleSkinPackageValidator.validate(package)
@@ -82,7 +107,7 @@ public enum ThumbleSkinQualityEvaluator {
             }
             evaluateAuthorship(workspace, usesCSS: workspace.usesCSSAuthoring, add: add)
             if workspace.usesCSSAuthoring {
-                evaluatePackageContrast(package, add: add)
+                evaluatePackageContrast(package, artboard: workspace.resolvedArtboard, targeted: targeted)
             } else {
                 evaluateSourceContrast(workspace, add: add)
             }
@@ -91,9 +116,10 @@ public enum ThumbleSkinQualityEvaluator {
         let artboardID = requestedArtboardID
             ?? workspace?.artboardID
             ?? package.manifest.compatibility?.templates.first?.templateID
-        let artboard = artboardID.flatMap(ThumbleSkinArtboardCatalog.resolve)
+        let artboard = workspace?.resolvedArtboard.flatMap { $0.id == artboardID ? $0 : nil }
+            ?? artboardID.flatMap(ThumbleSkinArtboardCatalog.resolve)
         if let artboard {
-            evaluateArtboard(artboard, package: package, workspace: workspace, add: add)
+            evaluateArtboard(artboard, package: package, workspace: workspace, capturedProfile: capturedProfile, add: add, targeted: targeted)
         } else if package.manifest.compatibility?.mode == .templateAligned {
             add(.error, "unknown-canonical-artboard", "Template-aligned artwork must resolve to a committed canonical artboard.", path: "manifest.compatibility.templates")
         } else {
@@ -101,9 +127,9 @@ public enum ThumbleSkinQualityEvaluator {
         }
 
         evaluateVariantMatrix(package, artboard: artboard, workspace: workspace, add: add)
-        evaluateControlStates(package, add: add)
+        evaluateControlStates(package, add: add, targeted: targeted)
         evaluateAssetDimensionsAndBudgets(package, artboard: artboard, add: add)
-        evaluateLayerSafety(package, add: add)
+        evaluateLayerSafety(package, add: add, targeted: targeted)
 
         let ordered = issues.sorted {
             if $0.severity != $1.severity { return $0.severity == .error }
@@ -148,43 +174,103 @@ public enum ThumbleSkinQualityEvaluator {
         }
     }
 
-    /// CSS skins evaluate contrast against their compiled style tokens.
+    /// Representative native legend backgrounds, not a certification of composited pixels.
+    /// A joystick legend is centered over its puck; a shared token still checks button faces.
     private static func evaluatePackageContrast(
         _ package: ThumbleSkinPackage,
-        add: (ThumbleSkinQualitySeverity, String, String, String?) -> Void
+        artboard: ThumbleSkinArtboard?,
+        targeted: (ThumbleSkinQualitySeverity, String, String, String?, ThumbleSkinQualityTarget) -> Void
     ) {
         guard let skin = package.skin else { return }
-        var scopes: [(label: String, styles: [GamepadStyleToken])] = [("base", skin.base.styleLibrary.styles)]
+        var scopes: [(id: String?, label: String, appearance: ThumbleSkinAppearance)] = [(nil, "base", skin.base)]
         for variant in skin.variants {
             let label = [variant.orientation?.rawValue, variant.colorScheme?.rawValue]
-                .compactMap { $0 }
-                .joined(separator: "-")
-            scopes.append((label.isEmpty ? variant.id : label, variant.appearance.styleLibrary.styles))
+                .compactMap { $0 }.joined(separator: "-")
+            scopes.append((variant.id, label.isEmpty ? variant.id : label, variant.appearance))
         }
-        for (scope, styles) in scopes {
-            for style in styles {
-                let normal = style.visualStyle.normal
-                guard let foreground = normal.foregroundColor,
-                      let fill = normal.fillStyle?.representativeColor
-                else { continue }
-                let ratio = contrastRatio(foreground, fill)
-                if ratio < 3 {
-                    add(
-                        .error,
-                        "low-style-contrast",
-                        "Style \(style.id) (\(scope)) has \(String(format: "%.2f", ratio)):1 legend contrast; require at least 3:1.",
-                        "skin.json.styleLibrary.\(style.id)"
-                    )
-                } else if ratio < 4.5 {
-                    add(
-                        .warning,
-                        "moderate-style-contrast",
-                        "Style \(style.id) (\(scope)) has \(String(format: "%.2f", ratio)):1 legend contrast; 4.5:1 is preferred for small legends.",
-                        "skin.json.styleLibrary.\(style.id)"
-                    )
+        let controls = artboard?.variants.flatMap(\.controls) ?? []
+        for (appearanceID, scope, appearance) in scopes {
+            for style in appearance.styleLibrary.styles {
+                let target = ThumbleSkinQualityTarget(styleID: style.id, appearanceID: appearanceID)
+                var usesPuck = false
+                var usesFace = appearance.defaultControl?.styleID == style.id
+                var legacyPuckColor: GamepadRGBAColor?
+                for rule in appearance.roleRules where rule.appearance.styleID == style.id {
+                    let kinds = Set(controls.filter { $0.visualRole == rule.role }.map(\.kind))
+                    if kinds.contains(.joystick) || (kinds.isEmpty && rule.role == .joystick) {
+                        usesPuck = true
+                        legacyPuckColor = rule.appearance.joystickKnobColor ?? legacyPuckColor
+                    }
+                    if kinds.contains(where: { $0 != .joystick }) || (kinds.isEmpty && rule.role != .joystick) {
+                        usesFace = true
+                    }
+                }
+                for rule in appearance.buttonRules where rule.appearance.styleID == style.id {
+                    let kinds = Set(controls.filter { $0.inputID == rule.button }.map(\.kind))
+                    if kinds.contains(.joystick) {
+                        usesPuck = true
+                        legacyPuckColor = rule.appearance.joystickKnobColor ?? legacyPuckColor
+                    }
+                    if kinds.isEmpty || kinds.contains(where: { $0 != .joystick }) { usesFace = true }
+                }
+                if !usesPuck && !usesFace { usesFace = true }
+                for state in GamepadControlPresentationState.allCases {
+                    let paint = style.visualStyle.stateStyle(for: state)
+                    guard let foreground = paint.foregroundColor, let fillStyle = paint.fillStyle else { continue }
+                    var backgrounds: [(String, GamepadRGBAColor)] = []
+                    let puck = paint.content?.pointing?.joystickKnobFillColor ?? legacyPuckColor.map { $0.adjustedForPress(state.usesPressedFallback) }
+                    if usesPuck, let puck { backgrounds.append(("joystick puck", puck)) }
+                    // Unauthored native puck paint depends on profile/accent context. Keep the
+                    // existing face estimate in that case; exact native pixel review remains required.
+                    if usesFace || (usesPuck && puck == nil) {
+                        if case .image(let image) = fillStyle {
+                            let data = image.data ?? image.assetID.flatMap { package.assets[$0] }
+                            if let data, let sampled = rasterFillRepresentativeColor(data) {
+                                backgrounds.append(("face", sampled))
+                            } else {
+                                targeted(.warning, "raster-contrast-unverified", "Style \(style.id) (\(scope), \(state.rawValue)) requires native pixel contrast review; no opaque raster face could be sampled.", "skin.json.styleLibrary.\(style.id)", target)
+                            }
+                        } else { backgrounds.append(("face", fillStyle.representativeColor)) }
+                    }
+                    for (surface, background) in backgrounds {
+                        let ratio = contrastRatio(foreground, background)
+                        if ratio < 3 {
+                            targeted(.error, "low-style-contrast", "Style \(style.id) (\(scope), \(state.rawValue)) has \(String(format: "%.2f", ratio)):1 legend contrast against its \(surface); require at least 3:1.", "skin.json.styleLibrary.\(style.id)", target)
+                        } else if ratio < 4.5 {
+                            targeted(.warning, "moderate-style-contrast", "Style \(style.id) (\(scope), \(state.rawValue)) has \(String(format: "%.2f", ratio)):1 legend contrast against its \(surface); 4.5:1 is preferred for small legends.", "skin.json.styleLibrary.\(style.id)", target)
+                        }
+                    }
                 }
             }
         }
+    }
+
+    /// Representative face estimate only. Independent native review still checks legends
+    /// over artwork; transparent corners and small registration marks are excluded here.
+    static func rasterFillRepresentativeColor(_ data: Data) -> GamepadRGBAColor? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceThumbnailMaxPixelSize: 8,
+                kCGImageSourceCreateThumbnailWithTransform: true
+              ] as CFDictionary) else { return nil }
+        var pixels = [UInt8](repeating: 0, count: 8 * 8 * 4)
+        let rendered = pixels.withUnsafeMutableBytes { bytes -> Bool in
+            guard let context = CGContext(data: bytes.baseAddress, width: 8, height: 8,
+                bitsPerComponent: 8, bytesPerRow: 32, space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return false }
+            context.draw(image, in: CGRect(x: 0, y: 0, width: 8, height: 8))
+            return true
+        }
+        guard rendered else { return nil }
+        var counts: [Int: Int] = [:]
+        for index in stride(from: 0, to: pixels.count, by: 4) where pixels[index + 3] == 255 {
+            let key = Int(pixels[index]) << 16 | Int(pixels[index + 1]) << 8 | Int(pixels[index + 2])
+            counts[key, default: 0] += 1
+        }
+        guard let dominant = counts.keys.sorted().max(by: { counts[$0]! < counts[$1]! }) else { return nil }
+        return GamepadRGBAColor(red: CGFloat((dominant >> 16) & 255) / 255,
+            green: CGFloat((dominant >> 8) & 255) / 255, blue: CGFloat(dominant & 255) / 255)
     }
 
     private static func evaluateSourceContrast(
@@ -224,7 +310,9 @@ public enum ThumbleSkinQualityEvaluator {
         _ artboard: ThumbleSkinArtboard,
         package: ThumbleSkinPackage,
         workspace: ThumbleSkinWorkspace?,
-        add: (ThumbleSkinQualitySeverity, String, String, String?) -> Void
+        capturedProfile: GamepadConfigurationProfile?,
+        add: (ThumbleSkinQualitySeverity, String, String, String?) -> Void,
+        targeted: (ThumbleSkinQualitySeverity, String, String, String?, ThumbleSkinQualityTarget) -> Void
     ) {
         let requiredRoles = Set(artboard.expectedRoles.filter { ![.system, .decoration, .custom].contains($0) })
         if let workspace {
@@ -241,7 +329,7 @@ public enum ThumbleSkinQualityEvaluator {
                 guard let frame = component.frame?.normalized else { continue }
                 let aligns = artboard.variants.contains { variant in
                     variant.controls.contains { control in
-                        let semanticMatch = component.role.map { $0 == control.visualRole } ?? (component.button == control.mappedButton)
+                        let semanticMatch = component.role.map { $0 == control.visualRole } ?? (component.button == control.inputID)
                         guard semanticMatch else { return false }
                         let centerX = control.frame.x + control.frame.width / 2
                         let centerY = control.frame.y + control.frame.height / 2
@@ -255,7 +343,7 @@ public enum ThumbleSkinQualityEvaluator {
             }
         }
 
-        guard let profile = ThumbleSkinArtboardCatalog.profile(for: artboard.id) else {
+        guard let profile = capturedProfile ?? ThumbleSkinArtboardCatalog.profile(for: artboard.id) else {
             add(.error, "missing-artboard-profile", "Canonical artboard \(artboard.id) has no deterministic profile.", nil)
             return
         }
@@ -282,7 +370,7 @@ public enum ThumbleSkinQualityEvaluator {
                 let centerY = control.frame.y + control.frame.height / 2
                 if centerX < safeRect.x || centerX > safeRect.x + safeRect.width
                     || centerY < safeRect.y || centerY > safeRect.y + safeRect.height {
-                    add(.error, "control-outside-safe-area", "\(control.label) falls outside the canonical safe area in \(variant.orientation.rawValue).", "artboard.\(variant.id)")
+                    targeted(.error, "control-outside-safe-area", "\(control.label) falls outside the canonical safe area in \(variant.orientation.rawValue).", "artboard.\(variant.id)", .init(controlID: control.id))
                 }
             }
         }
@@ -336,36 +424,37 @@ public enum ThumbleSkinQualityEvaluator {
 
     private static func evaluateControlStates(
         _ package: ThumbleSkinPackage,
-        add: (ThumbleSkinQualitySeverity, String, String, String?) -> Void
+        add: (ThumbleSkinQualitySeverity, String, String, String?) -> Void,
+        targeted: (ThumbleSkinQualitySeverity, String, String, String?, ThumbleSkinQualityTarget) -> Void
     ) {
         guard let skin = package.skin else { return }
-        let appearances = [("base", skin.base)] + skin.variants.map { ($0.id, $0.appearance) }
-        var styles: [(id: String, visualStyle: GamepadControlVisualStyle)] = []
+        let appearances: [(String?, ThumbleSkinAppearance)] = [(nil, skin.base)] + skin.variants.map { (Optional($0.id), $0.appearance) }
+        var styles: [(id: String, visualStyle: GamepadControlVisualStyle, target: ThumbleSkinQualityTarget)] = []
         for (appearanceID, appearance) in appearances {
             for style in appearance.styleLibrary.styles {
-                styles.append(("\(appearanceID).\(style.id)", style.visualStyle))
+                styles.append(("\(appearanceID ?? "base").\(style.id)", style.visualStyle, .init(styleID: style.id, appearanceID: appearanceID)))
             }
             let direct = [appearance.defaultControl].compactMap { $0 }
                 + appearance.roleRules.map(\.appearance)
                 + appearance.buttonRules.map(\.appearance)
             for (index, control) in direct.enumerated() {
                 if let visualStyle = control.visualStyle {
-                    styles.append(("\(appearanceID).direct-\(index)", visualStyle))
+                    styles.append(("\(appearanceID ?? "base").direct-\(index)", visualStyle, .init(appearanceID: appearanceID)))
                 }
             }
         }
         if styles.isEmpty {
             add(.error, "missing-control-materials", "Skin has no authored native control materials.", "skin.json")
         }
-        for (id, style) in styles.sorted(by: { $0.id < $1.id }) {
-            if style.pressed == nil { add(.error, "missing-pressed-state", "Style \(id) has no pressed state.", "skin.json.styleLibrary.\(id)") }
-            if style.active == nil { add(.error, "missing-active-state", "Style \(id) has no active state.", "skin.json.styleLibrary.\(id)") }
-            if style.disabled == nil { add(.error, "missing-disabled-state", "Style \(id) has no disabled state.", "skin.json.styleLibrary.\(id)") }
+        for (id, style, target) in styles.sorted(by: { $0.id < $1.id }) {
+            if style.pressed == nil { targeted(.error, "missing-pressed-state", "Style \(id) has no pressed state.", "skin.json.styleLibrary.\(id)", target) }
+            if style.active == nil { targeted(.error, "missing-active-state", "Style \(id) has no active state.", "skin.json.styleLibrary.\(id)", target) }
+            if style.disabled == nil { targeted(.error, "missing-disabled-state", "Style \(id) has no disabled state.", "skin.json.styleLibrary.\(id)", target) }
             if let pressed = style.pressed, pressed == style.normal {
-                add(.error, "indistinguishable-pressed-state", "Style \(id)'s pressed state is indistinguishable from normal.", "skin.json.styleLibrary.\(id)")
+                targeted(.error, "indistinguishable-pressed-state", "Style \(id)'s pressed state is indistinguishable from normal.", "skin.json.styleLibrary.\(id)", target)
             }
             if let disabled = style.disabled, disabled == style.normal {
-                add(.warning, "indistinguishable-disabled-state", "Style \(id)'s disabled state is indistinguishable from normal.", "skin.json.styleLibrary.\(id)")
+                targeted(.warning, "indistinguishable-disabled-state", "Style \(id)'s disabled state is indistinguishable from normal.", "skin.json.styleLibrary.\(id)", target)
             }
         }
     }
@@ -424,7 +513,8 @@ public enum ThumbleSkinQualityEvaluator {
 
     private static func evaluateLayerSafety(
         _ package: ThumbleSkinPackage,
-        add: (ThumbleSkinQualitySeverity, String, String, String?) -> Void
+        add: (ThumbleSkinQualitySeverity, String, String, String?) -> Void,
+        targeted: (ThumbleSkinQualitySeverity, String, String, String?, ThumbleSkinQualityTarget) -> Void
     ) {
         guard let skin = package.skin else { return }
         let appearances = [skin.base] + skin.variants.map(\.appearance)
@@ -434,10 +524,10 @@ public enum ThumbleSkinQualityEvaluator {
         }
         for layer in layers {
             if layer.fillStyle == nil {
-                add(.warning, "empty-artwork-layer", "Artwork layer \(layer.id) has no fill.", "skin.json.artworkLayers.\(layer.id)")
+                targeted(.warning, "empty-artwork-layer", "Artwork layer \(layer.id) has no fill.", "skin.json.artworkLayers.\(layer.id)", .init(layerID: layer.id))
             }
             if layer.plane == .overlay && layer.opacity > 0.92 && layer.frame?.normalized == ThumbleNormalizedRect(x: 0, y: 0, width: 1, height: 1) {
-                add(.warning, "opaque-full-overlay", "Full-canvas overlay \(layer.id) may obscure native control states.", "skin.json.artworkLayers.\(layer.id)")
+                targeted(.warning, "opaque-full-overlay", "Full-canvas overlay \(layer.id) may obscure native control states.", "skin.json.artworkLayers.\(layer.id)", .init(layerID: layer.id))
             }
         }
     }

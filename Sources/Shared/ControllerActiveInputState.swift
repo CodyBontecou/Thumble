@@ -1,25 +1,26 @@
 import Foundation
 
 public struct ControllerActiveInputPress: Equatable, Sendable {
-    public var button: GameButton
+    public var button: KeypadElementID
     public var pressIdentifier: UInt64?
 
-    public init(button: GameButton, pressIdentifier: UInt64?) {
+    public init(button: KeypadElementID, pressIdentifier: UInt64?) {
         self.button = button
         self.pressIdentifier = pressIdentifier
     }
 }
 
 public struct ControllerActiveInputState: Equatable, Sendable {
-    private var identifiedPressesByButton: [GameButton: Set<UInt64>] = [:]
-    private var anonymousPressCountsByButton: [GameButton: Int] = [:]
+    private var identifiedPressesByButton: [KeypadElementID: Set<UInt64>] = [:]
+    private var anonymousPressCountsByButton: [KeypadElementID: Int] = [:]
 
     public init() {}
 
     public var activePresses: [ControllerActiveInputPress] {
         var presses: [ControllerActiveInputPress] = []
 
-        for button in GameButton.allCases {
+        let inputs = Set(identifiedPressesByButton.keys).union(anonymousPressCountsByButton.keys)
+        for button in inputs.sorted(by: { $0.rawValue < $1.rawValue }) {
             for identifier in (identifiedPressesByButton[button] ?? []).sorted() {
                 presses.append(.init(button: button, pressIdentifier: identifier))
             }
@@ -38,7 +39,7 @@ public struct ControllerActiveInputState: Equatable, Sendable {
     }
 
     public mutating func record(
-        button: GameButton,
+        button: KeypadElementID,
         state: ButtonPressState,
         pressIdentifier: UInt64?
     ) {

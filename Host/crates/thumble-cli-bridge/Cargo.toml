@@ -12,6 +12,7 @@ path = "src/main.rs"
 libc = "=0.2.175"
 serde_json.workspace = true
 thumble-host = { path = "../thumble-host" }
+thumble-protocol = { path = "../thumble-protocol" }
 tokio = { version = "=1.47.1", features = ["rt-multi-thread"] }
 uuid = { version = "=1.18.1", features = ["v4"] }
 

@@ -6,11 +6,14 @@
 //! them.
 
 mod message;
+mod strict_json;
 mod wire;
+
+pub use strict_json::{decode_unique_json, validate_unique_json};
 
 pub use message::{
     ButtonPressState, ControllerCapability, ControllerMessage, ControllerMessageType,
-    ControllerPointerButton, ControllerPointerEventKind, GameButton,
+    ControllerPointerButton, ControllerPointerEventKind, KeypadElementID,
     GamepadProfileOrientationPreference, KeypadElementInputPart, VirtualGamepadStick,
     VirtualGamepadTrigger,
 };

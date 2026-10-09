@@ -19,6 +19,9 @@ struct ThumbleMacApp: App {
                         NotificationCenter.default.post(name: .thumbleCommitPendingShortcutRecordings, object: nil)
                         server.prepareForTermination()
                     }
+            } else if let failure = startup.failure {
+                ContentUnavailableView("Configuration Unavailable", systemImage: "exclamationmark.triangle", description: Text(failure))
+                    .frame(minWidth: 840, minHeight: 620)
             } else {
                 RustAuthorityActiveView()
                     .frame(minWidth: 840, minHeight: 620)
@@ -31,13 +34,21 @@ struct ThumbleMacApp: App {
 
 private final class MacServerStartup: ObservableObject {
     let server: MacControllerServer?
+    let failure: String?
 
     init() {
-        guard let lease = try? MacLegacyAuthorityLease.acquire() else {
+        do {
+            let lease = try MacLegacyAuthorityLease.acquire()
+            server = try MacControllerServer(legacyAuthorityLease: lease)
+            failure = nil
+        } catch MacLegacyAuthorityLease.LeaseError.activeRustControlSocket,
+                MacLegacyAuthorityLease.LeaseError.authorityHeld {
             server = nil
-            return
+            failure = nil
+        } catch {
+            server = nil
+            failure = error.localizedDescription
         }
-        server = MacControllerServer(legacyAuthorityLease: lease)
     }
 }
 

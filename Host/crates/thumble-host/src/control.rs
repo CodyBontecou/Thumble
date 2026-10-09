@@ -471,7 +471,7 @@ async fn handle_connection(
             }
             Err(_) => return Err("control request read timed out".to_owned()),
         };
-        let response = match serde_json::from_slice::<ControlRequest>(&line.bytes) {
+        let response = match thumble_protocol::decode_unique_json::<ControlRequest>(&line.bytes) {
             Ok(request) => {
                 let permit = match tokio::time::timeout(
                     CONTROL_ADMISSION_TIMEOUT,

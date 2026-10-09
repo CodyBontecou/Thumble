@@ -31,6 +31,162 @@ final class GamepadSharedOperationsSmokeTests: XCTestCase {
         return false
     }
 
+    func testElementOnlyGeometryEditsKeepDeclaredUUIDsAndOwnedOutputs() throws {
+        let first = UUID(uuidString: "BB6FB706-B969-4DB2-9E2B-03A21F3C9786")!
+        let second = UUID(uuidString: "D3FA995B-2C9E-46EF-8D1E-AB1F6AEEFA84")!
+        let json = """
+        {"elements":[
+          {"id":"\(first)","label":"Same","kind":"button","layout":{"centerX":0.2,"centerY":0.2},"output":{"keyboard":{"keyCode":49,"modifiersRawValue":0},"gamepadButtons":[]}},
+          {"id":"\(second)","label":"Same","kind":"button","layout":{"centerX":0.8,"centerY":0.8},"output":{"keyboard":{"keyCode":48,"modifiersRawValue":0},"gamepadButtons":[]}}
+        ]}
+        """
+        let source = try JSONDecoder().decode(GamepadCustomization.self, from: Data(json.utf8))
+        XCTAssertTrue(source.customButtons.isEmpty)
+        var moved = source
+        moved.setPosition(CGPoint(x: 0.3, y: 0.4), for: .custom(first))
+        moved = moved.normalized
+        XCTAssertEqual(moved.elements.first(where: { $0.id == first })?.layout.centerX, 0.3)
+        XCTAssertEqual(moved.elements.first(where: { $0.id == first })?.layout.centerY, 0.4)
+        var aligned = source
+        XCTAssertTrue(try aligned.alignControls([.custom(first), .custom(second)], alignment: .verticalCenters, in: CGSize(width: 874, height: 402)))
+        let layouts = aligned.elements.map(\.layout)
+        XCTAssertEqual(layouts[0].centerY, layouts[1].centerY)
+        for customization in [moved, aligned] {
+            XCTAssertEqual(Set(customization.elements.map(\.id)), [first, second])
+            for original in source.elements {
+                XCTAssertEqual(customization.elements.first(where: { $0.id == original.id })?.output, original.output)
+            }
+        }
+    }
+
+    func testStyleDeletionNeverInstallsUndeclaredStarterControls() {
+        var customization = GamepadCustomization.blankCanvas
+        var layout = GamepadButtonCustomization.defaultValue
+        layout.styleID = "removed"
+        customization.buttonCustomizations[.preset(5)] = layout
+        customization.deleteReusableStyle(id: "removed")
+        XCTAssertTrue(customization.elements.isEmpty)
+    }
+
+    func testStarterAppearanceUUIDMirrorsNeverRenderAsAdditionalControls() {
+        let input = KeypadElementID.preset(5)
+        var customization = GamepadCustomization.blankCanvas
+        customization.buttonCustomizations.removeAll()
+        customization.elements = [KeypadElement(id: input.uuid, label: "Owned", layout: .defaultValue)]
+        customization.customButtons = [GamepadCustomButton(id: input.uuid, label: "Owned", layout: .defaultValue)]
+        let controls = customization.normalized.resolvedControls(in: CGSize(width: 874, height: 402)).filter { $0.elementID == input.uuid }
+        XCTAssertEqual(controls.count, 1)
+        XCTAssertEqual(controls.first?.id, .builtin(input))
+    }
+
+    func testLifecycleCapacityUsesDeclarationsIncludingBuiltinAndColdSpecializedControls() throws {
+        var dense = GamepadCustomization.blankCanvas
+        dense.elements = [KeypadElement(id: KeypadElementID.preset(5).uuid, label: "Same", layout: .defaultValue)]
+        dense.elements += (1..<128).map { ordinal in
+            KeypadElement(id: UUID(uuidString: String(format: "407FAE83-287E-4DA2-934F-%012X", ordinal))!, label: "Same", layout: .defaultValue)
+        }
+        let originalIDs = dense.elements.map(\.id)
+        XCTAssertThrowsError(try dense.duplicateControls([.builtin(.preset(5))]))
+        XCTAssertEqual(dense.elements.map(\.id), originalIDs)
+        XCTAssertThrowsError(try dense.addStandaloneCustomControl(GamepadCustomButton(label: "Too many", layout: .defaultValue)))
+        XCTAssertEqual(dense.elements.map(\.id), originalIDs)
+
+        var cold = GamepadCustomization.blankCanvas
+        let trackpadID = UUID(uuidString: "60571208-0300-4210-A92F-1CC91F0F8043")!
+        cold.elements = [KeypadElement(id: trackpadID, label: "Same", kind: .trackpad, layout: .defaultValue)]
+        XCTAssertTrue(cold.customButtons.isEmpty)
+        XCTAssertThrowsError(try cold.addStandaloneCustomControl(GamepadCustomButton(label: "Second", layout: .defaultValue, controlKind: .trackpad)))
+        XCTAssertEqual(cold.elements.map(\.id), [trackpadID])
+    }
+
+    func testDirectAuthoringCountsDeclaredControlsAndNeverReusesUUIDs() throws {
+        typealias AddControl = (inout GamepadCustomization, UUID) -> Void
+        let authors: [(GamepadCustomControlKind, AddControl)] = [
+            (.button, { $0.addCustomButton(id: $1) }),
+            (.joystick, { $0.addJoystick(id: $1) }),
+            (.trigger, { $0.addTrigger(id: $1) }),
+            (.trackpad, { $0.addTrackpad(id: $1) }),
+            (.text, { $0.addText(id: $1) }),
+            (.decoration, { $0.addDecoration(id: $1) })
+        ]
+        let freshID = UUID(uuidString: "5FDD8C01-A9C7-4A86-A52E-105B606FA1F8")!
+        var dense = GamepadCustomization.blankCanvas
+        dense.elements = (0..<128).map { ordinal in
+            KeypadElement(id: UUID(uuidString: String(format: "5861D929-21DB-48AD-931D-%012X", ordinal))!, label: "Same", layout: .defaultValue)
+        }
+        XCTAssertTrue(dense.customButtons.isEmpty)
+        for (kind, author) in authors {
+            var candidate = dense
+            author(&candidate, freshID)
+            XCTAssertEqual(candidate, dense, kind.rawValue)
+        }
+        var defaults = dense
+        defaults.installDefaultControls()
+        XCTAssertEqual(defaults, dense)
+        defaults.setButtonCustomization(.defaultValue, for: .preset(5))
+        XCTAssertEqual(defaults, dense)
+        let normalizedDense = dense.normalized
+        var repaired = normalizedDense
+        XCTAssertFalse(repaired.applyLayoutRepair(.showDefaultControls).didChange)
+        XCTAssertEqual(repaired, normalizedDense)
+
+        for (kind, limit) in [(GamepadCustomControlKind.joystick, 2), (.trigger, 2), (.trackpad, 1)] {
+            var cold = GamepadCustomization.blankCanvas
+            cold.elements = dense.elements.prefix(limit).map { element in
+                var element = element
+                element.kind = kind
+                return element
+            }
+            let author = try XCTUnwrap(authors.first(where: { $0.0 == kind })?.1)
+            var candidate = cold
+            author(&candidate, freshID)
+            XCTAssertEqual(candidate, cold, kind.rawValue)
+        }
+
+        var owned = GamepadCustomization.blankCanvas
+        owned.elements = [KeypadElement(
+            id: freshID, label: "Owned", layout: .defaultValue,
+            output: KeypadElementOutputBinding(keyboard: KeypadKeyboardBinding(keyCode: 49, modifiersRawValue: 8), gamepadButtons: [.south]),
+            defaultOutput: KeypadElementOutputBinding(keyboard: KeypadKeyboardBinding(keyCode: 48, modifiersRawValue: 0), gamepadButtons: [.east])
+        )]
+        for (kind, author) in authors {
+            var candidate = owned
+            author(&candidate, freshID)
+            XCTAssertEqual(candidate, owned, kind.rawValue)
+        }
+
+        // The same appearance mirror and declaration count once, not twice.
+        var almostFull = dense
+        almostFull.elements.removeLast()
+        almostFull.customButtons = [GamepadCustomButton(id: almostFull.elements[0].id, label: "Same", layout: .defaultValue)]
+        almostFull.addCustomButton(id: freshID)
+        XCTAssertEqual(almostFull.elements.count, 128)
+        XCTAssertNotNil(almostFull.elements.first(where: { $0.id == freshID }))
+        XCTAssertNoThrow(try JSONDecoder().decode(GamepadCustomization.self, from: JSONEncoder().encode(almostFull)))
+    }
+
+    func testNonButtonStarterUUIDsStayCustomInDesignOrderAndDuplication() throws {
+        let sourceID = KeypadElementID.preset(5).uuid
+        let siblingID = UUID(uuidString: "035BB3C9-50F7-41A7-A688-767241AC45A9")!
+        let copyID = UUID(uuidString: "CB9B11BE-7149-43F7-BAA1-EBB44D491697")!
+        for kind in GamepadCustomControlKind.allCases where kind != .button {
+            var customization = GamepadCustomization.blankCanvas
+            customization.elements = [
+                KeypadElement(id: sourceID, label: "Same", kind: kind, layout: .defaultValue),
+                KeypadElement(id: siblingID, label: "Same", layout: .defaultValue)
+            ]
+            customization = customization.normalized
+            XCTAssertTrue(customization.allControlIdentitiesForDesign.contains(.custom(sourceID)), kind.rawValue)
+            XCTAssertFalse(customization.allControlIdentitiesForDesign.contains(.builtin(.preset(5))), kind.rawValue)
+            if kind == .trackpad { continue } // The one-trackpad capacity bound is intentional.
+            _ = try customization.duplicateControls([.custom(sourceID)], newElementIDs: [copyID])
+            let order = customization.orderedControlIdentitiesForDesign
+            let sourceIndex = try XCTUnwrap(order.firstIndex(of: .custom(sourceID)), kind.rawValue)
+            XCTAssertEqual(order[sourceIndex + 1], .custom(copyID), kind.rawValue)
+            XCTAssertEqual(customization.elements.first(where: { $0.id == copyID })?.kind, kind)
+        }
+    }
+
     func testOptionArrowNudgeRoutesWhileTextFieldHasFocus() {
         let expectedDirections: [(UInt16, GamepadEditorNudgeDirection)] = [
             (123, .left),
@@ -159,7 +315,7 @@ final class GamepadSharedOperationsSmokeTests: XCTestCase {
     func testStableControlIdentityParsesEveryExistingIDShape() {
         let customID = UUID(uuidString: "00000000-0000-0000-0000-00000000CAFE")!
         let identities: [GamepadControlIdentity] = [
-            .builtin(.jump),
+            .builtin(.preset(5)),
             .custom(customID),
             .system(.topBarActivation),
             .controlBarItem(.settings)
@@ -168,20 +324,21 @@ final class GamepadSharedOperationsSmokeTests: XCTestCase {
         for identity in identities {
             XCTAssertEqual(GamepadControlIdentity(stableID: identity.id), identity)
         }
-        XCTAssertEqual(GamepadControlIdentity(stableID: "jump"), .builtin(.jump))
+        XCTAssertNil(GamepadControlIdentity(stableID: "jump"))
+        XCTAssertEqual(GamepadControlIdentity(stableID: KeypadElementID.preset(5).rawValue), .builtin(.preset(5)))
         XCTAssertEqual(GamepadControlIdentity(stableID: customID.uuidString), .custom(customID))
         XCTAssertNil(GamepadControlIdentity(stableID: "custom.not-a-uuid"))
     }
 
     func testDuplicateBuiltInCreatesEquivalentCustomControlWithClonedOutput() throws {
         var customization = GamepadCustomization.defaultValue.normalized
-        var jumpLayout = customization.buttonCustomization(for: .jump)
+        var jumpLayout = customization.buttonCustomization(for: .preset(5))
         jumpLayout.centerX = 0.72
         jumpLayout.centerY = 0.66
         jumpLayout.fillColor = GamepadRGBAColor(hexString: "#112233")
-        customization.setButtonCustomization(jumpLayout, for: .jump)
+        customization.setButtonCustomization(jumpLayout, for: .preset(5))
 
-        let sourceID = try XCTUnwrap(customization.elementID(for: .builtin(.jump)))
+        let sourceID = try XCTUnwrap(customization.elementID(for: .builtin(.preset(5))))
         let sourceIndex = try XCTUnwrap(customization.elements.firstIndex(where: { $0.id == sourceID }))
         let primary = KeypadElementOutputBinding(
             keyboard: KeypadKeyboardBinding(keyCode: 49),
@@ -192,17 +349,18 @@ final class GamepadSharedOperationsSmokeTests: XCTestCase {
         customization.elements[sourceIndex].setOutputBinding(alternate, for: .joystickUp)
 
         let result = try customization.duplicateControls(
-            [.builtin(.jump)],
+            [.builtin(.preset(5))],
             normalizedOffset: CGSize(width: 0.04, height: -0.03),
             canvasSize: CGSize(width: 874, height: 402)
         )
-        let duplicateIdentity = try XCTUnwrap(result.identityMap[.builtin(.jump)])
+        let duplicateIdentity = try XCTUnwrap(result.identityMap[.builtin(.preset(5))])
         guard case .custom(let duplicateID) = duplicateIdentity else {
             return XCTFail("built-in duplicate should be custom")
         }
         let duplicate = try XCTUnwrap(customization.customButtons.first(where: { $0.id == duplicateID }))
-        XCTAssertEqual(duplicate.mappedButton, .jump)
-        XCTAssertEqual(duplicate.label, customization.visualLabel(for: .jump))
+        XCTAssertEqual(duplicate.inputID, KeypadElementID(duplicateID))
+        XCTAssertNotEqual(duplicate.inputID, .preset(5))
+        XCTAssertEqual(duplicate.label, customization.visualLabel(for: .preset(5)))
         XCTAssertEqual(try XCTUnwrap(duplicate.layout.centerX), CGFloat(0.76), accuracy: 0.001)
         XCTAssertEqual(try XCTUnwrap(duplicate.layout.centerY), CGFloat(0.63), accuracy: 0.001)
         XCTAssertEqual(duplicate.layout.fillColor, GamepadRGBAColor(hexString: "#112233")?.normalized)
@@ -250,7 +408,7 @@ final class GamepadSharedOperationsSmokeTests: XCTestCase {
                 visualStyle: GamepadControlVisualStyle(normal: GamepadControlStateStyle(opacity: 0.8))
             )
         ])
-        landscape.addCustomButton(id: UUID(uuidString: "00000000-0000-0000-0000-00000000B001")!, mappedTo: .custom1)
+        landscape.addCustomButton(id: UUID(uuidString: "00000000-0000-0000-0000-00000000B001")!)
         landscape.customButtons[0].layout.centerX = 0.8
         landscape.customButtons[0].layout.centerY = 0.25
         landscape.deviceCanvas = GamepadDeviceCanvas(frameID: "iphone-17-pro-landscape")
@@ -308,7 +466,6 @@ final class GamepadSharedOperationsSmokeTests: XCTestCase {
         customization.customButtons = zip(ids, [0.2, 0.45, 0.8]).map { id, x in
             GamepadCustomButton(
                 id: id,
-                mappedButton: .custom1,
                 label: "Key",
                 layout: GamepadButtonCustomization(centerX: x, centerY: 0.2 + x / 2, shape: .rectangle)
             )
@@ -332,8 +489,8 @@ final class GamepadSharedOperationsSmokeTests: XCTestCase {
         let smallID = UUID(uuidString: "00000000-0000-0000-0000-00000000E001")!
         let lockedID = UUID(uuidString: "00000000-0000-0000-0000-00000000E002")!
         var customization = GamepadCustomization.blankCanvas
-        customization.addCustomButton(id: smallID, mappedTo: .custom1)
-        customization.addCustomButton(id: lockedID, mappedTo: .custom2)
+        customization.addCustomButton(id: smallID)
+        customization.addCustomButton(id: lockedID)
         customization.customButtons[0].layout.widthScale = 0.2
         customization.customButtons[0].layout.heightScale = 0.2
         customization.customButtons[1].layout.widthScale = 0.2
@@ -362,7 +519,7 @@ final class GamepadSharedOperationsSmokeTests: XCTestCase {
     func testEdgeRepairMovesControlToComfortableInset() throws {
         let id = UUID(uuidString: "00000000-0000-0000-0000-00000000E003")!
         var customization = GamepadCustomization.blankCanvas
-        customization.addCustomButton(id: id, mappedTo: .custom1)
+        customization.addCustomButton(id: id)
         customization.customButtons[0].layout.centerX = 0
         customization.customButtons[0].layout.centerY = 0
         let canvas = CGSize(width: 600, height: 300)
@@ -386,8 +543,8 @@ final class GamepadSharedOperationsSmokeTests: XCTestCase {
         let firstID = UUID(uuidString: "00000000-0000-0000-0000-00000000E004")!
         let secondID = UUID(uuidString: "00000000-0000-0000-0000-00000000E005")!
         var customization = GamepadCustomization.blankCanvas
-        customization.addCustomButton(id: firstID, mappedTo: .custom1)
-        customization.addCustomButton(id: secondID, mappedTo: .custom2)
+        customization.addCustomButton(id: firstID)
+        customization.addCustomButton(id: secondID)
         customization.customButtons[0].layout.centerX = 0.5
         customization.customButtons[0].layout.centerY = 0.5
         customization.customButtons[1].layout.centerX = 0.5
@@ -413,8 +570,8 @@ final class GamepadSharedOperationsSmokeTests: XCTestCase {
         let unlockedID = UUID(uuidString: "00000000-0000-0000-0000-00000000E006")!
         let lockedID = UUID(uuidString: "00000000-0000-0000-0000-00000000E007")!
         var customization = GamepadCustomization.blankCanvas
-        customization.addCustomButton(id: unlockedID, mappedTo: .custom1)
-        customization.addCustomButton(id: lockedID, mappedTo: .custom2)
+        customization.addCustomButton(id: unlockedID)
+        customization.addCustomButton(id: lockedID)
         customization.customButtons[0].layout.centerX = 0.5
         customization.customButtons[0].layout.centerY = 0.5
         customization.customButtons[1].layout.centerX = 0.5
@@ -499,8 +656,8 @@ final class GamepadSharedOperationsSmokeTests: XCTestCase {
         let secondID = UUID(uuidString: "00000000-0000-0000-0000-00000000D002")!
         let groupID = UUID(uuidString: "00000000-0000-0000-0000-00000000D100")!
         var customization = GamepadCustomization.blankCanvas
-        customization.addCustomButton(id: firstID, mappedTo: .custom1)
-        customization.addCustomButton(id: secondID, mappedTo: .custom2)
+        customization.addCustomButton(id: firstID)
+        customization.addCustomButton(id: secondID)
         customization = customization.normalized
         let elementIndex = try XCTUnwrap(customization.elements.firstIndex(where: { $0.id == firstID }))
         customization.elements[elementIndex].setOutputBinding(

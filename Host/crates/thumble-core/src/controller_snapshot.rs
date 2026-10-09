@@ -124,8 +124,6 @@ pub struct ControllerElementSnapshot {
     pub label: String,
     pub kind: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub mapped_button: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub visual_role: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub accent_style: Option<String>,
@@ -909,13 +907,8 @@ fn snapshot_primary_role(element: &ControllerElementSnapshot) -> Option<bool> {
     {
         return None;
     }
-    match element.mapped_button.as_deref() {
-        Some("up" | "down" | "left" | "right") => Some(true),
-        Some(
-            "jump" | "attack" | "dash" | "focus" | "custom1" | "custom2" | "custom3" | "custom4"
-            | "custom5" | "custom6" | "custom7" | "custom8",
-        ) => Some(false),
-        _ => None,
+    match thumble_protocol::KeypadElementID::parse(&element.id).and_then(|id| id.starter_index()) {
+        Some(1..=4) => Some(true), Some(5..=8) => Some(false), _ => None,
     }
 }
 
@@ -1279,21 +1272,15 @@ fn resolved_elements(
         {
             continue;
         }
-        let built_in = element
-            .get("builtInButton")
-            .and_then(Value::as_str)
-            .and_then(allowed_button);
-        let mapped_button = built_in.or_else(|| {
-            element
-                .get("legacySlot")
-                .and_then(Value::as_str)
-                .and_then(allowed_button)
+        // Starter UUIDs are appearance anchors only for button declarations.
+        let appearance_anchor = element.get("id").and_then(Value::as_str).filter(|id| {
+            kind == "button" && thumble_protocol::KeypadElementID::parse(id).and_then(|id| id.starter_index()).is_some()
         });
         let shape = allowed_shape(layout_field("shape").and_then(Value::as_str))
-            .unwrap_or_else(|| default_shape(kind, mapped_button));
+            .unwrap_or_else(|| default_shape(kind, appearance_anchor));
         let (base_width, base_height) = base_size(
             kind,
-            mapped_button.unwrap_or("jump"),
+            appearance_anchor.unwrap_or(""),
             canvas.width,
             canvas.height,
             control_scale,
@@ -1302,7 +1289,7 @@ fn resolved_elements(
             .clamp(1.0, canvas.width);
         let height = (base_height * bounded_number(layout_field("heightScale"), 1.0, 0.001, 12.0))
             .clamp(1.0, canvas.height);
-        let default_center = built_in.map(|button| {
+        let default_center = appearance_anchor.map(|button| {
             default_normalized_center(
                 button,
                 layout_mode,
@@ -1321,7 +1308,7 @@ fn resolved_elements(
         let label = redacted_bounded_string(
             element.get("label").and_then(Value::as_str).unwrap_or(""),
             MAXIMUM_LABEL_CHARACTERS,
-            default_label(kind, mapped_button),
+            default_label(kind, appearance_anchor),
             redact,
         );
         let z_index = layout_field("zIndex")
@@ -1366,7 +1353,6 @@ fn resolved_elements(
                 id,
                 label,
                 kind: kind.to_owned(),
-                mapped_button: mapped_button.map(str::to_owned),
                 visual_role: element
                     .get("visualRole")
                     .and_then(Value::as_str)
@@ -1712,15 +1698,18 @@ fn allowed_visual_role(value: &str) -> bool {
 }
 
 fn sanitize_joystick_mapping(value: Option<&Value>) -> (Option<Value>, bool) {
-    sanitize_enum_object(
-        value,
-        &[
-            ("up", ALLOWED_BUTTONS),
-            ("down", ALLOWED_BUTTONS),
-            ("left", ALLOWED_BUTTONS),
-            ("right", ALLOWED_BUTTONS),
-        ],
-    )
+    let Some(value) = value else { return (None, false); };
+    let Some(object) = value.as_object() else { return (None, true); };
+    if object.keys().any(|key| !["up", "down", "left", "right"].contains(&key.as_str())) { return (None, true); }
+    let mut safe = serde_json::Map::new();
+    let mut omitted = false;
+    for direction in ["up", "down", "left", "right"] {
+        let Some(binding) = object.get(direction) else { return (None, true); };
+        let Ok(output) = serde_json::from_value::<crate::OutputBinding>(binding.clone()) else { return (None, true); };
+        omitted |= binding.as_object().is_some_and(|fields| fields.keys().any(|key| !["keyboard", "gamepadButtons"].contains(&key.as_str())));
+        safe.insert(direction.to_owned(), output.element_value());
+    }
+    (Some(Value::Object(safe)), omitted)
 }
 
 fn sanitize_joystick_settings(value: Option<&Value>) -> (Option<Value>, bool) {
@@ -1858,11 +1847,6 @@ fn sanitize_trackpad_settings(value: Option<&Value>) -> (Option<Value>, bool) {
         omitted,
     )
 }
-
-const ALLOWED_BUTTONS: &[&str] = &[
-    "up", "down", "left", "right", "jump", "attack", "dash", "focus", "map", "pause", "custom1",
-    "custom2", "custom3", "custom4", "custom5", "custom6", "custom7", "custom8",
-];
 
 fn sanitize_enum_object(
     value: Option<&Value>,
@@ -2122,87 +2106,26 @@ fn resolved_layers(
         style_id: layer_style_id(top_bar_layout),
     });
 
-    for (index, button) in [
-        "up", "down", "left", "right", "jump", "attack", "dash", "focus", "map", "pause",
-    ]
-    .into_iter()
-    .enumerate()
-    {
-        let element = elements
-            .iter()
-            .take(MAXIMUM_CONTROLLER_SOURCE_ELEMENTS)
-            .find_map(|value| {
-                let object = value.as_object()?;
-                (object.get("builtInButton").and_then(Value::as_str) == Some(button))
-                    .then_some(object)
-            });
-        let layout = saved_button_layout(customization, button).or_else(|| {
-            element
-                .and_then(|element| element.get("layout"))
-                .and_then(Value::as_object)
-        });
-        let fallback_id = format!("00000000-0000-0000-0000-{:012}", index + 101);
-        let target_id = element
-            .and_then(|element| element.get("id"))
-            .and_then(Value::as_str)
-            .filter(|id| valid_snapshot_identifier(id))
-            .unwrap_or(&fallback_id)
-            .to_owned();
-        let label = element
-            .and_then(|element| element.get("label"))
-            .and_then(Value::as_str)
-            .unwrap_or_else(|| default_label("button", Some(button)));
+    for element in elements.iter().take(MAXIMUM_CONTROLLER_SOURCE_ELEMENTS) {
+        let Some(element) = element.as_object() else { continue; };
+        let Some(id) = element.get("id").and_then(Value::as_str).and_then(thumble_protocol::KeypadElementID::parse) else { continue; };
+        let id_text = id.to_string();
+        let kind = allowed_kind(element.get("kind").and_then(Value::as_str)).unwrap_or("button");
+        let starter = kind == "button" && id.starter_index().is_some();
+        let prefix = if starter { "builtin" } else { "custom" };
+        let layout = element.get("layout").and_then(Value::as_object);
         sources.push(LayerSource {
-            key: format!("builtin:{button}"),
-            target_id,
-            stable_id: format!("builtin.{button}"),
-            label: label.to_owned(),
-            kind: "button".to_owned(),
-            z_index: layer_z_index(layout),
-            is_hidden: layer_bool(layout, "isHidden"),
-            is_location_locked: layer_bool(layout, "isLocationLocked"),
-            style_id: layer_style_id(layout),
-        });
-    }
-
-    for button in customization
-        .get("customButtons")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .take(MAXIMUM_CONTROLLER_SOURCE_ELEMENTS)
-    {
-        let Some(button) = button.as_object() else {
-            continue;
-        };
-        let Some(id) = button
-            .get("id")
-            .and_then(Value::as_str)
-            .filter(|id| valid_snapshot_identifier(id))
-        else {
-            continue;
-        };
-        let layout = button.get("layout").and_then(Value::as_object);
-        let kind =
-            allowed_kind(button.get("controlKind").and_then(Value::as_str)).unwrap_or("button");
-        sources.push(LayerSource {
-            key: format!("custom:{}", id.to_ascii_lowercase()),
-            target_id: id.to_owned(),
-            stable_id: format!("custom.{id}"),
-            label: button
-                .get("label")
-                .and_then(Value::as_str)
-                .unwrap_or_else(|| default_label(kind, None))
-                .to_owned(),
+            key: format!("{prefix}:{}", id_text.to_ascii_lowercase()),
+            target_id: id_text.clone(),
+            stable_id: format!("{prefix}.{id_text}"),
+            label: element.get("label").and_then(Value::as_str).unwrap_or("Button").to_owned(),
             kind: kind.to_owned(),
             z_index: layer_z_index(layout),
             is_hidden: layer_bool(layout, "isHidden"),
             is_location_locked: layer_bool(layout, "isLocationLocked"),
             style_id: layer_style_id(layout),
         });
-        if sources.len() >= MAXIMUM_CONTROLLER_SNAPSHOT_LAYERS {
-            break;
-        }
+        if sources.len() >= MAXIMUM_CONTROLLER_SNAPSHOT_LAYERS { break; }
     }
 
     let source_by_key = sources
@@ -2890,7 +2813,7 @@ fn device_dimensions(frame_id: &str) -> Option<(String, f64, f64)> {
 
 fn base_size(
     kind: &str,
-    mapped_button: &str,
+    appearance_anchor: &str,
     canvas_width: f64,
     canvas_height: f64,
     scale: f64,
@@ -2916,10 +2839,10 @@ fn base_size(
                 .clamp(92.0 * scale, 150.0 * scale),
         ),
         "text" => {
-            let (width, height) = button_base_size("jump", shortest, landscape, scale);
+            let (width, height) = button_base_size("", shortest, landscape, scale);
             (width, (height * 0.58).max(24.0))
         }
-        _ => button_base_size(mapped_button, shortest, landscape, scale),
+        _ => button_base_size(appearance_anchor, shortest, landscape, scale),
     }
 }
 
@@ -2927,8 +2850,8 @@ fn button_base_size(button: &str, shortest: f64, landscape: bool, scale: f64) ->
     let side =
         (shortest * if landscape { 0.24 } else { 0.20 } * scale).clamp(50.0 * scale, 86.0 * scale);
     match button {
-        "map" => (side * 1.48, side * 0.72),
-        "pause" => (side * 1.66, side * 0.72),
+        "00000000-0000-0000-0000-000000000109" => (side * 1.48, side * 0.72),
+        "00000000-0000-0000-0000-00000000010A" => (side * 1.66, side * 0.72),
         _ => (side, side),
     }
 }
@@ -2957,16 +2880,16 @@ fn default_normalized_center(
         };
         let y = 0.56;
         match button {
-            "up" => (dpad_x, y - y_step),
-            "down" => (dpad_x, y + y_step),
-            "left" => (dpad_x - x_step, y),
-            "right" => (dpad_x + x_step, y),
-            "focus" => (action_x - x_step * 0.55, y - y_step * 0.55),
-            "dash" => (action_x + x_step * 0.55, y - y_step * 0.55),
-            "attack" => (action_x - x_step * 0.55, y + y_step * 0.55),
-            "jump" => (action_x + x_step * 0.55, y + y_step * 0.55),
-            "map" => (0.43, y),
-            "pause" => (0.57, y),
+            "00000000-0000-0000-0000-000000000101" => (dpad_x, y - y_step),
+            "00000000-0000-0000-0000-000000000102" => (dpad_x, y + y_step),
+            "00000000-0000-0000-0000-000000000103" => (dpad_x - x_step, y),
+            "00000000-0000-0000-0000-000000000104" => (dpad_x + x_step, y),
+            "00000000-0000-0000-0000-000000000108" => (action_x - x_step * 0.55, y - y_step * 0.55),
+            "00000000-0000-0000-0000-000000000107" => (action_x + x_step * 0.55, y - y_step * 0.55),
+            "00000000-0000-0000-0000-000000000106" => (action_x - x_step * 0.55, y + y_step * 0.55),
+            "00000000-0000-0000-0000-000000000105" => (action_x + x_step * 0.55, y + y_step * 0.55),
+            "00000000-0000-0000-0000-000000000109" => (0.43, y),
+            "00000000-0000-0000-0000-00000000010A" => (0.57, y),
             _ => (0.5, y),
         }
     } else {
@@ -2983,28 +2906,28 @@ fn default_normalized_center(
         let portrait_x_step = ((width * 1.16) / canvas_width).clamp(0.13, 0.22);
         let portrait_y_step = ((height * 1.10) / canvas_height).clamp(0.08, 0.12);
         match button {
-            "up" => (0.5, dpad_y - portrait_y_step),
-            "down" => (0.5, dpad_y + portrait_y_step),
-            "left" => (0.5 - portrait_x_step, dpad_y),
-            "right" => (0.5 + portrait_x_step, dpad_y),
-            "focus" => (
+            "00000000-0000-0000-0000-000000000101" => (0.5, dpad_y - portrait_y_step),
+            "00000000-0000-0000-0000-000000000102" => (0.5, dpad_y + portrait_y_step),
+            "00000000-0000-0000-0000-000000000103" => (0.5 - portrait_x_step, dpad_y),
+            "00000000-0000-0000-0000-000000000104" => (0.5 + portrait_x_step, dpad_y),
+            "00000000-0000-0000-0000-000000000108" => (
                 0.5 - portrait_x_step * 0.55,
                 action_y - portrait_y_step * 0.75,
             ),
-            "dash" => (
+            "00000000-0000-0000-0000-000000000107" => (
                 0.5 + portrait_x_step * 0.55,
                 action_y - portrait_y_step * 0.75,
             ),
-            "attack" => (
+            "00000000-0000-0000-0000-000000000106" => (
                 0.5 - portrait_x_step * 0.55,
                 action_y + portrait_y_step * 0.75,
             ),
-            "jump" => (
+            "00000000-0000-0000-0000-000000000105" => (
                 0.5 + portrait_x_step * 0.55,
                 action_y + portrait_y_step * 0.75,
             ),
-            "map" => (0.36, 0.51),
-            "pause" => (0.64, 0.51),
+            "00000000-0000-0000-0000-000000000109" => (0.36, 0.51),
+            "00000000-0000-0000-0000-00000000010A" => (0.64, 0.51),
             _ => (0.5, 0.51),
         }
     }
@@ -3051,21 +2974,14 @@ fn allowed_shape(value: Option<&str>) -> Option<&'static str> {
     }
 }
 
-fn allowed_button(value: &str) -> Option<&str> {
-    match value {
-        "up" | "down" | "left" | "right" | "jump" | "attack" | "dash" | "focus" | "map"
-        | "pause" | "custom1" | "custom2" | "custom3" | "custom4" | "custom5" | "custom6"
-        | "custom7" | "custom8" => Some(value),
-        _ => None,
-    }
-}
+fn allowed_button(value: &str) -> Option<&str> { thumble_protocol::KeypadElementID::parse(value).map(|_| value) }
 
-fn default_shape(kind: &str, mapped_button: Option<&str>) -> &'static str {
+fn default_shape(kind: &str, appearance_anchor: Option<&str>) -> &'static str {
     match kind {
         "joystick" => "circle",
         "trigger" => "capsule",
         "trackpad" | "button" | "decoration" => {
-            if matches!(mapped_button, Some("map" | "pause")) {
+            if matches!(appearance_anchor, Some("00000000-0000-0000-0000-000000000109" | "00000000-0000-0000-0000-00000000010A")) {
                 "capsule"
             } else {
                 "rounded_rectangle"
@@ -3076,18 +2992,18 @@ fn default_shape(kind: &str, mapped_button: Option<&str>) -> &'static str {
     }
 }
 
-fn default_label(kind: &str, mapped_button: Option<&str>) -> &'static str {
-    match mapped_button {
-        Some("up") => "Up",
-        Some("down") => "Down",
-        Some("left") => "Left",
-        Some("right") => "Right",
-        Some("jump") => "Jump",
-        Some("attack") => "Attack",
-        Some("dash") => "Dash",
-        Some("focus") => "Focus",
-        Some("map") => "Map",
-        Some("pause") => "Pause",
+fn default_label(kind: &str, appearance_anchor: Option<&str>) -> &'static str {
+    match appearance_anchor {
+        Some("00000000-0000-0000-0000-000000000101") => "Up",
+        Some("00000000-0000-0000-0000-000000000102") => "Down",
+        Some("00000000-0000-0000-0000-000000000103") => "Left",
+        Some("00000000-0000-0000-0000-000000000104") => "Right",
+        Some("00000000-0000-0000-0000-000000000105") => "Jump",
+        Some("00000000-0000-0000-0000-000000000106") => "Attack",
+        Some("00000000-0000-0000-0000-000000000107") => "Dash",
+        Some("00000000-0000-0000-0000-000000000108") => "Focus",
+        Some("00000000-0000-0000-0000-000000000109") => "Map",
+        Some("00000000-0000-0000-0000-00000000010A") => "Pause",
         _ => match kind {
             "joystick" => "Joystick",
             "trigger" => "Trigger",
@@ -3165,6 +3081,39 @@ mod tests {
     }
 
     #[test]
+    fn non_button_starter_uuid_does_not_supply_button_label_or_placement() {
+        let state = state_with_profile(json!({
+            "id": "00000000-0000-0000-0000-000000000201",
+            "customization": {"elements": [{
+                "id": "00000000-0000-0000-0000-00000000010A", "kind": "joystick", "label": ""
+            }]}
+        }));
+        let snapshot = state.controller_snapshot().unwrap();
+        let element = &snapshot.elements[0];
+        assert_eq!(element.label, "Joystick");
+        assert!((element.frame.x + element.frame.width / 2.0 - snapshot.canvas.width / 2.0).abs() < 1e-10);
+        assert!((element.frame.y + element.frame.height / 2.0 - snapshot.canvas.height / 2.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn non_button_starter_layer_uses_the_declared_custom_identity_and_order() {
+        let joystick = "00000000-0000-0000-0000-00000000010A";
+        let other = "81C296ED-309D-4F05-BB11-F5A2E2027801";
+        let state = state_with_profile(json!({
+            "id": "00000000-0000-0000-0000-000000000201",
+            "customization": {"elements": [
+                {"id": other, "kind": "button", "label": "Other"},
+                {"id": joystick, "kind": "joystick", "label": "Joystick"}
+            ], "designMetadata": {"layerOrder": [
+                {"kind":"custom", "id":joystick}, {"kind":"custom", "id":other}
+            ]}}
+        }));
+        let snapshot = state.controller_snapshot().unwrap();
+        assert_eq!(snapshot.layers[0].stable_id, format!("custom.{joystick}"));
+        assert_eq!(snapshot.layers[1].stable_id, format!("custom.{other}"));
+    }
+
+    #[test]
     fn minimal_profile_resolves_default_landscape_geometry_without_outputs() {
         let state = PersistentState::minimal("server").unwrap();
         let snapshot = state.controller_snapshot().unwrap();
@@ -3180,7 +3129,7 @@ mod tests {
         assert!(!snapshot.canvas.unsupported_content_omitted);
         assert_eq!(snapshot.elements.len(), 10);
         assert_eq!(snapshot.layers.len(), 11);
-        assert_eq!(snapshot.layers[0].stable_id, "builtin.up");
+        assert_eq!(snapshot.layers[0].stable_id, "builtin.00000000-0000-0000-0000-000000000101");
         assert_eq!(
             snapshot.layers[0].target_id,
             "00000000-0000-0000-0000-000000000101"
@@ -3435,7 +3384,6 @@ mod tests {
         customization["elements"][4]["layout"] = json!({"zIndex": 3, "isHidden": true});
         customization["customButtons"] = json!([{
             "id":"00000000-0000-0000-0000-000000000901",
-            "mappedButton":"custom1",
             "label":"Hidden custom",
             "controlKind":"decoration",
             "layout":{"zIndex":-2,"isHidden":true,"isLocationLocked":true}
@@ -3448,19 +3396,18 @@ mod tests {
                 "label":"Hidden custom",
                 "kind":"decoration",
                 "layout":{"zIndex":-2,"isHidden":true,"isLocationLocked":true},
-                "legacySlot":"custom1",
                 "partOutputs":[]
             }));
         customization["designMetadata"] = json!({
             "layerOrder":[
-                {"kind":"builtin","button":"jump"},
+                {"kind":"builtin","button":"00000000-0000-0000-0000-000000000105"},
                 {"kind":"custom","id":"00000000-0000-0000-0000-000000000901"}
             ],
             "groups":[{
                 "id":"00000000-0000-0000-0000-000000000902",
                 "name":"Hidden pair",
                 "children":[
-                    {"kind":"builtin","button":"jump"},
+                    {"kind":"builtin","button":"00000000-0000-0000-0000-000000000105"},
                     {"kind":"custom","id":"00000000-0000-0000-0000-000000000901"}
                 ],
                 "isLocked":true,
@@ -3483,7 +3430,7 @@ mod tests {
         let jump = snapshot
             .layers
             .iter()
-            .find(|layer| layer.stable_id == "builtin.jump")
+            .find(|layer| layer.stable_id == "builtin.00000000-0000-0000-0000-000000000105")
             .unwrap();
         assert!(jump.is_hidden);
         assert_eq!(snapshot.groups.len(), 1);
@@ -3491,7 +3438,7 @@ mod tests {
         assert_eq!(
             snapshot.groups[0].child_stable_ids,
             [
-                "builtin.jump".to_owned(),
+                "builtin.00000000-0000-0000-0000-000000000105".to_owned(),
                 "custom.00000000-0000-0000-0000-000000000901".to_owned()
             ]
         );
@@ -3508,8 +3455,9 @@ mod tests {
     fn style_snapshot_is_bounded_typed_and_omits_asset_content() {
         let secret = "private-asset-token";
         let mut customization = minimal_default_customization();
+        customization["elements"][4]["layout"]["styleID"] = json!("safe-style");
         customization["buttonCustomizations"] = json!([
-            "jump", {
+            "00000000-0000-0000-0000-000000000105", {
                 "widthScale":1,"heightScale":1,"rotationDegrees":0,"zIndex":0,
                 "shadowStrength":1,"isLocationLocked":false,"isHidden":false,
                 "styleID":"safe-style"
@@ -3614,7 +3562,7 @@ mod tests {
             snapshot
                 .layers
                 .iter()
-                .find(|layer| layer.stable_id == "builtin.jump")
+                .find(|layer| layer.stable_id == "builtin.00000000-0000-0000-0000-000000000105")
                 .unwrap()
                 .style_id
                 .as_deref(),
@@ -3634,7 +3582,7 @@ mod tests {
             .as_array_mut()
             .unwrap()
             .iter_mut()
-            .find(|element| element.get("builtInButton").and_then(Value::as_str) == Some("jump"))
+            .find(|element| element.get("id").and_then(Value::as_str) == Some("00000000-0000-0000-0000-000000000105"))
             .unwrap();
         jump["output"] = json!({
             "keyboard": {"keyCode": 13, "modifiersRawValue": 10},

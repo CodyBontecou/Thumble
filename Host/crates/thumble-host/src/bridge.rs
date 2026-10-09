@@ -1,6 +1,8 @@
 use crate::draft_operation::{ConfigurationOperation, ConfigurationOperationOutcome};
 #[path = "layout_fix.rs"]
 mod layout_fix;
+#[path = "element_operation.rs"]
+mod element_operation;
 use layout_fix::constrained_layout_fix_delta;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -115,7 +117,7 @@ impl ConfigurationBridge {
         input.push(b'\n');
         let output = self.execute(input)?;
 
-        if let Ok(failure) = serde_json::from_slice::<BridgeFailure>(&output) {
+        if let Ok(failure) = thumble_protocol::decode_unique_json::<BridgeFailure>(&output) {
             if failure.schema_version != BRIDGE_SCHEMA_VERSION
                 || !allowed_failure_code(&failure.error.code)
                 || failure.error.message.len() > 512
@@ -124,7 +126,7 @@ impl ConfigurationBridge {
             }
             return Err(ConfigurationBridgeError::Rejected(failure.error.code));
         }
-        let response: BridgeSuccess = serde_json::from_slice(&output)
+        let response: BridgeSuccess = thumble_protocol::decode_unique_json(&output)
             .map_err(|_| ConfigurationBridgeError::InvalidResponse)?;
         if response.schema_version != BRIDGE_SCHEMA_VERSION {
             return Err(ConfigurationBridgeError::InvalidResponse);
@@ -262,6 +264,13 @@ fn validate_operation_bounds(
         serde_json::to_value(operation).map_err(|_| ConfigurationBridgeError::EncodingFailed)?;
     let encoded =
         serde_json::to_vec(&value).map_err(|_| ConfigurationBridgeError::EncodingFailed)?;
+    if matches!(operation, ConfigurationOperation::DesignApply { .. }) {
+        // The typed operation validator bounds the archive and hash fields. Ordinary
+        // scalar-edit budgets cannot describe an embedded reviewed package.
+        return if encoded.len() <= MAXIMUM_BRIDGE_BYTES && operation.validate_bridge_input().is_ok() {
+            Ok(())
+        } else { Err(ConfigurationBridgeError::OperationTooLarge) };
+    }
     if encoded.len() > 64 * 1024 || !bounded_json_value(&value, 0) {
         return Err(ConfigurationBridgeError::OperationTooLarge);
     }
@@ -414,6 +423,7 @@ fn allowed_changed_path(operation: &ConfigurationOperation, path: &str) -> bool 
         | ConfigurationOperation::ControlBarReset { profile_id, .. }
         | ConfigurationOperation::ControlBarItemReset { profile_id, .. }
         | ConfigurationOperation::ControlBarItemSet { profile_id, .. }
+        | ConfigurationOperation::DesignApply { profile_id, .. }
         | ConfigurationOperation::ThemeApply { profile_id, .. }
         | ConfigurationOperation::OrientationCopy { profile_id, .. }
         | ConfigurationOperation::ElementAdd { profile_id, .. }
@@ -439,13 +449,12 @@ fn valid_operation_delta(
         return true;
     }
     match operation {
-        ConfigurationOperation::BindingSet {
-            profile_id, button, ..
-        }
-        | ConfigurationOperation::BindingClear { profile_id, button }
-        | ConfigurationOperation::BindingReset { profile_id, button } => {
+        ConfigurationOperation::BindingSet { profile_id, .. }
+        | ConfigurationOperation::BindingClear { profile_id, .. }
+        | ConfigurationOperation::BindingReset { profile_id, .. } => {
+            // Exact reconstruction validates every map entry, including required
+            // reconciliation of other controls' stale sidecars to owned outputs.
             valid_binding_output_delta(before, after, profile_id, None)
-                && target_key_binding_only_changed(before, after, profile_id, *button)
                 && exact_binding_output_delta(before, after, operation)
         }
         ConfigurationOperation::BindingResetAll { profile_id } => {
@@ -458,17 +467,14 @@ fn valid_operation_delta(
             valid_binding_output_delta(before, after, profile_id, Some(*mode))
                 && exact_binding_output_delta(before, after, operation)
         }
-        ConfigurationOperation::OutputSet {
-            profile_id, button, ..
-        }
-        | ConfigurationOperation::OutputReset { profile_id, button } => {
+        ConfigurationOperation::OutputSet { profile_id, .. }
+        | ConfigurationOperation::OutputReset { profile_id, .. } => {
             valid_binding_output_delta(
                 before,
                 after,
                 profile_id,
                 Some(crate::draft_operation::ConfigurationOutputMode::Custom),
-            ) && target_button_maps_only_changed(before, after, profile_id, *button)
-                && exact_binding_output_delta(before, after, operation)
+            ) && exact_binding_output_delta(before, after, operation)
         }
         ConfigurationOperation::OutputResetAll { profile_id } => {
             valid_binding_output_delta(
@@ -562,6 +568,7 @@ fn valid_operation_delta(
         | operation @ ConfigurationOperation::GroupBack { .. } => {
             constrained_group_operation_delta(before, after, operation)
         }
+        ConfigurationOperation::DesignApply { profile_id, layout_edits_json, .. } => design_appearance_delta(before, after, profile_id, layout_edits_json.as_deref()),
         ConfigurationOperation::CustomizationReset {
             profile_id,
             variant,
@@ -580,36 +587,13 @@ fn valid_operation_delta(
             variant,
             ..
         }
-        | ConfigurationOperation::ElementDuplicate {
-            profile_id,
-            variant,
-            ..
-        }
-        | ConfigurationOperation::ElementAlign {
-            profile_id,
-            variant,
-            ..
-        }
-        | ConfigurationOperation::ElementDistribute {
-            profile_id,
-            variant,
-            ..
-        }
-        | ConfigurationOperation::ElementNudge {
-            profile_id,
-            variant,
-            ..
-        }
-        | ConfigurationOperation::ElementDelete {
-            profile_id,
-            variant,
-            ..
-        }
-        | ConfigurationOperation::ElementReset {
-            profile_id,
-            variant,
-            ..
-        } => customization_operation_delta(before, after, profile_id, *variant),
+        => customization_operation_delta(before, after, profile_id, *variant),
+        ConfigurationOperation::ElementDuplicate { .. }
+        | ConfigurationOperation::ElementAlign { .. }
+        | ConfigurationOperation::ElementDistribute { .. }
+        | ConfigurationOperation::ElementNudge { .. }
+        | ConfigurationOperation::ElementDelete { .. }
+        | ConfigurationOperation::ElementReset { .. } => constrained_control_ownership_delta(before, after, operation),
         ConfigurationOperation::ProfileReset { profile_id } => profile_local_delta(
             before,
             after,
@@ -669,7 +653,6 @@ fn valid_operation_delta(
             *make_default,
         ),
         ConfigurationOperation::GenerationGenerate {
-            preset,
             destination,
             new_element_ids,
             select,
@@ -685,7 +668,6 @@ fn valid_operation_delta(
                 new_element_ids,
                 select: *select,
                 make_default: *make_default,
-                expected_keys: generated_key_bindings(*preset),
             },
         ),
         ConfigurationOperation::TemplateInstall {
@@ -706,11 +688,97 @@ fn valid_operation_delta(
                 new_element_ids,
                 select: *select,
                 make_default: *make_default,
-                expected_keys: template_key_bindings(*template),
             },
         ),
         _ => false,
     }
+}
+
+/// Design attachment may replace native appearance and detachable baselines, but it may
+/// not change any executable mapping, UUID-owned control, geometry or unrelated profile field.
+fn design_appearance_delta(before: &ConfigurationDocument, after: &ConfigurationDocument, profile_id: &str, layout_plan: Option<&str>) -> bool {
+    let edits = match layout_plan {
+        Some(raw) => match crate::draft_operation::decode_design_layout_plan(raw) { Ok(edits) => edits, Err(_) => return false },
+        None => Vec::new(),
+    };
+    if !profile_local_delta(before, after, profile_id, &[
+        "customization", "landscapeCustomization", "portraitCustomization", "skinReference",
+        "skinBaselineCustomization", "landscapeSkinBaselineCustomization", "portraitSkinBaselineCustomization", "updatedAt",
+    ]) { return false; }
+    let Some(index) = profile_position(before, profile_id) else { return false; };
+    let left = &before.profiles[index];
+    let right = &after.profiles[index];
+    if thumble_core::profile_owned_outputs(left) != thumble_core::profile_owned_outputs(right) { return false; }
+    let appearance_fields = [
+        "shape", "cornerRadius", "cornerRadii", "fillColor", "fillStyle", "fillOpacity", "accentStyle",
+        "borderColor", "borderWidth", "shadowStrength", "visualStyle", "styleID", "icon",
+        "lightFillStyle", "darkFillStyle", "lightFillOpacity", "darkFillOpacity",
+        "thumbFill", "lightThumbFill", "darkThumbFill", "thumbOpacity", "lightThumbOpacity", "darkThumbOpacity",
+        "joystickVisualStyle",
+    ];
+    for slot in ["customization", "landscapeCustomization", "portraitCustomization"] {
+        let a = left.get(slot).filter(|v| !v.is_null());
+        let b = right.get(slot).filter(|v| !v.is_null());
+        if a.is_none() && b.is_none() { continue; }
+        let (Some(a), Some(b)) = (a.and_then(Value::as_object), b.and_then(Value::as_object)) else { return false; };
+        let mut a_rest = a.clone();
+        let mut b_rest = b.clone();
+        for key in ["elements", "buttonCustomizations", "customButtons", "controlBarItemCustomizations",
+                    "topBarActivationRegion", "styleLibrary", "assetLibrary", "artworkLayers", "backgroundFillStyle", "backgroundColor", "updatedAt"] {
+            a_rest.remove(key); b_rest.remove(key);
+        }
+        if a_rest != b_rest { return false; }
+        let element_map = |object: &Map<String, Value>| -> Option<std::collections::BTreeMap<String, Value>> {
+            let elements = object.get("elements")?.as_array()?;
+            let mut map = std::collections::BTreeMap::new();
+            for element in elements {
+                let mut stripped = element.as_object()?.clone();
+                let id = stripped.get("id")?.as_str()?.to_ascii_lowercase();
+                if let Some(layout) = stripped.get_mut("layout").and_then(Value::as_object_mut) {
+                    for field in appearance_fields { layout.remove(field); }
+                }
+                if map.insert(id, Value::Object(stripped)).is_some() { return None; }
+            }
+            Some(map)
+        };
+        let (Some(mut a_elements), Some(b_elements)) = (element_map(a), element_map(b)) else { return false; };
+        let variant = match slot { "landscapeCustomization" => crate::draft_operation::ConfigurationVariant::Landscape,
+            "portraitCustomization" => crate::draft_operation::ConfigurationVariant::Portrait, _ => crate::draft_operation::ConfigurationVariant::Primary };
+        for edit in edits.iter().filter(|edit| edit.variant == variant && edit.control_id != crate::draft_operation::DESIGN_REVEAL_CONTROL_ID) {
+            let Some((_, id)) = edit.control_id.split_once('.') else { return false; };
+            let Some(element) = a_elements.get_mut(&id.to_ascii_lowercase()).and_then(Value::as_object_mut) else { return false; };
+            if edit.clear_visual_role { element.remove("visualRole"); }
+            if let Some(role) = edit.visual_role {
+                let Ok(value) = serde_json::to_value(role) else { return false; };
+                element.insert("visualRole".into(), value);
+            }
+            if edit.clear_presentation { element.remove("presentation"); }
+            if let Some(presentation) = &edit.presentation {
+                let Ok(value) = serde_json::to_value(presentation) else { return false; };
+                element.insert("presentation".into(), value);
+            }
+            let Some(layout) = element.get_mut("layout").and_then(Value::as_object_mut) else { return false; };
+            for (key, value) in [("centerX", edit.center_x), ("centerY", edit.center_y), ("widthScale", edit.width_scale),
+                ("heightScale", edit.height_scale), ("rotationDegrees", edit.rotation_degrees)] {
+                if let Some(value) = value { layout.insert(key.into(), serde_json::json!(value)); }
+            }
+        }
+        if !json_semantically_equal(&serde_json::json!(a_elements), &serde_json::json!(b_elements)) { return false; }
+        // Existing explicit reveal geometry remains fixed. Absent fields are native defaults
+        // and are checked by the native transform's exact resolved-geometry guard.
+        if let Some(reveal) = a.get("topBarActivationRegion").and_then(Value::as_object) {
+            for key in ["centerX", "centerY", "widthScale", "heightScale", "rotationDegrees", "hitInsets", "isHidden"] {
+                if let Some(value) = reveal.get(key) {
+                    let planned = edits.iter().find(|e| e.variant == variant && e.control_id == crate::draft_operation::DESIGN_REVEAL_CONTROL_ID)
+                        .and_then(|e| match key { "centerX" => e.center_x, "centerY" => e.center_y, "widthScale" => e.width_scale,
+                            "heightScale" => e.height_scale, "rotationDegrees" => e.rotation_degrees, _ => None });
+                    let expected = planned.map(|v| serde_json::json!(v)).unwrap_or_else(|| value.clone());
+                    if !json_semantically_equal(b.get("topBarActivationRegion").and_then(|r| r.get(key)).unwrap_or(&Value::Null), &expected) { return false; }
+                }
+            }
+        }
+    }
+    true
 }
 
 fn customization_operation_delta(
@@ -836,13 +904,12 @@ fn constrained_element_operation_delta(
 ) -> bool {
     use crate::draft_operation::{ConfigurationVariant, ElementKind};
 
-    let (profile_id, variant, element_id, changes, add_kind, add_mapped) = match operation {
+    let (profile_id, variant, element_id, changes, add_kind) = match operation {
         ConfigurationOperation::ElementAdd {
             profile_id,
             variant,
             element_id,
             kind,
-            mapped_button,
             changes,
         } => (
             profile_id.as_str(),
@@ -850,7 +917,6 @@ fn constrained_element_operation_delta(
             element_id.as_str(),
             changes.as_ref(),
             Some(*kind),
-            *mapped_button,
         ),
         ConfigurationOperation::ElementSet {
             profile_id,
@@ -863,10 +929,12 @@ fn constrained_element_operation_delta(
             element_id.as_str(),
             changes.as_ref(),
             None,
-            None,
         ),
         _ => return false,
     };
+    if (changes.is_presentation_only() || changes.is_output_only()) && add_kind.is_none() {
+        return constrained_raw_element_fields_delta(before, after, profile_id, variant, element_id, changes);
+    }
     if !customization_operation_delta(before, after, profile_id, variant) {
         return false;
     }
@@ -902,6 +970,14 @@ fn constrained_element_operation_delta(
     if !element_capacity_is_valid(after_customization) {
         return false;
     }
+    // Compare logical appearance records derived only from declared controls.
+    // Raw native overlays may omit unchanged mirrors and retain compact layouts.
+    let mut before_appearance = before_customization.clone();
+    let mut after_appearance = after_customization.clone();
+    if !materialize_declared_custom_mirrors(&mut before_appearance)
+        || !materialize_declared_custom_mirrors(&mut after_appearance) { return false; }
+    let before_customization = &before_appearance;
+    let after_customization = &after_appearance;
     let before_identity = if add_kind.is_some() {
         format!("custom:{}", element_id.to_ascii_lowercase())
     } else {
@@ -936,6 +1012,7 @@ fn constrained_element_operation_delta(
         return false;
     }
 
+    if !element_presentation_after_is_exact(before_element, after_element, changes) { return false; }
     if add_kind.is_some() {
         if before_custom.is_some()
             || before_element.is_some()
@@ -970,12 +1047,6 @@ fn constrained_element_operation_delta(
                 .and_then(Value::as_str)
                 .is_none_or(|id| !id.eq_ignore_ascii_case(element_id))
         {
-            return false;
-        }
-        let expected_mapped = add_mapped
-            .and_then(|button| serde_json::to_value(button).ok())
-            .or_else(|| default_add_mapped_button(before_customization, add_kind.unwrap()));
-        if expected_mapped.as_ref() != custom.get("mappedButton") {
             return false;
         }
         if let Some(element) = after_element {
@@ -1033,18 +1104,28 @@ fn constrained_element_operation_delta(
             ) {
                 return false;
             }
-            let before_layout = saved_button_layout_value(before_customization, button);
+            let before_owned_layout = builtin_layout(before_customization, button).map(|layout| {
+                let mut normalized = normalized_known_layout(layout);
+                normalized.entry("shape".to_owned()).or_insert_with(|| Value::String("rounded_rectangle".to_owned()));
+                Value::Object(normalized)
+            });
+            let before_layout = before_owned_layout.as_ref();
             let after_layout = saved_button_layout_value(after_customization, button);
+            let after_normalized_layout = after_layout.and_then(Value::as_object).map(|layout| {
+                let mut normalized = normalized_known_layout(layout.clone());
+                normalized.entry("shape".to_owned()).or_insert_with(|| Value::String("rounded_rectangle".to_owned()));
+                Value::Object(normalized)
+            });
             if !button_customization_siblings_equal(
                 before_customization,
                 after_customization,
                 button,
-            ) || !layout_changed_keys_allowed(before_layout, after_layout, changes)
+            ) || !layout_changed_keys_allowed(before_layout, after_normalized_layout.as_ref(), changes)
                 || after_layout.is_some_and(|layout| {
                     after_element.is_some_and(|element| {
-                        !json_semantically_equal(
-                            element.get("layout").unwrap_or(&Value::Null),
-                            layout,
+                        !custom_element_mirrors_match(
+                            &serde_json::json!({"id": element["id"], "label": element["label"], "controlKind":"button", "layout":layout, "visualRole":element.get("visualRole")}),
+                            &serde_json::json!({"id": element["id"], "label": element["label"], "kind":"button", "layout":element.get("layout"), "visualRole":element.get("visualRole")})
                         )
                     })
                 })
@@ -1101,6 +1182,141 @@ fn constrained_element_operation_delta(
     true
 }
 
+/// Appearance/geometry operations must not alter owned executable data or
+/// introduce undeclared identities, even when both orientation mirrors change.
+fn constrained_control_ownership_delta(
+    before: &ConfigurationDocument,
+    after: &ConfigurationDocument,
+    operation: &ConfigurationOperation,
+) -> bool {
+    use crate::draft_operation::ConfigurationVariant;
+    let (profile_id, variant) = match operation {
+        ConfigurationOperation::ElementDuplicate { profile_id, variant, .. }
+        | ConfigurationOperation::ElementAlign { profile_id, variant, .. }
+        | ConfigurationOperation::ElementDistribute { profile_id, variant, .. }
+        | ConfigurationOperation::ElementNudge { profile_id, variant, .. }
+        | ConfigurationOperation::ElementDelete { profile_id, variant, .. }
+        | ConfigurationOperation::ElementReset { profile_id, variant, .. } => (profile_id, *variant),
+        _ => return false,
+    };
+    if !customization_operation_delta(before, after, profile_id, variant) {
+        return false;
+    }
+    let source_key = match variant {
+        ConfigurationVariant::Primary => "customization",
+        ConfigurationVariant::Landscape => "landscapeCustomization",
+        ConfigurationVariant::Portrait => "portraitCustomization",
+    };
+    let (Some(before_profile), Some(after_profile)) = (
+        profile_position(before, profile_id).and_then(|index| before.profiles[index].as_object()),
+        profile_position(after, profile_id).and_then(|index| after.profiles[index].as_object()),
+    ) else { return false; };
+    let (Some(source), Some(result)) = (
+        before_profile.get(source_key).or_else(|| before_profile.get("customization")).and_then(Value::as_object),
+        after_profile.get("customization").and_then(Value::as_object),
+    ) else { return false; };
+    let mut resolved_source = source.clone();
+    if variant != ConfigurationVariant::Primary {
+        if let Some(color) = before_profile.get("customization").and_then(|value| value.get("colorSchemePreference")) {
+            resolved_source.insert("colorSchemePreference".to_owned(), color.clone());
+        }
+    }
+    let source = &resolved_source;
+    fn declared(customization: &Map<String, Value>) -> Option<std::collections::BTreeMap<Uuid, &Value>> {
+        let mut ids = std::collections::BTreeMap::new();
+        for element in customization.get("elements")?.as_array()? {
+            let id = Uuid::parse_str(element.get("id")?.as_str()?).ok()?;
+            if ids.insert(id, element).is_some() { return None; }
+        }
+        Some(ids)
+    }
+    let (Some(source_elements), Some(result_elements)) = (declared(source), declared(result)) else { return false; };
+    let mut expected_ids = source_elements.keys().copied().collect::<std::collections::BTreeSet<_>>();
+    let mut duplicate_sources = Vec::new();
+    let mut reset_id = None;
+    match operation {
+        ConfigurationOperation::ElementDuplicate { element_ids, new_element_ids, .. } => {
+            if element_ids.is_empty() || element_ids.len() != new_element_ids.len() { return false; }
+            let mut sources_seen = std::collections::HashSet::new();
+            for (old, new) in element_ids.iter().zip(new_element_ids) {
+                let (Ok(old), Ok(new)) = (Uuid::parse_str(old), Uuid::parse_str(new)) else { return false; };
+                let Some(source) = source_elements.get(&old) else { return false; };
+                if !sources_seen.insert(old) || !expected_ids.insert(new) { return false; }
+                duplicate_sources.push((new, *source));
+            }
+        }
+        ConfigurationOperation::ElementDelete { element_id, .. } => {
+            let Some(identity) = resolve_layer_identity(source, element_id).and_then(|id| layer_identity_key(&id)) else { return false; };
+            if let Some(id) = identity.strip_prefix("custom:").and_then(|id| Uuid::parse_str(id).ok()) {
+                if !expected_ids.remove(&id) { return false; }
+            }
+        }
+        ConfigurationOperation::ElementReset { element_id, .. } => {
+            reset_id = Uuid::parse_str(element_id).ok();
+            if reset_id.is_none() && !matches!(element_id.as_str(), "system.top_bar_activation") { return false; }
+            if reset_id.is_some_and(|id| !source_elements.contains_key(&id)) { return false; }
+        }
+        ConfigurationOperation::ElementAlign { element_ids, .. }
+        | ConfigurationOperation::ElementDistribute { element_ids, .. }
+        | ConfigurationOperation::ElementNudge { element_ids, .. } => {
+            if element_ids.iter().any(|id| resolve_layer_identity(source, id).is_none()) { return false; }
+        }
+        _ => return false,
+    }
+    if expected_ids != result_elements.keys().copied().collect() || !element_capacity_is_valid(result) {
+        return false;
+    }
+    let mut mirror_ids = std::collections::HashSet::new();
+    for mirror in result.get("customButtons").and_then(Value::as_array).into_iter().flatten() {
+        let Some(id) = mirror.get("id").and_then(Value::as_str).and_then(|id| Uuid::parse_str(id).ok()) else { return false; };
+        if !expected_ids.contains(&id) || !mirror_ids.insert(id) || !custom_element_appearance_matches(mirror, result_elements[&id]) {
+            return false;
+        }
+    }
+    for (id, original) in &source_elements {
+        let Some(next) = result_elements.get(id) else { continue; };
+        let (Some(original_object), Some(next_object)) = (original.as_object(), next.as_object()) else { return false; };
+        let reset = reset_id == Some(*id);
+        for key in original_object.keys().chain(next_object.keys()) {
+            if key == "layout" || key == "id" || (reset && matches!(key.as_str(), "label" | "joystickOutputSettings" | "triggerSettings" | "trackpadSettings")) {
+                continue;
+            }
+            let equal = if key == "partOutputs" {
+                element_part_outputs(original) == element_part_outputs(next)
+            } else {
+                json_semantically_equal(original.get(key).unwrap_or(&Value::Null), next.get(key).unwrap_or(&Value::Null))
+            };
+            if !equal { return false; }
+        }
+    }
+    for (new_id, original) in duplicate_sources {
+        let Some(next) = result_elements.get(&new_id) else { return false; };
+        let Some(mirror) = custom_control_by_id(result, &new_id.to_string()).and_then(Value::as_object) else { return false; };
+        let Some(expected) = duplicate_element_from_button(mirror, original, &new_id.to_string().to_uppercase()) else { return false; };
+        if !json_semantically_equal(next, &Value::Object(expected)) { return false; }
+    }
+    if let ConfigurationOperation::ElementNudge { element_ids, delta_x, delta_y, .. } = operation {
+        let mut expected = source.clone();
+        let mut logical_result = result.clone();
+        if !materialize_declared_custom_mirrors(&mut expected)
+            || !materialize_declared_custom_mirrors(&mut logical_result) { return false; }
+        let Some(children) = element_ids.iter().map(|id| resolve_layer_identity(&expected, id)).collect::<Option<Vec<_>>>() else { return false; };
+        let frame_id = expected.get("deviceCanvas").and_then(|value| value.get("frameID")).and_then(Value::as_str).unwrap_or("iphone-17-pro-landscape").to_owned();
+        if !apply_expected_group_nudge(&mut expected, &logical_result, &children, &frame_id, *delta_x, *delta_y) { return false; }
+        correct_customization_frame_orientation(&mut expected, variant);
+        if !json_semantically_equal(&Value::Object(expected), &Value::Object(logical_result)) { return false; }
+    }
+    if matches!(operation, ConfigurationOperation::ElementAlign { .. } | ConfigurationOperation::ElementDistribute { .. })
+        && !layout_fix::constrained_element_arrangement_delta(source, result, operation) {
+        return false;
+    }
+    if matches!(operation, ConfigurationOperation::ElementDuplicate { .. } | ConfigurationOperation::ElementDelete { .. } | ConfigurationOperation::ElementReset { .. })
+        && !element_operation::constrained_lifecycle_delta(source, result, operation) {
+        return false;
+    }
+    true
+}
+
 fn requested_element_kind(
     initial: crate::draft_operation::ElementKind,
     changes: &crate::draft_operation::ElementChanges,
@@ -1145,31 +1361,7 @@ fn parse_element_kind(value: &str) -> Option<crate::draft_operation::ElementKind
     })
 }
 
-fn default_add_mapped_button(
-    customization: &Map<String, Value>,
-    kind: crate::draft_operation::ElementKind,
-) -> Option<Value> {
-    use crate::draft_operation::ElementKind;
-    if kind == ElementKind::Joystick {
-        return Some(Value::String("up".to_owned()));
-    }
-    if kind.is_passive() {
-        return Some(Value::String("custom8".to_owned()));
-    }
-    let used = customization
-        .get("customButtons")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(|value| value.get("mappedButton").and_then(Value::as_str))
-        .collect::<std::collections::BTreeSet<_>>();
-    Some(Value::String(
-        (1..=8)
-            .map(|index| format!("custom{index}"))
-            .find(|button| !used.contains(button.as_str()))
-            .unwrap_or_else(|| "custom1".to_owned()),
-    ))
-}
+
 
 fn custom_control_by_id<'a>(customization: &'a Map<String, Value>, id: &str) -> Option<&'a Value> {
     customization
@@ -1196,15 +1388,10 @@ fn element_by_identity<'a>(
 }
 
 fn element_identity_key(value: &Value) -> Option<String> {
-    let object = value.as_object()?;
-    if let Some(button) = object.get("builtInButton").and_then(Value::as_str) {
-        Some(format!("builtin:{}", button.to_ascii_lowercase()))
-    } else {
-        object
-            .get("id")
-            .and_then(Value::as_str)
-            .map(|id| format!("custom:{}", id.to_ascii_lowercase()))
-    }
+    let id = value.get("id")?.as_str()?;
+    let identity = thumble_protocol::KeypadElementID::parse(id)?;
+    let kind = if identity.starter_index().is_some() && value.get("kind").and_then(Value::as_str).unwrap_or("button") == "button" { "builtin" } else { "custom" };
+    Some(format!("{kind}:{}", id.to_ascii_lowercase()))
 }
 
 fn sibling_controls_equal(
@@ -1232,6 +1419,17 @@ fn sibling_controls_equal(
 }
 
 fn custom_element_mirrors_match(custom: &Value, element: &Value) -> bool {
+    fn appearance(value: &Value) -> Option<Value> {
+        let mut record = value.as_object()?.clone();
+        let kind = record.get("controlKind").or_else(|| record.get("kind")).cloned()
+            .unwrap_or_else(|| Value::String("button".to_owned()));
+        record.insert("controlKind".to_owned(), kind);
+        let mut layout = normalized_known_layout(record.get("layout").and_then(Value::as_object).cloned().unwrap_or_default());
+        normalize_duplicate_kind_layout(&mut record, &mut layout);
+        record.insert("layout".to_owned(), Value::Object(layout));
+        Some(Value::Object(record))
+    }
+    let (Some(custom), Some(element)) = (appearance(custom), appearance(element)) else { return false; };
     for (custom_key, element_key) in [
         ("id", "id"),
         ("label", "label"),
@@ -1253,11 +1451,15 @@ fn custom_element_mirrors_match(custom: &Value, element: &Value) -> bool {
     true
 }
 
+fn custom_element_appearance_matches(custom: &Value, element: &Value) -> bool {
+    custom_element_mirrors_match(custom, element)
+}
+
 fn element_capacity_is_valid(customization: &Map<String, Value>) -> bool {
-    let Some(buttons) = customization.get("customButtons").and_then(Value::as_array) else {
+    let Some(buttons) = customization.get("elements").and_then(Value::as_array) else {
         return false;
     };
-    if buttons.len() > 64 {
+    if buttons.len() > 128 {
         return false;
     }
     let mut ids = std::collections::BTreeSet::new();
@@ -1272,7 +1474,7 @@ fn element_capacity_is_valid(customization: &Map<String, Value>) -> bool {
             return false;
         }
         match button
-            .get("controlKind")
+            .get("kind")
             .and_then(Value::as_str)
             .unwrap_or("button")
         {
@@ -1328,7 +1530,7 @@ fn map_changed_only_at(
     )
 }
 
-// Swift encodes [GameButton: Layout] as an alternating key/value JSON array.
+// Swift encodes [KeypadElementID: Layout] as an alternating key/value JSON array.
 fn saved_button_layout_value<'a>(
     customization: &'a Map<String, Value>,
     button: &str,
@@ -1376,6 +1578,70 @@ fn button_customization_siblings_equal(
     json_semantically_equal(&Value::Array(before), &Value::Array(after))
 }
 
+fn constrained_raw_element_fields_delta(before: &ConfigurationDocument, after: &ConfigurationDocument,
+    profile_id: &str, variant: crate::draft_operation::ConfigurationVariant, element_id: &str,
+    changes: &crate::draft_operation::ElementChanges) -> bool {
+    let Some(index) = profile_position(before, profile_id) else { return false; };
+    let Some(after_index) = profile_position(after, profile_id) else { return false; };
+    let Some(profile) = before.profiles[index].as_object() else { return false; };
+    let Some(primary) = profile.get("customization").and_then(Value::as_object) else { return false; };
+    let Some((width, height)) = customization_canvas_size(primary) else { return false; };
+    let primary_portrait = width < height;
+    let target_portrait = match variant {
+        crate::draft_operation::ConfigurationVariant::Primary => primary_portrait,
+        crate::draft_operation::ConfigurationVariant::Portrait => true,
+        crate::draft_operation::ConfigurationVariant::Landscape => false,
+    };
+    let key = if target_portrait { "portraitCustomization" } else { "landscapeCustomization" };
+    let mut keys = Vec::new();
+    if primary_portrait == target_portrait { keys.push("customization"); }
+    if profile.get(key).is_some_and(Value::is_object) { keys.push(key); }
+    if keys.is_empty() { return false; }
+    let mut expected = before.clone();
+    for key in keys {
+        let Some(elements) = expected.profiles[index].get_mut(key).and_then(|v| v.get_mut("elements")).and_then(Value::as_array_mut) else { return false; };
+        let Some(owner) = elements.iter_mut().find(|e| e.get("id").and_then(Value::as_str).is_some_and(|id| id.eq_ignore_ascii_case(element_id))) else { return false; };
+        if changes.is_output_only() {
+            let Some(actual) = after.profiles[after_index].get(key).and_then(|v| v.get("elements")).and_then(Value::as_array)
+                .and_then(|elements| elements.iter().find(|e| e.get("id").and_then(Value::as_str).is_some_and(|id| id.eq_ignore_ascii_case(element_id)))) else { return false; };
+            if !element_output_change_is_exact(Some(owner), Some(actual), changes.output.as_ref()) { return false; }
+            if changes.output.as_ref().is_some_and(|output| output.part != crate::draft_operation::ElementInputPart::Primary)
+                && !json_semantically_equal(owner.get("output").unwrap_or(&Value::Null), actual.get("output").unwrap_or(&Value::Null)) { return false; }
+            let Some(actual) = actual.as_object() else { return false; };
+            let Some(owner) = owner.as_object_mut() else { return false; };
+            for field in ["output", "partOutputs"] {
+                if let Some(value) = actual.get(field) { owner.insert(field.to_owned(), value.clone()); }
+                else { owner.remove(field); }
+            }
+            continue;
+        }
+        let Some(owner) = owner.as_object_mut() else { return false; };
+        if changes.clear_presentation { owner.remove("presentation"); }
+        else if let Some(presentation) = &changes.presentation {
+            let Ok(value) = serde_json::to_value(presentation) else { return false; };
+            owner.insert("presentation".to_owned(), value);
+        } else { return false; }
+    }
+    let Some(updated) = after.profiles[after_index].get("updatedAt").filter(|v| v.as_i64().is_some()) else { return false; };
+    expected.profiles[index]["updatedAt"] = updated.clone();
+    expected.profiles.len() == after.profiles.len()
+        && expected.profiles.iter().zip(&after.profiles).all(|(a, b)| json_semantically_equal(a, b))
+        && expected.active_profile_id == after.active_profile_id && expected.default_profile_id == after.default_profile_id
+        && expected.key_bindings == after.key_bindings && expected.output_bindings == after.output_bindings
+        && expected.profile_key_bindings == after.profile_key_bindings
+        && expected.profile_output_bindings == after.profile_output_bindings
+}
+
+fn element_presentation_after_is_exact(before: Option<&Value>, after: Option<&Value>,
+                                      changes: &crate::draft_operation::ElementChanges) -> bool {
+    let expected = if let Some(presentation) = &changes.presentation {
+        let Ok(value) = serde_json::to_value(presentation) else { return false; };
+        value
+    } else if changes.clear_presentation { Value::Null }
+    else { before.and_then(|v| v.get("presentation")).cloned().unwrap_or(Value::Null) };
+    json_semantically_equal(after.and_then(|v| v.get("presentation")).unwrap_or(&Value::Null), &expected)
+}
+
 fn target_changed_keys_allowed(
     before: Option<&Value>,
     after: Option<&Value>,
@@ -1389,14 +1655,21 @@ fn target_changed_keys_allowed(
         return before.is_some() || after.is_none() || changes.is_hidden == Some(true);
     };
     let mut allowed = std::collections::BTreeSet::new();
+    if !custom {
+        if changes.clear_presentation {
+            if after.get("presentation").is_some_and(|v| !v.is_null()) { return false; }
+            allowed.insert("presentation");
+        } else if let Some(presentation) = &changes.presentation {
+            let Ok(expected) = serde_json::to_value(presentation) else { return false; };
+            if !json_semantically_equal(after.get("presentation").unwrap_or(&Value::Null), &expected) { return false; }
+            allowed.insert("presentation");
+        }
+    }
     if changes.label.is_some() || changes.clear_label {
         allowed.insert("label");
     }
     if changes.visual_role.is_some() || changes.clear_visual_role {
         allowed.insert("visualRole");
-    }
-    if changes.mapped_button.is_some() {
-        allowed.insert(if custom { "mappedButton" } else { "legacySlot" });
     }
     if changes.kind.is_some() {
         allowed.insert(if custom { "controlKind" } else { "kind" });
@@ -2625,8 +2898,13 @@ fn replace_expected_control_bar_appearance(
     true
 }
 
+// Appearance anchors used for starter-only metadata, never an input pool.
 const ORIENTATION_BUILTINS: [&str; 10] = [
-    "up", "down", "left", "right", "jump", "attack", "dash", "focus", "map", "pause",
+    "00000000-0000-0000-0000-000000000101", "00000000-0000-0000-0000-000000000102",
+    "00000000-0000-0000-0000-000000000103", "00000000-0000-0000-0000-000000000104",
+    "00000000-0000-0000-0000-000000000105", "00000000-0000-0000-0000-000000000106",
+    "00000000-0000-0000-0000-000000000107", "00000000-0000-0000-0000-000000000108",
+    "00000000-0000-0000-0000-000000000109", "00000000-0000-0000-0000-00000000010A",
 ];
 
 fn constrained_orientation_copy_delta(
@@ -2842,7 +3120,8 @@ fn orientation_arranged_customization_is_exact(
         return false;
     }
 
-    for button in ORIENTATION_BUILTINS {
+    for button in source.get("elements").and_then(Value::as_array).into_iter().flatten()
+        .filter_map(|element| element.get("id").and_then(Value::as_str)).filter(|id| is_builtin_layer_button(id)) {
         let (Some(source_layout), Some(destination_layout)) = (
             builtin_layout(source, button),
             builtin_layout(destination, button),
@@ -3111,8 +3390,9 @@ fn orientation_control_positions_match(
     let Some((source_width, source_height)) = customization_canvas_size(source) else {
         return false;
     };
-    for button in ORIENTATION_BUILTINS {
-        let identity = format!("builtin:{button}");
+    for button in source.get("elements").and_then(Value::as_array).into_iter().flatten()
+        .filter_map(|element| element.get("id").and_then(Value::as_str)).filter(|id| is_builtin_layer_button(id)) {
+        let identity = format!("builtin:{}", button.to_ascii_lowercase());
         if orientation_control_is_hidden(source, &identity) {
             continue;
         }
@@ -3258,27 +3538,9 @@ fn orientation_top_bar_collides(customization: &Map<String, Value>, center_y: f6
         system.center_x + system.width / 2.0 + 6.0,
         system.center_y + system.height / 2.0 + 6.0,
     );
-    let mut identities = ORIENTATION_BUILTINS
-        .iter()
-        .map(|button| format!("builtin:{button}"))
-        .collect::<Vec<_>>();
-    identities.extend(
-        candidate
-            .get("customButtons")
-            .and_then(Value::as_array)
-            .into_iter()
-            .flatten()
-            .filter_map(|button| {
-                let kind = button
-                    .get("controlKind")
-                    .and_then(Value::as_str)
-                    .unwrap_or("button");
-                (!matches!(kind, "text" | "decoration"))
-                    .then(|| button.get("id").and_then(Value::as_str))
-                    .flatten()
-                    .map(|id| format!("custom:{}", id.to_ascii_lowercase()))
-            }),
-    );
+    let identities = candidate.get("elements").and_then(Value::as_array).into_iter().flatten()
+        .filter(|element| !matches!(element.get("kind").and_then(Value::as_str), Some("text" | "decoration")))
+        .filter_map(element_identity_key).collect::<Vec<_>>();
     identities.into_iter().any(|identity| {
         if orientation_control_is_hidden(&candidate, &identity) {
             return false;
@@ -3639,9 +3901,16 @@ fn constrained_customization_operation_delta(
         _ => return false,
     }
 
-    after_profile
-        .get("customization")
-        .is_some_and(|actual| json_semantically_equal(actual, &Value::Object(expected)))
+    let expected = Value::Object(expected);
+    after_profile.get("customization").is_some_and(|actual| {
+        if matches!(operation, ConfigurationOperation::DeviceSet { frame_id, .. } if frame_id == "iphone-17-pro-landscape") {
+            // Swift omits the known default canvas. Compare that representation
+            // only; all unknown canvas fields and every other field stay exact.
+            customization_mirrors_are_semantically_equal(Some(actual), Some(&expected), ConfigurationVariant::Landscape)
+        } else {
+            json_semantically_equal(actual, &expected)
+        }
+    })
 }
 
 fn constrained_style_resource_delta(
@@ -3926,7 +4195,7 @@ fn clear_style_references(customization: &mut Map<String, Value>, expected_id: &
     {
         for element in elements {
             let is_cleared_builtin = element
-                .get("builtInButton")
+                .get("id")
                 .and_then(Value::as_str)
                 .is_some_and(|button| {
                     cleared_builtins
@@ -3938,7 +4207,9 @@ fn clear_style_references(customization: &mut Map<String, Value>, expected_id: &
                     .iter()
                     .any(|value| value.eq_ignore_ascii_case(id))
             });
-            if is_cleared_builtin || is_cleared_custom {
+            let owns_target_style = element.get("layout").and_then(|layout| layout.get("styleID"))
+                .and_then(Value::as_str) == Some(expected_id);
+            if is_cleared_builtin || is_cleared_custom || owns_target_style {
                 let Some(layout) = element.get_mut("layout").and_then(Value::as_object_mut) else {
                     return false;
                 };
@@ -4969,7 +5240,7 @@ fn apply_expected_group_duplicate(
             None => return false,
         },
     };
-    if custom_buttons.len() + children.len() > 64
+    if custom_buttons.len() + children.len() > 128
         || custom_buttons.iter().any(|button| {
             button
                 .get("id")
@@ -5055,13 +5326,15 @@ fn apply_expected_group_duplicate(
                 let source_element = element_for_identity(&elements, &identity)
                     .cloned()
                     .unwrap_or_else(|| Value::Object(Map::new()));
-                let button = serde_json::json!({
+                let mut button = serde_json::json!({
                     "id": new_id,
-                    "mappedButton": value,
                     "label": builtin_visual_label(expected, value),
                     "layout": layout,
                     "controlKind": "button"
                 });
+                if let Some(role) = source_element.get("visualRole") {
+                    button["visualRole"] = role.clone();
+                }
                 (button, source_element)
             }
             "custom" => {
@@ -5196,7 +5469,6 @@ fn known_custom_button(source: &Map<String, Value>) -> Option<Map<String, Value>
     let mut result = Map::new();
     for key in [
         "id",
-        "mappedButton",
         "label",
         "layout",
         "controlKind",
@@ -5210,7 +5482,7 @@ fn known_custom_button(source: &Map<String, Value>) -> Option<Map<String, Value>
             result.insert(key.to_owned(), value.clone());
         }
     }
-    for required in ["mappedButton", "label", "layout", "controlKind"] {
+    for required in ["id", "label", "layout", "controlKind"] {
         if !result.contains_key(required) {
             return None;
         }
@@ -5353,15 +5625,33 @@ fn normalize_duplicate_kind_layout(
     }
     match kind.as_str() {
         "joystick" => {
+            if button.get("joystickOutputSettings").is_none_or(Value::is_null) {
+                button.insert("joystickOutputSettings".to_owned(), serde_json::json!({
+                    "analogTarget":"none", "deadZone":0.12, "sensitivity":1.0,
+                    "invertX":false, "invertY":false, "sendsDigitalDirections":true, "snapToCardinal":false
+                }));
+            }
             button.remove("triggerSettings");
             button.remove("trackpadSettings");
         }
         "trigger" => {
+            if button.get("triggerSettings").is_none_or(Value::is_null) {
+                button.insert("triggerSettings".to_owned(), serde_json::json!({
+                    "target":"right", "orientation":"vertical", "deadZone":0.03,
+                    "sensitivity":1.0, "sendsDigitalButton":false, "digitalThreshold":0.5
+                }));
+            }
             button.remove("joystickMapping");
             button.remove("joystickOutputSettings");
             button.remove("trackpadSettings");
         }
         "trackpad" => {
+            if button.get("trackpadSettings").is_none_or(Value::is_null) {
+                button.insert("trackpadSettings".to_owned(), serde_json::json!({
+                    "sensitivity":1.2, "scrollSensitivity":0.85, "naturalScrolling":true,
+                    "tapToClick":true, "twoFingerScroll":true
+                }));
+            }
             button.remove("joystickMapping");
             button.remove("joystickOutputSettings");
             button.remove("triggerSettings");
@@ -5384,10 +5674,9 @@ fn element_for_identity<'a>(elements: &'a [Value], identity: &str) -> Option<&'a
     let (kind, value) = identity.split_once(':')?;
     match kind {
         "builtin" => elements.iter().find(|element| {
-            element
-                .get("builtInButton")
-                .and_then(Value::as_str)
-                .is_some_and(|button| button.eq_ignore_ascii_case(value))
+            element.get("kind").and_then(Value::as_str).unwrap_or("button") == "button"
+                && element.get("id").and_then(Value::as_str)
+                    .is_some_and(|button| button.eq_ignore_ascii_case(value))
         }),
         "custom" => {
             let expected = Uuid::parse_str(value).ok()?;
@@ -5409,24 +5698,25 @@ fn duplicate_element_from_button(
     new_id: &str,
 ) -> Option<Map<String, Value>> {
     let source = source_element.as_object()?;
-    let mapped_button = button.get("mappedButton")?.clone();
     let kind = button.get("controlKind")?.clone();
     let kind_name = kind.as_str()?.to_owned();
-    let mut element = Map::new();
+    let known_fields = ["id", "label", "kind", "layout", "visualRole", "output", "defaultOutput", "partOutputs",
+        "joystickMapping", "joystickOutputSettings", "triggerSettings", "trackpadSettings"];
+    let mut element: Map<String, Value> = source.iter()
+        .filter(|(key, _)| !known_fields.contains(&key.as_str()))
+        .map(|(key, value)| (key.clone(), value.clone())).collect();
     element.insert("id".to_owned(), Value::String(new_id.to_owned()));
     element.insert("label".to_owned(), button.get("label")?.clone());
     element.insert("kind".to_owned(), kind);
     element.insert("layout".to_owned(), button.get("layout")?.clone());
-    element.insert(
-        "legacySlot".to_owned(),
-        source.get("legacySlot").cloned().unwrap_or(mapped_button),
-    );
     if let Some(value) = button.get("visualRole") {
         element.insert("visualRole".to_owned(), value.clone());
     }
     if !matches!(kind_name.as_str(), "text" | "decoration") {
-        if let Some(value) = source.get("output") {
-            element.insert("output".to_owned(), value.clone());
+        for key in ["output", "defaultOutput"] {
+            if let Some(value) = source.get(key) {
+                element.insert(key.to_owned(), value.clone());
+            }
         }
         element.insert(
             "partOutputs".to_owned(),
@@ -5655,17 +5945,12 @@ fn group_nudge_snapshot(
                 .and_then(Value::as_object)
                 .cloned()
                 .unwrap_or_else(default_custom_layout);
-            let mapped_button = button
-                .get("mappedButton")
-                .and_then(Value::as_str)
-                .unwrap_or("custom1");
             let kind = button
                 .get("controlKind")
                 .and_then(Value::as_str)
                 .unwrap_or("button");
             let base_size = custom_base_size(
                 kind,
-                mapped_button,
                 control_scale,
                 canvas_width,
                 canvas_height,
@@ -5726,8 +6011,13 @@ fn normalized_layout_center(layout: &Map<String, Value>, key: &str, default: f64
 }
 
 fn builtin_layout(customization: &Map<String, Value>, button: &str) -> Option<Map<String, Value>> {
+    let owned_layout = customization.get("elements").and_then(Value::as_array)
+        .and_then(|elements| elements.iter().find(|element| element.get("id").and_then(Value::as_str)
+            .is_some_and(|id| id.eq_ignore_ascii_case(button))))
+        .and_then(|element| element.get("layout")).and_then(Value::as_object).cloned()
+        .unwrap_or_else(default_button_layout);
     let Some(values) = customization.get("buttonCustomizations") else {
-        return Some(default_button_layout());
+        return Some(owned_layout);
     };
     let values = values.as_array()?;
     if values.len() % 2 != 0 {
@@ -5740,7 +6030,51 @@ fn builtin_layout(customization: &Map<String, Value>, button: &str) -> Option<Ma
             return Some(layout.clone());
         }
     }
-    Some(default_button_layout())
+    Some(owned_layout)
+}
+
+/// Builds edit/appearance mirrors only for UUIDs already declared in elements.
+/// Owned outputs and unknown element metadata are never copied into a mirror.
+fn materialize_declared_custom_mirrors(customization: &mut Map<String, Value>) -> bool {
+    let Some(elements) = customization.get("elements").and_then(Value::as_array) else {
+        return false;
+    };
+    let mut buttons = match customization.get("customButtons") {
+        None => Vec::new(),
+        Some(Value::Array(buttons)) => buttons.clone(),
+        _ => return false,
+    };
+    let mut mirrored = buttons.iter().filter_map(|button| {
+        button.get("id").and_then(Value::as_str).and_then(thumble_protocol::KeypadElementID::parse)
+    }).collect::<std::collections::HashSet<_>>();
+    let mut added = false;
+    for element in elements {
+        let Some(id) = element.get("id").and_then(Value::as_str).and_then(thumble_protocol::KeypadElementID::parse) else {
+            return false;
+        };
+        let kind = element.get("kind").and_then(Value::as_str).unwrap_or("button");
+        if (id.starter_index().is_some() && kind == "button") || !mirrored.insert(id) {
+            continue;
+        }
+        let mut button = Map::new();
+        button.insert("id".to_owned(), Value::String(id.to_string()));
+        button.insert("label".to_owned(), element.get("label").cloned().unwrap_or_else(|| Value::String("Button".to_owned())));
+        button.insert("controlKind".to_owned(), Value::String(kind.to_owned()));
+        for field in ["visualRole", "joystickMapping", "joystickOutputSettings", "triggerSettings", "trackpadSettings"] {
+            if let Some(value) = element.get(field).filter(|value| !value.is_null()) {
+                button.insert(field.to_owned(), value.clone());
+            }
+        }
+        let mut layout = normalized_known_layout(element.get("layout").and_then(Value::as_object).cloned().unwrap_or_default());
+        normalize_duplicate_kind_layout(&mut button, &mut layout);
+        button.insert("layout".to_owned(), Value::Object(layout));
+        buttons.push(Value::Object(button));
+        added = true;
+    }
+    if added {
+        customization.insert("customButtons".to_owned(), Value::Array(buttons));
+    }
+    true
 }
 
 fn custom_button<'a>(
@@ -5781,23 +6115,16 @@ fn builtin_base_size(
 ) -> Option<(f64, f64)> {
     if !matches!(
         button,
-        "up" | "down"
-            | "left"
-            | "right"
-            | "jump"
-            | "attack"
-            | "dash"
-            | "focus"
-            | "map"
-            | "pause"
-            | "custom1"
-            | "custom2"
-            | "custom3"
-            | "custom4"
-            | "custom5"
-            | "custom6"
-            | "custom7"
-            | "custom8"
+        "00000000-0000-0000-0000-000000000101" | "00000000-0000-0000-0000-000000000102"
+            | "00000000-0000-0000-0000-000000000103"
+            | "00000000-0000-0000-0000-000000000104"
+            | "00000000-0000-0000-0000-000000000105"
+            | "00000000-0000-0000-0000-000000000106"
+            | "00000000-0000-0000-0000-000000000107"
+            | "00000000-0000-0000-0000-000000000108"
+            | "00000000-0000-0000-0000-000000000109"
+            | "00000000-0000-0000-0000-00000000010A"
+
     ) {
         return None;
     }
@@ -5811,15 +6138,14 @@ fn builtin_base_size(
         .max(50.0 * scale)
         .min(86.0 * scale);
     Some(match button {
-        "map" => (side * 1.48, side * 0.72),
-        "pause" => (side * 1.66, side * 0.72),
+        "00000000-0000-0000-0000-000000000109" => (side * 1.48, side * 0.72),
+        "00000000-0000-0000-0000-00000000010A" => (side * 1.66, side * 0.72),
         _ => (side, side),
     })
 }
 
 fn custom_base_size(
     kind: &str,
-    mapped_button: &str,
     scale: f64,
     canvas_width: f64,
     canvas_height: f64,
@@ -5850,11 +6176,10 @@ fn custom_base_size(
                 .min(150.0 * scale),
         )),
         "text" => {
-            let (width, height) = builtin_base_size("jump", scale, canvas_width, canvas_height)?;
+            let (width, height) = builtin_base_size("00000000-0000-0000-0000-000000000105", scale, canvas_width, canvas_height)?;
             Some((width, (height * 0.58).max(24.0)))
         }
-        "decoration" => builtin_base_size("jump", scale, canvas_width, canvas_height),
-        "button" => builtin_base_size(mapped_button, scale, canvas_width, canvas_height),
+        "decoration" | "button" => builtin_base_size("00000000-0000-0000-0000-000000000105", scale, canvas_width, canvas_height),
         _ => None,
     }
 }
@@ -5885,16 +6210,16 @@ fn default_builtin_center(
         };
         let y = 0.56;
         Some(match button {
-            "up" => (dpad_x, y - y_step),
-            "down" => (dpad_x, y + y_step),
-            "left" => (dpad_x - x_step, y),
-            "right" => (dpad_x + x_step, y),
-            "focus" => (action_x - x_step * 0.55, y - y_step * 0.55),
-            "dash" => (action_x + x_step * 0.55, y - y_step * 0.55),
-            "attack" => (action_x - x_step * 0.55, y + y_step * 0.55),
-            "jump" => (action_x + x_step * 0.55, y + y_step * 0.55),
-            "map" => (0.43, y),
-            "pause" => (0.57, y),
+            "00000000-0000-0000-0000-000000000101" => (dpad_x, y - y_step),
+            "00000000-0000-0000-0000-000000000102" => (dpad_x, y + y_step),
+            "00000000-0000-0000-0000-000000000103" => (dpad_x - x_step, y),
+            "00000000-0000-0000-0000-000000000104" => (dpad_x + x_step, y),
+            "00000000-0000-0000-0000-000000000108" => (action_x - x_step * 0.55, y - y_step * 0.55),
+            "00000000-0000-0000-0000-000000000107" => (action_x + x_step * 0.55, y - y_step * 0.55),
+            "00000000-0000-0000-0000-000000000106" => (action_x - x_step * 0.55, y + y_step * 0.55),
+            "00000000-0000-0000-0000-000000000105" => (action_x + x_step * 0.55, y + y_step * 0.55),
+            "00000000-0000-0000-0000-000000000109" => (0.43, y),
+            "00000000-0000-0000-0000-00000000010A" => (0.57, y),
             _ if button.starts_with("custom") => (0.5, y),
             _ => return None,
         })
@@ -5912,16 +6237,16 @@ fn default_builtin_center(
         let x_step = ((visual_width * 1.16) / canvas_width).clamp(0.13, 0.22);
         let y_step = ((visual_height * 1.10) / canvas_height).clamp(0.08, 0.12);
         Some(match button {
-            "up" => (0.5, dpad_y - y_step),
-            "down" => (0.5, dpad_y + y_step),
-            "left" => (0.5 - x_step, dpad_y),
-            "right" => (0.5 + x_step, dpad_y),
-            "focus" => (0.5 - x_step * 0.55, action_y - y_step * 0.75),
-            "dash" => (0.5 + x_step * 0.55, action_y - y_step * 0.75),
-            "attack" => (0.5 - x_step * 0.55, action_y + y_step * 0.75),
-            "jump" => (0.5 + x_step * 0.55, action_y + y_step * 0.75),
-            "map" => (0.36, 0.51),
-            "pause" => (0.64, 0.51),
+            "00000000-0000-0000-0000-000000000101" => (0.5, dpad_y - y_step),
+            "00000000-0000-0000-0000-000000000102" => (0.5, dpad_y + y_step),
+            "00000000-0000-0000-0000-000000000103" => (0.5 - x_step, dpad_y),
+            "00000000-0000-0000-0000-000000000104" => (0.5 + x_step, dpad_y),
+            "00000000-0000-0000-0000-000000000108" => (0.5 - x_step * 0.55, action_y - y_step * 0.75),
+            "00000000-0000-0000-0000-000000000107" => (0.5 + x_step * 0.55, action_y - y_step * 0.75),
+            "00000000-0000-0000-0000-000000000106" => (0.5 - x_step * 0.55, action_y + y_step * 0.75),
+            "00000000-0000-0000-0000-000000000105" => (0.5 + x_step * 0.55, action_y + y_step * 0.75),
+            "00000000-0000-0000-0000-000000000109" => (0.36, 0.51),
+            "00000000-0000-0000-0000-00000000010A" => (0.64, 0.51),
             _ if button.starts_with("custom") => (0.5, 0.51),
             _ => return None,
         })
@@ -6061,7 +6386,7 @@ fn set_builtin_style_id(
         .and_then(|elements| {
             elements.iter_mut().find(|element| {
                 element
-                    .get("builtInButton")
+                    .get("id")
                     .and_then(Value::as_str)
                     .is_some_and(|candidate| candidate.eq_ignore_ascii_case(button))
             })
@@ -6146,6 +6471,9 @@ fn set_builtin_layout_position(
     x: f64,
     y: f64,
 ) -> bool {
+    let Some(owned_layout) = builtin_layout(customization, button) else { return false; };
+    let mut owned_layout = normalized_known_layout(owned_layout);
+    owned_layout.entry("shape".to_owned()).or_insert_with(|| Value::String("rounded_rectangle".to_owned()));
     let Some(values) = customization
         .entry("buttonCustomizations".to_owned())
         .or_insert_with(|| Value::Array(Vec::new()))
@@ -6167,7 +6495,7 @@ fn set_builtin_layout_position(
     });
     let mut layout = position
         .and_then(|position| values[position * 2 + 1].as_object().cloned())
-        .unwrap_or_else(default_button_layout);
+        .unwrap_or(owned_layout);
     layout.insert("centerX".to_owned(), Value::from(x));
     layout.insert("centerY".to_owned(), Value::from(y));
     if let Some(position) = position {
@@ -6192,7 +6520,7 @@ fn set_builtin_layout_position(
     {
         if let Some(element) = elements.iter_mut().find(|element| {
             element
-                .get("builtInButton")
+                .get("id")
                 .and_then(Value::as_str)
                 .is_some_and(|candidate| candidate.eq_ignore_ascii_case(button))
         }) {
@@ -6264,6 +6592,7 @@ fn set_builtin_layout_state(
     state_key: &str,
     desired: bool,
 ) -> bool {
+    let owned_layout = builtin_layout(customization, button);
     let Some(values) = customization
         .entry("buttonCustomizations".to_owned())
         .or_insert_with(|| Value::Array(Vec::new()))
@@ -6289,7 +6618,7 @@ fn set_builtin_layout_state(
             .cloned()
             .unwrap_or_default()
     } else {
-        default_button_layout()
+        owned_layout.unwrap_or_else(default_button_layout)
     };
     layout.insert(state_key.to_owned(), Value::Bool(desired));
     if button_layout_is_default(&layout) {
@@ -6323,7 +6652,6 @@ fn set_builtin_element_layout_state(
     desired: bool,
     button_layout: &Map<String, Value>,
 ) -> bool {
-    let hidden = state_key == "isHidden" && desired;
     let label = builtin_visual_label(customization, button);
     let elements = customization
         .entry("elements".to_owned())
@@ -6333,15 +6661,11 @@ fn set_builtin_element_layout_state(
     };
     let position = elements.iter().position(|element| {
         element
-            .get("builtInButton")
+            .get("id")
             .and_then(Value::as_str)
             .is_some_and(|candidate| candidate.eq_ignore_ascii_case(button))
     });
-    if hidden {
-        if let Some(position) = position {
-            elements.remove(position);
-        }
-    } else if let Some(position) = position {
+    if let Some(position) = position {
         let Some(layout) = elements[position]
             .get_mut("layout")
             .and_then(Value::as_object_mut)
@@ -6349,7 +6673,7 @@ fn set_builtin_element_layout_state(
             return false;
         };
         layout.insert(state_key.to_owned(), Value::Bool(desired));
-    } else if state_key == "isHidden" {
+    } else if state_key == "isHidden" && !desired {
         let Some(id) = builtin_element_id(button) else {
             return false;
         };
@@ -6360,20 +6684,28 @@ fn set_builtin_element_layout_state(
                 Value::String("rounded_rectangle".to_owned()),
             );
         }
+        // Explicit starter construction (Show Default Controls), never an
+        // execution fallback or a slot assigned to a different control.
+        let starter = thumble_core::minimal_default_customization();
+        let Some(prototype) = starter.get("elements").and_then(Value::as_array).and_then(|elements|
+            elements.iter().find(|element| element.get("id").and_then(Value::as_str).is_some_and(|candidate| candidate.eq_ignore_ascii_case(&id)))
+        ) else { return false; };
+        let Some(output) = prototype.get("defaultOutput") else { return false; };
         let element = serde_json::json!({
             "id": id,
             "label": label,
             "kind": "button",
+            "visualRole": prototype["visualRole"],
             "layout": layout,
-            "builtInButton": button,
-            "legacySlot": button,
+            "output": output,
+            "defaultOutput": output,
             "partOutputs": []
         });
         let insertion = elements
             .iter()
             .position(|candidate| {
                 candidate
-                    .get("builtInButton")
+                    .get("id")
                     .and_then(Value::as_str)
                     .is_none_or(|candidate| {
                         game_button_order(candidate) > game_button_order(button)
@@ -6381,9 +6713,6 @@ fn set_builtin_element_layout_state(
             })
             .unwrap_or(elements.len());
         elements.insert(insertion, element);
-    }
-    if elements.is_empty() {
-        customization.remove("elements");
     }
     true
 }
@@ -6515,20 +6844,10 @@ fn top_bar_layout_is_default(layout: &Map<String, Value>) -> bool {
     )
 }
 
-fn builtin_element_id(button: &str) -> Option<&'static str> {
-    match button {
-        "up" => Some("00000000-0000-0000-0000-000000000101"),
-        "down" => Some("00000000-0000-0000-0000-000000000102"),
-        "left" => Some("00000000-0000-0000-0000-000000000103"),
-        "right" => Some("00000000-0000-0000-0000-000000000104"),
-        "jump" => Some("00000000-0000-0000-0000-000000000105"),
-        "attack" => Some("00000000-0000-0000-0000-000000000106"),
-        "dash" => Some("00000000-0000-0000-0000-000000000107"),
-        "focus" => Some("00000000-0000-0000-0000-000000000108"),
-        "map" => Some("00000000-0000-0000-0000-000000000109"),
-        "pause" => Some("00000000-0000-0000-0000-000000000110"),
-        _ => None,
-    }
+fn builtin_element_id(button: &str) -> Option<String> {
+    let id = thumble_protocol::KeypadElementID::parse(button)?;
+    id.starter_index()?;
+    Some(id.to_string())
 }
 
 fn builtin_visual_label(customization: &Map<String, Value>, button: &str) -> String {
@@ -6548,43 +6867,23 @@ fn builtin_visual_label(customization: &Map<String, Value>, button: &str) -> Str
         }
     }
     match button {
-        "up" => "↑",
-        "down" => "↓",
-        "left" => "←",
-        "right" => "→",
-        "jump" => "A",
-        "attack" => "B",
-        "dash" => "C",
-        "focus" => "D",
-        "map" => "⇧⌘P",
-        "pause" => "Esc",
+        "00000000-0000-0000-0000-000000000101" => "↑",
+        "00000000-0000-0000-0000-000000000102" => "↓",
+        "00000000-0000-0000-0000-000000000103" => "←",
+        "00000000-0000-0000-0000-000000000104" => "→",
+        "00000000-0000-0000-0000-000000000105" => "A",
+        "00000000-0000-0000-0000-000000000106" => "B",
+        "00000000-0000-0000-0000-000000000107" => "C",
+        "00000000-0000-0000-0000-000000000108" => "D",
+        "00000000-0000-0000-0000-000000000109" => "⇧⌘P",
+        "00000000-0000-0000-0000-00000000010A" => "Esc",
         _ => "Button",
     }
     .to_owned()
 }
 
 fn game_button_order(button: &str) -> usize {
-    match button {
-        "up" => 0,
-        "down" => 1,
-        "left" => 2,
-        "right" => 3,
-        "jump" => 4,
-        "attack" => 5,
-        "dash" => 6,
-        "focus" => 7,
-        "map" => 8,
-        "pause" => 9,
-        "custom1" => 10,
-        "custom2" => 11,
-        "custom3" => 12,
-        "custom4" => 13,
-        "custom5" => 14,
-        "custom6" => 15,
-        "custom7" => 16,
-        "custom8" => 17,
-        _ => usize::MAX,
-    }
+    thumble_protocol::KeypadElementID::parse(button).and_then(|id| id.starter_index()).map(|i| i - 1).unwrap_or(usize::MAX)
 }
 
 fn reorder_group_layers(
@@ -6667,13 +6966,8 @@ fn available_layer_identities(customization: &Map<String, Value>) -> Option<Vec<
         "kind": "system",
         "system": "top_bar_activation"
     })];
-    for button in [
-        "up", "down", "left", "right", "jump", "attack", "dash", "focus", "map", "pause",
-    ] {
-        identities.push(serde_json::json!({"kind": "builtin", "button": button}));
-    }
     for button in customization
-        .get("customButtons")
+        .get("elements")
         .and_then(Value::as_array)
         .into_iter()
         .flatten()
@@ -6684,7 +6978,13 @@ fn available_layer_identities(customization: &Map<String, Value>) -> Option<Vec<
             .hyphenated()
             .to_string()
             .to_uppercase();
-        identities.push(serde_json::json!({"kind": "custom", "id": canonical}));
+        let starter = thumble_protocol::KeypadElementID::parse(&canonical).and_then(|id| id.starter_index()).is_some()
+            && button.get("kind").and_then(Value::as_str).unwrap_or("button") == "button";
+        identities.push(if starter {
+            serde_json::json!({"kind": "builtin", "button": canonical})
+        } else {
+            serde_json::json!({"kind": "custom", "id": canonical})
+        });
     }
     let mut seen = std::collections::HashSet::new();
     if identities
@@ -6726,7 +7026,7 @@ fn layer_identity_key(identity: &Value) -> Option<String> {
     match kind {
         "builtin" => {
             let button = object.get("button")?.as_str()?;
-            is_builtin_layer_button(button).then(|| format!("builtin:{button}"))
+            is_builtin_layer_button(button).then(|| format!("builtin:{}", button.to_ascii_lowercase()))
         }
         "custom" => {
             let id = Uuid::parse_str(object.get("id")?.as_str()?).ok()?;
@@ -6744,61 +7044,18 @@ fn layer_identity_key(identity: &Value) -> Option<String> {
 }
 
 fn is_builtin_layer_button(value: &str) -> bool {
-    matches!(
-        value,
-        "up" | "down" | "left" | "right" | "jump" | "attack" | "dash" | "focus" | "map" | "pause"
-    )
+    thumble_protocol::KeypadElementID::parse(value).and_then(|id| id.starter_index()).is_some()
 }
 
 fn resolve_layer_identity(customization: &Map<String, Value>, input: &str) -> Option<Value> {
     let available = available_layer_identities(customization)?;
-    let input_key = if let Ok(id) = Uuid::parse_str(input) {
-        let normalized = id.hyphenated().to_string();
-        let built_in = [
-            (101, "up"),
-            (102, "down"),
-            (103, "left"),
-            (104, "right"),
-            (105, "jump"),
-            (106, "attack"),
-            (107, "dash"),
-            (108, "focus"),
-            (109, "map"),
-            (110, "pause"),
-        ]
-        .into_iter()
-        .find_map(|(suffix, button)| {
-            let expected = format!("00000000-0000-0000-0000-{suffix:012}");
-            normalized.eq_ignore_ascii_case(&expected).then_some(button)
+    if let Ok(id) = Uuid::parse_str(input) {
+        return available.into_iter().find(|identity| {
+            identity.get("id").or_else(|| identity.get("button"))
+                .and_then(Value::as_str).and_then(|value| Uuid::parse_str(value).ok()) == Some(id)
         });
-        if let Some(button) = built_in {
-            format!("builtin:{button}")
-        } else if let Some(element) = customization
-            .get("elements")
-            .and_then(Value::as_array)
-            .into_iter()
-            .flatten()
-            .find(|element| {
-                element
-                    .get("id")
-                    .and_then(Value::as_str)
-                    .is_some_and(|value| value.eq_ignore_ascii_case(input))
-            })
-        {
-            if let Some(button) = element.get("builtInButton").and_then(Value::as_str) {
-                if !is_builtin_layer_button(button) {
-                    return None;
-                }
-                format!("builtin:{button}")
-            } else {
-                format!("custom:{}", id.hyphenated())
-            }
-        } else {
-            format!("custom:{}", id.hyphenated())
-        }
-    } else {
-        layer_identity_key(&Value::String(input.to_owned()))?
-    };
+    }
+    let input_key = layer_identity_key(&Value::String(input.to_owned()))?;
     available
         .into_iter()
         .find(|identity| layer_identity_key(identity).as_deref() == Some(input_key.as_str()))
@@ -7019,7 +7276,18 @@ fn metadata_is_default_except_layer_order(metadata: &Map<String, Value>) -> bool
 
 fn json_semantically_equal(left: &Value, right: &Value) -> bool {
     match (left, right) {
-        (Value::Number(left), Value::Number(right)) => left.as_f64() == right.as_f64(),
+        (Value::Number(left), Value::Number(right)) => {
+            // Cross integer/float spelling is equivalent only inside the exact
+            // binary64 integer range. Never round distinct extension integers
+            // into equality when checking an otherwise constrained mutation.
+            if left == right { return true; }
+            const MAX_EXACT_INTEGER: u64 = 9_007_199_254_740_991;
+            let exact = |number: &serde_json::Number| {
+                number.as_i64().is_none_or(|value| value.unsigned_abs() <= MAX_EXACT_INTEGER)
+                    && number.as_u64().is_none_or(|value| value <= MAX_EXACT_INTEGER)
+            };
+            exact(left) && exact(right) && left.as_f64() == right.as_f64()
+        },
         (Value::Array(left), Value::Array(right)) => {
             left.len() == right.len()
                 && left
@@ -7153,16 +7421,17 @@ fn exact_binding_output_delta(
     let Some(before_profile) = before.profiles.get(profile_index) else {
         return false;
     };
-    // Profiles imported from the legacy Swift store may not yet have keyed
-    // maps. The constrained Swift transform starts those profiles from the
-    // standalone CLI's fixed default keyboard map and its keyboard outputs.
-    // Reconstruct that fallback independently so a helper still cannot choose
-    // arbitrary values while materializing the missing maps.
-    let fallback_keys = default_recommended_keys();
+    // Missing maps derive solely from the target profile's declared controls.
+    let mut fallback_outputs = thumble_core::profile_owned_outputs(before_profile);
+    let mut fallback_keys = ButtonBindings::default();
+    for (id, output) in fallback_outputs.iter_ids() {
+        if let Some(keyboard) = &output.keyboard {
+            fallback_keys.insert(id, keyboard.clone());
+        }
+    }
     let before_keys =
         profile_binding_for(&before.profile_key_bindings, profile_id).unwrap_or(&fallback_keys);
-    let mut fallback_outputs = ButtonBindings::default();
-    replace_with_keyboard_outputs(&mut fallback_outputs, before_keys);
+    apply_binding_mode_outputs(binding_profile_mode(before_profile).unwrap_or(crate::draft_operation::ConfigurationOutputMode::Keyboard), before_keys, &mut fallback_outputs);
     let before_outputs = profile_binding_for(&before.profile_output_bindings, profile_id)
         .unwrap_or(&fallback_outputs);
     let (Some(after_keys), Some(after_outputs)) = (
@@ -7171,8 +7440,16 @@ fn exact_binding_output_delta(
     ) else {
         return false;
     };
-    let mut expected_keys = before_keys.clone();
+    // Mirror native mutation: reconcile stored sidecars with explicit owned
+    // configurations before editing, while preserving independent gamepad outputs.
     let mut expected_outputs = before_outputs.clone();
+    for (id, output) in thumble_core::profile_configured_outputs(before_profile).iter_ids() {
+        expected_outputs.insert(id, output.clone());
+    }
+    let mut expected_keys = ButtonBindings::default();
+    for (id, output) in expected_outputs.iter_ids() {
+        if let Some(keyboard) = &output.keyboard { expected_keys.insert(id, keyboard.clone()); }
+    }
     let Some(mut expected_mode) = binding_profile_mode(before_profile) else {
         return false;
     };
@@ -7253,11 +7530,8 @@ fn exact_binding_output_delta(
             {
                 output.keyboard = expected_keys.get(button).cloned();
             }
-            if output.keyboard.is_none() && output.gamepad_buttons.is_empty() {
-                expected_outputs.remove(*button);
-            } else {
-                expected_outputs.insert(*button, output.clone());
-            }
+            // An explicit clear must remain present rather than exposing defaults.
+            expected_outputs.insert(*button, output.clone());
             if expected_outputs.get(button) != original.as_ref() {
                 match output.keyboard {
                     Some(binding) => {
@@ -7327,7 +7601,7 @@ fn binding_profile_mode(
     match profile
         .get("outputMode")
         .and_then(Value::as_str)
-        .unwrap_or("custom")
+        .unwrap_or("keyboard")
     {
         "keyboard" => Some(crate::draft_operation::ConfigurationOutputMode::Keyboard),
         "controller" => Some(crate::draft_operation::ConfigurationOutputMode::Controller),
@@ -7347,101 +7621,21 @@ fn resolved_semantic_binding(
     KeyBinding::from_strokes(strokes)
 }
 
-fn apply_binding_mode_outputs(
-    mode: crate::draft_operation::ConfigurationOutputMode,
-    keys: &ButtonBindings<KeyBinding>,
-    outputs: &mut ButtonBindings<OutputBinding>,
-) {
-    match mode {
-        crate::draft_operation::ConfigurationOutputMode::Keyboard => {
-            replace_with_keyboard_outputs(outputs, keys);
-        }
-        crate::draft_operation::ConfigurationOutputMode::Controller => {
-            replace_with_controller_outputs(outputs);
-        }
-        crate::draft_operation::ConfigurationOutputMode::Custom => {
-            for button in thumble_protocol::GameButton::ALL {
-                if let Some(binding) = keys.get(&button) {
-                    let mut output = outputs.get(&button).cloned().unwrap_or_default();
-                    output.keyboard = Some(binding.clone());
-                    outputs.insert(button, output);
-                }
-            }
-        }
+fn apply_binding_mode_outputs(_mode: crate::draft_operation::ConfigurationOutputMode, keys: &ButtonBindings<KeyBinding>, outputs: &mut ButtonBindings<OutputBinding>) {
+    let ids = outputs.iter().map(|(id, _)| id).chain(keys.iter().map(|(id, _)| id))
+        .filter_map(thumble_protocol::KeypadElementID::parse).collect::<std::collections::BTreeSet<_>>();
+    for id in ids {
+        let mut output = outputs.get(&id).cloned().unwrap_or_default();
+        output.keyboard = keys.get(&id).cloned();
+        outputs.insert(id, output);
     }
 }
 
-fn apply_output_mode_outputs(
-    mode: crate::draft_operation::ConfigurationOutputMode,
-    keys: &ButtonBindings<KeyBinding>,
-    outputs: &mut ButtonBindings<OutputBinding>,
-) {
-    match mode {
-        crate::draft_operation::ConfigurationOutputMode::Keyboard => {
-            replace_with_keyboard_outputs(outputs, keys);
-        }
-        crate::draft_operation::ConfigurationOutputMode::Controller => {
-            replace_with_controller_outputs(outputs);
-        }
-        crate::draft_operation::ConfigurationOutputMode::Custom => {
-            if !thumble_protocol::GameButton::ALL
-                .into_iter()
-                .any(|button| outputs.get(&button).is_some())
-            {
-                replace_with_keyboard_outputs(outputs, keys);
-            }
-        }
+fn apply_output_mode_outputs(_mode: crate::draft_operation::ConfigurationOutputMode, keys: &ButtonBindings<KeyBinding>, outputs: &mut ButtonBindings<OutputBinding>) {
+    for (raw_id, binding) in keys.iter() {
+        let id = thumble_protocol::KeypadElementID::parse(raw_id).unwrap();
+        if outputs.get(&id).is_none() { outputs.insert(id, OutputBinding::keyboard(binding.clone())); }
     }
-}
-
-pub(crate) fn replace_with_keyboard_outputs(
-    outputs: &mut ButtonBindings<OutputBinding>,
-    keys: &ButtonBindings<KeyBinding>,
-) {
-    for button in thumble_protocol::GameButton::ALL {
-        match keys.get(&button) {
-            Some(binding) => {
-                outputs.insert(button, OutputBinding::keyboard(binding.clone()));
-            }
-            None => {
-                outputs.remove(button);
-            }
-        }
-    }
-}
-
-fn replace_with_controller_outputs(outputs: &mut ButtonBindings<OutputBinding>) {
-    for button in thumble_protocol::GameButton::ALL {
-        outputs.remove(button);
-    }
-    for (button, gamepad) in controller_output_pairs() {
-        let mut output = OutputBinding::default();
-        output.gamepad_buttons.insert(gamepad.to_owned());
-        outputs.insert(button, output);
-    }
-}
-
-fn controller_output_pairs() -> [(thumble_protocol::GameButton, &'static str); 17] {
-    use thumble_protocol::GameButton;
-    [
-        (GameButton::Up, "dpadUp"),
-        (GameButton::Down, "dpadDown"),
-        (GameButton::Left, "dpadLeft"),
-        (GameButton::Right, "dpadRight"),
-        (GameButton::Jump, "south"),
-        (GameButton::Attack, "east"),
-        (GameButton::Dash, "west"),
-        (GameButton::Focus, "north"),
-        (GameButton::Map, "select"),
-        (GameButton::Pause, "start"),
-        (GameButton::Custom1, "leftShoulder"),
-        (GameButton::Custom2, "rightShoulder"),
-        (GameButton::Custom3, "leftStickPress"),
-        (GameButton::Custom4, "rightStickPress"),
-        (GameButton::Custom5, "leftTriggerButton"),
-        (GameButton::Custom6, "rightTriggerButton"),
-        (GameButton::Custom7, "home"),
-    ]
 }
 
 const fn configuration_gamepad_name(
@@ -7469,128 +7663,17 @@ const fn configuration_gamepad_name(
     })
 }
 
-fn recommended_outputs(profile: &Value) -> ButtonBindings<OutputBinding> {
-    let template = profile
-        .pointer("/customization/designMetadata/sourceTemplateID")
-        .and_then(Value::as_str)
-        .unwrap_or_default()
-        .to_ascii_lowercase();
-    let productivity = matches!(
-        template.as_str(),
-        "productivitystarter" | "productivityonehandedleft" | "productivityonehandedright"
-    );
-    let keys = if productivity || template.is_empty() || !known_game_template(&template) {
-        default_recommended_keys()
-    } else {
-        gaming_recommended_keys()
-    };
-    let mut outputs = ButtonBindings::default();
-    replace_with_keyboard_outputs(&mut outputs, &keys);
-    outputs
-}
+fn recommended_outputs(profile: &Value) -> ButtonBindings<OutputBinding> { thumble_core::profile_default_outputs(profile) }
 
-fn known_game_template(value: &str) -> bool {
-    matches!(
-        value,
-        "nes"
-            | "snes"
-            | "nintendo64"
-            | "gamecube"
-            | "gameboy"
-            | "gameboyadvance"
-            | "genesissixbutton"
-            | "saturn"
-            | "dreamcast"
-            | "arcadestick"
-            | "psp"
-            | "playstation"
-            | "xbox"
-            | "softwhite"
-    )
-}
-
-pub(crate) fn default_recommended_keys() -> ButtonBindings<KeyBinding> {
-    use thumble_protocol::GameButton;
-    key_map(&[
-        (GameButton::Left, 123, 0),
-        (GameButton::Right, 124, 0),
-        (GameButton::Up, 126, 0),
-        (GameButton::Down, 125, 0),
-        (GameButton::Jump, 36, 0),
-        (GameButton::Attack, 48, 0),
-        (GameButton::Dash, 40, 1),
-        (GameButton::Focus, 11, 8),
-        (GameButton::Map, 35, 3),
-        (GameButton::Pause, 53, 0),
-    ])
-}
-
-fn gaming_recommended_keys() -> ButtonBindings<KeyBinding> {
-    use thumble_protocol::GameButton;
-    key_map(&[
-        (GameButton::Up, 13, 0),
-        (GameButton::Down, 1, 0),
-        (GameButton::Left, 0, 0),
-        (GameButton::Right, 2, 0),
-        (GameButton::Jump, 49, 0),
-        (GameButton::Attack, 38, 0),
-        (GameButton::Dash, 56, 0),
-        (GameButton::Focus, 14, 0),
-        (GameButton::Map, 48, 0),
-        (GameButton::Pause, 53, 0),
-        (GameButton::Custom1, 126, 0),
-        (GameButton::Custom2, 125, 0),
-        (GameButton::Custom3, 123, 0),
-        (GameButton::Custom4, 124, 0),
-        (GameButton::Custom5, 12, 0),
-        (GameButton::Custom6, 15, 0),
-        (GameButton::Custom7, 6, 0),
-        (GameButton::Custom8, 7, 0),
-    ])
-}
-
-fn key_map(entries: &[(thumble_protocol::GameButton, u16, u8)]) -> ButtonBindings<KeyBinding> {
-    let mut result = ButtonBindings::default();
-    for (button, key_code, modifiers) in entries {
-        result.insert(*button, KeyBinding::new(*key_code, *modifiers));
+fn replace_recognized_keys(target: &mut ButtonBindings<KeyBinding>, source: &ButtonBindings<OutputBinding>) {
+    let mut keys = ButtonBindings::default();
+    for (raw_id, output) in source.iter() {
+        if let Some(keyboard) = &output.keyboard { keys.insert(thumble_protocol::KeypadElementID::parse(raw_id).unwrap(), keyboard.clone()); }
     }
-    result
+    *target = keys;
 }
 
-fn replace_recognized_keys(
-    keys: &mut ButtonBindings<KeyBinding>,
-    outputs: &ButtonBindings<OutputBinding>,
-) {
-    for button in thumble_protocol::GameButton::ALL {
-        match outputs
-            .get(&button)
-            .and_then(|output| output.keyboard.clone())
-        {
-            Some(binding) => {
-                keys.insert(button, binding);
-            }
-            None => {
-                keys.remove(button);
-            }
-        }
-    }
-}
-
-fn replace_recognized_outputs(
-    outputs: &mut ButtonBindings<OutputBinding>,
-    replacements: &ButtonBindings<OutputBinding>,
-) {
-    for button in thumble_protocol::GameButton::ALL {
-        match replacements.get(&button).cloned() {
-            Some(output) => {
-                outputs.insert(button, output);
-            }
-            None => {
-                outputs.remove(button);
-            }
-        }
-    }
-}
+fn replace_recognized_outputs(target: &mut ButtonBindings<OutputBinding>, source: &ButtonBindings<OutputBinding>) { *target = source.clone(); }
 
 fn binding_profile_sync_is_exact(
     before: &Value,
@@ -7614,7 +7697,10 @@ fn binding_profile_sync_is_exact(
         crate::draft_operation::ConfigurationOutputMode::Controller => "controller",
         crate::draft_operation::ConfigurationOutputMode::Custom => "custom",
     };
-    if after_object.get("outputMode").and_then(Value::as_str) != Some(expected_mode_name) {
+    let implicit_keyboard = !before_object.contains_key("outputMode")
+        && !after_object.contains_key("outputMode")
+        && expected_mode == crate::draft_operation::ConfigurationOutputMode::Keyboard;
+    if !implicit_keyboard && after_object.get("outputMode").and_then(Value::as_str) != Some(expected_mode_name) {
         return false;
     }
     let mut before_rest = before_object.clone();
@@ -7629,7 +7715,7 @@ fn binding_profile_sync_is_exact(
         before_rest.remove(key);
         after_rest.remove(key);
     }
-    if before_rest != after_rest {
+    if !json_semantically_equal(&Value::Object(before_rest), &Value::Object(after_rest)) {
         return false;
     }
     for key in [
@@ -7669,7 +7755,7 @@ fn customization_output_sync_is_exact(
     let mut after_rest = after.clone();
     let before_elements = before_rest.remove("elements");
     let after_elements = after_rest.remove("elements");
-    if before_rest != after_rest {
+    if !json_semantically_equal(&Value::Object(before_rest), &Value::Object(after_rest)) {
         return false;
     }
     let (Some(before_elements), Some(after_elements)) = (
@@ -7681,74 +7767,22 @@ fn customization_output_sync_is_exact(
     if before_elements.len() != after_elements.len() || before_elements.len() > 128 {
         return false;
     }
-    let custom_mappings = before
-        .get("customButtons")
-        .and_then(Value::as_array)
-        .map(|buttons| {
-            buttons
-                .iter()
-                .filter_map(|button| {
-                    Some((
-                        Uuid::parse_str(button.get("id")?.as_str()?).ok()?,
-                        serde_json::from_value(button.get("mappedButton")?.clone()).ok()?,
-                    ))
-                })
-                .collect::<std::collections::BTreeMap<Uuid, thumble_protocol::GameButton>>()
-        })
-        .unwrap_or_default();
     before_elements
         .iter()
         .zip(after_elements)
         .all(|(before_element, after_element)| {
-            element_output_sync_is_exact(before_element, after_element, &custom_mappings, outputs)
+            element_output_sync_is_exact(before_element, after_element, outputs)
         })
 }
 
-fn element_output_sync_is_exact(
-    before: &Value,
-    after: &Value,
-    custom_mappings: &std::collections::BTreeMap<Uuid, thumble_protocol::GameButton>,
-    outputs: &ButtonBindings<OutputBinding>,
-) -> bool {
-    let (Some(before), Some(after)) = (before.as_object(), after.as_object()) else {
-        return false;
-    };
-    let mut before_rest = before.clone();
-    let mut after_rest = after.clone();
-    let before_output = before_rest.remove("output");
-    let after_output = after_rest.remove("output");
-    if before_rest != after_rest {
-        return false;
-    }
-    let element_id = before
-        .get("id")
-        .and_then(Value::as_str)
-        .and_then(|value| Uuid::parse_str(value).ok());
-    let mut mapped = None;
-    for button in thumble_protocol::GameButton::ALL {
-        let built_in = before
-            .get("builtInButton")
-            .and_then(|value| serde_json::from_value(value.clone()).ok());
-        let legacy = before
-            .get("legacySlot")
-            .and_then(|value| serde_json::from_value(value.clone()).ok());
-        if built_in == Some(button)
-            || legacy == Some(button)
-            || element_id.and_then(|id| custom_mappings.get(&id).copied()) == Some(button)
-        {
-            mapped = Some(button);
-        }
-    }
-    let Some(button) = mapped else {
-        return before_output == after_output;
-    };
-    match outputs.get(&button) {
-        Some(expected) => {
-            after_output
-                .and_then(|value| serde_json::from_value::<OutputBinding>(value).ok())
-                .as_ref()
-                == Some(expected)
-        }
+fn element_output_sync_is_exact(before: &Value, after: &Value, outputs: &ButtonBindings<OutputBinding>) -> bool {
+    let (Some(before), Some(after)) = (before.as_object(), after.as_object()) else { return false; };
+    let mut before_rest = before.clone(); let mut after_rest = after.clone();
+    before_rest.remove("output"); let after_output = after_rest.remove("output");
+    if !json_semantically_equal(&Value::Object(before_rest), &Value::Object(after_rest)) { return false; }
+    let Some(id) = before.get("id").and_then(Value::as_str).and_then(thumble_protocol::KeypadElementID::parse) else { return false; };
+    match outputs.get(&id) {
+        Some(expected) => after_output.and_then(|value| serde_json::from_value::<OutputBinding>(value).ok()).as_ref() == Some(expected),
         None => after_output.is_none() || after_output == Some(Value::Null),
     }
 }
@@ -7840,86 +7874,7 @@ fn valid_binding_output_delta(
     }
 }
 
-fn target_key_binding_only_changed(
-    before: &ConfigurationDocument,
-    after: &ConfigurationDocument,
-    profile_id: &str,
-    button: thumble_protocol::GameButton,
-) -> bool {
-    match (
-        profile_binding_for(&before.profile_key_bindings, profile_id),
-        profile_binding_for(&after.profile_key_bindings, profile_id),
-    ) {
-        (Some(before), Some(after)) => button_bindings_only_changed(before, after, button),
-        (None, Some(_)) => true,
-        _ => false,
-    }
-}
-
-fn target_button_maps_only_changed(
-    before: &ConfigurationDocument,
-    after: &ConfigurationDocument,
-    profile_id: &str,
-    button: thumble_protocol::GameButton,
-) -> bool {
-    let key_bindings_valid = match (
-        profile_binding_for(&before.profile_key_bindings, profile_id),
-        profile_binding_for(&after.profile_key_bindings, profile_id),
-    ) {
-        (Some(before), Some(after)) => button_bindings_only_changed(before, after, button),
-        (None, Some(_)) => true,
-        _ => false,
-    };
-    let output_bindings_valid = match (
-        profile_binding_for(&before.profile_output_bindings, profile_id),
-        profile_binding_for(&after.profile_output_bindings, profile_id),
-    ) {
-        (Some(before), Some(after)) => button_bindings_only_changed(before, after, button),
-        (None, Some(_)) => true,
-        _ => false,
-    };
-    key_bindings_valid && output_bindings_valid
-}
-
-fn button_bindings_only_changed<T: PartialEq>(
-    before: &ButtonBindings<T>,
-    after: &ButtonBindings<T>,
-    button: thumble_protocol::GameButton,
-) -> bool {
-    let target = game_button_name(button);
-    before
-        .iter()
-        .filter(|(name, _)| *name != target)
-        .all(|(name, value)| after.get_raw(name) == Some(value))
-        && after
-            .iter()
-            .filter(|(name, _)| *name != target)
-            .all(|(name, value)| before.get_raw(name) == Some(value))
-}
-
-const fn game_button_name(button: thumble_protocol::GameButton) -> &'static str {
-    use thumble_protocol::GameButton;
-    match button {
-        GameButton::Up => "up",
-        GameButton::Down => "down",
-        GameButton::Left => "left",
-        GameButton::Right => "right",
-        GameButton::Jump => "jump",
-        GameButton::Attack => "attack",
-        GameButton::Dash => "dash",
-        GameButton::Focus => "focus",
-        GameButton::Map => "map",
-        GameButton::Pause => "pause",
-        GameButton::Custom1 => "custom1",
-        GameButton::Custom2 => "custom2",
-        GameButton::Custom3 => "custom3",
-        GameButton::Custom4 => "custom4",
-        GameButton::Custom5 => "custom5",
-        GameButton::Custom6 => "custom6",
-        GameButton::Custom7 => "custom7",
-        GameButton::Custom8 => "custom8",
-    }
-}
+fn game_button_name(button: thumble_protocol::KeypadElementID) -> String { button.to_string() }
 
 fn binding_maps_only_target_changed<T: PartialEq>(
     before: &std::collections::BTreeMap<String, T>,
@@ -7950,7 +7905,6 @@ struct GeneratedInstallExpectation<'a> {
     new_element_ids: &'a [String],
     select: bool,
     make_default: bool,
-    expected_keys: ButtonBindings<KeyBinding>,
 }
 
 fn valid_generated_install(
@@ -8079,16 +8033,22 @@ fn valid_generated_install(
     let Some(actual_keys) = profile_binding_for(&after.profile_key_bindings, target_id) else {
         return false;
     };
-    let expected_outputs = keyboard_outputs(&expectation.expected_keys);
+    let expected_outputs = thumble_core::profile_owned_outputs(&after.profiles[target_index]);
+    let mut expected_keys = ButtonBindings::default();
+    for (id, output) in expected_outputs.iter_ids() {
+        if let Some(keyboard) = &output.keyboard {
+            expected_keys.insert(id, keyboard.clone());
+        }
+    }
     let Some(actual_outputs) = profile_binding_for(&after.profile_output_bindings, target_id)
     else {
         return false;
     };
-    if actual_keys != &expectation.expected_keys || actual_outputs != &expected_outputs {
+    if actual_keys != &expected_keys || actual_outputs != &expected_outputs {
         return false;
     }
     if profile_id_matches(&after.active_profile_id, target_id) {
-        after.key_bindings == expectation.expected_keys && after.output_bindings == expected_outputs
+        after.key_bindings == expected_keys && after.output_bindings == expected_outputs
     } else {
         after.key_bindings == before.key_bindings && after.output_bindings == before.output_bindings
     }
@@ -8123,84 +8083,6 @@ fn generated_custom_element_ids(
         }
     }
     Some(result)
-}
-
-fn keyboard_outputs(keys: &ButtonBindings<KeyBinding>) -> ButtonBindings<OutputBinding> {
-    let mut outputs = ButtonBindings::default();
-    for (name, binding) in keys.iter() {
-        outputs.insert_raw(name, OutputBinding::keyboard(binding.clone()));
-    }
-    outputs
-}
-
-fn generated_key_bindings(
-    _preset: crate::draft_operation::GenerationPreset,
-) -> ButtonBindings<KeyBinding> {
-    let mut bindings = ButtonBindings::default();
-    for (button, key_code) in [
-        ("up", 126),
-        ("down", 125),
-        ("left", 123),
-        ("right", 124),
-        ("focus", 0),
-        ("dash", 8),
-        ("jump", 6),
-        ("attack", 7),
-        ("map", 48),
-        ("pause", 53),
-        ("custom5", 3),
-        ("custom6", 2),
-        ("custom7", 1),
-        ("custom8", 34),
-    ] {
-        bindings.insert_raw(button, KeyBinding::new(key_code, 0));
-    }
-    bindings
-}
-
-fn template_key_bindings(
-    template: crate::draft_operation::ControllerTemplate,
-) -> ButtonBindings<KeyBinding> {
-    let values: &[(&str, u16, u8)] = if template.is_productivity() {
-        &[
-            ("left", 123, 0),
-            ("right", 124, 0),
-            ("up", 126, 0),
-            ("down", 125, 0),
-            ("jump", 36, 0),
-            ("attack", 48, 0),
-            ("dash", 40, 1),
-            ("focus", 11, 8),
-            ("map", 35, 3),
-            ("pause", 53, 0),
-        ]
-    } else {
-        &[
-            ("up", 13, 0),
-            ("down", 1, 0),
-            ("left", 0, 0),
-            ("right", 2, 0),
-            ("jump", 49, 0),
-            ("attack", 38, 0),
-            ("dash", 56, 0),
-            ("focus", 14, 0),
-            ("map", 48, 0),
-            ("pause", 53, 0),
-            ("custom1", 126, 0),
-            ("custom2", 125, 0),
-            ("custom3", 123, 0),
-            ("custom4", 124, 0),
-            ("custom5", 12, 0),
-            ("custom6", 15, 0),
-            ("custom7", 6, 0),
-            ("custom8", 7, 0),
-        ]
-    };
-    let mut bindings = ButtonBindings::default();
-    for (button, key_code, modifiers) in values {
-        bindings.insert_raw(*button, KeyBinding::new(*key_code, *modifiers));
-    }
-    bindings
 }
 
 fn valid_profile_duplicate(
@@ -8691,18 +8573,135 @@ mod tests {
     use std::os::unix::fs::symlink;
     use tempfile::tempdir;
 
+
+    #[test]
+    fn design_attachment_replays_exact_native_reveal_geometry_only() {
+        let state = thumble_core::PersistentState::minimal("design-reveal-delta-test").unwrap();
+        let mut before = ConfigurationDocument::from_state(&state).unwrap();
+        before.profiles[0]["customization"]["topBarActivationRegion"] = serde_json::json!({
+            "centerX":0.5,"centerY":0.115,"widthScale":1,"heightScale":1,"rotationDegrees":0,
+            "hitInsets":{"top":10,"leading":10,"bottom":10,"trailing":10},"isHidden":false
+        });
+        let mut after = before.clone();
+        after.profiles[0]["customization"]["topBarActivationRegion"]["centerY"] = serde_json::json!(0.09);
+        let operation = ConfigurationOperation::DesignApply {
+            profile_id: before.active_profile_id.clone(), package_base64:"AA==".into(),
+            package_sha256:"a".repeat(64),profile_sha256:"b".repeat(64),evidence_sha256:"c".repeat(64),
+            base_profile_sha256:Some("d".repeat(64)),
+            layout_edits_json:Some(serde_json::json!([{"variant":"primary","controlID":"system.top_bar_activation","centerY":0.09}]).to_string())
+        };
+        assert!(validate_operation_bounds(&operation).is_ok());
+        assert!(valid_operation_delta(&before,&after,&operation));
+        let mut unplanned = after.clone();
+        unplanned.profiles[0]["customization"]["topBarActivationRegion"]["centerX"] = serde_json::json!(0.2);
+        assert!(!valid_operation_delta(&before,&unplanned,&operation));
+        unplanned = after.clone();
+        unplanned.profiles[0]["customization"]["topBarActivationRegion"]["hitInsets"]["top"] = serde_json::json!(30);
+        assert!(!valid_operation_delta(&before,&unplanned,&operation));
+        unplanned = after.clone();
+        unplanned.profiles[0]["customization"]["elements"][0]["layout"]["centerY"] = serde_json::json!(0.2);
+        assert!(!valid_operation_delta(&before,&unplanned,&operation));
+        unplanned = after;
+        unplanned.profiles[0]["customization"]["elements"][0]["output"] = serde_json::json!({"gamepadButtons":["south"]});
+        assert!(!valid_operation_delta(&before,&unplanned,&operation));
+    }
+
+    #[test]
+    fn design_attachment_delta_preserves_geometry_routing_defaults_and_unknown_fields() {
+        let state = thumble_core::PersistentState::minimal("design-delta-test").unwrap();
+        let mut before = ConfigurationDocument::from_state(&state).unwrap();
+        before.profiles[0]["unknownDesignSentinel"] = serde_json::json!({"keep": true});
+        let id = before.active_profile_id.clone();
+        let mut after = before.clone();
+        after.profiles[0]["customization"]["elements"][0]["layout"]["fillColor"] = serde_json::json!({"red": 0.2, "green": 0.3, "blue": 0.4, "alpha": 1});
+        after.profiles[0]["skinReference"] = serde_json::json!({"identifier": "com.test.design", "version": "1.0.0"});
+        let operation = ConfigurationOperation::DesignApply { profile_id: id.clone(), package_base64: "AA==".into(),
+            package_sha256: "a".repeat(64), profile_sha256: "b".repeat(64), evidence_sha256: "c".repeat(64),
+            base_profile_sha256: None, layout_edits_json: None };
+        assert!(validate_operation_bounds(&operation).is_ok());
+        let artifact_operation = ConfigurationOperation::DesignApply { profile_id: id.clone(),
+            package_base64: "A".repeat(100_000), package_sha256: "a".repeat(64), profile_sha256: "b".repeat(64), evidence_sha256: "c".repeat(64),
+            base_profile_sha256: None, layout_edits_json: None };
+        assert!(validate_operation_bounds(&artifact_operation).is_ok());
+        assert!(allowed_changed_path(&operation, &format!("/profiles/{id}")));
+        assert!(!allowed_changed_path(&operation, "/outputBindings"));
+        assert!(valid_operation_delta(&before, &after, &operation));
+        // Native skin attachment installs passive artwork alongside its raster assets.
+        // It must still preserve customization interaction and extension fields.
+        let mut decorated = after.clone();
+        decorated.profiles[0]["customization"]["artworkLayers"] = serde_json::json!([
+            {"id":"instrument-field","assetID":"field-landscape-light","placement":"underlay"}
+        ]);
+        assert!(valid_operation_delta(&before, &decorated, &operation));
+        decorated.profiles[0]["customization"]["interactionSentinel"] = serde_json::json!(true);
+        assert!(!valid_operation_delta(&before, &decorated, &operation));
+        let mut moved = after.clone();
+        moved.profiles[0]["customization"]["elements"][0]["layout"]["centerX"] = serde_json::json!(0.1);
+        assert!(!valid_operation_delta(&before, &moved, &operation));
+        let control_id = before.profiles[0]["customization"]["elements"][0]["id"].as_str().unwrap();
+        let mut planned = operation.clone();
+        if let ConfigurationOperation::DesignApply { base_profile_sha256, layout_edits_json, .. } = &mut planned {
+            *base_profile_sha256 = Some("d".repeat(64));
+            *layout_edits_json = Some(serde_json::json!([{"variant":"primary", "controlID":format!("builtin.{control_id}"),"centerX":0.1}]).to_string());
+        }
+        assert!(valid_operation_delta(&before, &moved, &planned));
+        moved.profiles[0]["customization"]["elements"][0]["layout"]["centerY"] = serde_json::json!(0.2);
+        assert!(!valid_operation_delta(&before, &moved, &planned));
+        let metadata = serde_json::json!({"schemaVersion":1,"actionID":"lux.light-binding","groupIDs":["abilities"],"legend":"Q"});
+        let mut described = after.clone();
+        described.profiles[0]["customization"]["elements"][0]["presentation"] = metadata.clone();
+        assert!(!valid_operation_delta(&before, &described, &operation));
+        let mut semantic_plan = operation.clone();
+        if let ConfigurationOperation::DesignApply { base_profile_sha256, layout_edits_json, .. } = &mut semantic_plan {
+            *base_profile_sha256 = Some("d".repeat(64));
+            *layout_edits_json = Some(serde_json::json!([{"variant":"primary","controlID":format!("builtin.{control_id}"),"presentation":metadata}]).to_string());
+        }
+        assert!(validate_operation_bounds(&semantic_plan).is_ok());
+        assert!(valid_operation_delta(&before, &described, &semantic_plan));
+        described.profiles[0]["customization"]["elements"][0]["presentation"]["legend"] = serde_json::json!("forged");
+        assert!(!valid_operation_delta(&before, &described, &semantic_plan));
+        let mut clear_plan = operation.clone();
+        if let ConfigurationOperation::DesignApply { base_profile_sha256, layout_edits_json, .. } = &mut clear_plan {
+            *base_profile_sha256 = Some("d".repeat(64));
+            *layout_edits_json = Some(serde_json::json!([{"variant":"primary","controlID":format!("builtin.{control_id}"),"clearPresentation":true}]).to_string());
+        }
+        assert!(validate_operation_bounds(&clear_plan).is_ok());
+        assert!(valid_operation_delta(&described, &after, &clear_plan));
+        let mut role_changed = after.clone();
+        role_changed.profiles[0]["customization"]["elements"][0]["visualRole"] = serde_json::json!("utility");
+        assert!(!valid_operation_delta(&before, &role_changed, &operation));
+        let mut role_plan = operation.clone();
+        if let ConfigurationOperation::DesignApply { base_profile_sha256, layout_edits_json, .. } = &mut role_plan {
+            *base_profile_sha256 = Some("d".repeat(64));
+            *layout_edits_json = Some(serde_json::json!([{"variant":"primary","controlID":format!("builtin.{control_id}"),"visualRole":"utility"}]).to_string());
+        }
+        assert!(validate_operation_bounds(&role_plan).is_ok());
+        assert!(valid_operation_delta(&before, &role_changed, &role_plan));
+        role_changed.profiles[0]["customization"]["elements"][0]["visualRole"] = serde_json::json!("primary_action");
+        assert!(!valid_operation_delta(&before, &role_changed, &role_plan));
+        let mut rebound = after.clone();
+        rebound.profiles[0]["customization"]["elements"][0]["output"] = serde_json::json!({"gamepadButtons": ["south"]});
+        assert!(!valid_operation_delta(&before, &rebound, &operation));
+        let mut lost_unknown = after.clone();
+        lost_unknown.profiles[0].as_object_mut().unwrap().remove("unknownDesignSentinel");
+        assert!(!valid_operation_delta(&before, &lost_unknown, &operation));
+        let mut selected = after;
+        selected.default_profile_id = uuid::Uuid::new_v4().to_string();
+        assert!(!valid_operation_delta(&before, &selected, &operation));
+    }
+
     #[test]
     fn binding_delta_requires_exact_semantic_sequence_and_element_mirrors() {
         use crate::draft_operation::{SemanticKeyStroke, SemanticModifier};
         use thumble_core::{KeyStroke, PersistentState};
-        use thumble_protocol::GameButton;
+        use thumble_protocol::KeypadElementID;
 
         let state = PersistentState::minimal("test-server").unwrap();
         let before = ConfigurationDocument::from_state(&state).unwrap();
         let profile_id = before.active_profile_id.clone();
         let operation = ConfigurationOperation::BindingSet {
             profile_id: profile_id.clone(),
-            button: GameButton::Jump,
+            button: KeypadElementID::preset(5),
             sequence: vec![
                 SemanticKeyStroke {
                     key: "B".to_owned(),
@@ -8718,20 +8717,20 @@ mod tests {
         let binding =
             KeyBinding::from_strokes(vec![KeyStroke::new(11, 8), KeyStroke::new(4, 0)]).unwrap();
         let keys = after.profile_key_bindings.get_mut(&profile_id).unwrap();
-        keys.insert(GameButton::Jump, binding);
+        keys.insert(KeypadElementID::preset(5), binding);
         let keys = keys.clone();
         let outputs = after.profile_output_bindings.get_mut(&profile_id).unwrap();
-        replace_with_keyboard_outputs(outputs, &keys);
+        apply_binding_mode_outputs(crate::draft_operation::ConfigurationOutputMode::Keyboard, &keys, outputs);
         let outputs = outputs.clone();
         after.key_bindings = keys;
         after.output_bindings = outputs.clone();
         let profile = after.profiles[0].as_object_mut().unwrap();
         profile.insert("updatedAt".to_owned(), Value::from(100));
         for element in profile["customization"]["elements"].as_array_mut().unwrap() {
-            let button: GameButton = serde_json::from_value(element["legacySlot"].clone()).unwrap();
+            let id: KeypadElementID = serde_json::from_value(element["id"].clone()).unwrap();
             element.as_object_mut().unwrap().insert(
                 "output".to_owned(),
-                serde_json::to_value(outputs.get(&button).unwrap()).unwrap(),
+                outputs.get(&id).unwrap().element_value(),
             );
         }
         assert!(valid_operation_delta(&before, &after, &operation));
@@ -8754,7 +8753,7 @@ mod tests {
             .profile_key_bindings
             .get_mut(&profile_id)
             .unwrap()
-            .insert(GameButton::Jump, KeyBinding::new(125, 0));
+            .insert(KeypadElementID::preset(5), KeyBinding::new(125, 0));
         substituted.key_bindings = substituted.profile_key_bindings[&profile_id].clone();
         assert!(!valid_operation_delta(&before, &substituted, &operation));
 
@@ -8762,6 +8761,91 @@ mod tests {
         injected.profiles[0]["customization"]["elements"][0]["label"] =
             Value::String("Injected".to_owned());
         assert!(!valid_operation_delta(&before, &injected, &operation));
+    }
+
+    #[test]
+    fn binding_delta_reconciles_stale_sidecars_to_owned_outputs() {
+        use thumble_protocol::KeypadElementID;
+        let mut before = ConfigurationDocument::from_state(&thumble_core::PersistentState::minimal("server").unwrap()).unwrap();
+        let profile_id = before.active_profile_id.clone();
+        let stale_id = KeypadElementID::preset(5);
+        let target_id = KeypadElementID::preset(6);
+        let stale = OutputBinding::keyboard(KeyBinding::new(12, 0));
+        before.profile_key_bindings.get_mut(&profile_id).unwrap().insert(stale_id, KeyBinding::new(12, 0));
+        before.profile_output_bindings.get_mut(&profile_id).unwrap().insert(stale_id, stale);
+        before.key_bindings = before.profile_key_bindings[&profile_id].clone();
+        before.output_bindings = before.profile_output_bindings[&profile_id].clone();
+        let operation = ConfigurationOperation::BindingSet {
+            profile_id: profile_id.clone(), button: target_id,
+            sequence: vec![crate::draft_operation::SemanticKeyStroke { key: "Tab".to_owned(), modifiers: Vec::new() }],
+        };
+        let mut after = before.clone();
+        let mut outputs = thumble_core::profile_owned_outputs(&before.profiles[0]);
+        let mut target = outputs.get(&target_id).unwrap().clone();
+        target.keyboard = Some(KeyBinding::new(48, 0));
+        outputs.insert(target_id, target);
+        let mut keys = ButtonBindings::default();
+        for (id, output) in outputs.iter_ids() {
+            if let Some(keyboard) = &output.keyboard { keys.insert(id, keyboard.clone()); }
+        }
+        after.profile_key_bindings.insert(profile_id.clone(), keys.clone());
+        after.profile_output_bindings.insert(profile_id.clone(), outputs.clone());
+        after.key_bindings = keys;
+        after.output_bindings = outputs.clone();
+        after.profiles[0]["updatedAt"] = serde_json::json!(100);
+        for element in after.profiles[0]["customization"]["elements"].as_array_mut().unwrap() {
+            let id = KeypadElementID::parse(element["id"].as_str().unwrap()).unwrap();
+            if let Some(output) = outputs.get(&id) { element["output"] = output.element_value(); }
+        }
+        assert!(valid_operation_delta(&before, &after, &operation));
+        after.profile_output_bindings.get_mut(&profile_id).unwrap().insert(stale_id, OutputBinding::keyboard(KeyBinding::new(12, 0)));
+        after.output_bindings = after.profile_output_bindings[&profile_id].clone();
+        assert!(!valid_operation_delta(&before, &after, &operation));
+    }
+
+    #[test]
+    fn reset_recommendations_use_declared_defaults_not_current_outputs() {
+        let id = thumble_protocol::KeypadElementID::parse("B42A01DD-1782-445D-8CC5-CE0497198637").unwrap();
+        let profile = serde_json::json!({"customization": {"elements": [{
+            "id": id, "output": {"keyboard": {"keyCode": 23}, "gamepadButtons": ["south"]},
+            "defaultOutput": {"keyboard": {"keyCode": 9}, "gamepadButtons": ["west"]}
+        }]}});
+        assert_eq!(thumble_core::profile_owned_outputs(&profile).get(&id).unwrap().keyboard.as_ref().unwrap().key_code, 23);
+        let defaults = recommended_outputs(&profile);
+        assert_eq!(defaults.get(&id).unwrap().keyboard.as_ref().unwrap().key_code, 9);
+        assert!(defaults.get(&id).unwrap().gamepad_buttons.contains("west"));
+        let no_defaults = serde_json::json!({"customization": {"elements": [{
+            "id": id, "output": {"keyboard": {"keyCode": 23}}
+        }]}});
+        assert!(recommended_outputs(&no_defaults).is_empty());
+    }
+
+    #[test]
+    fn output_delta_preserves_an_owned_clear_instead_of_restoring_defaults() {
+        use crate::draft_operation::{GamepadOutputEdit, KeyboardOutputEdit, ConfigurationOutputMode};
+        let before = ConfigurationDocument::from_state(&thumble_core::PersistentState::minimal("server").unwrap()).unwrap();
+        let profile_id = before.active_profile_id.clone();
+        let id = thumble_protocol::KeypadElementID::preset(5);
+        let operation = ConfigurationOperation::OutputSet {
+            profile_id: profile_id.clone(), button: id,
+            keyboard_edit: KeyboardOutputEdit::Clear, gamepad_edit: GamepadOutputEdit::Clear,
+        };
+        let mut after = before.clone();
+        after.profile_key_bindings.get_mut(&profile_id).unwrap().remove(id);
+        after.profile_output_bindings.get_mut(&profile_id).unwrap().insert(id, OutputBinding::default());
+        after.key_bindings = after.profile_key_bindings[&profile_id].clone();
+        after.output_bindings = after.profile_output_bindings[&profile_id].clone();
+        after.profiles[0]["outputMode"] = serde_json::json!(ConfigurationOutputMode::Custom);
+        after.profiles[0]["updatedAt"] = serde_json::json!(100);
+        for element in after.profiles[0]["customization"]["elements"].as_array_mut().unwrap() {
+            if element["id"].as_str().is_some_and(|raw| thumble_protocol::KeypadElementID::parse(raw) == Some(id)) {
+                element["output"] = OutputBinding::default().element_value();
+            }
+        }
+        assert!(valid_operation_delta(&before, &after, &operation));
+        after.profile_output_bindings.get_mut(&profile_id).unwrap().remove(id);
+        after.output_bindings.remove(id);
+        assert!(!valid_operation_delta(&before, &after, &operation));
     }
 
     #[test]
@@ -9113,6 +9197,31 @@ print(json.dumps({"schemaVersion":1,"document":request["document"],"changed":Tru
     }
 
     #[test]
+    fn device_set_accepts_only_source_preserving_current_orientation_mirrors() {
+        let fixture: Value = thumble_protocol::decode_unique_json(include_bytes!(
+            "../tests/fixtures/current-native-device-set-v1.json"
+        )).unwrap();
+        let before: ConfigurationDocument = serde_json::from_value(fixture["before"].clone()).unwrap();
+        let after: ConfigurationDocument = serde_json::from_value(fixture["after"].clone()).unwrap();
+        let operation: ConfigurationOperation = serde_json::from_value(fixture["operation"].clone()).unwrap();
+        before.validate().unwrap();
+        after.validate().unwrap();
+        assert!(valid_operation_delta(&before, &after, &operation), "generic={}, constrained={}",
+            customization_operation_delta(&before, &after, &before.active_profile_id, crate::draft_operation::ConfigurationVariant::Primary),
+            constrained_customization_operation_delta(&before, &after, &operation));
+        let index = profile_position(&after, &after.active_profile_id).unwrap();
+        let mut lossy = after.clone();
+        lossy.profiles[index]["landscapeCustomization"]["elements"][0]
+            .as_object_mut().unwrap().remove("futureElement");
+        assert!(!valid_operation_delta(&before, &lossy, &operation));
+        let mut injected = after.clone();
+        for field in ["customization", "landscapeCustomization"] {
+            injected.profiles[index][field]["elements"][0]["output"] = serde_json::json!({"gamepadButtons":["south"]});
+        }
+        assert!(!valid_operation_delta(&before, &injected, &operation));
+    }
+
+    #[test]
     fn control_bar_collection_delta_reconstructs_sparse_defaults_and_variant_frames() {
         use crate::draft_operation::{ConfigurationControlBarItem, ConfigurationVariant};
         let before = ConfigurationDocument::from_state(
@@ -9314,7 +9423,7 @@ print(json.dumps({"schemaVersion":1,"document":request["document"],"changed":Tru
         let mut initial_order = normalized_layer_order(&initial).unwrap();
         let jump = initial_order
             .iter_mut()
-            .find(|identity| layer_identity_key(identity).as_deref() == Some("builtin:jump"))
+            .find(|identity| layer_identity_key(identity).as_deref() == Some("builtin:00000000-0000-0000-0000-000000000105"))
             .unwrap();
         jump.as_object_mut().unwrap().insert(
             "futureIdentity".to_owned(),
@@ -9351,8 +9460,8 @@ print(json.dumps({"schemaVersion":1,"document":request["document"],"changed":Tru
         let profile = after.profiles[0].as_object_mut().unwrap();
         let mut changed = profile["customization"].as_object().unwrap().clone();
         let mut order = normalized_layer_order(&changed).unwrap();
-        let jump = resolve_layer_identity(&changed, "builtin.jump").unwrap();
-        let attack = resolve_layer_identity(&changed, "builtin.attack").unwrap();
+        let jump = resolve_layer_identity(&changed, "builtin.00000000-0000-0000-0000-000000000105").unwrap();
+        let attack = resolve_layer_identity(&changed, "builtin.00000000-0000-0000-0000-000000000106").unwrap();
         let source = layer_order_position(&order, &jump).unwrap();
         let destination = layer_order_position(&order, &attack).unwrap() + 1;
         let moving = order.remove(source);
@@ -9367,14 +9476,14 @@ print(json.dumps({"schemaVersion":1,"document":request["document"],"changed":Tru
             .as_array()
             .unwrap()
             .iter()
-            .find(|identity| layer_identity_key(identity).as_deref() == Some("builtin:jump"))
+            .find(|identity| layer_identity_key(identity).as_deref() == Some("builtin:00000000-0000-0000-0000-000000000105"))
             .unwrap();
         assert_eq!(moved_jump["futureIdentity"]["kept"], true);
 
         let restore = ConfigurationOperation::LayerMove {
             profile_id: before.active_profile_id.clone(),
             variant: ConfigurationVariant::Primary,
-            element_id: "builtin.jump".to_owned(),
+            element_id: "builtin.00000000-0000-0000-0000-000000000105".to_owned(),
             destination: LayerMoveDestination::Index { index: 5 },
         };
         let before_restore = after.clone();
@@ -9382,7 +9491,7 @@ print(json.dumps({"schemaVersion":1,"document":request["document"],"changed":Tru
         let profile = restored.profiles[0].as_object_mut().unwrap();
         let mut restored_customization = profile["customization"].as_object().unwrap().clone();
         let mut restored_order = normalized_layer_order(&restored_customization).unwrap();
-        let jump = resolve_layer_identity(&restored_customization, "builtin.jump").unwrap();
+        let jump = resolve_layer_identity(&restored_customization, "builtin.00000000-0000-0000-0000-000000000105").unwrap();
         let source = layer_order_position(&restored_order, &jump).unwrap();
         let moving = restored_order.remove(source);
         restored_order.insert(5, moving);
@@ -9401,7 +9510,7 @@ print(json.dumps({"schemaVersion":1,"document":request["document"],"changed":Tru
                 .unwrap()
                 .iter()
                 .find(|identity| {
-                    layer_identity_key(identity).as_deref() == Some("builtin:jump")
+                    layer_identity_key(identity).as_deref() == Some("builtin:00000000-0000-0000-0000-000000000105")
                 })
                 .unwrap()["futureIdentity"]["kept"],
             true
@@ -9428,15 +9537,15 @@ print(json.dumps({"schemaVersion":1,"document":request["document"],"changed":Tru
             variant: ConfigurationVariant::Primary,
             group_id: group_id.to_owned(),
             name: "Actions".to_owned(),
-            element_ids: vec!["builtin.jump".to_owned(), "builtin.attack".to_owned()],
+            element_ids: vec!["builtin.00000000-0000-0000-0000-000000000105".to_owned(), "builtin.00000000-0000-0000-0000-000000000106".to_owned()],
         };
         let mut after = before.clone();
         let mut customization = before.profiles[0]["customization"]
             .as_object()
             .unwrap()
             .clone();
-        let jump = resolve_layer_identity(&customization, "builtin.jump").unwrap();
-        let attack = resolve_layer_identity(&customization, "builtin.attack").unwrap();
+        let jump = resolve_layer_identity(&customization, "builtin.00000000-0000-0000-0000-000000000105").unwrap();
+        let attack = resolve_layer_identity(&customization, "builtin.00000000-0000-0000-0000-000000000106").unwrap();
         let group = serde_json::json!({
             "id": canonical_uuid_string(group_id),
             "name": "Actions",
@@ -9476,8 +9585,8 @@ print(json.dumps({"schemaVersion":1,"document":request["document"],"changed":Tru
             .as_object()
             .unwrap()
             .clone();
-        let jump = resolve_layer_identity(&raw_customization, "builtin.jump").unwrap();
-        let attack = resolve_layer_identity(&raw_customization, "builtin.attack").unwrap();
+        let jump = resolve_layer_identity(&raw_customization, "builtin.00000000-0000-0000-0000-000000000105").unwrap();
+        let attack = resolve_layer_identity(&raw_customization, "builtin.00000000-0000-0000-0000-000000000106").unwrap();
         let group = serde_json::json!({
             "id": canonical_uuid_string(group_id),
             "name": "Actions",
@@ -9503,7 +9612,7 @@ print(json.dumps({"schemaVersion":1,"document":request["document"],"changed":Tru
             variant: ConfigurationVariant::Landscape,
             group_id: group_id.to_owned(),
             name: "Actions".to_owned(),
-            element_ids: vec!["builtin.jump".to_owned(), "builtin.attack".to_owned()],
+            element_ids: vec!["builtin.00000000-0000-0000-0000-000000000105".to_owned(), "builtin.00000000-0000-0000-0000-000000000106".to_owned()],
         };
         let mut landscape_before = raw_metadata_before.clone();
         landscape_before.profiles[0]["landscapeCustomization"] =
@@ -9552,8 +9661,8 @@ print(json.dumps({"schemaVersion":1,"document":request["document"],"changed":Tru
             .unwrap()
             .clone();
         let children = vec![
-            resolve_layer_identity(&customization, "builtin.jump").unwrap(),
-            resolve_layer_identity(&customization, "builtin.attack").unwrap(),
+            resolve_layer_identity(&customization, "builtin.00000000-0000-0000-0000-000000000105").unwrap(),
+            resolve_layer_identity(&customization, "builtin.00000000-0000-0000-0000-000000000106").unwrap(),
         ];
         let group = serde_json::json!({
             "id": canonical_uuid_string(group_id),
@@ -9703,8 +9812,8 @@ print(json.dumps({"schemaVersion":1,"document":request["document"],"changed":Tru
             .unwrap()
             .clone();
         let children = vec![
-            resolve_layer_identity(&customization, "builtin.jump").unwrap(),
-            resolve_layer_identity(&customization, "builtin.attack").unwrap(),
+            resolve_layer_identity(&customization, "builtin.00000000-0000-0000-0000-000000000105").unwrap(),
+            resolve_layer_identity(&customization, "builtin.00000000-0000-0000-0000-000000000106").unwrap(),
         ];
         let group = serde_json::json!({
             "id": canonical_uuid_string(group_id),
@@ -9848,15 +9957,16 @@ print(json.dumps({"schemaVersion":1,"document":request["document"],"changed":Tru
     fn style_reference_cleanup_reconstructs_all_control_mirrors() {
         let custom_id = "00000000-0000-0000-0000-000000000901";
         let mut customization = serde_json::json!({
-            "buttonCustomizations":["jump",{
+            "buttonCustomizations":["00000000-0000-0000-0000-000000000105",{
                 "widthScale":1,"heightScale":1,"rotationDegrees":0,"zIndex":0,
                 "shadowStrength":1,"isLocationLocked":false,"isHidden":false,
                 "styleID":"target"
             }],
             "customButtons":[{"id":custom_id,"layout":{"styleID":"target"}}],
             "elements":[
-                {"id":"00000000-0000-0000-0000-000000000105","builtInButton":"jump","layout":{"styleID":"target"}},
-                {"id":custom_id,"layout":{"styleID":"target"}}
+                {"id":"00000000-0000-0000-0000-000000000105","kind":"button","layout":{"styleID":"target"}},
+                {"id":custom_id,"layout":{"styleID":"target"}},
+                {"id":"B79F4CF4-C998-47F3-98DC-64866576CA20","kind":"button","layout":{"styleID":"target"}}
             ],
             "topBarActivationRegion":{"styleID":"target"},
             "controlBarItemCustomizations":[
@@ -9903,8 +10013,8 @@ print(json.dumps({"schemaVersion":1,"document":request["document"],"changed":Tru
             .unwrap()
             .clone();
         let children = vec![
-            resolve_layer_identity(&customization, "builtin.jump").unwrap(),
-            resolve_layer_identity(&customization, "builtin.attack").unwrap(),
+            resolve_layer_identity(&customization, "builtin.00000000-0000-0000-0000-000000000105").unwrap(),
+            resolve_layer_identity(&customization, "builtin.00000000-0000-0000-0000-000000000106").unwrap(),
         ];
         let group = serde_json::json!({
             "id": canonical_uuid_string(group_id),
@@ -10024,25 +10134,24 @@ print(json.dumps({"schemaVersion":1,"document":request["document"],"changed":Tru
             make_default: false,
         };
         let mut after = before.clone();
-        after.profiles.push(serde_json::json!({
-            "id": profile_id,
-            "name": "Super Nintendo",
-            "customization": {
-                "customButtons": [
-                    {"id": element_ids[0]},
-                    {"id": element_ids[1]}
-                ],
-                "designMetadata": {
-                    "sourceTemplateID": "snes",
-                    "sourceTemplateRevision": 2
-                }
-            },
-            "orientationPreference": "automatic",
-            "outputMode": "keyboard",
-            "updatedAt": 1
-        }));
-        let keys = template_key_bindings(ControllerTemplate::Snes);
-        let outputs = keyboard_outputs(&keys);
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../fixtures/controller-templates/v1/snes.json");
+        let fixture: Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+        let mut profile_json = serde_json::to_string(&fixture["profile"]).unwrap();
+        for (source, destination) in fixture["customElementIDs"].as_array().unwrap().iter().zip(&element_ids) {
+            profile_json = profile_json.replace(source.as_str().unwrap(), destination);
+        }
+        let mut profile: Value = serde_json::from_str(&profile_json).unwrap();
+        profile["id"] = serde_json::json!(profile_id);
+        profile["customization"]["designMetadata"]["sourceTemplateRevision"] = serde_json::json!(2);
+        let outputs = thumble_core::profile_owned_outputs(&profile);
+        let mut keys = ButtonBindings::default();
+        for (id, output) in outputs.iter_ids() {
+            if let Some(keyboard) = &output.keyboard {
+                keys.insert(id, keyboard.clone());
+            }
+        }
+        after.profiles.push(profile);
         after
             .profile_key_bindings
             .insert(profile_id.to_owned(), keys);
@@ -10056,7 +10165,7 @@ print(json.dumps({"schemaVersion":1,"document":request["document"],"changed":Tru
             .profile_key_bindings
             .get_mut(profile_id)
             .unwrap()
-            .insert_raw("jump", KeyBinding::new(1, 0));
+            .insert(thumble_protocol::KeypadElementID::preset(5), KeyBinding::new(1, 0));
         assert!(!valid_operation_delta(&before, &wrong_binding, &operation));
 
         let mut undeclared_id = after.clone();
@@ -10101,6 +10210,189 @@ print(json.dumps({"schemaVersion":1,"document":request["document"],"changed":Tru
     }
 
     #[test]
+    fn element_only_operations_match_native_goldens_and_reject_injection() {
+        let fixture: Value = serde_json::from_str(include_str!(
+            "../tests/fixtures/element-only-operations-v1.json"
+        )).unwrap();
+        fn mutate_active_customizations(document: &mut ConfigurationDocument, mut mutate: impl FnMut(&mut Value)) {
+            let primary = document.profiles[0]["customization"].clone();
+            for field in ["customization", "landscapeCustomization", "portraitCustomization"] {
+                if document.profiles[0].get(field) == Some(&primary) {
+                    mutate(&mut document.profiles[0][field]);
+                }
+            }
+        }
+        let mut rejected = Vec::new();
+        for case in fixture["cases"].as_array().unwrap() {
+            let before: ConfigurationDocument = serde_json::from_value(case["before"].clone()).unwrap();
+            let after: ConfigurationDocument = serde_json::from_value(case["after"].clone()).unwrap();
+            let operation: ConfigurationOperation = serde_json::from_value(case["operation"].clone()).unwrap();
+            if !valid_operation_delta(&before, &after, &operation) {
+                rejected.push(case["name"].as_str().unwrap());
+                continue;
+            }
+            if matches!(operation, ConfigurationOperation::ElementAlign { .. } | ConfigurationOperation::ElementDistribute { .. } | ConfigurationOperation::ElementNudge { .. }) {
+                let mut injected = after.clone();
+                mutate_active_customizations(&mut injected, |customization| {
+                    let id = customization["elements"][0]["id"].as_str().unwrap().to_owned();
+                    customization["elements"][0]["layout"]["centerX"] = Value::from(0.94);
+                    if let Some(mirrors) = customization.get_mut("customButtons").and_then(Value::as_array_mut) {
+                        for mirror in mirrors {
+                            if mirror["id"].as_str().is_some_and(|value| value.eq_ignore_ascii_case(&id)) {
+                                mirror["layout"]["centerX"] = Value::from(0.94);
+                            }
+                        }
+                    }
+                    if let Some(mirrors) = customization.get_mut("buttonCustomizations").and_then(Value::as_array_mut) {
+                        for pair in mirrors.chunks_exact_mut(2) {
+                            if pair[0].as_str().is_some_and(|value| value.eq_ignore_ascii_case(&id)) {
+                                pair[1]["centerX"] = Value::from(0.94);
+                            }
+                        }
+                    }
+                });
+                assert!(!valid_operation_delta(&before, &injected, &operation), "mirror-consistent geometry injection: {}", case["name"]);
+            }
+            let mut injected = after.clone();
+            injected.profiles[0]["name"] = Value::String("Injected".to_owned());
+            assert!(!valid_operation_delta(&before, &injected, &operation), "profile injection: {}", case["name"]);
+            if case["name"] != "element-only-delete" {
+                for field in ["output", "defaultOutput", "futureControl"] {
+                    let mut injected = after.clone();
+                    mutate_active_customizations(&mut injected, |customization| {
+                        customization["elements"][0][field] = serde_json::json!({"injected":true});
+                    });
+                    assert!(!valid_operation_delta(&before, &injected, &operation), "element field injection ({field}): {}", case["name"]);
+                }
+                let mut injected = after.clone();
+                mutate_active_customizations(&mut injected, |customization| {
+                    customization.as_object_mut().unwrap().entry("customButtons")
+                        .or_insert_with(|| Value::Array(Vec::new())).as_array_mut().unwrap().push(serde_json::json!({
+                        "id":"3C622DCB-64C9-4FF7-9B91-11464E2C274F", "label":"Injected", "controlKind":"button", "layout":{}
+                    }));
+                });
+                assert!(!valid_operation_delta(&before, &injected, &operation), "undeclared mirror injection: {}", case["name"]);
+            }
+        }
+        assert!(rejected.is_empty(), "native element-only operations rejected: {rejected:?}");
+    }
+
+    #[test]
+    fn duplicate_preserves_source_future_metadata_and_rejects_replacement_or_loss() {
+        let fixture: Value = thumble_protocol::decode_unique_json(include_bytes!("../tests/fixtures/element-only-operations-v1.json")).unwrap();
+        let case = fixture["cases"].as_array().unwrap().iter().find(|case| case["operation"]["type"] == "element.duplicate").unwrap();
+        let operation: ConfigurationOperation = serde_json::from_value(case["operation"].clone()).unwrap();
+        let ConfigurationOperation::ElementDuplicate { element_ids, new_element_ids, .. } = &operation else { unreachable!() };
+        let mut before: ConfigurationDocument = serde_json::from_value(case["before"].clone()).unwrap();
+        let mut after: ConfigurationDocument = serde_json::from_value(case["after"].clone()).unwrap();
+        let mut source = before.profiles[0]["customization"]["elements"].as_array().unwrap().iter()
+            .find(|element| element["id"].as_str().unwrap().eq_ignore_ascii_case(&element_ids[0])).unwrap().clone();
+        source["futureCopy"] = serde_json::json!({"vendor":"x"});
+        let known = ["id", "label", "kind", "layout", "visualRole", "output", "defaultOutput", "partOutputs",
+            "joystickMapping", "joystickOutputSettings", "triggerSettings", "trackpadSettings"];
+        for document in [&mut before, &mut after] {
+            let primary = document.profiles[0]["customization"].clone();
+            for field in ["customization", "landscapeCustomization", "portraitCustomization"] {
+                if document.profiles[0].get(field) != Some(&primary) { continue; }
+                for element in document.profiles[0][field]["elements"].as_array_mut().unwrap() {
+                    let id = element["id"].as_str().unwrap();
+                    if id.eq_ignore_ascii_case(&element_ids[0]) || id.eq_ignore_ascii_case(&new_element_ids[0]) {
+                        for (key, value) in source.as_object().unwrap().iter().filter(|(key, _)| !known.contains(&key.as_str())) {
+                            element[key] = value.clone();
+                        }
+                    }
+                }
+            }
+        }
+        before.validate().unwrap(); after.validate().unwrap();
+        assert!(valid_operation_delta(&before, &after, &operation));
+        for replacement in [None, Some(serde_json::json!({"vendor":"injected"}))] {
+            let mut bad = after.clone();
+            for field in ["customization", "landscapeCustomization", "portraitCustomization"] {
+                for element in bad.profiles[0][field]["elements"].as_array_mut().into_iter().flatten() {
+                    if element["id"].as_str().is_some_and(|id| id.eq_ignore_ascii_case(&new_element_ids[0])) {
+                        if let Some(value) = &replacement { element["futureCopy"] = value.clone(); }
+                        else { element.as_object_mut().unwrap().remove("futureCopy"); }
+                    }
+                }
+            }
+            assert!(!valid_operation_delta(&before, &bad, &operation));
+        }
+    }
+
+    #[test]
+    fn duplicate_delete_reset_reject_exact_operation_injections() {
+        let fixture: Value = serde_json::from_str(include_str!(
+            "../tests/fixtures/element-only-operations-v1.json"
+        )).unwrap();
+        let mut accepted = Vec::new();
+        for case in fixture["cases"].as_array().unwrap() {
+            let before: ConfigurationDocument = serde_json::from_value(case["before"].clone()).unwrap();
+            let after: ConfigurationDocument = serde_json::from_value(case["after"].clone()).unwrap();
+            let operation: ConfigurationOperation = serde_json::from_value(case["operation"].clone()).unwrap();
+            let target_id = match &operation {
+                ConfigurationOperation::ElementDuplicate { new_element_ids, .. } => Some(new_element_ids[0].as_str()),
+                ConfigurationOperation::ElementReset { element_id, .. } => Some(element_id.as_str()),
+                ConfigurationOperation::ElementDelete { .. } => None,
+                _ => continue,
+            };
+            assert!(valid_operation_delta(&before, &after, &operation), "native case: {}", case["name"]);
+            for attack in ["geometry", "label", "customization-metadata", "sibling-geometry", "sibling-metadata"] {
+                let mut injected = after.clone();
+                let primary = injected.profiles[0]["customization"].clone();
+                let selected = primary["elements"].as_array().unwrap().iter().position(|element| {
+                    element["id"].as_str().zip(target_id).is_some_and(|(id, target)| id.eq_ignore_ascii_case(target))
+                });
+                let sibling = primary["elements"].as_array().unwrap().iter().position(|element| {
+                    element["id"].as_str().zip(target_id).is_none_or(|(id, target)| !id.eq_ignore_ascii_case(target))
+                });
+                let index = if attack.starts_with("sibling-") { sibling } else { selected };
+                if attack != "customization-metadata" && index.is_none() { continue; }
+                for field in ["customization", "landscapeCustomization", "portraitCustomization"] {
+                    if injected.profiles[0].get(field) != Some(&primary) { continue; }
+                    let customization = &mut injected.profiles[0][field];
+                    if attack == "customization-metadata" {
+                        customization["futureCustomization"] = serde_json::json!({"injected":true});
+                        continue;
+                    }
+                    let index = index.unwrap();
+                    let id = customization["elements"][index]["id"].as_str().unwrap().to_owned();
+                    if attack == "sibling-metadata" {
+                        customization["elements"][index]["futureControl"] = serde_json::json!({"injected":true});
+                        continue;
+                    }
+                    let (key, value) = if attack == "label" {
+                        ("label", Value::String("Injected".to_owned()))
+                    } else {
+                        ("centerX", Value::from(0.94))
+                    };
+                    if key == "label" { customization["elements"][index][key] = value.clone(); }
+                    else { customization["elements"][index]["layout"][key] = value.clone(); }
+                    if let Some(mirrors) = customization.get_mut("customButtons").and_then(Value::as_array_mut) {
+                        for mirror in mirrors {
+                            if mirror["id"].as_str().is_some_and(|value| value.eq_ignore_ascii_case(&id)) {
+                                if key == "label" { mirror[key] = value.clone(); }
+                                else { mirror["layout"][key] = value.clone(); }
+                            }
+                        }
+                    }
+                    if key != "label" {
+                        if let Some(mirrors) = customization.get_mut("buttonCustomizations").and_then(Value::as_array_mut) {
+                            for pair in mirrors.chunks_exact_mut(2) {
+                                if pair[0].as_str().is_some_and(|value| value.eq_ignore_ascii_case(&id)) { pair[1][key] = value.clone(); }
+                            }
+                        }
+                    }
+                }
+                if valid_operation_delta(&before, &injected, &operation) {
+                    accepted.push(format!("{}:{attack}", case["name"].as_str().unwrap()));
+                }
+            }
+        }
+        assert!(accepted.is_empty(), "accepted exact-operation injections: {accepted:?}");
+    }
+
+    #[test]
     fn element_set_delta_accepts_compact_builtin_layout_storage() {
         use crate::draft_operation::{ConfigurationVariant, ElementChanges};
 
@@ -10121,19 +10413,19 @@ print(json.dumps({"schemaVersion":1,"document":request["document"],"changed":Tru
         });
         let customization = serde_json::json!({
             "buttonCustomizations":[
-                "jump",jump_layout,
-                "pause",pause_layout
+                "00000000-0000-0000-0000-000000000105",jump_layout,
+                "00000000-0000-0000-0000-00000000010A",pause_layout
             ],
             "customButtons":[],
             "elements":[
                 {
                     "id":"00000000-0000-0000-0000-000000000105",
-                    "builtInButton":"jump","label":"A","kind":"button",
+                    "label":"A","kind":"button",
                     "layout":jump_layout,"partOutputs":[]
                 },
                 {
-                    "id":"00000000-0000-0000-0000-000000000110",
-                    "builtInButton":"pause","label":"Start","kind":"button",
+                    "id":"00000000-0000-0000-0000-00000000010A",
+                    "label":"Start","kind":"button",
                     "layout":pause_layout,"partOutputs":[]
                 }
             ]
@@ -10158,7 +10450,7 @@ print(json.dumps({"schemaVersion":1,"document":request["document"],"changed":Tru
         let operation = ConfigurationOperation::ElementSet {
             profile_id,
             variant: ConfigurationVariant::Primary,
-            element_id: "00000000-0000-0000-0000-000000000110".to_owned(),
+            element_id: "00000000-0000-0000-0000-00000000010A".to_owned(),
             changes: Box::new(ElementChanges {
                 center_x: Some(0.5),
                 center_y: Some(0.54),
@@ -10178,4 +10470,143 @@ print(json.dumps({"schemaVersion":1,"document":request["document"],"changed":Tru
             &operation
         ));
     }
+}
+
+#[cfg(test)]
+mod presentation_delta_regression_tests {
+    use super::*;
+    #[test]
+    fn presentation_only_native_golden_preserves_full_custom_profile() {
+        let request: Value = serde_json::from_str(include_str!("../tests/fixtures/presentation-only-request-v1.json")).unwrap();
+        let response: Value = serde_json::from_str(include_str!("../tests/fixtures/presentation-only-response-v1.json")).unwrap();
+        let before: ConfigurationDocument = serde_json::from_value(request["document"].clone()).unwrap();
+        let after: ConfigurationDocument = serde_json::from_value(response["document"].clone()).unwrap();
+        let operation: ConfigurationOperation = serde_json::from_value(request["operation"].clone()).unwrap();
+        assert!(after.validate().is_ok(), "response document fails validation");
+        assert!(operation.validate_bridge_input().is_ok());
+        if let ConfigurationOperation::ElementSet { profile_id, variant, element_id, changes } = &operation {
+            assert!(changes.is_presentation_only());
+            assert!(constrained_raw_element_fields_delta(&before, &after, profile_id, *variant, element_id, changes), "raw metadata delta rejected");
+        }
+        assert!(valid_operation_delta(&before, &after, &operation));
+        assert!(response["changedPaths"].as_array().unwrap().iter().all(|path| allowed_changed_path(&operation, path.as_str().unwrap())));
+    }
+
+    #[test]
+    fn presentation_only_delta_preserves_sparse_orientation_mirrors_and_raw_data() {
+        let id = "b6fd297d-7508-4ff4-aff7-97b3831f6ad0";
+        let customization = serde_json::json!({"deviceCanvas":{"frameID":"iphone-17-pro-landscape"},
+            "elements":[{"id":id,"kind":"button","layout":{},"label":"Legacy","futureControl":{"kept":true}}],
+            "futureCanvas":{"kept":true}});
+        let before: ConfigurationDocument = serde_json::from_value(serde_json::json!({
+            "profiles":[{"id":id,"name":"Presentation","updatedAt":1,"customization":customization,
+                "landscapeCustomization":customization,"futureProfile":{"kept":true}}],"activeProfileID":id,"defaultProfileID":id})).unwrap();
+        let changes: crate::draft_operation::ElementChanges = serde_json::from_value(serde_json::json!({"presentation":{"legend":"Q"}})).unwrap();
+        let mut after = before.clone();
+        for key in ["customization", "landscapeCustomization"] {
+            after.profiles[0][key]["elements"][0]["presentation"] = serde_json::to_value(changes.presentation.as_ref().unwrap()).unwrap();
+        }
+        after.profiles[0]["updatedAt"] = Value::from(2);
+        assert!(constrained_raw_element_fields_delta(&before, &after, id, crate::draft_operation::ConfigurationVariant::Primary, id, &changes));
+        let mut injected = after.clone(); injected.profiles[0]["customization"]["elements"][0]["layout"]["centerX"] = Value::from(0.5);
+        assert!(!constrained_raw_element_fields_delta(&before, &injected, id, crate::draft_operation::ConfigurationVariant::Primary, id, &changes));
+        injected = after.clone(); injected.profiles[0]["landscapeCustomization"] = before.profiles[0]["landscapeCustomization"].clone();
+        assert!(!constrained_raw_element_fields_delta(&before, &injected, id, crate::draft_operation::ConfigurationVariant::Primary, id, &changes));
+    }
+
+    #[test]
+    fn presentation_edits_require_exact_payload_and_preserve_routing() {
+        let before = serde_json::json!({"id":"a","label":"Legacy","layout":{},"output":{"gamepadButtons":["south"]}});
+        let changes: crate::draft_operation::ElementChanges = serde_json::from_value(serde_json::json!({"presentation":{
+            "actionID":"ability.q","groupIDs":["abilities"],"legend":"Q"}})).unwrap();
+        let mut after = before.clone();
+        after["presentation"] = serde_json::to_value(changes.presentation.as_ref().unwrap()).unwrap();
+        assert!(element_presentation_after_is_exact(Some(&before), Some(&after), &changes));
+        assert!(element_presentation_after_is_exact(None, Some(&after), &changes));
+        assert!(target_changed_keys_allowed(Some(&before), Some(&after), &changes, false));
+        let mut injected = after.clone(); injected["output"]["gamepadButtons"] = serde_json::json!(["east"]);
+        assert!(!target_changed_keys_allowed(Some(&before), Some(&injected), &changes, false));
+        injected = after.clone(); injected["presentation"]["legend"] = Value::String("E".to_owned());
+        assert!(!element_presentation_after_is_exact(Some(&before), Some(&injected), &changes));
+        assert!(!target_changed_keys_allowed(Some(&before), Some(&injected), &changes, false));
+        let clear = crate::draft_operation::ElementChanges { clear_presentation: true, ..Default::default() };
+        assert!(element_presentation_after_is_exact(Some(&after), Some(&before), &clear));
+        assert!(!element_presentation_after_is_exact(Some(&after), Some(&after), &clear));
+        assert!(!element_presentation_after_is_exact(None, Some(&after), &Default::default()));
+    }
+
+
+    #[test]
+    fn binding_sync_accepts_integral_json_number_spelling_but_rejects_layout_changes() {
+        let id = "00000000-0000-0000-0000-000000000107";
+        let before = serde_json::json!({"elements":[{"id":id,"kind":"button","layout":{"centerX":0.5,"shadowStrength":1.0},
+            "defaultOutput":{"gamepadButtons":[]},"output":{"keyboard":{"keyCode":40,"modifiersRawValue":0},"gamepadButtons":[]}}]});
+        let mut after = before.clone();
+        after["elements"][0]["layout"]["shadowStrength"] = serde_json::json!(1);
+        after["elements"][0]["output"]["keyboard"]["keyCode"] = serde_json::json!(49);
+        let outputs: ButtonBindings<OutputBinding> = serde_json::from_value(serde_json::json!({id:{"keyboard":{"keyCode":49,"modifiers":0},"gamepadButtons":[]}})).unwrap();
+        assert!(customization_output_sync_is_exact(Some(&before), Some(&after), &outputs));
+        after["elements"][0]["layout"]["shadowStrength"] = serde_json::json!(0.9);
+        assert!(!customization_output_sync_is_exact(Some(&before), Some(&after), &outputs));
+        after["elements"][0]["layout"]["shadowStrength"] = serde_json::json!(1);
+        after["elements"][0]["defaultOutput"]["gamepadButtons"] = serde_json::json!(["south"]);
+        assert!(!customization_output_sync_is_exact(Some(&before), Some(&after), &outputs));
+        assert!(json_semantically_equal(&serde_json::json!(1), &serde_json::json!(1.0)));
+        assert!(!json_semantically_equal(&serde_json::json!(9_007_199_254_740_993_u64), &serde_json::json!(9_007_199_254_740_992_u64)));
+        assert!(!json_semantically_equal(&serde_json::json!(9_007_199_254_740_993_u64), &serde_json::json!(9_007_199_254_740_992.0)));
+    }
+
+    #[test]
+    fn output_only_native_golden_preserves_full_custom_profile() {
+        let request: Value = serde_json::from_str(include_str!("../tests/fixtures/output-only-request-v1.json")).unwrap();
+        let response: Value = serde_json::from_str(include_str!("../tests/fixtures/output-only-response-v1.json")).unwrap();
+        let before: ConfigurationDocument = serde_json::from_value(request["document"].clone()).unwrap();
+        let after: ConfigurationDocument = serde_json::from_value(response["document"].clone()).unwrap();
+        let operation: ConfigurationOperation = serde_json::from_value(request["operation"].clone()).unwrap();
+        after.validate().unwrap();
+        operation.validate_bridge_input().unwrap();
+        assert!(valid_operation_delta(&before, &after, &operation));
+        assert!(response["changedPaths"].as_array().unwrap().iter().all(|path| allowed_changed_path(&operation, path.as_str().unwrap())));
+    }
+
+    #[test]
+    fn output_only_delta_changes_exact_owner_and_keeps_all_other_fields() {
+        let id = "00000000-0000-0000-0000-000000000107";
+        let sibling = "b6fd297d-7508-4ff4-aff7-97b3831f6ad0";
+        let customization = serde_json::json!({"elements":[
+            {"id":sibling,"kind":"button","layout":{"centerX":0.3},"future":"kept"},
+            {"id":id,"kind":"button","layout":{"centerX":0.7},"output":{"keyboard":{"keyCode":40,"modifiersRawValue":0},"gamepadButtons":[]},
+                "defaultOutput":{"gamepadButtons":["south"]},"partOutputs":[]}]});
+        let before: ConfigurationDocument = serde_json::from_value(serde_json::json!({"profiles":[{"id":id,"name":"Outputs","updatedAt":1,
+            "customization":customization,"landscapeCustomization":customization,"portraitCustomization":customization}],"activeProfileID":id,"defaultProfileID":id})).unwrap();
+        let operation: ConfigurationOperation = serde_json::from_value(serde_json::json!({"type":"element.set","profileID":id,"variant":"primary","elementID":id,
+            "changes":{"output":{"part":"primary","keyboardEdit":{"action":"set","sequence":[{"key":"Space","modifiers":[]}]},"gamepadEdit":{"action":"keep"}}}})).unwrap();
+        let mut after = before.clone();
+        for key in ["customization","landscapeCustomization"] { after.profiles[0][key]["elements"][1]["output"]["keyboard"]["keyCode"] = Value::from(49); }
+        after.profiles[0]["updatedAt"] = Value::from(2);
+        assert!(valid_operation_delta(&before, &after, &operation));
+        for field in ["layout","defaultOutput"] {
+            let mut injected = after.clone(); injected.profiles[0]["customization"]["elements"][1][field] = serde_json::json!({"injected":true});
+            assert!(!valid_operation_delta(&before, &injected, &operation));
+        }
+        let mut injected = after.clone(); injected.profiles[0]["customization"]["elements"].as_array_mut().unwrap().reverse();
+        assert!(!valid_operation_delta(&before, &injected, &operation));
+        injected = after.clone(); injected.profiles[0]["portraitCustomization"] = after.profiles[0]["customization"].clone();
+        assert!(!valid_operation_delta(&before, &injected, &operation));
+        injected = after.clone(); injected.profiles[0]["customization"]["elements"][1]["output"]["keyboard"]["keyCode"] = Value::from(0);
+        assert!(!valid_operation_delta(&before, &injected, &operation));
+        let changes: crate::draft_operation::ElementChanges = serde_json::from_value(serde_json::json!({"presentation":{"legend":"Q"},"isHidden":false})).unwrap();
+        assert!(!changes.is_presentation_only());
+        let mut part_before = before.clone();
+        for key in ["customization", "landscapeCustomization"] { part_before.profiles[0][key]["elements"][1]["kind"] = Value::from("joystick"); }
+        let part_operation: ConfigurationOperation = serde_json::from_value(serde_json::json!({"type":"element.set","profileID":id,"variant":"primary","elementID":id,
+            "changes":{"output":{"part":"joystick_up","keyboardEdit":{"action":"set","sequence":[{"key":"Space","modifiers":[]}]},"gamepadEdit":{"action":"keep"}}}})).unwrap();
+        let mut part_after = part_before.clone();
+        for key in ["customization", "landscapeCustomization"] { part_after.profiles[0][key]["elements"][1]["partOutputs"] = serde_json::json!(["joystick_up",{"keyboard":{"keyCode":49,"modifiersRawValue":0},"gamepadButtons":[]}]); }
+        part_after.profiles[0]["updatedAt"] = Value::from(2);
+        assert!(valid_operation_delta(&part_before, &part_after, &part_operation));
+        part_after.profiles[0]["customization"]["elements"][1]["output"]["keyboard"]["keyCode"] = Value::from(0);
+        assert!(!valid_operation_delta(&part_before, &part_after, &part_operation));
+    }
+
 }

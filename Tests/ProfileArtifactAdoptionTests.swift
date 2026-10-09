@@ -207,6 +207,26 @@ final class ProfileArtifactAdoptionTests: XCTestCase {
         XCTAssertEqual(bounded.allEntries.count, ProfileArtifactAdoptionConstants.maximumLedgerEntries)
     }
 
+    func testSavedLedgerRejectsAmbiguousBytesAndRepeatedOperationsBeforeReplay() throws {
+        let value = metadata(data: Data([1, 2, 3]))
+        let entry = ProfileArtifactAdoptionLedgerEntry(metadata: value, status: .succeeded, errorCode: nil,
+            destinationProfileIDs: [UUID()], completedAtMilliseconds: 1_000_000)
+        let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
+        let bytes = try encoder.encode(ProfileArtifactAdoptionLedger(entries: [entry]))
+        var checked = try ProfileArtifactAdoptionLedger.decodeSaved(bytes)
+        XCTAssertEqual(checked.lookup(value, nowMilliseconds: 1_000_000), .replay(entry))
+        let text = try XCTUnwrap(String(data: bytes, encoding: .utf8))
+        for key in ["contentHash", "operationID"] {
+            let field = key == "contentHash" ? value.contentHash : value.operationID.uuidString
+            let ambiguous = Data(text.replacingOccurrences(of: "\"\(key)\":", with: "\"\(key)\":\"\(field)\",\"\(key)\":").utf8)
+            // Reproduce the former ordinary-decoder path on the same bytes.
+            XCTAssertNoThrow(try JSONDecoder().decode(ProfileArtifactAdoptionLedger.self, from: ambiguous))
+            XCTAssertThrowsError(try ProfileArtifactAdoptionLedger.decodeSaved(ambiguous))
+        }
+        let repeated = try encoder.encode(ProfileArtifactAdoptionLedger(entries: [entry, entry]))
+        XCTAssertThrowsError(try ProfileArtifactAdoptionLedger.decodeSaved(repeated))
+    }
+
     func testPhoneTrackerAcceptsResultAndSnapshotInEitherOrderAndRejectsWrongServer() {
         let value = metadata(data: Data([1]))
         let destinations = [UUID(), UUID()]

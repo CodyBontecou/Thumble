@@ -1456,6 +1456,24 @@
           ],
           "status": "planned",
           "mcpTool": "legacy_mac_app_action"
+        },
+        {
+          "id": "app.setup-guide",
+          "cli": ["app setup-guide"],
+          "status": "planned",
+          "mcpTool": "legacy_mac_app_action"
+        },
+        {
+          "id": "app.local-network-settings",
+          "cli": ["app local-network-settings"],
+          "status": "planned",
+          "mcpTool": "legacy_mac_app_action"
+        },
+        {
+          "id": "app.ios-app",
+          "cli": ["app ios-app"],
+          "status": "planned",
+          "mcpTool": "legacy_mac_app_action"
         }
       ]
     }

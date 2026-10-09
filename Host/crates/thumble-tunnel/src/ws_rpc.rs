@@ -108,7 +108,7 @@ impl<Role: ServiceRole> Stream for WsJsonRpcStream<Role> {
                         eprintln!("thumble tunnel: rejected an oversized JSON-RPC frame");
                         return Poll::Ready(None);
                     }
-                    match serde_json::from_slice::<RxJsonRpcMessage<Role>>(&bytes) {
+                    match thumble_protocol::decode_unique_json::<RxJsonRpcMessage<Role>>(&bytes) {
                         Ok(message) => return Poll::Ready(Some(message)),
                         Err(error) => {
                             eprintln!(

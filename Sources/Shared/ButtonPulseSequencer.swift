@@ -6,7 +6,7 @@ enum InputPulseCommand<Input: Hashable>: Equatable {
     case schedulePress(Input, delayNanoseconds: UInt64)
 }
 
-typealias ButtonPulseCommand = InputPulseCommand<GameButton>
+typealias ButtonPulseCommand = InputPulseCommand<KeypadElementID>
 
 struct InputPulseSequencer<Input: Hashable> {
     // Keep synthesized tap edges visible across a 60 FPS game frame without
@@ -475,4 +475,4 @@ struct InputPulseSequencer<Input: Hashable> {
     }
 }
 
-typealias ButtonPulseSequencer = InputPulseSequencer<GameButton>
+typealias ButtonPulseSequencer = InputPulseSequencer<KeypadElementID>

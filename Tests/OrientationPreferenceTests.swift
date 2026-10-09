@@ -3,12 +3,12 @@ import XCTest
 final class OrientationPreferenceTests: XCTestCase {
     private let profileID = UUID(uuidString: "00000000-0000-0000-0000-00000000F001")!
 
-    func testLegacyProfileJSONDefaultsOrientationToAutomatic() throws {
+    func testDeclaredProfileJSONDefaultsOrientationToAutomatic() throws {
         let json = """
         {
           "id": "\(profileID.uuidString)",
           "name": "Legacy",
-          "customization": {}
+          "customization": {"elements": []}
         }
         """
 

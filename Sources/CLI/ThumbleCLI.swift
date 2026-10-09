@@ -40,18 +40,14 @@ struct ThumbleCLI {
         "--clear-output", "--clear-keyboard", "--clear-gamepad"
     ]
 
-    private struct StoredProfileState: Codable {
-        var profiles: [GamepadConfigurationProfile]
-        var activeProfileID: UUID?
-        var defaultProfileID: UUID?
-    }
-
     private struct ProfileStore {
         var profiles: [GamepadConfigurationProfile]
         var activeProfileID: UUID
         var defaultProfileID: UUID
         var profileKeyBindings: [String: [String: MacKeyBinding]]
         var profileOutputBindings: [String: [String: MacControlOutputBinding]]
+        var nativeSnapshot: ThumbleNativeConfiguration.Snapshot? = nil
+        var profileSources: [UUID: ThumbleBridgeJSONValue] = [:]
     }
 
     private struct GenerateOptions {
@@ -98,80 +94,34 @@ struct ThumbleCLI {
         var windowTitle: String?
     }
 
-    private struct ProfileExportEnvelope: Codable {
-        var schema: String = ThumbleKeypadConfigurationExport.schemaIdentifier
-        var version: Int = ThumbleKeypadConfigurationExport.currentVersion
-        var exportedAt: Int64 = Date.currentMilliseconds
-        var profiles: [GamepadConfigurationProfile]
-        var activeProfileID: UUID?
-        var defaultProfileID: UUID?
-        var profileKeyBindings: [String: [String: MacKeyBinding]]
-        var profileOutputBindings: [String: [String: MacControlOutputBinding]]
-        var bindingPresentations: [GamepadProfileBindingPresentations]?
+    private struct ProfileExportEnvelope: Encodable {
+        let document: MacConfigurationBindings.KeypadExportEnvelope
+        let bindingPresentations: [GamepadProfileBindingPresentations]?
 
         init(
             profiles: [GamepadConfigurationProfile],
             activeProfileID: UUID?,
             defaultProfileID: UUID?,
-            profileKeyBindings: [String: [String: MacKeyBinding]] = [:],
-            profileOutputBindings: [String: [String: MacControlOutputBinding]] = [:],
-            bindingPresentations: [GamepadProfileBindingPresentations]? = nil
+            profileKeyBindings: [String: [String: MacKeyBinding]],
+            profileOutputBindings: [String: [String: MacControlOutputBinding]],
+            bindingPresentations: [GamepadProfileBindingPresentations]?,
+            preserving sources: [UUID: ThumbleBridgeJSONValue]
         ) {
-            let state = GamepadConfigurationProfilePersistence.normalizedState(
-                profiles: profiles,
-                activeProfileID: activeProfileID,
-                defaultProfileID: defaultProfileID
+            document = MacConfigurationBindings.KeypadExportEnvelope(
+                profiles: profiles, activeProfileID: activeProfileID, defaultProfileID: defaultProfileID,
+                profileKeyBindings: profileKeyBindings, profileOutputBindings: profileOutputBindings,
+                preserving: sources
             )
-            self.profiles = state.profiles
-            self.activeProfileID = state.activeProfileID
-            self.defaultProfileID = state.defaultProfileID
-            self.profileKeyBindings = profileKeyBindings
-            self.profileOutputBindings = profileOutputBindings
             self.bindingPresentations = bindingPresentations
         }
 
-        init(from decoder: Decoder) throws {
-            let container = try decoder.container(keyedBy: CodingKeys.self)
-            schema = try container.decodeIfPresent(String.self, forKey: .schema) ?? ThumbleKeypadConfigurationExport.schemaIdentifier
-            version = try container.decodeIfPresent(Int.self, forKey: .version) ?? ThumbleKeypadConfigurationExport.currentVersion
-            guard schema == ThumbleKeypadConfigurationExport.schemaIdentifier else {
-                throw DecodingError.dataCorruptedError(
-                    forKey: .schema,
-                    in: container,
-                    debugDescription: "Unsupported Thumble keypad configuration schema: \(schema)"
-                )
-            }
-            guard version >= 1 && version <= ThumbleKeypadConfigurationExport.currentVersion else {
-                throw DecodingError.dataCorruptedError(
-                    forKey: .version,
-                    in: container,
-                    debugDescription: "Unsupported Thumble keypad configuration version: \(version)"
-                )
-            }
-
-            exportedAt = try container.decodeIfPresent(Int64.self, forKey: .exportedAt) ?? Date.currentMilliseconds
-            let decodedProfiles = try container.decode([GamepadConfigurationProfile].self, forKey: .profiles)
-            guard !decodedProfiles.isEmpty else {
-                throw DecodingError.dataCorruptedError(
-                    forKey: .profiles,
-                    in: container,
-                    debugDescription: "Thumble keypad configuration export must contain at least one profile."
-                )
-            }
-            let decodedActiveID = try container.decodeIfPresent(UUID.self, forKey: .activeProfileID)
-            let decodedDefaultID = try container.decodeIfPresent(UUID.self, forKey: .defaultProfileID)
-            let state = GamepadConfigurationProfilePersistence.normalizedState(
-                profiles: decodedProfiles,
-                activeProfileID: decodedActiveID,
-                defaultProfileID: decodedDefaultID
-            )
-            profiles = state.profiles
-            activeProfileID = state.activeProfileID
-            defaultProfileID = state.defaultProfileID
-            profileKeyBindings = try container.decodeIfPresent([String: [String: MacKeyBinding]].self, forKey: .profileKeyBindings) ?? [:]
-            profileOutputBindings = try container.decodeIfPresent([String: [String: MacControlOutputBinding]].self, forKey: .profileOutputBindings) ?? [:]
-            bindingPresentations = try container.decodeIfPresent([GamepadProfileBindingPresentations].self, forKey: .bindingPresentations)
+        func encode(to encoder: Encoder) throws {
+            try document.encode(to: encoder)
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encodeIfPresent(bindingPresentations, forKey: .bindingPresentations)
         }
+
+        private enum CodingKeys: String, CodingKey { case bindingPresentations }
     }
 
     private struct ThemeSummary: Codable {
@@ -233,7 +183,7 @@ struct ThumbleCLI {
     private struct ElementSummary: Codable {
         var id: String
         var kind: String
-        var mappedButton: GameButton?
+        var inputID: KeypadElementID?
         var label: String
         var visualRole: GamepadVisualRole?
         var isHidden: Bool
@@ -271,7 +221,7 @@ struct ThumbleCLI {
     }
 
     private enum ElementTarget: Equatable {
-        case builtin(GameButton)
+        case builtin(KeypadElementID)
         case custom(UUID)
         case system(GamepadSystemControl)
     }
@@ -315,6 +265,8 @@ struct ThumbleCLI {
             try template(arguments: rest)
         case "theme", "themes":
             try theme(arguments: rest)
+        case "design":
+            try controllerDesign(arguments: rest)
         case "skin", "skins":
             try skin(arguments: rest)
         case "binding", "bindings", "shortcut", "shortcuts":
@@ -432,7 +384,7 @@ struct ThumbleCLI {
             throw CLIError.message("Rust profile authority returned no generation plan")
         }
         guard let generatedData = plan.generatedJSON.data(using: .utf8),
-              let generated = try? JSONDecoder().decode(
+              let generated = try? JSONDecoder().decodeUnique(
                   GeneratedGameKeypadProfile.self,
                   from: generatedData
               )
@@ -489,7 +441,7 @@ struct ThumbleCLI {
     private static func prepareGeneratedProfile(
         _ generated: GeneratedGameKeypadProfile,
         options: GenerateOptions
-    ) throws -> [GameButton: MacKeyBinding] {
+    ) throws -> [KeypadElementID: MacKeyBinding] {
         let macBindings = options.printJSON ? [:] : try resolvedMacBindings(for: generated)
         let layoutReport = generated.profile.customization.layoutQualityReport(
             profileName: generated.resolvedGameName
@@ -781,12 +733,12 @@ struct ThumbleCLI {
             try requireExplicitUnmigratedProfileAccess(operation: "profile show", artifactRequired: true)
             let json = rest.contains("--json")
             let target = firstPositional(in: rest)
-            let store = loadStore()
+            let store = try loadStore()
             let profile = try resolveProfile(target, in: store)
             if json {
-                let bindings = store.profileKeyBindings[profile.id.uuidString] ?? rawBindings(DefaultKeypadKeyMap.defaultBindings)
-                let keyboardBindings = decodedBindings(bindings) ?? DefaultKeypadKeyMap.defaultBindings
-                let storedOutputs = decodedOutputBindings(store.profileOutputBindings[profile.id.uuidString]) ?? outputBindings(from: keyboardBindings)
+                let bindings = store.profileKeyBindings[profile.id.uuidString] ?? rawBindings(profile.initialMacOutputBindings.keyboardBindings)
+                let keyboardBindings = decodedBindings(bindings) ?? profile.initialMacOutputBindings.keyboardBindings
+                let storedOutputs = decodedOutputBindings(store.profileOutputBindings[profile.id.uuidString]) ?? profile.initialMacOutputBindings
                 let outputs = effectiveOutputBindings(for: profile.outputMode, keyBindings: keyboardBindings, customOutputBindings: storedOutputs)
                 try printJSON(ProfileExportEnvelope(
                     profiles: [profile],
@@ -794,7 +746,8 @@ struct ThumbleCLI {
                     defaultProfileID: store.defaultProfileID == profile.id ? profile.id : nil,
                     profileKeyBindings: [profile.id.uuidString: bindings],
                     profileOutputBindings: [profile.id.uuidString: rawOutputBindings(outputs)],
-                    bindingPresentations: bindingPresentations(for: profile, store: store)
+                    bindingPresentations: bindingPresentations(for: profile, store: store),
+                    preserving: store.profileSources
                 ))
             } else {
                 printProfile(profile, store: store)
@@ -1018,7 +971,7 @@ struct ThumbleCLI {
             index += 1
         }
 
-        var store = loadStore()
+        var store = try loadStore()
         let requestedName = nameParts.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
         let baseCustomization: GamepadCustomization
         let baseOutputMode: GamepadProfileOutputMode
@@ -1026,7 +979,7 @@ struct ThumbleCLI {
         var baseLandscapeCustomization: GamepadCustomization? = nil
         var basePortraitCustomization: GamepadCustomization? = nil
         var baseOrientationPreference: GamepadProfileOrientationPreference = .automatic
-        var baseBindings = decodedBindings(store.profileKeyBindings[store.activeProfileID.uuidString]) ?? DefaultKeypadKeyMap.defaultBindings
+        var baseBindings: [KeypadElementID: MacKeyBinding] = [:]
         var baseOutputBindings: [String: MacControlOutputBinding]?
 
         if let templateName {
@@ -1038,10 +991,9 @@ struct ThumbleCLI {
             basePortraitCustomization = profile.portraitCustomization
             baseOrientationPreference = profile.orientationPreference
             defaultName = profile.name
-            if let recommendedBindings = template.recommendedMacOutputBindings {
-                baseBindings = recommendedBindings.keyboardBindings
-                baseOutputBindings = rawOutputBindings(recommendedBindings)
-            }
+            let bindings = profile.initialMacOutputBindings
+            baseBindings = bindings.keyboardBindings
+            baseOutputBindings = rawOutputBindings(bindings)
         } else if let fromProfile {
             let profile = try resolveProfile(fromProfile, in: store)
             baseCustomization = profile.customization
@@ -1050,8 +1002,8 @@ struct ThumbleCLI {
             basePortraitCustomization = profile.portraitCustomization
             baseOrientationPreference = profile.orientationPreference
             defaultName = "\(profile.name) Copy"
-            baseBindings = decodedBindings(store.profileKeyBindings[profile.id.uuidString]) ?? baseBindings
-            baseOutputBindings = store.profileOutputBindings[profile.id.uuidString]
+            baseBindings = decodedBindings(store.profileKeyBindings[profile.id.uuidString]) ?? profile.initialMacOutputBindings.keyboardBindings
+            baseOutputBindings = store.profileOutputBindings[profile.id.uuidString] ?? rawOutputBindings(profile.initialMacOutputBindings)
         } else if blank {
             baseCustomization = .blankCanvas
             baseOutputMode = .keyboard
@@ -1073,6 +1025,10 @@ struct ThumbleCLI {
         }
         if let basePortraitCustomization {
             profile.setCustomizationVariant(basePortraitCustomization, for: .portrait)
+        }
+        if templateName == nil && fromProfile == nil {
+            baseBindings = profile.initialMacOutputBindings.keyboardBindings
+            baseOutputBindings = rawOutputBindings(profile.initialMacOutputBindings)
         }
         store.profiles.append(profile)
         store.profileKeyBindings[profile.id.uuidString] = rawBindings(baseBindings)
@@ -1228,7 +1184,7 @@ struct ThumbleCLI {
         if hasExplicitProfileArtifactSchema(topLevelProbe) {
             artifactJSON = rawArtifactJSON
         } else {
-            artifactJSON = try legacyProfileArtifactJSON(
+            artifactJSON = try currentProfileArtifactJSON(
                 adapting: rawArtifactJSON,
                 topLevelProbe: topLevelProbe,
                 path: path,
@@ -1264,6 +1220,34 @@ struct ThumbleCLI {
         }
         standardOutputData.append(0x0A)
         try FileHandle.standardOutput.write(contentsOf: standardOutputData)
+    }
+
+    private static func readBoundedDesignEditRequest(at url: URL) throws -> Data {
+        let maximumBytes = ControllerDesignWorkspace.maximumEditRequestBytes
+        let descriptor = Darwin.open(url.path, O_RDONLY | O_CLOEXEC | O_NONBLOCK)
+        guard descriptor >= 0 else { throw CLIError.message("Could not open source edit JSON") }
+        defer { _ = Darwin.close(descriptor) }
+        var status = stat()
+        guard Darwin.fstat(descriptor, &status) == 0, status.st_mode & S_IFMT == S_IFREG,
+              status.st_size >= 0, UInt64(status.st_size) <= UInt64(maximumBytes) else {
+            throw CLIError.message("Source edit JSON must be a regular file within the encoded request budget")
+        }
+        var data = Data()
+        data.reserveCapacity(Int(status.st_size))
+        var buffer = [UInt8](repeating: 0, count: 64 * 1024)
+        while true {
+            let remaining = maximumBytes - data.count
+            let count = min(buffer.count, remaining + 1)
+            let readCount = buffer.withUnsafeMutableBytes { Darwin.read(descriptor, $0.baseAddress, count) }
+            if readCount < 0 {
+                if errno == EINTR { continue }
+                throw CLIError.message("Could not read source edit JSON")
+            }
+            if readCount == 0 { break }
+            guard readCount <= remaining else { throw CLIError.message("Encoded source edit request exceeds budget") }
+            data.append(buffer, count: readCount)
+        }
+        return data
     }
 
     private static func readBoundedProfileArtifact(at url: URL) throws -> String {
@@ -1361,61 +1345,38 @@ struct ThumbleCLI {
         return probe.hasSchema || probe.hasArtifactVersion
     }
 
-    private static func legacyProfileArtifactJSON(
+    private static func currentProfileArtifactJSON(
         adapting artifactJSON: String,
         topLevelProbe: TopLevelProfileSchemaProbe?,
         path: String,
         name: String?
     ) throws -> String {
         let data = Data(artifactJSON.utf8)
-        let decoder = JSONDecoder()
-        let envelope: ProfileExportEnvelope
-
-        if let legacyEnvelope = try? decoder.decode(ProfileExportEnvelope.self, from: data) {
-            envelope = legacyEnvelope
-        } else if topLevelProbe?.hasGeneratedProfileShape == true,
-                  let generated = try? decoder.decode(GeneratedGameKeypadProfile.self, from: data) {
+        var envelope: MacConfigurationBindings.KeypadExportEnvelope
+        do {
+            envelope = try MacConfigurationBindings.decodeKeypadImport(data: data, sourceName: name ?? URL(fileURLWithPath: path).deletingPathExtension().lastPathComponent)
+        } catch {
+            throw CLIError.message("Unsupported profile import JSON: \(error.localizedDescription)")
+        }
+        // Keep the checked incoming raw sources through adaptation. Generated
+        // keyboard authoring overlays known outputs without discarding metadata.
+        if topLevelProbe?.hasGeneratedProfileShape == true,
+           let generated = try? JSONDecoder().decode(GeneratedGameKeypadProfile.self, from: data) {
             let generatedBindings = try resolvedMacBindings(for: generated)
-            envelope = ProfileExportEnvelope(
-                profiles: [generated.profile.normalized],
-                activeProfileID: generated.profile.id,
-                defaultProfileID: nil,
-                profileKeyBindings: [generated.profile.id.uuidString: rawBindings(generatedBindings)],
-                profileOutputBindings: [
-                    generated.profile.id.uuidString: rawOutputBindings(outputBindings(from: generatedBindings))
-                ]
-            )
-        } else if topLevelProbe?.hasProfileShape == true,
-                  let profile = try? decoder.decode(GamepadConfigurationProfile.self, from: data) {
-            envelope = ProfileExportEnvelope(
-                profiles: [profile.normalized],
-                activeProfileID: profile.id,
-                defaultProfileID: nil
-            )
-        } else if let profiles = try? decoder.decode([GamepadConfigurationProfile].self, from: data),
-                  !profiles.isEmpty {
-            envelope = ProfileExportEnvelope(
-                profiles: profiles.map(\.normalized),
-                activeProfileID: profiles.first?.id,
-                defaultProfileID: nil
-            )
-        } else if let customization = try? decoder.decode(GamepadCustomization.self, from: data) {
-            let requestedName = name ?? URL(fileURLWithPath: path).deletingPathExtension().lastPathComponent
-            let profile = GamepadConfigurationProfile(name: requestedName, primaryCustomization: customization)
-            envelope = ProfileExportEnvelope(
-                profiles: [profile],
-                activeProfileID: profile.id,
-                defaultProfileID: nil
-            )
-        } else {
-            throw CLIError.message("Unsupported profile import JSON")
+            var profile = generated.profile.normalized
+            let outputs = MacConfigurationBindings.applyingKeyboardBindings(generatedBindings, to: profile.initialMacOutputBindings)
+            MacConfigurationBindings.synchronizeElementOutputs(in: &profile, outputs: outputs)
+            envelope.profiles = [profile]
+            envelope.profileKeyBindings = [profile.id.uuidString: rawBindings(generatedBindings)]
+            envelope.profileOutputBindings = [profile.id.uuidString: rawOutputBindings(outputs)]
         }
 
-        var legacyEnvelope = envelope
-        legacyEnvelope.version = 4
+        guard envelope.version == ThumbleKeypadConfigurationExport.currentVersion else {
+            throw CLIError.message("Obsolete configuration schemas are no longer supported. Recreate the setup with element UUIDs.")
+        }
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
-        let encoded = try encoder.encode(legacyEnvelope)
+        let encoded = try encoder.encode(envelope)
         guard encoded.count <= ThumbleCLIProfileBackend.maximumProfileArtifactBytes else {
             throw CLIError.message("Adapted profile import JSON exceeds the 8 MiB limit")
         }
@@ -1432,7 +1393,7 @@ struct ThumbleCLI {
         let applicationURL = try resolveApplicationURL(path: path, bundleIdentifier: bundleIdentifier)
         let launchTarget = GamepadProfileLaunchTarget.application(url: applicationURL)
 
-        var store = loadStore()
+        var store = try loadStore()
         let index = try resolveProfileIndex(profileTarget, in: store)
         store.profiles[index].launchTarget = launchTarget
         store.profiles[index].updatedAt = Date.currentMilliseconds
@@ -1443,7 +1404,7 @@ struct ThumbleCLI {
 
     private static func detachApplicationFromProfile(arguments: [String]) throws {
         let profileTarget = optionValue("--profile", in: arguments) ?? firstPositional(in: arguments)
-        var store = loadStore()
+        var store = try loadStore()
         let index = try resolveProfileIndex(profileTarget, in: store)
         let removedName = store.profiles[index].launchTarget?.displayName
         store.profiles[index].launchTarget = nil
@@ -1459,7 +1420,7 @@ struct ThumbleCLI {
 
     private static func launchAttachedApplication(arguments: [String]) throws {
         let profileTarget = optionValue("--profile", in: arguments) ?? firstPositional(in: arguments)
-        let store = loadStore()
+        let store = try loadStore()
         let profile = try resolveProfile(profileTarget, in: store)
         guard let launchTarget = profile.launchTarget else {
             throw CLIError.message("Profile \"\(profile.name)\" does not have an attached application.")
@@ -1597,6 +1558,171 @@ struct ThumbleCLI {
 
     private static func themeSummary(for preset: GamepadThemePreset) -> ThemeSummary {
         ThemeSummary(id: preset.rawValue, name: preset.displayName, description: preset.description)
+    }
+
+    // MARK: - Agentic controller design
+
+    private static func controllerDesign(arguments: [String]) throws {
+        guard let action = arguments.first else {
+            throw CLIError.message("Usage: thumble design capabilities|begin|update|review|critique|apply|inspect")
+        }
+        let rest = Array(arguments.dropFirst())
+        if action == "capabilities" {
+            try printJSON(ControllerDesignCapabilities.current)
+            return
+        }
+        guard let path = optionValue("--workspace", in: rest) ?? (action == "begin" ? optionValue("-o", in: rest) : rest.first),
+              !path.hasPrefix("--") else { throw CLIError.message("design \(action) requires --workspace DIRECTORY") }
+        let root = URL(fileURLWithPath: path).standardizedFileURL
+        switch action {
+        case "begin":
+            guard let expectedText = optionValue("--expected-configuration-revision", in: rest),
+                  let expected = UInt64(expectedText), expected > 0,
+                  let identifier = optionValue("--identifier", in: rest) else {
+                throw CLIError.message("design begin requires --expected-configuration-revision N and --identifier REVERSE.DNS.ID")
+            }
+            let draftID: UUID?
+            if let value = optionValue("--draft", in: rest) {
+                guard let id = UUID(uuidString: value) else { throw CLIError.message("Invalid design draft UUID") }
+                draftID = id
+            } else { draftID = nil }
+            let draftRevision = optionValue("--expected-draft-revision", in: rest).flatMap(UInt64.init)
+            guard (draftID == nil) == (draftRevision == nil) else {
+                throw CLIError.message("Draft capture requires --draft UUID and --expected-draft-revision N together")
+            }
+            let createDraft = rest.contains("--private-draft")
+            guard !createDraft || draftID == nil else { throw CLIError.message("--private-draft creates a new draft and cannot resume --draft") }
+            guard !FileManager.default.fileExists(atPath: root.path) else { throw ControllerDesignError.conflict("destination already exists") }
+            guard ThumbleSkinPackageValidator.isValidReverseDNSIdentifier(identifier) else { throw ControllerDesignError.invalid("package identifier must use reverse DNS") }
+            let response = try ThumbleCLIProfileBackend().perform(
+                .designSnapshot(.init(optionValue("--profile", in: rest)), draftID: draftID, expectedDraftRevision: draftRevision, createDraft: createDraft),
+                expectedConfigurationRevision: expected)
+            guard let snapshot = response.designSnapshot, snapshot.configurationRevision == expected,
+                  (createDraft ? snapshot.draftID != nil && snapshot.draftRevision == 1 : snapshot.draftID == draftID && snapshot.draftRevision == draftRevision) else {
+                throw CLIError.message("Authoritative service did not return the requested exact design snapshot")
+            }
+            let profile = try JSONDecoder().decodeUnique(GamepadConfigurationProfile.self, from: Data(snapshot.profileJSON.utf8))
+            let safeAreas: [ThumbleSkinOrientation: ThumbleNormalizedInsets]
+            if let file = optionValue("--safe-areas", in: rest) {
+                let data = try Data(contentsOf: URL(fileURLWithPath: file))
+                guard data.count <= 4096 else { throw CLIError.message("Safe area input exceeds its limit") }
+                let values = try JSONDecoder().decodeUnique([String: ThumbleNormalizedInsets].self, from: data)
+                var parsed: [ThumbleSkinOrientation: ThumbleNormalizedInsets] = [:]
+                for (key, value) in values {
+                    guard let orientation = ThumbleSkinOrientation(rawValue: key) else { throw CLIError.message("Unknown safe area orientation: \(key)") }
+                    parsed[orientation] = value
+                }
+                safeAreas = parsed
+            } else if rest.contains("--viewport-safe-area-zero") {
+                safeAreas = [.landscape: .init(), .portrait: .init()]
+            } else {
+                throw CLIError.message("Supply --safe-areas JSON or --viewport-safe-area-zero for an offscreen viewport; device insets are never guessed")
+            }
+            let renderer = try Data(contentsOf: URL(fileURLWithPath: CommandLine.arguments[0])).thumbleSHA256
+            let session = try MainActor.assumeIsolated {
+                try ControllerDesignWorkspace.beginNative(profile: profile, bindings: Data(snapshot.bindingJSON.utf8),
+                    targetRevision: expected, safeAreas: safeAreas, name: optionValue("--name", in: rest) ?? profile.name,
+                    identifier: identifier, at: root, draftID: snapshot.draftID, draftRevision: snapshot.draftRevision,
+                    rendererSHA256: renderer)
+            }
+            try printJSON(session)
+        case "update":
+            let revision = try designRevision(rest)
+            let edits: [ControllerDesignSession.FileEdit]
+            if let file = optionValue("--edits", in: rest) {
+                let data = try readBoundedDesignEditRequest(at: URL(fileURLWithPath: file))
+                edits = try JSONDecoder().decodeUnique([ControllerDesignSession.FileEdit].self, from: data)
+            } else { edits = [] }
+            let layoutEdits: [ControllerDesignLayoutEdit]
+            if let path = optionValue("--layout-edits", in: rest) {
+                let bytes = try Data(contentsOf: URL(fileURLWithPath: path))
+                guard bytes.count <= 64 * 1024 else { throw CLIError.message("Layout edit request exceeds byte budget") }
+                layoutEdits = try JSONDecoder().decodeUnique([ControllerDesignLayoutEdit].self, from: bytes)
+            } else { layoutEdits = [] }
+            let renderer = try Data(contentsOf: URL(fileURLWithPath: CommandLine.arguments[0])).thumbleSHA256
+            let receipt = try MainActor.assumeIsolated {
+                try ControllerDesignWorkspace.updateNative(at: root, expectedRevision: revision, edits: edits,
+                    layoutEdits: layoutEdits, rendererSHA256: renderer)
+            }
+            try printJSON(receipt)
+        case "review":
+            let revision = try designRevision(rest)
+            let renderer = try Data(contentsOf: URL(fileURLWithPath: CommandLine.arguments[0])).thumbleSHA256
+            let mixed: [String: GamepadControlPresentationState]?
+            if let file = optionValue("--mixed-states", in: rest) {
+                let data = try Data(contentsOf: URL(fileURLWithPath: file))
+                guard data.count <= 32 * 1024 else { throw CLIError.message("Mixed state input exceeds budget") }
+                mixed = try JSONDecoder().decodeUnique([String: GamepadControlPresentationState].self, from: data)
+            } else { mixed = nil }
+            let review = try MainActor.assumeIsolated {
+                try ControllerDesignWorkspace.review(at: root, expectedRevision: revision,
+                    rendererSHA256: renderer, mixedStates: mixed,
+                    renderScale: CGFloat(Double(optionValue("--scale", in: rest) ?? "1") ?? 0),
+                    showsSafeAreaOverlay: rest.contains("--safe-area-overlay"),
+                    showsTouchTargets: rest.contains("--touch-targets"), showsBindingHints: rest.contains("--binding-hints"), includesControlBar: !rest.contains("--no-control-bar"),
+                    minimumPortraitTopInset: CGFloat(Double(optionValue("--portrait-top-inset", in: rest) ?? "0") ?? -1))
+            }
+            try printJSON(ControllerDesignSession.ReviewReceipt(evidence: review))
+        case "apply":
+            let revision = try designRevision(rest)
+            guard let reviewText = optionValue("--review", in: rest), let number = Int(reviewText), number > 0,
+                  let evidenceHash = optionValue("--evidence-sha256", in: rest),
+                  let configurationText = optionValue("--expected-configuration-revision", in: rest),
+                  let configurationRevision = UInt64(configurationText),
+                  let invocationText = optionValue("--invocation-id", in: rest), let invocationID = UUID(uuidString: invocationText) else {
+                throw CLIError.message("design apply requires --review N, --evidence-sha256 HASH, --expected-configuration-revision N, and --invocation-id UUID")
+            }
+            let renderer = try Data(contentsOf: URL(fileURLWithPath: CommandLine.arguments[0])).thumbleSHA256
+            let review = try ControllerDesignWorkspace.reviewedCandidate(at: root, number: number,
+                expectedRevision: revision, rendererSHA256: renderer, evidenceSHA256: evidenceHash)
+            let session = try ControllerDesignWorkspace.load(at: root)
+            guard configurationRevision == session.targetRevision else { throw ControllerDesignError.conflict("configuration revision differs from design capture") }
+            guard review.sourceDiagnostics.isValid, review.qualityDiagnostics.isPassing else {
+                throw ControllerDesignError.invalid("reviewed structural or quality diagnostics contain errors")
+            }
+            let packageData = try ControllerDesignWorkspace.boundedData(root.appendingPathComponent(review.package.path), root: root)
+            guard packageData.thumbleSHA256 == review.package.sha256 else { throw ControllerDesignError.staleEvidence("package changed") }
+            // New references are installed before the atomic profile attachment. Never replace a
+            // version already used by another profile; a failed CAS can leave only an unused package.
+            let library = optionValue("--skin-library", in: rest).map { URL(fileURLWithPath: $0).standardizedFileURL }
+            _ = try ThumbleSkinStore(rootURL: library).install(data: packageData, policy: .newerOnly)
+            let layoutPlan: String?
+            if session.layoutPlanSHA256 != nil {
+                let bytes = try ControllerDesignWorkspace.boundedData(root.appendingPathComponent("contract/layout-edits.json"), root: root)
+                guard bytes.count <= 64 * 1024 else { throw ControllerDesignError.invalid("layout plan exceeds byte budget") }
+                layoutPlan = String(decoding: bytes, as: UTF8.self)
+            } else { layoutPlan = nil }
+            let response = try ThumbleCLIProfileBackend().perform(.designApply(.id(session.profileID), draftID: session.draftID, expectedDraftRevision: session.draftRevision,
+                packageBase64: packageData.base64EncodedString(), packageSHA256: review.package.sha256,
+                profileSHA256: session.profileSHA256, evidenceSHA256: evidenceHash,
+                baseProfileSHA256: session.baseProfileSHA256, layoutEditsJSON: layoutPlan),
+                invocationID: invocationID, expectedConfigurationRevision: configurationRevision)
+            guard let outcome = response.outcome else { throw CLIError.message("Design authority returned no apply receipt") }
+            try ControllerDesignWorkspace.write(outcome, to: root.appendingPathComponent("reviews/apply-\(invocationID.uuidString.lowercased()).json"))
+            notifySkinStoreChanged()
+            try printJSON(outcome)
+        case "critique":
+            let revision = try designRevision(rest)
+            guard let path = optionValue("--report", in: rest) else { throw CLIError.message("design critique requires --report JSON") }
+            let data = try Data(contentsOf: URL(fileURLWithPath: path))
+            guard data.count <= 128 * 1024 else { throw CLIError.message("Critique report exceeds byte budget") }
+            let report = try JSONDecoder().decodeUnique(ControllerDesignSession.Critique.self, from: data)
+            let renderer = try Data(contentsOf: URL(fileURLWithPath: CommandLine.arguments[0])).thumbleSHA256
+            let recorded = try ControllerDesignWorkspace.recordCritique(at: root, expectedRevision: revision,
+                rendererSHA256: renderer, critique: report)
+            try printJSON(["path": recorded, "humanApproval": "pending"])
+        case "inspect":
+            try printJSON(ControllerDesignWorkspace.inspect(at: root))
+        default:
+            throw CLIError.message("Unknown design subcommand: \(action)")
+        }
+    }
+
+    private static func designRevision(_ arguments: [String]) throws -> UInt64 {
+        guard let value = optionValue("--expected-revision", in: arguments), let revision = UInt64(value), revision > 0 else {
+            throw CLIError.message("Design operation requires --expected-revision N")
+        }
+        return revision
     }
 
     // MARK: - Shareable skins
@@ -1766,11 +1892,17 @@ struct ThumbleCLI {
                 throw CLIError.message("Usage: thumble skin quality SOURCE|PACKAGE [--artboard ARTBOARD] [--strict] [--json]")
             }
             let targetURL = URL(fileURLWithPath: target)
+            let capturedProfile: GamepadConfigurationProfile?
             let workspace: ThumbleSkinWorkspace?
             let package: ThumbleSkinPackage
             if ThumbleSkinCompiler.containsWorkspace(at: targetURL) {
                 let loaded = try ThumbleSkinCompiler.loadWorkspace(from: targetURL)
                 workspace = loaded.workspace
+                if !loaded.workspace.capturedArtboards.isEmpty {
+                    _ = try ControllerDesignWorkspace.load(at: targetURL)
+                    capturedProfile = try JSONDecoder().decodeUnique(GamepadConfigurationProfile.self,
+                        from: ControllerDesignWorkspace.boundedData(targetURL.appendingPathComponent("contract/profile.json"), root: targetURL))
+                } else { capturedProfile = nil }
                 let temporary = FileManager.default.temporaryDirectory
                     .appendingPathComponent("ThumbleSkinQuality-\(UUID().uuidString)", isDirectory: true)
                 defer { try? FileManager.default.removeItem(at: temporary) }
@@ -1786,12 +1918,14 @@ struct ThumbleCLI {
                 package = compiled.package
             } else {
                 workspace = nil
+                capturedProfile = nil
                 package = try resolveSkinPackage(target).package
             }
             let report = ThumbleSkinQualityEvaluator.evaluate(
                 package: package,
                 workspace: workspace,
-                artboardID: optionValue("--artboard", in: rest)
+                artboardID: optionValue("--artboard", in: rest),
+                capturedProfile: capturedProfile
             )
             if rest.contains("--json") {
                 try printJSON(report)
@@ -1839,7 +1973,7 @@ struct ThumbleCLI {
                 )
                 notifySkinStoreChanged()
             }
-            var profileStore = loadStore()
+            var profileStore = try loadStore()
             let profileIndex = try resolveProfileIndex(optionValue("--profile", in: rest), in: profileStore)
             let scheme = try parseSkinColorScheme(optionValue("--appearance", in: rest) ?? optionValue("--scheme", in: rest) ?? "light")
             profileStore.profiles[profileIndex].applySkin(resolved.package, colorScheme: scheme)
@@ -1848,7 +1982,7 @@ struct ThumbleCLI {
             print("Applied \(resolved.package.manifest.name) to \(profileName).")
 
         case "detach", "fork":
-            var profileStore = loadStore()
+            var profileStore = try loadStore()
             let profileIndex = try resolveProfileIndex(optionValue("--profile", in: rest) ?? firstPositional(in: rest), in: profileStore)
             guard let reference = profileStore.profiles[profileIndex].skinReference else {
                 print("\(profileStore.profiles[profileIndex].name) already uses local appearance.")
@@ -1877,7 +2011,7 @@ struct ThumbleCLI {
             if (try store.installedSkins().first(where: { $0.reference == reference }))?.isBundled == true {
                 throw CLIError.message("Built-in skins cannot be removed.")
             }
-            if let profile = loadStore().profiles.first(where: { $0.skinReference == reference }) {
+            if let profile = try loadStore().profiles.first(where: { $0.skinReference == reference }) {
                 throw CLIError.message("Skin is still used by profile \"\(profile.name)\". Run `thumble skin detach --profile \"\(profile.name)\"` first.")
             }
             try store.remove(reference)
@@ -1965,7 +2099,7 @@ struct ThumbleCLI {
             package = try resolveSkinPackage(target).package
         }
 
-        let profileStore = loadStore()
+        let profileStore = try loadStore()
         let profile: GamepadConfigurationProfile
         if let requested = optionValue("--profile", in: arguments) {
             profile = try resolveProfile(requested, in: profileStore)
@@ -2428,12 +2562,12 @@ struct ThumbleCLI {
         guard exists else { throw CLIError.message("Skin package source not found: \(inputURL.path)") }
         let root = isDirectory.boolValue ? inputURL : inputURL.deletingLastPathComponent()
         let manifestURL = inputURL.lastPathComponent == "manifest.json" ? inputURL : root.appendingPathComponent("manifest.json")
-        let manifest = try JSONDecoder().decode(ThumbleSkinManifest.self, from: Data(contentsOf: manifestURL)).normalized
+        let manifest = try JSONDecoder().decodeUnique(ThumbleSkinManifest.self, from: Data(contentsOf: manifestURL)).normalized
         let skin = try manifest.skinPath.map { path in
-            try JSONDecoder().decode(ThumbleSkin.self, from: Data(contentsOf: try safePackageFileURL(path, root: root)))
+            try JSONDecoder().decodeUnique(ThumbleSkin.self, from: Data(contentsOf: try safePackageFileURL(path, root: root)))
         }
         let profile = try manifest.profilePath.map { path in
-            try JSONDecoder().decode(GamepadConfigurationProfile.self, from: Data(contentsOf: try safePackageFileURL(path, root: root)))
+            try JSONDecoder().decodeUnique(GamepadConfigurationProfile.self, from: Data(contentsOf: try safePackageFileURL(path, root: root)))
         }
         var assets: [String: Data] = [:]
         for descriptor in manifest.assets {
@@ -2465,7 +2599,7 @@ struct ThumbleCLI {
             throw CLIError.message("Unsafe package path: \(path)")
         }
         let resolvedRoot = root.standardizedFileURL.resolvingSymlinksInPath()
-        let candidate = root.appendingPathComponent(path).standardizedFileURL.resolvingSymlinksInPath()
+        let candidate = resolvedRoot.appendingPathComponent(path).standardizedFileURL.resolvingSymlinksInPath()
         guard candidate.path.hasPrefix(resolvedRoot.path + "/") else {
             throw CLIError.message("Package path escapes the source directory: \(path)")
         }
@@ -2862,7 +2996,7 @@ struct ThumbleCLI {
     ) -> String {
         switch mode {
         case .keyboard: "Send this keypad as Mac keyboard shortcuts. Virtual controller output stays off for this setup."
-        case .controller: "Send this keypad as a virtual Xbox-style controller using Thumble’s default controller map."
+        case .controller: "Send the gamepad outputs configured on this keypad’s elements. Keyboard output stays off for this setup."
         case .custom: "Use per-element output bindings. This can mix keyboard shortcuts and virtual controller buttons."
         }
     }
@@ -2874,23 +3008,24 @@ struct ThumbleCLI {
         let rest = Array(arguments.dropFirst())
         switch subcommand {
         case "show":
-            let store = loadStore()
+            let store = try loadStore()
             let profile = try resolveProfile(optionValue("--profile", in: rest), in: store)
-            try printJSON(customization(for: profile, arguments: rest))
+            try printJSON(customizationSource(for: profile, store: store, arguments: rest))
         case "export":
             let outputPath = optionValue("--output", in: rest) ?? optionValue("-o", in: rest)
-            let store = loadStore()
+            let store = try loadStore()
             let profile = try resolveProfile(optionValue("--profile", in: rest), in: store)
-            try writeJSON(customization(for: profile, arguments: rest), to: outputPath)
+            try writeJSON(customizationSource(for: profile, store: store, arguments: rest), to: outputPath)
         case "import":
+            guard let path = firstPositional(in: rest) else { throw CLIError.message("Missing customization JSON path") }
+            let data = try Data(contentsOf: URL(fileURLWithPath: path))
+            let customization = try GamepadCustomizationPersistence.decodeSavedCustomization(data)
+            let source = try JSONDecoder().decodeUnique(ThumbleBridgeJSONValue.self, from: data)
             try requireExplicitUnmigratedProfileAccess(
                 operation: "customization import",
                 artifactRequired: true
             )
-            guard let path = firstPositional(in: rest) else { throw CLIError.message("Missing customization JSON path") }
-            let data = try Data(contentsOf: URL(fileURLWithPath: path))
-            let customization = try JSONDecoder().decode(GamepadCustomization.self, from: data)
-            try mutateCustomization(profileTarget: optionValue("--profile", in: rest), variant: try customizationVariant(in: rest)) { $0 = customization }
+            try mutateCustomization(profileTarget: optionValue("--profile", in: rest), variant: try customizationVariant(in: rest), preserving: source) { $0 = customization }
             print("Imported customization.")
         case "validate", "check", "lint":
             try validateLayout(arguments: rest)
@@ -3288,7 +3423,7 @@ struct ThumbleCLI {
     }
 
     private static func validateLayout(arguments: [String]) throws {
-        let store = loadStore()
+        let store = try loadStore()
         let profile = try resolveProfile(layoutProfileTarget(in: arguments), in: store)
         let resolvedCustomization = try customization(for: profile, arguments: arguments)
         let canvasSize = try parseLayoutCanvasSize(arguments, fallback: resolvedCustomization.deviceCanvas.editorDeviceFrame.screenRect.size)
@@ -3414,7 +3549,7 @@ struct ThumbleCLI {
     }
 
     private static func previewLayout(arguments: [String]) throws {
-        let store = loadStore()
+        let store = try loadStore()
         let profile = try resolveProfile(layoutProfileTarget(in: arguments), in: store)
         let resolvedCustomization = try customization(for: profile, arguments: arguments)
         let canvasSize = try parseLayoutCanvasSize(arguments, fallback: resolvedCustomization.deviceCanvas.editorDeviceFrame.screenRect.size)
@@ -3590,31 +3725,67 @@ struct ThumbleCLI {
         return profile.customization
     }
 
-    private static func mutateCustomization(profileTarget: String?, variant: GamepadEditorDeviceOrientation? = nil, mutate: (inout GamepadCustomization) throws -> Void) throws {
-        var store = loadStore()
+    private static func customizationSource(for profile: GamepadConfigurationProfile, store: ProfileStore, arguments: [String]) throws -> ThumbleBridgeJSONValue {
+        guard let value = try MacConfigurationBindings.profileValues([profile], preserving: store.profileSources).first,
+              case .object(var fields) = value,
+              let primarySource = fields["customization"] else {
+            throw GamepadSavedConfigurationError.invalid("profile must contain its declared customization source")
+        }
+        var selectedProfile = profile
+        selectedProfile.customization = try customization(for: profile, arguments: arguments)
+        let variantSource = try customizationVariant(in: arguments).flatMap { fields[$0.rawValue + "Customization"] }
+        fields["customization"] = variantSource.flatMap { $0 == .null ? nil : $0 } ?? primarySource
+        guard case .object(let selectedFields) = try ThumbleConfigurationBridge.preservingProfileMetadata(.object(fields), after: selectedProfile),
+              let source = selectedFields["customization"] else {
+            throw GamepadSavedConfigurationError.invalid("selected customization must retain its declared source")
+        }
+        return source
+    }
+
+    private static func mutateCustomization(profileTarget: String?, variant: GamepadEditorDeviceOrientation? = nil, preserving incomingSource: ThumbleBridgeJSONValue? = nil, mutate: (inout GamepadCustomization) throws -> Void) throws {
+        var store = try loadStore()
         let index = try resolveProfileIndex(profileTarget, in: store)
+        let previous = store.profiles[index]
         var customization = variant.map { store.profiles[index].customization(for: $0) } ?? store.profiles[index].customization
         try mutate(&customization)
         let normalizedCustomization = customization.normalized
-        if let variant {
-            store.profiles[index].setCustomization(normalizedCustomization, for: variant)
-        } else {
-            store.profiles[index].setCustomization(
-                normalizedCustomization,
-                for: normalizedCustomization.deviceCanvas.editorDeviceFrame.orientation
-            )
+        let orientation = variant ?? normalizedCustomization.deviceCanvas.editorDeviceFrame.orientation
+        store.profiles[index].setCustomization(normalizedCustomization, for: orientation)
+        if let incomingSource {
+            let source = try store.profileSources[previous.id] ?? JSONDecoder().decodeUnique(ThumbleBridgeJSONValue.self, from: JSONEncoder().encode(previous))
+            guard case .object(var fields) = source, let previousPrimarySource = fields["customization"] else {
+                throw GamepadSavedConfigurationError.invalid("customization source must belong to the edited profile")
+            }
+            let previousOrientation = previous.customization.deviceCanvas.editorDeviceFrame.orientation
+            if previousOrientation != orientation, !previous.hasCustomizationVariant(for: previousOrientation) {
+                fields[previousOrientation.rawValue + "Customization"] = previousPrimarySource
+            }
+            fields["customization"] = incomingSource
+            fields[orientation.rawValue + "Customization"] = incomingSource
+            store.profileSources[previous.id] = .object(fields)
         }
         store.profiles[index].updatedAt = Date.currentMilliseconds
+        removeDeletedOwnerReferences(previous: previous, current: store.profiles[index], from: &store)
         try persistStore(store)
+    }
+
+    private static func removeDeletedOwnerReferences(previous: GamepadConfigurationProfile, current: GamepadConfigurationProfile, from store: inout ProfileStore) {
+        let id = current.id.uuidString
+        var keys = store.profileKeyBindings[id] ?? [:]
+        var outputs = store.profileOutputBindings[id] ?? [:]
+        MacConfigurationBindings.removeDeletedOwnerReferences(previous: previous, current: current, keys: &keys, outputs: &outputs)
+        if store.profileKeyBindings[id] != nil { store.profileKeyBindings[id] = keys }
+        if store.profileOutputBindings[id] != nil { store.profileOutputBindings[id] = outputs }
     }
 
     private static func mutateProfileResources(
         profileTarget: String?,
         mutate: (inout GamepadCustomization) throws -> Void
     ) throws {
-        var store = loadStore()
+        var store = try loadStore()
         let index = try resolveProfileIndex(profileTarget, in: store)
-        var profile = store.profiles[index]
+        let previous = store.profiles[index]
+        var profile = previous
 
         try mutate(&profile.customization)
         profile.customization = profile.customization.normalized
@@ -3629,6 +3800,7 @@ struct ThumbleCLI {
 
         profile.updatedAt = Date.currentMilliseconds
         store.profiles[index] = profile.normalized
+        removeDeletedOwnerReferences(previous: previous, current: store.profiles[index], from: &store)
         try persistStore(store)
     }
 
@@ -3753,7 +3925,7 @@ struct ThumbleCLI {
                 operation: "style export",
                 artifactRequired: true
             )
-            let store = loadStore()
+            let store = try loadStore()
             let profile = try resolveProfile(optionValue("--profile", in: rest), in: store)
             try writeJSON(profile.customization.styleLibrary.normalized, to: optionValue("--output", in: rest) ?? optionValue("-o", in: rest))
         case "import":
@@ -4003,13 +4175,13 @@ struct ThumbleCLI {
         let rest = Array(arguments.dropFirst())
         switch subcommand {
         case "list", "ls":
-            let store = loadStore()
+            let store = try loadStore()
             let profile = try resolveProfile(optionValue("--profile", in: rest), in: store)
             let assets = profile.customization.assetLibrary.normalized.assets
             if rest.contains("--json") { try printJSON(assets) } else { assets.forEach { print("\($0.id)\t\($0.name)\t\($0.role.rawValue)\t\($0.byteCount) bytes") } }
         case "show":
             guard let id = firstPositional(in: rest) else { throw CLIError.message("Usage: thumble asset show <asset-id>") }
-            let store = loadStore()
+            let store = try loadStore()
             let profile = try resolveProfile(optionValue("--profile", in: rest), in: store)
             guard let asset = profile.customization.assetLibrary.asset(id: id) else { throw CLIError.message("Asset not found: \(id)") }
             try printJSON(asset)
@@ -4037,7 +4209,7 @@ struct ThumbleCLI {
             let requestedRole = try optionValue("--role", in: rest).map(parseAssetRole)
             guard requestedName != nil || requestedRole != nil else { throw CLIError.message("asset set needs --name or --role") }
             if let requestedName, requestedName.isEmpty { throw CLIError.message("Asset name cannot be empty") }
-            let assetStore = loadStore()
+            let assetStore = try loadStore()
             let assetProfile = try resolveProfile(optionValue("--profile", in: rest), in: assetStore)
             guard assetProfile.customization.assetLibrary.asset(id: id) != nil else { throw CLIError.message("Asset not found: \(id)") }
             try mutateProfileResources(profileTarget: optionValue("--profile", in: rest)) { customization in
@@ -5292,25 +5464,24 @@ struct ThumbleCLI {
         guard let kindText = firstPositional(in: arguments) else { throw CLIError.message("Usage: thumble element add <button|joystick|trigger|trackpad|text|decoration> [options]") }
         let kind = try parseCustomControlKind(kindText)
         try mutateCustomization(profileTarget: optionValue("--profile", in: arguments), variant: try customizationVariant(in: arguments)) { customization in
-            guard customization.customButtons.count < GamepadCustomization.maximumCustomButtons else { throw CLIError.message("Maximum custom element count reached") }
-            if kind == .joystick && customization.customButtons.filter({ $0.normalized.isJoystick }).count >= GamepadCustomization.maximumJoysticks {
+            let controlKinds = customization.controlKindsByID
+            guard controlKinds.count < GamepadCustomization.maximumCustomButtons else { throw CLIError.message("Maximum element count reached") }
+            if kind == .joystick && controlKinds.values.filter({ $0 == .joystick }).count >= GamepadCustomization.maximumJoysticks {
                 throw CLIError.message("Maximum joystick count reached")
             }
-            if kind == .trigger && customization.customButtons.filter({ $0.normalized.isTrigger }).count >= GamepadCustomization.maximumTriggers {
+            if kind == .trigger && controlKinds.values.filter({ $0 == .trigger }).count >= GamepadCustomization.maximumTriggers {
                 throw CLIError.message("Maximum trigger count reached")
             }
-            if kind == .trackpad && customization.customButtons.filter({ $0.normalized.isTrackpad }).count >= GamepadCustomization.maximumTrackpads {
+            if kind == .trackpad && controlKinds.values.filter({ $0 == .trackpad }).count >= GamepadCustomization.maximumTrackpads {
                 throw CLIError.message("Maximum trackpad count reached")
             }
 
             let id = UUID()
-            let triggerCount = customization.customButtons.filter { $0.normalized.isTrigger }.count
+            let triggerCount = controlKinds.values.filter { $0 == .trigger }.count
             let defaultTriggerTarget: VirtualGamepadTrigger = triggerCount == 0 ? .left : .right
             let isPassiveLayer = kind == .text || kind == .decoration
-            let mapped = try optionValue("--maps-to", in: arguments).map(parseButton) ?? (kind == .joystick ? .up : (isPassiveLayer ? .custom8 : firstAvailableCustomSlot(in: customization) ?? .custom1))
             var customButton = GamepadCustomButton(
                 id: id,
-                mappedButton: mapped,
                 label: optionValue("--text", in: arguments) ?? optionValue("--label", in: arguments) ?? (kind == .trigger ? defaultTriggerTarget.shortName : defaultLabel(for: kind)),
                 controlKind: kind,
                 visualRole: try (optionValue("--visual-role", in: arguments) ?? optionValue("--skin-role", in: arguments)).map(parseVisualRole),
@@ -5401,11 +5572,11 @@ struct ThumbleCLI {
                     customization.setLabel(label, for: button)
                 }
                 if arguments.contains("--clear-visual-role") || arguments.contains("--clear-skin-role") {
-                    if let index = customization.elements.firstIndex(where: { $0.builtInButton == button }) {
+                    if let index = customization.elements.firstIndex(where: { $0.defaultControlID == button }) {
                         customization.elements[index].visualRole = nil
                     }
                 } else if let role = try (optionValue("--visual-role", in: arguments) ?? optionValue("--skin-role", in: arguments)).map(parseVisualRole),
-                          let index = customization.elements.firstIndex(where: { $0.builtInButton == button }) {
+                          let index = customization.elements.firstIndex(where: { $0.defaultControlID == button }) {
                     customization.elements[index].visualRole = role
                 }
                 var layout = customization.buttonCustomization(for: button)
@@ -5413,14 +5584,14 @@ struct ThumbleCLI {
                 customization.setButtonCustomization(layout, for: button)
             case .custom(let id):
                 guard let index = customization.customButtons.firstIndex(where: { $0.id == id }) else { throw CLIError.message("Custom element not found") }
+                let originalKind = customization.customButtons[index].controlKind
                 if arguments.contains("--clear-label") {
                     customization.customButtons[index].label = customization.customButtons[index].controlKind == .text
                         ? "Text"
-                        : customization.visualLabel(for: customization.customButtons[index].mappedButton)
+                        : customization.visualLabel(for: customization.customButtons[index].inputID)
                 } else if let label = optionValue("--text", in: arguments) ?? optionValue("--label", in: arguments) {
                     customization.customButtons[index].label = normalizedLabel(label)
                 }
-                if let mapped = optionValue("--maps-to", in: arguments) { customization.customButtons[index].mappedButton = try parseButton(mapped) }
                 if let kind = optionValue("--kind", in: arguments) { customization.customButtons[index].controlKind = try parseCustomControlKind(kind) }
                 if arguments.contains("--clear-visual-role") || arguments.contains("--clear-skin-role") {
                     customization.customButtons[index].visualRole = nil
@@ -5433,41 +5604,54 @@ struct ThumbleCLI {
                 let hasTriggerOptions = hasAnyOption(triggerOptionNames, in: arguments)
                 let hasTrackpadOptions = hasAnyOption(trackpadOptionNames, in: arguments)
                 if customization.customButtons[index].controlKind == .joystick || hasJoystickOptions {
+                    let converting = originalKind != .joystick
                     customization.customButtons[index].controlKind = .joystick
-                    customization.customButtons[index].joystickMapping = try joystickMapping(from: arguments, fallback: customization.customButtons[index].joystickMapping ?? .movement)
-                    customization.customButtons[index].joystickOutputSettings = try joystickOutputSettings(from: arguments, fallback: customization.customButtons[index].joystickOutputSettings ?? .defaultValue)
+                    if converting || hasAnyOption(["--up", "--down", "--left", "--right"], in: arguments) {
+                        let unbound = GamepadJoystickMapping(up: .init(), down: .init(), left: .init(), right: .init())
+                        customization.customButtons[index].joystickMapping = try joystickMapping(from: arguments,
+                            fallback: customization.customButtons[index].joystickMapping ?? (converting ? .movement : unbound))
+                    }
+                    if converting || hasAnyOption(joystickOptionNames.filter { !["--joystick-style", "--stick-style", "--thumbstick", "--classic-joystick", "--up", "--down", "--left", "--right"].contains($0) } + ["--target", "--dead-zone", "--deadzone", "--sensitivity"], in: arguments) {
+                        customization.customButtons[index].joystickOutputSettings = try joystickOutputSettings(from: arguments, fallback: customization.customButtons[index].joystickOutputSettings ?? .defaultValue)
+                    }
                     customization.customButtons[index].triggerSettings = nil
                     customization.customButtons[index].trackpadSettings = nil
-                    customization.customButtons[index].layout.shape = .circle
+                    if converting || customization.customButtons[index].layout.shape == nil { customization.customButtons[index].layout.shape = .circle }
                 } else if customization.customButtons[index].controlKind == .trigger || hasTriggerOptions {
+                    let converting = originalKind != .trigger
                     customization.customButtons[index].controlKind = .trigger
                     customization.customButtons[index].joystickMapping = nil
                     customization.customButtons[index].joystickOutputSettings = nil
-                    customization.customButtons[index].triggerSettings = try triggerSettings(from: arguments, fallback: customization.customButtons[index].triggerSettings ?? .defaultValue)
+                    if converting || hasTriggerOptions {
+                        customization.customButtons[index].triggerSettings = try triggerSettings(from: arguments, fallback: customization.customButtons[index].triggerSettings ?? .defaultValue)
+                    }
                     customization.customButtons[index].trackpadSettings = nil
-                    customization.customButtons[index].layout.shape = .capsule
+                    if converting || customization.customButtons[index].layout.shape == nil { customization.customButtons[index].layout.shape = .capsule }
                 } else if customization.customButtons[index].controlKind == .trackpad || hasTrackpadOptions {
+                    let converting = originalKind != .trackpad
                     customization.customButtons[index].controlKind = .trackpad
                     customization.customButtons[index].joystickMapping = nil
                     customization.customButtons[index].joystickOutputSettings = nil
                     customization.customButtons[index].triggerSettings = nil
                     customization.customButtons[index].layout.shape = customization.customButtons[index].layout.shape ?? .roundedRectangle
-                    customization.customButtons[index].trackpadSettings = try trackpadSettings(from: arguments, fallback: customization.customButtons[index].trackpadSettings ?? .defaultValue)
+                    if converting || hasTrackpadOptions {
+                        customization.customButtons[index].trackpadSettings = try trackpadSettings(from: arguments, fallback: customization.customButtons[index].trackpadSettings ?? .defaultValue)
+                    }
                 } else if customization.customButtons[index].controlKind == .text {
                     customization.customButtons[index].joystickMapping = nil
                     customization.customButtons[index].joystickOutputSettings = nil
                     customization.customButtons[index].triggerSettings = nil
                     customization.customButtons[index].trackpadSettings = nil
-                    customization.customButtons[index].layout.shape = .rectangle
+                    if originalKind != .text || customization.customButtons[index].layout.shape == nil { customization.customButtons[index].layout.shape = .rectangle }
                     customization.customButtons[index].layout.shadowStrength = 0
-                    customization.customButtons[index].layout.showsIntegratedLabel = false
+                    if originalKind != .text { customization.customButtons[index].layout.showsIntegratedLabel = false }
                 } else if customization.customButtons[index].controlKind == .decoration {
                     customization.customButtons[index].joystickMapping = nil
                     customization.customButtons[index].joystickOutputSettings = nil
                     customization.customButtons[index].triggerSettings = nil
                     customization.customButtons[index].trackpadSettings = nil
                     customization.customButtons[index].layout.shape = customization.customButtons[index].layout.shape ?? .roundedRectangle
-                    customization.customButtons[index].layout.shadowStrength = 0
+                    if originalKind != .decoration { customization.customButtons[index].layout.shadowStrength = 0 }
                 } else if customization.customButtons[index].controlKind == .button {
                     customization.customButtons[index].joystickMapping = nil
                     customization.customButtons[index].joystickOutputSettings = nil
@@ -5476,7 +5660,7 @@ struct ThumbleCLI {
                 }
                 try applyLayoutOptions(arguments, to: &customization.customButtons[index].layout)
             case .system(.topBarActivation):
-                if arguments.contains("--clear-label") || optionValue("--label", in: arguments) != nil || optionValue("--maps-to", in: arguments) != nil || optionValue("--kind", in: arguments) != nil {
+                if arguments.contains("--clear-label") || optionValue("--label", in: arguments) != nil || optionValue("--kind", in: arguments) != nil {
                     throw CLIError.message("The control bar hotspot only supports layout options")
                 }
                 try applyLayoutOptions(arguments, to: &customization.topBarActivationRegion)
@@ -5577,7 +5761,7 @@ struct ThumbleCLI {
         let translation = try parseNudgeTranslation(arguments: arguments, directionText: directionText)
         let canvasSize = try parseNudgeCanvasSize(arguments)
 
-        var store = loadStore()
+        var store = try loadStore()
         let profileIndex = try resolveProfileIndex(optionValue("--profile", in: arguments), in: store)
         let variant = try customizationVariant(in: arguments)
         let sourceCustomization = variant.map { store.profiles[profileIndex].customization(for: $0) } ?? store.profiles[profileIndex].customization
@@ -6085,15 +6269,16 @@ struct ThumbleCLI {
             index += 1
         }
         guard elementInput == nil || buttonText == nil else { throw CLIError.message("Choose a button or --element, not both.") }
-        let button: GameButton?
+        let button: KeypadElementID?
         let controlID: String
         if let elementInput {
             button = nil
             controlID = "element:\(elementInput.storageKey)"
         } else {
-            let target = try parseButton(buttonText ?? "jump")
+            guard let buttonText else { throw CLIError.message("Provide an element UUID or --element UUID#part.") }
+            let target = try parseButton(buttonText)
             button = target
-            controlID = "button:\(target.rawValue)"
+            controlID = "element:\(target.rawValue)"
         }
         switch try runtimeRoute(.status) {
         case .rust:
@@ -6180,7 +6365,7 @@ struct ThumbleCLI {
     }
     private struct LegacyTapCommand: Encodable {
         let command = "testGamepad"
-        let button: GameButton?
+        let button: KeypadElementID?
         let elementInput: KeypadElementInputID?
         let holdMilliseconds: Int
     }
@@ -6439,6 +6624,22 @@ struct ThumbleCLI {
         case "replay-onboarding", "onboarding", "reset-onboarding":
             try replayOnboarding()
             print("Reset onboarding and opened Thumble Mac.")
+        case "setup-guide":
+            print(ThumbleMacSetupGuide.text)
+        case "local-network-settings":
+            guard NSWorkspace.shared.open(ThumbleMacSetupGuide.localNetworkSettingsURL()) else {
+                throw CLIError.message("Could not open System Settings. Open Privacy & Security → Local Network and enable Thumble Mac.")
+            }
+            print("Opened Privacy & Security settings. Check Local Network access for Thumble Mac on macOS 15 or later, and for Thumble on iPhone.")
+        case "ios-app":
+            guard let url = ThumbleMacSetupGuide.iOSAppStoreURL else {
+                print(ThumbleMacSetupGuide.iOSAppStorePlaceholder)
+                return
+            }
+            guard NSWorkspace.shared.open(url) else {
+                throw CLIError.message("Could not open the iPhone App Store listing: \(url.absoluteString)")
+            }
+            print("Opened the Thumble for iPhone App Store listing.")
         default:
             throw CLIError.message("Unknown app subcommand: \(subcommand)")
         }
@@ -6746,7 +6947,7 @@ struct ThumbleCLI {
         return formatter.string(from: date)
     }
 
-    private static func formatCapturePressed(_ buttons: [GameButton]?) -> String {
+    private static func formatCapturePressed(_ buttons: [KeypadElementID]?) -> String {
         guard let buttons else { return "" }
         if buttons.isEmpty { return " pressed=[]" }
         return " pressed=[\(buttons.map(\.rawValue).joined(separator: ","))]"
@@ -6758,7 +6959,7 @@ struct ThumbleCLI {
 
     private static func postRuntimeCommand(
         _ command: ThumbleMacCLICommand,
-        button: GameButton? = nil,
+        button: KeypadElementID? = nil,
         elementInput: KeypadElementInputID? = nil,
         reason: String? = nil
     ) throws {
@@ -6770,7 +6971,7 @@ struct ThumbleCLI {
 
     private static func postLegacyRuntimeCommand(
         _ command: ThumbleMacCLICommand,
-        button: GameButton? = nil,
+        button: KeypadElementID? = nil,
         elementInput: KeypadElementInputID? = nil,
         reason: String? = nil
     ) throws {
@@ -6947,22 +7148,38 @@ struct ThumbleCLI {
 
     // MARK: - Persistence
 
-    private static func loadStore() -> ProfileStore {
-        let domain = loadAppDomain()
-        let state = loadProfileState(from: domain)
-        var profileBindings = loadProfileBindings(from: domain)
-        if profileBindings[state.activeProfileID.uuidString] == nil {
-            profileBindings[state.activeProfileID.uuidString] = rawBindings(loadActiveKeyBindings(from: domain))
+    private static func loadStore() throws -> ProfileStore {
+        if ThumbleNativeConfiguration.endpointExists() {
+            let snapshot = try ThumbleNativeConfiguration.snapshot()
+            let document = snapshot.document
+            let encoder = ThumbleNativeConfiguration.encoder()
+            let state = try GamepadConfigurationProfilePersistence.decodeSavedState(encoder.encode(ThumbleBridgeJSONValue.object([
+                "profiles": .array(document.profiles), "activeProfileID": .string(document.activeProfileID), "defaultProfileID": .string(document.defaultProfileID)])))
+            let maps = try MacConfigurationBindings.loadSavedBindings(from: [
+                keyBindingsDefaultsKey: try encoder.encode(document.keyBindings), outputBindingsDefaultsKey: try encoder.encode(document.outputBindings),
+                profileKeyBindingsDefaultsKey: try encoder.encode(document.profileKeyBindings), profileOutputBindingsDefaultsKey: try encoder.encode(document.profileOutputBindings)], state: state)
+            return ProfileStore(profiles: state.profiles, activeProfileID: state.activeProfileID, defaultProfileID: state.defaultProfileID,
+                profileKeyBindings: Dictionary(uniqueKeysWithValues: maps.profileKeys.map { ($0.key.uuidString, rawBindings($0.value)) }),
+                profileOutputBindings: Dictionary(uniqueKeysWithValues: maps.profileOutputs.map { ($0.key.uuidString, rawOutputBindings($0.value)) }), nativeSnapshot: snapshot,
+                profileSources: try MacConfigurationBindings.profileSources(document.profiles, matching: state.profiles))
         }
-        var profileOutputBindings = loadProfileOutputBindings(from: domain, fallbackProfileKeyBindings: profileBindings)
+        let domain = loadAppDomain()
+        let state = try loadProfileState(from: domain)
+        let sources = try savedProfileSources(from: domain, matching: state)
+        let maps = try MacConfigurationBindings.loadSavedBindings(from: domain, state: state)
+        let activeProfile = state.activeProfile ?? state.profiles[0]
+        var profileBindings = Dictionary(uniqueKeysWithValues: maps.profileKeys.map { ($0.key.uuidString, rawBindings($0.value)) })
+        if profileBindings[state.activeProfileID.uuidString] == nil {
+            profileBindings[state.activeProfileID.uuidString] = rawBindings(activeProfile.initialMacOutputBindings.keyboardBindings)
+        }
+        var profileOutputBindings = Dictionary(uniqueKeysWithValues: maps.profileOutputs.map { ($0.key.uuidString, rawOutputBindings($0.value)) })
         if profileOutputBindings[state.activeProfileID.uuidString] == nil {
-            let activeBindings = decodedBindings(profileBindings[state.activeProfileID.uuidString]) ?? DefaultKeypadKeyMap.defaultBindings
-            let activeProfile = state.activeProfile ?? state.profiles[0]
+            let activeBindings = decodedBindings(profileBindings[state.activeProfileID.uuidString]) ?? activeProfile.initialMacOutputBindings.keyboardBindings
             profileOutputBindings[state.activeProfileID.uuidString] = rawOutputBindings(
                 effectiveOutputBindings(
                     for: activeProfile.outputMode,
                     keyBindings: activeBindings,
-                    customOutputBindings: outputBindings(from: activeBindings)
+                    customOutputBindings: activeProfile.initialMacOutputBindings
                 )
             )
         }
@@ -6971,11 +7188,19 @@ struct ThumbleCLI {
             activeProfileID: state.activeProfileID,
             defaultProfileID: state.defaultProfileID,
             profileKeyBindings: profileBindings,
-            profileOutputBindings: profileOutputBindings
+            profileOutputBindings: profileOutputBindings,
+            profileSources: sources
         )
     }
 
     private static func persistStore(_ inputStore: ProfileStore) throws {
+        if let snapshot = inputStore.nativeSnapshot {
+            try persistNativeStore(inputStore, snapshot: snapshot)
+            return
+        }
+        // A native endpoint appearing after an offline read must not cause a
+        // write from that stale/different configuration source.
+        guard !ThumbleNativeConfiguration.endpointExists() else { throw CLIError.message("Native configuration authority changed after the read; retry without writing another store.") }
         try profileBackend().requireLegacyPersistenceAllowed(operation: "legacy configuration write")
         var store = inputStore
         let state = GamepadConfigurationProfilePersistence.normalizedState(
@@ -6992,9 +7217,9 @@ struct ThumbleCLI {
         store.profileKeyBindings = store.profileKeyBindings.filter { validIDs.contains($0.key) }
         store.profileOutputBindings = store.profileOutputBindings.filter { validIDs.contains($0.key) }
         let activeProfile = state.activeProfile ?? state.profiles[0]
-        let activeBindings = decodedBindings(store.profileKeyBindings[activeProfile.id.uuidString]) ?? DefaultKeypadKeyMap.defaultBindings
+        let activeBindings = decodedBindings(store.profileKeyBindings[activeProfile.id.uuidString]) ?? activeProfile.initialMacOutputBindings.keyboardBindings
         store.profileKeyBindings[activeProfile.id.uuidString] = rawBindings(activeBindings)
-        let storedActiveOutputBindings = decodedOutputBindings(store.profileOutputBindings[activeProfile.id.uuidString]) ?? outputBindings(from: activeBindings)
+        let storedActiveOutputBindings = decodedOutputBindings(store.profileOutputBindings[activeProfile.id.uuidString]) ?? activeProfile.initialMacOutputBindings
         let activeOutputBindings = effectiveOutputBindings(
             for: activeProfile.outputMode,
             keyBindings: activeBindings,
@@ -7003,14 +7228,17 @@ struct ThumbleCLI {
         store.profileOutputBindings[activeProfile.id.uuidString] = rawOutputBindings(activeOutputBindings)
 
         var domain = loadAppDomain()
-        let stateData = try JSONEncoder().encode(
-            StoredProfileState(
-                profiles: state.profiles,
-                activeProfileID: state.activeProfileID,
-                defaultProfileID: state.defaultProfileID
-            )
+        let stateData = try MacConfigurationBindings.encodedProfileState(
+            state.profiles, activeProfileID: state.activeProfileID, defaultProfileID: state.defaultProfileID,
+            preserving: store.profileSources
         )
-        let activeCustomizationData = try JSONEncoder().encode(activeProfile.customization.normalized)
+        let checkedSources = try MacConfigurationBindings.decodedProfileSources(stateData, matching: state)
+        guard case .object(let activeFields) = checkedSources[state.activeProfileID],
+              let activeCustomization = activeFields["customization"] else {
+            throw GamepadSavedConfigurationError.invalid("encoded profile store must contain the selected customization")
+        }
+        let activeCustomizationData = try JSONEncoder().encode(activeCustomization)
+        _ = try GamepadCustomizationPersistence.decodeSavedCustomization(activeCustomizationData)
         let keyBindingsData = try JSONEncoder().encode(rawBindings(activeBindings))
         let profileKeyBindingsData = try JSONEncoder().encode(store.profileKeyBindings)
         let outputBindingsData = try JSONEncoder().encode(rawOutputBindings(activeOutputBindings))
@@ -7035,69 +7263,89 @@ struct ThumbleCLI {
         )
     }
 
+    private static func persistNativeStore(_ store: ProfileStore, snapshot: ThumbleNativeConfiguration.Snapshot) throws {
+        let encoder = ThumbleNativeConfiguration.encoder()
+        func raw<T: Encodable>(_ value: T) throws -> ThumbleBridgeJSONValue {
+            try JSONDecoder().decodeUnique(ThumbleBridgeJSONValue.self, from: encoder.encode(value))
+        }
+        let profiles = try MacConfigurationBindings.profileValues(store.profiles, preserving: store.profileSources)
+        guard let active = store.profiles.first(where: { $0.id == store.activeProfileID }) else { throw CLIError.message("Native configuration has no declared active profile.") }
+        let keys = decodedBindings(store.profileKeyBindings[active.id.uuidString]) ?? active.initialMacOutputBindings.keyboardBindings
+        let outputs = decodedOutputBindings(store.profileOutputBindings[active.id.uuidString]) ?? active.initialMacOutputBindings
+        let document = ThumbleBridgeConfigurationDocument(profiles: profiles, activeProfileID: store.activeProfileID.uuidString, defaultProfileID: store.defaultProfileID.uuidString,
+            keyBindings: try raw(rawBindings(keys)), outputBindings: try raw(rawOutputBindings(outputs)),
+            profileKeyBindings: try store.profileKeyBindings.mapValues(raw), profileOutputBindings: try store.profileOutputBindings.mapValues(raw))
+        try ThumbleNativeConfiguration.commit(document, from: snapshot)
+    }
+
     private static func loadAppDomain() -> [String: Any] {
         UserDefaults.standard.persistentDomain(forName: appDefaultsDomain) ?? [:]
     }
 
-    private static func loadProfileState(from domain: [String: Any]) -> GamepadConfigurationProfilePersistence.LoadedState {
-        let activeCustomization: GamepadCustomization
-        if let data = dataValue(domain[GamepadCustomizationPersistence.defaultsKey]),
-           let decoded = try? JSONDecoder().decode(GamepadCustomization.self, from: data) {
-            activeCustomization = decoded.normalized
-        } else {
-            activeCustomization = .defaultValue
+    private static func loadProfileState(from domain: [String: Any]) throws -> GamepadConfigurationProfilePersistence.LoadedState {
+        var activeCustomization = GamepadCustomization.defaultValue
+        if let value = domain[GamepadCustomizationPersistence.defaultsKey] {
+            guard let data = dataValue(value) else { throw GamepadSavedConfigurationError.invalid("standalone customization must contain JSON data") }
+            activeCustomization = try GamepadCustomizationPersistence.decodeSavedCustomization(data)
         }
-
-        if let data = dataValue(domain[GamepadConfigurationProfilePersistence.defaultsKey]),
-           let stored = try? JSONDecoder().decode(StoredProfileState.self, from: data) {
-            return GamepadConfigurationProfilePersistence.normalizedState(
-                profiles: stored.profiles,
-                activeProfileID: stored.activeProfileID,
-                defaultProfileID: stored.defaultProfileID,
-                fallbackCustomization: activeCustomization
-            )
+        if let value = domain[GamepadConfigurationProfilePersistence.defaultsKey] {
+            guard let data = dataValue(value) else { throw GamepadSavedConfigurationError.invalid("profile store must contain JSON data") }
+            return try GamepadConfigurationProfilePersistence.decodeSavedState(data)
         }
-
+        if domain[GamepadCustomizationPersistence.defaultsKey] != nil {
+            let profile = GamepadConfigurationProfile(name: "Current Setup", primaryCustomization: activeCustomization)
+            return .init(profiles: [profile], activeProfileID: profile.id, defaultProfileID: profile.id)
+        }
         return GamepadConfigurationProfilePersistence.normalizedState(
-            profiles: [],
-            activeProfileID: nil,
-            defaultProfileID: nil,
-            fallbackCustomization: activeCustomization
+            profiles: [], activeProfileID: nil, defaultProfileID: nil, fallbackCustomization: activeCustomization
         )
     }
 
-    private static func loadProfileBindings(from domain: [String: Any]) -> [String: [String: MacKeyBinding]] {
-        guard let data = dataValue(domain[profileKeyBindingsDefaultsKey]),
-              let decoded = try? JSONDecoder().decode([String: [String: MacKeyBinding]].self, from: data)
-        else { return [:] }
-        return decoded
+    private static func savedProfileSources(
+        from domain: [String: Any], matching state: GamepadConfigurationProfilePersistence.LoadedState
+    ) throws -> [UUID: ThumbleBridgeJSONValue] {
+        if let value = domain[GamepadConfigurationProfilePersistence.defaultsKey] {
+            guard let data = dataValue(value) else { throw GamepadSavedConfigurationError.invalid("profile store must contain JSON data") }
+            return try MacConfigurationBindings.decodedProfileSources(data, matching: state)
+        }
+        guard let value = domain[GamepadCustomizationPersistence.defaultsKey] else { return [:] }
+        guard let data = dataValue(value), state.profiles.count == 1 else {
+            throw GamepadSavedConfigurationError.invalid("standalone source must match its newly authored profile")
+        }
+        let customization = try GamepadCustomizationPersistence.decodeSavedCustomization(data)
+        let profile = state.profiles[0]
+        guard profile.customization == customization else {
+            throw GamepadSavedConfigurationError.invalid("standalone source must match its newly authored profile")
+        }
+        let source = try JSONDecoder().decodeUnique(ThumbleBridgeJSONValue.self, from: data)
+        guard case .object(var fields) = try JSONDecoder().decodeUnique(ThumbleBridgeJSONValue.self, from: JSONEncoder().encode(profile)) else {
+            throw GamepadSavedConfigurationError.invalid("new profile must contain a declared customization")
+        }
+        // Genuine catalog absence permits authoring, not recovery. The checked
+        // standalone declaration remains the source for each matching canvas.
+        fields["customization"] = source
+        if profile.landscapeCustomization == customization { fields["landscapeCustomization"] = source }
+        if profile.portraitCustomization == customization { fields["portraitCustomization"] = source }
+        return try MacConfigurationBindings.profileSources([.object(fields)], matching: state.profiles)
     }
 
-    private static func loadActiveKeyBindings(from domain: [String: Any]) -> [GameButton: MacKeyBinding] {
-        guard let data = dataValue(domain[keyBindingsDefaultsKey]),
-              let raw = try? JSONDecoder().decode([String: MacKeyBinding].self, from: data),
-              let decoded = decodedBindings(raw)
-        else { return DefaultKeypadKeyMap.defaultBindings }
-        return decoded
-    }
-
-    private static func decodedBindings(_ raw: [String: MacKeyBinding]?) -> [GameButton: MacKeyBinding]? {
+    private static func decodedBindings(_ raw: [String: MacKeyBinding]?) -> [KeypadElementID: MacKeyBinding]? {
         MacConfigurationBindings.decodedKeyBindings(raw)
     }
 
-    private static func rawBindings(_ bindings: [GameButton: MacKeyBinding]) -> [String: MacKeyBinding] {
+    private static func rawBindings(_ bindings: [KeypadElementID: MacKeyBinding]) -> [String: MacKeyBinding] {
         MacConfigurationBindings.rawKeyBindings(bindings)
     }
 
-    private static func outputBindings(from keyBindings: [GameButton: MacKeyBinding]) -> [GameButton: MacControlOutputBinding] {
+    private static func outputBindings(from keyBindings: [KeypadElementID: MacKeyBinding]) -> [KeypadElementID: MacControlOutputBinding] {
         MacConfigurationBindings.keyboardOutputs(from: keyBindings)
     }
 
     private static func effectiveOutputBindings(
         for mode: GamepadProfileOutputMode,
-        keyBindings: [GameButton: MacKeyBinding],
-        customOutputBindings: [GameButton: MacControlOutputBinding]
-    ) -> [GameButton: MacControlOutputBinding] {
+        keyBindings: [KeypadElementID: MacKeyBinding],
+        customOutputBindings: [KeypadElementID: MacControlOutputBinding]
+    ) -> [KeypadElementID: MacControlOutputBinding] {
         MacConfigurationBindings.effectiveOutputs(
             for: mode,
             keyBindings: keyBindings,
@@ -7110,8 +7358,8 @@ struct ThumbleCLI {
         store: ProfileStore
     ) -> [GamepadProfileBindingPresentations] {
         let profileID = profile.id.uuidString
-        let keys = decodedBindings(store.profileKeyBindings[profileID]) ?? DefaultKeypadKeyMap.defaultBindings
-        let storedOutputs = decodedOutputBindings(store.profileOutputBindings[profileID]) ?? outputBindings(from: keys)
+        let keys = decodedBindings(store.profileKeyBindings[profileID]) ?? profile.initialMacOutputBindings.keyboardBindings
+        let storedOutputs = decodedOutputBindings(store.profileOutputBindings[profileID]) ?? profile.initialMacOutputBindings
         let outputs = effectiveOutputBindings(
             for: profile.outputMode,
             keyBindings: keys,
@@ -7119,32 +7367,16 @@ struct ThumbleCLI {
         )
         return KeypadBindingPresentationBuilder.presentations(
             for: profile,
-            effectiveLegacyOutputs: outputs.compactMapValues { $0.isEmpty ? nil : $0.sharedBinding }
+            elementOutputs: outputs.mapValues(\.sharedBinding)
         )
     }
 
-    private static func rawOutputBindings(_ bindings: [GameButton: MacControlOutputBinding]) -> [String: MacControlOutputBinding] {
+    private static func rawOutputBindings(_ bindings: [KeypadElementID: MacControlOutputBinding]) -> [String: MacControlOutputBinding] {
         MacConfigurationBindings.rawOutputs(bindings)
     }
 
-    private static func decodedOutputBindings(_ raw: [String: MacControlOutputBinding]?) -> [GameButton: MacControlOutputBinding]? {
+    private static func decodedOutputBindings(_ raw: [String: MacControlOutputBinding]?) -> [KeypadElementID: MacControlOutputBinding]? {
         MacConfigurationBindings.decodedOutputs(raw)
-    }
-
-    private static func loadProfileOutputBindings(
-        from domain: [String: Any],
-        fallbackProfileKeyBindings: [String: [String: MacKeyBinding]]
-    ) -> [String: [String: MacControlOutputBinding]] {
-        var resolvedOutputBindings = Dictionary(uniqueKeysWithValues: fallbackProfileKeyBindings.map { profileID, rawBindings in
-            (profileID, rawOutputBindings(outputBindings(from: decodedBindings(rawBindings) ?? DefaultKeypadKeyMap.defaultBindings)))
-        })
-        guard let data = dataValue(domain[profileOutputBindingsDefaultsKey]),
-              let decoded = try? JSONDecoder().decode([String: [String: MacControlOutputBinding]].self, from: data)
-        else { return resolvedOutputBindings }
-        for (profileID, bindings) in decoded {
-            resolvedOutputBindings[profileID] = bindings
-        }
-        return resolvedOutputBindings
     }
 
     private static func dataValue(_ value: Any?) -> Data? {
@@ -7230,13 +7462,11 @@ struct ThumbleCLI {
         throw CLIError.message("Template not found: \(text)")
     }
 
-    private static func parseButton(_ text: String) throws -> GameButton {
-        let normalized = normalizedLookup(text)
-        if let button = GameButton(rawValue: text) { return button }
-        if let button = GameButton.allCases.first(where: { normalizedLookup($0.rawValue) == normalized || normalizedLookup($0.displayName) == normalized }) {
-            return button
+    private static func parseButton(_ text: String) throws -> KeypadElementID {
+        guard let id = KeypadElementID(rawValue: text) else {
+            throw CLIError.message("Expected an element UUID: \(text). Named input slots are no longer supported.")
         }
-        throw CLIError.message("Unknown button: \(text)")
+        return id
     }
 
     private static func parseElementInput(_ text: String) throws -> KeypadElementInputID {
@@ -7705,10 +7935,10 @@ struct ThumbleCLI {
 
     private static func joystickMapping(from arguments: [String], fallback: GamepadJoystickMapping = .movement) throws -> GamepadJoystickMapping {
         var mapping = fallback
-        if let value = optionValue("--up", in: arguments) { mapping.up = try parseButton(value) }
-        if let value = optionValue("--down", in: arguments) { mapping.down = try parseButton(value) }
-        if let value = optionValue("--left", in: arguments) { mapping.left = try parseButton(value) }
-        if let value = optionValue("--right", in: arguments) { mapping.right = try parseButton(value) }
+        if let value = optionValue("--up", in: arguments) { mapping.up = MacControlOutputBinding.keyboard(try parseKeyBindingSequence(value)).sharedBinding }
+        if let value = optionValue("--down", in: arguments) { mapping.down = MacControlOutputBinding.keyboard(try parseKeyBindingSequence(value)).sharedBinding }
+        if let value = optionValue("--left", in: arguments) { mapping.left = MacControlOutputBinding.keyboard(try parseKeyBindingSequence(value)).sharedBinding }
+        if let value = optionValue("--right", in: arguments) { mapping.right = MacControlOutputBinding.keyboard(try parseKeyBindingSequence(value)).sharedBinding }
         return mapping
     }
 
@@ -7764,7 +7994,7 @@ struct ThumbleCLI {
         let normalized = normalizedLookup(text)
         if let stableIdentity = GamepadControlIdentity(stableID: text) {
             switch stableIdentity {
-            case .builtin(let button) where GameButton.builtInControls.contains(button):
+            case .builtin(let button) where DefaultKeypadElements.ids.contains(button):
                 return .builtin(button)
             case .custom(let id) where customization.customButtons.contains(where: { $0.id == id }):
                 return .custom(id)
@@ -7781,51 +8011,31 @@ struct ThumbleCLI {
         }
         if let uuid = UUID(uuidString: text), customization.customButtons.contains(where: { $0.id == uuid }) { return .custom(uuid) }
         if let button = try? parseButton(text) {
-            if GameButton.builtInControls.contains(button) { return .builtin(button) }
-            let matches = customization.customButtons.filter { $0.mappedButton == button }
+            if DefaultKeypadElements.ids.contains(button) { return .builtin(button) }
+            let matches = customization.customButtons.filter { $0.inputID == button }
             if matches.count == 1 { return .custom(matches[0].id) }
         }
-        let matches = customization.customButtons.filter { normalizedLookup($0.visualLabel(fallback: $0.mappedButton.displayName)) == normalized || normalizedLookup($0.label) == normalized }
+        let matches = customization.customButtons.filter { normalizedLookup($0.visualLabel(fallback: $0.inputID.displayName)) == normalized || normalizedLookup($0.label) == normalized }
         if matches.count == 1 { return .custom(matches[0].id) }
         if matches.count > 1 { throw CLIError.message("Element is ambiguous: \(text)") }
         throw CLIError.message("Element not found: \(text)")
     }
 
     private static func elementSummaries(for customization: GamepadCustomization) -> [ElementSummary] {
-        var summaries: [ElementSummary] = GameButton.builtInControls.map { button in
-            let layout = customization.buttonCustomization(for: button)
-            return ElementSummary(
-                id: button.rawValue,
-                kind: "builtin",
-                mappedButton: button,
-                label: customization.visualLabel(for: button, defaultLabel: button.displayName),
-                visualRole: customization.elements.first(where: { $0.builtInButton == button })?.visualRole,
-                isHidden: layout.isHidden,
-                isLocationLocked: layout.isLocationLocked,
-                layout: layout,
-                joystickMapping: nil,
-                joystickOutputSettings: nil,
-                triggerSettings: nil,
-                trackpadSettings: nil
-            )
-        }
-        summaries += customization.customButtons.map { custom in
-            let normalized = custom.normalized
-            let kind = normalized.isJoystick ? "joystick" : (normalized.isTrigger ? "trigger" : (normalized.isTrackpad ? "trackpad" : (normalized.isDecoration ? "decoration" : "button")))
-            let fallbackLabel = normalized.isDecoration ? "Decoration" : (normalized.isTrigger ? (normalized.triggerSettings ?? .defaultValue).normalized.target.shortName : (normalized.isTrackpad ? "Trackpad" : "Button"))
-            return ElementSummary(
-                id: normalized.id.uuidString,
-                kind: kind,
-                mappedButton: normalized.mappedButton,
-                label: normalized.visualLabel(fallback: fallbackLabel),
-                visualRole: normalized.visualRole,
-                isHidden: normalized.layout.isHidden,
-                isLocationLocked: normalized.layout.isLocationLocked,
-                layout: normalized.layout,
-                joystickMapping: normalized.joystickMapping,
-                joystickOutputSettings: normalized.joystickOutputSettings,
-                triggerSettings: normalized.triggerSettings,
-                trackpadSettings: normalized.trackpadSettings
+        var summaries: [ElementSummary] = customization.normalized.elements.map { element in
+            ElementSummary(
+                id: element.id.uuidString,
+                kind: element.kind == .button && element.defaultControlID != nil ? "builtin" : element.kind.rawValue,
+                inputID: element.inputID,
+                label: element.label,
+                visualRole: element.visualRole,
+                isHidden: element.layout.isHidden,
+                isLocationLocked: element.layout.isLocationLocked,
+                layout: element.layout,
+                joystickMapping: element.joystickMapping,
+                joystickOutputSettings: element.joystickOutputSettings,
+                triggerSettings: element.triggerSettings,
+                trackpadSettings: element.trackpadSettings
             )
         }
         let topBarLayout = customization.topBarActivationRegion.normalized
@@ -7833,7 +8043,7 @@ struct ThumbleCLI {
             ElementSummary(
                 id: GamepadControlIdentity.system(.topBarActivation).id,
                 kind: "system",
-                mappedButton: nil,
+                inputID: nil,
                 label: GamepadSystemControl.topBarActivation.displayName,
                 visualRole: .system,
                 isHidden: topBarLayout.isHidden,
@@ -7848,12 +8058,8 @@ struct ThumbleCLI {
         return summaries
     }
 
-    private static func firstAvailableCustomSlot(in customization: GamepadCustomization) -> GameButton? {
-        GameButton.customSlots.first { slot in !customization.customButtons.contains { $0.mappedButton == slot } }
-    }
-
-    private static func resolvedMacBindings(for generated: GeneratedGameKeypadProfile) throws -> [GameButton: MacKeyBinding] {
-        var bindings = DefaultKeypadKeyMap.defaultBindings
+    private static func resolvedMacBindings(for generated: GeneratedGameKeypadProfile) throws -> [KeypadElementID: MacKeyBinding] {
+        var bindings = generated.profile.initialMacOutputBindings.keyboardBindings
         for (button, spec) in generated.keyBindings {
             guard let binding = MacKeyBinding(generatedSpec: spec) else {
                 let rawBinding = (spec.modifiers + [spec.key]).joined(separator: "+")
@@ -7899,7 +8105,7 @@ struct ThumbleCLI {
             "--spec", "--from-spec", "--output", "-o", "--window-title", "--profile", "--name", "--template", "--from", "--identifier", "--artboard", "--build-directory", "--state", "--columns",
             "--layout-preview", "--preview-output", "--path", "--app", "--application", "--bundle-id", "--bundle", "--image-scale", "--render-scale",
             "--sequence", "--keyboard", "--key", "--gamepad-button", "--gamepad", "--part", "--input", "--modifiers", "--mods", "--layout", "--scale", "--control-scale",
-            "--appearance", "--color-scheme", "--scheme", "--accent", "--color", "--labels", "--label", "--maps-to", "--x", "--center-x", "--y", "--center-y",
+            "--appearance", "--color-scheme", "--scheme", "--accent", "--color", "--labels", "--label", "--x", "--center-x", "--y", "--center-y",
             "--background", "--bg", "--light-background", "--background-light", "--dark-background", "--background-dark",
             "--background-gradient", "--bg-gradient", "--background-tile", "--bg-tile", "--background-image", "--bg-image",
             "--light-background-gradient", "--background-light-gradient", "--dark-background-gradient", "--background-dark-gradient",
@@ -7980,7 +8186,7 @@ struct ThumbleCLI {
 
     private static func printSummary(
         generated: GeneratedGameKeypadProfile,
-        macBindings: [GameButton: MacKeyBinding],
+        macBindings: [KeypadElementID: MacKeyBinding],
         installed: Bool,
         selected: Bool
     ) {
@@ -7990,7 +8196,7 @@ struct ThumbleCLI {
         print("Confidence: \(generated.confidence.rawValue)")
         for note in generated.notes { print("- \(note)") }
         print("\nBindings:")
-        for button in GameButton.allCases {
+        for button in generated.profile.customization.normalized.elements.map(\.inputID) {
             guard let binding = macBindings[button], generated.keyBindings[button] != nil else { continue }
             let label = generatedLabel(for: button, in: generated.profile.customization)
             print("- \(label): \(binding.displayName)")
@@ -8024,8 +8230,8 @@ struct ThumbleCLI {
         }
     }
 
-    private static func generatedLabel(for button: GameButton, in customization: GamepadCustomization) -> String {
-        if let customButton = customization.customButtons.first(where: { $0.mappedButton == button }) {
+    private static func generatedLabel(for button: KeypadElementID, in customization: GamepadCustomization) -> String {
+        if let customButton = customization.customButtons.first(where: { $0.inputID == button }) {
             return customButton.visualLabel(fallback: button.displayName)
         }
         return customization.visualLabel(for: button, defaultLabel: button.displayName)
@@ -8573,6 +8779,15 @@ struct ThumbleCLI {
           Primary linking flow: click Connect for Thumble in ChatGPT, then
           click Allow on this Mac. The displayed code is only a headless fallback.
 
+        Controller design:
+          thumble design capabilities
+          thumble design begin --workspace DIRECTORY --profile PROFILE --identifier REVERSE.DNS.ID --expected-configuration-revision N --viewport-safe-area-zero
+          thumble design update --workspace DIRECTORY --expected-revision N [--edits JSON] [--layout-edits JSON]
+          thumble design review --workspace DIRECTORY --expected-revision N [--mixed-states JSON] [--scale 1|2] [--safe-area-overlay] [--touch-targets] [--binding-hints] [--no-control-bar] [--portrait-top-inset POINTS]
+          thumble design apply --workspace DIRECTORY --expected-revision N --review N --evidence-sha256 HASH --expected-configuration-revision N --invocation-id UUID
+          thumble design critique --workspace DIRECTORY --expected-revision N --report JSON
+          thumble design inspect --workspace DIRECTORY
+
         Generation:
           thumble generate "Hollow Knight" [--json] [--dry-run]
           thumble generate [GAME NAME] --spec agent-keypad.json [--json] [--dry-run] [--layout-preview preview.png] [--strict-layout] [--invocation-id UUID]
@@ -8634,14 +8849,14 @@ struct ThumbleCLI {
         Bindings:
           thumble binding list [--profile PROFILE]
           thumble binding display [--profile PROFILE] [--json]
-          thumble binding set jump Return
-          thumble binding set focus --sequence 'Control+B,H'
-          thumble binding reset jump
+          thumble binding set UUID Return
+          thumble binding set UUID --sequence 'Control+B,H'
+          thumble binding reset UUID
           thumble binding reset-all
           thumble output list [--profile PROFILE]
           thumble output mode keyboard|controller|custom [--profile PROFILE]
-          thumble output set jump --keyboard Space --gamepad south
-          thumble output set custom5 --clear-keyboard --gamepad leftTriggerButton
+          thumble output set UUID --keyboard Space --gamepad south
+          thumble output set UUID --clear-keyboard --gamepad leftTriggerButton
 
         Customization:
           thumble customization set --appearance dark --device iphone-17-pro --background '#101014'
@@ -8673,33 +8888,33 @@ struct ThumbleCLI {
           thumble element add trackpad --label Trackpad --x 0.5 --y 0.58 --width 1.4 --sensitivity 1.2 --tap-to-click true
           thumble element add text --text Z --x 0.5 --y 0.5 --width 1.2 --height 0.8 --text-color '#FFFFFF'
           thumble element add decoration --label Shell --material soft-white-plate --x 0.5 --y 0.5 --width 3.2 --height 1.5 --shape rounded_rectangle
-          thumble element set jump --keyboard Space --gamepad south --hide-integrated-label
+          thumble element set UUID --keyboard Space --gamepad south --hide-integrated-label
           thumble element set "Text" --text Jump --text-color '#FFFFFF'
-          thumble element set jump --clear-label
-          thumble element set jump --skin-role primary-action --hit-insets 16
+          thumble element set UUID --clear-label
+          thumble element set UUID --skin-role primary-action --hit-insets 16
           thumble element set "Menu" --visual-role menu --hit-insets 10,18,14,18
-          thumble element set jump --clear-visual-role --clear-hit-insets
-          thumble element set jump --variant portrait --label A --light-fill '#7C3AED' --dark-fill '#C4B5FD' --shape circle --width 1.2 --height 1.2 --z-index 10
+          thumble element set UUID --clear-visual-role --clear-hit-insets
+          thumble element set UUID --variant portrait --label A --light-fill '#7C3AED' --dark-fill '#C4B5FD' --shape circle --width 1.2 --height 1.2 --z-index 10
           thumble element set "Right Stick" --thumb-fill '#22C55E'
-          thumble element set jump --fill-gradient '#000000,#666666' --gradient-angle 0
-          thumble element set jump --fill-tile dots --tile-foreground '#FFFFFF' --tile-background '#111111'
-          thumble element set jump --fill-image ./button-texture.png --image-mode fill
-          thumble element set focus --icon sf:sparkles --haptic medium --haptic-pattern double --haptic-intensity 75% --haptic-duration 70ms --stroke '#38BDF8' --pressed-fill '#0EA5E9' --glow '#0EA5E9'
-          thumble element set jump --text-color '#7C61A8' --inner-shadow '#B8B2C2' --inner-shadow-radius 5 --highlight '#FFFFFF' --highlight-opacity 45% --highlight-x -4 --highlight-y -4 --bevel-width 1.5
-          thumble element set jump --material soft-white --shadow-layers '#FFFFFF,14,-7,-7,96%;#9B91AA,20,8,9,24%'
+          thumble element set UUID --fill-gradient '#000000,#666666' --gradient-angle 0
+          thumble element set UUID --fill-tile dots --tile-foreground '#FFFFFF' --tile-background '#111111'
+          thumble element set UUID --fill-image ./button-texture.png --image-mode fill
+          thumble element set UUID --icon sf:sparkles --haptic medium --haptic-pattern double --haptic-intensity 75% --haptic-duration 70ms --stroke '#38BDF8' --pressed-fill '#0EA5E9' --glow '#0EA5E9'
+          thumble element set UUID --text-color '#7C61A8' --inner-shadow '#B8B2C2' --inner-shadow-radius 5 --highlight '#FFFFFF' --highlight-opacity 45% --highlight-x -4 --highlight-y -4 --bevel-width 1.5
+          thumble element set UUID --material soft-white --shadow-layers '#FFFFFF,14,-7,-7,96%;#9B91AA,20,8,9,24%'
           thumble element set control-bar --x 0.2 --y 0.08 --width 1.4 --height 1.1
-          thumble element duplicate builtin.jump [--offset 0.025] [--profile PROFILE] [--variant portrait]
-          thumble element align top jump attack dash
-          thumble element distribute horizontal-spacing jump attack dash focus
-          thumble element nudge jump right --step 10 --canvas iphone-17-pro-landscape
+          thumble element duplicate UUID [--offset 0.025] [--profile PROFILE] [--variant portrait]
+          thumble element align top UUID1 UUID2 UUID3
+          thumble element distribute horizontal-spacing UUID1 UUID2 UUID3 UUID4
+          thumble element nudge UUID right --step 10 --canvas iphone-17-pro-landscape
           thumble style create SoftWhite --material soft-white --fill '#F8F6F7' --text-color '#7C61A8'
           thumble style create Soul --fill '#F8FAFC' --stroke '#38BDF8' --pressed-fill '#0EA5E9' --icon sf:sparkles
           thumble style rename soul "Soul Button"
           thumble style import styles.json --merge
-          thumble style apply soul focus
+          thumble style apply soul UUID
           thumble layer list
-          thumble layer front focus
-          thumble group create Actions jump attack dash focus
+          thumble layer front UUID
+          thumble group create Actions UUID1 UUID2 UUID3 UUID4
           thumble group list --tree
           thumble group rename Actions "Face Buttons" [--profile PROFILE] [--variant landscape]
           thumble group duplicate Actions --name "Actions Copy" --offset 0.025
@@ -8711,6 +8926,9 @@ struct ThumbleCLI {
 
         Runtime:
           thumble app open|quit|replay-onboarding
+          thumble app setup-guide
+          thumble app local-network-settings
+          thumble app ios-app
           thumble app screenshot [-o thumble.png] [--window-title TITLE] [--json]
           thumble status [--json]
           thumble monitor [--jsonl] [--clear] [--from-start] [--duration seconds]
@@ -8719,7 +8937,7 @@ struct ThumbleCLI {
           thumble server start|stop|restart|addresses
           thumble pairing code|payload|cancel
           thumble accessibility status|prompt|open|refresh
-          thumble test tap jump
+          thumble test tap UUID
           thumble test tap --element UUID[#part] [--hold-ms 120 (legacy only, max 1000)]
           thumble test down|up [button] [--element UUID[#part]]
           thumble gamepad status|doctor|retry [--json]

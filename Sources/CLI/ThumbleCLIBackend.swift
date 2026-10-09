@@ -11,6 +11,8 @@ final class ThumbleCLIProfileBackend {
     static let maximumGenerationSpecBytes = 256 * 1024
     static let maximumGenerationOutputBytes = 8 * 1024 * 1024
     static let maximumStderrBytes = 16 * 1024
+    /// A profile can own distinct 128-control primary, landscape and portrait canvases.
+    static let maximumProfileBindingRows = 3 * GamepadCustomization.maximumCustomButtons
 
     enum ProfileSelector: Encodable, Equatable {
         case active
@@ -568,6 +570,8 @@ final class ThumbleCLIProfileBackend {
         case authorityStatus
         case list
         case export(ProfileSelector?)
+        case designApply(ProfileSelector, draftID: UUID?, expectedDraftRevision: UInt64?, packageBase64: String, packageSHA256: String, profileSHA256: String, evidenceSHA256: String, baseProfileSHA256: String? = nil, layoutEditsJSON: String? = nil)
+        case designSnapshot(ProfileSelector, draftID: UUID?, expectedDraftRevision: UInt64?, createDraft: Bool = false)
         case `import`(artifactJSON: String, appendAsCopies: Bool, select: Bool, makeDefault: Bool)
         case select(ProfileSelector)
         case setDefault(ProfileSelector)
@@ -613,15 +617,15 @@ final class ThumbleCLIProfileBackend {
         case orientationCopy(ProfileSelector, LayoutOrientation, LayoutOrientation, Bool)
         case bindingList(ProfileSelector)
         case bindingDisplay(ProfileSelector)
-        case bindingSet(ProfileSelector, GameButton, [SemanticKeyStroke])
-        case bindingClear(ProfileSelector, GameButton)
-        case bindingReset(ProfileSelector, GameButton)
+        case bindingSet(ProfileSelector, KeypadElementID, [SemanticKeyStroke])
+        case bindingClear(ProfileSelector, KeypadElementID)
+        case bindingReset(ProfileSelector, KeypadElementID)
         case bindingResetAll(ProfileSelector)
         case outputList(ProfileSelector)
         case outputModeGet(ProfileSelector)
         case outputMode(ProfileSelector, OutputMode)
-        case outputSet(ProfileSelector, GameButton, KeyboardEdit, GamepadEdit)
-        case outputReset(ProfileSelector, GameButton)
+        case outputSet(ProfileSelector, KeypadElementID, KeyboardEdit, GamepadEdit)
+        case outputReset(ProfileSelector, KeypadElementID)
         case outputResetAll(ProfileSelector)
         case deviceGet(ProfileSelector, ConfigurationVariant)
         case deviceSet(ProfileSelector, ConfigurationVariant, String)
@@ -637,7 +641,7 @@ final class ThumbleCLIProfileBackend {
 
         private enum CodingKeys: String, CodingKey {
             case type, target, name, targets, destination, preference, source, automaticallyArrange
-            case artifactJSON, appendAsCopies
+            case artifactJSON, appendAsCopies, draftID, expectedDraftRevision, createDraft, packageBase64, packageSHA256, profileSHA256, evidenceSHA256, baseProfileSHA256, layoutEditsJSON
             case specJSON, requestedGameName
             case template, select, makeDefault, styleID, elementID, appearance
             case button, sequence, mode, keyboardEdit, gamepadEdit
@@ -666,6 +670,23 @@ final class ThumbleCLIProfileBackend {
                 try container.encode("authority.status", forKey: .type)
             case .list:
                 try container.encode("profile.list", forKey: .type)
+            case .designApply(let target, let draftID, let expectedDraftRevision, let packageBase64, let packageSHA256, let profileSHA256, let evidenceSHA256, let baseProfileSHA256, let layoutEditsJSON):
+                try container.encode("design.apply", forKey: .type)
+                try container.encode(target, forKey: .target)
+                try container.encodeIfPresent(draftID, forKey: .draftID)
+                try container.encodeIfPresent(expectedDraftRevision, forKey: .expectedDraftRevision)
+                try container.encode(packageBase64, forKey: .packageBase64)
+                try container.encode(packageSHA256, forKey: .packageSHA256)
+                try container.encode(profileSHA256, forKey: .profileSHA256)
+                try container.encode(evidenceSHA256, forKey: .evidenceSHA256)
+                try container.encodeIfPresent(baseProfileSHA256, forKey: .baseProfileSHA256)
+                try container.encodeIfPresent(layoutEditsJSON, forKey: .layoutEditsJSON)
+            case .designSnapshot(let target, let draftID, let expectedDraftRevision, let createDraft):
+                try container.encode("design.snapshot", forKey: .type)
+                try container.encode(target, forKey: .target)
+                if createDraft { try container.encode(true, forKey: .createDraft) }
+                try container.encodeIfPresent(draftID, forKey: .draftID)
+                try container.encodeIfPresent(expectedDraftRevision, forKey: .expectedDraftRevision)
             case .export(let target):
                 try container.encode("profile.export", forKey: .type)
                 try container.encodeIfPresent(target, forKey: .target)
@@ -990,7 +1011,7 @@ final class ThumbleCLIProfileBackend {
     }
 
     struct BindingOutputRow: Codable, Equatable {
-        var button: GameButton
+        var button: KeypadElementID
         var output: SemanticOutput?
     }
 
@@ -1283,6 +1304,14 @@ final class ThumbleCLIProfileBackend {
         var conflictPaths: [String]?
     }
 
+    struct DesignSnapshot: Codable, Equatable {
+        let configurationRevision: UInt64
+        let draftID: UUID?
+        let draftRevision: UInt64?
+        let profileJSON: String
+        let bindingJSON: String
+    }
+
     struct Response: Codable, Equatable {
         var schemaVersion: Int
         var ok: Bool
@@ -1291,6 +1320,7 @@ final class ThumbleCLIProfileBackend {
         var authorityPresent: Bool?
         var catalog: Catalog?
         var artifact: ProfileArtifactResponse?
+        var designSnapshot: DesignSnapshot? = nil
         var generationPlan: GenerationPlan?
         var orientation: OrientationSummary?
         var projection: BindingOutputProjection?
@@ -1564,7 +1594,7 @@ final class ThumbleCLIProfileBackend {
     }
 
     private static func isBoundedTypedResponse(_ response: Response) -> Bool {
-        guard ["online", "offline", "status", "none"].contains(response.authorityMode) else {
+        guard ["online", "offline", "native", "status", "none"].contains(response.authorityMode) else {
             return false
         }
         let safeText: (String, Int) -> Bool = { value, maximum in
@@ -1590,7 +1620,7 @@ final class ThumbleCLIProfileBackend {
         }
         if let projection = response.projection {
             guard safeText(projection.profileName, 256),
-                  (projection.rows?.count ?? 0) <= 18,
+                  (projection.rows?.count ?? 0) <= maximumProfileBindingRows,
                   (projection.displayGroups?.count ?? 0) <= 2,
                   projection.rows?.allSatisfy({ row in
                       boundedSemanticOutput(row.output, safeText: safeText)
@@ -1696,7 +1726,7 @@ final class ThumbleCLIProfileBackend {
               plan.omittedWarningCount >= 0,
               plan.omittedWarningCount <= 128,
               plan.omittedWarningCount == 0 || plan.warnings.count == 128,
-              plan.assignedControls.count <= 18,
+              plan.assignedControls.count <= 128,
               plan.droppedControls.count <= 128,
               plan.layoutQuality.issues.count <= 128
         else { return false }
@@ -1709,8 +1739,8 @@ final class ThumbleCLIProfileBackend {
         }),
         plan.assignedControls.allSatisfy({ control in
             validOrdinal(control.sourceOrdinal)
-                && safeText(control.button, 32)
-                && safeText(control.elementID, 64)
+                && UUID(uuidString: control.button) != nil
+                && UUID(uuidString: control.button) == UUID(uuidString: control.elementID)
                 && safeText(control.kind, 32)
         }),
         plan.droppedControls.allSatisfy({ control in
@@ -1748,7 +1778,7 @@ final class ThumbleCLIProfileBackend {
                       && Set(issue.controlIDs).count == issue.controlIDs.count
                       && issue.controlIDs.allSatisfy({ safeText($0, 128) })
                       && issue.controlCount >= issue.controlIDs.count
-                      && issue.controlCount <= 18
+                      && issue.controlCount <= 128
                       && (issue.metric.map(\.isFinite) ?? true)
                       && issue.suggestedRepairs.count <= 16
                       && issue.suggestedRepairs.allSatisfy({ safeText($0, 128) })
@@ -1770,14 +1800,23 @@ final class ThumbleCLIProfileBackend {
     }
 
     private static func validateStrictResponseJSON(_ data: Data) throws {
+        do { try JSONDecoder.validateUniqueKeys(in: data) }
+        catch { throw BackendError.malformedResponse }
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw BackendError.malformedResponse
         }
         try requireOnly(root, [
             "schemaVersion", "ok", "invocationID", "authorityMode", "authorityPresent",
-            "catalog", "artifact", "generationPlan", "orientation", "projection", "controlBar",
+            "catalog", "artifact", "designSnapshot", "generationPlan", "orientation", "projection", "controlBar",
             "controlBarItem", "device", "styles", "layers", "groups", "outcome", "error"
         ])
+        if let snapshot = root["designSnapshot"] as? [String: Any] {
+            try requireOnly(snapshot, ["configurationRevision", "draftID", "draftRevision", "profileJSON", "bindingJSON"])
+            guard let profile = snapshot["profileJSON"] as? String, let bindings = snapshot["bindingJSON"] as? String,
+                  profile.utf8.count <= maximumProfileArtifactBytes, bindings.utf8.count <= maximumProfileArtifactBytes else {
+                throw BackendError.malformedResponse
+            }
+        }
         if let artifact = root["artifact"] as? [String: Any] {
             try requireOnly(artifact, ["configurationRevision", "artifactJSON", "contentHash"])
             guard let contentHash = artifact["contentHash"] as? [String: Any] else {
@@ -1793,7 +1832,7 @@ final class ThumbleCLIProfileBackend {
             ])
             guard let contentHash = plan["contentHash"] as? [String: Any],
                   let warnings = plan["warnings"] as? [[String: Any]], warnings.count <= 128,
-                  let assigned = plan["assignedControls"] as? [[String: Any]], assigned.count <= 18,
+                  let assigned = plan["assignedControls"] as? [[String: Any]], assigned.count <= 128,
                   let dropped = plan["droppedControls"] as? [[String: Any]], dropped.count <= 128,
                   let quality = plan["layoutQuality"] as? [String: Any]
             else { throw BackendError.malformedResponse }
@@ -1840,7 +1879,7 @@ final class ThumbleCLIProfileBackend {
                 "rows", "displayGroups"
             ])
             if let rows = projection["rows"] as? [[String: Any]] {
-                guard rows.count <= 18 else { throw BackendError.malformedResponse }
+                guard rows.count <= maximumProfileBindingRows else { throw BackendError.malformedResponse }
                 for row in rows {
                     try requireOnly(row, ["button", "output"])
                     if let output = row["output"] as? [String: Any] {

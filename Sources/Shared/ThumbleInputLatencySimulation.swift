@@ -70,7 +70,7 @@ public struct ThumbleLatencySimulationSummary: Codable, Sendable {
 
 public struct ThumbleLatencySimulationSample: Codable, Sendable {
     public var sequenceNumber: UInt64
-    public var button: GameButton
+    public var button: KeypadElementID
     public var state: ButtonPressState
     public var touchAtMilliseconds: Double
     public var observedAtMilliseconds: Double
@@ -144,7 +144,7 @@ private struct Simulation {
 
     private struct InputEdge {
         var at: UInt64
-        var button: GameButton
+        var button: KeypadElementID
         var state: ButtonPressState
         var pressIdentifier: UInt64?
     }
@@ -196,7 +196,7 @@ private struct Simulation {
 
     private struct MutableSample {
         var sequenceNumber: UInt64
-        var button: GameButton
+        var button: KeypadElementID
         var state: ButtonPressState
         var touchAt: UInt64
         var observedAt: UInt64
@@ -307,20 +307,20 @@ private struct Simulation {
         switch pattern {
         case .hollowKnight:
             return [
-                .init(at: ns(0), button: .right, state: .down, pressIdentifier: 1),
-                .init(at: ns(18), button: .jump, state: .down, pressIdentifier: 2),
-                .init(at: ns(32), button: .attack, state: .down, pressIdentifier: 3),
-                .init(at: ns(38), button: .jump, state: .up, pressIdentifier: 2),
-                .init(at: ns(52), button: .attack, state: .up, pressIdentifier: 3),
-                .init(at: ns(68), button: .dash, state: .down, pressIdentifier: 4),
-                .init(at: ns(82), button: .dash, state: .up, pressIdentifier: 4),
-                .init(at: ns(96), button: .jump, state: .down, pressIdentifier: 5),
-                .init(at: ns(112), button: .jump, state: .up, pressIdentifier: 5),
-                .init(at: ns(128), button: .right, state: .up, pressIdentifier: 1),
-                .init(at: ns(130), button: .left, state: .down, pressIdentifier: 6),
-                .init(at: ns(146), button: .attack, state: .down, pressIdentifier: 7),
-                .init(at: ns(164), button: .attack, state: .up, pressIdentifier: 7),
-                .init(at: ns(178), button: .left, state: .up, pressIdentifier: 6)
+                .init(at: ns(0), button: .preset(4), state: .down, pressIdentifier: 1),
+                .init(at: ns(18), button: .preset(5), state: .down, pressIdentifier: 2),
+                .init(at: ns(32), button: .preset(6), state: .down, pressIdentifier: 3),
+                .init(at: ns(38), button: .preset(5), state: .up, pressIdentifier: 2),
+                .init(at: ns(52), button: .preset(6), state: .up, pressIdentifier: 3),
+                .init(at: ns(68), button: .preset(7), state: .down, pressIdentifier: 4),
+                .init(at: ns(82), button: .preset(7), state: .up, pressIdentifier: 4),
+                .init(at: ns(96), button: .preset(5), state: .down, pressIdentifier: 5),
+                .init(at: ns(112), button: .preset(5), state: .up, pressIdentifier: 5),
+                .init(at: ns(128), button: .preset(4), state: .up, pressIdentifier: 1),
+                .init(at: ns(130), button: .preset(3), state: .down, pressIdentifier: 6),
+                .init(at: ns(146), button: .preset(6), state: .down, pressIdentifier: 7),
+                .init(at: ns(164), button: .preset(6), state: .up, pressIdentifier: 7),
+                .init(at: ns(178), button: .preset(3), state: .up, pressIdentifier: 6)
             ]
 
         case .sameButtonBurst:
@@ -328,37 +328,37 @@ private struct Simulation {
             for index in 0..<10 {
                 let base = UInt64(index * 12)
                 let identifier = UInt64(index + 1)
-                edges.append(.init(at: ns(base), button: .jump, state: .down, pressIdentifier: identifier))
-                edges.append(.init(at: ns(base + 5), button: .jump, state: .up, pressIdentifier: identifier))
+                edges.append(.init(at: ns(base), button: .preset(5), state: .down, pressIdentifier: identifier))
+                edges.append(.init(at: ns(base + 5), button: .preset(5), state: .up, pressIdentifier: identifier))
             }
             return edges
 
         case .udpRecovery:
             return [
-                .init(at: ns(0), button: .right, state: .down, pressIdentifier: 1),
-                .init(at: ns(12), button: .jump, state: .down, pressIdentifier: 2),
-                .init(at: ns(24), button: .jump, state: .up, pressIdentifier: 2),
-                .init(at: ns(36), button: .attack, state: .down, pressIdentifier: 3),
-                .init(at: ns(48), button: .attack, state: .up, pressIdentifier: 3),
-                .init(at: ns(60), button: .right, state: .up, pressIdentifier: 1)
+                .init(at: ns(0), button: .preset(4), state: .down, pressIdentifier: 1),
+                .init(at: ns(12), button: .preset(5), state: .down, pressIdentifier: 2),
+                .init(at: ns(24), button: .preset(5), state: .up, pressIdentifier: 2),
+                .init(at: ns(36), button: .preset(6), state: .down, pressIdentifier: 3),
+                .init(at: ns(48), button: .preset(6), state: .up, pressIdentifier: 3),
+                .init(at: ns(60), button: .preset(4), state: .up, pressIdentifier: 1)
             ]
 
         case .udpRecoveryBurst:
             return [
-                .init(at: ns(0), button: .right, state: .down, pressIdentifier: 1),
-                .init(at: ns(1), button: .jump, state: .down, pressIdentifier: 2),
-                .init(at: ns(2), button: .attack, state: .down, pressIdentifier: 3),
-                .init(at: ns(3), button: .jump, state: .up, pressIdentifier: 2),
-                .init(at: ns(4), button: .dash, state: .down, pressIdentifier: 4),
-                .init(at: ns(5), button: .attack, state: .up, pressIdentifier: 3),
-                .init(at: ns(6), button: .dash, state: .up, pressIdentifier: 4),
-                .init(at: ns(7), button: .right, state: .up, pressIdentifier: 1)
+                .init(at: ns(0), button: .preset(4), state: .down, pressIdentifier: 1),
+                .init(at: ns(1), button: .preset(5), state: .down, pressIdentifier: 2),
+                .init(at: ns(2), button: .preset(6), state: .down, pressIdentifier: 3),
+                .init(at: ns(3), button: .preset(5), state: .up, pressIdentifier: 2),
+                .init(at: ns(4), button: .preset(7), state: .down, pressIdentifier: 4),
+                .init(at: ns(5), button: .preset(6), state: .up, pressIdentifier: 3),
+                .init(at: ns(6), button: .preset(7), state: .up, pressIdentifier: 4),
+                .init(at: ns(7), button: .preset(4), state: .up, pressIdentifier: 1)
             ]
 
         case .heldDirectionHeartbeatRecovery:
             return [
-                .init(at: ns(0), button: .left, state: .down, pressIdentifier: 1),
-                .init(at: ns(1_800), button: .left, state: .up, pressIdentifier: 1)
+                .init(at: ns(0), button: .preset(3), state: .down, pressIdentifier: 1),
+                .init(at: ns(1_800), button: .preset(3), state: .up, pressIdentifier: 1)
             ]
         }
     }
@@ -626,7 +626,7 @@ private struct Simulation {
     private mutating func process(
         _ message: ControllerMessage,
         sequenceNumber: UInt64,
-        button: GameButton,
+        button: KeypadElementID,
         state: ButtonPressState,
         source: String,
         at now: UInt64

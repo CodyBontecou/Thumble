@@ -99,27 +99,30 @@ fn aliases_precedence_bindings_and_uuid_rules_match_the_basic_contract() {
     assert_eq!(plan.assigned_controls.len(), 2);
     assert_eq!(
         plan.assigned_controls[0].element_id,
-        "00000000-0000-0000-0000-000000000101"
+        "D673535A-975B-4D72-93BE-FDF87C93001A"
     );
     assert_eq!(
         plan.assigned_controls[1].element_id,
-        "00000000-0000-0000-0000-000000000105"
+        "F3AE856B-4F4D-46E4-898F-6F97DA70002A"
     );
     assert_eq!(plan.elements[1]["layout"]["centerX"], 0.82);
     assert_eq!(plan.elements[1]["layout"]["centerY"], 0.84);
-    assert_eq!(plan.semantic_bindings[0].button, "up");
+    assert_eq!(plan.semantic_bindings[0].button, plan.assigned_controls[0].element_id);
     assert_eq!(plan.semantic_bindings[0].key_code, 126);
-    assert_eq!(plan.semantic_bindings[1].button, "jump");
+    assert_eq!(plan.semantic_bindings[1].button, plan.assigned_controls[1].element_id);
     assert_eq!(plan.semantic_bindings[1].key_code, 49);
     assert_eq!(plan.semantic_bindings[1].modifier_mask, 2);
 
     let alternating = plan.generated_profile["keyBindings"].as_array().unwrap();
     assert_eq!(alternating.len(), 4);
-    assert_eq!(alternating[0], "up");
-    assert_eq!(alternating[2], "jump");
-    assert!(plan.profile_key_bindings.get_raw("left").is_some());
-    assert!(plan.profile_key_bindings.get_raw("pause").is_some());
-    assert!(plan.profile_output_bindings.get_raw("jump").is_some());
+    assert_eq!(alternating[0], plan.assigned_controls[0].element_id);
+    assert_eq!(alternating[2], plan.assigned_controls[1].element_id);
+    assert_eq!(plan.profile_key_bindings.len(), 2);
+    assert_eq!(plan.profile_output_bindings.len(), 2);
+    for control in &plan.assigned_controls {
+        assert!(plan.profile_key_bindings.get_raw(&control.element_id).is_some());
+        assert!(plan.profile_output_bindings.get_raw(&control.element_id).is_some());
+    }
 
     let expected_profile = Uuid::new_v5(
         &GENERATION_UUID_NAMESPACE,
@@ -135,7 +138,8 @@ fn joystick_trackpad_text_and_decoration_defaults_are_explicit_and_safe() {
     let joystick = &plan.elements[0];
     assert_eq!(joystick["kind"], "joystick");
     assert_eq!(joystick["layout"]["joystickVisualStyle"], "thumbstick");
-    assert_eq!(joystick["joystickMapping"]["right"], "custom4");
+    assert_eq!(joystick["joystickMapping"]["right"]["keyboard"]["keyCode"], 2);
+    assert!(joystick["joystickMapping"].as_object().unwrap().values().all(Value::is_object));
     assert_eq!(joystick["layout"]["widthScale"], 0.58);
     let trackpad = &plan.elements[1];
     assert_eq!(trackpad["kind"], "trackpad");
@@ -184,7 +188,7 @@ fn trigger_defaults_labels_and_kind_specific_shape_normalization_match_swift() {
 
     let input = serde_json::to_vec(&json!({
         "controls": [
-            {"button":"jump","label":"   ","key":"A"},
+            {"label":"   ","key":"A"},
             {"kind":"text","label":"  操作設定あいうえおかきくけこさし  "},
             {"kind":"joystick","label":"Stick","shape":"star"},
             {"kind":"decoration","label":"Panel","shadowStrength":1.6}
@@ -192,7 +196,7 @@ fn trigger_defaults_labels_and_kind_specific_shape_normalization_match_swift() {
     }))
     .unwrap();
     let plan = plan_generation_spec(&input, None).unwrap();
-    assert_eq!(plan.elements[0]["label"], "Jump");
+    assert_eq!(plan.elements[0]["label"], "Button");
     assert_eq!(plan.elements[1]["label"], "操作設定あいうえおかきく");
     assert_eq!(plan.elements[2]["layout"]["shape"], "circle");
     assert_eq!(plan.elements[3]["layout"]["shadowStrength"], 1.6);
@@ -281,21 +285,20 @@ fn specialized_capacities_drop_before_assignment_and_leave_no_profile_or_artifac
 }
 
 #[test]
-fn duplicate_exhaustion_and_reused_layout_warnings_are_source_ordinal() {
+fn repeated_labels_have_independent_ids_and_no_slot_capacity() {
     let duplicate = serde_json::to_vec(&json!({
         "gameName": "Duplicate fallback",
         "controls": [
-            {"button":"jump","label":"Jump","key":"Space"},
-            {"button":"jump","label":"Second Jump","key":"A"}
+            {"label":"Jump","key":"Space"},
+            {"label":"Jump","key":"A"}
         ]
     }))
     .unwrap();
     let duplicate_plan = plan_generation_spec(&duplicate, None).unwrap();
-    assert_eq!(duplicate_plan.assigned_controls[0].button, "jump");
-    assert_eq!(duplicate_plan.assigned_controls[1].button, "custom1");
-    assert!(duplicate_plan.warnings.iter().any(|warning| {
-        warning.code == "duplicate-explicit-button-fallback" && warning.source_ordinal == 1
-    }));
+    assert_ne!(duplicate_plan.assigned_controls[0].element_id, duplicate_plan.assigned_controls[1].element_id);
+    for control in &duplicate_plan.assigned_controls { Uuid::parse_str(&control.element_id).unwrap(); }
+    assert_eq!(duplicate_plan.elements[0]["output"]["keyboard"]["keyCode"], 49);
+    assert_eq!(duplicate_plan.elements[1]["output"]["keyboard"]["keyCode"], 0);
 
     let reused_specialized = serde_json::to_vec(&json!({
         "controls": [
@@ -323,14 +326,11 @@ fn duplicate_exhaustion_and_reused_layout_warnings_are_source_ordinal() {
         .any(|warning| warning.code == "reused-trackpad-layout-default"));
 
     let plan = plan_generation_spec(EXHAUSTION, None).unwrap();
-    assert_eq!(plan.assigned_controls.len(), 18);
-    assert_eq!(plan.dropped_controls.len(), 2);
-    assert_eq!(plan.dropped_controls[0].source_ordinal, 18);
-    assert_eq!(plan.dropped_controls[1].source_ordinal, 19);
-    assert!(plan
-        .warnings
-        .iter()
-        .any(|warning| warning.code == "slot-exhaustion" && warning.source_ordinal == 18));
+    assert_eq!(plan.assigned_controls.len(), 20);
+    assert!(plan.dropped_controls.is_empty());
+    let ids = plan.assigned_controls.iter().map(|control| &control.element_id).collect::<std::collections::BTreeSet<_>>();
+    assert_eq!(ids.len(), 20);
+    assert!(!plan.warnings.iter().any(|warning| warning.code == "slot-exhaustion"));
     assert!(plan
         .warnings
         .iter()
@@ -487,7 +487,7 @@ fn rich_appearance_and_material_presets_match_exact_semantic_vectors() {
 fn material_and_scalar_aliases_merge_with_swift_precedence() {
     let input = serde_json::to_vec(&json!({
         "controls":[{
-            "button":"jump","label":"Merge",
+            "label":"Merge",
             "material":"raised","materialPreset":"plate",
             "stroke":"#010203","strokeColor":"#FFFFFF","strokeWidth":3,
             "foreground":"#040506","pressedColor":"#070809","opacity":0.75
@@ -530,7 +530,7 @@ fn material_and_scalar_aliases_merge_with_swift_precedence() {
 fn explicit_visual_style_wins_and_safe_states_and_gradients_normalize() {
     let input = serde_json::to_vec(&json!({
         "controls": [{
-            "button": "focus",
+            "id": "6B57228F-99F2-42D3-A3C5-2FDA661C9E10",
             "label": "Explicit",
             "visualStyle": {
                 "normal": {
@@ -576,7 +576,7 @@ fn icon_haptic_alias_precedence_normalization_and_clamping_are_exact() {
     let long_icon = format!("  {}  ", "x".repeat(100));
     let input = serde_json::to_vec(&json!({
         "controls": [{
-            "button":"jump", "label":"Clamp",
+            "label":"Clamp",
             "styleID":"  raised style/@1.0  ",
             "icon":{"source":"text","value":long_icon,"placement":"top","scale":99,"renderingMode":"original"},
             "sfSymbol":"ignored",
@@ -584,7 +584,7 @@ fn icon_haptic_alias_precedence_normalization_and_clamping_are_exact() {
             "hapticFeedback":{"style":"light","pattern":"buzz","intensity":4,"sharpness":-2,"duration":9},
             "hapticPattern":"ignored"
         }, {
-            "button":"attack", "label":"Aliases",
+            "label":"Aliases",
             "iconName":"text: GO ",
             "hapticStrength":0.4,"hapticDurationMS":1
         }]
@@ -621,25 +621,25 @@ fn icon_haptic_alias_precedence_normalization_and_clamping_are_exact() {
 fn default_outer_haptic_feedback_is_omitted_without_affecting_material_feedback() {
     let input = serde_json::to_vec(&json!({
         "controls": [{
-            "button":"jump",
+            "id":"7548A2DD-EB1B-48B8-AF14-E4A67AB07E7A",
             "label":"Default",
             "hapticFeedback": {
                 "style":"light", "pattern":"single", "intensity":0.45,
                 "sharpness":0.48, "duration":0.06
             }
         }, {
-            "button":"attack",
+            "id":"2EA0FA83-F8FA-46ED-A0F2-8CBD7D3FCC02",
             "label":"Within tolerance",
             "hapticStyle":"light",
             "hapticIntensity":0.4509,
             "hapticSharpness":0.4791,
             "hapticDuration":0.0609
         }, {
-            "button":"dash",
+            "id":"6B57228F-99F2-42D3-A3C5-2FDA661C9E10",
             "label":"Near nondefault",
             "hapticIntensity":0.451
         }, {
-            "button":"focus",
+            "id":"8A8430A9-4539-4230-8390-D52BC10A8732",
             "label":"Material feedback",
             "visualStyle": {
                 "normal": {},
@@ -679,23 +679,23 @@ fn normalized_rich_fields_participate_in_deterministic_identity_and_hashes() {
     for (name, baseline, mutation) in [
         (
             "material",
-            json!({"button":"jump","label":"Identity","material":"raised"}),
-            json!({"button":"jump","label":"Identity","material":"inset"}),
+            json!({"label":"Identity","material":"raised"}),
+            json!({"label":"Identity","material":"inset"}),
         ),
         (
             "style",
-            json!({"button":"jump","label":"Identity","styleID":"style-one"}),
-            json!({"button":"jump","label":"Identity","styleID":"style-two"}),
+            json!({"label":"Identity","styleID":"style-one"}),
+            json!({"label":"Identity","styleID":"style-two"}),
         ),
         (
             "state",
-            json!({"button":"jump","label":"Identity","visualStyle":{"normal":{"strokeWidth":1}}}),
-            json!({"button":"jump","label":"Identity","visualStyle":{"normal":{"strokeWidth":2}}}),
+            json!({"label":"Identity","visualStyle":{"normal":{"strokeWidth":1}}}),
+            json!({"label":"Identity","visualStyle":{"normal":{"strokeWidth":2}}}),
         ),
         (
             "haptic",
-            json!({"button":"jump","label":"Identity","hapticStyle":"heavy","hapticIntensity":0.7}),
-            json!({"button":"jump","label":"Identity","hapticStyle":"heavy","hapticIntensity":0.8}),
+            json!({"label":"Identity","hapticStyle":"heavy","hapticIntensity":0.7}),
+            json!({"label":"Identity","hapticStyle":"heavy","hapticIntensity":0.8}),
         ),
     ] {
         let first = plan(baseline.clone());
@@ -832,20 +832,57 @@ fn key_modifier_type_count_and_size_errors_are_rejected() {
 }
 
 #[test]
+fn repeated_requested_uuid_authoring_retains_each_owned_output_but_saved_duplicates_reject() {
+    let requested = "7548A2DD-EB1B-48B8-AF14-E4A67AB07E7A";
+    let later = "D673535A-975B-4D72-93BE-FDF87C93001A";
+    let input = serde_json::to_vec(&json!({"controls": [
+        {"id": requested, "label": "Same", "key": "A"},
+        {"id": requested.to_lowercase(), "label": "Same", "key": "C"},
+        {"id": later, "label": "Same", "key": "Tab"}
+    ]})).unwrap();
+    let plan = plan_generation_spec(&input, None).unwrap();
+    let replay = plan_generation_spec(&input, None).unwrap();
+    assert_eq!(plan.assigned_controls.len(), 3);
+    assert_eq!(plan.elements.len(), 3);
+    assert!(plan.dropped_controls.is_empty());
+    let ids = plan.assigned_controls.iter().map(|control| Uuid::parse_str(&control.element_id).unwrap()).collect::<std::collections::BTreeSet<_>>();
+    assert_eq!(ids.len(), 3);
+    assert_eq!(plan.assigned_controls[0].element_id, requested);
+    assert_eq!(plan.assigned_controls[2].element_id, later);
+    assert_eq!(plan.assigned_controls, replay.assigned_controls);
+    let duplicates = plan.warnings.iter().filter(|warning| warning.code == "duplicate-element-id").collect::<Vec<_>>();
+    assert_eq!(duplicates.len(), 1);
+    assert_eq!(duplicates[0].source_ordinal, 1);
+    assert!(duplicates[0].message.contains(&plan.assigned_controls[1].element_id));
+    for (ordinal, code) in [0, 8, 48].into_iter().enumerate() {
+        let owner = &plan.assigned_controls[ordinal].element_id;
+        assert_eq!(plan.elements[ordinal]["id"], *owner);
+        assert_eq!(plan.elements[ordinal]["output"]["keyboard"]["keyCode"], code);
+        assert_eq!(plan.semantic_bindings[ordinal].button, *owner);
+        assert_eq!(plan.semantic_bindings[ordinal].key_code, code);
+        assert!(plan.profile_key_bindings.get_raw(owner).is_some());
+        assert!(plan.profile_output_bindings.get_raw(owner).is_some());
+    }
+    let mut saved = plan.artifact.to_configuration_document().unwrap();
+    saved.profiles[0]["customization"]["elements"][1]["id"] = json!(requested.to_lowercase());
+    assert!(saved.validate().is_err());
+}
+
+#[test]
 fn warning_output_is_bounded_and_reports_deterministic_omissions() {
     let controls = (0..MAXIMUM_GENERATION_SOURCE_CONTROLS)
-        .map(|ordinal| json!({"button":"jump","label":format!("Warning {ordinal}"),"key":"A"}))
+        .map(|ordinal| json!({"id":"7548A2DD-EB1B-48B8-AF14-E4A67AB07E7A","label":format!("Warning {ordinal}"),"key":"A"}))
         .collect::<Vec<_>>();
     let input = serde_json::to_vec(&json!({"controls":controls})).unwrap();
     let first = plan_generation_spec(&input, None).unwrap();
     let second = plan_generation_spec(&input, None).unwrap();
     assert_eq!(first.warnings.len(), MAXIMUM_GENERATION_WARNINGS);
     assert_eq!(first.warnings, second.warnings);
-    assert_eq!(first.omitted_warning_count, 2);
+    assert_eq!(first.omitted_warning_count, 121);
     assert_eq!(first.omitted_warning_count, second.omitted_warning_count);
 
     let serialized = serde_json::to_value(&first).unwrap();
-    assert_eq!(serialized["omittedWarningCount"], 2);
+    assert_eq!(serialized["omittedWarningCount"], 121);
     assert!(serialized["generatedJSON"].is_string());
     assert!(serialized["artifactJSON"].is_string());
     assert!(serialized.get("generatedJson").is_none());

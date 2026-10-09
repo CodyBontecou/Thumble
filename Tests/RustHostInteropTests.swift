@@ -49,6 +49,10 @@ final class RustHostInteropTests: XCTestCase {
                 let decoded = try ControllerWireCodec.decode(encoded, using: JSONDecoder())
                 assertEquivalent(decoded, message, fixture.name)
 
+            case "rejected":
+                let bytes = try Data(hexadecimal: XCTUnwrap(fixture.hex, fixture.name))
+                XCTAssertThrowsError(try ControllerWireCodec.decode(bytes, using: JSONDecoder()), fixture.name)
+
             default:
                 XCTFail("Unknown fixture kind \(fixture.kind) in \(fixture.name)")
             }
@@ -70,7 +74,7 @@ final class RustHostInteropTests: XCTestCase {
         XCTAssertEqual(profile.orientationPreference, .automatic)
         XCTAssertEqual(profile.outputMode, .keyboard)
         XCTAssertEqual(profile.customization.elements.count, 10)
-        XCTAssertEqual(profile.customization.elements.first?.builtInButton, .up)
+        XCTAssertEqual(profile.customization.elements.first?.defaultControlID, KeypadElementID.preset(1))
     }
 
     private func assertEquivalent(

@@ -5,10 +5,11 @@
   "name": "Alias Arcade",
   "source": "fixture",
   "confidence": "high",
-  "notes": ["Alias precedence vector."],
+  "notes": [
+    "Alias precedence vector."
+  ],
   "controls": [
     {
-      "id": "up",
       "label": "Move Up",
       "key": "up arrow",
       "modifiers": [],
@@ -17,19 +18,22 @@
       "width": 1.12,
       "height": 1.05,
       "fillHex": "#1F2937",
-      "shape": "rounded_rectangle"
+      "shape": "rounded_rectangle",
+      "id": "D673535A-975B-4D72-93BE-FDF87C93001A"
     },
     {
-      "button": "jump",
       "label": "Jump",
       "key": "space-bar",
-      "modifiers": ["shift"],
+      "modifiers": [
+        "shift"
+      ],
       "centerX": 0.82,
       "x": 0.1,
       "centerY": 0.84,
       "y": 0.1,
       "fill": "#7C3AED",
-      "accentStyle": "purple"
+      "accentStyle": "purple",
+      "id": "F3AE856B-4F4D-46E4-898F-6F97DA70002A"
     }
   ]
 }

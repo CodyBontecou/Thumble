@@ -239,6 +239,8 @@ class ArtifactTests(unittest.TestCase):
                 trust_checks = [call.args[0] for call in run.call_args_list if "--test-requirement" in call.args[0]]
                 self.assertEqual(len(trust_checks), 1)
                 requirement = trust_checks[0][trust_checks[0].index("--test-requirement") + 1]
+                self.assertTrue(requirement.startswith("="),
+                                "codesign otherwise treats the requirement expression as a filename")
                 self.assertIn("anchor apple generic", requirement)
                 self.assertIn("1.2.840.113635.100.6.1.13", requirement)
                 self.assertIn(TEAM, requirement)
@@ -275,15 +277,21 @@ class ArtifactTests(unittest.TestCase):
                  patch.object(hid, "inspect_entitlements", return_value={}):
                 hid.verify_artifact(app, bundle_id=BUNDLE, team_id=TEAM, now=NOW)
 
-    def test_inspector_reads_actual_leaf_and_entitlements(self):
+    def test_inspector_attaches_optional_extract_prefix_and_reads_actual_leaf(self):
         display = (f"Identifier={BUNDLE}\nTeamIdentifier={TEAM}\n"
                    "Authority=Developer ID Application: Synthetic Signer\n").encode()
         claims = signature_fixture()["entitlements"]
 
         def fake_command(argv, **kwargs):
-            if "--extract-certificates" in argv:
-                prefix = argv[argv.index("--extract-certificates") + 1]
-                Path(str(prefix) + "0").write_bytes(CERT)
+            extraction = [str(arg) for arg in argv if str(arg).startswith("--extract-certificates")]
+            if extraction:
+                self.assertEqual(len(extraction), 1)
+                self.assertTrue(extraction[0].startswith("--extract-certificates="),
+                                "codesign optional arguments must be attached, not mistaken for input paths")
+                prefix = extraction[0].split("=", 1)[1]
+                self.assertTrue(prefix)
+                self.assertEqual(argv[-1], "synthetic-receiver")
+                Path(prefix + "0").write_bytes(CERT)
                 return b""
             if "--entitlements" in argv:
                 return plistlib.dumps(claims)

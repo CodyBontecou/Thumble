@@ -52,28 +52,8 @@ struct MacKeyModifiers: OptionSet, Codable, Hashable, Sendable {
     }
 
     init?(generatedModifierNames names: [String]) {
-        var modifiers: MacKeyModifiers = []
-        for name in names {
-            switch Self.normalizedModifierName(name) {
-            case "cmd", "command", "meta":
-                modifiers.insert(.command)
-            case "shift":
-                modifiers.insert(.shift)
-            case "opt", "option", "alt":
-                modifiers.insert(.option)
-            case "ctrl", "control":
-                modifiers.insert(.control)
-            case "":
-                continue
-            default:
-                return nil
-            }
-        }
-        self = modifiers
-    }
-
-    private static func normalizedModifierName(_ name: String) -> String {
-        name.lowercased().filter { $0.isLetter || $0.isNumber }
+        guard let mask = KeypadKeyboardKeyCatalog.modifierMask(named: names) else { return nil }
+        self.init(rawValue: mask)
     }
 }
 
@@ -147,12 +127,8 @@ struct MacKeyBinding: Codable, Equatable, Hashable, Sendable {
     }
 
     init?(generatedSpec spec: GeneratedKeyBindingSpec) {
-        guard let keyCode = MacVirtualKey.keyCode(named: spec.key),
-              let modifiers = MacKeyModifiers(generatedModifierNames: spec.modifiers)
-        else {
-            return nil
-        }
-        self.init(keyCode: keyCode, modifiers: modifiers)
+        guard let binding = KeypadKeyboardBinding(keyName: spec.key, modifierNames: spec.modifiers) else { return nil }
+        self.init(keyCode: binding.keyCode, modifiers: MacKeyModifiers(rawValue: binding.modifiersRawValue))
     }
 
     var strokes: [MacKeyStroke] {
@@ -201,20 +177,20 @@ struct MacKeyBinding: Codable, Equatable, Hashable, Sendable {
 
 /// General-purpose starter bindings for a programmable Mac keypad.
 enum DefaultKeypadKeyMap {
-    static let defaultBindings: [GameButton: MacKeyBinding] = [
-        .left: MacKeyBinding(keyCode: MacVirtualKey.leftArrow),
-        .right: MacKeyBinding(keyCode: MacVirtualKey.rightArrow),
-        .up: MacKeyBinding(keyCode: MacVirtualKey.upArrow),
-        .down: MacKeyBinding(keyCode: MacVirtualKey.downArrow),
-        .jump: MacKeyBinding(keyCode: MacVirtualKey.returnKey),
-        .attack: MacKeyBinding(keyCode: MacVirtualKey.tab),
-        .dash: MacKeyBinding(keyCode: MacVirtualKey.k, modifiers: .command),
-        .focus: .tmuxPrefix,
-        .map: MacKeyBinding(keyCode: MacVirtualKey.p, modifiers: [.command, .shift]),
-        .pause: MacKeyBinding(keyCode: MacVirtualKey.escape)
+    static let defaultBindings: [KeypadElementID: MacKeyBinding] = [
+        .preset(3): MacKeyBinding(keyCode: MacVirtualKey.leftArrow),
+        .preset(4): MacKeyBinding(keyCode: MacVirtualKey.rightArrow),
+        .preset(1): MacKeyBinding(keyCode: MacVirtualKey.upArrow),
+        .preset(2): MacKeyBinding(keyCode: MacVirtualKey.downArrow),
+        .preset(5): MacKeyBinding(keyCode: MacVirtualKey.returnKey),
+        .preset(6): MacKeyBinding(keyCode: MacVirtualKey.tab),
+        .preset(7): MacKeyBinding(keyCode: MacVirtualKey.k, modifiers: .command),
+        .preset(8): .tmuxPrefix,
+        .preset(9): MacKeyBinding(keyCode: MacVirtualKey.p, modifiers: [.command, .shift]),
+        .preset(10): MacKeyBinding(keyCode: MacVirtualKey.escape)
     ]
 
-    static func defaultBinding(for button: GameButton) -> MacKeyBinding? {
+    static func defaultBinding(for button: KeypadElementID) -> MacKeyBinding? {
         defaultBindings[button]
     }
 }
@@ -256,46 +232,10 @@ enum MacVirtualKey {
     }
 
     static func keyCode(named name: String) -> CGKeyCode? {
-        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
-
-        if let exactMatch = keyNames.first(where: { $0.value.caseInsensitiveCompare(trimmed) == .orderedSame }) {
-            return exactMatch.key
-        }
-
-        let normalized = normalizedKeyName(trimmed)
-        switch normalized {
-        case "left", "leftarrow", "arrowleft":
-            return leftArrow
-        case "right", "rightarrow", "arrowright":
-            return rightArrow
-        case "up", "uparrow", "arrowup":
-            return upArrow
-        case "down", "downarrow", "arrowdown":
-            return downArrow
-        case "esc", "escape":
-            return escape
-        case "return", "enter":
-            return returnKey
-        case "space", "spacebar":
-            return 49
-        case "delete", "backspace":
-            return 51
-        case "forwarddelete":
-            return 117
-        default:
-            break
-        }
-
-        if let namedMatch = keyNames.first(where: { normalizedKeyName($0.value) == normalized }) {
-            return namedMatch.key
-        }
-
-        if let numericCode = UInt16(trimmed) {
-            return CGKeyCode(numericCode)
-        }
-
-        return nil
+        if let code = KeypadKeyboardKeyCatalog.keyCode(named: name) { return code }
+        // Local raw-key editing remains available. Generated specifications use
+        // the shared, known-code-only vocabulary instead.
+        return UInt16(name.trimmingCharacters(in: .whitespacesAndNewlines))
     }
 
     static func modifierFlag(for keyCode: CGKeyCode) -> CGEventFlags? {
@@ -328,10 +268,6 @@ enum MacVirtualKey {
         default:
             return nil
         }
-    }
-
-    private static func normalizedKeyName(_ name: String) -> String {
-        name.lowercased().filter { $0.isLetter || $0.isNumber }
     }
 
     private static let keyNames: [CGKeyCode: String] = [

@@ -176,6 +176,7 @@ pub fn generated_semantic_key_code(name: &str) -> Option<u16> {
         "space" | "spacebar" => Some(49),
         "delete" | "backspace" => Some(51),
         "forwarddelete" => Some(117),
+        "function" => Some(63),
         _ => None,
     };
     if alias.is_some() {
@@ -286,6 +287,8 @@ mod tests {
             ("page-up", 116),
             ("right.command", 54),
             ("keypad enter", 76),
+            ("Function", 63),
+            ("function", 63),
             ("←", 123),
             ("→", 124),
             ("↓", 125),

@@ -10,7 +10,7 @@
     "customization": {
       "accentStyle": "purple",
       "buttonCustomizations": [
-        "up",
+        "00000000-0000-0000-0000-000000000101",
         {
           "centerX": 0.17,
           "centerY": 0.37,
@@ -30,7 +30,7 @@
           "widthScale": 0.58,
           "zIndex": 0
         },
-        "down",
+        "00000000-0000-0000-0000-000000000102",
         {
           "centerX": 0.17,
           "centerY": 0.7100000000000001,
@@ -50,7 +50,7 @@
           "widthScale": 0.58,
           "zIndex": 0
         },
-        "left",
+        "00000000-0000-0000-0000-000000000103",
         {
           "centerX": 0.07800000000000001,
           "centerY": 0.54,
@@ -70,7 +70,7 @@
           "widthScale": 0.58,
           "zIndex": 0
         },
-        "right",
+        "00000000-0000-0000-0000-000000000104",
         {
           "centerX": 0.262,
           "centerY": 0.54,
@@ -90,7 +90,7 @@
           "widthScale": 0.58,
           "zIndex": 0
         },
-        "jump",
+        "00000000-0000-0000-0000-000000000105",
         {
           "centerX": 0.84,
           "centerY": 0.74,
@@ -109,7 +109,7 @@
           "widthScale": 0.58,
           "zIndex": 0
         },
-        "attack",
+        "00000000-0000-0000-0000-000000000106",
         {
           "centerX": 0.75,
           "centerY": 0.55,
@@ -128,7 +128,7 @@
           "widthScale": 0.58,
           "zIndex": 0
         },
-        "dash",
+        "00000000-0000-0000-0000-000000000107",
         {
           "centerX": 0.93,
           "centerY": 0.55,
@@ -147,7 +147,7 @@
           "widthScale": 0.58,
           "zIndex": 0
         },
-        "focus",
+        "00000000-0000-0000-0000-000000000108",
         {
           "centerX": 0.84,
           "centerY": 0.36,
@@ -166,7 +166,7 @@
           "widthScale": 0.58,
           "zIndex": 0
         },
-        "map",
+        "00000000-0000-0000-0000-000000000109",
         {
           "centerX": 0.43,
           "centerY": 0.82,
@@ -185,7 +185,7 @@
           "widthScale": 0.48,
           "zIndex": 0
         },
-        "pause",
+        "00000000-0000-0000-0000-00000000010A",
         {
           "centerX": 0.57,
           "centerY": 0.82,
@@ -229,8 +229,7 @@
             "shape": "capsule",
             "widthScale": 1.12,
             "zIndex": 0
-          },
-          "mappedButton": "custom1"
+          }
         },
         {
           "controlKind": "button",
@@ -253,8 +252,7 @@
             "shape": "capsule",
             "widthScale": 1.12,
             "zIndex": 0
-          },
-          "mappedButton": "custom2"
+          }
         }
       ],
       "designMetadata": {
@@ -273,43 +271,43 @@
             "system": "top_bar_activation"
           },
           {
-            "button": "up",
+            "button": "00000000-0000-0000-0000-000000000101",
             "kind": "builtin"
           },
           {
-            "button": "down",
+            "button": "00000000-0000-0000-0000-000000000102",
             "kind": "builtin"
           },
           {
-            "button": "left",
+            "button": "00000000-0000-0000-0000-000000000103",
             "kind": "builtin"
           },
           {
-            "button": "right",
+            "button": "00000000-0000-0000-0000-000000000104",
             "kind": "builtin"
           },
           {
-            "button": "jump",
+            "button": "00000000-0000-0000-0000-000000000108",
             "kind": "builtin"
           },
           {
-            "button": "attack",
+            "button": "00000000-0000-0000-0000-000000000107",
             "kind": "builtin"
           },
           {
-            "button": "dash",
+            "button": "00000000-0000-0000-0000-000000000105",
             "kind": "builtin"
           },
           {
-            "button": "focus",
+            "button": "00000000-0000-0000-0000-000000000106",
             "kind": "builtin"
           },
           {
-            "button": "map",
+            "button": "00000000-0000-0000-0000-000000000109",
             "kind": "builtin"
           },
           {
-            "button": "pause",
+            "button": "00000000-0000-0000-0000-00000000010A",
             "kind": "builtin"
           },
           {
@@ -331,7 +329,15 @@
       },
       "elements": [
         {
-          "builtInButton": "up",
+          "defaultOutput": {
+            "gamepadButtons": [
+              "dpadUp"
+            ],
+            "keyboard": {
+              "keyCode": 13,
+              "modifiersRawValue": 0
+            }
+          },
           "id": "00000000-0000-0000-0000-000000000101",
           "kind": "button",
           "label": "↑",
@@ -354,18 +360,28 @@
             "widthScale": 0.58,
             "zIndex": 0
           },
-          "legacySlot": "up",
           "output": {
-            "gamepadButtons": [],
+            "gamepadButtons": [
+              "dpadUp"
+            ],
             "keyboard": {
               "keyCode": 13,
               "modifiersRawValue": 0
             }
           },
-          "partOutputs": []
+          "partOutputs": [],
+          "visualRole": "movement"
         },
         {
-          "builtInButton": "down",
+          "defaultOutput": {
+            "gamepadButtons": [
+              "dpadDown"
+            ],
+            "keyboard": {
+              "keyCode": 1,
+              "modifiersRawValue": 0
+            }
+          },
           "id": "00000000-0000-0000-0000-000000000102",
           "kind": "button",
           "label": "↓",
@@ -388,18 +404,28 @@
             "widthScale": 0.58,
             "zIndex": 0
           },
-          "legacySlot": "down",
           "output": {
-            "gamepadButtons": [],
+            "gamepadButtons": [
+              "dpadDown"
+            ],
             "keyboard": {
               "keyCode": 1,
               "modifiersRawValue": 0
             }
           },
-          "partOutputs": []
+          "partOutputs": [],
+          "visualRole": "movement"
         },
         {
-          "builtInButton": "left",
+          "defaultOutput": {
+            "gamepadButtons": [
+              "dpadLeft"
+            ],
+            "keyboard": {
+              "keyCode": 0,
+              "modifiersRawValue": 0
+            }
+          },
           "id": "00000000-0000-0000-0000-000000000103",
           "kind": "button",
           "label": "←",
@@ -422,18 +448,28 @@
             "widthScale": 0.58,
             "zIndex": 0
           },
-          "legacySlot": "left",
           "output": {
-            "gamepadButtons": [],
+            "gamepadButtons": [
+              "dpadLeft"
+            ],
             "keyboard": {
               "keyCode": 0,
               "modifiersRawValue": 0
             }
           },
-          "partOutputs": []
+          "partOutputs": [],
+          "visualRole": "movement"
         },
         {
-          "builtInButton": "right",
+          "defaultOutput": {
+            "gamepadButtons": [
+              "dpadRight"
+            ],
+            "keyboard": {
+              "keyCode": 2,
+              "modifiersRawValue": 0
+            }
+          },
           "id": "00000000-0000-0000-0000-000000000104",
           "kind": "button",
           "label": "→",
@@ -456,117 +492,28 @@
             "widthScale": 0.58,
             "zIndex": 0
           },
-          "legacySlot": "right",
           "output": {
-            "gamepadButtons": [],
+            "gamepadButtons": [
+              "dpadRight"
+            ],
             "keyboard": {
               "keyCode": 2,
               "modifiersRawValue": 0
             }
           },
-          "partOutputs": []
+          "partOutputs": [],
+          "visualRole": "movement"
         },
         {
-          "builtInButton": "jump",
-          "id": "00000000-0000-0000-0000-000000000105",
-          "kind": "button",
-          "label": "B",
-          "layout": {
-            "centerX": 0.84,
-            "centerY": 0.74,
-            "fillColor": {
-              "alpha": 1,
-              "blue": 0.8588235294117647,
-              "green": 0.8352941176470589,
-              "red": 0.8196078431372549
-            },
-            "heightScale": 0.58,
-            "isHidden": false,
-            "isLocationLocked": false,
-            "rotationDegrees": 0,
-            "shadowStrength": 1,
-            "shape": "circle",
-            "widthScale": 0.58,
-            "zIndex": 0
-          },
-          "legacySlot": "jump",
-          "output": {
-            "gamepadButtons": [],
+          "defaultOutput": {
+            "gamepadButtons": [
+              "west"
+            ],
             "keyboard": {
-              "keyCode": 49,
+              "keyCode": 14,
               "modifiersRawValue": 0
             }
           },
-          "partOutputs": []
-        },
-        {
-          "builtInButton": "attack",
-          "id": "00000000-0000-0000-0000-000000000106",
-          "kind": "button",
-          "label": "Y",
-          "layout": {
-            "centerX": 0.75,
-            "centerY": 0.55,
-            "fillColor": {
-              "alpha": 1,
-              "blue": 0.2901960784313726,
-              "green": 0.6392156862745098,
-              "red": 0.08627450980392157
-            },
-            "heightScale": 0.58,
-            "isHidden": false,
-            "isLocationLocked": false,
-            "rotationDegrees": 0,
-            "shadowStrength": 1,
-            "shape": "circle",
-            "widthScale": 0.58,
-            "zIndex": 0
-          },
-          "legacySlot": "attack",
-          "output": {
-            "gamepadButtons": [],
-            "keyboard": {
-              "keyCode": 38,
-              "modifiersRawValue": 0
-            }
-          },
-          "partOutputs": []
-        },
-        {
-          "builtInButton": "dash",
-          "id": "00000000-0000-0000-0000-000000000107",
-          "kind": "button",
-          "label": "A",
-          "layout": {
-            "centerX": 0.93,
-            "centerY": 0.55,
-            "fillColor": {
-              "alpha": 1,
-              "blue": 0.14901960784313725,
-              "green": 0.14901960784313725,
-              "red": 0.8627450980392157
-            },
-            "heightScale": 0.58,
-            "isHidden": false,
-            "isLocationLocked": false,
-            "rotationDegrees": 0,
-            "shadowStrength": 1,
-            "shape": "circle",
-            "widthScale": 0.58,
-            "zIndex": 0
-          },
-          "legacySlot": "dash",
-          "output": {
-            "gamepadButtons": [],
-            "keyboard": {
-              "keyCode": 56,
-              "modifiersRawValue": 0
-            }
-          },
-          "partOutputs": []
-        },
-        {
-          "builtInButton": "focus",
           "id": "00000000-0000-0000-0000-000000000108",
           "kind": "button",
           "label": "X",
@@ -588,18 +535,157 @@
             "widthScale": 0.58,
             "zIndex": 0
           },
-          "legacySlot": "focus",
           "output": {
-            "gamepadButtons": [],
+            "gamepadButtons": [
+              "west"
+            ],
             "keyboard": {
               "keyCode": 14,
               "modifiersRawValue": 0
             }
           },
-          "partOutputs": []
+          "partOutputs": [],
+          "visualRole": "secondary_action"
         },
         {
-          "builtInButton": "map",
+          "defaultOutput": {
+            "gamepadButtons": [
+              "south"
+            ],
+            "keyboard": {
+              "keyCode": 56,
+              "modifiersRawValue": 0
+            }
+          },
+          "id": "00000000-0000-0000-0000-000000000107",
+          "kind": "button",
+          "label": "A",
+          "layout": {
+            "centerX": 0.93,
+            "centerY": 0.55,
+            "fillColor": {
+              "alpha": 1,
+              "blue": 0.14901960784313725,
+              "green": 0.14901960784313725,
+              "red": 0.8627450980392157
+            },
+            "heightScale": 0.58,
+            "isHidden": false,
+            "isLocationLocked": false,
+            "rotationDegrees": 0,
+            "shadowStrength": 1,
+            "shape": "circle",
+            "widthScale": 0.58,
+            "zIndex": 0
+          },
+          "output": {
+            "gamepadButtons": [
+              "south"
+            ],
+            "keyboard": {
+              "keyCode": 56,
+              "modifiersRawValue": 0
+            }
+          },
+          "partOutputs": [],
+          "visualRole": "secondary_action"
+        },
+        {
+          "defaultOutput": {
+            "gamepadButtons": [
+              "east"
+            ],
+            "keyboard": {
+              "keyCode": 49,
+              "modifiersRawValue": 0
+            }
+          },
+          "id": "00000000-0000-0000-0000-000000000105",
+          "kind": "button",
+          "label": "B",
+          "layout": {
+            "centerX": 0.84,
+            "centerY": 0.74,
+            "fillColor": {
+              "alpha": 1,
+              "blue": 0.8588235294117647,
+              "green": 0.8352941176470589,
+              "red": 0.8196078431372549
+            },
+            "heightScale": 0.58,
+            "isHidden": false,
+            "isLocationLocked": false,
+            "rotationDegrees": 0,
+            "shadowStrength": 1,
+            "shape": "circle",
+            "widthScale": 0.58,
+            "zIndex": 0
+          },
+          "output": {
+            "gamepadButtons": [
+              "east"
+            ],
+            "keyboard": {
+              "keyCode": 49,
+              "modifiersRawValue": 0
+            }
+          },
+          "partOutputs": [],
+          "visualRole": "primary_action"
+        },
+        {
+          "defaultOutput": {
+            "gamepadButtons": [
+              "north"
+            ],
+            "keyboard": {
+              "keyCode": 38,
+              "modifiersRawValue": 0
+            }
+          },
+          "id": "00000000-0000-0000-0000-000000000106",
+          "kind": "button",
+          "label": "Y",
+          "layout": {
+            "centerX": 0.75,
+            "centerY": 0.55,
+            "fillColor": {
+              "alpha": 1,
+              "blue": 0.2901960784313726,
+              "green": 0.6392156862745098,
+              "red": 0.08627450980392157
+            },
+            "heightScale": 0.58,
+            "isHidden": false,
+            "isLocationLocked": false,
+            "rotationDegrees": 0,
+            "shadowStrength": 1,
+            "shape": "circle",
+            "widthScale": 0.58,
+            "zIndex": 0
+          },
+          "output": {
+            "gamepadButtons": [
+              "north"
+            ],
+            "keyboard": {
+              "keyCode": 38,
+              "modifiersRawValue": 0
+            }
+          },
+          "partOutputs": [],
+          "visualRole": "primary_action"
+        },
+        {
+          "defaultOutput": {
+            "gamepadButtons": [
+              "select"
+            ],
+            "keyboard": {
+              "keyCode": 48,
+              "modifiersRawValue": 0
+            }
+          },
           "id": "00000000-0000-0000-0000-000000000109",
           "kind": "button",
           "label": "Select",
@@ -621,19 +707,29 @@
             "widthScale": 0.48,
             "zIndex": 0
           },
-          "legacySlot": "map",
           "output": {
-            "gamepadButtons": [],
+            "gamepadButtons": [
+              "select"
+            ],
             "keyboard": {
               "keyCode": 48,
               "modifiersRawValue": 0
             }
           },
-          "partOutputs": []
+          "partOutputs": [],
+          "visualRole": "utility"
         },
         {
-          "builtInButton": "pause",
-          "id": "00000000-0000-0000-0000-000000000110",
+          "defaultOutput": {
+            "gamepadButtons": [
+              "start"
+            ],
+            "keyboard": {
+              "keyCode": 53,
+              "modifiersRawValue": 0
+            }
+          },
+          "id": "00000000-0000-0000-0000-00000000010A",
           "kind": "button",
           "label": "Start",
           "layout": {
@@ -654,17 +750,28 @@
             "widthScale": 0.44,
             "zIndex": 0
           },
-          "legacySlot": "pause",
           "output": {
-            "gamepadButtons": [],
+            "gamepadButtons": [
+              "start"
+            ],
             "keyboard": {
               "keyCode": 53,
               "modifiersRawValue": 0
             }
           },
-          "partOutputs": []
+          "partOutputs": [],
+          "visualRole": "menu"
         },
         {
+          "defaultOutput": {
+            "gamepadButtons": [
+              "leftShoulder"
+            ],
+            "keyboard": {
+              "keyCode": 12,
+              "modifiersRawValue": 0
+            }
+          },
           "id": "C5EC51F7-C610-572F-9171-A8699D614ED6",
           "kind": "button",
           "label": "L",
@@ -686,17 +793,27 @@
             "widthScale": 1.12,
             "zIndex": 0
           },
-          "legacySlot": "custom1",
           "output": {
-            "gamepadButtons": [],
+            "gamepadButtons": [
+              "leftShoulder"
+            ],
             "keyboard": {
-              "keyCode": 126,
+              "keyCode": 12,
               "modifiersRawValue": 0
             }
           },
           "partOutputs": []
         },
         {
+          "defaultOutput": {
+            "gamepadButtons": [
+              "rightShoulder"
+            ],
+            "keyboard": {
+              "keyCode": 14,
+              "modifiersRawValue": 0
+            }
+          },
           "id": "0371280B-F6EE-5EB4-BA12-89D240745D3C",
           "kind": "button",
           "label": "R",
@@ -718,11 +835,12 @@
             "widthScale": 1.12,
             "zIndex": 0
           },
-          "legacySlot": "custom2",
           "output": {
-            "gamepadButtons": [],
+            "gamepadButtons": [
+              "rightShoulder"
+            ],
             "keyboard": {
-              "keyCode": 125,
+              "keyCode": 14,
               "modifiersRawValue": 0
             }
           },
@@ -730,25 +848,25 @@
         }
       ],
       "labelOverrides": [
-        "up",
+        "00000000-0000-0000-0000-000000000101",
         "↑",
-        "down",
+        "00000000-0000-0000-0000-000000000102",
         "↓",
-        "left",
+        "00000000-0000-0000-0000-000000000103",
         "←",
-        "right",
+        "00000000-0000-0000-0000-000000000104",
         "→",
-        "jump",
+        "00000000-0000-0000-0000-000000000105",
         "B",
-        "attack",
+        "00000000-0000-0000-0000-000000000106",
         "Y",
-        "dash",
+        "00000000-0000-0000-0000-000000000107",
         "A",
-        "focus",
+        "00000000-0000-0000-0000-000000000108",
         "X",
-        "map",
+        "00000000-0000-0000-0000-000000000109",
         "Select",
-        "pause",
+        "00000000-0000-0000-0000-00000000010A",
         "Start"
       ],
       "layoutMode": "standard",
@@ -762,203 +880,161 @@
     "updatedAt": 0
   },
   "profileKeyBindings": {
-    "attack": {
-      "keyCode": 38,
+    "00000000-0000-0000-0000-000000000101": {
+      "keyCode": 13,
       "modifiers": 0
     },
-    "custom1": {
-      "keyCode": 126,
-      "modifiers": 0
-    },
-    "custom2": {
-      "keyCode": 125,
-      "modifiers": 0
-    },
-    "custom3": {
-      "keyCode": 123,
-      "modifiers": 0
-    },
-    "custom4": {
-      "keyCode": 124,
-      "modifiers": 0
-    },
-    "custom5": {
-      "keyCode": 12,
-      "modifiers": 0
-    },
-    "custom6": {
-      "keyCode": 15,
-      "modifiers": 0
-    },
-    "custom7": {
-      "keyCode": 6,
-      "modifiers": 0
-    },
-    "custom8": {
-      "keyCode": 7,
-      "modifiers": 0
-    },
-    "dash": {
-      "keyCode": 56,
-      "modifiers": 0
-    },
-    "down": {
+    "00000000-0000-0000-0000-000000000102": {
       "keyCode": 1,
       "modifiers": 0
     },
-    "focus": {
-      "keyCode": 14,
-      "modifiers": 0
-    },
-    "jump": {
-      "keyCode": 49,
-      "modifiers": 0
-    },
-    "left": {
+    "00000000-0000-0000-0000-000000000103": {
       "keyCode": 0,
       "modifiers": 0
     },
-    "map": {
-      "keyCode": 48,
-      "modifiers": 0
-    },
-    "pause": {
-      "keyCode": 53,
-      "modifiers": 0
-    },
-    "right": {
+    "00000000-0000-0000-0000-000000000104": {
       "keyCode": 2,
       "modifiers": 0
     },
-    "up": {
-      "keyCode": 13,
+    "00000000-0000-0000-0000-000000000105": {
+      "keyCode": 49,
+      "modifiers": 0
+    },
+    "00000000-0000-0000-0000-000000000106": {
+      "keyCode": 38,
+      "modifiers": 0
+    },
+    "00000000-0000-0000-0000-000000000107": {
+      "keyCode": 56,
+      "modifiers": 0
+    },
+    "00000000-0000-0000-0000-000000000108": {
+      "keyCode": 14,
+      "modifiers": 0
+    },
+    "00000000-0000-0000-0000-000000000109": {
+      "keyCode": 48,
+      "modifiers": 0
+    },
+    "00000000-0000-0000-0000-00000000010A": {
+      "keyCode": 53,
+      "modifiers": 0
+    },
+    "0371280B-F6EE-5EB4-BA12-89D240745D3C": {
+      "keyCode": 14,
+      "modifiers": 0
+    },
+    "C5EC51F7-C610-572F-9171-A8699D614ED6": {
+      "keyCode": 12,
       "modifiers": 0
     }
   },
   "profileOutputBindings": {
-    "attack": {
-      "gamepadButtons": [],
+    "00000000-0000-0000-0000-000000000101": {
+      "gamepadButtons": [
+        "dpadUp"
+      ],
       "keyboard": {
-        "keyCode": 38,
+        "keyCode": 13,
         "modifiers": 0
       }
     },
-    "custom1": {
-      "gamepadButtons": [],
-      "keyboard": {
-        "keyCode": 126,
-        "modifiers": 0
-      }
-    },
-    "custom2": {
-      "gamepadButtons": [],
-      "keyboard": {
-        "keyCode": 125,
-        "modifiers": 0
-      }
-    },
-    "custom3": {
-      "gamepadButtons": [],
-      "keyboard": {
-        "keyCode": 123,
-        "modifiers": 0
-      }
-    },
-    "custom4": {
-      "gamepadButtons": [],
-      "keyboard": {
-        "keyCode": 124,
-        "modifiers": 0
-      }
-    },
-    "custom5": {
-      "gamepadButtons": [],
-      "keyboard": {
-        "keyCode": 12,
-        "modifiers": 0
-      }
-    },
-    "custom6": {
-      "gamepadButtons": [],
-      "keyboard": {
-        "keyCode": 15,
-        "modifiers": 0
-      }
-    },
-    "custom7": {
-      "gamepadButtons": [],
-      "keyboard": {
-        "keyCode": 6,
-        "modifiers": 0
-      }
-    },
-    "custom8": {
-      "gamepadButtons": [],
-      "keyboard": {
-        "keyCode": 7,
-        "modifiers": 0
-      }
-    },
-    "dash": {
-      "gamepadButtons": [],
-      "keyboard": {
-        "keyCode": 56,
-        "modifiers": 0
-      }
-    },
-    "down": {
-      "gamepadButtons": [],
+    "00000000-0000-0000-0000-000000000102": {
+      "gamepadButtons": [
+        "dpadDown"
+      ],
       "keyboard": {
         "keyCode": 1,
         "modifiers": 0
       }
     },
-    "focus": {
-      "gamepadButtons": [],
-      "keyboard": {
-        "keyCode": 14,
-        "modifiers": 0
-      }
-    },
-    "jump": {
-      "gamepadButtons": [],
-      "keyboard": {
-        "keyCode": 49,
-        "modifiers": 0
-      }
-    },
-    "left": {
-      "gamepadButtons": [],
+    "00000000-0000-0000-0000-000000000103": {
+      "gamepadButtons": [
+        "dpadLeft"
+      ],
       "keyboard": {
         "keyCode": 0,
         "modifiers": 0
       }
     },
-    "map": {
-      "gamepadButtons": [],
-      "keyboard": {
-        "keyCode": 48,
-        "modifiers": 0
-      }
-    },
-    "pause": {
-      "gamepadButtons": [],
-      "keyboard": {
-        "keyCode": 53,
-        "modifiers": 0
-      }
-    },
-    "right": {
-      "gamepadButtons": [],
+    "00000000-0000-0000-0000-000000000104": {
+      "gamepadButtons": [
+        "dpadRight"
+      ],
       "keyboard": {
         "keyCode": 2,
         "modifiers": 0
       }
     },
-    "up": {
-      "gamepadButtons": [],
+    "00000000-0000-0000-0000-000000000105": {
+      "gamepadButtons": [
+        "east"
+      ],
       "keyboard": {
-        "keyCode": 13,
+        "keyCode": 49,
+        "modifiers": 0
+      }
+    },
+    "00000000-0000-0000-0000-000000000106": {
+      "gamepadButtons": [
+        "north"
+      ],
+      "keyboard": {
+        "keyCode": 38,
+        "modifiers": 0
+      }
+    },
+    "00000000-0000-0000-0000-000000000107": {
+      "gamepadButtons": [
+        "south"
+      ],
+      "keyboard": {
+        "keyCode": 56,
+        "modifiers": 0
+      }
+    },
+    "00000000-0000-0000-0000-000000000108": {
+      "gamepadButtons": [
+        "west"
+      ],
+      "keyboard": {
+        "keyCode": 14,
+        "modifiers": 0
+      }
+    },
+    "00000000-0000-0000-0000-000000000109": {
+      "gamepadButtons": [
+        "select"
+      ],
+      "keyboard": {
+        "keyCode": 48,
+        "modifiers": 0
+      }
+    },
+    "00000000-0000-0000-0000-00000000010A": {
+      "gamepadButtons": [
+        "start"
+      ],
+      "keyboard": {
+        "keyCode": 53,
+        "modifiers": 0
+      }
+    },
+    "0371280B-F6EE-5EB4-BA12-89D240745D3C": {
+      "gamepadButtons": [
+        "rightShoulder"
+      ],
+      "keyboard": {
+        "keyCode": 14,
+        "modifiers": 0
+      }
+    },
+    "C5EC51F7-C610-572F-9171-A8699D614ED6": {
+      "gamepadButtons": [
+        "leftShoulder"
+      ],
+      "keyboard": {
+        "keyCode": 12,
         "modifiers": 0
       }
     }

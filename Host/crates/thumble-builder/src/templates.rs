@@ -263,7 +263,7 @@ fn validate_fixture_set(
     manifest_bytes: &[u8],
     sources: &[(BuilderTemplate, &str, &[u8])],
 ) -> Result<BTreeMap<String, TemplateFixture>, BuilderError> {
-    let manifest: FixtureManifest = serde_json::from_slice(manifest_bytes)
+    let manifest: FixtureManifest = thumble_protocol::decode_unique_json(manifest_bytes)
         .map_err(|_| BuilderError::InvalidTemplateFixtures)?;
     if manifest.schema != FIXTURE_MANIFEST_SCHEMA
         || manifest.version != FIXTURE_VERSION
@@ -306,7 +306,7 @@ fn validate_fixture_set(
             return Err(BuilderError::InvalidTemplateFixtures);
         }
         let fixture: TemplateFixture =
-            serde_json::from_slice(bytes).map_err(|_| BuilderError::InvalidTemplateFixtures)?;
+            thumble_protocol::decode_unique_json(bytes).map_err(|_| BuilderError::InvalidTemplateFixtures)?;
         if fixture.fixture_version != FIXTURE_VERSION
             || fixture.template_id != metadata.template_id
             || fixture.revision != metadata.revision

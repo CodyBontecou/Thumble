@@ -1,0 +1,412 @@
+{
+  "confidence": "low",
+  "keyBindings": [
+    "BD60BD75-DACE-5AB7-A2DC-021A6CCEC3F5",
+    {
+      "key": "W",
+      "modifiers": []
+    }
+  ],
+  "notes": [
+    "Installed from an agent-provided keypad spec."
+  ],
+  "profile": {
+    "customization": {
+      "accentStyle": "purple",
+      "buttonCustomizations": [],
+      "colorSchemePreference": "system",
+      "controlScale": "standard",
+      "customButtons": [
+        {
+          "controlKind": "joystick",
+          "id": "BD60BD75-DACE-5AB7-A2DC-021A6CCEC3F5",
+          "joystickMapping": {
+            "down": {
+              "gamepadButtons": [],
+              "keyboard": {
+                "keyCode": 1,
+                "modifiersRawValue": 0
+              }
+            },
+            "left": {
+              "gamepadButtons": [],
+              "keyboard": {
+                "keyCode": 0,
+                "modifiersRawValue": 0
+              }
+            },
+            "right": {
+              "gamepadButtons": [],
+              "keyboard": {
+                "keyCode": 2,
+                "modifiersRawValue": 0
+              }
+            },
+            "up": {
+              "gamepadButtons": [],
+              "keyboard": {
+                "keyCode": 13,
+                "modifiersRawValue": 0
+              }
+            }
+          },
+          "joystickOutputSettings": {
+            "analogTarget": "none",
+            "deadZone": 0.12,
+            "invertX": false,
+            "invertY": false,
+            "sendsDigitalDirections": true,
+            "sensitivity": 1.0,
+            "snapToCardinal": false
+          },
+          "label": "Move",
+          "layout": {
+            "accentStyle": "monochrome",
+            "centerX": 0.5,
+            "centerY": 0.62,
+            "fillColor": {
+              "alpha": 1.0,
+              "blue": 0.21568627450980393,
+              "green": 0.1607843137254902,
+              "red": 0.12156862745098039
+            },
+            "heightScale": 0.58,
+            "isHidden": false,
+            "isLocationLocked": false,
+            "joystickKnobColor": {
+              "alpha": 1.0,
+              "blue": 1.0,
+              "green": 1.0,
+              "red": 1.0
+            },
+            "joystickVisualStyle": "thumbstick",
+            "rotationDegrees": 0,
+            "shadowStrength": 1.0,
+            "shape": "circle",
+            "widthScale": 0.58,
+            "zIndex": 0
+          },
+          "visualRole": "joystick"
+        },
+        {
+          "controlKind": "trackpad",
+          "id": "3E65E0AD-EFF7-57B1-ADFC-374EDA9CB6F8",
+          "label": "Pointer",
+          "layout": {
+            "accentStyle": "monochrome",
+            "centerX": 0.5,
+            "centerY": 0.58,
+            "cornerRadius": 18.0,
+            "fillColor": {
+              "alpha": 1.0,
+              "blue": 0.21568627450980393,
+              "green": 0.1607843137254902,
+              "red": 0.12156862745098039
+            },
+            "heightScale": 1.0,
+            "isHidden": false,
+            "isLocationLocked": false,
+            "rotationDegrees": 0,
+            "shadowStrength": 1.0,
+            "shape": "rounded_rectangle",
+            "widthScale": 1.25,
+            "zIndex": 0
+          },
+          "trackpadSettings": {
+            "naturalScrolling": false,
+            "scrollSensitivity": 0.9,
+            "sensitivity": 1.5,
+            "tapToClick": true,
+            "twoFingerScroll": false
+          },
+          "visualRole": "trackpad"
+        },
+        {
+          "controlKind": "text",
+          "id": "C471B730-F90A-5DBB-AA81-733B4188A070",
+          "label": "Inventory",
+          "layout": {
+            "accentStyle": "monochrome",
+            "centerX": 0.066,
+            "centerY": 0.56,
+            "cornerRadius": 12.0,
+            "fillColor": {
+              "alpha": 1.0,
+              "blue": 0.21568627450980393,
+              "green": 0.1607843137254902,
+              "red": 0.12156862745098039
+            },
+            "heightScale": 1.05,
+            "isHidden": false,
+            "isLocationLocked": false,
+            "rotationDegrees": 0,
+            "shadowStrength": 0.0,
+            "shape": "rounded_rectangle",
+            "showsIntegratedLabel": false,
+            "widthScale": 1.12,
+            "zIndex": 0
+          },
+          "visualRole": "decoration"
+        },
+        {
+          "controlKind": "decoration",
+          "id": "68A2A521-19E4-5DBC-A493-E5B6F9C32657",
+          "label": "Panel",
+          "layout": {
+            "accentStyle": "monochrome",
+            "centerX": 0.334,
+            "centerY": 0.56,
+            "cornerRadius": 12.0,
+            "fillColor": {
+              "alpha": 1.0,
+              "blue": 0.3176470588235294,
+              "green": 0.2549019607843137,
+              "red": 0.21568627450980393
+            },
+            "heightScale": 1.05,
+            "isHidden": false,
+            "isLocationLocked": false,
+            "rotationDegrees": 0,
+            "shadowStrength": 1.0,
+            "shape": "rounded_rectangle",
+            "widthScale": 1.12,
+            "zIndex": 0
+          },
+          "visualRole": "decoration"
+        }
+      ],
+      "deviceCanvas": {
+        "frameID": "iphone-17-pro-landscape"
+      },
+      "elements": [
+        {
+          "id": "BD60BD75-DACE-5AB7-A2DC-021A6CCEC3F5",
+          "joystickMapping": {
+            "down": {
+              "gamepadButtons": [],
+              "keyboard": {
+                "keyCode": 1,
+                "modifiersRawValue": 0
+              }
+            },
+            "left": {
+              "gamepadButtons": [],
+              "keyboard": {
+                "keyCode": 0,
+                "modifiersRawValue": 0
+              }
+            },
+            "right": {
+              "gamepadButtons": [],
+              "keyboard": {
+                "keyCode": 2,
+                "modifiersRawValue": 0
+              }
+            },
+            "up": {
+              "gamepadButtons": [],
+              "keyboard": {
+                "keyCode": 13,
+                "modifiersRawValue": 0
+              }
+            }
+          },
+          "joystickOutputSettings": {
+            "analogTarget": "none",
+            "deadZone": 0.12,
+            "invertX": false,
+            "invertY": false,
+            "sendsDigitalDirections": true,
+            "sensitivity": 1.0,
+            "snapToCardinal": false
+          },
+          "kind": "joystick",
+          "label": "Move",
+          "layout": {
+            "accentStyle": "monochrome",
+            "centerX": 0.5,
+            "centerY": 0.62,
+            "fillColor": {
+              "alpha": 1.0,
+              "blue": 0.21568627450980393,
+              "green": 0.1607843137254902,
+              "red": 0.12156862745098039
+            },
+            "heightScale": 0.58,
+            "isHidden": false,
+            "isLocationLocked": false,
+            "joystickKnobColor": {
+              "alpha": 1.0,
+              "blue": 1.0,
+              "green": 1.0,
+              "red": 1.0
+            },
+            "joystickVisualStyle": "thumbstick",
+            "rotationDegrees": 0,
+            "shadowStrength": 1.0,
+            "shape": "circle",
+            "widthScale": 0.58,
+            "zIndex": 0
+          },
+          "output": {
+            "gamepadButtons": [],
+            "keyboard": {
+              "keyCode": 13,
+              "modifiersRawValue": 0
+            }
+          },
+          "partOutputs": [
+            "joystick_up",
+            {
+              "gamepadButtons": [],
+              "keyboard": {
+                "keyCode": 13,
+                "modifiersRawValue": 0
+              }
+            },
+            "joystick_down",
+            {
+              "gamepadButtons": [],
+              "keyboard": {
+                "keyCode": 1,
+                "modifiersRawValue": 0
+              }
+            },
+            "joystick_left",
+            {
+              "gamepadButtons": [],
+              "keyboard": {
+                "keyCode": 0,
+                "modifiersRawValue": 0
+              }
+            },
+            "joystick_right",
+            {
+              "gamepadButtons": [],
+              "keyboard": {
+                "keyCode": 2,
+                "modifiersRawValue": 0
+              }
+            }
+          ],
+          "visualRole": "joystick"
+        },
+        {
+          "id": "3E65E0AD-EFF7-57B1-ADFC-374EDA9CB6F8",
+          "kind": "trackpad",
+          "label": "Pointer",
+          "layout": {
+            "accentStyle": "monochrome",
+            "centerX": 0.5,
+            "centerY": 0.58,
+            "cornerRadius": 18.0,
+            "fillColor": {
+              "alpha": 1.0,
+              "blue": 0.21568627450980393,
+              "green": 0.1607843137254902,
+              "red": 0.12156862745098039
+            },
+            "heightScale": 1.0,
+            "isHidden": false,
+            "isLocationLocked": false,
+            "rotationDegrees": 0,
+            "shadowStrength": 1.0,
+            "shape": "rounded_rectangle",
+            "widthScale": 1.25,
+            "zIndex": 0
+          },
+          "partOutputs": [],
+          "trackpadSettings": {
+            "naturalScrolling": false,
+            "scrollSensitivity": 0.9,
+            "sensitivity": 1.5,
+            "tapToClick": true,
+            "twoFingerScroll": false
+          },
+          "visualRole": "trackpad"
+        },
+        {
+          "id": "C471B730-F90A-5DBB-AA81-733B4188A070",
+          "kind": "text",
+          "label": "Inventory",
+          "layout": {
+            "accentStyle": "monochrome",
+            "centerX": 0.066,
+            "centerY": 0.56,
+            "cornerRadius": 12.0,
+            "fillColor": {
+              "alpha": 1.0,
+              "blue": 0.21568627450980393,
+              "green": 0.1607843137254902,
+              "red": 0.12156862745098039
+            },
+            "heightScale": 1.05,
+            "isHidden": false,
+            "isLocationLocked": false,
+            "rotationDegrees": 0,
+            "shadowStrength": 0.0,
+            "shape": "rounded_rectangle",
+            "showsIntegratedLabel": false,
+            "widthScale": 1.12,
+            "zIndex": 0
+          },
+          "output": {
+            "gamepadButtons": [],
+            "keyboard": {
+              "keyCode": 34,
+              "modifiersRawValue": 0
+            }
+          },
+          "partOutputs": [],
+          "visualRole": "decoration"
+        },
+        {
+          "id": "68A2A521-19E4-5DBC-A493-E5B6F9C32657",
+          "kind": "decoration",
+          "label": "Panel",
+          "layout": {
+            "accentStyle": "monochrome",
+            "centerX": 0.334,
+            "centerY": 0.56,
+            "cornerRadius": 12.0,
+            "fillColor": {
+              "alpha": 1.0,
+              "blue": 0.3176470588235294,
+              "green": 0.2549019607843137,
+              "red": 0.21568627450980393
+            },
+            "heightScale": 1.05,
+            "isHidden": false,
+            "isLocationLocked": false,
+            "rotationDegrees": 0,
+            "shadowStrength": 1.0,
+            "shape": "rounded_rectangle",
+            "widthScale": 1.12,
+            "zIndex": 0
+          },
+          "output": {
+            "gamepadButtons": [],
+            "keyboard": {
+              "keyCode": 35,
+              "modifiersRawValue": 0
+            }
+          },
+          "partOutputs": [],
+          "visualRole": "decoration"
+        }
+      ],
+      "labelOverrides": [],
+      "layoutMode": "standard",
+      "showsButtonLabels": true,
+      "updatedAt": 0
+    },
+    "id": "9bf8e737-ff96-5cff-82b6-1257dafd6ab0",
+    "name": "Mixed Controls",
+    "orientationPreference": "automatic",
+    "outputMode": "keyboard",
+    "updatedAt": 0
+  },
+  "requestedGameName": "Mixed Controls",
+  "resolvedGameName": "Mixed Controls",
+  "source": "Agent-provided keypad spec"
+}

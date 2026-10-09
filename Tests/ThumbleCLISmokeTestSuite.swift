@@ -18,7 +18,7 @@ final class ThumbleCLISmokeTestSuite: XCTestCase {
     func testKeypadConfigurationExportSchemaRoundTrip() throws {
         var customization = GamepadCustomization.defaultValue
         customization.accentStyle = .blue
-        customization.labelOverrides[.jump] = "Fire"
+        customization.labelOverrides[.preset(5)] = "Fire"
         let profile = GamepadConfigurationProfile(name: "Arcade Test", customization: customization)
         let export = ThumbleKeypadConfigurationExport(
             exportedAt: 123_456,
@@ -43,30 +43,226 @@ final class ThumbleCLISmokeTestSuite: XCTestCase {
         XCTAssertEqual(decoded.defaultProfileID, profile.id)
     }
 
-    func testKeypadConfigurationNormalizesLegacyButtonsIntoElements() throws {
-        var customization = GamepadCustomization.defaultValue.normalized
-        XCTAssertFalse(customization.elements.isEmpty)
-        XCTAssertNotNil(customization.elements.first { $0.builtInButton == .pause })
-        XCTAssertEqual(customization.elements.first { $0.builtInButton == .pause }?.legacySlot, .pause)
-
+    func testControlsOwnUUIDsWithoutRoutingSlots() throws {
+        var customization = GamepadCustomization.blankCanvas
         customization.addCustomButton()
-        var added = try XCTUnwrap(customization.normalized.elements.first { $0.builtInButton == nil && $0.kind == .button })
-        XCTAssertNil(added.legacySlot)
-
-        customization = GamepadCustomization.blankCanvas
         customization.addJoystick()
-        added = try XCTUnwrap(customization.normalized.elements.first { $0.kind == .joystick })
-        XCTAssertNil(added.legacySlot)
-
-        customization = GamepadCustomization.blankCanvas
         customization.addTrigger()
-        added = try XCTUnwrap(customization.normalized.elements.first { $0.kind == .trigger })
-        XCTAssertNil(added.legacySlot)
-
-        customization = GamepadCustomization.blankCanvas
         customization.addTrackpad()
-        added = try XCTUnwrap(customization.normalized.elements.first { $0.kind == .trackpad })
-        XCTAssertNil(added.legacySlot)
+        let elements = customization.normalized.elements
+        XCTAssertEqual(elements.count, 4)
+        XCTAssertEqual(Set(elements.map(\.id)).count, 4)
+        for element in elements {
+            XCTAssertEqual(element.inputID.uuid, element.id)
+            XCTAssertFalse(DefaultKeypadElements.ids.contains(element.inputID))
+        }
+        let json = String(decoding: try JSONEncoder().encode(customization), as: UTF8.self)
+        for field in ["legacySlot", "mappedButton", "builtInButton"] {
+            XCTAssertFalse(json.contains("\"\(field)\""))
+        }
+    }
+
+    func testElementOnlySetupsNeverSynthesizeStarterControls() throws {
+        let first = KeypadElement(label: "Same label", output: KeypadElementOutputBinding(), defaultOutput: KeypadElementOutputBinding(keyboard: KeypadKeyboardBinding(keyCode: 49)))
+        let second = KeypadElement(label: "Same label", output: KeypadElementOutputBinding(keyboard: KeypadKeyboardBinding(keyCode: 0)))
+        let customization = GamepadCustomization(elements: [first, second]).normalized
+        XCTAssertEqual(Set(customization.elements.map(\.id)), [first.id, second.id])
+        let decoded = try JSONDecoder().decode(GamepadCustomization.self, from: JSONEncoder().encode(customization)).normalized
+        XCTAssertEqual(Set(decoded.elements.map(\.id)), [first.id, second.id])
+        XCTAssertTrue(try XCTUnwrap(decoded.elements.first { $0.id == first.id }?.output).isEmpty)
+        XCTAssertEqual(Set(decoded.resolvedControls(in: CGSize(width: 852, height: 393)).compactMap(\.elementID)), [first.id, second.id])
+        let empty = try JSONDecoder().decode(GamepadCustomization.self, from: Data("{\"elements\":[]}".utf8)).normalized
+        XCTAssertTrue(empty.elements.isEmpty)
+        XCTAssertTrue(try JSONDecoder().decode(GamepadCustomization.self, from: JSONEncoder().encode(empty)).elements.isEmpty)
+        XCTAssertThrowsError(try JSONDecoder().decode(GamepadCustomization.self, from: Data("{}".utf8)))
+        let rawElement = try JSONSerialization.jsonObject(with: JSONEncoder().encode(first))
+        let duplicate = try JSONSerialization.data(withJSONObject: ["elements": [rawElement, rawElement]])
+        XCTAssertThrowsError(try JSONDecoder().decode(GamepadCustomization.self, from: duplicate))
+        let unboundStick = KeypadElement(label: "Unbound stick", kind: .joystick)
+        let stickSetup = GamepadCustomization(elements: [unboundStick]).normalized
+        XCTAssertNil(stickSetup.elements.first?.joystickMapping)
+        XCTAssertTrue(try XCTUnwrap(stickSetup.elements.first).partOutputs.isEmpty)
+    }
+
+    func testElementPartEncodingHasDeterministicCanonicalOrder() throws {
+        let id = UUID()
+        var first = KeypadElement(id: id, label: "Stick", kind: .joystick)
+        for direction in GamepadJoystickDirection.allCases {
+            first.partOutputs[KeypadElementInputPart(direction: direction)] = GamepadJoystickMapping.movement[direction]
+        }
+        var second = KeypadElement(id: id, label: "Stick", kind: .joystick)
+        for direction in GamepadJoystickDirection.allCases.reversed() {
+            second.partOutputs[KeypadElementInputPart(direction: direction)] = GamepadJoystickMapping.movement[direction]
+        }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        let data = try encoder.encode(first)
+        XCTAssertEqual(data, try encoder.encode(second))
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let parts = try XCTUnwrap(object["partOutputs"] as? [Any])
+        XCTAssertEqual(stride(from: 0, to: parts.count, by: 2).compactMap { parts[$0] as? String }, ["joystick_down", "joystick_left", "joystick_right", "joystick_up"])
+    }
+
+    func testClearedStarterOutputSurvivesHideAndShow() throws {
+        var customization = GamepadCustomization()
+        let id = KeypadElementID.preset(5)
+        let index = try XCTUnwrap(customization.elements.firstIndex { $0.inputID == id })
+        customization.elements[index].setOutputBinding(nil)
+        var layout = customization.buttonCustomization(for: id)
+        layout.isHidden = true
+        customization.setButtonCustomization(layout, for: id)
+        customization = customization.normalized
+        layout.isHidden = false
+        customization.setButtonCustomization(layout, for: id)
+        customization = customization.normalized
+        XCTAssertTrue(try XCTUnwrap(customization.elements.first { $0.inputID == id }?.output).isEmpty)
+    }
+
+    func testNamedInputsAndRoutingFieldsAreRejectedOnImport() throws {
+        for name in ["jump", "attack", "dash", "focus", "custom1", "up"] {
+            XCTAssertThrowsError(try JSONDecoder().decode(KeypadElementID.self, from: JSONEncoder().encode(name)))
+        }
+        let element = KeypadElement(label: "Jump")
+        let encoded = try JSONEncoder().encode(element)
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        for field in ["legacySlot", "mappedButton", "builtInButton", "inputID"] {
+            var invalid = object
+            invalid[field] = NSNull()
+            XCTAssertThrowsError(try JSONDecoder().decode(KeypadElement.self, from: JSONSerialization.data(withJSONObject: invalid)))
+        }
+        let profile = GamepadConfigurationProfile(name: "Current", customization: GamepadCustomization(elements: [element]))
+        let export = ThumbleKeypadConfigurationExport(profiles: [profile], activeProfileID: profile.id, defaultProfileID: profile.id)
+        var exportObject = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(export)) as? [String: Any])
+        for version in 1..<ThumbleKeypadConfigurationExport.currentVersion {
+            exportObject["version"] = version
+            XCTAssertThrowsError(try JSONDecoder().decode(ThumbleKeypadConfigurationExport.self, from: JSONSerialization.data(withJSONObject: exportObject)))
+        }
+    }
+
+    func testNativeFileImportRejectsObsoleteEnvelopeAndWholeDomainBeforeMutation() throws {
+        let owner = UUID(uuidString: "81C296ED-309D-4F05-BB11-F5A2E2027801")!
+        let profile = GamepadConfigurationProfile(name: "Owned", customization: GamepadCustomization(elements: [
+            KeypadElement(id: owner, label: "Same", output: KeypadElementOutputBinding(keyboard: KeypadKeyboardBinding(keyCode: 49), gamepadButtons: [.south]))
+        ]))
+        let envelope = MacConfigurationBindings.KeypadExportEnvelope(profiles: [profile], activeProfileID: profile.id, defaultProfileID: nil, profileKeyBindings: [:], profileOutputBindings: [:])
+        let baseline = try JSONEncoder().encode(envelope)
+        XCTAssertEqual(try MacConfigurationBindings.decodeKeypadImport(data: baseline, sourceName: "owned").profiles.map(\.id), [profile.id])
+        let root = try XCTUnwrap(JSONSerialization.jsonObject(with: baseline) as? [String: Any])
+        var invalids: [(String, [String: Any])] = []
+        for version in [1, 2, 3] {
+            var invalid = root; invalid["version"] = version
+            invalids.append(("obsolete version \(version)", invalid))
+        }
+        for key in ["schema", "version", "activeProfileID"] {
+            var invalid = root; invalid.removeValue(forKey: key)
+            invalids.append(("missing \(key)", invalid))
+        }
+        var duplicate = root; duplicate["profiles"] = (root["profiles"] as! [Any]) + (root["profiles"] as! [Any])
+        invalids.append(("duplicate profiles", duplicate))
+        for key in ["activeProfileID", "defaultProfileID"] {
+            var invalid = root; invalid[key] = UUID().uuidString
+            invalids.append(("dangling \(key)", invalid))
+        }
+        let binding: [String: Any] = ["keyCode": 49, "modifiers": 0]
+        let output: [String: Any] = ["keyboard": binding, "gamepadButtons": []]
+        for (field, value) in [("profileKeyBindings", binding), ("profileOutputBindings", output)] {
+            for id in ["jump", UUID().uuidString] {
+                var invalid = root; invalid[field] = [profile.id.uuidString: [id: value]]
+                invalids.append(("\(field) unowned \(id)", invalid))
+            }
+            var invalid = root; invalid[field] = [UUID().uuidString: [owner.uuidString: value]]
+            invalids.append(("\(field) orphan profile", invalid))
+            invalid[field] = [profile.id.uuidString: [:], profile.id.uuidString.lowercased(): [:]]
+            invalids.append(("\(field) duplicate profile case", invalid))
+        }
+        for (label, invalid) in invalids {
+            let data = try JSONSerialization.data(withJSONObject: invalid)
+            XCTAssertThrowsError(try MacConfigurationBindings.decodeKeypadImport(data: data, sourceName: "invalid"), label)
+        }
+        // Failed envelope parsing must not retry a plausible raw-profile subset.
+        var mixed = root
+        mixed["version"] = 3
+        let rawProfile = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(profile)) as? [String: Any])
+        mixed.merge(rawProfile, uniquingKeysWith: { _, profileValue in profileValue })
+        XCTAssertThrowsError(try MacConfigurationBindings.decodeKeypadImport(data: JSONSerialization.data(withJSONObject: mixed), sourceName: "mixed"))
+        var generated = GeneratedGameKeypadProfile(requestedGameName: "Owned", resolvedGameName: "Owned", profile: profile, keyBindings: [KeypadElementID(UUID()): GeneratedKeyBindingSpec(key: "Space")], source: "test", confidence: .high)
+        XCTAssertThrowsError(try MacConfigurationBindings.decodeKeypadImport(data: JSONEncoder().encode(generated), sourceName: "generated orphan"))
+        generated.keyBindings = [:]
+        XCTAssertEqual(try MacConfigurationBindings.decodeKeypadImport(data: JSONEncoder().encode(generated), sourceName: "generated").profiles.map(\.id), [profile.id])
+    }
+
+    func testNativeResetAllRestoresOwnedDefaultsOnEveryExecutableCanvas() throws {
+        let controls = [
+            KeypadElement(label: "Same", output: KeypadElementOutputBinding(keyboard: KeypadKeyboardBinding(keyCode: 49), gamepadButtons: [.south]), defaultOutput: KeypadElementOutputBinding(keyboard: KeypadKeyboardBinding(keyCode: 12), gamepadButtons: [.west])),
+            KeypadElement(label: "Same", output: KeypadElementOutputBinding(keyboard: KeypadKeyboardBinding(keyCode: 48), gamepadButtons: [.east]), defaultOutput: KeypadElementOutputBinding(keyboard: KeypadKeyboardBinding(keyCode: 13), gamepadButtons: [.north])),
+            KeypadElement(label: "Same", output: KeypadElementOutputBinding(keyboard: KeypadKeyboardBinding(keyCode: 0), gamepadButtons: [.west]), defaultOutput: KeypadElementOutputBinding())
+        ]
+        var original = GamepadConfigurationProfile(name: "Three canvases", customization: GamepadCustomization(elements: [controls[0]]))
+        original.landscapeCustomization = GamepadCustomization(elements: [controls[1]])
+        original.portraitCustomization = GamepadCustomization(elements: [controls[2]])
+        for orientation in [GamepadEditorDeviceOrientation.landscape, .portrait] {
+            var profile = original
+            profile.customization.deviceCanvas = GamepadDeviceCanvas(frameID: GamepadEditorDeviceFrame(spec: profile.customization.deviceCanvas.editorDeviceFrame.spec, orientation: orientation).id)
+            let outputs = MacConfigurationBindings.resetAllOutputs(in: &profile)
+            XCTAssertEqual(Set(outputs.keys), Set(controls.map(\.inputID)))
+            for customization in [profile.customization, try XCTUnwrap(profile.landscapeCustomization), try XCTUnwrap(profile.portraitCustomization)] {
+                let element = try XCTUnwrap(customization.elements.first)
+                XCTAssertEqual(element.output, element.defaultOutput, "reset must include off-canvas UUIDs")
+            }
+            XCTAssertEqual(profile.outputMode, .keyboard)
+            XCTAssertEqual(original.customization.elements[0].output, controls[0].output, "reset must preserve value semantics")
+        }
+    }
+
+    func testNativeTargetMapsNeverMergePreviousProfileOrResurrectClears() {
+        let sourceID = UUID()
+        let targetID = UUID()
+        let sourceInput = KeypadElementID()
+        let targetInput = KeypadElementID()
+        let sourceKey = MacKeyBinding(keyCode: 49, modifiers: [])
+        let targetKey = MacKeyBinding(keyCode: 48, modifiers: [])
+        let sourceOutput = MacControlOutputBinding(keyboard: sourceKey, gamepadButtons: [.south])
+        let targetOutput = MacControlOutputBinding(keyboard: targetKey, gamepadButtons: [.east])
+        let keys = [sourceID: [sourceInput: sourceKey], targetID: [targetInput: targetKey]]
+        let outputs = [sourceID: [sourceInput: sourceOutput], targetID: [targetInput: targetOutput]]
+        XCTAssertEqual(MacConfigurationBindings.resolvedKeyBindings(for: targetID, in: keys, fallback: [sourceInput: sourceKey]), [targetInput: targetKey])
+        XCTAssertEqual(MacConfigurationBindings.resolvedOutputBindings(for: targetID, in: outputs, fallback: [sourceInput: sourceOutput]), [targetInput: targetOutput])
+        XCTAssertTrue(MacConfigurationBindings.resolvedKeyBindings(for: targetID, in: [targetID: [:]], fallback: [targetInput: targetKey]).isEmpty)
+        XCTAssertTrue(MacConfigurationBindings.resolvedOutputBindings(for: targetID, in: [targetID: [:]], fallback: [targetInput: targetOutput]).isEmpty)
+        let clear = MacControlOutputBinding()
+        XCTAssertEqual(MacConfigurationBindings.resolvedOutputBindings(for: targetID, in: [targetID: [targetInput: clear]], fallback: [sourceInput: sourceOutput]), [targetInput: clear])
+    }
+
+    func testNativeFileImportDoesNotDiscardArtifactIntegrity() throws {
+        let rootURL = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let fixture = try Data(contentsOf: rootURL.appendingPathComponent("Host/fixtures/profile-artifact/v1.json"))
+        XCTAssertNoThrow(try MacConfigurationBindings.decodeKeypadImport(data: fixture, sourceName: "valid artifact"))
+        let root = try XCTUnwrap(JSONSerialization.jsonObject(with: fixture) as? [String: Any])
+        for field in ["artifactVersion", "contentHash", "catalogRevision"] {
+            var invalid = root
+            invalid[field] = field == "artifactVersion" ? 2 : NSNull()
+            XCTAssertThrowsError(try MacConfigurationBindings.decodeKeypadImport(data: JSONSerialization.data(withJSONObject: invalid), sourceName: field))
+        }
+        var tampered = root
+        var profiles = root["profiles"] as! [[String: Any]]
+        profiles[0]["name"] = "Tampered name"
+        tampered["profiles"] = profiles
+        XCTAssertThrowsError(try MacConfigurationBindings.decodeKeypadImport(data: JSONSerialization.data(withJSONObject: tampered), sourceName: "tampered"))
+    }
+
+    func testSharedExportDecodeNeverRepairsProfileReferences() throws {
+        let profile = GamepadConfigurationProfile(name: "Empty", customization: .blankCanvas)
+        let value = ThumbleKeypadConfigurationExport(profiles: [profile], activeProfileID: profile.id, defaultProfileID: nil)
+        let data = try JSONEncoder().encode(value)
+        let root = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        var duplicate = root; duplicate["profiles"] = (root["profiles"] as! [Any]) + (root["profiles"] as! [Any])
+        XCTAssertThrowsError(try JSONDecoder().decodeUnique(ThumbleKeypadConfigurationExport.self, from: JSONSerialization.data(withJSONObject: duplicate)))
+        for key in ["activeProfileID", "defaultProfileID"] {
+            var invalid = root; invalid[key] = UUID().uuidString
+            XCTAssertThrowsError(try JSONDecoder().decodeUnique(ThumbleKeypadConfigurationExport.self, from: JSONSerialization.data(withJSONObject: invalid)))
+        }
+        var missing = root; missing.removeValue(forKey: "activeProfileID")
+        XCTAssertThrowsError(try JSONDecoder().decodeUnique(ThumbleKeypadConfigurationExport.self, from: JSONSerialization.data(withJSONObject: missing)))
     }
 
     func testControlBarItemsNormalizeAndRoundTrip() throws {
@@ -149,7 +345,7 @@ final class ThumbleCLISmokeTestSuite: XCTestCase {
             pressed: GamepadControlStateStyle(opacity: 0.86, scale: 0.94)
         )
 
-        for button in GameButton.builtInControls {
+        for button in DefaultKeypadElements.ids {
             var layout = customization.buttonCustomization(for: button)
             layout.visualStyle = visualStyle
             customization.setButtonCustomization(layout, for: button)
@@ -170,7 +366,7 @@ final class ThumbleCLISmokeTestSuite: XCTestCase {
 
         XCTAssertFalse(data.isEmpty)
         let decoded = try ControllerWireCodec.decode(data, using: JSONDecoder())
-        XCTAssertEqual(decoded.gamepadProfiles?.first?.customization.normalized.buttonCustomizations.count, GameButton.builtInControls.count)
+        XCTAssertEqual(decoded.gamepadProfiles?.first?.customization.normalized.buttonCustomizations.count, DefaultKeypadElements.ids.count)
     }
 
     func testAddedJoystickDefaultsToKeyboardDigitalDirections() throws {
@@ -180,7 +376,7 @@ final class ThumbleCLISmokeTestSuite: XCTestCase {
 
         let joystick = try XCTUnwrap(customization.normalized.customButtons.first(where: { $0.id == id })?.normalized)
         XCTAssertEqual(joystick.label, "Arrow Keys")
-        XCTAssertEqual(joystick.mappedButton, .up)
+        XCTAssertEqual(joystick.inputID.uuid, joystick.id)
         XCTAssertEqual(joystick.joystickMapping, .movement)
         XCTAssertEqual(joystick.joystickOutputSettings, Optional(GamepadJoystickOutputSettings.defaultValue.normalized))
 
@@ -197,7 +393,7 @@ final class ThumbleCLISmokeTestSuite: XCTestCase {
             kind: "button",
             source: "iPhone UDP",
             messageType: .button,
-            button: .jump,
+            button: .preset(5),
             state: .down,
             binding: "Space",
             inputSequence: 7,
@@ -208,7 +404,7 @@ final class ThumbleCLISmokeTestSuite: XCTestCase {
             outputInjectionMS: 0.5,
             postInjectionMS: 0.125,
             outputDeferred: false,
-            pressedButtons: [.jump],
+            pressedButtons: [.preset(5)],
             detail: "smoke"
         )
 
@@ -218,7 +414,7 @@ final class ThumbleCLISmokeTestSuite: XCTestCase {
         XCTAssertEqual(decoded.kind, "button")
         XCTAssertEqual(decoded.source, "iPhone UDP")
         XCTAssertEqual(decoded.messageType, .button)
-        XCTAssertEqual(decoded.button, .jump)
+        XCTAssertEqual(decoded.button, .preset(5))
         XCTAssertEqual(decoded.state, .down)
         XCTAssertEqual(decoded.binding, "Space")
         XCTAssertEqual(decoded.inputSequence, 7)
@@ -229,7 +425,7 @@ final class ThumbleCLISmokeTestSuite: XCTestCase {
         XCTAssertEqual(decoded.outputInjectionMS, 0.5)
         XCTAssertEqual(decoded.postInjectionMS, 0.125)
         XCTAssertEqual(decoded.outputDeferred, false)
-        XCTAssertEqual(decoded.pressedButtons, [.jump])
+        XCTAssertEqual(decoded.pressedButtons, [.preset(5)])
         XCTAssertEqual(decoded.detail, "smoke")
     }
 
@@ -257,7 +453,7 @@ final class ThumbleCLISmokeTestSuite: XCTestCase {
             outputInjectionP95MS: 0.75,
             outputInjectionP99MS: 1.25,
             postInjectionP95MS: 0.2,
-            pressedButtons: [.jump],
+            pressedButtons: [.preset(5)],
             missedButtonFrames: 0,
             ignoredButtonEdges: 0,
             recoveredButtonEdges: 0,
@@ -277,7 +473,7 @@ final class ThumbleCLISmokeTestSuite: XCTestCase {
         XCTAssertEqual(decoded.postInjectionP95MS, 0.2)
     }
 
-    func testElementRuntimeCommandPayloadRoundTripsAndLegacyPayloadStillDecodes() throws {
+    func testElementRuntimeCommandPayloadRoundTripsAndRejectsNamedInputs() throws {
         let input = KeypadElementInputID(
             elementID: UUID(uuidString: "00000000-0000-0000-0000-00000000E2E2")!,
             part: .joystickRight
@@ -296,11 +492,7 @@ final class ThumbleCLISmokeTestSuite: XCTestCase {
         XCTAssertEqual(decoded.reason, "Editor test")
 
         let legacyData = Data(#"{"command":"testUp","button":"jump","reason":"Legacy test"}"#.utf8)
-        let legacy = try JSONDecoder().decode(ThumbleMacCLICommandPayload.self, from: legacyData)
-        XCTAssertEqual(legacy.command, .testUp)
-        XCTAssertEqual(legacy.button, .jump)
-        XCTAssertNil(legacy.elementInput)
-        XCTAssertEqual(legacy.reason, "Legacy test")
+        XCTAssertThrowsError(try JSONDecoder().decode(ThumbleMacCLICommandPayload.self, from: legacyData))
     }
 
     func testElementInputStorageKeyRejectsUnknownExplicitPart() throws {
@@ -395,19 +587,20 @@ final class ThumbleCLISmokeTestSuite: XCTestCase {
         XCTAssertEqual(ControllerWireCodec.inputPressIdentifier(from: decoded), 7)
     }
 
-    func testKeypadProfileOutputModeDefaultsToKeyboardAndPreservesLegacyBindings() throws {
+    func testKeypadProfileOutputModeDefaultsToKeyboardForDeclaredControls() throws {
         let newProfile = GamepadConfigurationProfile(name: "Keyboard Setup", customization: .defaultValue)
         XCTAssertEqual(newProfile.outputMode, .keyboard)
 
         let legacyJSON = """
         {
           "id": "00000000-0000-0000-0000-00000000ABCD",
-          "name": "Legacy Mixed Setup",
-          "customization": {}
+          "name": "Declared Setup",
+          "customization": {"elements": []}
         }
         """
         let legacyProfile = try JSONDecoder().decode(GamepadConfigurationProfile.self, from: Data(legacyJSON.utf8))
-        XCTAssertEqual(legacyProfile.outputMode, .custom)
+        XCTAssertEqual(legacyProfile.outputMode, .keyboard)
+        XCTAssertTrue(legacyProfile.customization.elements.isEmpty)
     }
 
     func testCommandClickedProfileSelectionExcludesActiveByDefault() {
@@ -661,6 +854,181 @@ final class ThumbleCLISmokeTestSuite: XCTestCase {
         XCTAssertEqual(joystick?.layout.joystickVisualStyle, .thumbstick)
     }
 
+    func testImportRejectsUndeclaredCustomMirrorsInsteadOfSynthesizingControls() throws {
+        let data = Data(#"{"elements":[],"customButtons":[{"id":"6B39FBA0-5BB8-4CD7-9E8E-4B780D29391F","label":"Undeclared","controlKind":"button","layout":{}}]}"#.utf8)
+        XCTAssertThrowsError(try JSONDecoder().decode(GamepadCustomization.self, from: data))
+    }
+
+    func testDirectGenerationAuthorsOwnedOutputsAndResetDefaultsWithoutInstallation() throws {
+        let first = UUID(uuidString: "68CF7BC8-C78E-48E5-9F8E-2D75D694E98D")!
+        let second = UUID(uuidString: "FDAD6EB1-33FB-49EA-9355-04A047DEB744")!
+        let generated = GameKeypadGenerator.generate(from: AgentKeypadSpec(gameName: "Owned", controls: [
+            AgentKeypadControlSpec(id: first.uuidString, label: "Same", key: "Space", modifiers: ["Control"]),
+            AgentKeypadControlSpec(id: second.uuidString, label: "Same", key: "C", modifiers: ["Shift"])
+        ]))
+        XCTAssertEqual(Set(generated.profile.customization.elements.map(\.id)), [first, second])
+        let expected = [first: KeypadKeyboardBinding(keyCode: 49, modifiersRawValue: 8), second: KeypadKeyboardBinding(keyCode: 8, modifiersRawValue: 2)]
+        for element in generated.profile.customization.elements {
+            XCTAssertEqual(element.output?.keyboard, expected[element.id])
+            XCTAssertEqual(element.defaultOutput?.keyboard, expected[element.id])
+        }
+        let roundTrip = try JSONDecoder().decode(GamepadConfigurationProfile.self, from: JSONEncoder().encode(generated.profile))
+        for element in roundTrip.customization.elements {
+            XCTAssertEqual(element.output?.keyboard, expected[element.id])
+            XCTAssertEqual(element.defaultOutput?.keyboard, expected[element.id])
+        }
+    }
+
+    func testGenerationNeverInheritsOutputsFromStarterAppearanceUUIDs() throws {
+        let generated = GameKeypadGenerator.generate(from: AgentKeypadSpec(gameName: "Appearance IDs", controls: [
+            AgentKeypadControlSpec(id: KeypadElementID.preset(5).rawValue, label: "Same", key: "Tab"),
+            AgentKeypadControlSpec(id: KeypadElementID.preset(6).rawValue, label: "Same", key: ""),
+            AgentKeypadControlSpec(id: KeypadElementID.preset(7).rawValue, label: "Same", key: "Space", controlKind: .text)
+        ]))
+        let elements = generated.profile.customization.elements
+        let first = try XCTUnwrap(elements.first { $0.inputID == .preset(5) })
+        let second = try XCTUnwrap(elements.first { $0.inputID == .preset(6) })
+        let passive = try XCTUnwrap(elements.first { $0.inputID == .preset(7) })
+        XCTAssertEqual(first.output, KeypadElementOutputBinding(keyboard: KeypadKeyboardBinding(keyCode: 48)))
+        XCTAssertEqual(first.defaultOutput, first.output)
+        XCTAssertEqual(second.output, KeypadElementOutputBinding())
+        XCTAssertEqual(second.defaultOutput, second.output)
+        XCTAssertNil(passive.output)
+        XCTAssertNil(passive.defaultOutput)
+        XCTAssertEqual(Set(generated.keyBindings.keys), [.preset(5)])
+    }
+
+    func testDirectGeneratedDefaultsRemainIndependentOfConfiguredOutputAndMode() throws {
+        let id = UUID(uuidString: "C720BBAB-FF9B-413F-8991-AD0C3B71FA8C")!
+        var profile = GameKeypadGenerator.generate(from: AgentKeypadSpec(gameName: "Owned", controls: [
+            AgentKeypadControlSpec(id: id.uuidString, label: "Control", key: "Space", modifiers: ["Control"])
+        ])).profile
+        let expected = KeypadElementOutputBinding(keyboard: KeypadKeyboardBinding(keyCode: 49, modifiersRawValue: 8))
+        profile.customization.elements[0].setOutputBinding(
+            KeypadElementOutputBinding(keyboard: KeypadKeyboardBinding(keyCode: 48), gamepadButtons: [.south]), for: .primary
+        )
+        for mode in GamepadProfileOutputMode.allCases {
+            profile.outputMode = mode
+            XCTAssertEqual(profile.customization.elements[0].defaultOutput, expected)
+            XCTAssertEqual(profile.recommendedMacOutputBindings[KeypadElementID(id)]?.sharedBinding, expected)
+            XCTAssertEqual(profile.configuredMacOutputBindings[KeypadElementID(id)]?.keyboard?.keyCode, 48)
+        }
+        let copyID = UUID(uuidString: "F5A5CB2B-A218-49D3-A3B4-3158B18B99CC")!
+        _ = try profile.customization.duplicateControls([.custom(id)], normalizedOffset: CGSize(width: 0.03, height: 0.04), canvasSize: CGSize(width: 874, height: 402), newElementIDs: [copyID])
+        let copy = try XCTUnwrap(profile.customization.elements.first { $0.id == copyID })
+        XCTAssertEqual(copy.output, profile.customization.elements.first { $0.id == id }?.output)
+        XCTAssertEqual(copy.defaultOutput, expected)
+        profile.customization.elements[0].output = KeypadElementOutputBinding()
+        XCTAssertEqual(profile.customization.elements.first { $0.id == copyID }?.output, copy.output)
+    }
+
+    func testDirectAuthoringRetainsRepeatedRequestedUUIDControlsWithAnExplicitNotice() throws {
+        let firstID = UUID(uuidString: "68CF7BC8-C78E-48E5-9F8E-2D75D694E98D")!
+        let laterID = UUID(uuidString: "E8197FBC-7085-4DEC-8257-EA2B5276BF71")!
+        let data = Data("""
+        {"gameName":"Explicit Authoring","controls":[
+          {"id":"68cf7bc8-c78e-48e5-9f8e-2d75d694e98d","label":"First","key":"Space"},
+          {"id":"68CF7BC8-C78E-48E5-9F8E-2D75D694E98D","label":"Second","key":"C"},
+          {"id":"E8197FBC-7085-4DEC-8257-EA2B5276BF71","label":"Later","key":"W"}
+        ]}
+        """.utf8)
+        let spec = try JSONDecoder().decodeUnique(AgentKeypadSpec.self, from: data)
+        for candidate in [spec, AgentKeypadSpec(gameName: spec.gameName, controls: spec.controls)] {
+            let generated = GameKeypadGenerator.generate(from: candidate)
+            let elements = generated.profile.customization.elements
+            XCTAssertEqual(elements.count, 3)
+            XCTAssertEqual(Set(elements.map(\.id)).count, 3)
+            XCTAssertEqual(elements.first?.id, firstID)
+            XCTAssertEqual(elements.last?.id, laterID)
+            guard let second = elements.first(where: { $0.label == "Second" }) else {
+                XCTFail("Explicit authoring silently discarded a requested control")
+                continue
+            }
+            XCTAssertNotEqual(second.id, firstID)
+            XCTAssertNotEqual(second.id, laterID)
+            XCTAssertEqual(second.output?.keyboard?.keyCode, 8)
+            XCTAssertEqual(second.defaultOutput, second.output)
+            XCTAssertEqual(generated.keyBindings[KeypadElementID(second.id)]?.key, "C")
+            XCTAssertTrue(generated.notes.contains(where: { $0.contains("duplicate") && $0.contains("fresh UUID") }))
+            var invalidSaved = try XCTUnwrap(JSONSerialization.jsonObject(
+                with: JSONEncoder().encode(generated.profile)
+            ) as? [String: Any])
+            var rawCustomization = try XCTUnwrap(invalidSaved["customization"] as? [String: Any])
+            var rawElements = try XCTUnwrap(rawCustomization["elements"] as? [[String: Any]])
+            rawElements[1]["id"] = firstID.uuidString
+            rawCustomization["elements"] = rawElements
+            invalidSaved["customization"] = rawCustomization
+            XCTAssertThrowsError(try JSONDecoder().decodeUnique(
+                GamepadConfigurationProfile.self, from: JSONSerialization.data(withJSONObject: invalidSaved)
+            ))
+        }
+    }
+
+    func testDirectSpecializedGenerationReportsDropsAndKeepsOnlyDeclaredBindingOwners() throws {
+        let capacities: [(GamepadCustomControlKind, Int)] = [
+            (.button, GamepadCustomization.maximumCustomButtons),
+            (.joystick, GamepadCustomization.maximumJoysticks),
+            (.trigger, GamepadCustomization.maximumTriggers),
+            (.trackpad, GamepadCustomization.maximumTrackpads)
+        ]
+        for (kind, capacity) in capacities {
+            let controls = (0...capacity).map { ordinal in
+                AgentKeypadControlSpec(
+                    id: UUID().uuidString,
+                    label: "Control \(ordinal)",
+                    key: "Space",
+                    controlKind: kind
+                )
+            }
+            let baseline = GameKeypadGenerator.generate(from: AgentKeypadSpec(
+                gameName: "Within Capacity", controls: Array(controls.prefix(capacity))
+            ))
+            XCTAssertNoThrow(try MacConfigurationBindings.decodeKeypadImport(
+                data: JSONEncoder().encode(baseline), sourceName: "Within Capacity"
+            ))
+            let generated = GameKeypadGenerator.generate(from: AgentKeypadSpec(
+                gameName: "Capacity \(kind.rawValue)", controls: controls
+            ))
+            let owners = Set(generated.profile.customization.elements.map(\.id))
+            XCTAssertEqual(owners.count, capacity, kind.rawValue)
+            XCTAssertEqual(Set(generated.keyBindings.keys.map(\.uuid)), owners, kind.rawValue)
+            XCTAssertTrue(generated.notes.contains(where: {
+                $0.contains("dropped") && (kind == .button || $0.contains(kind.rawValue)) && $0.contains("capacity")
+            }), "Missing explicit \(kind.rawValue) capacity notice")
+            if kind == .button {
+                XCTAssertThrowsError(try JSONDecoder().decodeUnique(
+                    AgentKeypadSpec.self,
+                    from: JSONEncoder().encode(AgentKeypadSpec(gameName: "Invalid Input", controls: controls))
+                ))
+            }
+            let data = try JSONEncoder().encode(generated)
+            do {
+                let imported = try MacConfigurationBindings.decodeKeypadImport(data: data, sourceName: "Capacity")
+                XCTAssertEqual(Set(imported.profiles[0].customization.elements.map(\.id)), owners)
+                let keys = try XCTUnwrap(imported.profileKeyBindings[imported.profiles[0].id.uuidString])
+                XCTAssertEqual(Set(keys.keys.compactMap(UUID.init(uuidString:))), owners)
+            } catch {
+                XCTFail("Generated \(kind.rawValue) artifact is not importable: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    func testAgentGenerationKeeps128IndependentDeclaredControls() throws {
+        let controls: [[String: Any]] = (0..<128).map { ordinal in
+            ["id": String(format: "43A49CCA-9165-448F-8DF1-%012X", ordinal), "label": "Same", "key": "Space"]
+        }
+        let data = try JSONSerialization.data(withJSONObject: ["gameName": "Dense", "controls": controls])
+        let spec = try JSONDecoder().decode(AgentKeypadSpec.self, from: data)
+        let generated = GameKeypadGenerator.generate(from: spec)
+        XCTAssertEqual(generated.profile.customization.elements.count, 128)
+        XCTAssertEqual(Set(generated.profile.customization.elements.map(\.id)).count, 128)
+        XCTAssertEqual(generated.keyBindings.count, 128)
+        let declared = Set(generated.profile.customization.elements.map(\.inputID))
+        XCTAssertEqual(declared, Set(generated.keyBindings.keys))
+        let overLimit = try JSONSerialization.data(withJSONObject: ["gameName": "Dense", "controls": controls + [controls[0]]])
+        XCTAssertThrowsError(try JSONDecoder().decode(AgentKeypadSpec.self, from: overLimit))
+    }
+
     func testAgentJoystickThumbColorSpecGeneratesCustomJoystick() throws {
         let json = """
         {
@@ -673,10 +1041,12 @@ final class ThumbleCLISmokeTestSuite: XCTestCase {
               "fill": "#111827",
               "thumbFill": "#F8FAFC",
               "joystickStyle": "thumbstick",
-              "up": "up",
-              "down": "down",
-              "left": "left",
-              "right": "right"
+              "joystickMapping": {
+                "up": {"keyboard": {"keyCode": 13, "modifiersRawValue": 0}, "gamepadButtons": []},
+                "down": {"keyboard": {"keyCode": 1, "modifiersRawValue": 0}, "gamepadButtons": []},
+                "left": {"keyboard": {"keyCode": 0, "modifiersRawValue": 0}, "gamepadButtons": []},
+                "right": {"keyboard": {"keyCode": 2, "modifiersRawValue": 0}, "gamepadButtons": []}
+              }
             }
           ]
         }
@@ -733,18 +1103,18 @@ final class ThumbleCLISmokeTestSuite: XCTestCase {
         XCTAssertEqual(trackpad.trackpadSettings?.tapToClick, false)
         XCTAssertEqual(trackpad.trackpadSettings?.twoFingerScroll, true)
         XCTAssertEqual(trackpad.trackpadSettings?.naturalScrolling, false)
-        XCTAssertEqual(generated.keyBindings[trackpad.mappedButton]?.key, "Space")
+        XCTAssertEqual(generated.keyBindings[trackpad.inputID]?.key, "Space")
     }
 
     func testDesignMetadataLayerOrderControlsResolvedZOrder() throws {
         var customization = GamepadCustomization.defaultValue
-        customization.addCustomButton(id: UUID(uuidString: "00000000-0000-0000-0000-00000000CAFE")!, mappedTo: .custom1)
+        customization.addCustomButton(id: UUID(uuidString: "00000000-0000-0000-0000-00000000CAFE")!)
         customization.designMetadata = GamepadDesignMetadata(
-            layerOrder: [.custom(UUID(uuidString: "00000000-0000-0000-0000-00000000CAFE")!), .builtin(.jump)]
+            layerOrder: [.custom(UUID(uuidString: "00000000-0000-0000-0000-00000000CAFE")!), .builtin(.preset(5))]
         )
 
         let controls = customization.normalized.resolvedControls(in: CGSize(width: 874, height: 402))
-        let jumpIndex = controls.firstIndex { $0.id == .builtin(.jump) }
+        let jumpIndex = controls.firstIndex { $0.id == .builtin(.preset(5)) }
         let customIndex = controls.firstIndex { $0.id == .custom(UUID(uuidString: "00000000-0000-0000-0000-00000000CAFE")!) }
         XCTAssertNotNil(jumpIndex)
         XCTAssertNotNil(customIndex)
@@ -755,8 +1125,8 @@ final class ThumbleCLISmokeTestSuite: XCTestCase {
         let backID = UUID(uuidString: "00000000-0000-0000-0000-00000000D111")!
         let frontID = UUID(uuidString: "00000000-0000-0000-0000-00000000D222")!
         var customization = GamepadCustomization.blankCanvas
-        customization.addCustomButton(id: backID, mappedTo: .custom1)
-        customization.addCustomButton(id: frontID, mappedTo: .custom2)
+        customization.addCustomButton(id: backID)
+        customization.addCustomButton(id: frontID)
         customization.customButtons[0].layout.zIndex = 50
         customization.customButtons[1].layout.zIndex = -10
         customization.designMetadata = GamepadDesignMetadata(layerOrder: [.custom(backID), .custom(frontID)])
@@ -774,18 +1144,20 @@ final class ThumbleCLISmokeTestSuite: XCTestCase {
     func testGroupedLayerOperationsMoveChildrenAsBlock() throws {
         let firstID = UUID(uuidString: "00000000-0000-0000-0000-00000000A111")!
         let secondID = UUID(uuidString: "00000000-0000-0000-0000-00000000B222")!
+        let thirdID = UUID(uuidString: "5D84EBB4-F748-4981-85D2-A99C4262292D")!
         var customization = GamepadCustomization.blankCanvas
-        customization.addCustomButton(id: firstID, mappedTo: .custom1)
-        customization.addCustomButton(id: secondID, mappedTo: .custom2)
+        customization.addCustomButton(id: firstID)
+        customization.addCustomButton(id: secondID)
+        customization.addCustomButton(id: thirdID)
         customization.designMetadata = GamepadDesignMetadata(
-            layerOrder: [.custom(firstID), .custom(secondID), .builtin(.jump)],
+            layerOrder: [.custom(firstID), .custom(secondID), .custom(thirdID)],
             groups: [GamepadLayerGroup(name: "Pair", children: [.custom(firstID), .custom(secondID)])]
         )
 
         customization.bringLayersForward([.custom(firstID), .custom(secondID)])
         XCTAssertEqual(
             Array(customization.orderedControlIdentitiesForDesign.prefix(3)),
-            [.builtin(.jump), .custom(firstID), .custom(secondID)]
+            [.custom(thirdID), .custom(firstID), .custom(secondID)]
         )
 
         customization.sendLayersToBack([.custom(firstID), .custom(secondID)])
@@ -836,9 +1208,9 @@ final class ThumbleCLISmokeTestSuite: XCTestCase {
         var layout = GamepadButtonCustomization(fillColor: GamepadRGBAColor(hexString: "#111827")!, styleID: "soul-orb")
         var customization = GamepadCustomization.defaultValue
         customization.styleLibrary = GamepadStyleLibrary(styles: [style])
-        customization.setButtonCustomization(layout, for: .focus)
+        customization.setButtonCustomization(layout, for: .preset(8))
 
-        let control = customization.resolvedControls(in: CGSize(width: 874, height: 402)).first { $0.id == .builtin(.focus) }!
+        let control = customization.resolvedControls(in: CGSize(width: 874, height: 402)).first { $0.id == .builtin(.preset(8)) }!
         let normal = customization.resolvedPresentation(for: control, state: .normal, scheme: .dark)
         XCTAssertEqual(normal.fillStyle.representativeColor, GamepadRGBAColor(hexString: "#F8FAFC")!.normalized)
         XCTAssertEqual(normal.foregroundColor, GamepadRGBAColor(hexString: "#7C61A8")!.normalized)
@@ -872,7 +1244,7 @@ final class ThumbleCLISmokeTestSuite: XCTestCase {
         let data = try JSONEncoder().encode(customization.normalized)
         let decoded = try JSONDecoder().decode(GamepadCustomization.self, from: data).normalized
         XCTAssertEqual(decoded.styleLibrary.styles.first?.id, "soul-orb")
-        layout = decoded.buttonCustomization(for: .focus)
+        layout = decoded.buttonCustomization(for: .preset(8))
         XCTAssertEqual(layout.styleID, "soul-orb")
     }
 
@@ -884,7 +1256,7 @@ final class ThumbleCLISmokeTestSuite: XCTestCase {
             {
               "label": "Focus",
               "key": "F",
-              "button": "focus",
+              "id": "BC770D48-78F4-45B6-BBF4-96C10B551E5F",
               "fill": "#111827",
               "pressedFill": "#38BDF8",
               "stroke": "#F8FAFC",
@@ -916,7 +1288,7 @@ final class ThumbleCLISmokeTestSuite: XCTestCase {
 
         let spec = try JSONDecoder().decode(AgentKeypadSpec.self, from: Data(json.utf8))
         let generated = GameKeypadGenerator.generate(from: spec)
-        let layout = generated.profile.customization.buttonCustomization(for: .focus)
+        let layout = try XCTUnwrap(generated.profile.customization.elements.first { $0.id == UUID(uuidString: "BC770D48-78F4-45B6-BBF4-96C10B551E5F") }?.layout)
         XCTAssertEqual(layout.icon?.value, "sparkles")
         XCTAssertEqual(layout.hapticStyle, .heavy)
         XCTAssertEqual(layout.hapticFeedback?.pattern, .double)
@@ -952,16 +1324,19 @@ final class ThumbleCLISmokeTestSuite: XCTestCase {
         }
 
         let aliases = try fixture("aliases-basic")
-        XCTAssertEqual(aliases.profile.id.uuidString.lowercased(), "b6e5fb93-be66-5a82-9801-88da1dbb4c49")
+        XCTAssertEqual(aliases.profile.id.uuidString.lowercased(), "76ee5047-12b2-5c28-b1d0-37391d988fd7")
         XCTAssertEqual(aliases.profile, aliases.profile.normalized)
         XCTAssertEqual(aliases.profile.outputMode, .keyboard)
-        XCTAssertEqual(aliases.profile.customization.visualLabel(for: .up), "Move Up")
-        XCTAssertEqual(aliases.profile.customization.visualLabel(for: .jump), "Jump")
-        XCTAssertEqual(aliases.keyBindings[.up], .init(key: "up arrow"))
-        XCTAssertEqual(aliases.keyBindings[.jump], .init(key: "space-bar", modifiers: ["shift"]))
+        let moveID = KeypadElementID(UUID(uuidString: "D673535A-975B-4D72-93BE-FDF87C93001A")!)
+        let jumpID = KeypadElementID(UUID(uuidString: "F3AE856B-4F4D-46E4-898F-6F97DA70002A")!)
+        XCTAssertEqual(aliases.profile.customization.elements.first { $0.inputID == moveID }?.label, "Move Up")
+        XCTAssertEqual(aliases.profile.customization.elements.first { $0.inputID == jumpID }?.label, "Jump")
+        XCTAssertEqual(aliases.keyBindings[moveID], .init(key: "up arrow"))
+        XCTAssertEqual(aliases.keyBindings[jumpID], .init(key: "space-bar", modifiers: ["shift"]))
+        XCTAssertEqual(Set(aliases.keyBindings.keys), [moveID, jumpID])
 
         let specialized = try fixture("specialized-capacity")
-        XCTAssertEqual(specialized.profile.id.uuidString.lowercased(), "64542b15-5a6f-5c8d-ba94-99cd24da68f7")
+        XCTAssertEqual(specialized.profile.id.uuidString.lowercased(), "0772045b-0d1e-57c1-8523-0ea4b4602463")
         XCTAssertEqual(specialized.profile, specialized.profile.normalized)
         XCTAssertEqual(specialized.profile.outputMode, .keyboard)
         let specializedControls = specialized.profile.customization.customButtons.map(\.normalized)
@@ -969,11 +1344,11 @@ final class ThumbleCLISmokeTestSuite: XCTestCase {
         XCTAssertEqual(specializedControls.filter(\.isTrigger).count, 2)
         XCTAssertEqual(specializedControls.filter(\.isTrackpad).count, 1)
         XCTAssertEqual(Set(specializedControls.map { $0.id.uuidString.lowercased() }), Set([
-            "95e98733-8394-53b3-9a63-95f364da5cad",
-            "e31e8da3-f034-538f-8e47-cdac8de728a3",
-            "d1f85e97-c08b-5757-b400-50f8cfd4eefa",
-            "cd604c20-d5a4-5bc2-a4a5-b300a32f1138",
-            "213a5b40-5a29-5437-b1e6-b2cdf42ee0a1"
+            "fc6d4ea4-3619-5bd3-84cc-7609d5f64e07",
+            "28d6a0ad-5cf7-5a27-9a63-e0364bc887f2",
+            "1ff04475-6d1e-57d5-8a41-4d454d78c7ee",
+            "7b6afa3f-81e3-5b0b-930d-d82a3ec9529e",
+            "1a539c00-8d79-55cb-a9ac-45372b6e737d"
         ]))
         XCTAssertEqual(specializedControls.first(where: \.isJoystick)?.joystickMapping, .movement)
         XCTAssertEqual(
@@ -986,25 +1361,26 @@ final class ThumbleCLISmokeTestSuite: XCTestCase {
                 naturalScrolling: true
             ).normalized
         )
-        XCTAssertEqual(Set(specialized.keyBindings.keys), Set([.custom1, .custom2, .custom4, .custom5, .custom7]))
+        XCTAssertEqual(Set(specialized.keyBindings.keys), Set(specializedControls.map(\.inputID)))
 
         let trigger = try fixture("trigger-defaults")
-        XCTAssertEqual(trigger.profile.id.uuidString.lowercased(), "2c6d329f-e7c2-5895-aa29-a290e42032d5")
+        XCTAssertEqual(trigger.profile.id.uuidString.lowercased(), "bfc8f93f-b9d0-5cd3-8e1f-d93d75690610")
         let triggerControl = try XCTUnwrap(trigger.profile.customization.customButtons.first?.normalized)
-        XCTAssertEqual(triggerControl.id.uuidString.lowercased(), "1938d035-4098-5bfc-9c99-baa58e176420")
+        XCTAssertEqual(triggerControl.id.uuidString.lowercased(), "4525b55a-eff3-57fc-9266-e297196cb863")
         XCTAssertEqual(triggerControl.label, "Right Trigge")
         XCTAssertEqual(triggerControl.label.count, GamepadCustomization.maximumLabelLength)
         XCTAssertEqual(triggerControl.triggerSettings, .defaultValue)
         XCTAssertEqual(triggerControl.layout.shape, .ellipse)
-        XCTAssertEqual(trigger.keyBindings, [.custom1: .init(key: "R")])
+        XCTAssertEqual(trigger.keyBindings, [triggerControl.inputID: .init(key: "R")])
         XCTAssertEqual(trigger.profile.outputMode, .keyboard)
 
         let rich = try fixture("rich-appearance")
-        XCTAssertEqual(rich.profile.id.uuidString.lowercased(), "5dbf90ec-609d-5a93-b547-9104e3966d6b")
+        XCTAssertEqual(rich.profile.id.uuidString.lowercased(), "3ac50975-b9fb-5875-b78f-6f3fa806e61a")
         XCTAssertEqual(rich.profile, rich.profile.normalized)
         XCTAssertEqual(rich.profile.outputMode, .keyboard)
-        XCTAssertEqual(rich.keyBindings, [.focus: .init(key: "F")])
-        let richLayout = rich.profile.customization.buttonCustomization(for: .focus)
+        let richID = KeypadElementID(UUID(uuidString: "0295D44A-4F4F-5E2C-B32D-8237ADCF2050")!)
+        XCTAssertEqual(rich.keyBindings, [richID: .init(key: "F")])
+        let richLayout = try XCTUnwrap(rich.profile.customization.elements.first { $0.inputID == richID }?.layout)
         XCTAssertEqual(richLayout.icon?.value, "sparkles")
         XCTAssertEqual(richLayout.icon?.source, .sfSymbol)
         XCTAssertEqual(richLayout.hapticStyle, .heavy)
@@ -1030,17 +1406,17 @@ final class ThumbleCLISmokeTestSuite: XCTestCase {
     }
 
     func testProductivityStarterKeepsFriendlyLabelsSeparateFromBindings() {
-        let expectedLabels: [GameButton: String] = [
-            .left: "Left",
-            .right: "Right",
-            .up: "Up",
-            .down: "Down",
-            .jump: "Return",
-            .attack: "Tab",
-            .dash: "Command",
-            .focus: "Prefix",
-            .map: "Palette",
-            .pause: "Escape"
+        let expectedLabels: [KeypadElementID: String] = [
+            .preset(3): "Left",
+            .preset(4): "Right",
+            .preset(1): "Up",
+            .preset(2): "Down",
+            .preset(5): "Return",
+            .preset(6): "Tab",
+            .preset(7): "Command",
+            .preset(8): "Prefix",
+            .preset(9): "Palette",
+            .preset(10): "Escape"
         ]
         let profile = GamepadControllerTemplate.productivityStarter.makeProfile()
 
@@ -1052,35 +1428,72 @@ final class ThumbleCLISmokeTestSuite: XCTestCase {
         }
     }
 
+    func testAppearanceThemesNeverDeclareOrBindMissingControls() throws {
+        for theme in GamepadThemePreset.allCases {
+            var empty = GamepadCustomization.blankCanvas
+            theme.apply(to: &empty)
+            XCTAssertTrue(empty.elements.isEmpty, theme.rawValue)
+            XCTAssertTrue(empty.customButtons.isEmpty, theme.rawValue)
+            let id = KeypadElementID(UUID())
+            let owned = KeypadElement(id: id.uuid, label: "Owned", output: .init(), defaultOutput: .init(keyboard: .init(keyCode: 49)))
+            var one = GamepadCustomization(elements: [owned])
+            theme.apply(to: &one)
+            XCTAssertEqual(one.elements.map(\.inputID), [id], theme.rawValue)
+            XCTAssertEqual(one.elements.first?.output, owned.output)
+            XCTAssertEqual(one.elements.first?.defaultOutput, owned.defaultOutput)
+            XCTAssertEqual(one.elements.first?.partOutputs, owned.partOutputs)
+        }
+    }
+
+    func testExtraControllerTemplateButtonsHaveExplicitConfiguredAndDefaultOutputs() throws {
+        for (template, label) in [(GamepadControllerTemplate.nintendo64, "Z"), (.gameCube, "Z"), (.genesisSixButton, "C"), (.genesisSixButton, "Z"), (.genesisSixButton, "Mode"), (.saturn, "C"), (.saturn, "Z")] {
+            let element = try XCTUnwrap(template.makeProfile().customization.elements.first { $0.label == label }, "\(template.rawValue) \(label)")
+            let output = try XCTUnwrap(element.output, "\(template.rawValue) \(label)")
+            XCTAssertFalse(output.gamepadButtons.isEmpty, "\(template.rawValue) \(label)")
+            XCTAssertNotNil(output.keyboard, "\(template.rawValue) \(label)")
+            XCTAssertEqual(element.defaultOutput, output, "\(template.rawValue) \(label)")
+        }
+    }
+
+    func testDreamcastTriggerLegendsDeclareTriggersNotShoulders() throws {
+        let profile = GamepadControllerTemplate.dreamcast.makeProfile()
+        let left = try XCTUnwrap(profile.customization.elements.first { $0.label == "L" })
+        let right = try XCTUnwrap(profile.customization.elements.first { $0.label == "R" })
+        XCTAssertNotEqual(left.inputID, right.inputID)
+        for (element, expected, key) in [(left, VirtualGamepadButton.leftTriggerButton, UInt16(12)), (right, .rightTriggerButton, UInt16(14))] {
+            XCTAssertEqual(element.output?.gamepadButtons, [expected], element.label)
+            XCTAssertEqual(element.defaultOutput?.gamepadButtons, [expected], element.label)
+            XCTAssertEqual(element.output?.keyboard?.keyCode, key, element.label)
+            XCTAssertEqual(element.defaultOutput?.keyboard?.keyCode, key, element.label)
+            XCTAssertEqual(profile.initialMacOutputBindings[element.inputID]?.gamepadButtons, [expected], element.label)
+        }
+    }
+
     func testTemplatesSeedCompleteBindingsWithoutInheritingTheActiveProfile() throws {
-        for template in [
-            GamepadControllerTemplate.productivityStarter,
-            .productivityOneHandedLeft,
-            .productivityOneHandedRight
-        ] {
-            let recommended = try XCTUnwrap(template.recommendedMacOutputBindings)
-            XCTAssertEqual(recommended, DefaultMacControlOutputMap.defaultBindings)
-            XCTAssertEqual(recommended[.dash]?.displayName, "⌘K")
-            XCTAssertEqual(recommended[.focus]?.displayName, "⌃B")
-            XCTAssertEqual(recommended[.map]?.displayName, "⇧⌘P")
+        for template in GamepadControllerTemplate.allCases {
+            let profile = template.makeProfile()
+            let bindings = profile.initialMacOutputBindings
+            for orientation in GamepadEditorDeviceOrientation.allCases {
+                for element in profile.customization(for: orientation).normalized.elements {
+                    guard let output = element.output ?? element.defaultOutput else { continue }
+                    XCTAssertEqual(bindings[element.inputID], MacControlOutputBinding(shared: output), template.displayName)
+                }
+            }
+            let ids = Set(profile.customization.normalized.elements.map(\.inputID))
+            XCTAssertTrue(Set(bindings.keys).isSubset(of: ids), template.displayName)
         }
 
-        for template in GamepadControllerTemplate.allCases.dropFirst(3) {
-            let recommended = try XCTUnwrap(template.recommendedMacOutputBindings)
-            XCTAssertEqual(recommended, DefaultMacControlOutputMap.gamingKeyboardBindings)
-            XCTAssertEqual(template.makeProfile().recommendedMacOutputBindings, recommended, template.displayName)
-        }
+        let productivity = GamepadControllerTemplate.productivityStarter.makeProfile().initialMacOutputBindings
+        XCTAssertEqual(productivity[.preset(7)]?.keyboard?.displayName, "⌘K")
+        XCTAssertEqual(productivity[.preset(8)]?.keyboard?.displayName, "⌃B")
+        XCTAssertEqual(productivity[.preset(9)]?.keyboard?.displayName, "⇧⌘P")
 
-        let xbox = try XCTUnwrap(GamepadControllerTemplate.xbox.recommendedMacOutputBindings)
-        XCTAssertEqual(xbox.count, GameButton.allCases.count)
-        XCTAssertEqual(xbox[.up]?.displayName, "W")
-        XCTAssertEqual(xbox[.down]?.displayName, "S")
-        XCTAssertEqual(xbox[.left]?.displayName, "A")
-        XCTAssertEqual(xbox[.right]?.displayName, "D")
-        XCTAssertEqual(xbox[.jump]?.displayName, "Space")
-        XCTAssertEqual(xbox[.pause]?.displayName, "Esc")
-        for button in [GameButton.custom1, .custom2, .custom3, .custom4, .custom5, .custom6, .custom7, .custom8] {
-            XCTAssertNotNil(xbox[button], button.rawValue)
+        let xbox = GamepadControllerTemplate.xbox.makeProfile().customization.normalized
+        let expected: [String: VirtualGamepadButton] = ["A": .south, "B": .east, "X": .west, "Y": .north, "RT": .rightTriggerButton]
+        for (label, button) in expected {
+            let element = try XCTUnwrap(xbox.elements.first { $0.label == label })
+            XCTAssertEqual(element.output?.gamepadButtons, [button], label)
+            XCTAssertEqual(element.defaultOutput?.gamepadButtons, [button], label)
         }
     }
 
@@ -1093,8 +1506,8 @@ final class ThumbleCLISmokeTestSuite: XCTestCase {
         XCTAssertEqual(portrait.deviceCanvas.editorDeviceFrame.orientation, .portrait)
         XCTAssertFalse(landscape.hasSamePresentation(as: portrait))
         XCTAssertNotEqual(
-            landscape.buttonCustomization(for: .jump).centerX,
-            portrait.buttonCustomization(for: .jump).centerX
+            landscape.buttonCustomization(for: .preset(5)).centerX,
+            portrait.buttonCustomization(for: .preset(5)).centerX
         )
 
         for customization in [landscape, portrait] {
@@ -1115,18 +1528,18 @@ final class ThumbleCLISmokeTestSuite: XCTestCase {
             .productivityOneHandedRight
         ] {
             let customization = template.makeProfile().customization(for: .portrait)
-            for button in GameButton.builtInControls {
+            for button in DefaultKeypadElements.ids {
                 XCTAssertNotNil(customization.buttonCustomization(for: button).icon, "\(template.displayName) \(button.rawValue) icon")
             }
 
-            XCTAssertEqual(customization.buttonCustomization(for: .up).shape, .roundedRectangle)
-            XCTAssertEqual(customization.buttonCustomization(for: .jump).shape, .capsule)
-            XCTAssertEqual(customization.buttonCustomization(for: .dash).shape, .rectangle)
-            XCTAssertEqual(customization.buttonCustomization(for: .pause).shape, .circle)
-            XCTAssertEqual(customization.buttonCustomization(for: .up).resolvedHapticFeedback.pattern, .single)
-            XCTAssertEqual(customization.buttonCustomization(for: .jump).resolvedHapticFeedback.pattern, .double)
-            XCTAssertEqual(customization.buttonCustomization(for: .dash).resolvedHapticFeedback.pattern, .pulse)
-            XCTAssertEqual(customization.buttonCustomization(for: .pause).resolvedHapticFeedback.pattern, .buzz)
+            XCTAssertEqual(customization.buttonCustomization(for: .preset(1)).shape, .roundedRectangle)
+            XCTAssertEqual(customization.buttonCustomization(for: .preset(5)).shape, .capsule)
+            XCTAssertEqual(customization.buttonCustomization(for: .preset(7)).shape, .rectangle)
+            XCTAssertEqual(customization.buttonCustomization(for: .preset(10)).shape, .circle)
+            XCTAssertEqual(customization.buttonCustomization(for: .preset(1)).resolvedHapticFeedback.pattern, .single)
+            XCTAssertEqual(customization.buttonCustomization(for: .preset(5)).resolvedHapticFeedback.pattern, .double)
+            XCTAssertEqual(customization.buttonCustomization(for: .preset(7)).resolvedHapticFeedback.pattern, .pulse)
+            XCTAssertEqual(customization.buttonCustomization(for: .preset(10)).resolvedHapticFeedback.pattern, .buzz)
         }
     }
 
@@ -1177,7 +1590,7 @@ final class ThumbleCLISmokeTestSuite: XCTestCase {
 
         let legacyID = UUID(uuidString: "00000000-0000-0000-0000-00000000E002")!
         var legacyCustomization = GamepadCustomization.blankCanvas
-        legacyCustomization.addCustomButton(id: UUID(uuidString: "00000000-0000-0000-0000-00000000E003")!, mappedTo: .custom1)
+        legacyCustomization.addCustomButton(id: UUID(uuidString: "00000000-0000-0000-0000-00000000E003")!)
         legacyCustomization.customButtons[0].label = "Legacy"
         let legacyProfile = GamepadConfigurationProfile(
             id: legacyID,
@@ -1196,7 +1609,452 @@ final class ThumbleCLISmokeTestSuite: XCTestCase {
         XCTAssertEqual(legacyState.defaultProfileID, legacyID)
     }
 
-    func testProfilePersistenceDoesNotReplaceSavedProfileWithStaleLegacyMirror() {
+    func testSavedConfigurationLoadRejectsInvalidDataWithoutChangingIt() throws {
+        let suite = "ThumbleTests.saved-rejection.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let keys = [GamepadCustomizationPersistence.defaultsKey, GamepadConfigurationProfilePersistence.defaultsKey]
+        for data in [Data("{\"buttonCustomizations\":{\"jump\":{}}}".utf8), Data("not JSON".utf8)] {
+            defaults.set(data, forKey: keys[0])
+            XCTAssertThrowsError(try GamepadCustomizationPersistence.load(defaults: defaults))
+            XCTAssertEqual(defaults.data(forKey: keys[0]), data)
+        }
+        defaults.set("invalid storage type", forKey: keys[0])
+        XCTAssertThrowsError(try GamepadCustomizationPersistence.load(defaults: defaults))
+        XCTAssertEqual(defaults.string(forKey: keys[0]), "invalid storage type")
+
+        let profile = GamepadConfigurationProfile(name: "Owned", primaryCustomization: .blankCanvas)
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(profile)) as? [String: Any])
+        let invalidStates: [[String: Any]] = [
+            ["profiles": [[:]], "activeProfileID": profile.id.uuidString, "defaultProfileID": profile.id.uuidString],
+            ["profiles": [object, object], "activeProfileID": profile.id.uuidString, "defaultProfileID": profile.id.uuidString],
+            ["profiles": [object], "activeProfileID": UUID().uuidString, "defaultProfileID": profile.id.uuidString],
+            ["profiles": [object], "activeProfileID": profile.id.uuidString, "defaultProfileID": UUID().uuidString],
+            ["profiles": [object]],
+            ["profiles": [], "activeProfileID": profile.id.uuidString, "defaultProfileID": profile.id.uuidString]
+        ]
+        for state in invalidStates {
+            let data = try JSONSerialization.data(withJSONObject: state, options: .sortedKeys)
+            defaults.set(data, forKey: keys[1])
+            XCTAssertThrowsError(try GamepadConfigurationProfilePersistence.load(activeCustomization: .blankCanvas, defaults: defaults))
+            XCTAssertEqual(defaults.data(forKey: keys[1]), data)
+        }
+        defaults.set("invalid storage type", forKey: keys[1])
+        XCTAssertThrowsError(try GamepadConfigurationProfilePersistence.load(activeCustomization: .blankCanvas, defaults: defaults))
+        XCTAssertEqual(defaults.string(forKey: keys[1]), "invalid storage type")
+    }
+
+    func testImportedDeclarationsEnforceTotalAndSpecializedCapacitiesBeforeNormalization() throws {
+        func data(kind: String, count: Int) throws -> Data {
+            let elements: [[String: Any]] = (1...count).map { ordinal in
+                ["id": String(format: "1A939AE0-3E1E-440B-9162-%012X", ordinal), "label": "Same", "kind": kind, "layout": [:]]
+            }
+            return try JSONSerialization.data(withJSONObject: ["elements": elements])
+        }
+        XCTAssertEqual(try JSONDecoder().decode(GamepadCustomization.self, from: data(kind: "button", count: 128)).elements.count, 128)
+        for (kind, count) in [("button", 129), ("joystick", GamepadCustomization.maximumJoysticks + 1), ("trigger", GamepadCustomization.maximumTriggers + 1), ("trackpad", GamepadCustomization.maximumTrackpads + 1)] {
+            XCTAssertThrowsError(try JSONDecoder().decode(GamepadCustomization.self, from: data(kind: kind, count: count)), kind)
+        }
+    }
+
+    func testImportsRejectDanglingAppearanceAndDesignReferencesBeforeNormalization() throws {
+        let id = UUID(uuidString: "E423FA5F-D7F4-4750-8E5B-8F2775440ADB")!
+        let orphan = UUID(uuidString: "483B28C9-43F3-4E7C-A35B-80E33C61D6F0")!
+        var customization = GamepadCustomization.blankCanvas
+        customization.elements = [KeypadElement(id: id, label: "Owned", layout: .defaultValue)]
+        customization.designMetadata = GamepadDesignMetadata(
+            layerOrder: [.custom(id), .system(.topBarActivation)],
+            groups: [GamepadLayerGroup(name: "Owned", children: [.custom(id)])]
+        )
+        let source = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(customization)) as? [String: Any])
+        let metadata = try XCTUnwrap(source["designMetadata"] as? [String: Any])
+        let group = try XCTUnwrap((metadata["groups"] as? [[String: Any]])?.first)
+        let invalidIdentity: [String: Any] = ["kind": "custom", "id": orphan.uuidString]
+        var invalid: [[String: Any]] = []
+        for field in ["labelOverrides", "buttonCustomizations"] {
+            let value: Any = field == "labelOverrides" ? "Orphan" : [String: Any]()
+            var candidate = source
+            candidate[field] = [orphan.uuidString, value]
+            invalid.append(candidate)
+            candidate[field] = [id.uuidString, value, id.uuidString.lowercased(), value]
+            invalid.append(candidate)
+        }
+        let orders: [[Any]] = [[invalidIdentity], ["builtin.jump"], try XCTUnwrap(metadata["layerOrder"] as? [Any]) + [["kind": "custom", "id": id.uuidString]]]
+        for order in orders {
+            var candidate = source
+            var design = metadata
+            design["layerOrder"] = order
+            candidate["designMetadata"] = design
+            invalid.append(candidate)
+        }
+        for children in [[invalidIdentity], [["kind": "custom", "id": id.uuidString], ["kind": "custom", "id": id.uuidString.lowercased()]]] {
+            var candidate = source
+            var design = metadata
+            var invalidGroup = group
+            invalidGroup["children"] = children
+            design["groups"] = [invalidGroup]
+            candidate["designMetadata"] = design
+            invalid.append(candidate)
+        }
+        var duplicateGroups = source
+        var design = metadata
+        design["groups"] = [group, group]
+        duplicateGroups["designMetadata"] = design
+        invalid.append(duplicateGroups)
+        var wrongKind = source
+        wrongKind["customButtons"] = [["id": id.uuidString, "label": "Mirror", "controlKind": "joystick", "layout": [:]]]
+        invalid.append(wrongKind)
+        for (index, candidate) in invalid.enumerated() {
+            XCTAssertThrowsError(try JSONDecoder().decode(GamepadCustomization.self, from: JSONSerialization.data(withJSONObject: candidate)), "case \(index)")
+        }
+        let valid = try JSONDecoder().decode(GamepadCustomization.self, from: JSONSerialization.data(withJSONObject: source))
+        XCTAssertEqual(valid.normalized.elements.map(\.id), [id])
+        XCTAssertEqual(valid.normalized.designMetadata?.groups.first?.children, [.custom(id)])
+    }
+
+    func testImportedMirrorsNeverDeclareOrOverrideExecutableSettings() throws {
+        let id = UUID(uuidString: "B5BD5966-973D-4284-9FF2-B65789C91141")!
+        func encoded<T: Encodable>(_ value: T) throws -> Any { try JSONSerialization.jsonObject(with: JSONEncoder().encode(value)) }
+        let cases: [(GamepadCustomControlKind, String, Any?, Any)] = [
+            (.joystick, "joystickMapping", nil, try encoded(GamepadJoystickMapping.movement)),
+            (.joystick, "joystickMapping", try encoded(GamepadJoystickMapping.movement), try encoded(GamepadJoystickMapping(up: .init(keyboard: .init(keyCode: 13))))),
+            (.joystick, "joystickOutputSettings", try encoded(GamepadJoystickOutputSettings.analogRightStick), try encoded(GamepadJoystickOutputSettings.analogLeftStick)),
+            (.trigger, "triggerSettings", try encoded(GamepadTriggerSettings(target: .left)), try encoded(GamepadTriggerSettings(target: .right))),
+            (.trackpad, "trackpadSettings", try encoded(GamepadTrackpadSettings(tapToClick: false)), try encoded(GamepadTrackpadSettings(tapToClick: true)))
+        ]
+        for (kind, field, owned, injected) in cases {
+            var element: [String: Any] = ["id": id.uuidString, "kind": kind.rawValue, "label": "Owned", "layout": [:]]
+            element[field] = owned
+            let mirror: [String: Any] = ["id": id.uuidString, "controlKind": kind.rawValue, "label": "Appearance", "layout": [:]]
+            var candidate: [String: Any] = ["elements": [element], "customButtons": [mirror.merging([field: injected]) { _, value in value }]]
+            XCTAssertThrowsError(try JSONDecoder().decode(GamepadCustomization.self, from: JSONSerialization.data(withJSONObject: candidate)), field)
+            candidate["customButtons"] = [mirror]
+            let decoded = try JSONDecoder().decode(GamepadCustomization.self, from: JSONSerialization.data(withJSONObject: candidate)).normalized
+            let declaration = try JSONDecoder().decode(KeypadElement.self, from: JSONSerialization.data(withJSONObject: element)).normalized
+            XCTAssertEqual(decoded.elements[0].joystickMapping, declaration.joystickMapping)
+            XCTAssertEqual(decoded.elements[0].joystickOutputSettings, declaration.joystickOutputSettings)
+            XCTAssertEqual(decoded.elements[0].triggerSettings, declaration.triggerSettings)
+            XCTAssertEqual(decoded.elements[0].trackpadSettings, declaration.trackpadSettings)
+            XCTAssertEqual(decoded.elements[0].partOutputs, declaration.partOutputs)
+        }
+    }
+
+    func testSavedCustomizationRejectsLiteralAndEscapedDuplicateKeysBeforeDecoding() throws {
+        let id = "B6FD297D-7508-4FF4-AFF7-97B3831F6AD0"
+        let declarations = "[{\"id\":\"\(id)\",\"kind\":\"button\"}]"
+        let cases = [
+            "{\"elements\":[],\"elements\":\(declarations)}",
+            "{\"elements\":[{\"id\":\"\(id)\",\"\\u0069d\":\"\(id)\",\"kind\":\"button\"}]}",
+            "{\"elements\":[{\"id\":\"\(id)\",\"kind\":\"button\",\"output\":{},\"output\":{\"keyboard\":{\"keyCode\":49}}}]}"
+        ]
+        let suite = "ThumbleLiteralDuplicateTest.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        for raw in cases {
+            let data = Data(raw.utf8)
+            defaults.set(data, forKey: GamepadCustomizationPersistence.defaultsKey)
+            XCTAssertThrowsError(try GamepadCustomizationPersistence.load(defaults: defaults), raw)
+            XCTAssertEqual(defaults.data(forKey: GamepadCustomizationPersistence.defaultsKey), data)
+            XCTAssertNil(defaults.object(forKey: GamepadConfigurationProfilePersistence.defaultsKey))
+        }
+    }
+
+    func testLocalLifecycleRemovesOnlyDeletedOwnersAcrossExecutableCanvases() throws {
+        let removedID = KeypadElementID(UUID())
+        let retainedID = KeypadElementID(UUID())
+        var primary = GamepadCustomization.blankCanvas
+        primary.elements = [KeypadElement(id: removedID.uuid, label: "Removed", layout: .defaultValue), KeypadElement(id: retainedID.uuid, label: "Retained", layout: .defaultValue)]
+        var portrait = GamepadCustomization.blankCanvas
+        portrait.elements = [primary.elements[1]]
+        var previous = GamepadConfigurationProfile(name: "Owned", primaryCustomization: primary)
+        previous.portraitCustomization = portrait
+        var current = previous
+        current.customization = .blankCanvas
+        current.landscapeCustomization = .blankCanvas
+        let key = MacKeyBinding(keyCode: 49, modifiers: [])
+        var keys = [removedID.rawValue.lowercased(): key, retainedID.rawValue: key, "jump": key]
+        var outputs = [removedID.rawValue: MacControlOutputBinding(keyboard: key), retainedID.rawValue.lowercased(): MacControlOutputBinding(), "jump": MacControlOutputBinding()]
+        MacConfigurationBindings.removeDeletedOwnerReferences(previous: previous, current: current, keys: &keys, outputs: &outputs)
+        XCTAssertNil(keys[removedID.rawValue.lowercased()])
+        XCTAssertNil(outputs[removedID.rawValue])
+        XCTAssertEqual(keys[retainedID.rawValue], key)
+        XCTAssertNotNil(outputs[retainedID.rawValue.lowercased()])
+        XCTAssertNotNil(keys["jump"], "Invalid existing keys must not be filtered into apparent validity")
+        XCTAssertNotNil(outputs["jump"])
+        XCTAssertEqual(previous.customization.elements.count, 2)
+    }
+
+    func testNativeFileImportRoundTripPreservesIncomingProfileMetadata() throws {
+        let profile = GamepadControllerTemplate.xbox.makeProfile()
+        var raw = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(profile)) as? [String: Any])
+        raw["futureProfile"] = ["source": "Incoming"]
+        var customization = try XCTUnwrap(raw["customization"] as? [String: Any])
+        customization["futureCustomization"] = ["source": "Incoming"]
+        var elements = try XCTUnwrap(customization["elements"] as? [[String: Any]])
+        elements[0]["futureElement"] = ["source": "Incoming"]
+        customization["elements"] = elements; raw["customization"] = customization
+        let envelope: [String: Any] = [
+            "schema": ThumbleKeypadConfigurationExport.schemaIdentifier, "version": 4,
+            "profiles": [raw], "activeProfileID": profile.id.uuidString,
+            "defaultProfileID": profile.id.uuidString, "profileKeyBindings": [String: Any](),
+            "profileOutputBindings": [String: Any]()
+        ]
+        let generated = GeneratedGameKeypadProfile(requestedGameName: "Owned", resolvedGameName: "Owned", profile: profile, keyBindings: [:], source: "test", confidence: .high)
+        var generatedValue = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(generated)) as? [String: Any])
+        generatedValue["profile"] = raw
+        let shapes: [Any] = [envelope, raw, [raw], generatedValue, customization]
+        for (index, shape) in shapes.enumerated() {
+            let imported = try MacConfigurationBindings.decodeKeypadImport(data: JSONSerialization.data(withJSONObject: shape), sourceName: "incoming")
+            let exported = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(imported)) as? [String: Any])
+            let saved = try XCTUnwrap((exported["profiles"] as? [[String: Any]])?.first)
+            XCTAssertNil(exported["profileSources"], "private source cache must not become an envelope field")
+            if index < 4 { XCTAssertEqual(saved["futureProfile"] as? [String: String], ["source": "Incoming"]) }
+            let savedCustomization = try XCTUnwrap(saved["customization"] as? [String: Any])
+            XCTAssertEqual(savedCustomization["futureCustomization"] as? [String: String], ["source": "Incoming"])
+            let savedElement = try XCTUnwrap((savedCustomization["elements"] as? [[String: Any]])?.first)
+            XCTAssertEqual(savedElement["futureElement"] as? [String: String], ["source": "Incoming"])
+            XCTAssertEqual(imported.profiles.first?.customization.elements.first?.output, profile.customization.elements.first?.output)
+        }
+    }
+
+    func testNativeUndoRestoresItsOwnSourcesAndExportChecksTheWholeDomainBeforeFiltering() throws {
+        let profile = GamepadControllerTemplate.xbox.makeProfile()
+        let raw = try JSONDecoder().decodeUnique(ThumbleBridgeJSONValue.self, from: JSONEncoder().encode(profile))
+        guard case .object(var fields) = raw else { return XCTFail("Expected profile object") }
+        fields["futureProfile"] = .string("Alpha")
+        let alphaSources = [profile.id: ThumbleBridgeJSONValue.object(fields)]
+        let bindings = profile.initialMacOutputBindings
+        let snapshot = MacConfigurationBindings.EditorUndoSnapshot(keyBindings: bindings.keyboardBindings, outputBindings: bindings,
+            gamepadCustomization: profile.customization, gamepadProfiles: [profile], activeGamepadProfileID: profile.id,
+            defaultGamepadProfileID: profile.id, profileKeyBindings: [profile.id: bindings.keyboardBindings],
+            profileOutputBindings: [profile.id: bindings], profileSources: alphaSources)
+        var redo = snapshot
+        guard case .object(var changed) = try XCTUnwrap(redo.profileSources[profile.id]) else { return XCTFail("Expected profile object") }
+        changed["futureProfile"] = .string("Beta")
+        redo.profileSources[profile.id] = .object(changed)
+        redo.gamepadProfiles[0].name = "Beta edited"
+        for (saved, expected) in [(snapshot, "Alpha"), (redo, "Beta"), (snapshot, "Alpha")] {
+            let update = try MacConfigurationBindings.checkedEditorUndoUpdate(saved)
+            let data = try MacConfigurationBindings.keypadExportData(profiles: update.state.profiles,
+                activeProfileID: update.state.activeProfileID, defaultProfileID: update.state.defaultProfileID,
+                exportingProfileID: profile.id, bindings: update.bindings, preserving: update.profileSources)
+            let root = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+            let exported = try XCTUnwrap((root["profiles"] as? [[String: Any]])?.first)
+            XCTAssertEqual(exported["futureProfile"] as? String, expected)
+            XCTAssertEqual(exported["name"] as? String, saved.gamepadProfiles[0].name)
+            XCTAssertEqual(update.bindings.profileOutputs[profile.id], bindings)
+        }
+        var invalid = snapshot
+        let orphan = KeypadElementID(UUID())
+        invalid.profileOutputBindings[profile.id]?[orphan] = .init()
+        XCTAssertThrowsError(try MacConfigurationBindings.checkedEditorUndoUpdate(invalid))
+        let other = GamepadConfigurationProfile(name: "Other", primaryCustomization: .blankCanvas)
+        let invalidBindings = MacConfigurationBindings.SavedBindings(profileKeys: snapshot.profileKeyBindings,
+            profileOutputs: [profile.id: bindings, other.id: [orphan: .init()]])
+        XCTAssertThrowsError(try MacConfigurationBindings.keypadExportData(profiles: [profile, other], activeProfileID: profile.id,
+            defaultProfileID: profile.id, exportingProfileID: profile.id, bindings: invalidBindings, preserving: alphaSources))
+        guard case .object(var customization) = fields["customization"],
+              case .array(var elements) = customization["elements"],
+              case .object(var element) = elements[0] else { return XCTFail("Expected declaration") }
+        element["mappedButton"] = .null
+        elements[0] = .object(element); customization["elements"] = .array(elements)
+        fields["customization"] = .object(customization)
+        XCTAssertThrowsError(try MacConfigurationBindings.keypadExportData(profiles: [profile], activeProfileID: profile.id,
+            defaultProfileID: profile.id, exportingProfileID: nil, bindings: .init(profileKeys: snapshot.profileKeyBindings,
+                profileOutputs: snapshot.profileOutputBindings), preserving: [profile.id: .object(fields)]))
+        XCTAssertEqual(snapshot.profileSources, alphaSources)
+    }
+
+    func testNativeProfileSourcesReplaceSameIDMetadataAndPreserveItThroughKnownEdits() throws {
+        let profile = GamepadControllerTemplate.xbox.makeProfile()
+        let canonical = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(profile)) as? [String: Any])
+        var previousSources: [UUID: ThumbleBridgeJSONValue] = [:]
+        for marker in ["Alpha", "Beta", "Gamma"] {
+            var raw = canonical
+            raw["futureProfile"] = ["source": marker]
+            var customization = try XCTUnwrap(raw["customization"] as? [String: Any])
+            customization["futureCustomization"] = ["source": marker]
+            var elements = try XCTUnwrap(customization["elements"] as? [[String: Any]])
+            elements[0]["futureElement"] = ["source": marker]
+            customization["elements"] = elements; raw["customization"] = customization
+            let catalog = try JSONSerialization.data(withJSONObject: ["profiles": [raw], "activeProfileID": profile.id.uuidString, "defaultProfileID": profile.id.uuidString])
+            let update = try MacConfigurationBindings.decodeProfileUpdate(profileState: catalog, activeCustomization: nil, bindingDomain: [:])
+            if !previousSources.isEmpty { XCTAssertNotEqual(update.profileSources, previousSources) }
+            previousSources = update.profileSources
+            var edited = update.state.profiles
+            edited[0].name = "Edited"
+            edited[0].customization.setLabel("Changed", for: edited[0].customization.elements[0].inputID)
+            let encoded = try MacConfigurationBindings.encodedProfileState(edited, activeProfileID: profile.id, defaultProfileID: profile.id, preserving: update.profileSources)
+            let root = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+            let saved = try XCTUnwrap((root["profiles"] as? [[String: Any]])?.first)
+            XCTAssertEqual(saved["futureProfile"] as? [String: String], ["source": marker])
+            XCTAssertEqual(saved["name"] as? String, "Edited")
+            let savedCustomization = try XCTUnwrap(saved["customization"] as? [String: Any])
+            XCTAssertEqual(savedCustomization["futureCustomization"] as? [String: String], ["source": marker])
+            let savedElement = try XCTUnwrap((savedCustomization["elements"] as? [[String: Any]])?.first)
+            XCTAssertEqual(savedElement["futureElement"] as? [String: String], ["source": marker])
+            XCTAssertEqual(savedElement["label"] as? String, "Changed")
+            XCTAssertEqual(try GamepadConfigurationProfilePersistence.decodeSavedState(encoded).profiles[0].customization.elements[0].output, update.state.profiles[0].customization.elements[0].output)
+            XCTAssertThrowsError(try MacConfigurationBindings.encodedProfileState(edited + edited, activeProfileID: profile.id, defaultProfileID: profile.id, preserving: update.profileSources))
+        }
+    }
+
+    func testExternalProfileUpdatesValidateWholeIncomingDomainWithoutRecovery() throws {
+        var profile = GamepadControllerTemplate.xbox.makeProfile()
+        let elementID = try XCTUnwrap(profile.customization.elements.first).inputID
+        profile.customization.elements[0].output = .init(keyboard: .init(keyCode: 49), gamepadButtons: [.south])
+        let profileValue = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(profile)) as? [String: Any])
+        let validCatalog: [String: Any] = [
+            "profiles": [profileValue], "activeProfileID": profile.id.uuidString, "defaultProfileID": profile.id.uuidString
+        ]
+        let catalogData = try JSONSerialization.data(withJSONObject: validCatalog)
+        let decoded = try MacConfigurationBindings.decodeProfileUpdate(profileState: catalogData, activeCustomization: nil, bindingDomain: [:])
+        XCTAssertEqual(decoded.state.profiles.map(\.id), [profile.id])
+        XCTAssertEqual(decoded.bindings.profileOutputs[profile.id]?[elementID]?.keyboard?.keyCode, 49)
+        XCTAssertEqual(decoded.bindings.profileOutputs[profile.id]?[elementID]?.gamepadButtons, [.south])
+
+        for replacement in [[String: Any](), ["activeProfileID": UUID().uuidString], ["profiles": []], ["profiles": [profileValue, profileValue]]] {
+            var invalid = validCatalog
+            if replacement.isEmpty { invalid.removeValue(forKey: "defaultProfileID") }
+            else { invalid.merge(replacement, uniquingKeysWith: { _, new in new }) }
+            let raw = try JSONSerialization.data(withJSONObject: invalid)
+            XCTAssertThrowsError(try MacConfigurationBindings.decodeProfileUpdate(profileState: raw, activeCustomization: nil, bindingDomain: [:]))
+        }
+        let orphan = UUID().uuidString
+        let invalidDomains: [[String: Any]] = [
+            ["PocketPadMac.keyBindings.v2": Data("{\"\(orphan)\":{\"keyCode\":48,\"modifiers\":0}}".utf8)],
+            ["PocketPadMac.profileOutputBindings.v1": Data("{\"\(orphan)\":{}}".utf8)],
+            ["PocketPadMac.outputBindings.v1": Data("{\"\(elementID.rawValue)\":{},\"\(elementID.rawValue)\":{}}".utf8)],
+            ["PocketPadMac.keyBindings.v2": "not JSON data"]
+        ]
+        for domain in invalidDomains {
+            XCTAssertThrowsError(try MacConfigurationBindings.decodeProfileUpdate(profileState: catalogData, activeCustomization: nil, bindingDomain: domain))
+        }
+        XCTAssertThrowsError(try MacConfigurationBindings.decodeProfileUpdate(profileState: catalogData, activeCustomization: Data("{}".utf8), bindingDomain: [:]))
+        XCTAssertEqual(try MacConfigurationBindings.decodeProfileUpdate(profileState: catalogData, activeCustomization: nil, bindingDomain: [:]).state, decoded.state)
+    }
+
+    func testSavedMapsRejectLiteralElementAndProfileDuplicatesBeforeCollection() throws {
+        let profile = GamepadControllerTemplate.xbox.makeProfile()
+        let id = try XCTUnwrap(profile.customization.elements.first).inputID.rawValue
+        let state = GamepadConfigurationProfilePersistence.normalizedState(profiles: [profile], activeProfileID: profile.id, defaultProfileID: profile.id)
+        let key = "{\"keyCode\":49,\"modifiers\":{\"rawValue\":0}}"
+        let duplicateKeys = "{\"\(id)\":\(key),\"\(id)\":\(key)}"
+        let duplicateOutputs = "{\"\(id)\":{\"gamepadButtons\":[]},\"\(id)\":{\"gamepadButtons\":[]}}"
+        let cases = [
+            ("PocketPadMac.keyBindings.v2", duplicateKeys),
+            ("PocketPadMac.outputBindings.v1", duplicateOutputs),
+            ("PocketPadMac.profileKeyBindings.v1", "{\"\(profile.id)\":\(duplicateKeys)}"),
+            ("PocketPadMac.profileOutputBindings.v1", "{\"\(profile.id)\":{},\"\(profile.id)\":{}}")
+        ]
+        for (field, raw) in cases {
+            XCTAssertThrowsError(try MacConfigurationBindings.loadSavedBindings(from: [field: Data(raw.utf8)], state: state), field)
+        }
+    }
+
+    func testSavedCatalogRejectsLiteralDuplicateSelectionBeforeRecoveryOrWrites() throws {
+        let profile = GamepadConfigurationProfile(name: "Independent", primaryCustomization: .blankCanvas)
+        let profileJSON = String(decoding: try JSONEncoder().encode(profile), as: UTF8.self)
+        let data = Data("{\"profiles\":[\(profileJSON)],\"activeProfileID\":\"\(profile.id)\",\"activeProfileID\":\"\(profile.id)\",\"defaultProfileID\":\"\(profile.id)\"}".utf8)
+        let suite = "ThumbleCatalogDuplicateTest.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(data, forKey: GamepadConfigurationProfilePersistence.defaultsKey)
+        XCTAssertThrowsError(try GamepadConfigurationProfilePersistence.load(activeCustomization: .defaultValue, defaults: defaults))
+        XCTAssertEqual(defaults.data(forKey: GamepadConfigurationProfilePersistence.defaultsKey), data)
+        XCTAssertNil(defaults.object(forKey: GamepadCustomizationPersistence.defaultsKey))
+    }
+
+    func testElementPartOutputsRejectRepeatedPartsBeforeDictionaryDecoding() throws {
+        let raw = "{\"id\":\"B6FD297D-7508-4FF4-AFF7-97B3831F6AD0\",\"kind\":\"joystick\",\"partOutputs\":[\"joystick_up\",{\"keyboard\":{\"keyCode\":49,\"modifiersRawValue\":0},\"gamepadButtons\":[]},\"joystick_up\",{\"keyboard\":{\"keyCode\":48,\"modifiersRawValue\":0},\"gamepadButtons\":[]}]}"
+        let single = raw.replacingOccurrences(of: ",\"joystick_up\",{\"keyboard\":{\"keyCode\":48,\"modifiersRawValue\":0},\"gamepadButtons\":[]}", with: "")
+        XCTAssertNoThrow(try JSONDecoder().decode(KeypadElement.self, from: Data(single.utf8)))
+        XCTAssertThrowsError(try JSONDecoder().decode(KeypadElement.self, from: Data(raw.utf8)))
+        XCTAssertThrowsError(try GamepadCustomizationPersistence.decodeSavedCustomization(Data("{\"elements\":[\(raw)]}".utf8)))
+    }
+
+    func testSavedStandaloneEmptyDeclarationsStayEmptyAndObsoleteStandaloneRejects() throws {
+        let suite = "ThumbleSavedDeclarationTest.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let fresh = try GamepadConfigurationProfilePersistence.load(activeCustomization: .defaultValue, defaults: defaults)
+        XCTAssertEqual(fresh.profiles.count, 1)
+        XCTAssertEqual(fresh.activeProfile?.name, GamepadControllerTemplate.productivityStarter.displayName)
+        let empty = try JSONEncoder().encode(GamepadCustomization.blankCanvas)
+        defaults.set(empty, forKey: GamepadCustomizationPersistence.defaultsKey)
+        let loaded = try GamepadConfigurationProfilePersistence.load(activeCustomization: .defaultValue, defaults: defaults)
+        XCTAssertEqual(loaded.profiles.count, 1)
+        XCTAssertEqual(loaded.activeProfile?.customization.elements, [])
+        XCTAssertTrue(loaded.activeProfile?.initialMacOutputBindings.isEmpty == true)
+        XCTAssertNil(defaults.object(forKey: GamepadConfigurationProfilePersistence.defaultsKey))
+        let obsolete = Data("{\"buttonCustomizations\":{\"jump\":{}}}".utf8)
+        defaults.set(obsolete, forKey: GamepadCustomizationPersistence.defaultsKey)
+        XCTAssertThrowsError(try GamepadConfigurationProfilePersistence.load(activeCustomization: .defaultValue, defaults: defaults))
+        XCTAssertEqual(defaults.data(forKey: GamepadCustomizationPersistence.defaultsKey), obsolete)
+        XCTAssertNil(defaults.object(forKey: GamepadConfigurationProfilePersistence.defaultsKey))
+    }
+
+    func testSavedBindingMapsRejectEveryInvalidIdentityAndReconcileOwnedOutputs() throws {
+        let firstID = UUID(uuidString: "EA17636C-54D9-4BB9-91C3-4446938A2801")!
+        let clearID = UUID(uuidString: "BA0C059D-2158-45F3-A3AC-76792B2A94DC")!
+        let otherID = UUID(uuidString: "06D820AC-1068-43B8-B789-EE97733E42A7")!
+        var firstCustomization = GamepadCustomization.blankCanvas
+        firstCustomization.elements = [
+            KeypadElement(id: firstID, label: "Same", layout: .defaultValue, output: .init(keyboard: .init(keyCode: 49), gamepadButtons: [.south])),
+            KeypadElement(id: clearID, label: "Same", layout: .defaultValue, output: .init())
+        ]
+        var otherCustomization = GamepadCustomization.blankCanvas
+        otherCustomization.elements = [KeypadElement(id: otherID, label: "Same", layout: .defaultValue, output: .init(keyboard: .init(keyCode: 48), gamepadButtons: [.north]))]
+        let first = GamepadConfigurationProfile(name: "First", primaryCustomization: firstCustomization)
+        let other = GamepadConfigurationProfile(name: "Other", primaryCustomization: otherCustomization)
+        let state = GamepadConfigurationProfilePersistence.normalizedState(profiles: [first, other], activeProfileID: first.id, defaultProfileID: other.id)
+        func encoded<T: Encodable>(_ value: T) throws -> Data { try JSONEncoder().encode(value) }
+        let staleKeys = [first.id.uuidString: [firstID.uuidString: MacKeyBinding(keyCode: 12), clearID.uuidString: MacKeyBinding(keyCode: 13)]]
+        let staleOutputs = [first.id.uuidString: [firstID.uuidString: MacControlOutputBinding(), clearID.uuidString: MacControlOutputBinding.keyboard(.init(keyCode: 13))]]
+        let valid: [String: Any] = ["PocketPadMac.profileKeyBindings.v1": try encoded(staleKeys), "PocketPadMac.profileOutputBindings.v1": try encoded(staleOutputs)]
+        let resolved = try MacConfigurationBindings.loadSavedBindings(from: valid, state: state)
+        XCTAssertEqual(resolved.profileKeys[first.id]?[KeypadElementID(firstID)]?.keyCode, 49)
+        XCTAssertNil(resolved.profileKeys[first.id]?[KeypadElementID(clearID)])
+        XCTAssertEqual(resolved.profileOutputs[first.id]?[KeypadElementID(firstID)]?.gamepadButtons, [.south])
+        XCTAssertEqual(resolved.profileOutputs[first.id]?[KeypadElementID(clearID)], MacControlOutputBinding())
+        XCTAssertEqual(resolved.profileKeys[other.id]?[KeypadElementID(otherID)]?.keyCode, 48)
+        XCTAssertEqual(resolved.profileOutputs[other.id]?[KeypadElementID(otherID)]?.gamepadButtons, [.north])
+        let invalid: [[String: Any]] = [
+            ["PocketPadMac.keyBindings.v1": Data("{}".utf8)],
+            ["PocketPadMac.keyBindings.v2": "wrong storage type"],
+            ["PocketPadMac.profileKeyBindings.v1": Data("not JSON".utf8)],
+            ["PocketPadMac.keyBindings.v2": try encoded(["jump": MacKeyBinding(keyCode: 49)])],
+            ["PocketPadMac.keyBindings.v2": try encoded([otherID.uuidString: MacKeyBinding(keyCode: 49)])],
+            ["PocketPadMac.outputBindings.v1": try encoded([otherID.uuidString: MacControlOutputBinding()])],
+            ["PocketPadMac.profileKeyBindings.v1": try encoded([UUID().uuidString: [String: MacKeyBinding]()])],
+            ["PocketPadMac.profileOutputBindings.v1": try encoded([first.id.uuidString: [otherID.uuidString: MacControlOutputBinding()]])],
+            ["PocketPadMac.profileKeyBindings.v1": try encoded([first.id.uuidString: [firstID.uuidString: MacKeyBinding(keyCode: 49), firstID.uuidString.lowercased(): MacKeyBinding(keyCode: 49)]])],
+            ["PocketPadMac.profileOutputBindings.v1": try encoded([first.id.uuidString: [String: MacControlOutputBinding](), first.id.uuidString.lowercased(): [String: MacControlOutputBinding]()])]
+        ]
+        for domain in invalid { XCTAssertThrowsError(try MacConfigurationBindings.loadSavedBindings(from: domain, state: state)) }
+    }
+
+    func testSavedUUIDProfilesNeverMigrateBasedOnNamesOrStandaloneMirror() throws {
+        let suite = "ThumbleTests.saved-profile-names.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let key = GamepadConfigurationProfilePersistence.defaultsKey
+        let names = ["Current Setup", "NES", "Super Nintendo", "Nintendo 64", "GameCube", "Game Boy", "Game Boy Advance", "Genesis 6-Button", "Sega Saturn", "Dreamcast", "Arcade Stick", "PSP", "PlayStation", "Xbox", "Soft White Pro", "Navigation Left", "Actions Left", "Dual Stick Shooter", "Large Blue", "Compact Minimal"]
+        let profiles = names.map { GamepadConfigurationProfile(name: $0, primaryCustomization: .blankCanvas) }
+        let profileObjects = try profiles.map { try JSONSerialization.jsonObject(with: JSONEncoder().encode($0)) }
+        let saved = try JSONSerialization.data(withJSONObject: [
+            "profiles": profileObjects, "activeProfileID": profiles[0].id.uuidString, "defaultProfileID": profiles[1].id.uuidString
+        ], options: .sortedKeys)
+        defaults.set(saved, forKey: key)
+        let before = defaults.data(forKey: key)
+        let loaded = try GamepadConfigurationProfilePersistence.load(activeCustomization: .defaultValue, defaults: defaults)
+        XCTAssertEqual(loaded.profiles, profiles.map(\.normalized))
+        XCTAssertEqual(loaded.activeProfileID, profiles[0].id)
+        XCTAssertEqual(loaded.defaultProfileID, profiles[1].id)
+        XCTAssertEqual(defaults.data(forKey: key), before)
+    }
+
+    func testProfilePersistenceDoesNotReplaceSavedProfileWithStaleLegacyMirror() throws {
         let defaults = UserDefaults.standard
         let originalData = defaults.data(forKey: GamepadConfigurationProfilePersistence.defaultsKey)
         defer {
@@ -1209,7 +2067,7 @@ final class ThumbleCLISmokeTestSuite: XCTestCase {
 
         var profile = GamepadControllerTemplate.xbox.makeProfile()
         var savedCustomization = profile.customization
-        savedCustomization.setLabel("Saved", for: .jump)
+        savedCustomization.setLabel("Saved", for: .preset(5))
         savedCustomization.updatedAt = 200
         profile.customization = savedCustomization
         profile.updatedAt = 200
@@ -1220,11 +2078,11 @@ final class ThumbleCLISmokeTestSuite: XCTestCase {
         )
 
         var staleMirror = savedCustomization
-        staleMirror.setLabel("Stale", for: .jump)
+        staleMirror.setLabel("Stale", for: .preset(5))
         staleMirror.updatedAt = 100
-        let loaded = GamepadConfigurationProfilePersistence.load(activeCustomization: staleMirror)
+        let loaded = try GamepadConfigurationProfilePersistence.load(activeCustomization: staleMirror)
 
-        XCTAssertEqual(loaded.activeProfile?.customization.visualLabel(for: .jump), "Saved")
+        XCTAssertEqual(loaded.activeProfile?.customization.visualLabel(for: .preset(5)), "Saved")
         XCTAssertEqual(loaded.activeProfile?.customization.updatedAt, 200)
     }
 
@@ -1234,8 +2092,8 @@ final class ThumbleCLISmokeTestSuite: XCTestCase {
         let themed = customization.normalized
         XCTAssertEqual(themed.colorSchemePreference, .light)
         XCTAssertTrue(themed.styleLibrary.style(id: "soft-white-raised") != nil)
-        XCTAssertEqual(themed.buttonCustomization(for: .jump).styleID, "soft-white-lavender")
-        let jump = themed.resolvedControls(in: CGSize(width: 874, height: 402)).first { $0.id == .builtin(.jump) }!
+        XCTAssertEqual(themed.buttonCustomization(for: .preset(5)).styleID, "soft-white-lavender")
+        let jump = themed.resolvedControls(in: CGSize(width: 874, height: 402)).first { $0.id == .builtin(.preset(5)) }!
         XCTAssertGreaterThan(themed.resolvedPresentation(for: jump, state: .normal, scheme: .light).shadows.count, 1)
 
         let template = GamepadControllerTemplate.softWhite.makeProfile().customization.normalized
@@ -1257,7 +2115,6 @@ final class ThumbleCLISmokeTestSuite: XCTestCase {
         customization.customButtons = [
             GamepadCustomButton(
                 id: id,
-                mappedButton: .custom1,
                 label: "Large Action",
                 layout: GamepadButtonCustomization(
                     centerX: 0.5,
@@ -1315,12 +2172,12 @@ final class ThumbleCLISmokeTestSuite: XCTestCase {
             "cavern-soul",
             "cavern-stone"
         ])
-        XCTAssertEqual(normalized.buttonCustomization(for: .focus).styleID, "cavern-soul")
-        XCTAssertEqual(normalized.buttonCustomization(for: .attack).styleID, "cavern-nail")
-        XCTAssertEqual(normalized.buttonCustomization(for: .dash).styleID, "cavern-dash")
+        XCTAssertEqual(normalized.buttonCustomization(for: .preset(8)).styleID, "cavern-soul")
+        XCTAssertEqual(normalized.buttonCustomization(for: .preset(6)).styleID, "cavern-nail")
+        XCTAssertEqual(normalized.buttonCustomization(for: .preset(7)).styleID, "cavern-dash")
         XCTAssertTrue(normalized.designMetadata?.tags.contains("marketable") == true)
 
-        let focus = normalized.resolvedControls(in: CGSize(width: 874, height: 402)).first { $0.id == .builtin(.focus) }!
+        let focus = normalized.resolvedControls(in: CGSize(width: 874, height: 402)).first { $0.id == .builtin(.preset(8)) }!
         let normal = normalized.resolvedPresentation(for: focus, state: .normal, scheme: .dark)
         let pressed = normalized.resolvedPresentation(for: focus, state: .pressed, scheme: .dark)
         XCTAssertEqual(normal.icon?.value, "sparkles")
@@ -1329,15 +2186,28 @@ final class ThumbleCLISmokeTestSuite: XCTestCase {
         XCTAssertNotEqual(normal.fillStyle.representativeColor, pressed.fillStyle.representativeColor)
     }
 
+    func testHollowKnightAuthorsItsOwnKeyboardAndGamepadDefaults() throws {
+        let generated = try XCTUnwrap(GameKeypadGenerator.generate(for: "Hollow Knight"))
+        for element in generated.profile.customization.elements where element.kind == .button {
+            let specification = try XCTUnwrap(generated.keyBindings[element.inputID])
+            let keyboard = try XCTUnwrap(KeypadKeyboardBinding(keyName: specification.key, modifierNames: specification.modifiers))
+            XCTAssertEqual(element.output?.keyboard, keyboard)
+            XCTAssertEqual(element.defaultOutput, element.output)
+        }
+        let elements = generated.profile.customization.elements
+        XCTAssertEqual(elements.first { $0.inputID == .preset(6) }?.output?.gamepadButtons, [.west])
+        XCTAssertEqual(elements.first { $0.inputID == .preset(7) }?.output?.gamepadButtons, [.east])
+    }
+
     func testHollowKnightBuiltInUsesMarketableCavernGlowTheme() throws {
         let generated = try XCTUnwrap(GameKeypadGenerator.generate(for: "Hollow Knight"))
         let customization = generated.profile.customization.normalized
 
         XCTAssertEqual(generated.source, "Built-in Hollow Knight default keyboard template with Thumble's Cavern Glow showcase theme")
         XCTAssertEqual(customization.colorSchemePreference, .dark)
-        XCTAssertEqual(customization.buttonCustomization(for: .focus).styleID, "cavern-soul")
-        XCTAssertEqual(customization.buttonCustomization(for: .attack).styleID, "cavern-nail")
-        XCTAssertEqual(customization.buttonCustomization(for: .map).styleID, "cavern-parchment")
+        XCTAssertEqual(customization.buttonCustomization(for: .preset(8)).styleID, "cavern-soul")
+        XCTAssertEqual(customization.buttonCustomization(for: .preset(6)).styleID, "cavern-nail")
+        XCTAssertEqual(customization.buttonCustomization(for: .preset(9)).styleID, "cavern-parchment")
         XCTAssertTrue(customization.styleLibrary.style(id: "cavern-soul") != nil)
         XCTAssertTrue(customization.hasCustomBackgroundFill(for: .dark))
         XCTAssertTrue(customization.designMetadata?.tags.contains("showcase") == true)
@@ -1961,7 +2831,7 @@ final class ThumbleCLISmokeTestSuite: XCTestCase {
         XCTAssertEqual(hash["canonicalization"] as? String, "rfc8785")
         XCTAssertEqual(
             hash["value"] as? String,
-            "71bb1a2c4832391a93df43ff42cc970b2ff90e8e85bc4041eebbfaa6d2cee3ff"
+            "c2a7a65503c80d94648642ae57c1721181fd8ad2274113846bc32d3d6670507b"
         )
 
         let profile = try XCTUnwrap((fixture["profiles"] as? [[String: Any]])?.first)
@@ -1970,12 +2840,12 @@ final class ThumbleCLISmokeTestSuite: XCTestCase {
         let profileID = "00000000-0000-0000-0000-000000000201"
         let keyMaps = try XCTUnwrap(fixture["profileKeyBindings"] as? [String: Any])
         let keyBindings = try XCTUnwrap(keyMaps[profileID] as? [String: Any])
-        let futureButton = try XCTUnwrap(keyBindings["futureButton"] as? [String: Any])
+        let futureButton = try XCTUnwrap(keyBindings["81C296ED-309D-4F05-BB11-F5A2E2027801"] as? [String: Any])
         let futureBinding = try XCTUnwrap(futureButton["futureBindingField"] as? [String: Any])
         XCTAssertEqual(futureBinding["label"] as? String, "保持")
         let outputMaps = try XCTUnwrap(fixture["profileOutputBindings"] as? [String: Any])
         let outputBindings = try XCTUnwrap(outputMaps[profileID] as? [String: Any])
-        let futureOutputButton = try XCTUnwrap(outputBindings["futureButton"] as? [String: Any])
+        let futureOutputButton = try XCTUnwrap(outputBindings["81C296ED-309D-4F05-BB11-F5A2E2027801"] as? [String: Any])
         let futureOutput = try XCTUnwrap(futureOutputButton["futureOutputField"] as? [String: Any])
         XCTAssertEqual(futureOutput["mode"] as? String, "next")
 
@@ -2022,7 +2892,7 @@ final class ThumbleCLISmokeTestSuite: XCTestCase {
         }
     }
 
-    func testProfileImportSchemaLessEnvelopeAdapterRunsFirstAndPreservesCatalogMetadata() throws {
+    func testProfileImportRejectsSchemaLessEnvelopesBeforeDispatch() throws {
         struct SchemaLessEnvelope: Codable {
             var exportedAt: Int64
             var profiles: [GamepadConfigurationProfile]
@@ -2036,9 +2906,9 @@ final class ThumbleCLISmokeTestSuite: XCTestCase {
         defer { try? FileManager.default.removeItem(at: routed.root) }
         let first = GamepadConfigurationProfile(name: "First", customization: .defaultValue)
         let second = GamepadConfigurationProfile(name: "Second", customization: .defaultValue)
-        let keyBindings = [first.id.uuidString: ["jump": MacKeyBinding(keyCode: MacVirtualKey.space)]]
+        let keyBindings = [first.id.uuidString: [KeypadElementID.preset(5).rawValue: MacKeyBinding(keyCode: MacVirtualKey.space)]]
         let outputBindings = [
-            second.id.uuidString: ["attack": MacControlOutputBinding(gamepadButtons: [.south])]
+            second.id.uuidString: [KeypadElementID.preset(6).rawValue: MacControlOutputBinding(gamepadButtons: [.south])]
         ]
         let inputEnvelope = SchemaLessEnvelope(
             exportedAt: 123_456,
@@ -2049,21 +2919,61 @@ final class ThumbleCLISmokeTestSuite: XCTestCase {
             profileOutputBindings: outputBindings
         )
         let input = routed.root.appendingPathComponent("schema-less-envelope.json")
-        try JSONEncoder().encode(inputEnvelope).write(to: input)
+        let originalInput = try JSONEncoder().encode(inputEnvelope)
+        try originalInput.write(to: input)
 
         let result = try runRoutedCLI(routed, arguments: ["profile", "import", input.path])
-        XCTAssertEqual(result.status, 0, result.stderr)
-        let artifactJSON = try XCTUnwrap(try recordedCommand(in: routed)["artifactJSON"] as? String)
-        let adapted = try JSONDecoder().decode(SchemaLessEnvelope.self, from: Data(artifactJSON.utf8))
-        XCTAssertEqual(adapted.exportedAt, 123_456)
-        XCTAssertEqual(adapted.profiles.map(\.id), [first.id, second.id])
-        XCTAssertEqual(adapted.activeProfileID, second.id)
-        XCTAssertEqual(adapted.defaultProfileID, first.id)
-        XCTAssertEqual(adapted.profileKeyBindings, keyBindings)
-        XCTAssertEqual(adapted.profileOutputBindings, outputBindings)
+        XCTAssertNotEqual(result.status, 0, result.stderr)
+        XCTAssertTrue(result.stderr.contains("Unsupported profile import JSON"), result.stderr)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: routed.record.path))
+        XCTAssertEqual(try Data(contentsOf: input), originalInput)
     }
 
-    func testProfileImportLegacyAdaptersProduceVersionFourEnvelopes() throws {
+    func testCurrentImportAdaptersPreserveFutureProfileAndCustomizationMetadata() throws {
+        let routed = try makeRoutedCLI()
+        defer { try? FileManager.default.removeItem(at: routed.root) }
+        let profile = GamepadConfigurationProfile(name: "Metadata", customization: .defaultValue)
+        var raw = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(profile)) as? [String: Any])
+        raw["futureProfile"] = ["source": "Incoming"]
+        var customization = try XCTUnwrap(raw["customization"] as? [String: Any])
+        customization["futureCustomization"] = ["source": "Incoming"]
+        var elements = try XCTUnwrap(customization["elements"] as? [[String: Any]])
+        elements[0]["futureElement"] = ["source": "Incoming"]
+        customization["elements"] = elements
+        raw["customization"] = customization
+        let current: [String: Any] = ["schema": ThumbleKeypadConfigurationExport.schemaIdentifier, "version": 4,
+            "profiles": [raw], "activeProfileID": profile.id.uuidString, "profileKeyBindings": [:], "profileOutputBindings": [:]]
+        let generated = GeneratedGameKeypadProfile(requestedGameName: "Metadata", resolvedGameName: "Metadata",
+            profile: profile, keyBindings: [.preset(5): .init(key: "Space", modifiers: ["Shift"])], source: "test", confidence: .high)
+        var generatedRaw = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(generated)) as? [String: Any])
+        generatedRaw["profile"] = raw
+        let shapes: [(String, Any)] = [("profile", raw), ("envelope", current), ("profiles", [raw]),
+            ("generated", generatedRaw), ("customization", customization)]
+        for (name, value) in shapes {
+            let input = routed.root.appendingPathComponent(name + ".json")
+            try JSONSerialization.data(withJSONObject: value).write(to: input)
+            let result = try runRoutedCLI(routed, arguments: ["profile", "import", input.path])
+            XCTAssertEqual(result.status, 0, result.stderr)
+            let json = try XCTUnwrap(try recordedCommand(in: routed)["artifactJSON"] as? String)
+            let envelope = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
+            let imported = try XCTUnwrap((envelope["profiles"] as? [[String: Any]])?.first)
+            if name != "customization" {
+                XCTAssertEqual(imported["futureProfile"] as? [String: String], ["source": "Incoming"], name)
+            }
+            let importedCustomization = try XCTUnwrap(imported["customization"] as? [String: Any])
+            XCTAssertEqual(importedCustomization["futureCustomization"] as? [String: String], ["source": "Incoming"], name)
+            XCTAssertEqual((importedCustomization["elements"] as? [[String: Any]])?.first?["futureElement"] as? [String: String], ["source": "Incoming"], name)
+            let checked = try MacConfigurationBindings.decodeKeypadImport(data: Data(json.utf8), sourceName: name)
+            if name == "generated" {
+                let binding = checked.profiles[0].initialMacOutputBindings[.preset(5)]
+                XCTAssertEqual(binding?.keyboard?.strokes.first?.keyCode, 49)
+                XCTAssertEqual(binding?.keyboard?.strokes.first?.modifiers, [.shift])
+                XCTAssertEqual(binding?.gamepadButtons, [.south])
+            }
+        }
+    }
+
+    func testCurrentRawProfileAdaptersProduceVersionFourEnvelopes() throws {
         let routed = try makeRoutedCLI()
         defer { try? FileManager.default.removeItem(at: routed.root) }
         let profile = GamepadConfigurationProfile(name: "Adapter Profile", customization: .defaultValue)
@@ -2071,7 +2981,7 @@ final class ThumbleCLISmokeTestSuite: XCTestCase {
             requestedGameName: "Adapter Game",
             resolvedGameName: "Adapter Game",
             profile: profile,
-            keyBindings: [.jump: .init(key: "Space")],
+            keyBindings: [.preset(5): .init(key: "Space")],
             source: "test",
             confidence: .high
         )
@@ -2359,7 +3269,7 @@ final class ThumbleCLISmokeTestSuite: XCTestCase {
                     "code": "unsupported_profile_artifact_schema",
                     "message": "profile import artifact schema is unsupported"
                 }
-            elif artifact.get("version") not in range(1, 5):
+            elif artifact.get("version") != 4:
                 response["ok"] = False
                 response["error"] = {
                     "code": "unsupported_profile_artifact_schema_version",
@@ -2395,8 +3305,21 @@ final class ThumbleCLISmokeTestSuite: XCTestCase {
         standardInput: Data? = nil
     ) throws -> RoutedCLIResult {
         let process = Process()
-        let stdout = Pipe()
-        let stderr = Pipe()
+        // Generated profiles can exceed pipe capacity. File-backed capture keeps
+        // the child from blocking while the synchronous harness waits for exit.
+        let token = UUID().uuidString
+        let stdoutURL = routed.root.appendingPathComponent("stdout-\(token)")
+        let stderrURL = routed.root.appendingPathComponent("stderr-\(token)")
+        try Data().write(to: stdoutURL)
+        try Data().write(to: stderrURL)
+        let stdout = try FileHandle(forWritingTo: stdoutURL)
+        let stderr = try FileHandle(forWritingTo: stderrURL)
+        defer {
+            try? stdout.close()
+            try? stderr.close()
+            try? FileManager.default.removeItem(at: stdoutURL)
+            try? FileManager.default.removeItem(at: stderrURL)
+        }
         let stdin = standardInput.map { _ in Pipe() }
         process.executableURL = routed.executable
         process.arguments = arguments
@@ -2411,8 +3334,8 @@ final class ThumbleCLISmokeTestSuite: XCTestCase {
         process.waitUntilExit()
         return RoutedCLIResult(
             status: process.terminationStatus,
-            stdout: String(decoding: stdout.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self),
-            stderr: String(decoding: stderr.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+            stdout: String(decoding: try Data(contentsOf: stdoutURL), as: UTF8.self),
+            stderr: String(decoding: try Data(contentsOf: stderrURL), as: UTF8.self)
         )
     }
 

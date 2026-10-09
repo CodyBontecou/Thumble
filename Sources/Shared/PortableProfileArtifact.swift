@@ -236,6 +236,7 @@ public struct PortableProfileArtifact: Sendable {
         var summaries: [ProfileSummary] = []
         summaries.reserveCapacity(rawProfiles.count)
         var idsByLowercase: [String: UUID] = [:]
+        var declaredByProfile: [String: Set<UUID>] = [:]
         for profile in rawProfiles {
             guard !profile.keys.contains("launchTarget") else {
                 throw PortableProfileArtifactError.launchTargetForbidden
@@ -253,6 +254,21 @@ public struct PortableProfileArtifact: Sendable {
             guard idsByLowercase.updateValue(id, forKey: normalizedID) == nil else {
                 throw PortableProfileArtifactError.duplicateProfileID
             }
+            var declared = Set<UUID>()
+            for field in ["customization", "landscapeCustomization", "portraitCustomization"] {
+                guard let raw = profile[field], !(raw is NSNull) else { continue }
+                guard let customization = raw as? [String: Any],
+                      let elements = customization["elements"] as? [[String: Any]] else {
+                    throw PortableProfileArtifactError.malformedProfile
+                }
+                for element in elements {
+                    guard let rawID = element["id"] as? String, let id = canonicalUUID(rawID) else {
+                        throw PortableProfileArtifactError.malformedProfile
+                    }
+                    declared.insert(id)
+                }
+            }
+            declaredByProfile[normalizedID] = declared
             summaries.append(ProfileSummary(id: id, name: name))
         }
         guard let active = idsByLowercase[activeString.lowercased()] else {
@@ -268,8 +284,8 @@ public struct PortableProfileArtifact: Sendable {
             defaultID = nil
         }
 
-        try validateBindingMaps(keyMaps, profileIDs: Set(idsByLowercase.keys), output: false)
-        try validateBindingMaps(outputMaps, profileIDs: Set(idsByLowercase.keys), output: true)
+        try validateBindingMaps(keyMaps, declaredByProfile: declaredByProfile, output: false)
+        try validateBindingMaps(outputMaps, declaredByProfile: declaredByProfile, output: true)
 
         return ValidatedEnvelope(
             rawProfiles: rawProfiles,
@@ -284,7 +300,7 @@ public struct PortableProfileArtifact: Sendable {
 
     private static func validateBindingMaps(
         _ maps: [String: Any],
-        profileIDs: Set<String>,
+        declaredByProfile: [String: Set<UUID>],
         output: Bool
     ) throws {
         var normalizedKeys = Set<String>()
@@ -293,16 +309,21 @@ public struct PortableProfileArtifact: Sendable {
             guard canonicalUUID(profileID) != nil, normalizedKeys.insert(normalized).inserted else {
                 throw PortableProfileArtifactError.duplicateBindingProfileID
             }
-            guard profileIDs.contains(normalized) else {
+            guard let declared = declaredByProfile[normalized] else {
                 throw PortableProfileArtifactError.bindingProfileMissing
             }
-            guard let bindings = rawBindings as? [String: Any], bindings.count <= 128 else {
+            // One profile may declare 128 distinct controls in each of its
+            // three executable orientations. Skin baselines are not inputs.
+            guard let bindings = rawBindings as? [String: Any], bindings.count <= GamepadCustomization.maximumCustomButtons * 3 else {
                 throw PortableProfileArtifactError.invalidBindingMap
             }
-            for value in bindings.values {
-                guard let binding = value as? [String: Any] else {
+            var elementIDs = Set<UUID>()
+            for (key, value) in bindings {
+                guard let id = canonicalUUID(key), elementIDs.insert(id).inserted,
+                      let binding = value as? [String: Any] else {
                     throw PortableProfileArtifactError.invalidBindingMap
                 }
+                guard declared.contains(id) else { throw PortableProfileArtifactError.bindingElementMissing }
                 if output {
                     try validateOutputBinding(binding)
                 } else {
@@ -464,6 +485,7 @@ public enum PortableProfileArtifactError: Error, Equatable, Sendable, LocalizedE
     case activeProfileMissing
     case defaultProfileMissing
     case bindingProfileMissing
+    case bindingElementMissing
     case duplicateBindingProfileID
     case invalidBindingMap
     case globalBindingMapForbidden
@@ -503,6 +525,7 @@ public enum PortableProfileArtifactError: Error, Equatable, Sendable, LocalizedE
         case .activeProfileMissing: "The portable profile artifact active profile is missing."
         case .defaultProfileMissing: "The portable profile artifact default profile is missing."
         case .bindingProfileMissing: "A portable profile artifact binding map references a missing profile."
+        case .bindingElementMissing: "A portable profile artifact binding map references an undeclared element UUID."
         case .duplicateBindingProfileID: "Portable profile artifact binding maps contain duplicate profile IDs."
         case .invalidBindingMap: "The portable profile artifact contains an invalid binding map."
         case .globalBindingMapForbidden: "Authority-global binding maps are not portable."
@@ -517,7 +540,7 @@ public enum PortableProfileArtifactError: Error, Equatable, Sendable, LocalizedE
     }
 }
 
-private enum PortableArtifactCanonicalizer {
+enum PortableArtifactCanonicalizer {
     // Audited fixed routine: JSON.parse is applied only to the scanned data string; no artifact
     // bytes are evaluated as source. Array order is retained, object keys use JavaScript's UTF-16
     // lexical order, and JSON.stringify supplies ECMAScript number/string serialization (RFC 8785).
@@ -534,28 +557,54 @@ private enum PortableArtifactCanonicalizer {
         }
         return JSON.stringify(value);
       }
-      return function canonicalizePortableArtifact(text) {
+      return function canonicalizePortableArtifact(text, removeArtifactMetadata) {
         var root = JSON.parse(text);
-        delete root.exportedAt;
-        delete root.contentHash;
+        if (removeArtifactMetadata) {
+          delete root.exportedAt;
+          delete root.contentHash;
+        }
         return canonicalize(root);
       };
     })()
     """
 
     static func canonicalize(_ data: Data) throws -> Data {
+        try canonicalize(data, removeArtifactMetadata: true)
+    }
+
+    /// Canonical hashes for arbitrary design JSON retain every field. Strict scanning also
+    /// rejects duplicate keys and integers that cannot round-trip through ECMAScript numbers.
+    static func canonicalizeJSON(_ data: Data) throws -> Data {
+        try PortableJSONScanner(data: data).scan()
+        return try canonicalize(data, removeArtifactMetadata: false)
+    }
+
+    private static func canonicalize(_ data: Data, removeArtifactMetadata: Bool) throws -> Data {
         guard let text = String(data: data, encoding: .utf8), let context = JSContext() else {
             throw PortableProfileArtifactError.canonicalizationFailed
         }
         var exception = false
         context.exceptionHandler = { _, _ in exception = true }
         guard let function = context.evaluateScript(source), !exception,
-              let result = function.call(withArguments: [text]), !exception,
+              let result = function.call(withArguments: [text, removeArtifactMetadata]), !exception,
               let canonical = result.toString()
         else {
             throw PortableProfileArtifactError.canonicalizationFailed
         }
         return Data(canonical.utf8)
+    }
+}
+
+extension JSONDecoder {
+    /// Scan the original bytes before Codable containers can collapse repeated keys.
+    /// Unlike portable canonicalization, ordinary transport/persistence allows full-width integers.
+    func decodeUnique<T: Decodable>(_ type: T.Type, from data: Data) throws -> T {
+        try Self.validateUniqueKeys(in: data)
+        return try decode(type, from: data)
+    }
+
+    static func validateUniqueKeys(in data: Data) throws {
+        try PortableJSONScanner(data: data, enforceSafeIntegers: false).scan()
     }
 }
 
@@ -574,9 +623,15 @@ private final class PortableJSONScanner {
     private var index = 0
     private var frames: [Frame] = []
     private var rootComplete = false
+    private let enforceSafeIntegers: Bool
+    private let maximumStringBytes: Int
 
-    init(data: Data) {
+    init(data: Data, enforceSafeIntegers: Bool = true) {
         bytes = Array(data)
+        self.enforceSafeIntegers = enforceSafeIntegers
+        // Transport has its own bounded frame/chunk caps, which may exceed the
+        // portable artifact's per-string cap (for example a base64 chunk).
+        maximumStringBytes = enforceSafeIntegers ? 256 * 1024 : data.count
     }
 
     func scan() throws {
@@ -722,7 +777,7 @@ private final class PortableJSONScanner {
             let byte = bytes[index]
             if byte == 0x22 {
                 index += 1
-                guard decodedBytes <= 256 * 1024 else {
+                guard decodedBytes <= maximumStringBytes else {
                     throw PortableProfileArtifactError.stringTooLarge(offset: bounded(start))
                 }
                 return returnDecoded ? String(decoding: output, as: UTF8.self) : ""
@@ -788,7 +843,7 @@ private final class PortableJSONScanner {
                 if returnDecoded { output.append(contentsOf: bytes[index..<(index + length)]) }
                 index += length
             }
-            guard decodedBytes <= 256 * 1024 else {
+            guard decodedBytes <= maximumStringBytes else {
                 throw PortableProfileArtifactError.stringTooLarge(offset: bounded(start))
             }
         }
@@ -849,7 +904,7 @@ private final class PortableJSONScanner {
         guard let value = Double(token), value.isFinite else {
             throw PortableProfileArtifactError.invalidNumber(offset: bounded(start))
         }
-        if isInteger {
+        if isInteger && enforceSafeIntegers {
             let magnitude = token.first == "-" ? String(token.dropFirst()) : token
             let trimmed = String(magnitude.drop(while: { $0 == "0" }))
             if trimmed.count > 16 || (trimmed.count == 16 && trimmed > "9007199254740991") {

@@ -4,11 +4,20 @@ Thumble skins can be authored with real CSS instead of the material JSON model. 
 
 The supported language is versioned as profile **`thumble-css-core-1`**. Anything the profile does not support is a **strict compile error** — unsupported CSS is never silently ignored.
 
+Native pointing interiors have independent paint properties: `-thumble-trackpad-frame-color`,
+`-thumble-trackpad-cursor-color`, `-thumble-trackpad-indicator-color`,
+`-thumble-trackpad-secondary-indicator-color`, `-thumble-joystick-ring-color`,
+`-thumble-joystick-knob-fill` and `-thumble-joystick-knob-stroke`. Ring and aim-frame
+stroke widths use `-thumble-joystick-ring-stroke-width` and
+`-thumble-trackpad-frame-stroke-width` (0–12px). These accept normal, pressed, active
+and disabled rules, inherit normal paint, and preserve native interaction. Unspecified
+properties retain native defaults. Use `thumble skin css capabilities` for live syntax.
+
 ```bash
 thumble skin scaffold "My Skin" --identifier com.me.my-skin --css
 thumble skin css capabilities
 thumble skin css lint .
-thumble skin css computed . --control builtin-jump --scheme dark --state pressed
+thumble skin css computed . --control builtin-00000000-0000-0000-0000-000000000105 --scheme dark --state pressed
 thumble skin compile . --strict
 thumble skin preview . -o reviews/contact-sheet-1.png \
   --all-variants --all-states --native-renderer --contact-sheet --columns 4
@@ -27,10 +36,10 @@ Every control exposes these attributes:
 
 | Attribute | Values |
 |---|---|
-| `id` | Stable kebab-case ID, e.g. `builtin-jump`, `builtin-left-shoulder`, `custom-button-3` |
+| `id` | Kebab-case element identity containing its UUID, e.g. `builtin-00000000-0000-0000-0000-000000000105`; labels do not determine identity |
 | `kind` | `button`, `joystick`, `trigger`, `trackpad`, `text`, `decoration` |
 | `role` | `movement`, `primary_action`, `secondary_action`, `utility`, `menu`, `custom`, `joystick`, `trigger`, `trackpad`, `decoration`, `system` |
-| `button` | Built-in button ID for face buttons, e.g. `jump`, `attack`, `leftShoulder` |
+| `button` | Actual declared input UUID, e.g. `00000000-0000-0000-0000-000000000105`; absent on system/style-only controls. Names and roles are not input aliases |
 
 Run `thumble skin css computed .` (without `--control`) to list every element ID on your artboard.
 
@@ -57,7 +66,7 @@ control[role="primary_action"] {
   color: #FFFFFF;
 }
 
-#builtin-jump { border-radius: 50%; }
+#builtin-00000000-0000-0000-0000-000000000105 { border-radius: 50%; }
 
 @media (prefers-color-scheme: dark) {
   :root { --surface: #211A46; --ink: #B8A0E8; }
@@ -72,8 +81,8 @@ control[role="primary_action"] {
 | `controller` / `:root` | The controller root (background canvas) |
 | `control` | Every control |
 | `button`, `joystick`, `trigger`, `trackpad`, `text`, `decoration` | Controls of one kind |
-| `#builtin-jump` | One control by stable ID |
-| `[kind="button"]`, `[role~="primary_action"]`, `[button="jump"]` | Attribute selectors (`=` and `~=`) |
+| `#builtin-00000000-0000-0000-0000-000000000105` | One control by UUID-based appearance ID |
+| `[kind="button"]`, `[role~="primary_action"]`, `[button="00000000-0000-0000-0000-000000000105"]` | Attribute selectors (`=` and `~=`) |
 | `controller control` | Descendant selector |
 | `:normal`, `:pressed`, `:active`, `:disabled` | Interaction state |
 
@@ -120,7 +129,7 @@ Lengths use `px` (compiled 1:1 to points). Gradients support `deg` angles, `to t
 }
 
 @media (orientation: portrait) and (prefers-color-scheme: dark) {
-  #builtin-jump { box-shadow: none; }
+  #builtin-00000000-0000-0000-0000-000000000105 { box-shadow: none; }
 }
 ```
 
@@ -158,3 +167,50 @@ CSS in Thumble is appearance-only, exactly like material workspaces:
 ## Workspace example
 
 See [`examples/css-first-light/`](examples/css-first-light/) for a complete CSS-authored workspace, and `docs/skins/README.md` for the material JSON path. Both authoring models compile to the same validated package format.
+
+
+### Appearance action and group tags
+
+CSS source schema 3 may attach `controlSemantics` to exact artboard IDs. Select them with
+`[action="lux.light-binding"]`, `[purpose="ability.q"]`, or `[group~="abilities"]`.
+These tags identify appearance intent and do not route input. See
+[controller design workspaces](../mcp/controller-design-v1.md) for bounds and native evidence.
+
+### Passive artwork anchored to captured controls
+
+CSS schema 3 workspaces can place a declared SVG `canvas_artwork` asset around an exact
+control, action, or group. The compiler emits an ordinary passive native artwork layer;
+SVG remains editable source and the package contains validated raster media. For example:
+
+```json
+{
+  "id": "ability-well",
+  "path": "sources/ability-well.svg",
+  "purpose": "canvas_artwork",
+  "format": "png",
+  "outputWidth": 256,
+  "outputHeight": 256,
+  "anchor": { "group": "abilities", "scaleX": 1.2, "scaleY": 1.2, "plane": "underlay" }
+}
+```
+
+Declare matching `controlSemantics` records with `groups: ["abilities"]`. An anchor has
+exactly one target: `controlID`, `action`, or `group`. Each selected orientation must resolve
+1–32 visible controls. Different authored orientations can use different control UUIDs for
+one semantic group. The anchor resolves to their axis-aligned union before rotation or
+pressed-state scaling. `scaleX`/`scaleY` are 0.25–4; `offsetX`/`offsetY` are −1–1, measured
+in that union's width/height. Defaults are unit scale and zero offset. Optional `opacity`
+is 0–1, `zIndex` is −10000–10000, and `plane` is `underlay` or `overlay`. At most eight assets
+may have anchors. Asset orientation/scheme filters select where its layer exists.
+
+Missing targets, unsupported fields and transforms leaving the canvas fail compilation;
+frames are never silently clamped. Typed design layout edits recompile anchors against the
+replacement contract and invalidate previous review evidence. Anchors do not add interaction,
+labels, accessibility names, rotation following or live geometry tracking.
+
+Captured CSS packages use `captured_controller` compatibility. The manifest carries exact
+visible control IDs, kinds, normalized frames, captured rotations and canvas dimensions.
+Compatible custom controllers do not need a canonical template identity. Changing those
+geometry inputs hides aligned artwork until the package is recompiled and reviewed. Changing
+bindings does not change geometry compatibility. Legacy contracts that omit rotation retain
+their original bounds-only comparison for that field.

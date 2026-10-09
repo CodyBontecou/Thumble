@@ -35,8 +35,8 @@ struct GamepadLayoutResolverSmokeTests {
 
         var customization = GamepadCustomization.blankCanvas
         customization.customButtons = [
-            GamepadCustomButton(id: leftID, mappedButton: .custom1, label: "Left", layout: initialLayout),
-            GamepadCustomButton(id: rightID, mappedButton: .custom2, label: "Right", layout: initialLayout)
+            GamepadCustomButton(id: leftID, label: "Left", layout: initialLayout),
+            GamepadCustomButton(id: rightID, label: "Right", layout: initialLayout)
         ]
 
         let preliminaryControls = customization.resolvedControls(in: canvasSize)
@@ -214,14 +214,14 @@ struct GamepadLayoutResolverSmokeTests {
         var customization = GamepadCustomization.defaultValue
         let baselineKey = GamepadResolvedControlsLayoutCacheKey(customization: customization)
 
-        var jump = customization.buttonCustomization(for: .jump)
+        var jump = customization.buttonCustomization(for: .preset(5))
         jump.fillColor = GamepadRGBAColor(hexString: "#FF00AA")
         jump.shadowStrength = 1.75
         jump.hapticStyle = .heavy
         jump.visualStyle = GamepadControlVisualStyle(
             normal: GamepadControlStateStyle(glowRadius: 18, opacity: 0.42)
         )
-        customization.setButtonCustomization(jump, for: .jump)
+        customization.setButtonCustomization(jump, for: .preset(5))
         customization.backgroundFillStyle = .solid(GamepadRGBAColor(hexString: "#102030") ?? .defaultValue)
 
         expect(
@@ -230,7 +230,7 @@ struct GamepadLayoutResolverSmokeTests {
         )
 
         jump.widthScale = 1.4
-        customization.setButtonCustomization(jump, for: .jump)
+        customization.setButtonCustomization(jump, for: .preset(5))
         expect(
             GamepadResolvedControlsLayoutCacheKey(customization: customization) != baselineKey,
             "size changes should invalidate resolved control geometry"
@@ -243,17 +243,17 @@ struct GamepadLayoutResolverSmokeTests {
         let cache = GamepadResolvedControlsCache()
         let initial = cache.controls(for: customization, in: canvasSize, defaultLabelProvider: nil)
         expect(cache.resolutionCount == 1, "initial cache lookup should resolve geometry once")
-        guard let initialJump = initial.first(where: { $0.id == .builtin(.jump) }) else {
+        guard let initialJump = initial.first(where: { $0.id == .builtin(.preset(5)) }) else {
             fail("resolved-control cache did not return jump")
         }
 
-        var jump = customization.buttonCustomization(for: .jump)
+        var jump = customization.buttonCustomization(for: .preset(5))
         jump.fillColor = GamepadRGBAColor(hexString: "#22CC88")
         jump.shadowStrength = 0.25
-        customization.setButtonCustomization(jump, for: .jump)
+        customization.setButtonCustomization(jump, for: .preset(5))
         let presentationRefresh = cache.controls(for: customization, in: canvasSize, defaultLabelProvider: nil)
         expect(cache.resolutionCount == 1, "presentation refresh should not resolve geometry again")
-        guard let refreshedJump = presentationRefresh.first(where: { $0.id == .builtin(.jump) }) else {
+        guard let refreshedJump = presentationRefresh.first(where: { $0.id == .builtin(.preset(5)) }) else {
             fail("resolved-control cache lost jump after presentation refresh")
         }
         expectAlmostEqual(refreshedJump.center.x, initialJump.center.x, "presentation refresh should preserve cached geometry")
@@ -261,10 +261,10 @@ struct GamepadLayoutResolverSmokeTests {
         expectAlmostEqual(refreshedJump.layoutCustomization.shadowStrength, 0.25, "presentation refresh should expose the current style")
 
         jump.widthScale = 1.5
-        customization.setButtonCustomization(jump, for: .jump)
+        customization.setButtonCustomization(jump, for: .preset(5))
         let geometryRefresh = cache.controls(for: customization, in: canvasSize, defaultLabelProvider: nil)
         expect(cache.resolutionCount == 2, "geometry refresh should run the resolver again")
-        guard let resizedJump = geometryRefresh.first(where: { $0.id == .builtin(.jump) }) else {
+        guard let resizedJump = geometryRefresh.first(where: { $0.id == .builtin(.preset(5)) }) else {
             fail("resolved-control cache lost jump after geometry refresh")
         }
         expect(resizedJump.size.width > initialJump.size.width, "geometry changes should recompute resolved control size")
@@ -290,8 +290,8 @@ struct GamepadLayoutResolverSmokeTests {
             shape: .circle
         )
         customization.customButtons = [
-            GamepadCustomButton(id: firstID, mappedButton: .custom1, label: "One", layout: badLayout),
-            GamepadCustomButton(id: secondID, mappedButton: .custom2, label: "Two", layout: badLayout)
+            GamepadCustomButton(id: firstID, label: "One", layout: badLayout),
+            GamepadCustomButton(id: secondID, label: "Two", layout: badLayout)
         ]
 
         let report = customization.layoutQualityReport(
@@ -305,7 +305,7 @@ struct GamepadLayoutResolverSmokeTests {
 
     private static func testLayoutQualityDetectsUnderusedBottomSpace() {
         var customization = GamepadCustomization.blankCanvas
-        customization.customButtons = GameButton.customSlots.enumerated().map { index, button in
+        customization.customButtons = (11...18).map(KeypadElementID.preset).enumerated().map { index, button in
             let row = index / 4
             let column = index % 4
             let id = UUID(uuidString: String(format: "00000000-0000-0000-0000-%012X", 0x700 + index))!
@@ -316,7 +316,7 @@ struct GamepadLayoutResolverSmokeTests {
                 heightScale: 0.55,
                 shape: .roundedRectangle
             )
-            return GamepadCustomButton(id: id, mappedButton: button, label: "Button \(index + 1)", layout: layout)
+            return GamepadCustomButton(id: id, label: "Button \(index + 1)", layout: layout)
         }
 
         let report = customization.layoutQualityReport(
@@ -329,7 +329,6 @@ struct GamepadLayoutResolverSmokeTests {
     private static func customButton(id: UUID, center: CGPoint) -> GamepadCustomButton {
         GamepadCustomButton(
             id: id,
-            mappedButton: .custom1,
             label: "Key",
             layout: GamepadButtonCustomization(
                 centerX: center.x,

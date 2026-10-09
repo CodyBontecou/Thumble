@@ -394,6 +394,14 @@ public enum ThumbleSkinPackageValidator {
             if compatibility.mode == .templateAligned, compatibility.templates.isEmpty {
                 error("missing-template-requirement", "Template-aligned skins must name at least one canonical template.", path: "manifest.compatibility.templates")
             }
+            if compatibility.mode == .capturedController {
+                if compatibility.capturedGeometry?.isValid != true
+                    || Set(compatibility.capturedGeometry?.variants.map(\.orientation) ?? []) != Set(compatibility.orientations) {
+                    error("invalid-captured-geometry", "Captured skins require bounded exact geometry for every compatible orientation.", path: "manifest.compatibility.capturedGeometry")
+                }
+            } else if compatibility.capturedGeometry != nil {
+                error("unexpected-captured-geometry", "Captured geometry requires captured_controller compatibility.", path: "manifest.compatibility.capturedGeometry")
+            }
             if compatibility.orientations.isEmpty {
                 error("missing-compatible-orientation", "Compatibility must declare at least one orientation.", path: "manifest.compatibility.orientations")
             }
@@ -630,6 +638,9 @@ public enum ThumbleSkinPackageValidator {
     private static func collectAssets(from visualStyle: GamepadControlVisualStyle?, into ids: inout Set<String>) {
         guard let visualStyle else { return }
         collectAssets(from: visualStyle.icon, into: &ids)
+        for state in GamepadControlPresentationState.allCases {
+            collectAssets(from: visualStyle.stateStyle(for: state).content?.icon, into: &ids)
+        }
         collectAssets(from: visualStyle.normal.fillStyle, into: &ids)
         collectAssets(from: visualStyle.pressed?.fillStyle, into: &ids)
         collectAssets(from: visualStyle.active?.fillStyle, into: &ids)
@@ -908,7 +919,7 @@ public enum ThumbleSkinPackageCodec {
                 maximumBytes: 1_000_000
             )
             do {
-                manifest = try decoder.decode(ThumbleSkinManifest.self, from: data).normalized
+                manifest = try decoder.decodeUnique(ThumbleSkinManifest.self, from: data).normalized
             } catch {
                 throw ThumbleSkinPackageCodecError.corruptEntry("manifest.json")
             }
@@ -944,7 +955,7 @@ public enum ThumbleSkinPackageCodec {
                 throw ThumbleSkinPackageCodecError.corruptEntry(path)
             }
             do {
-                skin = try decoder.decode(ThumbleSkin.self, from: payload).normalized
+                skin = try decoder.decodeUnique(ThumbleSkin.self, from: payload).normalized
             } catch {
                 throw ThumbleSkinPackageCodecError.corruptEntry(path)
             }
@@ -968,7 +979,7 @@ public enum ThumbleSkinPackageCodec {
                 throw ThumbleSkinPackageCodecError.corruptEntry(path)
             }
             do {
-                profile = try decoder.decode(GamepadConfigurationProfile.self, from: payload).normalized
+                profile = try decoder.decodeUnique(GamepadConfigurationProfile.self, from: payload).normalized
             } catch {
                 throw ThumbleSkinPackageCodecError.corruptEntry(path)
             }

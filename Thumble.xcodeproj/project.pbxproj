@@ -7,6 +7,13 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		8D314AD27369510B0797A101 /* ThumbleNativeConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D314AD27369510B0797A100 /* ThumbleNativeConfiguration.swift */; };
+		8D314AD27369510B0797A102 /* ThumbleNativeConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D314AD27369510B0797A100 /* ThumbleNativeConfiguration.swift */; };
+		8D314AD27369510B0797A103 /* ThumbleNativeConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D314AD27369510B0797A100 /* ThumbleNativeConfiguration.swift */; };
+		8D314AD27369510B0797A104 /* ThumbleNativeConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D314AD27369510B0797A100 /* ThumbleNativeConfiguration.swift */; };
+		8D314AD27369510B0797A105 /* ThumbleNativeConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D314AD27369510B0797A100 /* ThumbleNativeConfiguration.swift */; };
+		8D314AD27369510B0797A106 /* ThumbleNativeConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D314AD27369510B0797A100 /* ThumbleNativeConfiguration.swift */; };
+		8D314AD27369510B0797A107 /* ThumbleNativeConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D314AD27369510B0797A100 /* ThumbleNativeConfiguration.swift */; };
 		00837D25779E4BBA910F8117 /* GamepadEditorDeviceCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87E5175D4D0F8D54EE4324BA /* GamepadEditorDeviceCatalog.swift */; };
 		01D4035F44491185B5D9D88A /* ThumbleSkinCompiler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E634A254AB9DDE331583C54 /* ThumbleSkinCompiler.swift */; };
 		03052B5667E2D2B4316AFF25 /* ThumbleMacApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71028E6D8438E0C8996AFD24 /* ThumbleMacApp.swift */; };
@@ -66,6 +73,7 @@
 		2462DF9C1E7AB75926095601 /* ThumbleSkin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14C28FC193386E1DFDFCBFE5 /* ThumbleSkin.swift */; };
 		25399EA553BC6DC140B7613B /* GamepadLayoutQuality.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB4F172EB8B6245807056D82 /* GamepadLayoutQuality.swift */; };
 		25BE35AFE9A18D07AD1BC612 /* ThumbleSkinQualityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27C4395AC453777D35ED383D /* ThumbleSkinQualityTests.swift */; };
+		265ECC00C15235D76638ECEC /* ThumbleMacSetupGuide.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26697D46B1B657D2C3BFD2D9 /* ThumbleMacSetupGuide.swift */; };
 		2687059C47D85AF93164E1F7 /* ThumbleCLI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5857C60B46178E03A9325C29 /* ThumbleCLI.swift */; };
 		26B73C7D5E270286B4547D28 /* ThumbleInputLatencySimulation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8F83DB2B9FB309CF3FB0367 /* ThumbleInputLatencySimulation.swift */; };
 		26F4B7927DC8BCEC4C1933B6 /* GamepadLayoutQuality.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB4F172EB8B6245807056D82 /* GamepadLayoutQuality.swift */; };
@@ -85,9 +93,11 @@
 		34FF501FD6610D1A5D5C9FC3 /* VirtualGamepadOutputPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8095D8C904A6623E001629C5 /* VirtualGamepadOutputPolicy.swift */; };
 		351249EEFD69E0EF25DB9900 /* ThumbleConfigurationBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4203ED7A09090D979073E3B4 /* ThumbleConfigurationBridge.swift */; };
 		36483D97D929829A250BEC0A /* PortableProfileArtifact.swift in Sources */ = {isa = PBXBuildFile; fileRef = C11E738F239D2BA9E214FB88 /* PortableProfileArtifact.swift */; };
+		36B1CBDC378BBA0A7B9B6525 /* ThumbleMacSetupGuide.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26697D46B1B657D2C3BFD2D9 /* ThumbleMacSetupGuide.swift */; };
 		36D3BC7ED9FC05221A1C5A11 /* PointerInjector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54B2C341DE2DFCEB69940768 /* PointerInjector.swift */; };
 		3753AE70EC45415EB0D02EE4 /* ThumbleConfigurationBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4203ED7A09090D979073E3B4 /* ThumbleConfigurationBridge.swift */; };
 		37BD6BDF2A329488F4755A3B /* ThumbleSkinWorkspace.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89F4714337A0F3FB4D592AFB /* ThumbleSkinWorkspace.swift */; };
+		12C9E9CDDBF64353602E7590 /* ControllerDesignSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2509C947A2EBD21D2034426D /* ControllerDesignSession.swift */; };
 		37F46C3BF169EF8B66F26182 /* ThumbleSkinCompatibility.swift in Sources */ = {isa = PBXBuildFile; fileRef = B63E6C04F59CAA138585500A /* ThumbleSkinCompatibility.swift */; };
 		380EE25507A5A8D4AD6BEC0F /* IOSLocalKeypadUX.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE976B45D64D1907B80DB6D8 /* IOSLocalKeypadUX.swift */; };
 		397869934508A8881627F8B3 /* GamepadControllerPresentationRouting.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC5E9DF9F03FFF71DFC52353 /* GamepadControllerPresentationRouting.swift */; };
@@ -138,6 +148,7 @@
 		59ACABE7C685527150426C4C /* ThumbleCLIBackendTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0946B4C0AA812A093188D8A /* ThumbleCLIBackendTests.swift */; };
 		59C2C6F235713D7EC9B8FCB1 /* GameKeypadGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44916FAE61260FE7B7A18A7E /* GameKeypadGenerator.swift */; };
 		5AAA46D6FE30630C0DD37477 /* ThumbleSkinWorkspace.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89F4714337A0F3FB4D592AFB /* ThumbleSkinWorkspace.swift */; };
+		B3E2008DDCF85CB9C45A8DE2 /* ControllerDesignSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2509C947A2EBD21D2034426D /* ControllerDesignSession.swift */; };
 		5C912BC10E8587DCE69CDFAC /* ThumbleVectorCompiler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E61CD2D4EFC81FB15DA411F /* ThumbleVectorCompiler.swift */; };
 		5CEF91757DAFCB8C9B554B5C /* ThumbleConfigurationBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4203ED7A09090D979073E3B4 /* ThumbleConfigurationBridge.swift */; };
 		5CFA2E83D91F3AAFA2A644C4 /* ThumbleNativeSkinPreviewRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3A5EC5351AEADAEE468D463 /* ThumbleNativeSkinPreviewRenderer.swift */; };
@@ -150,6 +161,7 @@
 		60553FF8662176249F779074 /* ThumbleSkinPackage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 761F8839E8DA1B7F8AFB9234 /* ThumbleSkinPackage.swift */; };
 		61006EB74A635A00C68D8DFA /* StackSafetyRegressionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57F30309134A29FDEEEF0247 /* StackSafetyRegressionTests.swift */; };
 		624AC58A9C784B73B7E3E2CC /* KeypadBindingPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFEF9B0E16D3BA71547B9160 /* KeypadBindingPresentation.swift */; };
+		63C5F3AC48AC9BEC863F0A4B /* ThumbleMacSetupGuide.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26697D46B1B657D2C3BFD2D9 /* ThumbleMacSetupGuide.swift */; };
 		63F7EE4F2E32AE9134F51B6E /* GamepadCustomization.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43A91C0CCA23D63A11106CD8 /* GamepadCustomization.swift */; };
 		646DDF8EB1E5441208A1C2DE /* ThumbleSkinResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7A78813402B0D520E0353CC /* ThumbleSkinResolver.swift */; };
 		649C21F998AA7A6B6A182995 /* ThumbleSkinResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7A78813402B0D520E0353CC /* ThumbleSkinResolver.swift */; };
@@ -157,6 +169,7 @@
 		65119AEFC30EC2EB82F4D64D /* PortableProfileArtifact.swift in Sources */ = {isa = PBXBuildFile; fileRef = C11E738F239D2BA9E214FB88 /* PortableProfileArtifact.swift */; };
 		656C31541C4483F0274EB4EE /* ButtonPulseSequencerSmokeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FB8DC5963B4A317C03ACB40 /* ButtonPulseSequencerSmokeTests.swift */; };
 		6573C82D7E3DCA87358F425F /* ThumbleSkinWorkspace.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89F4714337A0F3FB4D592AFB /* ThumbleSkinWorkspace.swift */; };
+		7838C425F2D642C03F916A57 /* ControllerDesignSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2509C947A2EBD21D2034426D /* ControllerDesignSession.swift */; };
 		65F13795FDC9515637CB89F4 /* ThumbleSkin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14C28FC193386E1DFDFCBFE5 /* ThumbleSkin.swift */; };
 		6713DF05A8CDC46413040535 /* KeypadAccessibilityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB9E05BD7ED6CFAEB8A21D03 /* KeypadAccessibilityTests.swift */; };
 		6718ECB0722AC1DECD61E008 /* ThumbleConfigurationBridgeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18ACF717A07A2FE44A8827B1 /* ThumbleConfigurationBridgeTests.swift */; };
@@ -164,6 +177,7 @@
 		682114187BB7CC1F9628634D /* IOSLocalKeypadUX.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE976B45D64D1907B80DB6D8 /* IOSLocalKeypadUX.swift */; };
 		6865CDA0C6FE7DA205E07F26 /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = F6235D34FECDA5DAEE0C106B /* ZIPFoundation */; };
 		6872D114A0FA022B13E15FBC /* IOSContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5DB7778B6693CFF76EECCC5 /* IOSContentView.swift */; };
+		6B08087158F1F9BAFF6AD726 /* ThumbleMacSetupGuide.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26697D46B1B657D2C3BFD2D9 /* ThumbleMacSetupGuide.swift */; };
 		6B2150575CD9DDB3E3E2C19B /* ThumbleSVGRasterizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F032EA624A966085B73A13FD /* ThumbleSVGRasterizer.swift */; };
 		6B477D40085B2F6A1F68150B /* ProfileArtifactAdoption.swift in Sources */ = {isa = PBXBuildFile; fileRef = 223FD9B514AF3C896FF23228 /* ProfileArtifactAdoption.swift */; };
 		6D3AAB36371D5FE4B4E08558 /* ThumbleInputLatencySimulation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8F83DB2B9FB309CF3FB0367 /* ThumbleInputLatencySimulation.swift */; };
@@ -180,6 +194,7 @@
 		738B6637FD04EB4A09E64BD9 /* VirtualGamepadOutputPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8095D8C904A6623E001629C5 /* VirtualGamepadOutputPolicy.swift */; };
 		73CD3A45B89A1705DEC5119C /* GamepadEditorDeviceCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87E5175D4D0F8D54EE4324BA /* GamepadEditorDeviceCatalog.swift */; };
 		742160DC3DF250C1F8B5951A /* ThumbleCSSCompiler.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5AC60027A3BD6E36E1AEBB9 /* ThumbleCSSCompiler.swift */; };
+		746127E76EB9F0D536260611 /* ThumbleMacSetupGuide.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26697D46B1B657D2C3BFD2D9 /* ThumbleMacSetupGuide.swift */; };
 		75187F0F0858BFDF17EF5AF6 /* GamepadLayoutQuality.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB4F172EB8B6245807056D82 /* GamepadLayoutQuality.swift */; };
 		75677E05A5E8A5292B286731 /* ThumbleSkinCompiler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E634A254AB9DDE331583C54 /* ThumbleSkinCompiler.swift */; };
 		76807B2DFAA0461AA2C2E8D7 /* ButtonPulseSequencer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E36A6B8AF78BF82AAF4C4CF /* ButtonPulseSequencer.swift */; };
@@ -234,6 +249,7 @@
 		9B0D46E7E9C311A335A16156 /* ThumbleCLIRuntimeBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = 079351FE0C12BE733877AF09 /* ThumbleCLIRuntimeBackend.swift */; };
 		9B2F0FD7C33214FBB84C018E /* MacControlOutputBinding.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7C97FFBBD03EF776B734E44 /* MacControlOutputBinding.swift */; };
 		9B6BDEF423AE9BDD3EC43A2B /* ControllerRuntimeUX.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA34DE7F2FC237A7747F02A7 /* ControllerRuntimeUX.swift */; };
+		9BB2D1386A208293B2B1313E /* ThumbleMacSetupGuide.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26697D46B1B657D2C3BFD2D9 /* ThumbleMacSetupGuide.swift */; };
 		9C95187BF04CBC5970882966 /* GamepadOrientationCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1785329DCEA27BD6E48B36AA /* GamepadOrientationCoordinator.swift */; };
 		9D14F40C9529FF7694CACC87 /* ThumbleVectorCompiler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E61CD2D4EFC81FB15DA411F /* ThumbleVectorCompiler.swift */; };
 		9D503E0DBD1DA66795330808 /* ThumbleVectorCompiler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E61CD2D4EFC81FB15DA411F /* ThumbleVectorCompiler.swift */; };
@@ -266,6 +282,7 @@
 		AC8007FFF75C7CE6A58596E6 /* ControllerActiveInputState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E7BCF7847D7362428517C49 /* ControllerActiveInputState.swift */; };
 		ACDBCFDB8DF2D74C60404284 /* VirtualGamepadReport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6746EED39D7CFFB495CB2CD4 /* VirtualGamepadReport.swift */; };
 		AD5C50A26BB967397C8979D7 /* ThumbleSkinStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F55618F7D37F55E262B353D8 /* ThumbleSkinStore.swift */; };
+		AD7D3C54BC5DAACECA7CD16F /* ThumbleMacSetupGuide.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26697D46B1B657D2C3BFD2D9 /* ThumbleMacSetupGuide.swift */; };
 		AF595ED05957494418C60D16 /* GamepadCustomization.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43A91C0CCA23D63A11106CD8 /* GamepadCustomization.swift */; };
 		AFDDB0C4E4BAB24ADBF1D2D5 /* BuilderArtifactShare.swift in Sources */ = {isa = PBXBuildFile; fileRef = C399D36AF8D1E1523BED9E3D /* BuilderArtifactShare.swift */; };
 		B007692463DFAA0084EBE5D5 /* GamepadEditorDeviceCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87E5175D4D0F8D54EE4324BA /* GamepadEditorDeviceCatalog.swift */; };
@@ -298,10 +315,12 @@
 		C3C91E022D747BA04CC10E47 /* ThumbleSkinCompiler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E634A254AB9DDE331583C54 /* ThumbleSkinCompiler.swift */; };
 		C3E14D779C6B048527F01B47 /* GeistDesign.swift in Sources */ = {isa = PBXBuildFile; fileRef = D42888086CFE3092D63946C7 /* GeistDesign.swift */; };
 		C40B050117EE4801C4DF9412 /* GamepadOutputTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E917F309E4E4EE0FD4B8652 /* GamepadOutputTypes.swift */; };
+		C4794D0C6A0BF0874B0E3A26 /* ThumbleMacSetupGuideTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 259BA894DC8EA8A3074462B0 /* ThumbleMacSetupGuideTests.swift */; };
 		C48ED5E8DB70373298C58D2E /* ThumbleSkinQuality.swift in Sources */ = {isa = PBXBuildFile; fileRef = C18E4BB397E9FBAB30E65349 /* ThumbleSkinQuality.swift */; };
 		C5BEBF7A86E9D59577A0E910 /* ThumbleInputLatencySimulation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8F83DB2B9FB309CF3FB0367 /* ThumbleInputLatencySimulation.swift */; };
 		C63204C7172716D74F7C1D34 /* KeypadConfigurationExport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63EEF6D322B8B0EB07923C65 /* KeypadConfigurationExport.swift */; };
 		C64BC50282B28486C34032D0 /* ThumbleSkinWorkspace.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89F4714337A0F3FB4D592AFB /* ThumbleSkinWorkspace.swift */; };
+		17D93B8F43DD570F454FC4E7 /* ControllerDesignSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2509C947A2EBD21D2034426D /* ControllerDesignSession.swift */; };
 		C845CE99C7B6DF2F260E9ED3 /* IOSSkinLibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F9BEBF993C2D483AE96B386 /* IOSSkinLibraryView.swift */; };
 		C8600873618274BB8D8645A8 /* ThumbleArtworkLayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5231B0FDBCE915A59D76EBA /* ThumbleArtworkLayerView.swift */; };
 		C99BD2400B06A35A9BECBA48 /* ThumbleSkinStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F55618F7D37F55E262B353D8 /* ThumbleSkinStore.swift */; };
@@ -311,10 +330,12 @@
 		CC8529006FDEE67DF7EA9BD5 /* GamepadSharedOperations.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF53229F20750F62BC912D45 /* GamepadSharedOperations.swift */; };
 		CE1B35277E716F93C1A44D11 /* ControllerProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9D0C725B083FBF2119A83F1 /* ControllerProtocol.swift */; };
 		CE56452D39F4A4D2477158F9 /* ThumbleSkinWorkspace.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89F4714337A0F3FB4D592AFB /* ThumbleSkinWorkspace.swift */; };
+		2ADD74B28C6CE6A961300046 /* ControllerDesignSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2509C947A2EBD21D2034426D /* ControllerDesignSession.swift */; };
 		CE7FDB22B1E952DA587AEF10 /* IOSPendingBuilderArtifactStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9C75B166A7E582814C744E9 /* IOSPendingBuilderArtifactStoreTests.swift */; };
 		CED7AE140729381D53A4AC0C /* ThumbleCLIRuntimeBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = 079351FE0C12BE733877AF09 /* ThumbleCLIRuntimeBackend.swift */; };
 		CEDC8BDC4B5E5BED9F9FAD68 /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = DD16CDC408EB6016CDABD2B0 /* ZIPFoundation */; };
 		CF5B63388427FC12E963A0C4 /* ThumbleArtworkLayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5231B0FDBCE915A59D76EBA /* ThumbleArtworkLayerView.swift */; };
+		CFE50013AE1DE89EEF432367 /* MacOnboardingSetupSlide.swift in Sources */ = {isa = PBXBuildFile; fileRef = 997FEC648BDC6B5115BB0DF3 /* MacOnboardingSetupSlide.swift */; };
 		D127C73F6679197B73254CDA /* ThumbleVectorCompiler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E61CD2D4EFC81FB15DA411F /* ThumbleVectorCompiler.swift */; };
 		D134D012E77394FB2F046C36 /* ThumbleCSSCompiler.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5AC60027A3BD6E36E1AEBB9 /* ThumbleCSSCompiler.swift */; };
 		D1B7663BACADBEDB436AFA0A /* GamepadLayoutQuality.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB4F172EB8B6245807056D82 /* GamepadLayoutQuality.swift */; };
@@ -335,6 +356,7 @@
 		DBE2FBE5392418946890290D /* ThumbleSkinCompiler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E634A254AB9DDE331583C54 /* ThumbleSkinCompiler.swift */; };
 		DD4CAF4AF2BBE2370707AE66 /* ControllerProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9D0C725B083FBF2119A83F1 /* ControllerProtocol.swift */; };
 		DD622903C7E6289B6395B8B5 /* ThumbleSkinWorkspace.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89F4714337A0F3FB4D592AFB /* ThumbleSkinWorkspace.swift */; };
+		4B3C7D72D844368B4D8BEA96 /* ControllerDesignSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2509C947A2EBD21D2034426D /* ControllerDesignSession.swift */; };
 		DE1AB58A6B40E4B0A2E1975D /* ControllerRuntimeUX.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA34DE7F2FC237A7747F02A7 /* ControllerRuntimeUX.swift */; };
 		DF69BCD39919A7445DC4DA02 /* KeypadBindingPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFEF9B0E16D3BA71547B9160 /* KeypadBindingPresentation.swift */; };
 		DF7C19CAAF97003243BBAFAE /* IOSPendingBuilderArtifactStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD8A484187E42E7D649D7726 /* IOSPendingBuilderArtifactStore.swift */; };
@@ -353,6 +375,7 @@
 		E3AF932376685FF9C33BF02D /* ThumbleSkinResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7A78813402B0D520E0353CC /* ThumbleSkinResolver.swift */; };
 		E40FE425F5303BC29D35A3AC /* KeypadAccessibility.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAF1EA78B8335BD649E9E798 /* KeypadAccessibility.swift */; };
 		E6FBBDEA657ABD8766CED06E /* ThumbleSkinWorkspace.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89F4714337A0F3FB4D592AFB /* ThumbleSkinWorkspace.swift */; };
+		CC43418168EAE01855669871 /* ControllerDesignSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2509C947A2EBD21D2034426D /* ControllerDesignSession.swift */; };
 		EA61C14546A7968DCB7AC43E /* ControllerActiveInputState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E7BCF7847D7362428517C49 /* ControllerActiveInputState.swift */; };
 		EB3888BBB8E64DD8C81D6764 /* PortableProfileArtifact.swift in Sources */ = {isa = PBXBuildFile; fileRef = C11E738F239D2BA9E214FB88 /* PortableProfileArtifact.swift */; };
 		EB78C57BD617A762E261178F /* KeypadBindingPresentationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB173C6C4B42C92F3100AAFB /* KeypadBindingPresentationTests.swift */; };
@@ -393,6 +416,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		8D314AD27369510B0797A100 /* ThumbleNativeConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThumbleNativeConfiguration.swift; sourceTree = "<group>"; };
 		05C84EA3F63C5CA040898C00 /* ThumbleSkinPackageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThumbleSkinPackageTests.swift; sourceTree = "<group>"; };
 		079351FE0C12BE733877AF09 /* ThumbleCLIRuntimeBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThumbleCLIRuntimeBackend.swift; sourceTree = "<group>"; };
 		07E6E29E742284B6FBF67C73 /* MacSkinLibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacSkinLibraryView.swift; sourceTree = "<group>"; };
@@ -406,6 +430,8 @@
 		1E36A6B8AF78BF82AAF4C4CF /* ButtonPulseSequencer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ButtonPulseSequencer.swift; sourceTree = "<group>"; };
 		1ED5370A7CC6D64718E8D11E /* OrientationPreferenceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrientationPreferenceTests.swift; sourceTree = "<group>"; };
 		223FD9B514AF3C896FF23228 /* ProfileArtifactAdoption.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileArtifactAdoption.swift; sourceTree = "<group>"; };
+		259BA894DC8EA8A3074462B0 /* ThumbleMacSetupGuideTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThumbleMacSetupGuideTests.swift; sourceTree = "<group>"; };
+		26697D46B1B657D2C3BFD2D9 /* ThumbleMacSetupGuide.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThumbleMacSetupGuide.swift; sourceTree = "<group>"; };
 		27C4395AC453777D35ED383D /* ThumbleSkinQualityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThumbleSkinQualityTests.swift; sourceTree = "<group>"; };
 		2D1C4BD96437F30E233F2A3F /* GamepadLayoutResolverSmokeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GamepadLayoutResolverSmokeTests.swift; sourceTree = "<group>"; };
 		2EDB8323D28AFE01649068B2 /* ThumbleCLITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ThumbleCLITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -456,10 +482,12 @@
 		8744EFAB7599C0E0D41BF2E6 /* InputLatencySimulationSmokeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputLatencySimulationSmokeTests.swift; sourceTree = "<group>"; };
 		87E5175D4D0F8D54EE4324BA /* GamepadEditorDeviceCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GamepadEditorDeviceCatalog.swift; sourceTree = "<group>"; };
 		89F4714337A0F3FB4D592AFB /* ThumbleSkinWorkspace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThumbleSkinWorkspace.swift; sourceTree = "<group>"; };
+		2509C947A2EBD21D2034426D /* ControllerDesignSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ControllerDesignSession.swift; sourceTree = "<group>"; };
 		8E8D29A00DD14728A53B3E14 /* VirtualGamepadReportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VirtualGamepadReportTests.swift; sourceTree = "<group>"; };
 		942570CE8FBAD27482FEA0D0 /* GamepadSharedOperationsSmokeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GamepadSharedOperationsSmokeTests.swift; sourceTree = "<group>"; };
 		94763C4AAD2AE79C2AD9938B /* ThumbleNativeSkinPreviewRendererTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThumbleNativeSkinPreviewRendererTests.swift; sourceTree = "<group>"; };
 		984589A9FCF7BD75EAF7A2AB /* ThumbleLegacyThumbConsoleCLI */ = {isa = PBXFileReference; includeInIndex = 0; path = ThumbleLegacyThumbConsoleCLI; sourceTree = BUILT_PRODUCTS_DIR; };
+		997FEC648BDC6B5115BB0DF3 /* MacOnboardingSetupSlide.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacOnboardingSetupSlide.swift; sourceTree = "<group>"; };
 		9A1609E57D470059A18B1548 /* VirtualGamepadOutputPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VirtualGamepadOutputPolicyTests.swift; sourceTree = "<group>"; };
 		9B3C4EFEC73C060C2B3860CA /* IOSBuilderArtifactPickupTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSBuilderArtifactPickupTests.swift; sourceTree = "<group>"; };
 		9B65CD4768382CBDB423F50E /* BuilderArtifactFetch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuilderArtifactFetch.swift; sourceTree = "<group>"; };
@@ -616,6 +644,7 @@
 				A6284DC97D35075137DBDEE3 /* MacContentView.swift */,
 				0A3D34D025A6CD7576DBDA7B /* MacControllerServer.swift */,
 				E7C97FFBBD03EF776B734E44 /* MacControlOutputBinding.swift */,
+				997FEC648BDC6B5115BB0DF3 /* MacOnboardingSetupSlide.swift */,
 				BFB33F8A8646202290892093 /* MacRustAuthorityInterlock.swift */,
 				3385192268D6E7B862446993 /* MacSharedKeypadImport.swift */,
 				07E6E29E742284B6FBF67C73 /* MacSkinLibraryView.swift */,
@@ -695,6 +724,7 @@
 				6B9D95E7AB148B2FD1EEEC72 /* ThumbleCLISmokeTestSuite.swift */,
 				18ACF717A07A2FE44A8827B1 /* ThumbleConfigurationBridgeTests.swift */,
 				35F05961CF29A45BC51BD507 /* ThumbleCSSCompilerTests.swift */,
+				259BA894DC8EA8A3074462B0 /* ThumbleMacSetupGuideTests.swift */,
 				94763C4AAD2AE79C2AD9938B /* ThumbleNativeSkinPreviewRendererTests.swift */,
 				6F3C02C9F571D996F8D1C5B2 /* ThumbleSkinCompatibilityTests.swift */,
 				ED3635AD77B9E810C9802049 /* ThumbleSkinCompilerTests.swift */,
@@ -719,6 +749,7 @@
 				1E36A6B8AF78BF82AAF4C4CF /* ButtonPulseSequencer.swift */,
 				4E7BCF7847D7362428517C49 /* ControllerActiveInputState.swift */,
 				C9D0C725B083FBF2119A83F1 /* ControllerProtocol.swift */,
+				8D314AD27369510B0797A100 /* ThumbleNativeConfiguration.swift */,
 				FA34DE7F2FC237A7747F02A7 /* ControllerRuntimeUX.swift */,
 				44916FAE61260FE7B7A18A7E /* GameKeypadGenerator.swift */,
 				DC5E9DF9F03FFF71DFC52353 /* GamepadControllerPresentationRouting.swift */,
@@ -740,6 +771,7 @@
 				4203ED7A09090D979073E3B4 /* ThumbleConfigurationBridge.swift */,
 				B5AC60027A3BD6E36E1AEBB9 /* ThumbleCSSCompiler.swift */,
 				A8F83DB2B9FB309CF3FB0367 /* ThumbleInputLatencySimulation.swift */,
+				26697D46B1B657D2C3BFD2D9 /* ThumbleMacSetupGuide.swift */,
 				C3A5EC5351AEADAEE468D463 /* ThumbleNativeSkinPreviewRenderer.swift */,
 				14C28FC193386E1DFDFCBFE5 /* ThumbleSkin.swift */,
 				B63E6C04F59CAA138585500A /* ThumbleSkinCompatibility.swift */,
@@ -749,6 +781,7 @@
 				D7A78813402B0D520E0353CC /* ThumbleSkinResolver.swift */,
 				F55618F7D37F55E262B353D8 /* ThumbleSkinStore.swift */,
 				89F4714337A0F3FB4D592AFB /* ThumbleSkinWorkspace.swift */,
+				2509C947A2EBD21D2034426D /* ControllerDesignSession.swift */,
 				F032EA624A966085B73A13FD /* ThumbleSVGRasterizer.swift */,
 				7E61CD2D4EFC81FB15DA411F /* ThumbleVectorCompiler.swift */,
 				8095D8C904A6623E001629C5 /* VirtualGamepadOutputPolicy.swift */,
@@ -1065,6 +1098,7 @@
 				50877A9CCB7AAD0C36E6472F /* ButtonPulseSequencer.swift in Sources */,
 				7868405382E2DFDA5D0DA68E /* ControllerActiveInputState.swift in Sources */,
 				731A8A3D909AF5AEA352EC10 /* ControllerProtocol.swift in Sources */,
+				8D314AD27369510B0797A101 /* ThumbleNativeConfiguration.swift in Sources */,
 				0DC54C4611A909E87C32227F /* ControllerRuntimeUX.swift in Sources */,
 				59C2C6F235713D7EC9B8FCB1 /* GameKeypadGenerator.swift in Sources */,
 				BC0E99AE0A34361A07005B37 /* GamepadControllerPresentationRouting.swift in Sources */,
@@ -1090,6 +1124,7 @@
 				6D760D1BC232CD561C617A43 /* ThumbleCSSCompiler.swift in Sources */,
 				0D950A659CF4A757E14A8987 /* ThumbleConfigurationBridge.swift in Sources */,
 				200ECEDBF1DFC1A4CAB67778 /* ThumbleInputLatencySimulation.swift in Sources */,
+				6B08087158F1F9BAFF6AD726 /* ThumbleMacSetupGuide.swift in Sources */,
 				A4546538448630865A705055 /* ThumbleNativeSkinPreviewRenderer.swift in Sources */,
 				3DAA5D6631DC1256933B8AA4 /* ThumbleSVGRasterizer.swift in Sources */,
 				4182DC61076A237FAB67AA79 /* ThumbleSkin.swift in Sources */,
@@ -1100,6 +1135,7 @@
 				0B88E1A0B36B7ABDBB78D99A /* ThumbleSkinResolver.swift in Sources */,
 				AD5C50A26BB967397C8979D7 /* ThumbleSkinStore.swift in Sources */,
 				C64BC50282B28486C34032D0 /* ThumbleSkinWorkspace.swift in Sources */,
+				17D93B8F43DD570F454FC4E7 /* ControllerDesignSession.swift in Sources */,
 				127BE10F156EB10660FCA076 /* ThumbleVectorCompiler.swift in Sources */,
 				BA008DB10A20536659545490 /* VirtualGamepadOutputPolicy.swift in Sources */,
 				1FB0C454AC424EE087B5B233 /* VirtualGamepadReport.swift in Sources */,
@@ -1116,6 +1152,7 @@
 				67E0843CDF551179EF0EBDBF /* ButtonPulseSequencer.swift in Sources */,
 				EA61C14546A7968DCB7AC43E /* ControllerActiveInputState.swift in Sources */,
 				DD4CAF4AF2BBE2370707AE66 /* ControllerProtocol.swift in Sources */,
+				8D314AD27369510B0797A102 /* ThumbleNativeConfiguration.swift in Sources */,
 				F803143D25109C285AA73EB8 /* ControllerRuntimeUX.swift in Sources */,
 				CA233E5C882AA520DE1ADB36 /* GameKeypadGenerator.swift in Sources */,
 				4739F6F5A9A3793B0323BCDB /* GamepadControllerPresentationRouting.swift in Sources */,
@@ -1143,6 +1180,7 @@
 				422B46E274E1D9D3B6A035D2 /* ThumbleCSSCompiler.swift in Sources */,
 				3753AE70EC45415EB0D02EE4 /* ThumbleConfigurationBridge.swift in Sources */,
 				C5BEBF7A86E9D59577A0E910 /* ThumbleInputLatencySimulation.swift in Sources */,
+				265ECC00C15235D76638ECEC /* ThumbleMacSetupGuide.swift in Sources */,
 				EFD15F71F93C02A290BE2C16 /* ThumbleNativeSkinPreviewRenderer.swift in Sources */,
 				6B2150575CD9DDB3E3E2C19B /* ThumbleSVGRasterizer.swift in Sources */,
 				65F13795FDC9515637CB89F4 /* ThumbleSkin.swift in Sources */,
@@ -1153,6 +1191,7 @@
 				E3AF932376685FF9C33BF02D /* ThumbleSkinResolver.swift in Sources */,
 				06073135E11F3CE25BCC9BAC /* ThumbleSkinStore.swift in Sources */,
 				6573C82D7E3DCA87358F425F /* ThumbleSkinWorkspace.swift in Sources */,
+				7838C425F2D642C03F916A57 /* ControllerDesignSession.swift in Sources */,
 				650FA51EE9447DBE787A8AB1 /* ThumbleVectorCompiler.swift in Sources */,
 				34FF501FD6610D1A5D5C9FC3 /* VirtualGamepadOutputPolicy.swift in Sources */,
 				ACDBCFDB8DF2D74C60404284 /* VirtualGamepadReport.swift in Sources */,
@@ -1169,6 +1208,7 @@
 				1B36DB39D30FA0960C3E4029 /* ButtonPulseSequencer.swift in Sources */,
 				4C71D83D7B77BEE1B5ECD3E5 /* ControllerActiveInputState.swift in Sources */,
 				CE1B35277E716F93C1A44D11 /* ControllerProtocol.swift in Sources */,
+				8D314AD27369510B0797A103 /* ThumbleNativeConfiguration.swift in Sources */,
 				5EAC1AA4032CC3B600E25777 /* ControllerRuntimeUX.swift in Sources */,
 				16590A1F606891B2FAD83F4A /* GameKeypadGenerator.swift in Sources */,
 				A5058488E3F4366F621B50AC /* GamepadControllerPresentationRouting.swift in Sources */,
@@ -1188,6 +1228,7 @@
 				03F047168411D7DE3E68C91D /* MacContentView.swift in Sources */,
 				7A4F7444266B361F67896D31 /* MacControlOutputBinding.swift in Sources */,
 				F646BC10FB72A43BFF08B128 /* MacControllerServer.swift in Sources */,
+				CFE50013AE1DE89EEF432367 /* MacOnboardingSetupSlide.swift in Sources */,
 				9AEC2A8DA6B7ACC09EAD8700 /* MacRustAuthorityInterlock.swift in Sources */,
 				793D9B17FA2FF20B600C19A0 /* MacSharedKeypadImport.swift in Sources */,
 				B7672DAD984587F77B53DCF3 /* MacSkinLibraryView.swift in Sources */,
@@ -1201,6 +1242,7 @@
 				DFB77C4D1167DF7DCF5E3607 /* ThumbleConfigurationBridge.swift in Sources */,
 				4D3C96B25947776048B3F9E6 /* ThumbleInputLatencySimulation.swift in Sources */,
 				03052B5667E2D2B4316AFF25 /* ThumbleMacApp.swift in Sources */,
+				9BB2D1386A208293B2B1313E /* ThumbleMacSetupGuide.swift in Sources */,
 				535105F841F2CFAF88FFB89A /* ThumbleNativeSkinPreviewRenderer.swift in Sources */,
 				A9877EE3853714321C9602A3 /* ThumbleSVGRasterizer.swift in Sources */,
 				2462DF9C1E7AB75926095601 /* ThumbleSkin.swift in Sources */,
@@ -1211,6 +1253,7 @@
 				88761282064FE9BB8CD993D4 /* ThumbleSkinResolver.swift in Sources */,
 				C99BD2400B06A35A9BECBA48 /* ThumbleSkinStore.swift in Sources */,
 				5AAA46D6FE30630C0DD37477 /* ThumbleSkinWorkspace.swift in Sources */,
+				B3E2008DDCF85CB9C45A8DE2 /* ControllerDesignSession.swift in Sources */,
 				9D14F40C9529FF7694CACC87 /* ThumbleVectorCompiler.swift in Sources */,
 				F0CFBC70D71D2CEFD4C9770C /* VirtualGamepadInjector.swift in Sources */,
 				1AE99D105D84D0201574924B /* VirtualGamepadOutputPolicy.swift in Sources */,
@@ -1231,6 +1274,7 @@
 				BE42C4D17404D8FA0723C5C3 /* ControllerActiveInputState.swift in Sources */,
 				FE91AC3623F0ED26B4DF460B /* ControllerActiveInputStateSmokeTests.swift in Sources */,
 				ED66625D2B0FB10E407CC9F2 /* ControllerProtocol.swift in Sources */,
+				8D314AD27369510B0797A104 /* ThumbleNativeConfiguration.swift in Sources */,
 				DE1AB58A6B40E4B0A2E1975D /* ControllerRuntimeUX.swift in Sources */,
 				8CA6C5B940CE814FF5C6B89C /* ControllerRuntimeUXTests.swift in Sources */,
 				2BE19CB3D3F8EF928E86F062 /* GameKeypadGenerator.swift in Sources */,
@@ -1285,6 +1329,8 @@
 				5CEF91757DAFCB8C9B554B5C /* ThumbleConfigurationBridge.swift in Sources */,
 				6718ECB0722AC1DECD61E008 /* ThumbleConfigurationBridgeTests.swift in Sources */,
 				26B73C7D5E270286B4547D28 /* ThumbleInputLatencySimulation.swift in Sources */,
+				746127E76EB9F0D536260611 /* ThumbleMacSetupGuide.swift in Sources */,
+				C4794D0C6A0BF0874B0E3A26 /* ThumbleMacSetupGuideTests.swift in Sources */,
 				A5DBF4F850A6D6263E87C6FD /* ThumbleNativeSkinPreviewRenderer.swift in Sources */,
 				B6ED665787EA50E7F7B9ACDE /* ThumbleNativeSkinPreviewRendererTests.swift in Sources */,
 				1B646EEF01411550C49E180C /* ThumbleSVGRasterizer.swift in Sources */,
@@ -1302,6 +1348,7 @@
 				B10E2796B0B5081CBCE91E55 /* ThumbleSkinStore.swift in Sources */,
 				403EB4AD7E10709838DAFBEE /* ThumbleSkinStoreTests.swift in Sources */,
 				CE56452D39F4A4D2477158F9 /* ThumbleSkinWorkspace.swift in Sources */,
+				2ADD74B28C6CE6A961300046 /* ControllerDesignSession.swift in Sources */,
 				500275D7ADC2B04FB791CF1D /* ThumbleSkinWorkspaceTests.swift in Sources */,
 				9D503E0DBD1DA66795330808 /* ThumbleVectorCompiler.swift in Sources */,
 				BEAEBFD8E2895700202F09CC /* TopBarActivationRegionTests.swift in Sources */,
@@ -1325,6 +1372,7 @@
 				F0AB7742432D26EB80966EBF /* ControllerActiveInputState.swift in Sources */,
 				E02D81AAF7CAB29153A44608 /* ControllerClient.swift in Sources */,
 				7C58932249D71E8B45C0BF24 /* ControllerProtocol.swift in Sources */,
+				8D314AD27369510B0797A105 /* ThumbleNativeConfiguration.swift in Sources */,
 				FA1FCE06B7F4F884B00570B0 /* ControllerRuntimeUX.swift in Sources */,
 				F326EA726A5D9CEABA8E80AA /* GameKeypadGenerator.swift in Sources */,
 				959C0B23DCFC1729F6D62489 /* GamepadControllerPresentationRouting.swift in Sources */,
@@ -1354,6 +1402,7 @@
 				D134D012E77394FB2F046C36 /* ThumbleCSSCompiler.swift in Sources */,
 				F042CFC011D404AC1E22D2D4 /* ThumbleConfigurationBridge.swift in Sources */,
 				6D3AAB36371D5FE4B4E08558 /* ThumbleInputLatencySimulation.swift in Sources */,
+				63C5F3AC48AC9BEC863F0A4B /* ThumbleMacSetupGuide.swift in Sources */,
 				57526D733A0EBB0D97748DFB /* ThumbleNativeSkinPreviewRenderer.swift in Sources */,
 				242E39B5DCAAB86F453BBF96 /* ThumbleSVGRasterizer.swift in Sources */,
 				A732EC415DB85C2F82428123 /* ThumbleSkin.swift in Sources */,
@@ -1364,6 +1413,7 @@
 				8631DFD9C44405DDBBA38CBA /* ThumbleSkinResolver.swift in Sources */,
 				BCEECF6AD4D0F76456F68E4D /* ThumbleSkinStore.swift in Sources */,
 				E6FBBDEA657ABD8766CED06E /* ThumbleSkinWorkspace.swift in Sources */,
+				CC43418168EAE01855669871 /* ControllerDesignSession.swift in Sources */,
 				5C912BC10E8587DCE69CDFAC /* ThumbleVectorCompiler.swift in Sources */,
 				1882D9AC56C961A6814FEC8A /* ThumbleiOSApp.swift in Sources */,
 				3D315BD25C9A0046F4520431 /* TouchCaptureView.swift in Sources */,
@@ -1382,6 +1432,7 @@
 				76807B2DFAA0461AA2C2E8D7 /* ButtonPulseSequencer.swift in Sources */,
 				9038E21B8CE794A21A00EA7A /* ControllerActiveInputState.swift in Sources */,
 				47130A91FF67FCAED57BF2D8 /* ControllerProtocol.swift in Sources */,
+				8D314AD27369510B0797A106 /* ThumbleNativeConfiguration.swift in Sources */,
 				C9F3B957AB9E267C3362CEE9 /* ControllerRuntimeUX.swift in Sources */,
 				B69A79DD877C35F138CB415C /* GameKeypadGenerator.swift in Sources */,
 				234E834801F4846FA8B232A5 /* GamepadControllerPresentationRouting.swift in Sources */,
@@ -1409,6 +1460,7 @@
 				E2FFE5999EE6A20987B0D068 /* ThumbleCSSCompiler.swift in Sources */,
 				E3A8ABE21F42E8B95304374E /* ThumbleConfigurationBridge.swift in Sources */,
 				D7AA9FBBD044D72DE01381E8 /* ThumbleInputLatencySimulation.swift in Sources */,
+				36B1CBDC378BBA0A7B9B6525 /* ThumbleMacSetupGuide.swift in Sources */,
 				5CFA2E83D91F3AAFA2A644C4 /* ThumbleNativeSkinPreviewRenderer.swift in Sources */,
 				48C1A238312FEC966E1A389C /* ThumbleSVGRasterizer.swift in Sources */,
 				0FC8E95CA643D65D269A3E3A /* ThumbleSkin.swift in Sources */,
@@ -1419,6 +1471,7 @@
 				2ACFDA12BD5B55065A088662 /* ThumbleSkinResolver.swift in Sources */,
 				0FEE530FEA9CC9C66B09580B /* ThumbleSkinStore.swift in Sources */,
 				DD622903C7E6289B6395B8B5 /* ThumbleSkinWorkspace.swift in Sources */,
+				4B3C7D72D844368B4D8BEA96 /* ControllerDesignSession.swift in Sources */,
 				D127C73F6679197B73254CDA /* ThumbleVectorCompiler.swift in Sources */,
 				738B6637FD04EB4A09E64BD9 /* VirtualGamepadOutputPolicy.swift in Sources */,
 				5584DC5EEC89A77570D8F361 /* VirtualGamepadReport.swift in Sources */,
@@ -1435,6 +1488,7 @@
 				F571E501C21DDF95E82A4D13 /* ButtonPulseSequencer.swift in Sources */,
 				AC8007FFF75C7CE6A58596E6 /* ControllerActiveInputState.swift in Sources */,
 				34E81E7F23BACD25E3CE0A0B /* ControllerProtocol.swift in Sources */,
+				8D314AD27369510B0797A107 /* ThumbleNativeConfiguration.swift in Sources */,
 				9B6BDEF423AE9BDD3EC43A2B /* ControllerRuntimeUX.swift in Sources */,
 				19281E40C2216402A1723587 /* GameKeypadGenerator.swift in Sources */,
 				53ADF43808DF0D8B9FD24FB1 /* GamepadControllerPresentationRouting.swift in Sources */,
@@ -1462,6 +1516,7 @@
 				AC7C096F357F73B389D0C514 /* ThumbleCSSCompiler.swift in Sources */,
 				351249EEFD69E0EF25DB9900 /* ThumbleConfigurationBridge.swift in Sources */,
 				98E924EBCB4A5018150441C7 /* ThumbleInputLatencySimulation.swift in Sources */,
+				AD7D3C54BC5DAACECA7CD16F /* ThumbleMacSetupGuide.swift in Sources */,
 				47F69CD750AF7C0300C3D88A /* ThumbleNativeSkinPreviewRenderer.swift in Sources */,
 				F547469CB5D4D9FAF15A92F2 /* ThumbleSVGRasterizer.swift in Sources */,
 				A3481A68AC882985AE652B96 /* ThumbleSkin.swift in Sources */,
@@ -1472,6 +1527,7 @@
 				649C21F998AA7A6B6A182995 /* ThumbleSkinResolver.swift in Sources */,
 				E259AD700110554800C044E9 /* ThumbleSkinStore.swift in Sources */,
 				37BD6BDF2A329488F4755A3B /* ThumbleSkinWorkspace.swift in Sources */,
+				12C9E9CDDBF64353602E7590 /* ControllerDesignSession.swift in Sources */,
 				9DCB2B2DAD8BF18A44943A01 /* ThumbleVectorCompiler.swift in Sources */,
 				3B6C6B7AFBEB2CA087A8CEA9 /* VirtualGamepadOutputPolicy.swift in Sources */,
 				3FFF510B17C943398525F64A /* VirtualGamepadReport.swift in Sources */,

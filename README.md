@@ -9,7 +9,7 @@ It is no longer game-specific: use it for terminal workflows, tmux prefixes, Cur
 - `ThumbleMac` — macOS 14+ SwiftUI helper, WebSocket pairing/control server plus UDP realtime listener preferring port `8765` with automatic fallback if unavailable, Bonjour Smart Connect advertising with peer-to-peer enabled, CGEvent keyboard shortcut injection.
 - `ThumbleiOS` — iOS 17+ SwiftUI programmable keypad with multitouch controls and Smart Connect reconnects.
 - `ThumbleCLI` — macOS command-line configuration and control tool for generating, editing, importing/exporting, selecting, and testing keypad profiles for the Mac helper.
-- `Host/crates/thumble-host` — standalone Rust macOS receiver MVP with the same current iOS pairing and reliable WebSocket input protocol, native Bonjour discovery, persistent migration, and a local lifecycle CLI.
+- `Host/crates/thumble-host` — standalone Rust macOS receiver MVP with the same current iOS pairing and reliable WebSocket input protocol, native Bonjour discovery, strict persistence/current-configuration adoption, and a local lifecycle CLI.
 - `Host/crates/thumble-mcp` — local stdio MCP adapter exposing curated host status, pairing, profiles, installed controls, revision-safe controller drafts, MCP Apps previews/editing, and emergency release tools to Claude, OpenAI Codex, and compatible clients.
 - `ThumbleBridge` / `thumble-bridge` — packaged, bounded Swift model transformer for allowlisted rich profile/theme/orientation operations; it receives no state paths, credentials, argv, or persistence authority. See [`docs/rust-host.md`](docs/rust-host.md).
 
@@ -54,13 +54,17 @@ The iOS script uses the `asc` CLI. Set `ASC_APP_ID` (or pass `--app`) and option
 
 ## Use
 
-1. Run `ThumbleMac` on the Mac.
-2. Grant Accessibility permission when prompted, then restart/refresh if needed.
-3. Run `ThumbleiOS` on the iPhone and tap **Scan Mac QR Code** to connect instantly, or manually enter one of the displayed `ws://<mac-ip>:<port>` addresses and tap **Request Pairing**. QR pairing can also discover the Mac over nearby peer-to-peer when there is no Wi‑Fi router.
-4. For manual pairing, enter the six-digit code shown in the Mac helper's secure pairing card.
-5. After the first successful pair, **Smart Connect** remembers this Mac, discovers it over Bonjour, and reconnects automatically when the iOS app opens or returns to foreground.
-6. The iOS app also keeps the last synced keypads available for viewing and switching even when Thumble Mac is not open.
-7. Focus the Mac app you want to control, such as Terminal, Cursor, or a browser.
+1. Run `ThumbleMac` on the Mac. The first-launch slides walk through setup; reopen them from **Setup Guide** in the toolbar.
+2. Install Thumble on your iPhone and keep both apps open. The guide has a disabled App Store link placeholder until the iOS launch; existing test builds can be used now.
+3. Allow **Local Network** access on both devices. On macOS 15+, open **System Settings → Privacy & Security → Local Network** and enable **Thumble Mac**. On iPhone, open **Settings → Privacy & Security → Local Network** and enable **Thumble**. macOS 14 has no Local Network switch; a running helper does not confirm permission on newer macOS versions.
+4. Grant Accessibility permission when prompted, then restart/refresh if needed.
+5. Run `ThumbleiOS` on the iPhone and tap **Scan Mac QR Code** to connect instantly, or manually enter one of the displayed `ws://<mac-ip>:<port>` addresses and tap **Request Pairing**. QR pairing can also discover the Mac over nearby peer-to-peer when there is no Wi‑Fi router.
+6. For manual pairing, enter the six-digit code shown in the Mac helper's secure pairing card.
+7. After the first successful pair, **Smart Connect** remembers this Mac, discovers it over Bonjour, and reconnects automatically when the iOS app opens or returns to foreground.
+8. The iOS app also keeps the last synced keypads available for viewing and switching even when Thumble Mac is not open.
+9. Focus the Mac app you want to control, such as Terminal, Cursor, or a browser.
+
+The CLI provides the same setup instructions with `thumble app setup-guide`. `thumble app local-network-settings` opens the Mac permission pane without requiring the helper to be running. `thumble app ios-app` reports the launch placeholder for now; it will open the App Store listing once `iOSAppStoreURL` in `Sources/Shared/ThumbleMacSetupGuide.swift` is set.
 
 For airplane/offline use, turn on Airplane Mode if desired, then manually re-enable Wi‑Fi and Bluetooth. Thumble can use Apple peer-to-peer discovery without internet or a router; if both radios are off, wireless control is not possible.
 
@@ -120,7 +124,7 @@ Example agent spec:
 
 ## CLI configuration parity
 
-The CLI can perform the same saved-configuration work as the macOS **Keypad** editor:
+The CLI exposes saved-configuration operations corresponding to the macOS **Keypad** editor. Some commands remain unavailable once Rust authority artifacts exist; see the migration boundaries below. In these examples, replace `UUID` (or `UUID1`–`UUID4`) with actual control identities from `thumble element list --json`:
 
 ```bash
 thumble profile list --ids
@@ -130,34 +134,41 @@ thumble profile attach-app "SNES Browser Controls" --path /Applications/OpenEmu.
 thumble profile launch "SNES Browser Controls"
 thumble profile export --all -o thumble-profiles.json
 thumble profile import thumble-profiles.json
-thumble binding set focus --sequence 'Control+B,H'
+thumble binding set UUID --sequence 'Control+B,H'
 thumble output mode keyboard   # or controller/custom per setup
 thumble customization set --appearance dark --device iphone-17-pro --background '#101014'
 thumble customization set --background-gradient '#101014,#4338CA' --gradient-angle 45
 thumble orientation get --profile "SNES Browser Controls"
 thumble orientation set landscape --profile "SNES Browser Controls"
 thumble device set iphone-17-pro --orientation landscape
-thumble element add joystick --label "Right Stick" --fill '#111827' --thumb-fill '#F8FAFC' --up custom1 --down custom2 --left custom3 --right custom4
+thumble element add joystick --label "Right Stick" --fill '#111827' --thumb-fill '#F8FAFC' --up W --down S --left A --right D
 thumble element add joystick --label Nub --thumbstick --target right-stick --no-digital-directions --x 0.5 --y 0.58
 thumble element add text --text A --x 0.72 --y 0.66 --text-color '#FFFFFF'
-thumble element set jump --keyboard Space --hide-integrated-label --light-fill '#7C3AED' --dark-fill '#C4B5FD' --shape circle --width 1.2 --height 1.2 --z-index 10
+thumble element set UUID --keyboard Space --hide-integrated-label --light-fill '#7C3AED' --dark-fill '#C4B5FD' --shape circle --width 1.2 --height 1.2 --z-index 10
 thumble element set "Right Stick" --thumb-fill '#22C55E'
 thumble style create Soul --fill '#F8FAFC' --stroke '#38BDF8' --pressed-fill '#0EA5E9' --glow '#0EA5E9' --glow-radius 12 --icon sf:sparkles --haptic medium --haptic-pattern double --haptic-intensity 75%
-thumble style apply soul focus
-thumble layer front focus
-thumble group create Actions jump attack dash focus
+thumble style apply soul UUID
+thumble layer front UUID
+thumble group create Actions UUID1 UUID2 UUID3 UUID4
 thumble asset import ./orb.png --role icon --name SoulOrb
 thumble skin list
 thumble skin pack docs/skins/starter -o Aurora.pocketpad
 thumble skin apply Aurora.pocketpad --profile "SNES Browser Controls"
 ```
 
-Controller-shaped templates now install with a complete starter keyboard map instead of inheriting unrelated shortcuts from the active setup: WASD movement, Space/J/Shift/E actions, Tab/Esc menus, arrow-key right-stick directions, and Q/R/Z/X for the remaining shoulder and trigger slots. These are intentionally generic game defaults; customize them for a game's own controls. Select one control and press **Command-B** to Quick Bind its key press without hunting for the shortcut field. **Reset All** in the Mac editor and `thumble binding reset-all` restore the defaults for that setup's source template.
+Controller-shaped templates install explicit keyboard and gamepad outputs on their declared UUID controls, rather than inheriting shortcuts from another setup or a shared action-name map. Hardware labels and outputs agree; customize each control for a game's own inputs. Select one control and press **Command-B** to Quick Bind its key press without hunting for the shortcut field. **Reset All** in the Mac editor and `thumble binding reset-all` restore the defaults for that setup's source template.
 
-Standalone CLI built-in Hollow Knight generation, all built-in template installs (including `profile create --template`), profile, orientation, binding, output, safe scalar/solid-background customization updates and deterministic canonical layout repairs, sanitized reusable-style list/show and all non-file style mutations, sanitized variant-scoped element/layer/group listing and all layer/group edits, checked-in device-frame, control-bar collection, and rich non-file control-bar item commands use the exact-sibling schema-v8 Rust authority bridge for identical online/offline revision-safe transactions; successful live-host saves queue the complete state for the paired iPhone. Binding/output reads return only bounded revision-tagged semantic keys, modifiers, gamepad buttons, and element-input IDs. Control-bar reads return ordered canonical item IDs or sanitized rendering-effective appearance—never raw key codes or profile documents. Older profiles without keyed maps use an independently reconstructed fixed fallback until their first transaction materializes those maps. Rust derives template/profile/custom-element IDs, exact catalog revisions, and replay outcomes without accepting unvalidated profile JSON. Spec-based generation is deterministic Rust planning followed by the same portable-artifact import transaction; profile export/import is likewise Rust-authoritative and bounded. Custom-size frames, rich customization background fills, image fills, asset icons, remaining customization reads/resets and issue-code-specific repair aliases, theme/element writes, style import/export, and skin/package artifact families still use the legacy path only when no Rust authority artifacts exist, and otherwise fail closed. Runtime commands are also available:
+Standalone CLI built-in Hollow Knight generation, all built-in template installs (including `profile create --template`), profile, orientation, binding, output, safe scalar/solid-background customization updates and deterministic canonical layout repairs, sanitized reusable-style list/show and all non-file style mutations, sanitized variant-scoped element/layer/group listing and all layer/group edits, checked-in device-frame, control-bar collection, and rich non-file control-bar item commands use the exact-sibling schema-v8 Rust authority bridge for identical online/offline revision-safe transactions; successful live-host saves queue the complete state for the paired iPhone. Binding/output reads return only bounded revision-tagged semantic keys, modifiers, gamepad buttons, and element-input IDs. Control-bar reads return ordered canonical item IDs or sanitized rendering-effective appearance—never raw key codes or profile documents. Missing keyed maps derive only from that profile's declared controls and owned outputs; explicit empty bindings remain clears. Obsolete named-slot profiles are rejected, not migrated. Rust derives template/profile/custom-element IDs, exact catalog revisions, and replay outcomes without accepting unvalidated profile JSON. Spec-based generation is deterministic Rust planning followed by the same portable-artifact import transaction; profile export/import is likewise Rust-authoritative and bounded. Custom-size frames, rich customization background fills, image fills, asset icons, remaining customization reads/resets and issue-code-specific repair aliases, theme/element writes, style import/export, and skin/package artifact families still use the legacy path only when no Rust authority artifacts exist, and otherwise fail closed.
+
+When the native Mac editor owns `runtime.lock`, the CLI instead uses its same-user configuration endpoint. Rust evaluates typed transactions privately against the editor’s validated snapshot; writes return through instance/revision/content-hash compare-and-swap. CLI operations implemented only in Swift also use a native snapshot and commit through that endpoint rather than writing the running editor’s preferences directly. An unreachable or changed authority fails closed without creating a competing Rust store. Native retries replay only within the current editor instance and its bounded cache, not durably across restarts; this differs from Rust’s persisted transaction replay.
+
+Runtime commands are also available:
 
 ```bash
 thumble app open
+thumble app setup-guide
+thumble app local-network-settings
+thumble app ios-app
 thumble app screenshot -o /tmp/thumble-window.png --json
 thumble status --json
 thumble server restart
@@ -165,7 +176,7 @@ thumble pairing payload
 thumble accessibility status
 thumble latency simulate --pattern hollow-knight --mode compare --log /tmp/thumble-latency.json
 thumble latency verify --max-ms 4 --p95-ms 4 --log /tmp/thumble-latency-verify.json
-thumble test tap jump
+thumble test tap UUID
 thumble release-all
 ```
 
@@ -194,13 +205,13 @@ Full keypad JSON export remains the backup/interchange format for layouts and bi
 
 ## Virtual gamepad output
 
-Thumble can map keypad controls to system-visible virtual gamepad buttons, analog sticks, and triggers while keeping keyboard and pointer output available. Each keypad setup has an output mode: `keyboard` keeps the virtual controller off, `controller` applies the default Xbox-style virtual controller map, and `custom` uses per-button mixed bindings. Configure the mode and mappings in the macOS Keypad editor or with the CLI:
+Thumble can map keypad controls to system-visible virtual gamepad buttons, analog sticks, and triggers while keeping keyboard and pointer output available. Each keypad setup has an output mode: `keyboard` keeps the virtual controller off, `controller` enables only each control's owned gamepad outputs, and `custom` enables its stored mixed outputs. Changing modes does not replace those bindings. Configure the mode and mappings in the macOS Keypad editor or with the CLI:
 
 ```bash
 thumble output mode controller
 thumble output mode keyboard --profile "SNES Browser Controls"
-thumble output set jump --keyboard Space --gamepad south
-thumble output set attack --gamepad west
+thumble output set UUID1 --keyboard Space --gamepad south
+thumble output set UUID2 --gamepad west
 thumble element add joystick --target left-stick --no-digital-directions
 thumble element add trigger --target left --orientation horizontal --sensitivity 1.2
 ```
@@ -215,7 +226,7 @@ Thumble uses its own versioned JSON envelope because there is no broadly adopted
 
 Each setup stores its own keypad-level preferences. Select a setup in the Keypad editor to show the right-side keypad inspector, where you can choose the device canvas, set **iPhone Rotation** to Follow Device, Lock Portrait, or Lock Landscape, attach a Mac application with the native file browser, set custom device dimensions, change the iPhone background fill, and toggle System/Light/Dark view modes while editing. Attached applications sync with the setup, including the selected app icon; when the iPhone is connected, the top bar shows that app icon as a button that asks the Mac helper to launch or refocus the pre-approved app. Use **Saved Mode** to choose whether that setup follows the device, always uses light mode, or always uses dark mode; per-button light and dark fills and keypad background fills are saved separately with the setup. The same settings are scriptable with `thumble orientation get|set`, `thumble customization set --appearance light|dark|system --device iphone-17-pro --background '#101014'`, `thumble customization set --background-gradient '#101014,#4338CA'`, `thumble element set BUTTON --light-fill '#RRGGBB' --dark-fill '#RRGGBB'`, and `thumble profile attach-app PROFILE --path /Applications/App.app`.
 
-Layouts can include up to two virtual joysticks via **Add Control → Add Joystick**. New joysticks default to **Digital directions**, so the first joystick's up/down/left/right directions use the normal arrow-key shortcut slots in keyboard mode. Each joystick maps its directions to normal Thumble shortcut slots, so you can also build shooter-style dual-stick layouts while still using the existing keyboard-binding recorder. In the joystick inspector, **Look → Thumbstick** turns the control into a compact center nub: touches must start on the small ball, then can drag through the larger invisible range without stealing taps from neighboring face buttons. The CLI equivalent is `thumble element add joystick --thumbstick --target right-stick --no-digital-directions`. Select a joystick and edit **Fill → Thumbstick** to recolor the moving thumb separately from the joystick base; the CLI equivalent is `thumble element set "Right Stick" --thumb-fill '#22C55E'` (or light/dark variants such as `--light-thumb-fill`).
+Layouts can include up to two virtual joysticks via **Add Control → Add Joystick**. New joysticks default to **Digital directions** with explicit WASD outputs. Each direction owns its binding independently; it does not route through another button or a shared shortcut slot. You can build dual-stick layouts while still using the keyboard-binding recorder. In the joystick inspector, **Look → Thumbstick** turns the control into a compact center nub: touches must start on the small ball, then can drag through the larger invisible range without stealing taps from neighboring face buttons. The CLI equivalent is `thumble element add joystick --thumbstick --target right-stick --no-digital-directions`. Select a joystick and edit **Fill → Thumbstick** to recolor the moving thumb separately from the joystick base; the CLI equivalent is `thumble element set "Right Stick" --thumb-fill '#22C55E'` (or light/dark variants such as `--light-thumb-fill`).
 
 The Keypad editor has a persistent command bar for Edit/Test mode, named control creation, undo/redo, orientation workflows, layout health, live save/delivery status, and explicit zoom controls; setup switching moves into the command bar whenever the Setups list is hidden. The left sidebar provides searchable **Setups** and **Layers** views with rename, duplicate, lock, visibility, grouping, and stack actions, and automatically follows the active setup. Use **Focus Canvas** (`⌥⌘0`) to temporarily hide both sidebars. The task-first inspector gives a button one **Action** field: the key press it sends. Visible letters and captions are separate passive **Text** layers from **Add Control → Text**; adding one from a selected button overlays it, hides the legacy integrated label, and groups both layers so they transform together. Switch to **Advanced** for reusable styles, haptics, corners, and effects. Pressing a control in Test mode sends its real configured output, while presses received from the paired iPhone are mirrored on the Mac canvas.
 
@@ -241,7 +252,7 @@ thumble device set iphone-17-pro --orientation portrait --variant portrait
 # Custom dimensions remain available in the app; CLI selection is limited to the checked-in catalog.
 thumble customization set --light-background '#FFFFFF' --dark-background '#050505'
 thumble customization set --background-tile dots --tile-foreground '#FFFFFF' --tile-background '#111111'
-thumble element nudge jump right --step 10 --canvas iphone-17-pro-landscape
+thumble element nudge UUID right --step 10 --canvas iphone-17-pro-landscape
 ```
 
 ## Shortcut bindings
@@ -263,7 +274,7 @@ Use **Default** for a single button or **Reset All** to restore the starter keyp
 ## Safety behavior
 
 - Only sends key events on state transitions.
-- Protocol v2 button frames use a fixed 32-byte binary payload with an input generation, full sequence number, and physical press identifier; legacy 14-byte v1 frames remain decodable. After pairing, iOS sends input over authenticated UDP and mirrors it over WebSocket for packet-loss recovery.
+- Protocol v3 input frames use a fixed 56-byte payload with an element UUID, input part, generation, sequence number, and physical press identifier. Old v1/v2 slot-index inputs and named-input JSON reject; non-input v1 frames remain supported. JSON preserves timestamps that cannot be represented compactly. After pairing, iOS sends input over authenticated UDP and mirrors it over WebSocket for packet-loss recovery.
 - The Mac advertises the `gamepad_profile_orientation_preference_mutation` capability before iOS enables rotation changes. A capable iPhone sends the dedicated profile-scoped mutation message only after that advertisement, and the Mac broadcasts the complete authoritative profile state afterward. Older peers ignore the optional capability/profile field; a new iPhone connected to an old Mac leaves the setting disabled and does not send the new message type.
 - iOS and macOS WebSocket connections set TCP `noDelay` to avoid Nagle delays on small input packets.
 - iOS uses a keypad-area UIKit touch router with stable expanded non-overlapping hit targets, hands moving touches between adjacent buttons and joysticks, sends every per-touch edge immediately before SwiftUI visual-state checks, stamps compact button frames with sequence diagnostics and per-press identifiers, supports optional per-control Core Haptics/impact feedback, and skips per-input send callbacks and live status publishes during use.

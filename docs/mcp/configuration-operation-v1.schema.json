@@ -781,16 +781,6 @@
             "null"
           ]
         },
-        "mappedButton": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/GameButtonInput"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
         "output": {
           "anyOf": [
             {
@@ -907,6 +897,20 @@
             "integer",
             "null"
           ]
+        },
+        "presentation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ElementPresentationInput"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "clearPresentation": {
+          "type": "boolean",
+          "default": false
         }
       },
       "type": "object"
@@ -1120,6 +1124,12 @@
       ],
       "type": "object"
     },
+    "ElementIDInput": {
+      "description": "UUID of the actual element being edited. Named input slots are rejected.",
+      "format": "uuid",
+      "pattern": "^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$",
+      "type": "string"
+    },
     "ElementInputPartInput": {
       "enum": [
         "primary",
@@ -1143,16 +1153,16 @@
       "additionalProperties": false,
       "properties": {
         "down": {
-          "$ref": "#/$defs/GameButtonInput"
+          "$ref": "#/$defs/ElementOutputBindingInput"
         },
         "left": {
-          "$ref": "#/$defs/GameButtonInput"
+          "$ref": "#/$defs/ElementOutputBindingInput"
         },
         "right": {
-          "$ref": "#/$defs/GameButtonInput"
+          "$ref": "#/$defs/ElementOutputBindingInput"
         },
         "up": {
-          "$ref": "#/$defs/GameButtonInput"
+          "$ref": "#/$defs/ElementOutputBindingInput"
         }
       },
       "required": [
@@ -1238,6 +1248,31 @@
         "decoration"
       ],
       "type": "string"
+    },
+    "ElementOutputBindingInput": {
+      "additionalProperties": false,
+      "description": "Explicit semantic keyboard/gamepad outputs, never a reference to another input.",
+      "properties": {
+        "gamepadButtons": {
+          "items": {
+            "$ref": "#/$defs/ConfigurationGamepadButtonInput"
+          },
+          "maxItems": 32,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "keyboard": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SemanticKeyStrokeInput"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
     },
     "ElementOutputChangesInput": {
       "additionalProperties": false,
@@ -1422,29 +1457,6 @@
         "trackpad",
         "decoration",
         "system"
-      ],
-      "type": "string"
-    },
-    "GameButtonInput": {
-      "enum": [
-        "up",
-        "down",
-        "left",
-        "right",
-        "jump",
-        "attack",
-        "dash",
-        "focus",
-        "map",
-        "pause",
-        "custom1",
-        "custom2",
-        "custom3",
-        "custom4",
-        "custom5",
-        "custom6",
-        "custom7",
-        "custom8"
       ],
       "type": "string"
     },
@@ -2253,6 +2265,56 @@
         "iphone-xs-max-portrait"
       ],
       "type": "string"
+    },
+    "ElementPresentationInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": {
+          "type": "integer",
+          "enum": [
+            1
+          ],
+          "default": 1
+        },
+        "actionID": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[a-z0-9._-]+$"
+        },
+        "purposeID": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[a-z0-9._-]+$"
+        },
+        "groupIDs": {
+          "type": "array",
+          "maxItems": 16,
+          "uniqueItems": true,
+          "default": [],
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[a-z0-9._-]+$"
+          }
+        },
+        "legend": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "caption": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "accessibilityName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      }
     }
   },
   "$id": "https://codybontecou.com/thumble/schemas/configuration-operation-v1.schema.json",
@@ -2294,16 +2356,6 @@
         },
         "kind": {
           "$ref": "#/$defs/ElementKindInput"
-        },
-        "mappedButton": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/GameButtonInput"
-            },
-            {
-              "type": "null"
-            }
-          ]
         },
         "profileID": {
           "type": "string"
@@ -2361,7 +2413,7 @@
       "additionalProperties": false,
       "properties": {
         "button": {
-          "$ref": "#/$defs/GameButtonInput"
+          "$ref": "#/$defs/ElementIDInput"
         },
         "profileID": {
           "description": "Exact profile UUID whose semantic button binding will change.",
@@ -2391,7 +2443,7 @@
       "additionalProperties": false,
       "properties": {
         "button": {
-          "$ref": "#/$defs/GameButtonInput"
+          "$ref": "#/$defs/ElementIDInput"
         },
         "profileID": {
           "type": "string"
@@ -2412,7 +2464,7 @@
       "additionalProperties": false,
       "properties": {
         "button": {
-          "$ref": "#/$defs/GameButtonInput"
+          "$ref": "#/$defs/ElementIDInput"
         },
         "profileID": {
           "type": "string"
@@ -2471,7 +2523,7 @@
       "additionalProperties": false,
       "properties": {
         "button": {
-          "$ref": "#/$defs/GameButtonInput"
+          "$ref": "#/$defs/ElementIDInput"
         },
         "gamepadEdit": {
           "$ref": "#/$defs/GamepadOutputEditInput"
@@ -2500,7 +2552,7 @@
       "additionalProperties": false,
       "properties": {
         "button": {
-          "$ref": "#/$defs/GameButtonInput"
+          "$ref": "#/$defs/ElementIDInput"
         },
         "profileID": {
           "type": "string"
@@ -3157,7 +3209,7 @@
           "type": "string"
         },
         "name": {
-          "description": "Optional duplicate name; defaults to the source name plus “Copy”.",
+          "description": "Optional duplicate name; defaults to the source name plus \u201cCopy\u201d.",
           "type": [
             "string",
             "null"
@@ -3555,7 +3607,7 @@
           "description": "Canonical built-in generation preset."
         },
         "presetRevision": {
-          "description": "Exact installed preset revision. Hollow Knight is revision 2 (thumb-sized controls).",
+          "description": "Exact installed preset revision. Hollow Knight is revision 2.",
           "format": "uint32",
           "minimum": 0,
           "type": "integer"

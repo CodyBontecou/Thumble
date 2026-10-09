@@ -90,3 +90,81 @@ final class ThumbleSkinQualityTests: XCTestCase {
         return (workspace, compiled.package)
     }
 }
+
+
+extension ThumbleSkinQualityTests {
+    func testRasterFaceEstimateUsesOpaqueArtworkAndIgnoresTransparentCorners() throws {
+        let svg = Data("<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 128 128\"><circle cx=\"64\" cy=\"64\" r=\"60\" fill=\"#D5DED9\"/></svg>".utf8)
+        let png = try ThumbleSVGRasterizer.rasterize(svg, width: 128, height: 128)
+        let sampled = try XCTUnwrap(ThumbleSkinQualityEvaluator.rasterFillRepresentativeColor(png))
+        XCTAssertEqual(sampled.red, CGFloat(213) / 255, accuracy: 0.02)
+        XCTAssertEqual(sampled.green, CGFloat(222) / 255, accuracy: 0.02)
+        XCTAssertEqual(sampled.blue, CGFloat(217) / 255, accuracy: 0.02)
+        XCTAssertNil(ThumbleSkinQualityEvaluator.rasterFillRepresentativeColor(Data("invalid".utf8)))
+    }
+}
+
+extension ThumbleSkinQualityTests {
+    func testCSSJoystickLegendContrastUsesAuthoredPuckInsteadOfWell() throws {
+        let (workspace, package) = try makePuckContrastWorkspace(legend: "#182735")
+        let report = ThumbleSkinQualityEvaluator.evaluate(package: package, workspace: workspace)
+        XCTAssertFalse(report.issues.contains {
+            $0.target?.styleID == "css-role-joystick" && $0.code.contains("style-contrast")
+        }, "Readable dark legend on cream puck must not be compared to its dark well: \(report.issues)")
+    }
+
+    func testCSSJoystickLegendContrastRejectsUnreadablePuckAndInheritedStates() throws {
+        let (workspace, package) = try makePuckContrastWorkspace(legend: "#FFF8E8")
+        let report = ThumbleSkinQualityEvaluator.evaluate(package: package, workspace: workspace)
+        let issues = report.issues.filter { $0.target?.styleID == "css-role-joystick" && $0.code == "low-style-contrast" }
+        for state in GamepadControlPresentationState.allCases {
+            XCTAssertTrue(issues.contains { $0.message.contains(", \(state.rawValue))") && $0.message.contains("joystick puck") })
+        }
+    }
+
+    func testCSSJoystickContrastChecksStateOverrideAndSharedButtonFace() throws {
+        let (workspace, initial) = try makePuckContrastWorkspace(legend: "#182735", extra: """
+        control[role=\"joystick\"]:pressed { -thumble-joystick-knob-fill: #182735; }
+        control[role=\"joystick\"]:active { -thumble-joystick-knob-fill: #182735; }
+        """)
+        let stateReport = ThumbleSkinQualityEvaluator.evaluate(package: initial, workspace: workspace)
+        let stateIssues = stateReport.issues.filter { $0.target?.styleID == "css-role-joystick" && $0.code == "low-style-contrast" }
+        XCTAssertTrue(stateIssues.contains { $0.message.contains(", pressed)") })
+        XCTAssertTrue(stateIssues.contains { $0.message.contains(", active)") })
+        XCTAssertFalse(stateIssues.contains { $0.message.contains(", normal)") || $0.message.contains(", disabled)") })
+
+        var package = initial
+        var skin = try XCTUnwrap(package.skin)
+        func shareWithButtons(_ appearance: inout ThumbleSkinAppearance) {
+            appearance.roleRules.removeAll { $0.role == .utility }
+            appearance.roleRules.append(.init(role: .utility, appearance: .init(styleID: "css-role-joystick")))
+        }
+        shareWithButtons(&skin.base)
+        for index in skin.variants.indices { shareWithButtons(&skin.variants[index].appearance) }
+        package.skin = skin
+        let shared = ThumbleSkinQualityEvaluator.evaluate(package: package, workspace: workspace)
+        XCTAssertTrue(shared.issues.contains {
+            $0.target?.styleID == "css-role-joystick" && $0.code == "low-style-contrast"
+                && $0.message.contains(", normal)") && $0.message.contains("against its face")
+        }, "A token shared with buttons must still check their face, even if the joystick puck is readable.")
+    }
+
+    private func makePuckContrastWorkspace(legend: String, extra: String = "") throws -> (ThumbleSkinWorkspace, ThumbleSkinPackage) {
+        let source = temporaryDirectory.appendingPathComponent("Puck-\(UUID().uuidString)", isDirectory: true)
+        var workspace = try ThumbleSkinScaffolder.write(name: "Puck Contrast", identifier: "com.example.puck-contrast",
+            artboardID: "xbox-v1", to: source, css: true)
+        workspace.author = ThumbleSkinAuthor(name: "Contrast Fixture")
+        try JSONEncoder().encode(workspace).write(to: source.appendingPathComponent(ThumbleSkinScaffolder.sourceFileName))
+        let css = """
+        control { background: #172A3A; color: #FFF8E8; }
+        control[role="joystick"] {
+            color: \(legend);
+            -thumble-joystick-knob-fill: #FFF8E8;
+        }
+        \(extra)
+        """
+        try Data(css.utf8).write(to: source.appendingPathComponent("styles/controller.css"))
+        let result = try ThumbleSkinCompiler.compile(source: source, strict: true)
+        return (workspace, result.package)
+    }
+}

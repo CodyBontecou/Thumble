@@ -24,11 +24,44 @@ final class StackSafetyRegressionTests: XCTestCase {
         assertInlineSize(PendingKeypadLayoutEdit.self, atMost: 4 * 1024)
         assertInlineSize(ControllerMessage.self, atMost: 4 * 1024)
         assertInlineSize(VirtualGamepadStatus.self, atMost: 8)
+        assertInlineSize(GamepadJoystickMapping.self, atMost: 8)
         assertInlineSize(ThumbleSkin.self, atMost: 1024)
         assertInlineSize(ThumbleSkinPackage.self, atMost: 1024)
         assertInlineSize(ThumbleSkinAppearance.self, atMost: 1024)
         assertInlineSize(ThumbleSkinControlAppearance.self, atMost: 2 * 1024)
         assertInlineSize(GamepadControlStateStyle.self, atMost: 2 * 1024)
+        assertInlineSize(ThumbleSkinWorkspace.self, atMost: 1024)
+        assertInlineSize(ControllerDesignSession.self, atMost: 512)
+        assertInlineSize(ControllerDesignLayoutEdit.self, atMost: 160)
+        assertInlineSize(GamepadControlContentStyle?.self, atMost: 8)
+        assertInlineSize(GamepadPointingPaint?.self, atMost: 8)
+        assertInlineSize(ThumbleSkinArtworkAnchor?.self, atMost: 8)
+        assertInlineSize(ThumbleSkinCapturedGeometry?.self, atMost: 8)
+        assertInlineSize(GamepadControlPresentation?.self, atMost: 8)
+        assertInlineSize(GamepadNativeContentPresentation?.self, atMost: 8)
+        assertInlineSize(GamepadControlBarLabelContent?.self, atMost: 8)
+        assertInlineSize(ControllerDesignSession.ControlBarReview?.self, atMost: 8)
+        assertInlineSize(ControllerDesignSession.DiagnosticReport?.self, atMost: 8)
+        assertInlineSize(ThumbleSkinQualityTarget?.self, atMost: 8)
+        assertInlineSize(ControllerDesignSession.DrawerReview?.self, atMost: 8)
+        assertInlineSize(GamepadNativeBarLayoutEvidence?.self, atMost: 8)
+        assertInlineSize(GamepadNativeBarPaintEvidence?.self, atMost: 8)
+        assertInlineSize(GamepadNativeBarItemEvidence?.self, atMost: 8)
+        assertInlineSize(GamepadNativeBarIconEvidence?.self, atMost: 8)
+        assertInlineSize(GamepadNativeBarContainerPresentation?.self, atMost: 8)
+        assertInlineSize(GamepadTopBarDrawerLayout?.self, atMost: 8)
+        assertInlineSize(GamepadControlFaceAdaptation?.self, atMost: 8)
+        assertInlineSize(GamepadRuntimeControlFaceTarget?.self, atMost: 8)
+        assertInlineSize(GamepadPointingFaceInteraction?.self, atMost: 8)
+        assertInlineSize(GamepadTriggerFaceInteraction?.self, atMost: 8)
+        assertInlineSize(GamepadControlSurfaceMask?.self, atMost: 8)
+        assertInlineSize(GamepadNativeSurfaceInkEvidence?.self, atMost: 8)
+        assertInlineSize(GamepadNativeSurfaceLayoutEvidence?.self, atMost: 8)
+        assertInlineSize(ThumbleSkinArtboardNativeGeometry?.self, atMost: 8)
+        assertInlineSize(ThumbleSkinArtboardNativeSurfaces?.self, atMost: 8)
+        assertInlineSize(ThumbleSkinArtboardNativeChrome?.self, atMost: 8)
+        assertInlineSize(ThumbleSkinArtboardNativeLayout?.self, atMost: 8)
+        assertInlineSize(ThumbleSkinArtboardVariant.self, atMost: 256)
         assertInlineSize(GamepadControlVisualStyle.self, atMost: 256)
         assertInlineSize(GamepadStyleToken.self, atMost: 256)
         assertInlineSize(ThumbleBridgeOperation.self, atMost: 512)
@@ -57,6 +90,26 @@ final class StackSafetyRegressionTests: XCTestCase {
         )
     }
 
+    func testStrictJSONScanAndDecodePreserveTransportBoundsOn512KiBStack() throws {
+        struct Payload: Decodable { let counter: UInt64; let chunk: String }
+        let chunk = String(repeating: "a", count: 300 * 1024)
+        let data = Data("{\"counter\":18446744073709551615,\"chunk\":\"\(chunk)\"}".utf8)
+        try runOnThread(stackSize: 512 * 1024) {
+            let decoded = try JSONDecoder().decodeUnique(Payload.self, from: data)
+            guard decoded.counter == UInt64.max, decoded.chunk == chunk else { throw StackTestError.unexpectedDecodedState }
+            for raw in [
+                "{\"counter\":1,\"\\u0063ounter\":2,\"chunk\":\"\"}",
+                "{\"é\":1,\"e\\u0301\":2}",
+                "{\"\\u00e9\":1,\"e\\u0301\":2}"
+            ] {
+                do {
+                    try JSONDecoder.validateUniqueKeys(in: Data(raw.utf8))
+                    throw StackTestError.unexpectedDecodedState
+                } catch PortableProfileArtifactError.duplicateObjectKey {}
+            }
+        }
+    }
+
     func testGamepadReadinessWireRoundTripOn512KiBStack() throws {
         let status = VirtualGamepadStatus(phase: .ready, entitlementGranted: true, reportCount: 3, pressedButtons: [.south])
         let message = ControllerMessage(type: .ping, timestamp: 42, virtualGamepadStatus: status)
@@ -80,9 +133,9 @@ final class StackSafetyRegressionTests: XCTestCase {
         )
         var changed = original
 
-        changed.customization.setLabel("Changed Primary", for: .jump)
-        changed.landscapeCustomization?.setLabel("Changed Landscape", for: .attack)
-        changed.skinBaselineCustomization?.setLabel("Changed Baseline", for: .dash)
+        changed.customization.setLabel("Changed Primary", for: .preset(5))
+        changed.landscapeCustomization?.setLabel("Changed Landscape", for: .preset(6))
+        changed.skinBaselineCustomization?.setLabel("Changed Baseline", for: .preset(7))
 
         XCTAssertEqual(original.customization, customization)
         XCTAssertEqual(original.landscapeCustomization, customization)
@@ -275,8 +328,8 @@ final class StackSafetyRegressionTests: XCTestCase {
 
     private final class ProfilePersistenceStartupJob: @unchecked Sendable {
         func run() throws {
-            let customization = GamepadCustomizationPersistence.load()
-            let state = GamepadConfigurationProfilePersistence.load(
+            let customization = try GamepadCustomizationPersistence.load()
+            let state = try GamepadConfigurationProfilePersistence.load(
                 activeCustomization: customization
             )
             guard state.profiles.count == 1,
@@ -319,7 +372,7 @@ final class StackSafetyRegressionTests: XCTestCase {
                 updatedAt: 10
             )
             var changed = customization
-            changed.setLabel("Pending Change", for: .jump)
+            changed.setLabel("Pending Change", for: .preset(5))
             changedEdit = PendingKeypadLayoutEdit(
                 profileID: profile.id,
                 orientation: .landscape,
@@ -407,9 +460,9 @@ final class StackSafetyRegressionTests: XCTestCase {
         }
 
         private func overrideJumpShape() {
-            var jump = profile.customization.buttonCustomization(for: .jump)
+            var jump = profile.customization.buttonCustomization(for: .preset(5))
             jump.shape = .rectangle
-            profile.customization.setButtonCustomization(jump, for: .jump)
+            profile.customization.setButtonCustomization(jump, for: .preset(5))
         }
 
         private func applyUpdatedPackage() {
@@ -420,10 +473,10 @@ final class StackSafetyRegressionTests: XCTestCase {
             guard profile.skinReference?.version == "2.0.0" else {
                 throw StackTestError.skinApplicationFailed
             }
-            guard profile.customization.buttonCustomization(for: .jump).shape == .rectangle else {
+            guard profile.customization.buttonCustomization(for: .preset(5)).shape == .rectangle else {
                 throw StackTestError.skinApplicationFailed
             }
-            guard profile.customization.buttonCustomization(for: .attack).shape == .circle else {
+            guard profile.customization.buttonCustomization(for: .preset(6)).shape == .circle else {
                 throw StackTestError.skinApplicationFailed
             }
             guard profile.landscapeSkinBaselineCustomization != nil,
@@ -521,6 +574,25 @@ final class StackSafetyRegressionTests: XCTestCase {
         }
     }
 
+    func testDirectGeneratedOutputAuthoringAndCodableRunOn512KiBStack() throws {
+        try runOnThread(stackSize: 512 * 1024, timeout: 30) {
+            let controls = (1...128).map { ordinal in
+                AgentKeypadControlSpec(
+                    id: String(format: "368C1C47-7233-40C4-93E6-%012X", ordinal),
+                    label: "Same", key: "Space", modifiers: ["Control"]
+                )
+            }
+            let generated = GameKeypadGenerator.generate(from: AgentKeypadSpec(gameName: "Stack Authoring", controls: controls))
+            let data = try JSONEncoder().encode(generated.profile)
+            let profile = try JSONDecoder().decode(GamepadConfigurationProfile.self, from: data)
+            let expected = KeypadKeyboardBinding(keyCode: 49, modifiersRawValue: 8)
+            guard profile.customization.elements.count == 128,
+                  Set(profile.customization.elements.map(\.id)).count == 128,
+                  profile.customization.elements.allSatisfy({ $0.output?.keyboard == expected && $0.defaultOutput?.keyboard == expected })
+            else { throw StackTestError.unexpectedDecodedState }
+        }
+    }
+
     func testDirectFullProfileCodableRunsOn512KiBStack() throws {
         let (_, profile) = makeFullProfileWireMessage()
         let job = ProfileCodableJob(profile: profile)
@@ -536,6 +608,88 @@ final class StackSafetyRegressionTests: XCTestCase {
         try runOnThread(stackSize: 512 * 1024, timeout: 30) {
             try job.run()
         }
+    }
+
+    private final class SavedConfigurationValidationJob: @unchecked Sendable {
+        func run() throws {
+            let suite = "ThumbleConstrainedSavedState.\(UUID().uuidString)"
+            guard let defaults = UserDefaults(suiteName: suite) else { throw StackTestError.persistenceStartupFailed }
+            defer { defaults.removePersistentDomain(forName: suite) }
+            let profileData = try makeProfileData()
+            defaults.set(profileData, forKey: GamepadConfigurationProfilePersistence.defaultsKey)
+            let state = try GamepadConfigurationProfilePersistence.load(activeCustomization: .defaultValue, defaults: defaults)
+            let bindings = try MacConfigurationBindings.loadSavedBindings(from: [:], state: state)
+            guard let active = state.activeProfile, active.customization.elements.count == 128,
+                  bindings.profileKeys[active.id]?.count == 128 else { throw StackTestError.persistenceStartupFailed }
+            let envelope = MacConfigurationBindings.KeypadExportEnvelope(profiles: state.profiles, activeProfileID: state.activeProfileID, defaultProfileID: state.defaultProfileID,
+                profileKeyBindings: [active.id.uuidString: MacConfigurationBindings.rawKeyBindings(bindings.profileKeys[active.id] ?? [:])],
+                profileOutputBindings: [active.id.uuidString: MacConfigurationBindings.rawOutputs(bindings.profileOutputs[active.id] ?? [:])])
+            let imported = try MacConfigurationBindings.decodeKeypadImport(data: JSONEncoder().encode(envelope), sourceName: "Constrained import")
+            guard imported.profiles.first?.customization.elements.count == 128 else { throw StackTestError.persistenceStartupFailed }
+            try verifyFileExportAndUndo(imported)
+            try verifyNativeConfigurationSnapshot(active)
+            var resetProfile = active
+            let reset = MacConfigurationBindings.resetAllOutputs(in: &resetProfile)
+            guard reset.isEmpty, resetProfile.customization.elements.count == 128,
+                  resetProfile.customization.elements.allSatisfy({ $0.output == KeypadElementOutputBinding() }) else { throw StackTestError.persistenceStartupFailed }
+            let named = Data("{\"jump\":{\"keyCode\":49,\"modifiersRawValue\":0}}".utf8)
+            do {
+                _ = try MacConfigurationBindings.loadSavedBindings(from: ["PocketPadMac.keyBindings.v2": named], state: state)
+                throw StackTestError.persistenceStartupFailed
+            } catch is GamepadSavedConfigurationError {}
+            guard defaults.data(forKey: GamepadConfigurationProfilePersistence.defaultsKey) == profileData else {
+                throw StackTestError.persistenceStartupFailed
+            }
+            let invalid = Data("{\"profiles\":[{}]}".utf8)
+            defaults.set(invalid, forKey: GamepadConfigurationProfilePersistence.defaultsKey)
+            do {
+                _ = try GamepadConfigurationProfilePersistence.load(activeCustomization: .defaultValue, defaults: defaults)
+                throw StackTestError.persistenceStartupFailed
+            } catch is GamepadSavedConfigurationError {}
+            guard defaults.data(forKey: GamepadConfigurationProfilePersistence.defaultsKey) == invalid else {
+                throw StackTestError.persistenceStartupFailed
+            }
+        }
+
+        private func verifyFileExportAndUndo(_ imported: MacConfigurationBindings.KeypadExportEnvelope) throws {
+            guard let profile = imported.profiles.first else { throw StackTestError.persistenceStartupFailed }
+            let outputs = profile.initialMacOutputBindings
+            let snapshot = MacConfigurationBindings.EditorUndoSnapshot(keyBindings: outputs.keyboardBindings, outputBindings: outputs,
+                gamepadCustomization: profile.customization, gamepadProfiles: imported.profiles, activeGamepadProfileID: profile.id,
+                defaultGamepadProfileID: profile.id, profileKeyBindings: [profile.id: outputs.keyboardBindings],
+                profileOutputBindings: [profile.id: outputs], profileSources: imported.profileSources)
+            let update = try MacConfigurationBindings.checkedEditorUndoUpdate(snapshot)
+            let data = try MacConfigurationBindings.keypadExportData(profiles: update.state.profiles, activeProfileID: profile.id,
+                defaultProfileID: profile.id, exportingProfileID: profile.id, bindings: update.bindings, preserving: update.profileSources)
+            guard try MacConfigurationBindings.decodeKeypadImport(data: data, sourceName: "Constrained undo export").profiles.first?.customization.elements.count == 128 else {
+                throw StackTestError.persistenceStartupFailed
+            }
+        }
+
+        private func verifyNativeConfigurationSnapshot(_ profile: GamepadConfigurationProfile) throws {
+            let encoder = ThumbleNativeConfiguration.encoder()
+            let raw = try JSONDecoder().decodeUnique(ThumbleBridgeJSONValue.self, from: encoder.encode(profile))
+            let document = ThumbleBridgeConfigurationDocument(profiles: [raw], activeProfileID: profile.id.uuidString, defaultProfileID: profile.id.uuidString)
+            let authority = ThumbleNativeConfigurationAuthority(read: { document }, write: { _ in throw StackTestError.persistenceStartupFailed })
+            let request = ThumbleNativeConfiguration.Request(requestID: UUID(), action: "snapshot", invocationID: UUID(), requestDigest: String(repeating: "0", count: 64))
+            let response = try JSONDecoder().decodeUnique(ThumbleNativeConfiguration.Response.self, from: authority.handle(encoder.encode(request)))
+            guard response.error == nil, response.document?.profiles.count == 1 else { throw StackTestError.persistenceStartupFailed }
+        }
+
+        private func makeProfileData() throws -> Data {
+            var customization = GamepadCustomization.blankCanvas
+            customization.elements = (1...128).map { ordinal in
+                KeypadElement(id: UUID(uuidString: String(format: "E932BB68-690C-4A01-8140-%012X", ordinal))!, label: "Same", layout: .defaultValue, output: .init(keyboard: .init(keyCode: 49)))
+            }
+            let profile = GamepadConfigurationProfile(name: "Owned", primaryCustomization: customization)
+            let raw = try JSONSerialization.jsonObject(with: JSONEncoder().encode(profile))
+            return try JSONSerialization.data(withJSONObject: ["profiles": [raw], "activeProfileID": profile.id.uuidString, "defaultProfileID": profile.id.uuidString])
+        }
+    }
+
+    func testSavedConfigurationValidationAndRejectionRunOn512KiBStack() throws {
+        let job = SavedConfigurationValidationJob()
+        try runOnThread(stackSize: 512 * 1024) { try job.run() }
     }
 
     func testEmptyPersistenceStartupRunsOn512KiBStack() throws {
@@ -647,7 +801,7 @@ final class StackSafetyRegressionTests: XCTestCase {
                 throw StackTestError.unexpectedDecodedState
             }
             var changed = rhs
-            changed.setLabel("Changed", for: .jump)
+            changed.setLabel("Changed", for: .preset(5))
             guard !lhs.hasSamePresentation(as: changed) else {
                 throw StackTestError.unexpectedDecodedState
             }
@@ -691,6 +845,194 @@ final class StackSafetyRegressionTests: XCTestCase {
 
     /// The complete CSS pipeline — tokenize, parse, cascade, var() resolution, lowering,
     /// package encoding, and archive writes — must run on a constrained 512 KiB stack.
+    func testExactDesignCaptureAndSourceUpdateRunOn512KiBStack() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("Thumble-Design-Stack-\(UUID().uuidString)")
+        defer {
+            try? FileManager.default.removeItem(at: root)
+            try? FileManager.default.removeItem(at: root.deletingLastPathComponent().appendingPathComponent(".\(root.lastPathComponent).design-lock"))
+        }
+        var profile = GamepadControllerTemplate.xbox.makeProfile()
+        profile.landscapeCustomization = nil
+        profile.portraitCustomization = nil
+        profile.customization.elements[0].presentation = GamepadControlPresentation(actionID: "ability.q", purposeID: "primary",
+            groupIDs: ["abilities"], legend: "Q", caption: "Light Binding", accessibilityName: "Cast Light Binding")
+        let frozenProfile = profile
+        try runOnThread(stackSize: 512 * 1024, timeout: 30) {
+            let session = try ControllerDesignWorkspace.begin(profile: frozenProfile, bindings: Data("{}".utf8),
+                targetRevision: 17, safeAreas: [.landscape: .init()], name: "Stack Design",
+                identifier: "com.example.stack-design", at: root)
+            let captured = try ControllerDesignWorkspace.inspect(at: root).artboard
+            guard captured.id == "captured-" + frozenProfile.id.uuidString.lowercased() else {
+                throw StackTestError.unexpectedDecodedState
+            }
+            let result = try ControllerDesignWorkspace.update(at: root, expectedRevision: session.revision,
+                edits: [.init(path: "styles/controller.css", data: Data("control { font-size: 22px; font-weight: bold; } joystick { -thumble-joystick-ring-color: #123456; -thumble-joystick-ring-stroke-width: 3px; } joystick:active { -thumble-joystick-knob-fill: #abcdef; }".utf8))])
+            guard result.session.revision == 2, result.session.artboardSHA256 == session.artboardSHA256 else {
+                throw StackTestError.unexpectedDecodedState
+            }
+            let loaded = try ThumbleSkinCompiler.loadWorkspace(from: root)
+            guard let control = loaded.workspace.capturedArtboards.first?.variants.first?.controls.first(where: { $0.presentation != nil }) else {
+                throw StackTestError.unexpectedDecodedState
+            }
+            let center = control.frame.x + control.frame.width / 2
+            var anchored = loaded.workspace
+            anchored.sourceAssets = [.init(id: "well", path: "sources/well.svg", purpose: .canvasArtwork,
+                outputWidth: 128, outputHeight: 128, anchor: .init(group: "abilities"))]
+            _ = try ControllerDesignWorkspace.update(at: root, expectedRevision: 2, edits: [
+                .init(path: "skin-source.json", data: JSONEncoder().encode(anchored)),
+                .init(path: "sources/well.svg", data: Data(##"<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128"><rect width="128" height="128" fill="#123456"/></svg>"##.utf8))])
+            let moved = try ControllerDesignWorkspace.update(at: root, expectedRevision: 3, edits: [],
+                layoutEdits: [.init(variant: .primary, controlID: control.id, centerX: center > 0.5 ? center - 0.01 : center + 0.01,
+                    presentation: GamepadControlPresentation(actionID: "lux.light-binding", purposeID: "ability.q",
+                        groupIDs: ["abilities"], legend: "Q", caption: "Updated Light Binding"), visualRole: .utility)])
+            guard moved.session.revision == 4, moved.session.baseProfileSHA256 == session.profileSHA256,
+                  moved.session.bindingSHA256 == session.bindingSHA256, moved.session.layoutPlanSHA256 != nil else {
+                throw StackTestError.unexpectedDecodedState
+            }
+            let editedArtboard = try JSONDecoder().decodeUnique(ThumbleSkinArtboard.self,
+                from: Data(contentsOf: root.appendingPathComponent("contract/artboard.json")))
+            guard editedArtboard.variants.first?.controls.first(where: { $0.id == control.id })?.presentation?.actionID == "lux.light-binding" else {
+                throw StackTestError.unexpectedDecodedState
+            }
+            guard editedArtboard.variants.first?.controls.first(where: { $0.id == control.id })?.visualRole == .utility else {
+                throw StackTestError.unexpectedDecodedState
+            }
+            let diagnostics = try ControllerDesignDiagnosticBuilder.build(source: .init(issues: []),
+                quality: .init(issues: [.init(severity: .warning, code: "fixture-global", message: "Global publication metadata")]),
+                artboard: editedArtboard, frames: [], layouts: [])
+            let decodedDiagnostics = try JSONDecoder().decode(ControllerDesignSession.DiagnosticReport.self,
+                from: JSONEncoder().encode(diagnostics))
+            guard decodedDiagnostics.issues.count == 1, decodedDiagnostics.issues[0].id.count == 64,
+                  decodedDiagnostics.issues[0].targetResolution == "global" else { throw StackTestError.unexpectedDecodedState }
+            let compilation = try ThumbleSkinCompiler.compile(source: root)
+            let manifest = try JSONDecoder().decode(ThumbleSkinManifest.self, from: JSONEncoder().encode(compilation.package.manifest))
+            guard manifest.compatibility?.capturedGeometry?.isValid == true,
+                  compilation.package.skin?.appearance(orientation: .landscape, colorScheme: .light).artworkLayers?.first?.id == "well" else {
+                throw StackTestError.unexpectedDecodedState
+            }
+        }
+    }
+
+    func testNativeContentResolutionAndEvidenceCodecRunOn512KiBStack() throws {
+        var profile = GamepadControllerTemplate.xbox.makeProfile()
+        profile.customization.elements.append(KeypadElement(label: "Trigger", kind: .trigger, triggerSettings: .defaultValue))
+        let requestedPaint = profile.customization.controlBarItemCustomization(for: .settings)
+        let paintItem = GamepadNativeBarItemEvidence(item: .settings, state: .normal, requested: requestedPaint,
+            resolved: profile.customization.resolvedPresentation(for: requestedPaint, fallbackAccentStyle: .blue,
+                controlKind: .button, state: .normal, scheme: .dark),
+            foreground: .init(red: 1, green: 1, blue: 1), background: .init(red: 0, green: 0, blue: 0),
+            border: .init(red: 0.5, green: 0.5, blue: 0.5), borderWidth: 1, cornerRadius: 8, height: 28,
+            padding: 12, rendererShape: "roundedRectangle", cornerRadii: nil)
+        let paintIcon = GamepadNativeBarIconEvidence(item: .settings, requested: nil, source: "sf_symbol", value: "gearshape",
+            fontSize: 13, frameWidth: 28, fallbacks: ["native default symbol"])
+        let barPaint = GamepadNativeBarPaintEvidence(items: [paintItem.surfaceID: paintItem], icons: [paintIcon.surfaceID: paintIcon])
+        try runOnThread(stackSize: 512 * 1024) {
+            let customization = profile.customization
+            var artboard = try ThumbleSkinArtboard.capture(profile: profile, identifier: "stack-hit",
+                safeAreas: [.landscape: .init(), .portrait: .init()])
+            for index in artboard.variants.indices {
+                let variant = artboard.variants[index]
+                let controlSamples = variant.controls.flatMap { control in
+                    ThumbleSkinColorScheme.allCases.flatMap { scheme in
+                        GamepadControlPresentationState.allCases.map { state in
+                            ThumbleSkinArtboardNativeLayout.ControlSample(controlID: control.id, colorScheme: scheme,
+                                state: state, flowFrames: ["legend": CGRect(x: 10, y: 20, width: 32, height: 18)])
+                        }
+                    }
+                }
+                let chromeSamples = (0..<24).map { index in
+                    ThumbleSkinArtboardNativeLayout.ChromeSample(paint: barPaint, kind: index < 8 ? "bar" : "drawer", colorScheme: .dark,
+                        isConnected: index.isMultiple(of: 2), isEditing: index.isMultiple(of: 3), requestedVisibility: true,
+                        resolvedVisibility: true, frames: ["native-control-bar": CGRect(x: 0, y: 0, width: variant.canvasWidth, height: 64)],
+                        viewport: CGRect(x: 0, y: 0, width: variant.canvasWidth, height: variant.canvasHeight))
+                }
+                artboard.variants[index].nativeLayout = .init(rendererSHA256: String(repeating: "a", count: 64),
+                    controls: controlSamples, chrome: chromeSamples)
+            }
+            let decodedArtboard = try JSONDecoder().decode(ThumbleSkinArtboard.self, from: JSONEncoder().encode(artboard))
+            guard decodedArtboard == artboard,
+                  decodedArtboard.variants.allSatisfy({ $0.nativeLayout?.chromeSamples.count == 24 && $0.nativeLayout?.chromeSamples.allSatisfy({ $0.paint == barPaint }) == true && $0.nativeLayout?.controlSamples.count == $0.controls.count * 8 && $0.nativeChrome != nil && $0.controls.allSatisfy { $0.nativeGeometry != nil && $0.nativeSurfaces?.samples.count == 8 } }) else {
+                throw StackTestError.unexpectedDecodedState
+            }
+            let drawerLayout = GamepadTopBarDrawerLayout(safeAreaInsets: .init(top: 30, leading: 10, bottom: 0, trailing: 20),
+                isLandscape: false, minimumPortraitTopInset: 54)
+            let decodedDrawer = try JSONDecoder().decode(GamepadTopBarDrawerLayout.self,
+                from: JSONEncoder().encode(drawerLayout))
+            guard decodedDrawer.topPadding == 54, decodedDrawer.effectiveLeadingInset == 10 else {
+                throw StackTestError.unexpectedDecodedState
+            }
+            let barLabel = GamepadControlBarLabelContent.profile(name: profile.name, isDefault: true, compact: false)
+            let launchLabel = GamepadControlBarLabelContent.launch(target: profile.launchTarget, compact: true)
+            guard barLabel.title == profile.name, barLabel.symbol == "star.fill",
+                  launchLabel.item == .launchTarget else { throw StackTestError.unexpectedDecodedState }
+            let barFrame = ControllerDesignSession.ControlBarReview.Frame(title: "bar-landscape-dark-connected-normal",
+                orientation: .landscape, colorScheme: .dark, isConnected: true, isEditing: false,
+                isDefaultProfile: false, profileName: profile.name, visibleItems: [.profileMenu, .settings],
+                surfaceIDs: ["native-control-bar", "native-control-bar/profile_menu", "native-control-bar/settings"],
+                viewportWidth: 874, viewportHeight: 64, renderScale: 1,
+                image: .init(path: "reviews/review-1/bar.png", byteCount: 10, sha256: String(repeating: "b", count: 64)),
+                nativeLayout: .init(frames: ["native-control-bar": CGRect(x: 0, y: 0, width: 874, height: 64)],
+                    viewport: CGRect(x: 0, y: 0, width: 874, height: 64)), drawerLayoutInputs: drawerLayout)
+            let barEvidence = ControllerDesignSession.ControlBarReview(frames: [barFrame],
+                contactSheet: .init(path: "reviews/review-1/control-bar-contact-sheet.png", byteCount: 10, sha256: String(repeating: "a", count: 64)))
+            let decodedBar = try JSONDecoder().decode(ControllerDesignSession.ControlBarReview.self,
+                from: JSONEncoder().encode(barEvidence))
+            guard decodedBar.scope == barEvidence.scope, decodedBar.frames.first?.surfaceIDs == barFrame.surfaceIDs,
+                  decodedBar.frames.first?.viewportWidth == 874,
+                  decodedBar.frames.first?.nativeLayout?.frames == barFrame.nativeLayout?.frames,
+                  decodedBar.frames.first?.drawerLayoutInputs?.topPadding == 54,
+                  decodedBar.contactSheet == barEvidence.contactSheet else { throw StackTestError.unexpectedDecodedState }
+            let drawerFrame = ControllerDesignSession.DrawerReview.Frame(title: "drawer-portrait-dark-connected-normal-expanded",
+                orientation: .portrait, colorScheme: .dark, isConnected: true, isEditing: false,
+                requestedVisibility: true, resolvedVisibility: true, collapsedOpacity: 1,
+                surfaceIDs: ["native-drawer/reveal"], nativeLayout: .init(frames: ["native-drawer/reveal": .init(x: 100, y: 54, width: 44, height: 44)],
+                    viewport: .init(x: 0, y: 0, width: 402, height: 874), coordinateDescription: "drawer-scene image"),
+                layoutInputs: drawerLayout, renderScale: 1, image: barFrame.image)
+            let drawerEvidence = ControllerDesignSession.DrawerReview(frames: [drawerFrame], contactSheet: barEvidence.contactSheet)
+            let decodedScenes = try JSONDecoder().decode(ControllerDesignSession.DrawerReview.self,
+                from: JSONEncoder().encode(drawerEvidence))
+            guard decodedScenes.frames.first?.nativeLayout.frames == drawerFrame.nativeLayout.frames,
+                  decodedScenes.frames.first?.layoutInputs.topPadding == 54,
+                  decodedScenes.contactSheet == drawerEvidence.contactSheet else { throw StackTestError.unexpectedDecodedState }
+            let controls = customization.resolvedControls(in: customization.deviceCanvas.editorDeviceFrame.screenRect.size)
+            let ink = GamepadNativeSurfaceInkEvidence(samples: ["legend": .init(
+                pixelBounds: CGRect(x: 20, y: 30, width: 16, height: 20),
+                canvasPointBounds: CGRect(x: 10, y: 15, width: 8, height: 10), rgbaSHA256: String(repeating: "a", count: 64),
+                nativeLayout: .init(canvasBounds: .init(x: 10, y: 15, width: 12, height: 16),
+                    viewport: .init(x: 0, y: 0, width: 500, height: 400)))],
+                width: 1000, height: 800, scale: 2)
+            let decodedInk = try JSONDecoder().decode(GamepadNativeSurfaceInkEvidence.self, from: JSONEncoder().encode(ink))
+            guard decodedInk.samples["legend"]?.pixelBounds == ink.samples["legend"]?.pixelBounds,
+                  decodedInk.samples["legend"]?.nativeLayout?.canvasBounds == ink.samples["legend"]?.nativeLayout?.canvasBounds,
+                  decodedInk.pixelScale == 2 else { throw StackTestError.unexpectedDecodedState }
+            for control in controls {
+                let appearance = customization.resolvedPresentation(for: control, state: .active, scheme: .dark)
+                let content = GamepadControlContentStyle(pointing: GamepadPointingPaint(
+                    trackpadFrameColor: GamepadRGBAColor(red: 1, green: 0.2, blue: 0.3),
+                    joystickRingColor: GamepadRGBAColor(red: 0.2, green: 0.3, blue: 1),
+                    joystickKnobFillColor: GamepadRGBAColor(red: 0.4, green: 1, blue: 0.2),
+                    trackpadFrameStrokeWidth: 3, joystickRingStrokeWidth: 2)).merged(over: appearance.content)
+                let native = GamepadNativeContentPresentation(control: control, showsButtonLabels: customization.showsButtonLabels,
+                                                            content: content, icon: appearance.icon, state: .active, scheme: .dark, triggerValue: 0.5, authoredScale: 0.7,
+                                                            foregroundColor: appearance.foregroundColor, profileAccentStyle: customization.accentStyle,
+                                                            secondaryBindingText: "⌘K")
+                let data = try JSONEncoder().encode(native)
+                let decoded = try JSONDecoder().decode(GamepadNativeContentPresentation.self, from: data)
+                guard decoded.visibleSurfaceIDs == native.visibleSurfaceIDs,
+                      decoded.localSurfaceFrames == native.localSurfaceFrames,
+                      decoded.pointingPaint == native.pointingPaint,
+                      decoded.resolvedPointingPaint == native.resolvedPointingPaint,
+                      decoded.bindingHint == native.bindingHint,
+                      decoded.triggerValue == native.triggerValue,
+                      decoded.effectiveFaceScale == native.effectiveFaceScale,
+                      !control.isTrigger || (decoded.triggerValue == 0.5 && decoded.visibleSurfaceIDs.contains("trigger-fill")) else {
+                    throw StackTestError.unexpectedDecodedState
+                }
+            }
+        }
+    }
+
     func testCSSSkinCompilationRunsOn512KiBStack() throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("Thumble-CSS-Compile-Stack-\(UUID().uuidString)", isDirectory: true)
@@ -919,7 +1261,7 @@ final class StackSafetyRegressionTests: XCTestCase {
             ),
             pressed: GamepadControlStateStyle(opacity: 0.82, scale: 0.94)
         )
-        for button in GameButton.builtInControls {
+        for button in DefaultKeypadElements.ids {
             var layout = customization.buttonCustomization(for: button)
             layout.visualStyle = visualStyle
             layout.hapticStyle = .medium
@@ -929,7 +1271,7 @@ final class StackSafetyRegressionTests: XCTestCase {
         settingsAppearance.visualStyle = visualStyle
         settingsAppearance.icon = .sfSymbol("slider.horizontal.3")
         customization.setControlBarItemCustomization(settingsAppearance, for: .settings)
-        customization.setLabel("Primary Action", for: .jump)
+        customization.setLabel("Primary Action", for: .preset(5))
         customization.updatedAt = 123
         return customization.normalized
     }
@@ -968,5 +1310,35 @@ final class StackSafetyRegressionTests: XCTestCase {
                 ]
             )
         )
+    }
+}
+
+extension StackSafetyRegressionTests {
+    func testPresentationOnlyRawBridgeTransformRunsOn512KiBStack() throws {
+        var profile = GamepadControllerTemplate.xbox.makeProfile()
+        profile.landscapeCustomization = nil; profile.portraitCustomization = nil
+        let elementID = profile.customization.elements[0].id.uuidString
+        let raw = try JSONSerialization.jsonObject(with: JSONEncoder().encode(profile))
+        let document: [String: Any] = ["profiles": [raw], "activeProfileID": profile.id.uuidString,
+            "defaultProfileID": profile.id.uuidString, "keyBindings": [:], "outputBindings": [:],
+            "profileKeyBindings": [:], "profileOutputBindings": [:]]
+        let input = try JSONSerialization.data(withJSONObject: ["schemaVersion": 1, "nowMillis": 2, "document": document,
+            "operation": ["type": "element.set", "profileID": profile.id.uuidString, "variant": "primary", "elementID": elementID,
+                "changes": ["presentation": ["actionID": "ability.q", "groupIDs": ["abilities"], "legend": "Q",
+                    "caption": "Light Binding", "accessibilityName": "Cast Light Binding"]]]])
+        try runOnThread(stackSize: 512 * 1024, timeout: 30) {
+            let request = try JSONDecoder().decodeUnique(ThumbleConfigurationBridgeRequest.self, from: input)
+            let response = try ThumbleConfigurationBridge.transform(request)
+            let roundTrip = try JSONDecoder().decode(ThumbleConfigurationBridgeResponse.self, from: JSONEncoder().encode(response))
+            guard roundTrip.changed, case .object(let profile) = roundTrip.document.profiles[0],
+                  case .object(let customization) = profile["customization"],
+                  case .array(let elements) = customization["elements"],
+                  elements.contains(where: { element in
+                      guard case .object(let value) = element, case .object(let metadata) = value["presentation"] else { return false }
+                      return metadata["legend"] == .string("Q") && metadata["actionID"] == .string("ability.q")
+                  }), profile["landscapeCustomization"] == nil else {
+                throw StackTestError.unexpectedDecodedState
+            }
+        }
     }
 }

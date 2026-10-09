@@ -11,6 +11,8 @@ const OP5: &str = "20000000-0000-0000-0000-000000000005";
 const OP6: &str = "20000000-0000-0000-0000-000000000006";
 const OP7: &str = "20000000-0000-0000-0000-000000000007";
 const DEFAULT_JUMP: &str = "00000000-0000-0000-0000-000000000105";
+const GENERATED_PRIMARY: &str = "E398E55F-33A6-42EA-91CD-16AF24CB75C5";
+const GENERATED_EXTRA: &str = "A83F162A-A025-4C55-B858-2E89C33CFBC2";
 
 /// Trusted persistence inspection used only by integration tests. Production
 /// code has no raw document/operation accessor; tool projections use the
@@ -60,8 +62,8 @@ fn simple_spec() -> Vec<u8> {
         "source": "RAW-SOURCE-MUST-NOT-LEAK",
         "notes": ["RAW-NOTE-MUST-NOT-LEAK"],
         "controls": [
-            {"id":"primary", "button":"jump", "label":"Jump", "key":"space", "modifiers":["shift"], "x":0.75, "y":0.7},
-            {"id":"extra", "button":"custom1", "label":"Extra", "key":"K", "modifiers":[], "x":0.55, "y":0.4}
+            {"id":GENERATED_PRIMARY, "label":"Jump", "key":"space", "modifiers":["shift"], "x":0.75, "y":0.7},
+            {"id":GENERATED_EXTRA, "label":"Extra", "key":"K", "modifiers":[], "x":0.55, "y":0.4}
         ]
     }))
     .unwrap()
@@ -155,7 +157,7 @@ fn all_edit_variants_apply_and_keep_active_maps_synchronized() {
             OP3,
             3,
             BuilderEdit::BindingSet {
-                button: "jump".into(),
+                button: DEFAULT_JUMP.into(),
                 key: "space-bar".into(),
                 modifiers: vec!["cmd".into(), "control".into()],
             },
@@ -163,7 +165,7 @@ fn all_edit_variants_apply_and_keep_active_maps_synchronized() {
         )
         .unwrap();
     let active = session.document().active_profile_id.clone();
-    let key = session.document().key_bindings.get_raw("jump").unwrap();
+    let key = session.document().key_bindings.get_raw(DEFAULT_JUMP).unwrap();
     assert_eq!(key.key_code, 49);
     assert_eq!(key.modifiers, 9);
     assert_eq!(
@@ -174,7 +176,7 @@ fn all_edit_variants_apply_and_keep_active_maps_synchronized() {
         session
             .document()
             .output_bindings
-            .get_raw("jump")
+            .get_raw(DEFAULT_JUMP)
             .unwrap()
             .keyboard
             .as_ref(),
@@ -186,13 +188,15 @@ fn all_edit_variants_apply_and_keep_active_maps_synchronized() {
             OP4,
             4,
             BuilderEdit::BindingClear {
-                button: "jump".into(),
+                button: DEFAULT_JUMP.into(),
             },
             1_004,
         )
         .unwrap();
-    assert!(session.document().key_bindings.get_raw("jump").is_none());
-    assert!(session.document().output_bindings.get_raw("jump").is_none());
+    assert!(session.document().key_bindings.get_raw(DEFAULT_JUMP).is_none());
+    let cleared = session.document().output_bindings.get_raw(DEFAULT_JUMP).unwrap();
+    assert!(cleared.keyboard.is_none());
+    assert!(cleared.gamepad_buttons.contains("south"));
 
     session
         .apply_edit(
@@ -295,18 +299,20 @@ fn edits_reject_unknown_fields_and_every_invalid_shape() {
             modifiers: vec![],
         },
         BuilderEdit::BindingSet {
-            button: "jump".into(),
+            button: DEFAULT_JUMP.into(),
             key: "hyper-key".into(),
             modifiers: vec![],
         },
         BuilderEdit::BindingSet {
-            button: "jump".into(),
+            button: DEFAULT_JUMP.into(),
             key: "Space".into(),
             modifiers: vec!["hyper".into()],
         },
         BuilderEdit::BindingClear {
             button: "south".into(),
         },
+        BuilderEdit::BindingSet { button: GENERATED_EXTRA.into(), key: "Space".into(), modifiers: vec![] },
+        BuilderEdit::BindingClear { button: GENERATED_EXTRA.into() },
     ];
     for (index, edit) in invalid.into_iter().enumerate() {
         let mut session = session();
@@ -428,6 +434,10 @@ fn generation_is_deterministic_sanitized_and_replayable() {
     assert_eq!(first.base_revision, 1);
     assert_eq!(first.result_revision, 2);
     assert_eq!(first.profile_name, "Builder Game");
+    for control in &first.assigned_controls {
+        let id = thumble_protocol::KeypadElementID::parse(&control.element_id).unwrap();
+        assert_eq!(thumble_protocol::KeypadElementID::parse(&control.button), Some(id));
+    }
 
     let summary_json = serde_json::to_string(&first).unwrap();
     for forbidden in [
@@ -497,7 +507,7 @@ fn generated_custom_layout_is_synchronized_and_generation_errors_are_atomic() {
     let custom_id = summary
         .assigned_controls
         .iter()
-        .find(|control| control.button == "custom1")
+        .find(|control| control.element_id.eq_ignore_ascii_case(GENERATED_EXTRA))
         .unwrap()
         .element_id
         .clone();
@@ -577,6 +587,24 @@ fn artifact_repeat_hash_handoff_and_change_invalidation() {
     );
     let changed = session.emit_artifact(2, 1_004).unwrap();
     assert_ne!(changed.receipt.content_hash, first.receipt.content_hash);
+}
+
+#[test]
+fn persisted_session_rejects_literal_duplicate_declarations_before_digest_validation() {
+    let session = session();
+    let encoded = String::from_utf8(session.encode_json().unwrap()).unwrap();
+    let ambiguous = encoded.replacen(
+        "\"kind\":\"button\"",
+        "\"kind\":\"joystick\",\"kind\":\"button\"",
+        1,
+    );
+    assert_ne!(ambiguous, encoded);
+    assert_eq!(
+        serde_json::from_str::<Value>(&ambiguous).unwrap(),
+        serde_json::from_str::<Value>(&encoded).unwrap()
+    );
+    assert_eq!(BuilderSession::decode_json(ambiguous.as_bytes()), Err(BuilderError::DecodingFailed));
+    assert!(BuilderSession::decode_json(encoded.as_bytes()).is_ok());
 }
 
 #[test]
@@ -684,7 +712,7 @@ fn canonical_active_profile_id_prevents_case_variant_binding_maps() {
             OP1,
             1,
             BuilderEdit::BindingSet {
-                button: "jump".into(),
+                button: DEFAULT_JUMP.into(),
                 key: "space-bar".into(),
                 modifiers: vec![],
             },
@@ -718,7 +746,7 @@ fn binding_edits_sync_all_variants_preview_and_preserve_gamepad_output() {
             OP1,
             1,
             BuilderEdit::BindingSet {
-                button: "jump".into(),
+                button: DEFAULT_JUMP.into(),
                 key: "space-bar".into(),
                 modifiers: vec!["shift".into()],
             },
@@ -746,9 +774,9 @@ fn binding_edits_sync_all_variants_preview_and_preserve_gamepad_output() {
     let active_id = decoded.document().active_profile_id.clone();
     for map in ["outputBindings", "profileOutputBindings"] {
         let output = if map == "outputBindings" {
-            &mut with_gamepad["document"][map]["jump"]
+            &mut with_gamepad["document"][map][DEFAULT_JUMP]
         } else {
-            &mut with_gamepad["document"][map][&active_id]["jump"]
+            &mut with_gamepad["document"][map][&active_id][DEFAULT_JUMP]
         };
         output["gamepadButtons"] = json!(["south"]);
     }
@@ -773,12 +801,12 @@ fn binding_edits_sync_all_variants_preview_and_preserve_gamepad_output() {
             OP2,
             2,
             BuilderEdit::BindingClear {
-                button: "jump".into(),
+                button: DEFAULT_JUMP.into(),
             },
             1_002,
         )
         .unwrap();
-    let output = decoded.document().output_bindings.get_raw("jump").unwrap();
+    let output = decoded.document().output_bindings.get_raw(DEFAULT_JUMP).unwrap();
     assert!(output.keyboard.is_none());
     assert!(output.gamepad_buttons.contains("south"));
     for key in [
@@ -795,6 +823,72 @@ fn binding_edits_sync_all_variants_preview_and_preserve_gamepad_output() {
         assert!(element["output"].get("keyboard").is_none());
         assert_eq!(element["output"]["gamepadButtons"], json!(["south"]));
     }
+}
+
+#[test]
+fn keyboard_edits_preserve_each_canvas_output_without_profile_sidecars() {
+    let mut failures = Vec::new();
+    for clear in [false, true] {
+        let initial = session();
+        let mut persisted = serde_json::to_value(&initial).unwrap();
+        let source = persisted["document"]["profiles"][0]["customization"].clone();
+        for (canvas, pad) in [("customization", "south"), ("landscapeCustomization", "east"), ("portraitCustomization", "west")] {
+            persisted["document"]["profiles"][0][canvas] = source.clone();
+            let elements = persisted["document"]["profiles"][0][canvas]["elements"].as_array_mut().unwrap();
+            let owner = elements.iter_mut().find(|element| element["id"] == DEFAULT_JUMP).unwrap();
+            owner["output"]["gamepadButtons"] = json!([pad]);
+            owner["output"]["futureOutput"] = json!({"source":canvas});
+        }
+        persisted["document"]["profileOutputBindings"] = json!({});
+        refresh_document_digest(&mut persisted);
+        let mut decoded = BuilderSession::decode_json(&serde_json::to_vec(&persisted).unwrap()).unwrap();
+        let edit = if clear { BuilderEdit::BindingClear { button: DEFAULT_JUMP.into() } }
+            else { BuilderEdit::BindingSet { button: DEFAULT_JUMP.into(), key: "Space".into(), modifiers: vec!["shift".into()] } };
+        decoded.apply_edit(OP1, 1, edit, 1001).unwrap();
+        for (canvas, pad) in [("customization", "south"), ("landscapeCustomization", "east"), ("portraitCustomization", "west")] {
+            let elements = decoded.document().profiles[0][canvas]["elements"].as_array().unwrap();
+            let owner = elements.iter().find(|element| element["id"] == DEFAULT_JUMP).unwrap();
+            if owner["output"]["gamepadButtons"] != json!([pad]) {
+                failures.push(format!("{canvas}, clear={clear}: owned gamepad channel changed"));
+            }
+            if owner["output"]["futureOutput"] != json!({"source":canvas}) {
+                failures.push(format!("{canvas}, clear={clear}: future output metadata lost"));
+            }
+            if clear { assert!(owner["output"].get("keyboard").is_none()); }
+            else { assert_eq!(owner["output"]["keyboard"], json!({"keyCode":49,"modifiersRawValue":2})); }
+            assert_eq!(owner["defaultOutput"], source["elements"][4]["defaultOutput"]);
+        }
+        let active = &decoded.document().active_profile_id;
+        if decoded.document().profile_output_bindings.get(active).and_then(|outputs| outputs.get_raw(DEFAULT_JUMP))
+            != decoded.document().output_bindings.get_raw(DEFAULT_JUMP) {
+            failures.push(format!("clear={clear}: target sidecar does not match its owned result"));
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("; "));
+}
+
+#[test]
+fn keyboard_only_clear_is_explicit_and_never_restores_an_owned_default() {
+    let session = session();
+    let mut persisted = serde_json::to_value(&session).unwrap();
+    for map in ["outputBindings", "profileOutputBindings"] {
+        let active = session.document().active_profile_id.clone();
+        let value = if map == "outputBindings" { &mut persisted["document"][map][DEFAULT_JUMP] }
+            else { &mut persisted["document"][map][&active][DEFAULT_JUMP] };
+        value["gamepadButtons"] = json!([]);
+    }
+    persisted["document"]["profiles"][0]["customization"]["elements"][4]["output"]["gamepadButtons"] = json!([]);
+    refresh_document_digest(&mut persisted);
+    let mut decoded: BuilderSession = serde_json::from_value(persisted).unwrap();
+    decoded.apply_edit(OP1, 1, BuilderEdit::BindingClear { button: DEFAULT_JUMP.into() }, 1001).unwrap();
+    let output = decoded.document().output_bindings.get_raw(DEFAULT_JUMP).cloned();
+    assert_eq!(output, Some(thumble_core::OutputBinding::default()));
+    let element = &decoded.document().profiles[0]["customization"]["elements"][4];
+    assert_eq!(element["output"], json!({"gamepadButtons":[]}));
+    assert!(element["defaultOutput"]["keyboard"].is_object());
+    let mut state = thumble_core::PersistentState::minimal("test").unwrap();
+    decoded.document().install_into(&mut state).unwrap();
+    assert_eq!(state.resolve_button_output(thumble_protocol::KeypadElementID::preset(5)), output);
 }
 
 #[test]

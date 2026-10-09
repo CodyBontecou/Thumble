@@ -1076,25 +1076,76 @@ public enum GamepadJoystickVisualStyle: String, Codable, CaseIterable, Identifia
     }
 }
 
-public struct GamepadJoystickMapping: Codable, Equatable, Sendable {
-    public var up: GameButton
-    public var down: GameButton
-    public var left: GameButton
-    public var right: GameButton
+/// Independent digital outputs for the four parts of a joystick. These are
+/// bindings, not references to other buttons or a shared slot table.
+private final class GamepadJoystickBindingStorage: Sendable {
+    let up: KeypadElementOutputBinding
+    let down: KeypadElementOutputBinding
+    let left: KeypadElementOutputBinding
+    let right: KeypadElementOutputBinding
 
-    public init(
-        up: GameButton = .up,
-        down: GameButton = .down,
-        left: GameButton = .left,
-        right: GameButton = .right
-    ) {
+    init(up: KeypadElementOutputBinding, down: KeypadElementOutputBinding, left: KeypadElementOutputBinding, right: KeypadElementOutputBinding) {
         self.up = up
         self.down = down
         self.left = left
         self.right = right
     }
+}
 
-    public subscript(direction: GamepadJoystickDirection) -> GameButton {
+public struct GamepadJoystickMapping: Codable, Equatable, Sendable {
+    private var storage: GamepadJoystickBindingStorage
+
+    public var up: KeypadElementOutputBinding {
+        get { storage.up }
+        set { storage = .init(up: newValue, down: down, left: left, right: right) }
+    }
+    public var down: KeypadElementOutputBinding {
+        get { storage.down }
+        set { storage = .init(up: up, down: newValue, left: left, right: right) }
+    }
+    public var left: KeypadElementOutputBinding {
+        get { storage.left }
+        set { storage = .init(up: up, down: down, left: newValue, right: right) }
+    }
+    public var right: KeypadElementOutputBinding {
+        get { storage.right }
+        set { storage = .init(up: up, down: down, left: left, right: newValue) }
+    }
+
+    public init(
+        up: KeypadElementOutputBinding = .init(keyboard: .init(keyCode: 126)),
+        down: KeypadElementOutputBinding = .init(keyboard: .init(keyCode: 125)),
+        left: KeypadElementOutputBinding = .init(keyboard: .init(keyCode: 123)),
+        right: KeypadElementOutputBinding = .init(keyboard: .init(keyCode: 124))
+    ) {
+        storage = .init(up: up, down: down, left: left, right: right)
+    }
+
+    private enum CodingKeys: String, CodingKey { case up, down, left, right }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            up: try container.decode(KeypadElementOutputBinding.self, forKey: .up),
+            down: try container.decode(KeypadElementOutputBinding.self, forKey: .down),
+            left: try container.decode(KeypadElementOutputBinding.self, forKey: .left),
+            right: try container.decode(KeypadElementOutputBinding.self, forKey: .right)
+        )
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(up, forKey: .up)
+        try container.encode(down, forKey: .down)
+        try container.encode(left, forKey: .left)
+        try container.encode(right, forKey: .right)
+    }
+
+    public static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.up == rhs.up && lhs.down == rhs.down && lhs.left == rhs.left && lhs.right == rhs.right
+    }
+
+    public subscript(direction: GamepadJoystickDirection) -> KeypadElementOutputBinding {
         get {
             switch direction {
             case .up: up
@@ -1113,8 +1164,8 @@ public struct GamepadJoystickMapping: Codable, Equatable, Sendable {
         }
     }
 
-    public static let movement = GamepadJoystickMapping(up: .up, down: .down, left: .left, right: .right)
-    public static let secondary = GamepadJoystickMapping(up: .custom1, down: .custom2, left: .custom3, right: .custom4)
+    public static let movement = GamepadJoystickMapping()
+    public static let secondary = GamepadJoystickMapping()
 }
 
 struct GamepadRegularPolygonButtonShape: Shape {
@@ -1718,7 +1769,7 @@ extension GamepadButtonShapeStyle {
 
 public struct GamepadCustomButton: Codable, Equatable, Identifiable, Sendable {
     public var id: UUID
-    public var mappedButton: GameButton
+    public var inputID: KeypadElementID { KeypadElementID(id) }
     public var label: String
     public var layout: GamepadButtonCustomization
     public var controlKind: GamepadCustomControlKind
@@ -1730,7 +1781,6 @@ public struct GamepadCustomButton: Codable, Equatable, Identifiable, Sendable {
 
     public init(
         id: UUID = UUID(),
-        mappedButton: GameButton = .custom1,
         label: String = "Button",
         layout: GamepadButtonCustomization = GamepadButtonCustomization(
             centerX: 0.5,
@@ -1747,7 +1797,6 @@ public struct GamepadCustomButton: Codable, Equatable, Identifiable, Sendable {
         trackpadSettings: GamepadTrackpadSettings? = nil
     ) {
         self.id = id
-        self.mappedButton = mappedButton
         self.label = label
         self.layout = layout
         self.controlKind = controlKind
@@ -1759,9 +1808,9 @@ public struct GamepadCustomButton: Codable, Equatable, Identifiable, Sendable {
     }
 
     public init(from decoder: Decoder) throws {
+        try KeypadElementSchema.requireIndependentIdentity(from: decoder)
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
-        mappedButton = try container.decodeIfPresent(GameButton.self, forKey: .mappedButton) ?? .custom1
+        id = try container.decode(UUID.self, forKey: .id)
         label = try container.decodeIfPresent(String.self, forKey: .label) ?? "Button"
         layout = try container.decodeIfPresent(GamepadButtonCustomization.self, forKey: .layout) ?? GamepadButtonCustomization(
             centerX: 0.5,
@@ -1781,7 +1830,6 @@ public struct GamepadCustomButton: Codable, Equatable, Identifiable, Sendable {
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(id, forKey: .id)
-        try container.encode(mappedButton, forKey: .mappedButton)
         try container.encode(label, forKey: .label)
         try container.encode(layout, forKey: .layout)
         try container.encode(controlKind, forKey: .controlKind)
@@ -1800,7 +1848,6 @@ public struct GamepadCustomButton: Codable, Equatable, Identifiable, Sendable {
         if copy.layout.centerY == nil { copy.layout.centerY = 0.5 }
         switch copy.controlKind {
         case .joystick:
-            copy.joystickMapping = copy.joystickMapping ?? .movement
             copy.joystickOutputSettings = (copy.joystickOutputSettings ?? .defaultValue).normalized
             copy.triggerSettings = nil
             copy.trackpadSettings = nil
@@ -1873,7 +1920,6 @@ public struct GamepadCustomButton: Codable, Equatable, Identifiable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case id
-        case mappedButton
         case label
         case layout
         case controlKind
@@ -1887,18 +1933,25 @@ public struct GamepadCustomButton: Codable, Equatable, Identifiable, Sendable {
 
 public struct KeypadElement: Codable, Equatable, Identifiable, Sendable {
     public var id: UUID
+    public var presentation: GamepadControlPresentation? = nil
     public var label: String
     public var kind: GamepadCustomControlKind
     public var layout: GamepadButtonCustomization
-    public var builtInButton: GameButton?
-    public var legacySlot: GameButton?
+    public var inputID: KeypadElementID { KeypadElementID(id) }
+    public var defaultControlID: KeypadElementID? {
+        DefaultKeypadElements.ids.contains(inputID) ? inputID : nil
+    }
     public var visualRole: GamepadVisualRole?
     public var output: KeypadElementOutputBinding?
+    public var defaultOutput: KeypadElementOutputBinding?
     public var partOutputs: [KeypadElementInputPart: KeypadElementOutputBinding]
     public var joystickMapping: GamepadJoystickMapping?
     public var joystickOutputSettings: GamepadJoystickOutputSettings?
     public var triggerSettings: GamepadTriggerSettings?
     public var trackpadSettings: GamepadTrackpadSettings?
+    // Dictionary storage is COW: forward-compatible element metadata follows
+    // value copies and fresh-UUID duplication without inflating aggregate frames.
+    private var futureMetadata: [String: ThumbleBridgeJSONValue] = [:]
 
     public init(
         id: UUID = UUID(),
@@ -1911,29 +1964,99 @@ public struct KeypadElement: Codable, Equatable, Identifiable, Sendable {
             heightScale: 1.0,
             shape: .roundedRectangle
         ),
-        builtInButton: GameButton? = nil,
-        legacySlot: GameButton? = nil,
         visualRole: GamepadVisualRole? = nil,
         output: KeypadElementOutputBinding? = nil,
+        defaultOutput: KeypadElementOutputBinding? = nil,
         partOutputs: [KeypadElementInputPart: KeypadElementOutputBinding] = [:],
         joystickMapping: GamepadJoystickMapping? = nil,
         joystickOutputSettings: GamepadJoystickOutputSettings? = nil,
         triggerSettings: GamepadTriggerSettings? = nil,
-        trackpadSettings: GamepadTrackpadSettings? = nil
+        trackpadSettings: GamepadTrackpadSettings? = nil,
+        presentation: GamepadControlPresentation? = nil
     ) {
         self.id = id
         self.label = label
         self.kind = kind
         self.layout = layout
-        self.builtInButton = builtInButton
-        self.legacySlot = legacySlot
         self.visualRole = visualRole
         self.output = output
+        self.defaultOutput = defaultOutput
         self.partOutputs = partOutputs
         self.joystickMapping = joystickMapping
         self.joystickOutputSettings = joystickOutputSettings
         self.triggerSettings = triggerSettings
         self.trackpadSettings = trackpadSettings
+        self.presentation = presentation
+    }
+
+    public init(from decoder: Decoder) throws {
+        try KeypadElementSchema.requireIndependentIdentity(from: decoder)
+        self.init()
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        presentation = try container.decodeIfPresent(GamepadControlPresentation.self, forKey: .presentation)
+        label = try container.decodeIfPresent(String.self, forKey: .label) ?? "Button"
+        kind = try container.decodeIfPresent(GamepadCustomControlKind.self, forKey: .kind) ?? .button
+        layout = try container.decodeIfPresent(GamepadButtonCustomization.self, forKey: .layout) ?? .defaultValue
+        visualRole = try container.decodeIfPresent(GamepadVisualRole.self, forKey: .visualRole)
+        output = try container.decodeIfPresent(KeypadElementOutputBinding.self, forKey: .output)
+        defaultOutput = try container.decodeIfPresent(KeypadElementOutputBinding.self, forKey: .defaultOutput)
+        if try container.contains(.partOutputs) && !container.decodeNil(forKey: .partOutputs) {
+            var parts = try container.nestedUnkeyedContainer(forKey: .partOutputs)
+            while !parts.isAtEnd {
+                let part = try parts.decode(KeypadElementInputPart.self)
+                guard partOutputs[part] == nil else {
+                    throw DecodingError.dataCorruptedError(in: parts, debugDescription: "Duplicate element part output bindings are not supported.")
+                }
+                partOutputs[part] = try parts.decode(KeypadElementOutputBinding.self)
+            }
+        }
+        joystickMapping = try container.decodeIfPresent(GamepadJoystickMapping.self, forKey: .joystickMapping)
+        joystickOutputSettings = try container.decodeIfPresent(GamepadJoystickOutputSettings.self, forKey: .joystickOutputSettings)
+        triggerSettings = try container.decodeIfPresent(GamepadTriggerSettings.self, forKey: .triggerSettings)
+        trackpadSettings = try container.decodeIfPresent(GamepadTrackpadSettings.self, forKey: .trackpadSettings)
+        let fields = try decoder.container(keyedBy: MetadataKey.self)
+        for key in fields.allKeys where CodingKeys(rawValue: key.stringValue) == nil {
+            futureMetadata[key.stringValue] = try fields.decode(ThumbleBridgeJSONValue.self, forKey: key)
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(label, forKey: .label)
+        try container.encodeIfPresent(presentation, forKey: .presentation)
+        try container.encode(kind, forKey: .kind)
+        try layout.encode(to: container.superEncoder(forKey: .layout))
+        try container.encodeIfPresent(visualRole, forKey: .visualRole)
+        try container.encodeIfPresent(output, forKey: .output)
+        try container.encodeIfPresent(defaultOutput, forKey: .defaultOutput)
+        // Enum-keyed dictionaries otherwise become randomly ordered arrays.
+        var parts = container.nestedUnkeyedContainer(forKey: .partOutputs)
+        for part in partOutputs.keys.sorted(by: { $0.rawValue < $1.rawValue }) {
+            try parts.encode(part)
+            try parts.encode(partOutputs[part]!)
+        }
+        try container.encodeIfPresent(joystickMapping, forKey: .joystickMapping)
+        try container.encodeIfPresent(joystickOutputSettings, forKey: .joystickOutputSettings)
+        try container.encodeIfPresent(triggerSettings, forKey: .triggerSettings)
+        try container.encodeIfPresent(trackpadSettings, forKey: .trackpadSettings)
+        var fields = encoder.container(keyedBy: MetadataKey.self)
+        for (key, value) in futureMetadata {
+            if let key = MetadataKey(stringValue: key) { try fields.encode(value, forKey: key) }
+        }
+    }
+
+    private struct MetadataKey: CodingKey {
+        let stringValue: String
+        let intValue: Int? = nil
+        init?(stringValue: String) { self.stringValue = stringValue }
+        init?(intValue: Int) { return nil }
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, label, kind, layout, visualRole, output, defaultOutput, partOutputs, presentation
+        case joystickMapping, joystickOutputSettings, triggerSettings, trackpadSettings
     }
 
     public var normalized: KeypadElement {
@@ -1946,12 +2069,17 @@ public struct KeypadElement: Codable, Equatable, Identifiable, Sendable {
         if !layoutIsAlreadyNormalized {
             copy.layout = layout.normalized
         }
-        copy.output = output?.isEmpty == true ? nil : output
-        copy.partOutputs = partOutputs.compactMapValues { $0.isEmpty ? nil : $0 }
+        copy.output = output
+        copy.partOutputs = partOutputs
 
         switch copy.kind {
         case .joystick:
-            copy.joystickMapping = copy.joystickMapping ?? .movement
+            if let mapping = copy.joystickMapping {
+                for direction in GamepadJoystickDirection.allCases {
+                    let part = KeypadElementInputPart(direction: direction)
+                    if copy.partOutputs[part] == nil { copy.partOutputs[part] = mapping[direction] }
+                }
+            }
             copy.joystickOutputSettings = (copy.joystickOutputSettings ?? .defaultValue).normalized
             copy.triggerSettings = nil
             copy.trackpadSettings = nil
@@ -1977,7 +2105,7 @@ public struct KeypadElement: Codable, Equatable, Identifiable, Sendable {
             copy.triggerSettings = nil
             copy.trackpadSettings = nil
             if copy.layout.shape == nil { copy.layout.shape = .roundedRectangle }
-            if copy.label.isEmpty { copy.label = copy.legacySlot.map(GamepadCustomization.defaultVisualLabel(for:)) ?? "Button" }
+            if copy.label.isEmpty { copy.label = "Button" }
         case .text:
             copy.output = nil
             copy.partOutputs.removeAll()
@@ -2009,11 +2137,10 @@ public struct KeypadElement: Codable, Equatable, Identifiable, Sendable {
             label: normalizedGamepadLabel(label),
             kind: kind,
             layout: .defaultValue,
-            builtInButton: builtInButton,
-            legacySlot: legacySlot,
             visualRole: visualRole,
-            output: output?.isEmpty == true ? nil : output,
-            partOutputs: partOutputs.compactMapValues { $0.isEmpty ? nil : $0 },
+            output: output,
+            defaultOutput: defaultOutput,
+            partOutputs: partOutputs,
             joystickMapping: joystickMapping,
             joystickOutputSettings: joystickOutputSettings,
             triggerSettings: triggerSettings,
@@ -2026,36 +2153,17 @@ public struct KeypadElement: Codable, Equatable, Identifiable, Sendable {
     }
 
     public mutating func setOutputBinding(_ binding: KeypadElementOutputBinding?, for part: KeypadElementInputPart = .primary) {
-        let normalizedBinding = binding?.isEmpty == true ? nil : binding
+        let normalizedBinding = binding ?? KeypadElementOutputBinding()
         if part == .primary {
             output = normalizedBinding
         } else {
+            // Keep an explicit empty part binding so normalization does not
+            // restore the joystick's construction defaults after a clear.
             partOutputs[part] = normalizedBinding
         }
     }
 
-    public static func builtInID(for button: GameButton) -> UUID {
-        switch button {
-        case .up: UUID(uuidString: "00000000-0000-0000-0000-000000000101")!
-        case .down: UUID(uuidString: "00000000-0000-0000-0000-000000000102")!
-        case .left: UUID(uuidString: "00000000-0000-0000-0000-000000000103")!
-        case .right: UUID(uuidString: "00000000-0000-0000-0000-000000000104")!
-        case .jump: UUID(uuidString: "00000000-0000-0000-0000-000000000105")!
-        case .attack: UUID(uuidString: "00000000-0000-0000-0000-000000000106")!
-        case .dash: UUID(uuidString: "00000000-0000-0000-0000-000000000107")!
-        case .focus: UUID(uuidString: "00000000-0000-0000-0000-000000000108")!
-        case .map: UUID(uuidString: "00000000-0000-0000-0000-000000000109")!
-        case .pause: UUID(uuidString: "00000000-0000-0000-0000-000000000110")!
-        case .custom1: UUID(uuidString: "00000000-0000-0000-0000-000000000111")!
-        case .custom2: UUID(uuidString: "00000000-0000-0000-0000-000000000112")!
-        case .custom3: UUID(uuidString: "00000000-0000-0000-0000-000000000113")!
-        case .custom4: UUID(uuidString: "00000000-0000-0000-0000-000000000114")!
-        case .custom5: UUID(uuidString: "00000000-0000-0000-0000-000000000115")!
-        case .custom6: UUID(uuidString: "00000000-0000-0000-0000-000000000116")!
-        case .custom7: UUID(uuidString: "00000000-0000-0000-0000-000000000117")!
-        case .custom8: UUID(uuidString: "00000000-0000-0000-0000-000000000118")!
-        }
-    }
+    public static func builtInID(for button: KeypadElementID) -> UUID { button.uuid }
 }
 
 public enum GamepadControlBarItem: String, Codable, CaseIterable, Identifiable, Sendable {
@@ -2125,6 +2233,129 @@ public enum GamepadControlBarItem: String, Codable, CaseIterable, Identifiable, 
 
 /// The visible control-bar chrome shared by the iPhone runtime and Mac editor preview.
 /// Item content stays at the call site so the runtime can provide live menus and actions.
+/// Immutable presentation input for native bar labels. Runtime actions remain in their wrappers.
+final class GamepadControlBarLabelContent: @unchecked Sendable {
+    enum Kind { case profile, launch, edit, connection, icon }
+    let kind: Kind
+    let item: GamepadControlBarItem
+    let compact: Bool
+    let title: String
+    let symbol: String
+    let launchTarget: GamepadProfileLaunchTarget?
+
+    private init(kind: Kind, item: GamepadControlBarItem, compact: Bool, title: String = "",
+                 symbol: String, launchTarget: GamepadProfileLaunchTarget? = nil) {
+        self.kind = kind; self.item = item; self.compact = compact; self.title = title
+        self.symbol = symbol; self.launchTarget = launchTarget
+    }
+    static func profile(name: String, isDefault: Bool, compact: Bool) -> GamepadControlBarLabelContent {
+        .init(kind: .profile, item: .profileMenu, compact: compact, title: name,
+              symbol: isDefault ? "star.fill" : "rectangle.grid.2x2")
+    }
+    static func launch(target: GamepadProfileLaunchTarget?, compact: Bool) -> GamepadControlBarLabelContent {
+        .init(kind: .launch, item: .launchTarget, compact: compact, symbol: "app.badge.fill", launchTarget: target)
+    }
+    static func edit(isEditing: Bool, compact: Bool) -> GamepadControlBarLabelContent {
+        .init(kind: .edit, item: .editLayout, compact: compact, title: isEditing ? "Done" : "Edit",
+              symbol: isEditing ? "checkmark" : "slider.horizontal.3")
+    }
+    static func connection(title: String, symbol: String, compact: Bool) -> GamepadControlBarLabelContent {
+        .init(kind: .connection, item: .connectionAction, compact: compact, title: title, symbol: symbol)
+    }
+    static func icon(item: GamepadControlBarItem, symbol: String) -> GamepadControlBarLabelContent {
+        .init(kind: .icon, item: item, compact: true, symbol: symbol)
+    }
+}
+
+private struct GamepadBarLeafCollectorKey: EnvironmentKey {
+    static let defaultValue: GamepadNativeBarLayoutCollector? = nil
+}
+private extension EnvironmentValues {
+    var gamepadBarLeafCollector: GamepadNativeBarLayoutCollector? {
+        get { self[GamepadBarLeafCollectorKey.self] }
+        set { self[GamepadBarLeafCollectorKey.self] = newValue }
+    }
+}
+
+/// Identical label tree for the interactive iOS bar and native editor/review.
+struct GamepadControlBarItemLabel: View {
+    @Environment(\.gamepadBarLeafCollector) private var layoutCollector
+    let customization: GamepadCustomization
+    let content: GamepadControlBarLabelContent
+
+    @ViewBuilder var body: some View {
+        switch content.kind {
+        case .profile:
+            if content.compact {
+                icon(size: 13, width: 28)
+            } else {
+                HStack(spacing: Geist.Spacing.s1) {
+                    icon(size: 11)
+                    legend.lineLimit(1).minimumScaleFactor(0.72)
+                }.frame(maxWidth: 160)
+            }
+        case .launch:
+            if customization.controlBarItemCustomization(for: .launchTarget).icon != nil {
+                icon(size: content.compact ? 18 : 20, width: 28)
+            } else if let target = content.launchTarget {
+                launchIcon(target, size: content.compact ? 18 : 20).frame(width: 28, height: 28)
+            } else {
+                icon(size: 18, width: 28)
+            }
+        case .edit:
+            HStack(spacing: Geist.Spacing.s1) {
+                icon(size: 13)
+                if !content.compact { legend.lineLimit(1) }
+            }
+        case .connection:
+            if content.compact {
+                icon(size: 13, width: 28)
+            } else if customization.controlBarItemCustomization(for: .connectionAction).icon != nil {
+                HStack(spacing: Geist.Spacing.s1) { icon(size: 13); legend }
+            } else { legend }
+        case .icon:
+            icon(size: 13, width: 28)
+        }
+    }
+
+    private var legend: some View {
+        Text(content.title).modifier(GamepadNativeBarLayoutModifier(collector: layoutCollector,
+            id: "native-control-bar/" + content.item.rawValue + "/legend"))
+    }
+
+    private func icon(size: CGFloat, width: CGFloat? = nil) -> some View {
+        GamepadControlBarItemIcon(customization: customization, item: content.item,
+            defaultSystemImage: content.symbol, fontSize: size, frameWidth: width)
+    }
+
+    @ViewBuilder private func launchIcon(_ target: GamepadProfileLaunchTarget, size: CGFloat) -> some View {
+        let hasImage = target.iconPNGData.flatMap { GamepadImageDecodeCache.image(for: $0) } != nil
+        let _ = layoutCollector?.recordIcon(.init(item: .launchTarget, requested: nil,
+            source: hasImage ? "launch-png" : "sf_symbol", value: hasImage ? "attached launch icon" : content.symbol,
+            fontSize: size, frameWidth: 28, fallbacks: hasImage ? [] : ["launch icon absent or undecodable; native launch symbol"],
+            renderingMode: hasImage ? "original" : "monochrome", assetSHA256: target.iconPNGData?.thumbleSHA256))
+        Group {
+#if os(macOS)
+        if let data = target.iconPNGData, let image = GamepadImageDecodeCache.image(for: data) {
+            Image(nsImage: image).renderingMode(.original).resizable().scaledToFit()
+                .frame(width: size, height: size)
+                .clipShape(RoundedRectangle(cornerRadius: max(4, size * 0.22), style: .continuous))
+        } else { fallbackLaunchIcon(size: size) }
+#elseif os(iOS)
+        if let data = target.iconPNGData, let image = GamepadImageDecodeCache.image(for: data) {
+            Image(uiImage: image).renderingMode(.original).resizable().scaledToFit()
+                .frame(width: size, height: size)
+                .clipShape(RoundedRectangle(cornerRadius: max(4, size * 0.22), style: .continuous))
+        } else { fallbackLaunchIcon(size: size) }
+#endif
+        }.modifier(GamepadNativeBarLayoutModifier(collector: layoutCollector, id: "native-control-bar/launch_target/icon"))
+    }
+    private func fallbackLaunchIcon(size: CGFloat) -> some View {
+        Image(systemName: content.symbol).font(.system(size: size, weight: .semibold))
+            .frame(width: size, height: size)
+    }
+}
+
 struct GamepadControlBarLayout<Content: View>: View {
     @Environment(\.colorScheme) private var colorScheme
     let items: [GamepadControlBarItem]
@@ -2143,30 +2374,31 @@ struct GamepadControlBarLayout<Content: View>: View {
 
     @ViewBuilder
     var body: some View {
+        let paint = GamepadNativeBarContainerPresentation(isLandscape: isLandscape, colorScheme: colorScheme)
         if isLandscape {
-            HStack(spacing: Geist.Spacing.s3) {
+            HStack(spacing: paint.spacing) {
                 ForEach(items) { item in
                     content(item, false)
                 }
             }
-            .padding(Geist.Spacing.s2)
-            .background(Geist.color(.background100, scheme: colorScheme), in: Capsule())
-            .overlay(Capsule().stroke(Geist.color(.grayAlpha400, scheme: colorScheme), lineWidth: 1))
+            .padding(paint.padding)
+            .background(paint.fillColor.swiftUIColor, in: Capsule())
+            .overlay(Capsule().stroke(paint.strokeColor.swiftUIColor, lineWidth: paint.strokeWidth))
         } else {
-            HStack(spacing: Geist.Spacing.s2) {
+            HStack(spacing: paint.spacing) {
                 ForEach(items) { item in
                     content(item, true)
                 }
             }
-            .padding(Geist.Spacing.s2)
+            .padding(paint.padding)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
-                Geist.color(.background100, scheme: colorScheme),
-                in: RoundedRectangle(cornerRadius: Geist.Radius.lg, style: .continuous)
+                paint.fillColor.swiftUIColor,
+                in: RoundedRectangle(cornerRadius: paint.cornerRadius ?? Geist.Radius.lg, style: .continuous)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: Geist.Radius.lg, style: .continuous)
-                    .stroke(Geist.color(.grayAlpha400, scheme: colorScheme), lineWidth: 1)
+                RoundedRectangle(cornerRadius: paint.cornerRadius ?? Geist.Radius.lg, style: .continuous)
+                    .stroke(paint.strokeColor.swiftUIColor, lineWidth: paint.strokeWidth)
             )
         }
     }
@@ -2174,14 +2406,15 @@ struct GamepadControlBarLayout<Content: View>: View {
 
 private struct GamepadControlBarItemSurface<Content: View>: View {
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.gamepadBarLeafCollector) private var paintCollector
     let customization: GamepadCustomization
     let item: GamepadControlBarItem
     let state: GamepadControlPresentationState
     let baseHeight: CGFloat
     let baseHorizontalPadding: CGFloat
-    let fallbackForeground: Color
-    let fallbackBackground: Color
-    let fallbackBorder: Color
+    let fallbackForeground: GamepadRGBAColor
+    let fallbackBackground: GamepadRGBAColor
+    let fallbackBorder: GamepadRGBAColor
     let fallbackBorderWidth: CGFloat
     let defaultCornerRadius: CGFloat
     let content: Content
@@ -2192,9 +2425,9 @@ private struct GamepadControlBarItemSurface<Content: View>: View {
         state: GamepadControlPresentationState,
         baseHeight: CGFloat,
         baseHorizontalPadding: CGFloat,
-        fallbackForeground: Color,
-        fallbackBackground: Color,
-        fallbackBorder: Color,
+        fallbackForeground: GamepadRGBAColor,
+        fallbackBackground: GamepadRGBAColor,
+        fallbackBorder: GamepadRGBAColor,
         fallbackBorderWidth: CGFloat,
         defaultCornerRadius: CGFloat = Geist.Radius.sm,
         @ViewBuilder content: () -> Content
@@ -2220,15 +2453,28 @@ private struct GamepadControlBarItemSurface<Content: View>: View {
         let height = max(22, baseHeight * heightScale)
         let horizontalPadding = baseHorizontalPadding * widthScale
 
-        if appearance.hasControlBarSurfaceOverrides {
-            let presentation = customization.resolvedPresentation(
+        let presentation = appearance.hasControlBarSurfaceOverrides ? customization.resolvedPresentation(
                 for: appearance,
                 fallbackAccentStyle: appearance.accentStyle ?? customization.accentStyle,
                 controlKind: .button,
                 state: state,
                 scheme: colorScheme
-            )
-            let shape = resolvedShape(for: appearance, height: height, widthScale: widthScale)
+            ) : nil
+        let declaredShape = appearance.resolvedShape(defaultShape: .roundedRectangle)
+        let radii = appearance.resolvedCornerRadii(defaultRadius: declaredShape.defaultEditableCornerRadius(
+            in: CGSize(width: max(32, 44 * widthScale), height: height)))
+        let shapeName = presentation == nil ? "roundedRectangle" : declaredShape == .polygon ? "regularPolygon(3)"
+            : declaredShape == .star ? "star(5)" : "unevenRoundedRectangle"
+        let styleReasons: [String] = appearance.styleID.map { id in
+            guard let token = customization.styleLibrary.style(id: id) else { return ["missing-style-token: " + id] }
+            return token.appliesTo.contains(.button) ? [] : ["incompatible-style-token: " + id]
+        } ?? []
+        let _ = paintCollector?.recordPaint(.init(item: item, state: state, requested: appearance, resolved: presentation,
+            foreground: fallbackForeground, background: fallbackBackground, border: fallbackBorder,
+            borderWidth: fallbackBorderWidth, cornerRadius: defaultCornerRadius, height: height, padding: horizontalPadding,
+            rendererShape: shapeName, cornerRadii: presentation != nil && declaredShape != .polygon && declaredShape != .star ? radii : nil, reasons: styleReasons))
+        if let presentation {
+            let shape = resolvedShape(declaredShape, radii: radii)
 
             content
                 .foregroundStyle(presentation.foregroundSwiftUIColor)
@@ -2245,23 +2491,16 @@ private struct GamepadControlBarItemSurface<Content: View>: View {
         } else {
             let shape = AnyShape(RoundedRectangle(cornerRadius: defaultCornerRadius, style: .continuous))
             content
-                .foregroundStyle(fallbackForeground)
+                .foregroundStyle(fallbackForeground.swiftUIColor)
                 .padding(.horizontal, horizontalPadding)
                 .frame(height: height)
-                .background(shape.fill(fallbackBackground))
-                .overlay(shape.stroke(fallbackBorder, lineWidth: fallbackBorderWidth))
+                .background(shape.fill(fallbackBackground.swiftUIColor))
+                .overlay(shape.stroke(fallbackBorder.swiftUIColor, lineWidth: fallbackBorderWidth))
                 .contentShape(shape)
         }
     }
 
-    private func resolvedShape(
-        for appearance: GamepadButtonCustomization,
-        height: CGFloat,
-        widthScale: CGFloat
-    ) -> AnyShape {
-        let shape = appearance.resolvedShape(defaultShape: .roundedRectangle)
-        let estimatedSize = CGSize(width: max(32, 44 * widthScale), height: height)
-        let radii = appearance.resolvedCornerRadii(defaultRadius: shape.defaultEditableCornerRadius(in: estimatedSize))
+    private func resolvedShape(_ shape: GamepadButtonShapeStyle, radii: GamepadCornerRadii) -> AnyShape {
         switch shape {
         case .roundedRectangle, .rectangle, .capsule, .circle, .ellipse:
             return AnyShape(UnevenRoundedRectangle(cornerRadii: radii.rectangleCornerRadii, style: .continuous))
@@ -2307,22 +2546,22 @@ struct GamepadControlBarButtonStyle: ButtonStyle {
         )
     }
 
-    private var fallbackForeground: Color {
-        guard isEnabled else { return Geist.color(.gray700, scheme: colorScheme) }
+    private var fallbackForeground: GamepadRGBAColor {
+        guard isEnabled else { return Geist.rgba(.gray700, scheme: colorScheme) }
         return switch variant {
-        case .primary: Geist.color(.background100, scheme: colorScheme)
-        case .secondary, .tertiary: Geist.color(.gray1000, scheme: colorScheme)
-        case .error: Color.white
+        case .primary: Geist.rgba(.background100, scheme: colorScheme)
+        case .secondary, .tertiary: Geist.rgba(.gray1000, scheme: colorScheme)
+        case .error: GamepadRGBAColor(red: 1, green: 1, blue: 1)
         }
     }
 
-    private func fallbackBackground(isPressed: Bool) -> Color {
-        guard isEnabled else { return Geist.color(.gray100, scheme: colorScheme) }
+    private func fallbackBackground(isPressed: Bool) -> GamepadRGBAColor {
+        guard isEnabled else { return Geist.rgba(.gray100, scheme: colorScheme) }
         return switch variant {
-        case .primary: isPressed ? Geist.color(.gray900, scheme: colorScheme) : Geist.color(.gray1000, scheme: colorScheme)
-        case .secondary: isPressed ? Geist.color(.grayAlpha200, scheme: colorScheme) : Geist.color(.background100, scheme: colorScheme)
-        case .tertiary: isPressed ? Geist.color(.grayAlpha200, scheme: colorScheme) : Color.clear
-        case .error: isPressed ? Geist.color(.red900, scheme: colorScheme) : Geist.color(.red800, scheme: colorScheme)
+        case .primary: isPressed ? Geist.rgba(.gray900, scheme: colorScheme) : Geist.rgba(.gray1000, scheme: colorScheme)
+        case .secondary: isPressed ? Geist.rgba(.grayAlpha200, scheme: colorScheme) : Geist.rgba(.background100, scheme: colorScheme)
+        case .tertiary: isPressed ? Geist.rgba(.grayAlpha200, scheme: colorScheme) : GamepadRGBAColor(red: 0, green: 0, blue: 0, alpha: 0)
+        case .error: isPressed ? Geist.rgba(.red900, scheme: colorScheme) : Geist.rgba(.red800, scheme: colorScheme)
         }
     }
 
@@ -2330,10 +2569,10 @@ struct GamepadControlBarButtonStyle: ButtonStyle {
         variant == .secondary || !isEnabled ? 1 : 0
     }
 
-    private func fallbackBorder(isPressed: Bool) -> Color {
-        guard isEnabled else { return Geist.color(.grayAlpha400, scheme: colorScheme) }
-        guard variant == .secondary else { return .clear }
-        return isPressed ? Geist.color(.grayAlpha600, scheme: colorScheme) : Geist.color(.grayAlpha400, scheme: colorScheme)
+    private func fallbackBorder(isPressed: Bool) -> GamepadRGBAColor {
+        guard isEnabled else { return Geist.rgba(.grayAlpha400, scheme: colorScheme) }
+        guard variant == .secondary else { return GamepadRGBAColor(red: 0, green: 0, blue: 0, alpha: 0) }
+        return isPressed ? Geist.rgba(.grayAlpha600, scheme: colorScheme) : Geist.rgba(.grayAlpha400, scheme: colorScheme)
     }
 }
 
@@ -2377,6 +2616,7 @@ private extension View {
 
 struct GamepadControlBarStatusPill: View {
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.gamepadBarLeafCollector) private var layoutCollector
     let customization: GamepadCustomization
     let title: String
     let systemImage: String
@@ -2389,14 +2629,15 @@ struct GamepadControlBarStatusPill: View {
             state: .normal,
             baseHeight: Geist.ControlSize.small.height,
             baseHorizontalPadding: Geist.Spacing.s3,
-            fallbackForeground: tone.foreground(scheme: colorScheme),
-            fallbackBackground: tone.background(scheme: colorScheme),
-            fallbackBorder: tone.border(scheme: colorScheme),
+            fallbackForeground: tone.foregroundRGBA(scheme: colorScheme),
+            fallbackBackground: tone.backgroundRGBA(scheme: colorScheme),
+            fallbackBorder: tone.borderRGBA(scheme: colorScheme),
             fallbackBorderWidth: 1,
             defaultCornerRadius: 100
         ) {
             Label {
-                Text(title)
+                Text(title).modifier(GamepadNativeBarLayoutModifier(collector: layoutCollector,
+                    id: "native-control-bar/status/legend"))
             } icon: {
                 GamepadControlBarItemIcon(
                     customization: customization,
@@ -2415,6 +2656,7 @@ struct GamepadControlBarStatusPill: View {
 }
 
 struct GamepadControlBarItemIcon: View {
+    @Environment(\.gamepadBarLeafCollector) private var layoutCollector
     let customization: GamepadCustomization
     let item: GamepadControlBarItem
     let defaultSystemImage: String
@@ -2425,12 +2667,49 @@ struct GamepadControlBarItemIcon: View {
     @ViewBuilder
     var body: some View {
         let icon = customization.controlBarItemCustomization(for: item).icon?.normalized
+        let _ = recordIcon(icon)
         if let tint = icon?.tintColor?.swiftUIColor {
             iconContent(icon)
                 .foregroundStyle(tint)
         } else {
             iconContent(icon)
         }
+    }
+
+    private func recordIcon(_ icon: GamepadControlIcon?) {
+        guard let layoutCollector else { return }
+        var source = icon?.source.rawValue ?? "sf_symbol", value = icon?.value ?? defaultSystemImage
+        var reasons: [String] = icon == nil ? ["no authored icon; native default symbol"] : []
+        var assetSHA256: String?
+        if icon?.source == .asset && icon?.renderingMode != .template && icon?.tintColor != nil {
+            reasons.append("original raster rendering ignores foreground tint")
+        }
+        if icon?.source == .asset {
+            if let data = customization.assetLibrary.asset(id: value)?.data {
+                assetSHA256 = data.thumbleSHA256
+                if GamepadImageDecodeCache.image(for: data) == nil {
+                    source = "empty"; reasons.append("asset decoding failed; native asset leaf has no image")
+                }
+            } else {
+                source = "sf_symbol"; value = "photo.badge.exclamationmark"
+                reasons.append("asset missing; native missing-image symbol")
+            }
+        }
+        if source == "sf_symbol" {
+#if os(macOS)
+            let available = NSImage(systemSymbolName: value, accessibilityDescription: nil) != nil
+#elseif os(iOS)
+            let available = UIImage(systemName: value) != nil
+#else
+            let available = true
+#endif
+            if !available { source = "empty"; reasons.append("system symbol unavailable; native image leaf has no glyph") }
+        }
+        layoutCollector.recordIcon(.init(item: item, requested: icon, source: source, value: value,
+            fontSize: fontSize * (icon?.scale ?? 1), frameWidth: frameWidth, fallbacks: reasons,
+            renderingMode: source == "empty" ? "none" : source == "asset" ? (icon?.renderingMode == .template ? "template" : "original")
+                : icon?.source == .sfSymbol && icon?.renderingMode == .multicolor ? "multicolor" : "monochrome",
+            tintColor: icon?.tintColor, assetSHA256: assetSHA256))
     }
 
     @ViewBuilder
@@ -2444,13 +2723,20 @@ struct GamepadControlBarItemIcon: View {
                 case .text:
                     Text(icon.value)
                 case .asset:
-                    Image(systemName: "photo")
+                    if let data = customization.assetLibrary.asset(id: icon.value)?.data {
+                        GamepadAssetIconImage(data: data, renderingMode: icon.renderingMode)
+                            .frame(width: fontSize * icon.scale, height: fontSize * icon.scale)
+                    } else {
+                        Image(systemName: "photo.badge.exclamationmark")
+                    }
                 }
             } else {
                 Image(systemName: defaultSystemImage)
             }
         }
         .font(.system(size: fontSize * (icon?.scale ?? 1), weight: weight))
+        .modifier(GamepadNativeBarLayoutModifier(collector: layoutCollector,
+            id: "native-control-bar/" + item.rawValue + "/icon"))
         .frame(width: frameWidth)
     }
 }
@@ -2536,7 +2822,7 @@ private extension GamepadButtonCustomization {
 
 public struct GamepadCustomization: Codable, Equatable, Sendable {
     public static let maximumLabelLength = gamepadMaximumLabelLength
-    public static let maximumCustomButtons = 64
+    public static let maximumCustomButtons = 128
     public static let maximumJoysticks = 2
     public static let maximumTriggers = 2
     public static let maximumTrackpads = 1
@@ -2565,11 +2851,14 @@ public struct GamepadCustomization: Codable, Equatable, Sendable {
     public static let defaultValue = GamepadCustomization()
     public static var blankCanvas: GamepadCustomization {
         var customization = GamepadCustomization.defaultValue
-        for button in GameButton.builtInControls {
+        for button in DefaultKeypadElements.ids {
             var buttonCustomization = GamepadButtonCustomization.defaultValue
             buttonCustomization.isHidden = true
             customization.setButtonCustomization(buttonCustomization, for: button)
         }
+        customization.elements = []
+        customization.buttonCustomizations.removeAll()
+        customization.labelOverrides.removeAll()
         return customization.normalized
     }
 
@@ -2587,8 +2876,8 @@ public struct GamepadCustomization: Codable, Equatable, Sendable {
     public var artworkLayers: [ThumbleSkinArtworkLayer]
     public var accentStyle: GamepadAccentStyle
     public var showsButtonLabels: Bool
-    public var labelOverrides: [GameButton: String]
-    public var buttonCustomizations: [GameButton: GamepadButtonCustomization]
+    public var labelOverrides: [KeypadElementID: String]
+    public var buttonCustomizations: [KeypadElementID: GamepadButtonCustomization]
     public var customButtons: [GamepadCustomButton]
     public var elements: [KeypadElement]
     public var topBarActivationRegion: GamepadButtonCustomization
@@ -2612,10 +2901,10 @@ public struct GamepadCustomization: Codable, Equatable, Sendable {
         artworkLayers: [ThumbleSkinArtworkLayer] = [],
         accentStyle: GamepadAccentStyle = .monochrome,
         showsButtonLabels: Bool = true,
-        labelOverrides: [GameButton: String] = [:],
-        buttonCustomizations: [GameButton: GamepadButtonCustomization] = [:],
+        labelOverrides: [KeypadElementID: String] = [:],
+        buttonCustomizations: [KeypadElementID: GamepadButtonCustomization] = [:],
         customButtons: [GamepadCustomButton] = [],
-        elements: [KeypadElement] = [],
+        elements: [KeypadElement]? = nil,
         topBarActivationRegion: GamepadButtonCustomization = GamepadCustomization.defaultTopBarActivationRegion,
         controlBarItems: [GamepadControlBarItem] = GamepadCustomization.defaultControlBarItems,
         controlBarItemCustomizations: [GamepadControlBarItemCustomization] = [],
@@ -2639,7 +2928,7 @@ public struct GamepadCustomization: Codable, Equatable, Sendable {
         self.labelOverrides = labelOverrides
         self.buttonCustomizations = buttonCustomizations
         self.customButtons = customButtons
-        self.elements = elements
+        self.elements = elements ?? Self.newDefaultElements()
         self.topBarActivationRegion = topBarActivationRegion
         self.controlBarItems = controlBarItems
         self.controlBarItemCustomizations = controlBarItemCustomizations
@@ -2649,12 +2938,25 @@ public struct GamepadCustomization: Codable, Equatable, Sendable {
         self.updatedAt = updatedAt
     }
 
+    private static func newDefaultElements() -> [KeypadElement] {
+        DefaultKeypadElements.ids.map { id in
+            let binding = DefaultKeypadElements.initialBinding(for: id)
+            return KeypadElement(
+                id: id.uuid, label: defaultVisualLabel(for: id),
+                visualRole: GamepadVisualRole.inferred(for: id, controlKind: .button),
+                output: binding, defaultOutput: binding
+            )
+        }
+    }
+
     public init(from decoder: Decoder) throws {
-        self.init()
+        self.init(elements: [])
+        try KeypadElementSchema.requireUUIDBindingKeys(from: decoder)
         let container = try decoder.container(keyedBy: CodingKeys.self)
         try Self.decodeLayoutFields(from: container, into: &self)
         try Self.decodeBackgroundFields(from: container, into: &self)
         try Self.decodeControlFields(from: container, into: &self)
+        try KeypadElementSchema.requireDeclaredAppearanceKeys(from: decoder, declaredIDs: Set(elements.map(\.id)))
         try Self.decodeControlBarFields(from: container, into: &self)
         try Self.decodeDesignFields(from: container, into: &self)
     }
@@ -2687,10 +2989,56 @@ public struct GamepadCustomization: Codable, Equatable, Sendable {
         from container: KeyedDecodingContainer<CodingKeys>,
         into customization: inout GamepadCustomization
     ) throws {
-        customization.labelOverrides = try container.decodeIfPresent([GameButton: String].self, forKey: .labelOverrides) ?? [:]
-        customization.buttonCustomizations = try container.decodeIfPresent([GameButton: GamepadButtonCustomization].self, forKey: .buttonCustomizations) ?? [:]
+        customization.labelOverrides = try container.decodeIfPresent([KeypadElementID: String].self, forKey: .labelOverrides) ?? [:]
+        customization.buttonCustomizations = try container.decodeIfPresent([KeypadElementID: GamepadButtonCustomization].self, forKey: .buttonCustomizations) ?? [:]
         customization.customButtons = try container.decodeIfPresent([GamepadCustomButton].self, forKey: .customButtons) ?? []
-        customization.elements = try container.decodeIfPresent([KeypadElement].self, forKey: .elements) ?? []
+        // Imports must declare their controls; no reconstruction from starter anchors.
+        customization.elements = try container.decode([KeypadElement].self, forKey: .elements)
+        guard customization.elements.count <= Self.maximumCustomButtons else {
+            throw DecodingError.dataCorruptedError(forKey: .elements, in: container, debugDescription: "At most 128 declared controls are supported.")
+        }
+        let limits: [(GamepadCustomControlKind, Int)] = [(.joystick, Self.maximumJoysticks), (.trigger, Self.maximumTriggers), (.trackpad, Self.maximumTrackpads)]
+        for (kind, limit) in limits where customization.elements.filter({ $0.kind == kind }).count > limit {
+            throw DecodingError.dataCorruptedError(forKey: .elements, in: container, debugDescription: "Too many declared \(kind.rawValue) controls.")
+        }
+        guard Set(customization.elements.map(\.id)).count == customization.elements.count,
+              Set(customization.customButtons.map(\.id)).count == customization.customButtons.count else {
+            throw DecodingError.dataCorruptedError(forKey: .elements, in: container, debugDescription: "Duplicate element UUIDs are not supported.")
+        }
+        let declaredIDs = Set(customization.elements.map(\.id))
+        guard customization.customButtons.allSatisfy({ declaredIDs.contains($0.id) }) else {
+            throw DecodingError.dataCorruptedError(forKey: .customButtons, in: container, debugDescription: "Custom control mirrors must reference declared element UUIDs. Controls are not reconstructed from mirrors.")
+        }
+        let declaredKinds = Dictionary(uniqueKeysWithValues: customization.elements.map { ($0.id, $0.kind) })
+        guard customization.customButtons.allSatisfy({ declaredKinds[$0.id] == $0.controlKind }) else {
+            throw DecodingError.dataCorruptedError(forKey: .customButtons, in: container, debugDescription: "Control mirror kinds must match their declared elements.")
+        }
+        try reconcileImportedControlMirrors(in: &customization, container: container)
+    }
+
+    private static func reconcileImportedControlMirrors(
+        in customization: inout GamepadCustomization,
+        container: KeyedDecodingContainer<CodingKeys>
+    ) throws {
+        let declarations = Dictionary(uniqueKeysWithValues: customization.elements.map { ($0.id, $0) })
+        for index in customization.customButtons.indices {
+            let mirror = customization.customButtons[index]
+            let declared = declarations[mirror.id]!.normalized
+            let normalizedMirror = mirror.normalized
+            guard (mirror.joystickMapping == nil || mirror.joystickMapping == declared.joystickMapping),
+                  (mirror.joystickOutputSettings == nil || normalizedMirror.joystickOutputSettings == declared.joystickOutputSettings),
+                  (mirror.triggerSettings == nil || normalizedMirror.triggerSettings == declared.triggerSettings),
+                  (mirror.trackpadSettings == nil || normalizedMirror.trackpadSettings == declared.trackpadSettings)
+            else {
+                throw DecodingError.dataCorruptedError(forKey: .customButtons, in: container, debugDescription: "Appearance mirrors cannot declare or override executable settings. Bindings and settings must be owned by their declared element UUID.")
+            }
+            // Missing mirror fields inherit only this declaration's settings;
+            // normalization must not erase them or supply executable mirror defaults.
+            customization.customButtons[index].joystickMapping = declared.joystickMapping
+            customization.customButtons[index].joystickOutputSettings = declared.joystickOutputSettings
+            customization.customButtons[index].triggerSettings = declared.triggerSettings
+            customization.customButtons[index].trackpadSettings = declared.trackpadSettings
+        }
     }
 
     private static func decodeControlBarFields(
@@ -2707,6 +3055,20 @@ public struct GamepadCustomization: Codable, Equatable, Sendable {
         into customization: inout GamepadCustomization
     ) throws {
         customization.designMetadata = try container.decodeIfPresent(GamepadDesignMetadata.self, forKey: .designMetadata)
+        if let metadata = customization.designMetadata {
+            let available = Set(customization.allControlIdentitiesForDesign)
+            var groupIDs = Set<UUID>()
+            guard Set(metadata.layerOrder).count == metadata.layerOrder.count,
+                  metadata.layerOrder.allSatisfy({ available.contains($0) }),
+                  metadata.groups.allSatisfy({ group in
+                      groupIDs.insert(group.id).inserted
+                          && Set(group.children).count == group.children.count
+                          && group.children.allSatisfy({ available.contains($0) })
+                  })
+            else {
+                throw DecodingError.dataCorruptedError(forKey: .designMetadata, in: container, debugDescription: "Design layers and groups must reference unique declared control identities; incompatible references are not repaired.")
+            }
+        }
         customization.styleLibrary = try container.decodeIfPresent(GamepadStyleLibrary.self, forKey: .styleLibrary) ?? .empty
         customization.assetLibrary = try container.decodeIfPresent(GamepadAssetLibrary.self, forKey: .assetLibrary) ?? .empty
         customization.updatedAt = try container.decodeIfPresent(Int64.self, forKey: .updatedAt) ?? 0
@@ -2742,11 +3104,11 @@ public struct GamepadCustomization: Codable, Equatable, Sendable {
     }
 
     private func encodeLabelOverrides(to container: inout KeyedEncodingContainer<CodingKeys>) throws {
-        // GameButton-keyed dictionaries otherwise encode as an unkeyed sequence in
+        // KeypadElementID-keyed dictionaries otherwise encode as an unkeyed sequence in
         // hash-table iteration order. Stable ordering keeps package/profile bytes,
         // catalog fingerprints, and agent artboard exports reproducible.
         var labels = container.nestedUnkeyedContainer(forKey: .labelOverrides)
-        for button in GameButton.allCases where labelOverrides[button] != nil {
+        for button in labelOverrides.keys.sorted(by: { $0.rawValue < $1.rawValue }) {
             try labels.encode(button)
             try labels.encode(labelOverrides[button]!)
         }
@@ -2754,7 +3116,7 @@ public struct GamepadCustomization: Codable, Equatable, Sendable {
 
     private func encodeButtonCustomizations(to container: inout KeyedEncodingContainer<CodingKeys>) throws {
         var customizations = container.nestedUnkeyedContainer(forKey: .buttonCustomizations)
-        for button in GameButton.allCases {
+        for button in buttonCustomizations.keys.sorted(by: { $0.rawValue < $1.rawValue }) {
             guard let customization = buttonCustomizations[button] else { continue }
             try customizations.encode(button)
             // Calling the concrete implementation avoids the generic container's large
@@ -2769,12 +3131,9 @@ public struct GamepadCustomization: Codable, Equatable, Sendable {
 
     private func encodeSynchronizedElements(to container: inout KeyedEncodingContainer<CodingKeys>) throws {
         let synchronized = synchronizedElements(
-            migratesLegacySlots: elements.isEmpty,
             controlsAreNormalized: true
         )
-        if !synchronized.isEmpty {
-            try container.encode(synchronized, forKey: .elements)
-        }
+        try container.encode(synchronized, forKey: .elements)
     }
 
     private func encodeControlBar(to container: inout KeyedEncodingContainer<CodingKeys>) throws {
@@ -2834,18 +3193,18 @@ public struct GamepadCustomization: Codable, Equatable, Sendable {
         try container.encode(updatedAt, forKey: .updatedAt)
     }
 
-    public func visualLabel(for button: GameButton) -> String {
+    public func visualLabel(for button: KeypadElementID) -> String {
         visualLabel(for: button, defaultLabel: nil)
     }
 
-    public func visualLabel(for button: GameButton, defaultLabel: String?) -> String {
+    public func visualLabel(for button: KeypadElementID, defaultLabel: String?) -> String {
         if let override = labelOverride(for: button) {
             return override
         }
         return Self.resolvedDefaultVisualLabel(for: button, defaultLabel: defaultLabel)
     }
 
-    public func labelOverride(for button: GameButton) -> String? {
+    public func labelOverride(for button: KeypadElementID) -> String? {
         guard let value = labelOverrides[button]?.trimmingCharacters(in: .whitespacesAndNewlines),
               !value.isEmpty
         else {
@@ -2854,14 +3213,14 @@ public struct GamepadCustomization: Codable, Equatable, Sendable {
         return value
     }
 
-    public mutating func setLabel(_ label: String, for button: GameButton) {
+    public mutating func setLabel(_ label: String, for button: KeypadElementID) {
         let normalizedLabel = normalizedGamepadLabel(label)
         if normalizedLabel.isEmpty {
             labelOverrides[button] = nil
         } else {
             labelOverrides[button] = normalizedLabel
         }
-        if let index = elements.firstIndex(where: { $0.builtInButton == button }) {
+        if let index = elements.firstIndex(where: { $0.defaultControlID == button }) {
             elements[index].label = normalizedLabel.isEmpty ? Self.defaultVisualLabel(for: button) : normalizedLabel
         }
     }
@@ -2870,31 +3229,42 @@ public struct GamepadCustomization: Codable, Equatable, Sendable {
         labelOverrides.removeAll()
     }
 
-    public func buttonCustomization(for button: GameButton) -> GamepadButtonCustomization {
-        buttonCustomizations[button]?.normalized ?? .defaultValue
+    public func buttonCustomization(for button: KeypadElementID) -> GamepadButtonCustomization {
+        (buttonCustomizations[button] ?? elements.first { $0.inputID == button }?.layout)?.normalized ?? .defaultValue
     }
 
-    public mutating func setButtonCustomization(_ customization: GamepadButtonCustomization, for button: GameButton) {
+    public mutating func setButtonCustomization(_ customization: GamepadButtonCustomization, for button: KeypadElementID) {
         let normalizedCustomization = customization.normalized
-        if normalizedCustomization.isDefault {
-            buttonCustomizations[button] = nil
-        } else {
-            buttonCustomizations[button] = normalizedCustomization
-        }
-        if let index = elements.firstIndex(where: { $0.builtInButton == button }) {
+        let index = elements.firstIndex(where: { $0.kind == .button && $0.inputID == button })
+        if index == nil {
+            guard !normalizedCustomization.isHidden,
+                  canAddControl(ofKind: .button, id: button.uuid),
+                  var element = Self.newDefaultElements().first(where: { $0.inputID == button })
+            else { return }
+            // Explicit starter/template construction. Decoding and normalizing
+            // never call this setter to recover absent controls.
+            element.layout = normalizedCustomization
+            element.label = labelOverride(for: button) ?? element.label
+            elements.append(element)
+        } else if let index {
             elements[index].layout = normalizedCustomization
         }
+        buttonCustomizations[button] = normalizedCustomization.isDefault ? nil : normalizedCustomization
     }
 
     public mutating func setPosition(_ normalizedPosition: CGPoint, for identity: GamepadControlIdentity) {
         switch identity {
         case .builtin(let button):
+            if !elements.contains(where: { $0.inputID == button }) { normalizeInPlace() }
+            guard elements.contains(where: { $0.inputID == button && $0.kind == .button }) else { return }
             var buttonCustomization = buttonCustomization(for: button)
             buttonCustomization.centerX = normalizedPosition.x
             buttonCustomization.centerY = normalizedPosition.y
             setButtonCustomization(buttonCustomization, for: button)
 
         case .custom(let id):
+            if !elements.contains(where: { $0.id == id }) || !customButtons.contains(where: { $0.id == id }) { normalizeInPlace() }
+            guard elements.contains(where: { $0.id == id }) else { return }
             guard let index = customButtons.firstIndex(where: { $0.id == id }) else { return }
             customButtons[index].layout.centerX = normalizedPosition.x
             customButtons[index].layout.centerY = normalizedPosition.y
@@ -2907,12 +3277,34 @@ public struct GamepadCustomization: Codable, Equatable, Sendable {
         }
     }
 
-    public mutating func addCustomButton(id: UUID = UUID(), mappedTo mappedButton: GameButton? = nil) {
-        guard customButtons.count < Self.maximumCustomButtons else { return }
-        let targetButton = mappedButton ?? firstAvailableCustomSlot() ?? .jump
+    // Typed authoring may have a mirror before its declaration. Count each UUID
+    // once and let declarations determine kind; imported mirrors never declare controls.
+    var controlKindsByID: [UUID: GamepadCustomControlKind] {
+        var kinds: [UUID: GamepadCustomControlKind] = [:]
+        for control in customButtons { kinds[control.id] = control.normalized.controlKind }
+        for element in elements { kinds[element.id] = element.kind }
+        return kinds
+    }
+
+    public func canAddControl(ofKind kind: GamepadCustomControlKind, id: UUID? = nil) -> Bool {
+        let kinds = controlKindsByID
+        guard kinds.count < Self.maximumCustomButtons,
+              id.map({ kinds[$0] == nil }) ?? true
+        else { return false }
+        let limit: Int
+        switch kind {
+        case .joystick: limit = Self.maximumJoysticks
+        case .trigger: limit = Self.maximumTriggers
+        case .trackpad: limit = Self.maximumTrackpads
+        case .button, .text, .decoration: return true
+        }
+        return kinds.values.filter { $0 == kind }.count < limit
+    }
+
+    public mutating func addCustomButton(id: UUID = UUID()) {
+        guard canAddControl(ofKind: .button, id: id) else { return }
         let customButton = GamepadCustomButton(
             id: id,
-            mappedButton: targetButton,
             label: "Button",
             layout: GamepadButtonCustomization(
                 centerX: 0.5,
@@ -2923,7 +3315,7 @@ public struct GamepadCustomization: Codable, Equatable, Sendable {
             )
         )
         customButtons.append(customButton)
-        upsertElementMirror(for: customButton, migratesLegacySlot: mappedButton != nil)
+        upsertElementMirror(for: customButton)
     }
 
     public mutating func addJoystick(
@@ -2932,10 +3324,8 @@ public struct GamepadCustomization: Codable, Equatable, Sendable {
         mapping: GamepadJoystickMapping? = nil,
         outputSettings: GamepadJoystickOutputSettings? = nil
     ) {
-        let joystickCount = customButtons.filter { $0.normalized.isJoystick }.count
-        guard customButtons.count < Self.maximumCustomButtons,
-              joystickCount < Self.maximumJoysticks
-        else { return }
+        guard canAddControl(ofKind: .joystick, id: id) else { return }
+        let joystickCount = controlKindsByID.values.filter { $0 == .joystick }.count
 
         let isPrimaryJoystick = joystickCount == 0
         let resolvedMapping = mapping ?? (isPrimaryJoystick ? .movement : .secondary)
@@ -2946,7 +3336,6 @@ public struct GamepadCustomization: Codable, Equatable, Sendable {
         )
         let customButton = GamepadCustomButton(
             id: id,
-            mappedButton: resolvedMapping.up,
             label: resolvedLabel,
             layout: GamepadButtonCustomization(
                 centerX: isPrimaryJoystick ? 0.22 : 0.78,
@@ -2961,7 +3350,7 @@ public struct GamepadCustomization: Codable, Equatable, Sendable {
             joystickOutputSettings: resolvedOutputSettings
         )
         customButtons.append(customButton)
-        upsertElementMirror(for: customButton, migratesLegacySlot: false)
+        upsertElementMirror(for: customButton)
     }
 
     private static func defaultJoystickLabel(
@@ -2978,16 +3367,13 @@ public struct GamepadCustomization: Codable, Equatable, Sendable {
         }
     }
 
-    public mutating func addTrigger(id: UUID = UUID(), target: VirtualGamepadTrigger? = nil, mappedTo mappedButton: GameButton? = nil) {
-        let triggerCount = customButtons.filter { $0.normalized.isTrigger }.count
-        guard customButtons.count < Self.maximumCustomButtons,
-              triggerCount < Self.maximumTriggers
-        else { return }
+    public mutating func addTrigger(id: UUID = UUID(), target: VirtualGamepadTrigger? = nil) {
+        guard canAddControl(ofKind: .trigger, id: id) else { return }
+        let triggerCount = controlKindsByID.values.filter { $0 == .trigger }.count
 
         let resolvedTarget = target ?? (triggerCount == 0 ? .left : .right)
         let customButton = GamepadCustomButton(
             id: id,
-            mappedButton: mappedButton ?? firstAvailableCustomSlot() ?? .custom1,
             label: resolvedTarget.shortName,
             layout: GamepadButtonCustomization(
                 centerX: resolvedTarget == .left ? 0.20 : 0.80,
@@ -3001,18 +3387,14 @@ public struct GamepadCustomization: Codable, Equatable, Sendable {
             triggerSettings: GamepadTriggerSettings(target: resolvedTarget, orientation: .horizontal)
         )
         customButtons.append(customButton)
-        upsertElementMirror(for: customButton, migratesLegacySlot: mappedButton != nil)
+        upsertElementMirror(for: customButton)
     }
 
-    public mutating func addTrackpad(id: UUID = UUID(), mappedTo mappedButton: GameButton? = nil) {
-        let trackpadCount = customButtons.filter { $0.normalized.isTrackpad }.count
-        guard customButtons.count < Self.maximumCustomButtons,
-              trackpadCount < Self.maximumTrackpads
-        else { return }
+    public mutating func addTrackpad(id: UUID = UUID()) {
+        guard canAddControl(ofKind: .trackpad, id: id) else { return }
 
         let customButton = GamepadCustomButton(
             id: id,
-            mappedButton: mappedButton ?? firstAvailableCustomSlot() ?? .custom1,
             label: "Trackpad",
             layout: GamepadButtonCustomization(
                 centerX: 0.50,
@@ -3027,7 +3409,7 @@ public struct GamepadCustomization: Codable, Equatable, Sendable {
             trackpadSettings: .defaultValue
         )
         customButtons.append(customButton)
-        upsertElementMirror(for: customButton, migratesLegacySlot: mappedButton != nil)
+        upsertElementMirror(for: customButton)
     }
 
     public mutating func addText(
@@ -3038,10 +3420,9 @@ public struct GamepadCustomization: Codable, Equatable, Sendable {
         widthScale: CGFloat = 1.4,
         heightScale: CGFloat = 0.7
     ) {
-        guard customButtons.count < Self.maximumCustomButtons else { return }
+        guard canAddControl(ofKind: .text, id: id) else { return }
         let textElement = GamepadCustomButton(
             id: id,
-            mappedButton: .custom8,
             label: normalizedGamepadLabel(text).isEmpty ? "Text" : text,
             layout: GamepadButtonCustomization(
                 centerX: centerX,
@@ -3056,7 +3437,7 @@ public struct GamepadCustomization: Codable, Equatable, Sendable {
             visualRole: .decoration
         )
         customButtons.append(textElement)
-        upsertElementMirror(for: textElement, migratesLegacySlot: false)
+        upsertElementMirror(for: textElement)
     }
 
     public mutating func addDecoration(
@@ -3070,10 +3451,9 @@ public struct GamepadCustomization: Codable, Equatable, Sendable {
         cornerRadius: CGFloat? = 28,
         visualStyle: GamepadControlVisualStyle? = .softWhitePlate()
     ) {
-        guard customButtons.count < Self.maximumCustomButtons else { return }
+        guard canAddControl(ofKind: .decoration, id: id) else { return }
         let customButton = GamepadCustomButton(
             id: id,
-            mappedButton: .custom8,
             label: label,
             layout: GamepadButtonCustomization(
                 centerX: centerX,
@@ -3089,7 +3469,7 @@ public struct GamepadCustomization: Codable, Equatable, Sendable {
             controlKind: .decoration
         )
         customButtons.append(customButton)
-        upsertElementMirror(for: customButton, migratesLegacySlot: false)
+        upsertElementMirror(for: customButton)
     }
 
     public mutating func removeCustomButton(id: UUID) {
@@ -3100,13 +3480,15 @@ public struct GamepadCustomization: Codable, Equatable, Sendable {
     public mutating func resetButtonLayout() {
         buttonCustomizations.removeAll()
         customButtons.removeAll()
-        elements.removeAll()
+        elements = Self.newDefaultElements()
     }
 
-    private func firstAvailableCustomSlot() -> GameButton? {
-        GameButton.customSlots.first { slot in
-            !customButtons.contains { $0.mappedButton == slot }
-        }
+    /// Explicit construction, never an import or normalization fallback.
+    public mutating func installDefaultControls() {
+        let existing = controlKindsByID
+        let additions = Self.newDefaultElements().filter { existing[$0.id] == nil }
+        guard existing.count + additions.count <= Self.maximumCustomButtons else { return }
+        elements.append(contentsOf: additions)
     }
 
     public var usesFreeformLayout: Bool {
@@ -3122,7 +3504,7 @@ public struct GamepadCustomization: Codable, Equatable, Sendable {
     public func element(for identity: GamepadControlIdentity) -> KeypadElement? {
         switch identity {
         case .builtin(let button):
-            return normalized.elements.first { $0.builtInButton == button }
+            return normalized.elements.first { $0.defaultControlID == button }
         case .custom(let id):
             return normalized.elements.first { $0.id == id }
         case .system, .controlBarItem:
@@ -3136,7 +3518,7 @@ public struct GamepadCustomization: Codable, Equatable, Sendable {
 
     public func identity(forElementID elementID: UUID) -> GamepadControlIdentity? {
         guard let element = element(for: elementID) else { return nil }
-        if let builtInButton = element.builtInButton { return .builtin(builtInButton) }
+        if element.kind == .button, let defaultControlID = element.defaultControlID { return .builtin(defaultControlID) }
         return .custom(element.id)
     }
 
@@ -3240,24 +3622,10 @@ public struct GamepadCustomization: Codable, Equatable, Sendable {
         controlBarItemCustomizations.removeAll()
     }
 
-    private mutating func upsertElementMirror(for customButton: GamepadCustomButton, migratesLegacySlot: Bool) {
+    private mutating func upsertElementMirror(for customButton: GamepadCustomButton) {
         let normalizedButton = customButton.normalized
-        let existing = elements.first { $0.id == normalizedButton.id }?.normalized
-        let element = KeypadElement(
-            id: normalizedButton.id,
-            label: normalizedButton.visualLabel(fallback: visualLabel(for: normalizedButton.mappedButton)),
-            kind: normalizedButton.controlKind,
-            layout: normalizedButton.layout,
-            builtInButton: nil,
-            legacySlot: migratesLegacySlot ? normalizedButton.mappedButton : existing?.legacySlot,
-            visualRole: normalizedButton.visualRole ?? existing?.visualRole,
-            output: existing?.output,
-            partOutputs: existing?.partOutputs ?? [:],
-            joystickMapping: normalizedButton.joystickMapping,
-            joystickOutputSettings: normalizedButton.joystickOutputSettings,
-            triggerSettings: normalizedButton.triggerSettings,
-            trackpadSettings: normalizedButton.trackpadSettings
-        ).normalized(layoutIsAlreadyNormalized: true)
+        let element = Self.updatedDeclaredElement(from: normalizedButton, existing: elements.first { $0.id == normalizedButton.id },
+            fallbackLabel: visualLabel(for: normalizedButton.inputID))
         if let index = elements.firstIndex(where: { $0.id == element.id }) {
             elements[index] = element
         } else {
@@ -3265,7 +3633,21 @@ public struct GamepadCustomization: Codable, Equatable, Sendable {
         }
     }
 
-    private func synchronizedElements(migratesLegacySlots: Bool, controlsAreNormalized: Bool = false) -> [KeypadElement] {
+    private static func updatedDeclaredElement(from mirror: GamepadCustomButton, existing: KeypadElement?, fallbackLabel: String) -> KeypadElement {
+        var element = existing ?? KeypadElement(id: mirror.id)
+        element.id = mirror.id
+        element.label = mirror.visualLabel(fallback: fallbackLabel)
+        element.kind = mirror.controlKind
+        element.layout = mirror.layout
+        element.visualRole = mirror.visualRole ?? element.visualRole
+        element.joystickMapping = mirror.joystickMapping
+        element.joystickOutputSettings = mirror.joystickOutputSettings
+        element.triggerSettings = mirror.triggerSettings
+        element.trackpadSettings = mirror.trackpadSettings
+        return element.normalized(layoutIsAlreadyNormalized: true)
+    }
+
+    private func synchronizedElements(controlsAreNormalized: Bool = false) -> [KeypadElement] {
         let existing = synchronizedElementIndexes(controlsAreNormalized: controlsAreNormalized)
         var synchronized: [KeypadElement] = []
         var seenIDs = Set<UUID>()
@@ -3279,22 +3661,24 @@ public struct GamepadCustomization: Codable, Equatable, Sendable {
             to: &synchronized,
             seenIDs: &seenIDs,
             existingByID: existing.byID,
-            migratesLegacySlots: migratesLegacySlots,
             controlsAreNormalized: controlsAreNormalized
         )
+        for element in elements where seenIDs.insert(element.id).inserted {
+            synchronized.append(element.normalized)
+        }
         return synchronized
     }
 
     private func synchronizedElementIndexes(
         controlsAreNormalized: Bool
-    ) -> (byID: [UUID: KeypadElement], byButton: [GameButton: KeypadElement]) {
+    ) -> (byID: [UUID: KeypadElement], byButton: [KeypadElementID: KeypadElement]) {
         var byID: [UUID: KeypadElement] = [:]
-        var byButton: [GameButton: KeypadElement] = [:]
+        var byButton: [KeypadElementID: KeypadElement] = [:]
         for element in elements {
-            let metadata = controlsAreNormalized ? element.synchronizationMetadata : element.normalized
+            let metadata = element.normalized
             byID[metadata.id] = metadata
-            if let builtInButton = metadata.builtInButton {
-                byButton[builtInButton] = metadata
+            if metadata.kind == .button, let defaultControlID = metadata.defaultControlID {
+                byButton[defaultControlID] = metadata
             }
         }
         return (byID, byButton)
@@ -3303,30 +3687,16 @@ public struct GamepadCustomization: Codable, Equatable, Sendable {
     private func appendSynchronizedBuiltInElements(
         to synchronized: inout [KeypadElement],
         seenIDs: inout Set<UUID>,
-        existingByButton: [GameButton: KeypadElement],
+        existingByButton: [KeypadElementID: KeypadElement],
         controlsAreNormalized: Bool
     ) {
-        for button in GameButton.builtInControls {
-            let layout = controlsAreNormalized
-                ? (buttonCustomizations[button] ?? .defaultValue)
-                : buttonCustomization(for: button)
-            guard !layout.isHidden else { continue }
-            let existing = existingByButton[button]
-            let id = existing?.id ?? KeypadElement.builtInID(for: button)
-            guard seenIDs.insert(id).inserted else { continue }
-            synchronized.append(
-                KeypadElement(
-                    id: id,
-                    label: visualLabel(for: button),
-                    kind: .button,
-                    layout: layout,
-                    builtInButton: button,
-                    legacySlot: existing?.legacySlot ?? button,
-                    visualRole: existing?.visualRole,
-                    output: existing?.output,
-                    partOutputs: existing?.partOutputs ?? [:]
-                ).normalized(layoutIsAlreadyNormalized: true)
-            )
+        for element in elements {
+            guard element.kind == .button, let button = element.defaultControlID,
+                  let existing = existingByButton[button], seenIDs.insert(existing.id).inserted else { continue }
+            var updated = existing
+            updated.layout = buttonCustomizations[button] ?? existing.layout
+            updated.label = labelOverride(for: button) ?? existing.label
+            synchronized.append(updated.normalized)
         }
     }
 
@@ -3334,30 +3704,14 @@ public struct GamepadCustomization: Codable, Equatable, Sendable {
         to synchronized: inout [KeypadElement],
         seenIDs: inout Set<UUID>,
         existingByID: [UUID: KeypadElement],
-        migratesLegacySlots: Bool,
         controlsAreNormalized: Bool
     ) {
         for customButton in customButtons {
             let normalizedButton = controlsAreNormalized ? customButton : customButton.normalized
             let existing = existingByID[normalizedButton.id]
             guard seenIDs.insert(normalizedButton.id).inserted else { continue }
-            synchronized.append(
-                KeypadElement(
-                    id: normalizedButton.id,
-                    label: normalizedButton.visualLabel(fallback: visualLabel(for: normalizedButton.mappedButton)),
-                    kind: normalizedButton.controlKind,
-                    layout: normalizedButton.layout,
-                    builtInButton: nil,
-                    legacySlot: migratesLegacySlots ? normalizedButton.mappedButton : existing?.legacySlot,
-                    visualRole: normalizedButton.visualRole ?? existing?.visualRole,
-                    output: existing?.output,
-                    partOutputs: existing?.partOutputs ?? [:],
-                    joystickMapping: normalizedButton.joystickMapping,
-                    joystickOutputSettings: normalizedButton.joystickOutputSettings,
-                    triggerSettings: normalizedButton.triggerSettings,
-                    trackpadSettings: normalizedButton.trackpadSettings
-                ).normalized(layoutIsAlreadyNormalized: true)
-            )
+            synchronized.append(Self.updatedDeclaredElement(from: normalizedButton, existing: existing,
+                fallbackLabel: visualLabel(for: normalizedButton.inputID)))
         }
     }
 
@@ -3404,9 +3758,10 @@ public struct GamepadCustomization: Codable, Equatable, Sendable {
     }
 
     private mutating func normalizeLabelsInPlace() {
-        var normalizedLabels: [GameButton: String] = [:]
+        var normalizedLabels: [KeypadElementID: String] = [:]
         normalizedLabels.reserveCapacity(labelOverrides.count)
-        for (button, label) in labelOverrides {
+        let declaredIDs = Set(elements.map(\.id) + customButtons.map(\.id))
+        for (button, label) in labelOverrides where declaredIDs.contains(button.uuid) {
             let normalizedLabel = normalizedGamepadLabel(label)
             if !normalizedLabel.isEmpty {
                 normalizedLabels[button] = normalizedLabel
@@ -3416,9 +3771,10 @@ public struct GamepadCustomization: Codable, Equatable, Sendable {
     }
 
     private mutating func normalizeBuiltInControlsInPlace() {
-        var normalizedControls: [GameButton: GamepadButtonCustomization] = [:]
+        var normalizedControls: [KeypadElementID: GamepadButtonCustomization] = [:]
         normalizedControls.reserveCapacity(buttonCustomizations.count)
-        for (button, customization) in buttonCustomizations {
+        let declaredIDs = Set(elements.map(\.id) + customButtons.map(\.id))
+        for (button, customization) in buttonCustomizations where declaredIDs.contains(button.uuid) {
             let normalizedCustomization = customization.normalized
             if !normalizedCustomization.isDefault {
                 normalizedControls[button] = normalizedCustomization
@@ -3449,12 +3805,29 @@ public struct GamepadCustomization: Codable, Equatable, Sendable {
             normalizedCustomButtons.append(normalizedCustomButton)
             if normalizedCustomButtons.count >= Self.maximumCustomButtons { break }
         }
+        // These are edit/appearance mirrors, not input declarations. Fill missing
+        // mirrors solely from already-declared elements; never allocate identities
+        // or recover bindings from labels, starter controls, or another element.
+        var mirroredIDs = Set(normalizedCustomButtons.map(\.id))
+        for element in elements where element.defaultControlID == nil || element.kind != .button {
+            guard mirroredIDs.insert(element.id).inserted else { continue }
+            normalizedCustomButtons.append(Self.customControlMirror(from: element))
+        }
         customButtons = normalizedCustomButtons
+    }
+
+    private static func customControlMirror(from element: KeypadElement) -> GamepadCustomButton {
+        GamepadCustomButton(
+            id: element.id, label: element.label, layout: element.layout,
+            controlKind: element.kind, visualRole: element.visualRole,
+            joystickMapping: element.joystickMapping,
+            joystickOutputSettings: element.joystickOutputSettings,
+            triggerSettings: element.triggerSettings, trackpadSettings: element.trackpadSettings
+        ).normalized
     }
 
     private mutating func normalizeElementsInPlace() {
         elements = synchronizedElements(
-            migratesLegacySlots: elements.isEmpty,
             controlsAreNormalized: true
         )
     }
@@ -3548,30 +3921,23 @@ public struct GamepadCustomization: Codable, Equatable, Sendable {
         }
     }
 
-    public static func defaultVisualLabel(for button: GameButton) -> String {
+    public static func defaultVisualLabel(for button: KeypadElementID) -> String {
         switch button {
-        case .up: "↑"
-        case .down: "↓"
-        case .left: "←"
-        case .right: "→"
-        case .jump: "A"
-        case .attack: "B"
-        case .dash: "C"
-        case .focus: "D"
-        case .map: "⇧⌘P"
-        case .pause: "Esc"
-        case .custom1: "C1"
-        case .custom2: "C2"
-        case .custom3: "C3"
-        case .custom4: "C4"
-        case .custom5: "C5"
-        case .custom6: "C6"
-        case .custom7: "C7"
-        case .custom8: "C8"
+        case .preset(1): "↑"
+        case .preset(2): "↓"
+        case .preset(3): "←"
+        case .preset(4): "→"
+        case .preset(5): "A"
+        case .preset(6): "B"
+        case .preset(7): "C"
+        case .preset(8): "D"
+        case .preset(9): "⇧⌘P"
+        case .preset(10): "Esc"
+        default: "Button"
         }
     }
 
-    private static func resolvedDefaultVisualLabel(for button: GameButton, defaultLabel: String?) -> String {
+    private static func resolvedDefaultVisualLabel(for button: KeypadElementID, defaultLabel: String?) -> String {
         let normalizedDefaultLabel = defaultLabel.map(normalizedGamepadLabel) ?? ""
         return normalizedDefaultLabel.isEmpty ? defaultVisualLabel(for: button) : normalizedDefaultLabel
     }
@@ -3628,7 +3994,7 @@ public enum GamepadSystemControl: String, Codable, CaseIterable, Identifiable, S
 }
 
 public enum GamepadControlIdentity: Hashable, Identifiable, Sendable {
-    case builtin(GameButton)
+    case builtin(KeypadElementID)
     case custom(UUID)
     case system(GamepadSystemControl)
     case controlBarItem(GamepadControlBarItem)
@@ -3646,7 +4012,7 @@ public enum GamepadControlIdentity: Hashable, Identifiable, Sendable {
 struct GamepadResolvedControl: Identifiable, Equatable {
     let id: GamepadControlIdentity
     let elementID: UUID?
-    let mappedButton: GameButton
+    let inputID: KeypadElementID?
     let label: String
     let normalizedCenter: CGPoint
     let center: CGPoint
@@ -3662,6 +4028,10 @@ struct GamepadResolvedControl: Identifiable, Equatable {
     let joystickOutputSettings: GamepadJoystickOutputSettings?
     let triggerSettings: GamepadTriggerSettings?
     let trackpadSettings: GamepadTrackpadSettings?
+
+    var presentationMetadata: GamepadControlPresentation? = nil
+    var visualLegend: String { presentationMetadata?.legend ?? label }
+    var accessibilityName: String { presentationMetadata?.accessibilityName ?? label }
 
     var isJoystick: Bool {
         controlKind == .joystick
@@ -3715,7 +4085,7 @@ struct GamepadResolvedControl: Identifiable, Equatable {
 extension GamepadCustomization {
     func resolvedControls(
         in canvasSize: CGSize,
-        defaultLabelProvider: ((GameButton) -> String?)? = nil
+        defaultLabelProvider: ((KeypadElementID) -> String?)? = nil
     ) -> [GamepadResolvedControl] {
         GamepadLayoutResolver.resolvedControls(
             for: self,
@@ -3835,7 +4205,7 @@ enum GamepadLayoutResolver {
     static func resolvedControls(
         for customization: GamepadCustomization,
         in canvasSize: CGSize,
-        defaultLabelProvider: ((GameButton) -> String?)? = nil
+        defaultLabelProvider: ((KeypadElementID) -> String?)? = nil
     ) -> [GamepadResolvedControl] {
         let resolved = preferredControls(
             for: customization,
@@ -3859,12 +4229,13 @@ enum GamepadLayoutResolver {
     static func preferredControls(
         for customization: GamepadCustomization,
         in canvasSize: CGSize,
-        defaultLabelProvider: ((GameButton) -> String?)? = nil
+        defaultLabelProvider: ((KeypadElementID) -> String?)? = nil
     ) -> [GamepadResolvedControl] {
         guard canvasSize.width > 1, canvasSize.height > 1 else { return [] }
 
-        let builtinControls = GameButton.builtInControls.compactMap { button -> GamepadResolvedControl? in
-            let buttonCustomization = customization.buttonCustomization(for: button)
+        let builtinControls = customization.elements.compactMap { element -> GamepadResolvedControl? in
+            guard let button = element.defaultControlID, element.kind == .button else { return nil }
+            let buttonCustomization = (customization.buttonCustomizations[button] ?? element.layout).normalized
             guard !buttonCustomization.isHidden else { return nil }
 
             let defaultShape = defaultShape(for: button)
@@ -3886,9 +4257,9 @@ enum GamepadLayoutResolver {
 
             return GamepadResolvedControl(
                 id: .builtin(button),
-                elementID: KeypadElement.builtInID(for: button),
-                mappedButton: button,
-                label: customization.visualLabel(for: button),
+                elementID: element.id,
+                inputID: element.inputID,
+                label: customization.labelOverride(for: button) ?? element.label,
                 normalizedCenter: CGPoint(x: center.x / canvasSize.width, y: center.y / canvasSize.height),
                 center: center,
                 size: scaledSize,
@@ -3898,16 +4269,29 @@ enum GamepadLayoutResolver {
                 isCustom: false,
                 isLocationLocked: buttonCustomization.isLocationLocked,
                 controlKind: .button,
-                visualRole: customization.elements.first(where: { $0.builtInButton == button })?.visualRole
+                visualRole: customization.elements.first(where: { $0.defaultControlID == button })?.visualRole
                     ?? GamepadVisualRole.inferred(for: button, controlKind: .button),
                 joystickMapping: nil,
                 joystickOutputSettings: nil,
                 triggerSettings: nil,
-                trackpadSettings: nil
+                trackpadSettings: nil,
+                presentationMetadata: element.presentation
             )
         }
 
-        let customControls = customization.customButtons.compactMap { customButton -> GamepadResolvedControl? in
+        let builtInIDs = Set(customization.elements.filter { $0.kind == .button && $0.defaultControlID != nil }.map(\.id))
+        var customRecords = customization.customButtons.filter { !builtInIDs.contains($0.id) }
+        let mirroredIDs = Set(customRecords.map(\.id))
+        for element in customization.elements where (element.defaultControlID == nil || element.kind != .button) && !mirroredIDs.contains(element.id) {
+            customRecords.append(GamepadCustomButton(
+                id: element.id, label: element.label, layout: element.layout,
+                controlKind: element.kind, visualRole: element.visualRole,
+                joystickMapping: element.joystickMapping,
+                joystickOutputSettings: element.joystickOutputSettings,
+                triggerSettings: element.triggerSettings, trackpadSettings: element.trackpadSettings
+            ))
+        }
+        let customControls = customRecords.compactMap { customButton -> GamepadResolvedControl? in
             let normalizedButton = customButton.normalized
             guard !normalizedButton.layout.isHidden else { return nil }
 
@@ -3916,7 +4300,7 @@ enum GamepadLayoutResolver {
             } else if normalizedButton.isDecoration {
                 .roundedRectangle
             } else {
-                defaultShape(for: normalizedButton.mappedButton)
+                defaultShape(for: normalizedButton.inputID)
             }
             let shape = normalizedButton.layout.resolvedShape(defaultShape: defaultShape)
             let baseControlSize: CGSize
@@ -3929,9 +4313,9 @@ enum GamepadLayoutResolver {
             } else if normalizedButton.isText {
                 baseControlSize = textBaseSize(controlScale: customization.controlScale, in: canvasSize)
             } else if normalizedButton.isDecoration {
-                baseControlSize = baseSize(for: .jump, controlScale: customization.controlScale, in: canvasSize)
+                baseControlSize = baseSize(for: .preset(5), controlScale: customization.controlScale, in: canvasSize)
             } else {
-                baseControlSize = baseSize(for: normalizedButton.mappedButton, controlScale: customization.controlScale, in: canvasSize)
+                baseControlSize = baseSize(for: normalizedButton.inputID, controlScale: customization.controlScale, in: canvasSize)
             }
             let scaledSize = effectiveSize(
                 CGSize(
@@ -3946,12 +4330,12 @@ enum GamepadLayoutResolver {
             )
             let center = clampedPixelCenter(normalizedCenter, visualSize: scaledSize, in: canvasSize)
 
-            let fallbackLabel = customization.visualLabel(for: normalizedButton.mappedButton)
+            let fallbackLabel = customization.visualLabel(for: normalizedButton.inputID)
 
             return GamepadResolvedControl(
                 id: .custom(normalizedButton.id),
                 elementID: normalizedButton.id,
-                mappedButton: normalizedButton.mappedButton,
+                inputID: normalizedButton.inputID,
                 label: normalizedButton.visualLabel(fallback: fallbackLabel),
                 normalizedCenter: CGPoint(x: center.x / canvasSize.width, y: center.y / canvasSize.height),
                 center: center,
@@ -3963,11 +4347,12 @@ enum GamepadLayoutResolver {
                 isLocationLocked: normalizedButton.layout.isLocationLocked,
                 controlKind: normalizedButton.controlKind,
                 visualRole: normalizedButton.visualRole
-                    ?? GamepadVisualRole.inferred(for: normalizedButton.mappedButton, controlKind: normalizedButton.controlKind),
-                joystickMapping: normalizedButton.isJoystick ? (normalizedButton.joystickMapping ?? .movement) : nil,
+                    ?? GamepadVisualRole.inferred(for: normalizedButton.inputID, controlKind: normalizedButton.controlKind),
+                joystickMapping: normalizedButton.isJoystick ? normalizedButton.joystickMapping : nil,
                 joystickOutputSettings: normalizedButton.isJoystick ? (normalizedButton.joystickOutputSettings ?? .defaultValue).normalized : nil,
                 triggerSettings: normalizedButton.isTrigger ? (normalizedButton.triggerSettings ?? .defaultValue).normalized : nil,
-                trackpadSettings: normalizedButton.isTrackpad ? (normalizedButton.trackpadSettings ?? .defaultValue).normalized : nil
+                trackpadSettings: normalizedButton.isTrackpad ? (normalizedButton.trackpadSettings ?? .defaultValue).normalized : nil,
+                presentationMetadata: customization.elements.first { $0.id == normalizedButton.id }?.presentation
             )
         }
 
@@ -4002,7 +4387,7 @@ enum GamepadLayoutResolver {
             GamepadResolvedControl(
                 id: .system(.topBarActivation),
                 elementID: nil,
-                mappedButton: .pause,
+                inputID: nil,
                 label: GamepadSystemControl.topBarActivation.displayName,
                 normalizedCenter: CGPoint(x: center.x / canvasSize.width, y: center.y / canvasSize.height),
                 center: center,
@@ -4023,13 +4408,13 @@ enum GamepadLayoutResolver {
     }
 
     private static func textBaseSize(controlScale: GamepadControlScale, in canvasSize: CGSize) -> CGSize {
-        let buttonSize = baseSize(for: .jump, controlScale: controlScale, in: canvasSize)
+        let buttonSize = baseSize(for: .preset(5), controlScale: controlScale, in: canvasSize)
         return CGSize(width: buttonSize.width, height: max(24, buttonSize.height * 0.58))
     }
 
-    static func defaultShape(for button: GameButton) -> GamepadButtonShapeStyle {
+    static func defaultShape(for button: KeypadElementID) -> GamepadButtonShapeStyle {
         switch button {
-        case .map, .pause: .capsule
+        case .preset(9), .preset(10): .capsule
         default: .roundedRectangle
         }
     }
@@ -4195,16 +4580,16 @@ enum GamepadLayoutResolver {
         return GamepadButtonCustomization.clamp(origin, lower: 0, upper: max(0, canvasLength - length))
     }
 
-    private static func baseSize(for button: GameButton, controlScale: GamepadControlScale, in canvasSize: CGSize) -> CGSize {
+    private static func baseSize(for button: KeypadElementID, controlScale: GamepadControlScale, in canvasSize: CGSize) -> CGSize {
         let isLandscape = canvasSize.width >= canvasSize.height
         let shortestSide = max(1, min(canvasSize.width, canvasSize.height))
         let scale = controlScale.multiplier
         let side = min(86 * scale, max(50 * scale, shortestSide * (isLandscape ? 0.24 : 0.20) * scale))
 
         switch button {
-        case .map:
+        case .preset(9):
             return CGSize(width: side * 1.48, height: side * 0.72)
-        case .pause:
+        case .preset(10):
             return CGSize(width: side * 1.66, height: side * 0.72)
         default:
             return CGSize(width: side, height: side)
@@ -4246,7 +4631,7 @@ enum GamepadLayoutResolver {
     }
 
     private static func defaultNormalizedCenter(
-        for button: GameButton,
+        for button: KeypadElementID,
         layoutMode: GamepadLayoutMode,
         visualSize: CGSize,
         in canvasSize: CGSize
@@ -4261,17 +4646,17 @@ enum GamepadLayoutResolver {
             let groupY: CGFloat = 0.56
 
             switch button {
-            case .up: return CGPoint(x: dPadCenterX, y: groupY - yStep)
-            case .down: return CGPoint(x: dPadCenterX, y: groupY + yStep)
-            case .left: return CGPoint(x: dPadCenterX - xStep, y: groupY)
-            case .right: return CGPoint(x: dPadCenterX + xStep, y: groupY)
-            case .focus: return CGPoint(x: actionCenterX - xStep * 0.55, y: groupY - yStep * 0.55)
-            case .dash: return CGPoint(x: actionCenterX + xStep * 0.55, y: groupY - yStep * 0.55)
-            case .attack: return CGPoint(x: actionCenterX - xStep * 0.55, y: groupY + yStep * 0.55)
-            case .jump: return CGPoint(x: actionCenterX + xStep * 0.55, y: groupY + yStep * 0.55)
-            case .map: return CGPoint(x: 0.43, y: groupY)
-            case .pause: return CGPoint(x: 0.57, y: groupY)
-            case .custom1, .custom2, .custom3, .custom4, .custom5, .custom6, .custom7, .custom8:
+            case .preset(1): return CGPoint(x: dPadCenterX, y: groupY - yStep)
+            case .preset(2): return CGPoint(x: dPadCenterX, y: groupY + yStep)
+            case .preset(3): return CGPoint(x: dPadCenterX - xStep, y: groupY)
+            case .preset(4): return CGPoint(x: dPadCenterX + xStep, y: groupY)
+            case .preset(8): return CGPoint(x: actionCenterX - xStep * 0.55, y: groupY - yStep * 0.55)
+            case .preset(7): return CGPoint(x: actionCenterX + xStep * 0.55, y: groupY - yStep * 0.55)
+            case .preset(6): return CGPoint(x: actionCenterX - xStep * 0.55, y: groupY + yStep * 0.55)
+            case .preset(5): return CGPoint(x: actionCenterX + xStep * 0.55, y: groupY + yStep * 0.55)
+            case .preset(9): return CGPoint(x: 0.43, y: groupY)
+            case .preset(10): return CGPoint(x: 0.57, y: groupY)
+            default:
                 return CGPoint(x: 0.5, y: groupY)
             }
         } else {
@@ -4282,17 +4667,17 @@ enum GamepadLayoutResolver {
             let portraitYStep = min(0.12, max(0.08, (visualSize.height * 1.10) / canvasSize.height))
 
             switch button {
-            case .up: return CGPoint(x: xCenter, y: dPadY - portraitYStep)
-            case .down: return CGPoint(x: xCenter, y: dPadY + portraitYStep)
-            case .left: return CGPoint(x: xCenter - portraitXStep, y: dPadY)
-            case .right: return CGPoint(x: xCenter + portraitXStep, y: dPadY)
-            case .focus: return CGPoint(x: xCenter - portraitXStep * 0.55, y: actionY - portraitYStep * 0.75)
-            case .dash: return CGPoint(x: xCenter + portraitXStep * 0.55, y: actionY - portraitYStep * 0.75)
-            case .attack: return CGPoint(x: xCenter - portraitXStep * 0.55, y: actionY + portraitYStep * 0.75)
-            case .jump: return CGPoint(x: xCenter + portraitXStep * 0.55, y: actionY + portraitYStep * 0.75)
-            case .map: return CGPoint(x: 0.36, y: 0.51)
-            case .pause: return CGPoint(x: 0.64, y: 0.51)
-            case .custom1, .custom2, .custom3, .custom4, .custom5, .custom6, .custom7, .custom8:
+            case .preset(1): return CGPoint(x: xCenter, y: dPadY - portraitYStep)
+            case .preset(2): return CGPoint(x: xCenter, y: dPadY + portraitYStep)
+            case .preset(3): return CGPoint(x: xCenter - portraitXStep, y: dPadY)
+            case .preset(4): return CGPoint(x: xCenter + portraitXStep, y: dPadY)
+            case .preset(8): return CGPoint(x: xCenter - portraitXStep * 0.55, y: actionY - portraitYStep * 0.75)
+            case .preset(7): return CGPoint(x: xCenter + portraitXStep * 0.55, y: actionY - portraitYStep * 0.75)
+            case .preset(6): return CGPoint(x: xCenter - portraitXStep * 0.55, y: actionY + portraitYStep * 0.75)
+            case .preset(5): return CGPoint(x: xCenter + portraitXStep * 0.55, y: actionY + portraitYStep * 0.75)
+            case .preset(9): return CGPoint(x: 0.36, y: 0.51)
+            case .preset(10): return CGPoint(x: 0.64, y: 0.51)
+            default:
                 return CGPoint(x: 0.5, y: 0.51)
             }
         }
@@ -4418,16 +4803,51 @@ extension GamepadCustomization {
     }
 }
 
+enum GamepadSavedConfigurationError: LocalizedError {
+    case invalid(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .invalid(let detail):
+            let reason = detail.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: ".")))
+            return "Saved configuration is invalid or obsolete: \(reason). Recreate this setup using element UUIDs and explicit bindings. Saved data was not changed."
+        }
+    }
+
+    static func diagnostic(_ error: Error) -> String {
+        switch error {
+        case DecodingError.dataCorrupted(let context), DecodingError.typeMismatch(_, let context), DecodingError.valueNotFound(_, let context):
+            return context.debugDescription
+        case DecodingError.keyNotFound(let key, _):
+            return "missing required field \(key.stringValue)"
+        default:
+            return error.localizedDescription
+        }
+    }
+
+    static func data(forKey key: String, in defaults: UserDefaults) throws -> Data? {
+        guard let value = defaults.object(forKey: key) else { return nil }
+        guard let data = value as? Data else { throw Self.invalid("\(key) must contain JSON data") }
+        return data
+    }
+}
+
 enum GamepadCustomizationPersistence {
     static let defaultsKey = "PocketPad.gamepadCustomization.v1"
 
-    static func load() -> GamepadCustomization {
-        guard let data = UserDefaults.standard.data(forKey: defaultsKey),
-              let decoded = try? JSONDecoder().decode(GamepadCustomization.self, from: data)
-        else {
+    static func load(defaults: UserDefaults = .standard) throws -> GamepadCustomization {
+        guard let data = try GamepadSavedConfigurationError.data(forKey: defaultsKey, in: defaults) else {
             return .defaultValue
         }
-        return decoded.normalized
+        return try decodeSavedCustomization(data)
+    }
+
+    static func decodeSavedCustomization(_ data: Data) throws -> GamepadCustomization {
+        do {
+            return try JSONDecoder().decodeUnique(GamepadCustomization.self, from: data).normalized
+        } catch {
+            throw GamepadSavedConfigurationError.invalid("\(defaultsKey): \(GamepadSavedConfigurationError.diagnostic(error))")
+        }
     }
 
     static func save(_ customization: GamepadCustomization) {
@@ -4560,7 +4980,7 @@ public enum GamepadProfileOutputMode: String, Codable, CaseIterable, Identifiabl
         case .keyboard:
             "Send this keypad as Mac keyboard shortcuts. Virtual controller output stays off for this setup."
         case .controller:
-            "Send this keypad as a virtual Xbox-style controller using Thumble’s default controller map."
+            "Send this keypad’s configured gamepad bindings as a virtual Xbox-style controller. Keyboard output stays off for this setup."
         case .custom:
             "Use per-element output bindings. This can mix keyboard shortcuts and virtual controller buttons."
         }
@@ -4989,7 +5409,7 @@ public struct GamepadConfigurationProfile: Identifiable, Codable, Equatable, Sen
         from container: KeyedDecodingContainer<CodingKeys>,
         into workspace: DecodingWorkspace
     ) throws {
-        let decoded = try container.decodeIfPresent(GamepadCustomization.self, forKey: .customization) ?? .defaultValue
+        let decoded = try container.decode(GamepadCustomization.self, forKey: .customization)
         workspace.customization = decoded.normalized
     }
 
@@ -5042,7 +5462,7 @@ public struct GamepadConfigurationProfile: Identifiable, Codable, Equatable, Sen
         // Profiles saved before output modes had their Mac output bindings stored next
         // to the profile, not inside it. Treat legacy profiles as custom so any
         // existing mixed keyboard/controller bindings keep working after migration.
-        workspace.outputMode = try container.decodeIfPresent(GamepadProfileOutputMode.self, forKey: .outputMode) ?? .custom
+        workspace.outputMode = try container.decodeIfPresent(GamepadProfileOutputMode.self, forKey: .outputMode) ?? .keyboard
         workspace.launchTarget = try container.decodeIfPresent(GamepadProfileLaunchTarget.self, forKey: .launchTarget)?.normalized
         workspace.updatedAt = try container.decodeIfPresent(Int64.self, forKey: .updatedAt) ?? Date.currentMilliseconds
     }
@@ -5879,10 +6299,66 @@ enum GamepadControllerTemplate: String, CaseIterable, Identifiable {
     private func makePrimaryProfile(
         _ customization: GamepadCustomization
     ) -> GamepadConfigurationProfile {
-        GamepadConfigurationProfile(
+        var prepared = customization.normalized
+        installTemplateBindings(in: &prepared)
+        return GamepadConfigurationProfile(
             name: displayName,
-            primaryCustomization: customization
+            primaryCustomization: prepared
         )
+    }
+
+    private func installTemplateBindings(in customization: inout GamepadCustomization) {
+        for index in customization.elements.indices {
+            let element = customization.elements[index]
+            guard element.kind != .text, element.kind != .decoration else { continue }
+            if element.kind == .joystick {
+                let buttons: [VirtualGamepadButton] = [.dpadUp, .dpadDown, .dpadLeft, .dpadRight]
+                for (directionIndex, direction) in GamepadJoystickDirection.allCases.enumerated() {
+                    let part = KeypadElementInputPart(direction: direction)
+                    var binding = element.partOutputs[part] ?? KeypadElementOutputBinding()
+                    binding.gamepadButtons = [buttons[directionIndex]]
+                    customization.elements[index].partOutputs[part] = binding
+                }
+                continue
+            }
+            let label = element.label.uppercased()
+            let button: VirtualGamepadButton? = switch label {
+            case "↑", "C↑": .dpadUp
+            case "↓", "C↓": .dpadDown
+            case "←", "C←": .dpadLeft
+            case "→", "C→": .dpadRight
+            case "A", "×", "B1": .south
+            case "B", "○", "B2": .east
+            case "X", "□", "B3": .west
+            case "Y", "△", "B4": .north
+            case "L": self == .gameCube || self == .dreamcast ? .leftTriggerButton : .leftShoulder
+            case "R": self == .gameCube || self == .dreamcast ? .rightTriggerButton : .rightShoulder
+            case "L1", "LB", "B5": .leftShoulder
+            case "R1", "RB", "B6": .rightShoulder
+            // Explicit retro-template authoring, not runtime label routing.
+            // Six-button Genesis uses shoulders for C/Z; Saturn adds the
+            // trigger buttons so its physical L/R remain independent.
+            case "C": self == .genesisSixButton ? .rightShoulder : .rightTriggerButton
+            case "Z": self == .gameCube ? .rightShoulder : (self == .genesisSixButton ? .leftShoulder : .leftTriggerButton)
+            case "MODE": .select
+            case "L2", "LT", "ZL", "B7": .leftTriggerButton
+            case "R2", "RT", "ZR", "B8": .rightTriggerButton
+            case "SELECT", "VIEW", "SHARE", "−", "COIN": .select
+            case "START", "MENU", "OPTIONS", "+": .start
+            default: nil
+            }
+            let keyboard: KeypadKeyboardBinding?
+            if let anchor = DefaultKeypadElements.ids.firstIndex(of: element.inputID) {
+                let keys: [UInt16] = [13, 1, 0, 2, 49, 38, 56, 14, 48, 53]
+                keyboard = KeypadKeyboardBinding(keyCode: keys[anchor])
+            } else {
+                let keys: [String: UInt16] = ["L": 12, "R": 14, "L1": 12, "R1": 14, "LB": 12, "RB": 14, "LT": 12, "RT": 15, "L2": 12, "R2": 15, "ZL": 12, "ZR": 15, "C": 8, "Z": 6, "MODE": 48]
+                keyboard = keys[label].map { KeypadKeyboardBinding(keyCode: $0) }
+            }
+            let binding = KeypadElementOutputBinding(keyboard: keyboard, gamepadButtons: button.map { [$0] } ?? [])
+            customization.elements[index].output = binding.isEmpty ? nil : binding
+            customization.elements[index].defaultOutput = binding.isEmpty ? nil : binding
+        }
     }
 
     private func makeNESProfile() -> GamepadConfigurationProfile {
@@ -6116,27 +6592,27 @@ enum GamepadControllerTemplate: String, CaseIterable, Identifiable {
         customization.backgroundDarkFillStyle = .solid(GamepadRGBAColor(hexString: "#10141C") ?? .defaultValue)
 
         if isPortrait {
-            setProductivityButton(.up, in: &customization, x: 0.23, y: 0.60, width: 0.70, height: 0.70)
-            setProductivityButton(.down, in: &customization, x: 0.23, y: 0.78, width: 0.70, height: 0.70)
-            setProductivityButton(.left, in: &customization, x: 0.09, y: 0.69, width: 0.70, height: 0.70)
-            setProductivityButton(.right, in: &customization, x: 0.37, y: 0.69, width: 0.70, height: 0.70)
-            setProductivityButton(.dash, in: &customization, x: 0.17, y: 0.42, width: 0.95, height: 0.70)
-            setProductivityButton(.focus, in: &customization, x: 0.50, y: 0.42, width: 0.95, height: 0.70)
-            setProductivityButton(.map, in: &customization, x: 0.83, y: 0.42, width: 0.62, height: 0.96)
-            setProductivityButton(.attack, in: &customization, x: 0.66, y: 0.64, width: 0.95, height: 0.72)
-            setProductivityButton(.jump, in: &customization, x: 0.72, y: 0.76, width: 1.15, height: 0.72)
-            setProductivityButton(.pause, in: &customization, x: 0.88, y: 0.87, width: 0.42, height: 0.96)
+            setProductivityButton(.preset(1), in: &customization, x: 0.23, y: 0.60, width: 0.70, height: 0.70)
+            setProductivityButton(.preset(2), in: &customization, x: 0.23, y: 0.78, width: 0.70, height: 0.70)
+            setProductivityButton(.preset(3), in: &customization, x: 0.09, y: 0.69, width: 0.70, height: 0.70)
+            setProductivityButton(.preset(4), in: &customization, x: 0.37, y: 0.69, width: 0.70, height: 0.70)
+            setProductivityButton(.preset(7), in: &customization, x: 0.17, y: 0.42, width: 0.95, height: 0.70)
+            setProductivityButton(.preset(8), in: &customization, x: 0.50, y: 0.42, width: 0.95, height: 0.70)
+            setProductivityButton(.preset(9), in: &customization, x: 0.83, y: 0.42, width: 0.62, height: 0.96)
+            setProductivityButton(.preset(6), in: &customization, x: 0.66, y: 0.64, width: 0.95, height: 0.72)
+            setProductivityButton(.preset(5), in: &customization, x: 0.72, y: 0.76, width: 1.15, height: 0.72)
+            setProductivityButton(.preset(10), in: &customization, x: 0.88, y: 0.87, width: 0.42, height: 0.96)
         } else {
-            setProductivityButton(.up, in: &customization, x: 0.22, y: 0.45, width: 0.78, height: 0.78)
-            setProductivityButton(.down, in: &customization, x: 0.22, y: 0.79, width: 0.78, height: 0.78)
-            setProductivityButton(.left, in: &customization, x: 0.14, y: 0.62, width: 0.78, height: 0.78)
-            setProductivityButton(.right, in: &customization, x: 0.30, y: 0.62, width: 0.78, height: 0.78)
-            setProductivityButton(.dash, in: &customization, x: 0.53, y: 0.39, width: 1.15, height: 0.72)
-            setProductivityButton(.focus, in: &customization, x: 0.70, y: 0.39, width: 1.15, height: 0.72)
-            setProductivityButton(.map, in: &customization, x: 0.87, y: 0.39, width: 0.88, height: 1.0)
-            setProductivityButton(.attack, in: &customization, x: 0.56, y: 0.73, width: 1.15, height: 0.82)
-            setProductivityButton(.jump, in: &customization, x: 0.75, y: 0.73, width: 1.55, height: 0.82)
-            setProductivityButton(.pause, in: &customization, x: 0.92, y: 0.73, width: 0.46, height: 0.98)
+            setProductivityButton(.preset(1), in: &customization, x: 0.22, y: 0.45, width: 0.78, height: 0.78)
+            setProductivityButton(.preset(2), in: &customization, x: 0.22, y: 0.79, width: 0.78, height: 0.78)
+            setProductivityButton(.preset(3), in: &customization, x: 0.14, y: 0.62, width: 0.78, height: 0.78)
+            setProductivityButton(.preset(4), in: &customization, x: 0.30, y: 0.62, width: 0.78, height: 0.78)
+            setProductivityButton(.preset(7), in: &customization, x: 0.53, y: 0.39, width: 1.15, height: 0.72)
+            setProductivityButton(.preset(8), in: &customization, x: 0.70, y: 0.39, width: 1.15, height: 0.72)
+            setProductivityButton(.preset(9), in: &customization, x: 0.87, y: 0.39, width: 0.88, height: 1.0)
+            setProductivityButton(.preset(6), in: &customization, x: 0.56, y: 0.73, width: 1.15, height: 0.82)
+            setProductivityButton(.preset(5), in: &customization, x: 0.75, y: 0.73, width: 1.55, height: 0.82)
+            setProductivityButton(.preset(10), in: &customization, x: 0.92, y: 0.73, width: 0.46, height: 0.98)
         }
 
         var metadata = customization.designMetadata ?? .empty
@@ -6166,16 +6642,16 @@ enum GamepadControllerTemplate: String, CaseIterable, Identifiable {
         let escapeWidth: CGFloat = isPortrait ? 0.40 : 0.375
         let escapeHeight: CGFloat = isPortrait ? 0.92 : 0.86
 
-        setProductivityButton(.up, in: &customization, x: middleX, y: rows[0], width: standardScale, height: standardScale)
-        setProductivityButton(.left, in: &customization, x: outerX, y: rows[1], width: standardScale, height: standardScale)
-        setProductivityButton(.down, in: &customization, x: middleX, y: rows[1], width: standardScale, height: standardScale)
-        setProductivityButton(.right, in: &customization, x: innerX, y: rows[1], width: standardScale, height: standardScale)
-        setProductivityButton(.jump, in: &customization, x: outerX, y: rows[2], width: standardScale, height: standardScale)
-        setProductivityButton(.attack, in: &customization, x: middleX, y: rows[2], width: standardScale, height: standardScale)
-        setProductivityButton(.pause, in: &customization, x: innerX, y: rows[2], width: escapeWidth, height: escapeHeight)
-        setProductivityButton(.dash, in: &customization, x: outerX, y: rows[3], width: standardScale, height: standardScale)
-        setProductivityButton(.focus, in: &customization, x: middleX, y: rows[3], width: standardScale, height: standardScale)
-        setProductivityButton(.map, in: &customization, x: innerX, y: rows[3], width: mapWidth, height: mapHeight)
+        setProductivityButton(.preset(1), in: &customization, x: middleX, y: rows[0], width: standardScale, height: standardScale)
+        setProductivityButton(.preset(3), in: &customization, x: outerX, y: rows[1], width: standardScale, height: standardScale)
+        setProductivityButton(.preset(2), in: &customization, x: middleX, y: rows[1], width: standardScale, height: standardScale)
+        setProductivityButton(.preset(4), in: &customization, x: innerX, y: rows[1], width: standardScale, height: standardScale)
+        setProductivityButton(.preset(5), in: &customization, x: outerX, y: rows[2], width: standardScale, height: standardScale)
+        setProductivityButton(.preset(6), in: &customization, x: middleX, y: rows[2], width: standardScale, height: standardScale)
+        setProductivityButton(.preset(10), in: &customization, x: innerX, y: rows[2], width: escapeWidth, height: escapeHeight)
+        setProductivityButton(.preset(7), in: &customization, x: outerX, y: rows[3], width: standardScale, height: standardScale)
+        setProductivityButton(.preset(8), in: &customization, x: middleX, y: rows[3], width: standardScale, height: standardScale)
+        setProductivityButton(.preset(9), in: &customization, x: innerX, y: rows[3], width: mapWidth, height: mapHeight)
 
         var metadata = customization.designMetadata ?? .empty
         metadata.tags = ["productivity", "one-handed", usesLeftHand ? "left-hand" : "right-hand", isPortrait ? "portrait" : "landscape", "accessible"]
@@ -6185,7 +6661,7 @@ enum GamepadControllerTemplate: String, CaseIterable, Identifiable {
     }
 
     private static func setProductivityButton(
-        _ button: GameButton,
+        _ button: KeypadElementID,
         in customization: inout GamepadCustomization,
         x: CGFloat,
         y: CGFloat,
@@ -6212,7 +6688,7 @@ enum GamepadControllerTemplate: String, CaseIterable, Identifiable {
     }
 
     private static func productivitySpecification(
-        for button: GameButton
+        for button: KeypadElementID
     ) -> (label: String, icon: String, shape: GamepadButtonShapeStyle, fill: String, haptic: GamepadHapticFeedback) {
         let navigationHaptic = GamepadHapticFeedback(style: .rigid, pattern: .single, intensity: 0.58, sharpness: 0.90)
         let textHaptic = GamepadHapticFeedback(style: .soft, pattern: .double, intensity: 0.46, sharpness: 0.28)
@@ -6220,16 +6696,16 @@ enum GamepadControllerTemplate: String, CaseIterable, Identifiable {
         let escapeHaptic = GamepadHapticFeedback(style: .heavy, pattern: .buzz, intensity: 0.82, sharpness: 0.72)
 
         return switch button {
-        case .up: ("Up", "arrow.up", GamepadButtonShapeStyle.roundedRectangle, "#334155", navigationHaptic)
-        case .down: ("Down", "arrow.down", GamepadButtonShapeStyle.roundedRectangle, "#334155", navigationHaptic)
-        case .left: ("Left", "arrow.left", GamepadButtonShapeStyle.roundedRectangle, "#334155", navigationHaptic)
-        case .right: ("Right", "arrow.right", GamepadButtonShapeStyle.roundedRectangle, "#334155", navigationHaptic)
-        case .jump: ("Return", "return", GamepadButtonShapeStyle.capsule, "#2563EB", textHaptic)
-        case .attack: ("Tab", "arrow.right.to.line", GamepadButtonShapeStyle.capsule, "#2563EB", textHaptic)
-        case .dash: ("Command", "command", GamepadButtonShapeStyle.rectangle, "#475569", shortcutHaptic)
-        case .focus: ("Prefix", "terminal", GamepadButtonShapeStyle.rectangle, "#475569", shortcutHaptic)
-        case .map: ("Palette", "command.square", GamepadButtonShapeStyle.rectangle, "#475569", shortcutHaptic)
-        case .pause: ("Escape", "xmark.octagon.fill", GamepadButtonShapeStyle.circle, "#9F1239", escapeHaptic)
+        case .preset(1): ("Up", "arrow.up", GamepadButtonShapeStyle.roundedRectangle, "#334155", navigationHaptic)
+        case .preset(2): ("Down", "arrow.down", GamepadButtonShapeStyle.roundedRectangle, "#334155", navigationHaptic)
+        case .preset(3): ("Left", "arrow.left", GamepadButtonShapeStyle.roundedRectangle, "#334155", navigationHaptic)
+        case .preset(4): ("Right", "arrow.right", GamepadButtonShapeStyle.roundedRectangle, "#334155", navigationHaptic)
+        case .preset(5): ("Return", "return", GamepadButtonShapeStyle.capsule, "#2563EB", textHaptic)
+        case .preset(6): ("Tab", "arrow.right.to.line", GamepadButtonShapeStyle.capsule, "#2563EB", textHaptic)
+        case .preset(7): ("Command", "command", GamepadButtonShapeStyle.rectangle, "#475569", shortcutHaptic)
+        case .preset(8): ("Prefix", "terminal", GamepadButtonShapeStyle.rectangle, "#475569", shortcutHaptic)
+        case .preset(9): ("Palette", "command.square", GamepadButtonShapeStyle.rectangle, "#475569", shortcutHaptic)
+        case .preset(10): ("Escape", "xmark.octagon.fill", GamepadButtonShapeStyle.circle, "#9F1239", escapeHaptic)
         default: (button.displayName, "keyboard", GamepadButtonShapeStyle.roundedRectangle, "#475569", navigationHaptic)
         }
     }
@@ -6247,16 +6723,16 @@ enum GamepadControllerTemplate: String, CaseIterable, Identifiable {
             GamepadStyleToken(id: "reference-white-raised", name: "Reference White Raised", visualStyle: referenceRaisedStyle())
         ].compactMap { $0.normalized }).normalized
 
-        hideButton(.up, in: &customization)
-        hideButton(.down, in: &customization)
-        hideButton(.left, in: &customization)
-        hideButton(.right, in: &customization)
-        hideButton(.map, in: &customization)
-        hideButton(.pause, in: &customization)
+        hideButton(.preset(1), in: &customization)
+        hideButton(.preset(2), in: &customization)
+        hideButton(.preset(3), in: &customization)
+        hideButton(.preset(4), in: &customization)
+        hideButton(.preset(9), in: &customization)
+        hideButton(.preset(10), in: &customization)
 
         let shellID = addDecoration(label: "", in: &customization, x: 0.50, y: 0.50, width: 9.62, height: 4.28, shape: .roundedRectangle, cornerRadius: 30, style: referenceShellStyle())
         let leftWellID = addDecoration(label: "", in: &customization, x: 0.195, y: 0.565, width: 2.12, height: 2.12, shape: .circle, cornerRadius: nil, style: referenceInsetStyle())
-        let stickID = addReferenceJoystick(label: "Move", mappedButton: .custom1, mapping: .movement, in: &customization, x: 0.195, y: 0.585, scale: 1.38)
+        let stickID = addReferenceJoystick(label: "Move", mapping: .movement, in: &customization, x: 0.195, y: 0.585, scale: 1.38)
         let stickTextureID = addDecoration(label: "", in: &customization, x: 0.195, y: 0.585, width: 1.06, height: 1.06, shape: .circle, cornerRadius: nil, style: referenceGridStyle())
         let markerUpID = addIconDecoration(label: "", icon: "⌃", in: &customization, x: 0.195, y: 0.432, width: 0.30, height: 0.30, shape: .circle, cornerRadius: nil, style: referenceMarkerStyle(), iconScale: 1.18)
         let markerDownID = addIconDecoration(label: "", icon: "⌄", in: &customization, x: 0.195, y: 0.737, width: 0.30, height: 0.30, shape: .circle, cornerRadius: nil, style: referenceMarkerStyle(), iconScale: 1.18)
@@ -6264,19 +6740,22 @@ enum GamepadControllerTemplate: String, CaseIterable, Identifiable {
         let markerRightID = addIconDecoration(label: "", icon: "›", in: &customization, x: 0.284, y: 0.585, width: 0.30, height: 0.30, shape: .circle, cornerRadius: nil, style: referenceMarkerStyle(), iconScale: 1.18)
         let badgeID = addIconDecoration(label: "Variant", icon: "5", in: &customization, x: 0.034, y: 0.054, width: 0.48, height: 0.48, shape: .circle, cornerRadius: nil, style: referenceBadgeStyle(), iconScale: 1.85)
 
-        let minusID = addReferenceButton(mappedTo: .custom6, label: "−", in: &customization, x: 0.35, y: 0.125, width: 0.56, height: 0.56, shape: .circle, cornerRadius: nil, iconScale: 1.45)
-        let plusID = addReferenceButton(mappedTo: .custom7, label: "+", in: &customization, x: 0.65, y: 0.125, width: 0.56, height: 0.56, shape: .circle, cornerRadius: nil, iconScale: 1.45)
+        let minusID = addReferenceButton(label: "−", in: &customization, x: 0.35, y: 0.125, width: 0.56, height: 0.56, shape: .circle, cornerRadius: nil, iconScale: 1.45)
+        let plusID = addReferenceButton(label: "+", in: &customization, x: 0.65, y: 0.125, width: 0.56, height: 0.56, shape: .circle, cornerRadius: nil, iconScale: 1.45)
 
-        let zlID = addReferenceButton(mappedTo: .custom2, label: "ZL", in: &customization, x: 0.135, y: 0.285, width: 0.80, height: 0.52, shape: .roundedRectangle, cornerRadius: 9, iconScale: 1.28)
-        let lID = addReferenceButton(mappedTo: .custom3, label: "L", in: &customization, x: 0.245, y: 0.285, width: 0.80, height: 0.52, shape: .roundedRectangle, cornerRadius: 9, iconScale: 1.34)
-        let rID = addReferenceButton(mappedTo: .custom4, label: "R", in: &customization, x: 0.755, y: 0.285, width: 0.80, height: 0.52, shape: .roundedRectangle, cornerRadius: 9, iconScale: 1.34)
-        let zrID = addReferenceButton(mappedTo: .custom5, label: "ZR", in: &customization, x: 0.865, y: 0.285, width: 0.80, height: 0.52, shape: .roundedRectangle, cornerRadius: 9, iconScale: 1.28)
+        let zlID = addReferenceButton(label: "ZL", in: &customization, x: 0.135, y: 0.285, width: 0.80, height: 0.52, shape: .roundedRectangle, cornerRadius: 9, iconScale: 1.28)
+        let lID = addReferenceButton(label: "L", in: &customization, x: 0.245, y: 0.285, width: 0.80, height: 0.52, shape: .roundedRectangle, cornerRadius: 9, iconScale: 1.34)
+        let rID = addReferenceButton(label: "R", in: &customization, x: 0.755, y: 0.285, width: 0.80, height: 0.52, shape: .roundedRectangle, cornerRadius: 9, iconScale: 1.34)
+        let zrID = addReferenceButton(label: "ZR", in: &customization, x: 0.865, y: 0.285, width: 0.80, height: 0.52, shape: .roundedRectangle, cornerRadius: 9, iconScale: 1.28)
 
-        setReferenceButton(.focus, label: "Y", in: &customization, x: 0.642, y: 0.525, width: 0.92, height: 0.92, shape: .circle, iconScale: 1.28)
-        setReferenceButton(.attack, label: "X", in: &customization, x: 0.785, y: 0.430, width: 0.64, height: 0.64, shape: .circle, iconScale: 1.36)
-        setReferenceButton(.jump, label: "A", in: &customization, x: 0.875, y: 0.560, width: 0.70, height: 0.70, shape: .circle, iconScale: 1.32)
-        setReferenceButton(.dash, label: "B", in: &customization, x: 0.735, y: 0.725, width: 0.92, height: 0.92, shape: .circle, iconScale: 1.28)
+        setReferenceButton(.preset(8), label: "Y", in: &customization, x: 0.642, y: 0.525, width: 0.92, height: 0.92, shape: .circle, iconScale: 1.28)
+        setReferenceButton(.preset(6), label: "X", in: &customization, x: 0.785, y: 0.430, width: 0.64, height: 0.64, shape: .circle, iconScale: 1.36)
+        setReferenceButton(.preset(5), label: "A", in: &customization, x: 0.875, y: 0.560, width: 0.70, height: 0.70, shape: .circle, iconScale: 1.32)
+        setReferenceButton(.preset(7), label: "B", in: &customization, x: 0.735, y: 0.725, width: 0.92, height: 0.92, shape: .circle, iconScale: 1.28)
 
+        // Materialize the explicitly authored controls before validating their
+        // layer identities; otherwise only starter elements are available.
+        customization.normalizeInPlace()
         var metadata = customization.designMetadata ?? .empty
         metadata.layerOrder = [
             .custom(shellID),
@@ -6287,10 +6766,10 @@ enum GamepadControllerTemplate: String, CaseIterable, Identifiable {
             .custom(lID),
             .custom(rID),
             .custom(zrID),
-            .builtin(.focus),
-            .builtin(.attack),
-            .builtin(.jump),
-            .builtin(.dash),
+            .builtin(.preset(8)),
+            .builtin(.preset(6)),
+            .builtin(.preset(5)),
+            .builtin(.preset(7)),
             .custom(stickID),
             .custom(stickTextureID),
             .custom(markerUpID),
@@ -6298,7 +6777,7 @@ enum GamepadControllerTemplate: String, CaseIterable, Identifiable {
             .custom(markerLeftID),
             .custom(markerRightID),
             .custom(badgeID)
-        ] + GameButton.builtInControls.map { .builtin($0) } + customization.customButtons.map { .custom($0.id) }
+        ] + DefaultKeypadElements.ids.map { .builtin($0) } + customization.customButtons.map { .custom($0.id) }
         metadata.tags = ["showcase", "soft-white", "neumorphic", "variant-5", "reference-quality"]
         metadata.notes = "A layered profile built to resemble gamepad_redesign_variant_5.png: black outer canvas, rounded white controller shell, top +/- buttons, ZL/L/R/ZR shoulders, a textured left movement pad, and offset X/Y/A/B face buttons."
         customization.designMetadata = metadata.normalized(availableControls: customization.allControlIdentitiesForDesign)
@@ -6312,10 +6791,10 @@ enum GamepadControllerTemplate: String, CaseIterable, Identifiable {
         let utilityFill = "#6B7280"
 
         setDPad(in: &customization, centerX: 0.18, centerY: 0.58, scale: 0.62, fill: dPadFill)
-        setButton(.attack, label: "B", in: &customization, x: 0.76, y: 0.58, width: 0.70, height: 0.70, shape: .circle, fill: faceFill, shadowStrength: 1.25)
-        setButton(.jump, label: "A", in: &customization, x: 0.88, y: 0.58, width: 0.70, height: 0.70, shape: .circle, fill: faceFill, shadowStrength: 1.25)
-        setButton(.map, label: "Select", in: &customization, x: 0.43, y: 0.80, width: 0.50, height: 0.48, shape: .capsule, fill: utilityFill, shadowStrength: 0.75)
-        setButton(.pause, label: "Start", in: &customization, x: 0.57, y: 0.80, width: 0.46, height: 0.48, shape: .capsule, fill: utilityFill, shadowStrength: 0.75)
+        setButton(.preset(6), label: "B", in: &customization, x: 0.76, y: 0.58, width: 0.70, height: 0.70, shape: .circle, fill: faceFill, shadowStrength: 1.25)
+        setButton(.preset(5), label: "A", in: &customization, x: 0.88, y: 0.58, width: 0.70, height: 0.70, shape: .circle, fill: faceFill, shadowStrength: 1.25)
+        setButton(.preset(9), label: "Select", in: &customization, x: 0.43, y: 0.80, width: 0.50, height: 0.48, shape: .capsule, fill: utilityFill, shadowStrength: 0.75)
+        setButton(.preset(10), label: "Start", in: &customization, x: 0.57, y: 0.80, width: 0.46, height: 0.48, shape: .capsule, fill: utilityFill, shadowStrength: 0.75)
 
         return customization.normalized
     }
@@ -6327,15 +6806,15 @@ enum GamepadControllerTemplate: String, CaseIterable, Identifiable {
         let shoulderFill = "#374151"
 
         setDPad(in: &customization, centerX: 0.17, centerY: 0.54, scale: 0.58, fill: dPadFill)
-        setButton(.focus, label: "X", in: &customization, x: 0.84, y: 0.36, width: 0.58, height: 0.58, shape: .circle, fill: "#4F46E5")
-        setButton(.dash, label: "A", in: &customization, x: 0.93, y: 0.55, width: 0.58, height: 0.58, shape: .circle, fill: "#DC2626")
-        setButton(.jump, label: "B", in: &customization, x: 0.84, y: 0.74, width: 0.58, height: 0.58, shape: .circle, fill: "#D1D5DB")
-        setButton(.attack, label: "Y", in: &customization, x: 0.75, y: 0.55, width: 0.58, height: 0.58, shape: .circle, fill: "#16A34A")
-        setButton(.map, label: "Select", in: &customization, x: 0.43, y: 0.82, width: 0.48, height: 0.44, shape: .capsule, fill: utilityFill, shadowStrength: 0.75)
-        setButton(.pause, label: "Start", in: &customization, x: 0.57, y: 0.82, width: 0.44, height: 0.44, shape: .capsule, fill: utilityFill, shadowStrength: 0.75)
+        setButton(.preset(8), label: "X", in: &customization, x: 0.84, y: 0.36, width: 0.58, height: 0.58, shape: .circle, fill: "#4F46E5")
+        setButton(.preset(7), label: "A", in: &customization, x: 0.93, y: 0.55, width: 0.58, height: 0.58, shape: .circle, fill: "#DC2626")
+        setButton(.preset(5), label: "B", in: &customization, x: 0.84, y: 0.74, width: 0.58, height: 0.58, shape: .circle, fill: "#D1D5DB")
+        setButton(.preset(6), label: "Y", in: &customization, x: 0.75, y: 0.55, width: 0.58, height: 0.58, shape: .circle, fill: "#16A34A")
+        setButton(.preset(9), label: "Select", in: &customization, x: 0.43, y: 0.82, width: 0.48, height: 0.44, shape: .capsule, fill: utilityFill, shadowStrength: 0.75)
+        setButton(.preset(10), label: "Start", in: &customization, x: 0.57, y: 0.82, width: 0.44, height: 0.44, shape: .capsule, fill: utilityFill, shadowStrength: 0.75)
 
-        addButton(mappedTo: .custom1, label: "L", in: &customization, x: 0.20, y: 0.16, width: 1.12, height: 0.38, shape: .capsule, fill: shoulderFill)
-        addButton(mappedTo: .custom2, label: "R", in: &customization, x: 0.80, y: 0.16, width: 1.12, height: 0.38, shape: .capsule, fill: shoulderFill)
+        addButton(label: "L", in: &customization, x: 0.20, y: 0.16, width: 1.12, height: 0.38, shape: .capsule, fill: shoulderFill)
+        addButton(label: "R", in: &customization, x: 0.80, y: 0.16, width: 1.12, height: 0.38, shape: .capsule, fill: shoulderFill)
 
         return customization.normalized
     }
@@ -6348,19 +6827,19 @@ enum GamepadControllerTemplate: String, CaseIterable, Identifiable {
         let cButtonFill = "#D1D5DB"
 
         setDPad(in: &customization, centerX: 0.15, centerY: 0.58, scale: 0.46, fill: dPadFill)
-        addJoystick(label: "Stick", mappedButton: .up, mapping: .movement, in: &customization, x: 0.32, y: 0.63, scale: 0.82, fill: stickFill)
+        addJoystick(label: "Stick", mapping: .movement, in: &customization, x: 0.32, y: 0.63, scale: 0.82, fill: stickFill)
 
-        setButton(.jump, label: "A", in: &customization, x: 0.73, y: 0.63, width: 0.72, height: 0.72, shape: .circle, fill: "#2563EB", shadowStrength: 1.25)
-        setButton(.attack, label: "B", in: &customization, x: 0.63, y: 0.75, width: 0.60, height: 0.60, shape: .circle, fill: "#22C55E", shadowStrength: 1.25)
-        setButton(.pause, label: "Start", in: &customization, x: 0.50, y: 0.55, width: 0.50, height: 0.50, shape: .circle, fill: "#DC2626", shadowStrength: 0.9)
+        setButton(.preset(5), label: "A", in: &customization, x: 0.73, y: 0.63, width: 0.72, height: 0.72, shape: .circle, fill: "#2563EB", shadowStrength: 1.25)
+        setButton(.preset(6), label: "B", in: &customization, x: 0.63, y: 0.75, width: 0.60, height: 0.60, shape: .circle, fill: "#22C55E", shadowStrength: 1.25)
+        setButton(.preset(10), label: "Start", in: &customization, x: 0.50, y: 0.55, width: 0.50, height: 0.50, shape: .circle, fill: "#DC2626", shadowStrength: 0.9)
 
-        addButton(mappedTo: .custom1, label: "C↑", in: &customization, x: 0.87, y: 0.35, width: 0.44, height: 0.44, shape: .circle, fill: cButtonFill)
-        addButton(mappedTo: .custom2, label: "C↓", in: &customization, x: 0.87, y: 0.61, width: 0.44, height: 0.44, shape: .circle, fill: cButtonFill)
-        addButton(mappedTo: .custom3, label: "C←", in: &customization, x: 0.79, y: 0.48, width: 0.44, height: 0.44, shape: .circle, fill: cButtonFill)
-        addButton(mappedTo: .custom4, label: "C→", in: &customization, x: 0.95, y: 0.48, width: 0.44, height: 0.44, shape: .circle, fill: cButtonFill)
-        addButton(mappedTo: .custom5, label: "Z", in: &customization, x: 0.43, y: 0.78, width: 0.58, height: 0.44, shape: .capsule, fill: shoulderFill)
-        addButton(mappedTo: .custom6, label: "L", in: &customization, x: 0.19, y: 0.14, width: 1.02, height: 0.34, shape: .capsule, fill: shoulderFill)
-        addButton(mappedTo: .custom7, label: "R", in: &customization, x: 0.81, y: 0.14, width: 1.02, height: 0.34, shape: .capsule, fill: shoulderFill)
+        addButton(label: "C↑", in: &customization, x: 0.87, y: 0.35, width: 0.44, height: 0.44, shape: .circle, fill: cButtonFill)
+        addButton(label: "C↓", in: &customization, x: 0.87, y: 0.61, width: 0.44, height: 0.44, shape: .circle, fill: cButtonFill)
+        addButton(label: "C←", in: &customization, x: 0.79, y: 0.48, width: 0.44, height: 0.44, shape: .circle, fill: cButtonFill)
+        addButton(label: "C→", in: &customization, x: 0.95, y: 0.48, width: 0.44, height: 0.44, shape: .circle, fill: cButtonFill)
+        addButton(label: "Z", in: &customization, x: 0.43, y: 0.78, width: 0.58, height: 0.44, shape: .capsule, fill: shoulderFill)
+        addButton(label: "L", in: &customization, x: 0.19, y: 0.14, width: 1.02, height: 0.34, shape: .capsule, fill: shoulderFill)
+        addButton(label: "R", in: &customization, x: 0.81, y: 0.14, width: 1.02, height: 0.34, shape: .capsule, fill: shoulderFill)
 
         return customization.normalized
     }
@@ -6372,19 +6851,19 @@ enum GamepadControllerTemplate: String, CaseIterable, Identifiable {
         let utilityFill = "#4B5563"
         let cStickFill = "#6B7280"
 
-        addJoystick(label: "Stick", mappedButton: .up, mapping: .movement, in: &customization, x: 0.27, y: 0.46, scale: 0.82, fill: stickFill)
+        addJoystick(label: "Stick", mapping: .movement, in: &customization, x: 0.27, y: 0.46, scale: 0.82, fill: stickFill)
         setDPad(in: &customization, centerX: 0.19, centerY: 0.75, scale: 0.44, fill: dPadFill)
-        addJoystick(label: "C Stick", mappedButton: .custom1, mapping: .secondary, in: &customization, x: 0.64, y: 0.76, scale: 0.62, fill: cStickFill)
+        addJoystick(label: "C Stick", mapping: .secondary, in: &customization, x: 0.64, y: 0.76, scale: 0.62, fill: cStickFill)
 
-        setButton(.jump, label: "A", in: &customization, x: 0.80, y: 0.56, width: 0.90, height: 0.90, shape: .circle, fill: "#22C55E", shadowStrength: 1.35)
-        setButton(.attack, label: "B", in: &customization, x: 0.68, y: 0.69, width: 0.56, height: 0.56, shape: .circle, fill: "#EF4444", shadowStrength: 1.2)
-        setButton(.dash, label: "X", in: &customization, x: 0.92, y: 0.46, width: 0.56, height: 0.56, shape: .circle, fill: "#E5E7EB")
-        setButton(.focus, label: "Y", in: &customization, x: 0.76, y: 0.33, width: 0.56, height: 0.56, shape: .circle, fill: "#E5E7EB")
-        setButton(.pause, label: "Start", in: &customization, x: 0.51, y: 0.51, width: 0.42, height: 0.42, shape: .circle, fill: utilityFill, shadowStrength: 0.85)
+        setButton(.preset(5), label: "A", in: &customization, x: 0.80, y: 0.56, width: 0.90, height: 0.90, shape: .circle, fill: "#22C55E", shadowStrength: 1.35)
+        setButton(.preset(6), label: "B", in: &customization, x: 0.68, y: 0.69, width: 0.56, height: 0.56, shape: .circle, fill: "#EF4444", shadowStrength: 1.2)
+        setButton(.preset(7), label: "X", in: &customization, x: 0.92, y: 0.46, width: 0.56, height: 0.56, shape: .circle, fill: "#E5E7EB")
+        setButton(.preset(8), label: "Y", in: &customization, x: 0.76, y: 0.33, width: 0.56, height: 0.56, shape: .circle, fill: "#E5E7EB")
+        setButton(.preset(10), label: "Start", in: &customization, x: 0.51, y: 0.51, width: 0.42, height: 0.42, shape: .circle, fill: utilityFill, shadowStrength: 0.85)
 
-        addButton(mappedTo: .custom5, label: "L", in: &customization, x: 0.20, y: 0.13, width: 1.04, height: 0.34, shape: .capsule, fill: utilityFill)
-        addButton(mappedTo: .custom6, label: "R", in: &customization, x: 0.80, y: 0.13, width: 1.04, height: 0.34, shape: .capsule, fill: utilityFill)
-        addButton(mappedTo: .custom7, label: "Z", in: &customization, x: 0.88, y: 0.25, width: 0.58, height: 0.32, shape: .capsule, fill: "#6B7280")
+        addButton(label: "L", in: &customization, x: 0.20, y: 0.13, width: 1.04, height: 0.34, shape: .capsule, fill: utilityFill)
+        addButton(label: "R", in: &customization, x: 0.80, y: 0.13, width: 1.04, height: 0.34, shape: .capsule, fill: utilityFill)
+        addButton(label: "Z", in: &customization, x: 0.88, y: 0.25, width: 0.58, height: 0.32, shape: .capsule, fill: "#6B7280")
 
         return customization.normalized
     }
@@ -6395,15 +6874,15 @@ enum GamepadControllerTemplate: String, CaseIterable, Identifiable {
         let faceFill = "#8B1E3F"
         let utilityFill = "#6B7280"
 
-        setButton(.up, label: "↑", in: &customization, x: 0.18, y: 0.37, width: 0.70, height: 0.70, shape: .roundedRectangle, fill: dPadFill, cornerRadius: 9)
-        setButton(.down, label: "↓", in: &customization, x: 0.18, y: 0.75, width: 0.70, height: 0.70, shape: .roundedRectangle, fill: dPadFill, cornerRadius: 9)
-        setButton(.left, label: "←", in: &customization, x: 0.075, y: 0.56, width: 0.70, height: 0.70, shape: .roundedRectangle, fill: dPadFill, cornerRadius: 9)
-        setButton(.right, label: "→", in: &customization, x: 0.285, y: 0.56, width: 0.70, height: 0.70, shape: .roundedRectangle, fill: dPadFill, cornerRadius: 9)
+        setButton(.preset(1), label: "↑", in: &customization, x: 0.18, y: 0.37, width: 0.70, height: 0.70, shape: .roundedRectangle, fill: dPadFill, cornerRadius: 9)
+        setButton(.preset(2), label: "↓", in: &customization, x: 0.18, y: 0.75, width: 0.70, height: 0.70, shape: .roundedRectangle, fill: dPadFill, cornerRadius: 9)
+        setButton(.preset(3), label: "←", in: &customization, x: 0.075, y: 0.56, width: 0.70, height: 0.70, shape: .roundedRectangle, fill: dPadFill, cornerRadius: 9)
+        setButton(.preset(4), label: "→", in: &customization, x: 0.285, y: 0.56, width: 0.70, height: 0.70, shape: .roundedRectangle, fill: dPadFill, cornerRadius: 9)
 
-        setButton(.attack, label: "B", in: &customization, x: 0.75, y: 0.62, width: 0.78, height: 0.78, shape: .circle, fill: faceFill, shadowStrength: 1.25)
-        setButton(.jump, label: "A", in: &customization, x: 0.88, y: 0.50, width: 0.78, height: 0.78, shape: .circle, fill: faceFill, shadowStrength: 1.25)
-        setButton(.map, label: "Select", in: &customization, x: 0.43, y: 0.79, width: 0.50, height: 0.52, shape: .capsule, fill: utilityFill, shadowStrength: 0.75)
-        setButton(.pause, label: "Start", in: &customization, x: 0.57, y: 0.79, width: 0.46, height: 0.52, shape: .capsule, fill: utilityFill, shadowStrength: 0.75)
+        setButton(.preset(6), label: "B", in: &customization, x: 0.75, y: 0.62, width: 0.78, height: 0.78, shape: .circle, fill: faceFill, shadowStrength: 1.25)
+        setButton(.preset(5), label: "A", in: &customization, x: 0.88, y: 0.50, width: 0.78, height: 0.78, shape: .circle, fill: faceFill, shadowStrength: 1.25)
+        setButton(.preset(9), label: "Select", in: &customization, x: 0.43, y: 0.79, width: 0.50, height: 0.52, shape: .capsule, fill: utilityFill, shadowStrength: 0.75)
+        setButton(.preset(10), label: "Start", in: &customization, x: 0.57, y: 0.79, width: 0.46, height: 0.52, shape: .capsule, fill: utilityFill, shadowStrength: 0.75)
 
         return customization.normalized
     }
@@ -6415,18 +6894,18 @@ enum GamepadControllerTemplate: String, CaseIterable, Identifiable {
         let utilityFill = "#6B7280"
         let shoulderFill = "#374151"
 
-        setButton(.up, label: "↑", in: &customization, x: 0.17, y: 0.35, width: 0.64, height: 0.64, shape: .roundedRectangle, fill: dPadFill, cornerRadius: 9)
-        setButton(.down, label: "↓", in: &customization, x: 0.17, y: 0.69, width: 0.64, height: 0.64, shape: .roundedRectangle, fill: dPadFill, cornerRadius: 9)
-        setButton(.left, label: "←", in: &customization, x: 0.075, y: 0.52, width: 0.64, height: 0.64, shape: .roundedRectangle, fill: dPadFill, cornerRadius: 9)
-        setButton(.right, label: "→", in: &customization, x: 0.265, y: 0.52, width: 0.64, height: 0.64, shape: .roundedRectangle, fill: dPadFill, cornerRadius: 9)
+        setButton(.preset(1), label: "↑", in: &customization, x: 0.17, y: 0.35, width: 0.64, height: 0.64, shape: .roundedRectangle, fill: dPadFill, cornerRadius: 9)
+        setButton(.preset(2), label: "↓", in: &customization, x: 0.17, y: 0.69, width: 0.64, height: 0.64, shape: .roundedRectangle, fill: dPadFill, cornerRadius: 9)
+        setButton(.preset(3), label: "←", in: &customization, x: 0.075, y: 0.52, width: 0.64, height: 0.64, shape: .roundedRectangle, fill: dPadFill, cornerRadius: 9)
+        setButton(.preset(4), label: "→", in: &customization, x: 0.265, y: 0.52, width: 0.64, height: 0.64, shape: .roundedRectangle, fill: dPadFill, cornerRadius: 9)
 
-        setButton(.attack, label: "B", in: &customization, x: 0.75, y: 0.61, width: 0.74, height: 0.74, shape: .circle, fill: faceFill, shadowStrength: 1.25)
-        setButton(.jump, label: "A", in: &customization, x: 0.88, y: 0.49, width: 0.74, height: 0.74, shape: .circle, fill: faceFill, shadowStrength: 1.25)
-        setButton(.map, label: "Select", in: &customization, x: 0.43, y: 0.79, width: 0.48, height: 0.50, shape: .capsule, fill: utilityFill, shadowStrength: 0.75)
-        setButton(.pause, label: "Start", in: &customization, x: 0.57, y: 0.79, width: 0.44, height: 0.50, shape: .capsule, fill: utilityFill, shadowStrength: 0.75)
+        setButton(.preset(6), label: "B", in: &customization, x: 0.75, y: 0.61, width: 0.74, height: 0.74, shape: .circle, fill: faceFill, shadowStrength: 1.25)
+        setButton(.preset(5), label: "A", in: &customization, x: 0.88, y: 0.49, width: 0.74, height: 0.74, shape: .circle, fill: faceFill, shadowStrength: 1.25)
+        setButton(.preset(9), label: "Select", in: &customization, x: 0.43, y: 0.79, width: 0.48, height: 0.50, shape: .capsule, fill: utilityFill, shadowStrength: 0.75)
+        setButton(.preset(10), label: "Start", in: &customization, x: 0.57, y: 0.79, width: 0.44, height: 0.50, shape: .capsule, fill: utilityFill, shadowStrength: 0.75)
 
-        addButton(mappedTo: .custom1, label: "L", in: &customization, x: 0.19, y: 0.16, width: 1.12, height: 0.40, shape: .capsule, fill: shoulderFill)
-        addButton(mappedTo: .custom2, label: "R", in: &customization, x: 0.81, y: 0.16, width: 1.12, height: 0.40, shape: .capsule, fill: shoulderFill)
+        addButton(label: "L", in: &customization, x: 0.19, y: 0.16, width: 1.12, height: 0.40, shape: .capsule, fill: shoulderFill)
+        addButton(label: "R", in: &customization, x: 0.81, y: 0.16, width: 1.12, height: 0.40, shape: .capsule, fill: shoulderFill)
 
         return customization.normalized
     }
@@ -6439,15 +6918,15 @@ enum GamepadControllerTemplate: String, CaseIterable, Identifiable {
 
         setDPad(in: &customization, centerX: 0.18, centerY: 0.56, scale: 0.58, fill: dPadFill)
 
-        setButton(.focus, label: "X", in: &customization, x: 0.72, y: 0.43, width: 0.54, height: 0.54, shape: .circle, fill: faceFill)
-        addButton(mappedTo: .custom1, label: "Y", in: &customization, x: 0.83, y: 0.43, width: 0.54, height: 0.54, shape: .circle, fill: faceFill)
-        addButton(mappedTo: .custom2, label: "Z", in: &customization, x: 0.94, y: 0.43, width: 0.54, height: 0.54, shape: .circle, fill: faceFill)
-        setButton(.jump, label: "A", in: &customization, x: 0.72, y: 0.63, width: 0.54, height: 0.54, shape: .circle, fill: faceFill)
-        setButton(.attack, label: "B", in: &customization, x: 0.83, y: 0.63, width: 0.54, height: 0.54, shape: .circle, fill: faceFill)
-        setButton(.dash, label: "C", in: &customization, x: 0.94, y: 0.63, width: 0.54, height: 0.54, shape: .circle, fill: faceFill)
+        setButton(.preset(8), label: "X", in: &customization, x: 0.72, y: 0.43, width: 0.54, height: 0.54, shape: .circle, fill: faceFill)
+        addButton(label: "Y", in: &customization, x: 0.83, y: 0.43, width: 0.54, height: 0.54, shape: .circle, fill: faceFill)
+        addButton(label: "Z", in: &customization, x: 0.94, y: 0.43, width: 0.54, height: 0.54, shape: .circle, fill: faceFill)
+        setButton(.preset(5), label: "A", in: &customization, x: 0.72, y: 0.63, width: 0.54, height: 0.54, shape: .circle, fill: faceFill)
+        setButton(.preset(6), label: "B", in: &customization, x: 0.83, y: 0.63, width: 0.54, height: 0.54, shape: .circle, fill: faceFill)
+        setButton(.preset(7), label: "C", in: &customization, x: 0.94, y: 0.63, width: 0.54, height: 0.54, shape: .circle, fill: faceFill)
 
-        setButton(.map, label: "Mode", in: &customization, x: 0.44, y: 0.80, width: 0.44, height: 0.42, shape: .capsule, fill: utilityFill, shadowStrength: 0.75)
-        setButton(.pause, label: "Start", in: &customization, x: 0.56, y: 0.80, width: 0.44, height: 0.42, shape: .capsule, fill: utilityFill, shadowStrength: 0.75)
+        setButton(.preset(9), label: "Mode", in: &customization, x: 0.44, y: 0.80, width: 0.44, height: 0.42, shape: .capsule, fill: utilityFill, shadowStrength: 0.75)
+        setButton(.preset(10), label: "Start", in: &customization, x: 0.56, y: 0.80, width: 0.44, height: 0.42, shape: .capsule, fill: utilityFill, shadowStrength: 0.75)
 
         return customization.normalized
     }
@@ -6461,16 +6940,16 @@ enum GamepadControllerTemplate: String, CaseIterable, Identifiable {
 
         setDPad(in: &customization, centerX: 0.18, centerY: 0.56, scale: 0.58, fill: dPadFill)
 
-        setButton(.focus, label: "X", in: &customization, x: 0.72, y: 0.43, width: 0.54, height: 0.54, shape: .circle, fill: faceFill)
-        addButton(mappedTo: .custom1, label: "Y", in: &customization, x: 0.83, y: 0.43, width: 0.54, height: 0.54, shape: .circle, fill: faceFill)
-        addButton(mappedTo: .custom2, label: "Z", in: &customization, x: 0.94, y: 0.43, width: 0.54, height: 0.54, shape: .circle, fill: faceFill)
-        setButton(.jump, label: "A", in: &customization, x: 0.72, y: 0.63, width: 0.54, height: 0.54, shape: .circle, fill: faceFill)
-        setButton(.attack, label: "B", in: &customization, x: 0.83, y: 0.63, width: 0.54, height: 0.54, shape: .circle, fill: faceFill)
-        setButton(.dash, label: "C", in: &customization, x: 0.94, y: 0.63, width: 0.54, height: 0.54, shape: .circle, fill: faceFill)
+        setButton(.preset(8), label: "X", in: &customization, x: 0.72, y: 0.43, width: 0.54, height: 0.54, shape: .circle, fill: faceFill)
+        addButton(label: "Y", in: &customization, x: 0.83, y: 0.43, width: 0.54, height: 0.54, shape: .circle, fill: faceFill)
+        addButton(label: "Z", in: &customization, x: 0.94, y: 0.43, width: 0.54, height: 0.54, shape: .circle, fill: faceFill)
+        setButton(.preset(5), label: "A", in: &customization, x: 0.72, y: 0.63, width: 0.54, height: 0.54, shape: .circle, fill: faceFill)
+        setButton(.preset(6), label: "B", in: &customization, x: 0.83, y: 0.63, width: 0.54, height: 0.54, shape: .circle, fill: faceFill)
+        setButton(.preset(7), label: "C", in: &customization, x: 0.94, y: 0.63, width: 0.54, height: 0.54, shape: .circle, fill: faceFill)
 
-        addButton(mappedTo: .custom3, label: "L", in: &customization, x: 0.18, y: 0.15, width: 1.12, height: 0.38, shape: .capsule, fill: shoulderFill)
-        addButton(mappedTo: .custom4, label: "R", in: &customization, x: 0.82, y: 0.15, width: 1.12, height: 0.38, shape: .capsule, fill: shoulderFill)
-        setButton(.pause, label: "Start", in: &customization, x: 0.50, y: 0.80, width: 0.48, height: 0.42, shape: .capsule, fill: utilityFill, shadowStrength: 0.75)
+        addButton(label: "L", in: &customization, x: 0.18, y: 0.15, width: 1.12, height: 0.38, shape: .capsule, fill: shoulderFill)
+        addButton(label: "R", in: &customization, x: 0.82, y: 0.15, width: 1.12, height: 0.38, shape: .capsule, fill: shoulderFill)
+        setButton(.preset(10), label: "Start", in: &customization, x: 0.50, y: 0.80, width: 0.48, height: 0.42, shape: .capsule, fill: utilityFill, shadowStrength: 0.75)
 
         return customization.normalized
     }
@@ -6481,17 +6960,17 @@ enum GamepadControllerTemplate: String, CaseIterable, Identifiable {
         let triggerFill = "#94A3B8"
         let utilityFill = "#64748B"
 
-        addJoystick(label: "Stick", mappedButton: .up, mapping: .movement, in: &customization, x: 0.18, y: 0.44, scale: 0.72, fill: shellFill)
+        addJoystick(label: "Stick", mapping: .movement, in: &customization, x: 0.18, y: 0.44, scale: 0.72, fill: shellFill)
         setDPad(in: &customization, centerX: 0.33, centerY: 0.72, scale: 0.48, fill: shellFill)
 
-        setButton(.focus, label: "Y", in: &customization, x: 0.84, y: 0.32, width: 0.58, height: 0.58, shape: .circle, fill: "#D1D5DB")
-        setButton(.dash, label: "B", in: &customization, x: 0.93, y: 0.50, width: 0.58, height: 0.58, shape: .circle, fill: "#EF4444")
-        setButton(.jump, label: "A", in: &customization, x: 0.84, y: 0.68, width: 0.58, height: 0.58, shape: .circle, fill: "#22C55E")
-        setButton(.attack, label: "X", in: &customization, x: 0.75, y: 0.50, width: 0.58, height: 0.58, shape: .circle, fill: "#3B82F6")
+        setButton(.preset(8), label: "Y", in: &customization, x: 0.84, y: 0.32, width: 0.58, height: 0.58, shape: .circle, fill: "#D1D5DB")
+        setButton(.preset(7), label: "B", in: &customization, x: 0.93, y: 0.50, width: 0.58, height: 0.58, shape: .circle, fill: "#EF4444")
+        setButton(.preset(5), label: "A", in: &customization, x: 0.84, y: 0.68, width: 0.58, height: 0.58, shape: .circle, fill: "#22C55E")
+        setButton(.preset(6), label: "X", in: &customization, x: 0.75, y: 0.50, width: 0.58, height: 0.58, shape: .circle, fill: "#3B82F6")
 
-        addButton(mappedTo: .custom5, label: "L", in: &customization, x: 0.20, y: 0.13, width: 1.08, height: 0.36, shape: .capsule, fill: triggerFill)
-        addButton(mappedTo: .custom6, label: "R", in: &customization, x: 0.80, y: 0.13, width: 1.08, height: 0.36, shape: .capsule, fill: triggerFill)
-        setButton(.pause, label: "Start", in: &customization, x: 0.50, y: 0.45, width: 0.44, height: 0.40, shape: .capsule, fill: utilityFill, shadowStrength: 0.75)
+        addButton(label: "L", in: &customization, x: 0.20, y: 0.13, width: 1.08, height: 0.36, shape: .capsule, fill: triggerFill)
+        addButton(label: "R", in: &customization, x: 0.80, y: 0.13, width: 1.08, height: 0.36, shape: .capsule, fill: triggerFill)
+        setButton(.preset(10), label: "Start", in: &customization, x: 0.50, y: 0.45, width: 0.44, height: 0.40, shape: .capsule, fill: utilityFill, shadowStrength: 0.75)
 
         return customization.normalized
     }
@@ -6501,19 +6980,19 @@ enum GamepadControllerTemplate: String, CaseIterable, Identifiable {
         let stickFill = "#111827"
         let utilityFill = "#374151"
 
-        addJoystick(label: "Stick", mappedButton: .up, mapping: .movement, in: &customization, x: 0.22, y: 0.58, scale: 1.08, fill: stickFill)
+        addJoystick(label: "Stick", mapping: .movement, in: &customization, x: 0.22, y: 0.58, scale: 1.08, fill: stickFill)
 
-        setButton(.map, label: "Coin", in: &customization, x: 0.40, y: 0.20, width: 0.52, height: 0.38, shape: .capsule, fill: utilityFill, shadowStrength: 0.75)
-        setButton(.pause, label: "Start", in: &customization, x: 0.52, y: 0.20, width: 0.52, height: 0.38, shape: .capsule, fill: utilityFill, shadowStrength: 0.75)
+        setButton(.preset(9), label: "Coin", in: &customization, x: 0.40, y: 0.20, width: 0.52, height: 0.38, shape: .capsule, fill: utilityFill, shadowStrength: 0.75)
+        setButton(.preset(10), label: "Start", in: &customization, x: 0.52, y: 0.20, width: 0.52, height: 0.38, shape: .capsule, fill: utilityFill, shadowStrength: 0.75)
 
-        setButton(.jump, label: "B1", in: &customization, x: 0.60, y: 0.39, width: 0.60, height: 0.60, shape: .circle, fill: "#EF4444", shadowStrength: 1.25)
-        setButton(.attack, label: "B2", in: &customization, x: 0.71, y: 0.36, width: 0.60, height: 0.60, shape: .circle, fill: "#9CA3AF", shadowStrength: 1.25)
-        setButton(.dash, label: "B3", in: &customization, x: 0.82, y: 0.36, width: 0.60, height: 0.60, shape: .circle, fill: "#D1D5DB", shadowStrength: 1.25)
-        setButton(.focus, label: "B4", in: &customization, x: 0.93, y: 0.39, width: 0.60, height: 0.60, shape: .circle, fill: "#22C55E", shadowStrength: 1.25)
-        addButton(mappedTo: .custom1, label: "B5", in: &customization, x: 0.57, y: 0.62, width: 0.60, height: 0.60, shape: .circle, fill: "#3B82F6")
-        addButton(mappedTo: .custom2, label: "B6", in: &customization, x: 0.68, y: 0.59, width: 0.60, height: 0.60, shape: .circle, fill: "#6366F1")
-        addButton(mappedTo: .custom3, label: "B7", in: &customization, x: 0.79, y: 0.59, width: 0.60, height: 0.60, shape: .circle, fill: "#A855F7")
-        addButton(mappedTo: .custom4, label: "B8", in: &customization, x: 0.90, y: 0.62, width: 0.60, height: 0.60, shape: .circle, fill: "#EC4899")
+        setButton(.preset(5), label: "B1", in: &customization, x: 0.60, y: 0.39, width: 0.60, height: 0.60, shape: .circle, fill: "#EF4444", shadowStrength: 1.25)
+        setButton(.preset(6), label: "B2", in: &customization, x: 0.71, y: 0.36, width: 0.60, height: 0.60, shape: .circle, fill: "#9CA3AF", shadowStrength: 1.25)
+        setButton(.preset(7), label: "B3", in: &customization, x: 0.82, y: 0.36, width: 0.60, height: 0.60, shape: .circle, fill: "#D1D5DB", shadowStrength: 1.25)
+        setButton(.preset(8), label: "B4", in: &customization, x: 0.93, y: 0.39, width: 0.60, height: 0.60, shape: .circle, fill: "#22C55E", shadowStrength: 1.25)
+        addButton(label: "B5", in: &customization, x: 0.57, y: 0.62, width: 0.60, height: 0.60, shape: .circle, fill: "#3B82F6")
+        addButton(label: "B6", in: &customization, x: 0.68, y: 0.59, width: 0.60, height: 0.60, shape: .circle, fill: "#6366F1")
+        addButton(label: "B7", in: &customization, x: 0.79, y: 0.59, width: 0.60, height: 0.60, shape: .circle, fill: "#A855F7")
+        addButton(label: "B8", in: &customization, x: 0.90, y: 0.62, width: 0.60, height: 0.60, shape: .circle, fill: "#EC4899")
 
         return customization.normalized
     }
@@ -6525,18 +7004,18 @@ enum GamepadControllerTemplate: String, CaseIterable, Identifiable {
         let utilityFill = "#374151"
 
         setDPad(in: &customization, centerX: 0.16, centerY: 0.50, scale: 0.58, fill: shellFill)
-        addJoystick(label: "Nub", mappedButton: .up, mapping: .movement, in: &customization, x: 0.30, y: 0.75, scale: 0.72, fill: shellFill)
+        addJoystick(label: "Nub", mapping: .movement, in: &customization, x: 0.30, y: 0.75, scale: 0.72, fill: shellFill)
 
-        setButton(.focus, label: "△", in: &customization, x: 0.84, y: 0.34, width: 0.60, height: 0.60, shape: .circle, fill: faceFill)
-        setButton(.dash, label: "○", in: &customization, x: 0.93, y: 0.52, width: 0.60, height: 0.60, shape: .circle, fill: faceFill)
-        setButton(.jump, label: "×", in: &customization, x: 0.84, y: 0.70, width: 0.60, height: 0.60, shape: .circle, fill: faceFill)
-        setButton(.attack, label: "□", in: &customization, x: 0.75, y: 0.52, width: 0.60, height: 0.60, shape: .circle, fill: faceFill)
+        setButton(.preset(8), label: "△", in: &customization, x: 0.84, y: 0.34, width: 0.60, height: 0.60, shape: .circle, fill: faceFill)
+        setButton(.preset(7), label: "○", in: &customization, x: 0.93, y: 0.52, width: 0.60, height: 0.60, shape: .circle, fill: faceFill)
+        setButton(.preset(5), label: "×", in: &customization, x: 0.84, y: 0.70, width: 0.60, height: 0.60, shape: .circle, fill: faceFill)
+        setButton(.preset(6), label: "□", in: &customization, x: 0.75, y: 0.52, width: 0.60, height: 0.60, shape: .circle, fill: faceFill)
 
-        setButton(.map, label: "Select", in: &customization, x: 0.43, y: 0.84, width: 0.48, height: 0.44, shape: .capsule, fill: utilityFill, shadowStrength: 0.75)
-        setButton(.pause, label: "Start", in: &customization, x: 0.57, y: 0.84, width: 0.44, height: 0.44, shape: .capsule, fill: utilityFill, shadowStrength: 0.75)
+        setButton(.preset(9), label: "Select", in: &customization, x: 0.43, y: 0.84, width: 0.48, height: 0.44, shape: .capsule, fill: utilityFill, shadowStrength: 0.75)
+        setButton(.preset(10), label: "Start", in: &customization, x: 0.57, y: 0.84, width: 0.44, height: 0.44, shape: .capsule, fill: utilityFill, shadowStrength: 0.75)
 
-        addButton(mappedTo: .custom1, label: "L", in: &customization, x: 0.18, y: 0.16, width: 1.16, height: 0.40, shape: .capsule, fill: utilityFill)
-        addButton(mappedTo: .custom2, label: "R", in: &customization, x: 0.82, y: 0.16, width: 1.16, height: 0.40, shape: .capsule, fill: utilityFill)
+        addButton(label: "L", in: &customization, x: 0.18, y: 0.16, width: 1.16, height: 0.40, shape: .capsule, fill: utilityFill)
+        addButton(label: "R", in: &customization, x: 0.82, y: 0.16, width: 1.16, height: 0.40, shape: .capsule, fill: utilityFill)
 
         return customization.normalized
     }
@@ -6547,21 +7026,21 @@ enum GamepadControllerTemplate: String, CaseIterable, Identifiable {
         let utilityFill = "#374151"
 
         setDPad(in: &customization, centerX: 0.16, centerY: 0.50, scale: 0.56, fill: darkFill)
-        addJoystick(label: "L Stick", mappedButton: .up, mapping: .movement, in: &customization, x: 0.32, y: 0.76, scale: 0.72, fill: darkFill)
-        addJoystick(label: "R Stick", mappedButton: .custom1, mapping: .secondary, in: &customization, x: 0.66, y: 0.76, scale: 0.72, fill: darkFill)
+        addJoystick(label: "L Stick", mapping: .movement, in: &customization, x: 0.32, y: 0.76, scale: 0.72, fill: darkFill)
+        addJoystick(label: "R Stick", mapping: .secondary, in: &customization, x: 0.66, y: 0.76, scale: 0.72, fill: darkFill)
 
-        setButton(.focus, label: "△", in: &customization, x: 0.84, y: 0.34, width: 0.58, height: 0.58, shape: .circle, fill: "#22C55E")
-        setButton(.dash, label: "○", in: &customization, x: 0.93, y: 0.52, width: 0.58, height: 0.58, shape: .circle, fill: "#EF4444")
-        setButton(.jump, label: "×", in: &customization, x: 0.84, y: 0.70, width: 0.58, height: 0.58, shape: .circle, fill: "#3B82F6")
-        setButton(.attack, label: "□", in: &customization, x: 0.75, y: 0.52, width: 0.58, height: 0.58, shape: .circle, fill: "#EC4899")
+        setButton(.preset(8), label: "△", in: &customization, x: 0.84, y: 0.34, width: 0.58, height: 0.58, shape: .circle, fill: "#22C55E")
+        setButton(.preset(7), label: "○", in: &customization, x: 0.93, y: 0.52, width: 0.58, height: 0.58, shape: .circle, fill: "#EF4444")
+        setButton(.preset(5), label: "×", in: &customization, x: 0.84, y: 0.70, width: 0.58, height: 0.58, shape: .circle, fill: "#3B82F6")
+        setButton(.preset(6), label: "□", in: &customization, x: 0.75, y: 0.52, width: 0.58, height: 0.58, shape: .circle, fill: "#EC4899")
 
-        setButton(.map, label: "Share", in: &customization, x: 0.43, y: 0.32, width: 0.44, height: 0.42, shape: .capsule, fill: utilityFill, shadowStrength: 0.75)
-        setButton(.pause, label: "Options", in: &customization, x: 0.57, y: 0.32, width: 0.44, height: 0.42, shape: .capsule, fill: utilityFill, shadowStrength: 0.75)
+        setButton(.preset(9), label: "Share", in: &customization, x: 0.43, y: 0.32, width: 0.44, height: 0.42, shape: .capsule, fill: utilityFill, shadowStrength: 0.75)
+        setButton(.preset(10), label: "Options", in: &customization, x: 0.57, y: 0.32, width: 0.44, height: 0.42, shape: .capsule, fill: utilityFill, shadowStrength: 0.75)
 
-        addButton(mappedTo: .custom5, label: "L2", in: &customization, x: 0.20, y: 0.10, width: 1.02, height: 0.34, shape: .capsule, fill: utilityFill)
-        addButton(mappedTo: .custom6, label: "R2", in: &customization, x: 0.80, y: 0.10, width: 1.02, height: 0.34, shape: .capsule, fill: utilityFill)
-        addButton(mappedTo: .custom7, label: "L1", in: &customization, x: 0.20, y: 0.21, width: 1.02, height: 0.34, shape: .capsule, fill: darkFill)
-        addButton(mappedTo: .custom8, label: "R1", in: &customization, x: 0.80, y: 0.21, width: 1.02, height: 0.34, shape: .capsule, fill: darkFill)
+        addButton(label: "L2", in: &customization, x: 0.20, y: 0.10, width: 1.02, height: 0.34, shape: .capsule, fill: utilityFill)
+        addButton(label: "R2", in: &customization, x: 0.80, y: 0.10, width: 1.02, height: 0.34, shape: .capsule, fill: utilityFill)
+        addButton(label: "L1", in: &customization, x: 0.20, y: 0.21, width: 1.02, height: 0.34, shape: .capsule, fill: darkFill)
+        addButton(label: "R1", in: &customization, x: 0.80, y: 0.21, width: 1.02, height: 0.34, shape: .capsule, fill: darkFill)
 
         return customization.normalized
     }
@@ -6571,22 +7050,22 @@ enum GamepadControllerTemplate: String, CaseIterable, Identifiable {
         let darkFill = "#111827"
         let utilityFill = "#374151"
 
-        addJoystick(label: "L Stick", mappedButton: .up, mapping: .movement, in: &customization, x: 0.19, y: 0.47, scale: 0.72, fill: darkFill)
+        addJoystick(label: "L Stick", mapping: .movement, in: &customization, x: 0.19, y: 0.47, scale: 0.72, fill: darkFill)
         setDPad(in: &customization, centerX: 0.34, centerY: 0.70, scale: 0.52, fill: darkFill)
-        addJoystick(label: "R Stick", mappedButton: .custom1, mapping: .secondary, in: &customization, x: 0.64, y: 0.74, scale: 0.72, fill: darkFill)
+        addJoystick(label: "R Stick", mapping: .secondary, in: &customization, x: 0.64, y: 0.74, scale: 0.72, fill: darkFill)
 
-        setButton(.focus, label: "Y", in: &customization, x: 0.84, y: 0.32, width: 0.58, height: 0.58, shape: .circle, fill: "#D1D5DB")
-        setButton(.dash, label: "B", in: &customization, x: 0.93, y: 0.50, width: 0.58, height: 0.58, shape: .circle, fill: "#EF4444")
-        setButton(.jump, label: "A", in: &customization, x: 0.84, y: 0.68, width: 0.58, height: 0.58, shape: .circle, fill: "#22C55E")
-        setButton(.attack, label: "X", in: &customization, x: 0.75, y: 0.50, width: 0.58, height: 0.58, shape: .circle, fill: "#3B82F6")
+        setButton(.preset(8), label: "Y", in: &customization, x: 0.84, y: 0.32, width: 0.58, height: 0.58, shape: .circle, fill: "#D1D5DB")
+        setButton(.preset(7), label: "B", in: &customization, x: 0.93, y: 0.50, width: 0.58, height: 0.58, shape: .circle, fill: "#EF4444")
+        setButton(.preset(5), label: "A", in: &customization, x: 0.84, y: 0.68, width: 0.58, height: 0.58, shape: .circle, fill: "#22C55E")
+        setButton(.preset(6), label: "X", in: &customization, x: 0.75, y: 0.50, width: 0.58, height: 0.58, shape: .circle, fill: "#3B82F6")
 
-        setButton(.map, label: "View", in: &customization, x: 0.44, y: 0.38, width: 0.42, height: 0.40, shape: .capsule, fill: utilityFill, shadowStrength: 0.75)
-        setButton(.pause, label: "Menu", in: &customization, x: 0.56, y: 0.38, width: 0.42, height: 0.40, shape: .capsule, fill: utilityFill, shadowStrength: 0.75)
+        setButton(.preset(9), label: "View", in: &customization, x: 0.44, y: 0.38, width: 0.42, height: 0.40, shape: .capsule, fill: utilityFill, shadowStrength: 0.75)
+        setButton(.preset(10), label: "Menu", in: &customization, x: 0.56, y: 0.38, width: 0.42, height: 0.40, shape: .capsule, fill: utilityFill, shadowStrength: 0.75)
 
-        addButton(mappedTo: .custom5, label: "LT", in: &customization, x: 0.20, y: 0.11, width: 1.02, height: 0.34, shape: .capsule, fill: utilityFill)
-        addButton(mappedTo: .custom6, label: "RT", in: &customization, x: 0.80, y: 0.11, width: 1.02, height: 0.34, shape: .capsule, fill: utilityFill)
-        addButton(mappedTo: .custom7, label: "LB", in: &customization, x: 0.20, y: 0.22, width: 1.02, height: 0.34, shape: .capsule, fill: darkFill)
-        addButton(mappedTo: .custom8, label: "RB", in: &customization, x: 0.80, y: 0.22, width: 1.02, height: 0.34, shape: .capsule, fill: darkFill)
+        addButton(label: "LT", in: &customization, x: 0.20, y: 0.11, width: 1.02, height: 0.34, shape: .capsule, fill: utilityFill)
+        addButton(label: "RT", in: &customization, x: 0.80, y: 0.11, width: 1.02, height: 0.34, shape: .capsule, fill: utilityFill)
+        addButton(label: "LB", in: &customization, x: 0.20, y: 0.22, width: 1.02, height: 0.34, shape: .capsule, fill: darkFill)
+        addButton(label: "RB", in: &customization, x: 0.80, y: 0.22, width: 1.02, height: 0.34, shape: .capsule, fill: darkFill)
 
         return customization.normalized
     }
@@ -6604,7 +7083,6 @@ enum GamepadControllerTemplate: String, CaseIterable, Identifiable {
         style: GamepadControlVisualStyle
     ) -> UUID {
         let control = GamepadCustomButton(
-            mappedButton: .custom8,
             label: label,
             layout: GamepadButtonCustomization(
                 centerX: x,
@@ -6660,14 +7138,14 @@ enum GamepadControllerTemplate: String, CaseIterable, Identifiable {
         return controlID
     }
 
-    private static func hideButton(_ button: GameButton, in customization: inout GamepadCustomization) {
+    private static func hideButton(_ button: KeypadElementID, in customization: inout GamepadCustomization) {
         var layout = customization.buttonCustomization(for: button)
         layout.isHidden = true
         customization.setButtonCustomization(layout, for: button)
     }
 
     private static func setReferenceButton(
-        _ button: GameButton,
+        _ button: KeypadElementID,
         label: String,
         in customization: inout GamepadCustomization,
         x: CGFloat,
@@ -6687,7 +7165,6 @@ enum GamepadControllerTemplate: String, CaseIterable, Identifiable {
 
     @discardableResult
     private static func addReferenceButton(
-        mappedTo button: GameButton,
         label: String,
         in customization: inout GamepadCustomization,
         x: CGFloat,
@@ -6699,7 +7176,6 @@ enum GamepadControllerTemplate: String, CaseIterable, Identifiable {
         iconScale: CGFloat
     ) -> UUID {
         let control = GamepadCustomButton(
-            mappedButton: button,
             label: label,
             layout: referenceButtonLayout(label: label, x: x, y: y, width: width, height: height, shape: shape, cornerRadius: cornerRadius, iconScale: iconScale),
             controlKind: .button
@@ -6711,7 +7187,6 @@ enum GamepadControllerTemplate: String, CaseIterable, Identifiable {
     @discardableResult
     private static func addReferenceJoystick(
         label: String,
-        mappedButton: GameButton,
         mapping: GamepadJoystickMapping,
         in customization: inout GamepadCustomization,
         x: CGFloat,
@@ -6733,7 +7208,6 @@ enum GamepadControllerTemplate: String, CaseIterable, Identifiable {
         layout.joystickVisualStyle = .pad
         layout.joystickKnobColor = GamepadRGBAColor(hexString: "#DAD3E2")
         let control = GamepadCustomButton(
-            mappedButton: mappedButton,
             label: label,
             layout: layout,
             controlKind: .joystick,
@@ -6934,7 +7408,7 @@ enum GamepadControllerTemplate: String, CaseIterable, Identifiable {
     }
 
     private static func setSoftButton(
-        _ button: GameButton,
+        _ button: KeypadElementID,
         label: String,
         in customization: inout GamepadCustomization,
         x: CGFloat,
@@ -6952,7 +7426,6 @@ enum GamepadControllerTemplate: String, CaseIterable, Identifiable {
     }
 
     private static func addSoftButton(
-        mappedTo button: GameButton,
         label: String,
         in customization: inout GamepadCustomization,
         x: CGFloat,
@@ -6963,7 +7436,6 @@ enum GamepadControllerTemplate: String, CaseIterable, Identifiable {
     ) {
         customization.customButtons.append(
             GamepadCustomButton(
-                mappedButton: button,
                 label: label,
                 layout: softButtonLayout(x: x, y: y, width: width, height: height, shape: shape, cornerRadius: nil),
                 controlKind: .button
@@ -6973,7 +7445,6 @@ enum GamepadControllerTemplate: String, CaseIterable, Identifiable {
 
     private static func addSoftJoystick(
         label: String,
-        mappedButton: GameButton,
         mapping: GamepadJoystickMapping,
         in customization: inout GamepadCustomization,
         x: CGFloat,
@@ -6986,7 +7457,6 @@ enum GamepadControllerTemplate: String, CaseIterable, Identifiable {
         layout.joystickVisualStyle = .thumbstick
         customization.customButtons.append(
             GamepadCustomButton(
-                mappedButton: mappedButton,
                 label: label,
                 layout: layout,
                 controlKind: .joystick,
@@ -7028,14 +7498,14 @@ enum GamepadControllerTemplate: String, CaseIterable, Identifiable {
     ) {
         let xStep: CGFloat = 0.092
         let yStep: CGFloat = 0.17
-        setButton(.up, label: "↑", in: &customization, x: centerX, y: centerY - yStep, width: scale, height: scale, shape: .roundedRectangle, fill: fill, cornerRadius: 8)
-        setButton(.down, label: "↓", in: &customization, x: centerX, y: centerY + yStep, width: scale, height: scale, shape: .roundedRectangle, fill: fill, cornerRadius: 8)
-        setButton(.left, label: "←", in: &customization, x: centerX - xStep, y: centerY, width: scale, height: scale, shape: .roundedRectangle, fill: fill, cornerRadius: 8)
-        setButton(.right, label: "→", in: &customization, x: centerX + xStep, y: centerY, width: scale, height: scale, shape: .roundedRectangle, fill: fill, cornerRadius: 8)
+        setButton(.preset(1), label: "↑", in: &customization, x: centerX, y: centerY - yStep, width: scale, height: scale, shape: .roundedRectangle, fill: fill, cornerRadius: 8)
+        setButton(.preset(2), label: "↓", in: &customization, x: centerX, y: centerY + yStep, width: scale, height: scale, shape: .roundedRectangle, fill: fill, cornerRadius: 8)
+        setButton(.preset(3), label: "←", in: &customization, x: centerX - xStep, y: centerY, width: scale, height: scale, shape: .roundedRectangle, fill: fill, cornerRadius: 8)
+        setButton(.preset(4), label: "→", in: &customization, x: centerX + xStep, y: centerY, width: scale, height: scale, shape: .roundedRectangle, fill: fill, cornerRadius: 8)
     }
 
     private static func setButton(
-        _ button: GameButton,
+        _ button: KeypadElementID,
         label: String,
         in customization: inout GamepadCustomization,
         x: CGFloat,
@@ -7064,7 +7534,6 @@ enum GamepadControllerTemplate: String, CaseIterable, Identifiable {
     }
 
     private static func addButton(
-        mappedTo button: GameButton,
         label: String,
         in customization: inout GamepadCustomization,
         x: CGFloat,
@@ -7076,7 +7545,6 @@ enum GamepadControllerTemplate: String, CaseIterable, Identifiable {
     ) {
         customization.customButtons.append(
             GamepadCustomButton(
-                mappedButton: button,
                 label: label,
                 layout: templateButton(x: x, y: y, width: width, height: height, shape: shape, fill: fill)
             )
@@ -7085,7 +7553,6 @@ enum GamepadControllerTemplate: String, CaseIterable, Identifiable {
 
     private static func addJoystick(
         label: String,
-        mappedButton: GameButton,
         mapping: GamepadJoystickMapping,
         in customization: inout GamepadCustomization,
         x: CGFloat,
@@ -7095,7 +7562,6 @@ enum GamepadControllerTemplate: String, CaseIterable, Identifiable {
     ) {
         customization.customButtons.append(
             GamepadCustomButton(
-                mappedButton: mappedButton,
                 label: label,
                 layout: templateButton(x: x, y: y, width: scale, height: scale, shape: .circle, fill: fill, shadowStrength: 1.25),
                 controlKind: .joystick,
@@ -7162,79 +7628,38 @@ enum GamepadConfigurationProfilePersistence {
     }
 
     static let defaultsKey = "PocketPad.gamepadConfigurationProfiles.v1"
-    private static let legacySeededDefaultProfileNames = [
-        "Current Setup",
-        "NES",
-        "Super Nintendo",
-        "Nintendo 64",
-        "GameCube",
-        "Game Boy",
-        "Game Boy Advance",
-        "Genesis 6-Button",
-        "Sega Saturn",
-        "Dreamcast",
-        "Arcade Stick",
-        "PSP",
-        "PlayStation",
-        "Xbox",
-        "Soft White Pro",
-        "Navigation Left",
-        "Actions Left",
-        "Dual Stick Shooter",
-        "Large Blue",
-        "Compact Minimal"
-    ]
-
-    static func load(activeCustomization: GamepadCustomization) -> LoadedState {
-        let activeCustomization = activeCustomization.normalized
-
-        if let data = UserDefaults.standard.data(forKey: defaultsKey),
-           let stored = try? JSONDecoder().decode(StoredState.self, from: data) {
-            let profiles = normalizedUniqueProfiles(stored.profiles)
-            if let migratedState = migratedLegacySeededDefaultStateIfNeeded(
-                profiles: profiles,
-                activeProfileID: stored.activeProfileID,
-                activeCustomization: activeCustomization
-            ) {
-                return migratedState
-            }
-
-            if !profiles.isEmpty {
-                // Once a valid active profile is stored, the profile store is the
-                // source of truth. The standalone customization is only a legacy
-                // mirror and may lag behind an atomic profile save.
-                if let activeProfileID = validProfileID(stored.activeProfileID, in: profiles) {
-                    let defaultProfileID = validProfileID(stored.defaultProfileID, in: profiles) ?? activeProfileID
-                    return LoadedState(profiles: profiles, activeProfileID: activeProfileID, defaultProfileID: defaultProfileID)
-                }
-
-                // Preserve recovery for pre-profile stores (no active ID) and
-                // damaged stores whose selected profile no longer exists.
-                var recoveredProfiles = profiles
-                let activeProfileID: UUID
-                if stored.activeProfileID == nil {
-                    recoveredProfiles[0].customization = activeCustomization
-                    recoveredProfiles[0].updatedAt = Date.currentMilliseconds
-                    activeProfileID = recoveredProfiles[0].id
-                } else {
-                    let recoveredProfile = GamepadConfigurationProfile(
-                        name: "Current Setup",
-                        primaryCustomization: activeCustomization
-                    )
-                    recoveredProfiles.insert(recoveredProfile, at: 0)
-                    activeProfileID = recoveredProfile.id
-                }
-                let defaultProfileID = validProfileID(stored.defaultProfileID, in: recoveredProfiles) ?? activeProfileID
-                return LoadedState(
-                    profiles: recoveredProfiles,
-                    activeProfileID: activeProfileID,
-                    defaultProfileID: defaultProfileID
-                )
-            }
+    static func load(
+        activeCustomization: GamepadCustomization,
+        defaults: UserDefaults = .standard
+    ) throws -> LoadedState {
+        if let data = try GamepadSavedConfigurationError.data(forKey: defaultsKey, in: defaults) {
+            return try decodeSavedState(data)
         }
-
-        let profiles = defaultProfiles(activeCustomization: activeCustomization)
+        // Only a genuinely absent store permits fresh authoring. An explicitly
+        // saved current standalone declaration (even empty) stays authoritative.
+        let profiles: [GamepadConfigurationProfile]
+        if let data = try GamepadSavedConfigurationError.data(forKey: GamepadCustomizationPersistence.defaultsKey, in: defaults) {
+            let customization = try GamepadCustomizationPersistence.decodeSavedCustomization(data)
+            profiles = [GamepadConfigurationProfile(name: "Current Setup", primaryCustomization: customization)]
+        } else {
+            profiles = defaultProfiles(activeCustomization: activeCustomization.normalized)
+        }
         return LoadedState(profiles: profiles, activeProfileID: profiles[0].id, defaultProfileID: profiles[0].id)
+    }
+
+    static func decodeSavedState(_ data: Data) throws -> LoadedState {
+        let stored: StoredState
+        do { stored = try JSONDecoder().decodeUnique(StoredState.self, from: data) }
+        catch { throw GamepadSavedConfigurationError.invalid("\(defaultsKey): \(GamepadSavedConfigurationError.diagnostic(error))") }
+        let ids = Set(stored.profiles.map(\.id))
+        guard !stored.profiles.isEmpty, ids.count == stored.profiles.count else {
+            throw GamepadSavedConfigurationError.invalid("profiles must declare unique UUIDs and cannot be empty")
+        }
+        guard let activeID = stored.activeProfileID, ids.contains(activeID),
+              let defaultID = stored.defaultProfileID, ids.contains(defaultID) else {
+            throw GamepadSavedConfigurationError.invalid("active and default profile UUIDs must reference declared profiles")
+        }
+        return LoadedState(profiles: stored.profiles, activeProfileID: activeID, defaultProfileID: defaultID)
     }
 
     static func save(_ profiles: [GamepadConfigurationProfile], activeProfileID: UUID, defaultProfileID: UUID) {
@@ -7290,110 +7715,13 @@ enum GamepadConfigurationProfilePersistence {
         return profileID
     }
 
-    private static func migratedLegacySeededDefaultStateIfNeeded(
-        profiles: [GamepadConfigurationProfile],
-        activeProfileID: UUID?,
-        activeCustomization: GamepadCustomization
-    ) -> LoadedState? {
-        LegacyMigrationWorkspace(
-            profiles: profiles,
-            activeProfileID: activeProfileID,
-            activeCustomization: activeCustomization
-        ).resolve()
-    }
-
-    private final class LegacyMigrationWorkspace {
-        private let profiles: [GamepadConfigurationProfile]
-        private let activeProfileID: UUID?
-        private let activeCustomization: GamepadCustomization
-        private var starterProfile: GamepadConfigurationProfile?
-        private var normalizedActiveCustomization: GamepadCustomization?
-
-        init(
-            profiles: [GamepadConfigurationProfile],
-            activeProfileID: UUID?,
-            activeCustomization: GamepadCustomization
-        ) {
-            self.profiles = profiles
-            self.activeProfileID = activeProfileID
-            self.activeCustomization = activeCustomization
-        }
-
-        func resolve() -> LoadedState? {
-            guard GamepadConfigurationProfilePersistence.isLegacySeededDefaultProfileList(profiles)
-            else { return nil }
-            selectStarterProfile()
-            normalizeActiveCustomization()
-            applyActiveCustomization()
-            clearLegacyVariants()
-            return makeLoadedState()
-        }
-
-        private func selectStarterProfile() {
-            let selectedProfileID = GamepadConfigurationProfilePersistence.validProfileID(
-                activeProfileID,
-                in: profiles
-            ) ?? profiles[0].id
-            starterProfile = profiles.first { $0.id == selectedProfileID } ?? profiles[0]
-        }
-
-        private func normalizeActiveCustomization() {
-            normalizedActiveCustomization = activeCustomization.normalized
-        }
-
-        private func applyActiveCustomization() {
-            guard var starterProfile, let normalizedActiveCustomization else { return }
-            if starterProfile.name == "Current Setup", activeLooksLikeOldDefault {
-                starterProfile.name = "My First Keypad"
-                starterProfile.customization = GamepadCustomization.blankCanvas
-            } else {
-                starterProfile.customization = normalizedActiveCustomization
-            }
-            self.starterProfile = starterProfile
-        }
-
-        private var activeLooksLikeOldDefault: Bool {
-            guard let normalizedActiveCustomization else { return false }
-            if normalizedActiveCustomization.hasSamePresentation(
-                as: GamepadCustomization.defaultValue.normalized
-            ) {
-                return true
-            }
-            return normalizedActiveCustomization.hasSamePresentation(
-                as: GamepadCustomization.blankCanvas
-            )
-        }
-
-        private func clearLegacyVariants() {
-            guard var starterProfile else { return }
-            starterProfile.landscapeCustomization = nil
-            starterProfile.portraitCustomization = nil
-            starterProfile.updatedAt = Date.currentMilliseconds
-            self.starterProfile = starterProfile
-        }
-
-        private func makeLoadedState() -> LoadedState? {
-            guard let starterProfile else { return nil }
-            let normalizedProfile = starterProfile.normalized
-            return LoadedState(
-                profiles: [normalizedProfile],
-                activeProfileID: normalizedProfile.id,
-                defaultProfileID: normalizedProfile.id
-            )
-        }
-    }
-
-    private static func isLegacySeededDefaultProfileList(_ profiles: [GamepadConfigurationProfile]) -> Bool {
-        profiles.map(\.name) == legacySeededDefaultProfileNames
-    }
-
     private static func defaultProfiles(activeCustomization: GamepadCustomization) -> [GamepadConfigurationProfile] {
         let normalizedActiveCustomization = activeCustomization.normalized
         let defaultCustomization = GamepadCustomization.defaultValue.normalized
         let blankCustomization = GamepadCustomization.blankCanvas
-        let hasLegacyCustomization = !normalizedActiveCustomization.hasSamePresentation(as: defaultCustomization)
+        let hasExplicitCustomization = !normalizedActiveCustomization.hasSamePresentation(as: defaultCustomization)
             && !normalizedActiveCustomization.hasSamePresentation(as: blankCustomization)
-        if hasLegacyCustomization {
+        if hasExplicitCustomization {
             return [
                 GamepadConfigurationProfile(name: "Current Setup", primaryCustomization: normalizedActiveCustomization)
             ]
@@ -7760,7 +8088,6 @@ private struct GamepadImageFillView: View {
     var body: some View {
         let normalized = fill.normalized
         ZStack {
-            GamepadAlphaCheckerboard()
             if let data = normalized.data {
                 platformImage(data: data, contentMode: normalized.contentMode)
                     .opacity(Double(normalized.opacity))
@@ -7907,6 +8234,57 @@ private extension EnvironmentValues {
     }
 }
 
+/// Holds an already resolved control across the interactive view seam without
+/// embedding another aggregate or recomputing the entire layout on press edges.
+final class GamepadRuntimeControlFaceTarget {
+    let control: GamepadResolvedControl
+    init(control: GamepadResolvedControl) { self.control = control }
+}
+
+/// Runtime accessibility adaptations are boxed so the shared face retains a bounded
+/// inline footprint. They affect presentation only; capture views still own input.
+final class GamepadControlFaceAdaptation {
+    let increasedContrast: Bool
+    let reduceTransparency: Bool
+    let labelScale: CGFloat
+
+    init(increasedContrast: Bool = false, reduceTransparency: Bool = false, labelScale: CGFloat = 1) {
+        self.increasedContrast = increasedContrast
+        self.reduceTransparency = reduceTransparency
+        self.labelScale = labelScale
+    }
+}
+
+/// Transient input feedback is never persisted in profiles or used as routing.
+/// Native review without interaction renders the same resting authored face.
+final class GamepadPointingFaceInteraction {
+    let joystickVector: CGSize
+    let interactionSize: CGSize?
+    let trackpadTouchCount: Int
+
+    init(joystickVector: CGSize = .zero, interactionSize: CGSize? = nil, trackpadTouchCount: Int = 0) {
+        func bounded(_ value: CGFloat) -> CGFloat { value.isFinite ? min(1, max(-1, value)) : 0 }
+        self.joystickVector = CGSize(width: bounded(joystickVector.width), height: bounded(joystickVector.height))
+        self.interactionSize = interactionSize
+        self.trackpadTouchCount = min(5, max(0, trackpadTouchCount))
+    }
+}
+
+final class GamepadTriggerFaceInteraction {
+    let value: CGFloat
+    init(value: CGFloat) { self.value = value.isFinite ? min(1, max(0, value)) : 0 }
+}
+
+/// Private renderer instrumentation retains each surface's layout while hiding
+/// other paint. It never enters profile storage or authoring requests.
+final class GamepadControlSurfaceMask {
+    let surface: String
+    let layoutCollector: GamepadNativeBarLayoutCollector?
+    init(surface: String, layoutCollector: GamepadNativeBarLayoutCollector? = nil) {
+        self.surface = surface; self.layoutCollector = layoutCollector
+    }
+}
+
 struct GamepadRenderedControlFace: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.gamepadControlBarPreviewContext) private var controlBarPreviewContext
@@ -7914,9 +8292,87 @@ struct GamepadRenderedControlFace: View {
     let customization: GamepadCustomization
     var state: GamepadControlPresentationState = .normal
     var secondaryBindingText: String? = nil
+    var runtimeAdaptation: GamepadControlFaceAdaptation? = nil
+    var pointingInteraction: GamepadPointingFaceInteraction? = nil
+    var triggerInteraction: GamepadTriggerFaceInteraction? = nil
+    var surfaceMask: GamepadControlSurfaceMask? = nil
     var selectedControlBarItem: GamepadControlBarItem? = nil
     var onSelectControlBarItem: ((GamepadControlBarItem) -> Void)? = nil
     var onMoveControlBarItem: ((GamepadControlBarItem, Int) -> Void)? = nil
+
+    /// Selects the exact owned control used by the runtime, without deriving identity
+    /// from a title. Legacy-only callers may retain their existing fallback face.
+    static func runtimeButton(elementID: UUID?, inputID: KeypadElementID,
+                              customization: GamepadCustomization,
+                              state: GamepadControlPresentationState,
+                              secondaryBindingText: String? = nil,
+                              adaptation: GamepadControlFaceAdaptation? = nil,
+                              target: GamepadRuntimeControlFaceTarget? = nil) -> AnyView? {
+        let control: GamepadResolvedControl
+        if let target {
+            control = target.control
+            guard control.controlKind == .button,
+                  elementID != nil ? control.elementID == elementID : control.inputID == inputID else { return nil }
+        } else {
+            let canvas = customization.deviceCanvas.editorDeviceFrame.screenRect.size
+            guard let resolved = customization.resolvedControls(in: canvas).first(where: { candidate in
+                candidate.controlKind == .button && (elementID != nil
+                    ? candidate.elementID == elementID : candidate.inputID == inputID)
+            }) else { return nil }
+            control = resolved
+        }
+        return AnyView(GamepadRenderedControlFace(control: control, customization: customization, state: state,
+            secondaryBindingText: secondaryBindingText, runtimeAdaptation: adaptation))
+    }
+
+    static func runtimePointing(target: GamepadRuntimeControlFaceTarget,
+                                customization: GamepadCustomization,
+                                state: GamepadControlPresentationState,
+                                secondaryBindingText: String? = nil,
+                                adaptation: GamepadControlFaceAdaptation? = nil,
+                                interaction: GamepadPointingFaceInteraction? = nil) -> AnyView? {
+        guard target.control.isJoystick || target.control.isTrackpad else { return nil }
+        return AnyView(GamepadRenderedControlFace(control: target.control, customization: customization, state: state,
+            secondaryBindingText: secondaryBindingText, runtimeAdaptation: adaptation, pointingInteraction: interaction))
+    }
+
+    static func runtimeTrigger(target: GamepadRuntimeControlFaceTarget,
+                               customization: GamepadCustomization,
+                               state: GamepadControlPresentationState,
+                               secondaryBindingText: String? = nil,
+                               adaptation: GamepadControlFaceAdaptation? = nil,
+                               interaction: GamepadTriggerFaceInteraction? = nil) -> AnyView? {
+        guard target.control.isTrigger else { return nil }
+        return AnyView(GamepadRenderedControlFace(control: target.control, customization: customization, state: state,
+            secondaryBindingText: secondaryBindingText, runtimeAdaptation: adaptation, triggerInteraction: interaction))
+    }
+
+    /// Runtime drawers use the same authored face as native design review. The caller
+    /// retains its button, accessibility, pinning, fade and swipe behavior.
+    static func revealHandle(customization: GamepadCustomization, canvasSize: CGSize,
+                             state: GamepadControlPresentationState) -> AnyView {
+        let rendered = customization.resolvingAssetReferences().normalized
+        guard let control = rendered.resolvedControls(in: canvasSize).first(where: { $0.id == .system(.topBarActivation) }) else {
+            return AnyView(EmptyView())
+        }
+        return AnyView(GamepadRenderedControlFace(control: control, customization: rendered, state: state)
+            .rotationEffect(.degrees(control.rotationDegrees))
+            .allowsHitTesting(false)
+            .accessibilityHidden(true))
+    }
+
+    static func controlBar(customization: GamepadCustomization, profileName: String, isDefault: Bool,
+                           launchTarget: GamepadProfileLaunchTarget?, isConnected: Bool, isLandscape: Bool,
+                           isEditing: Bool = false, layoutCollector: GamepadNativeBarLayoutCollector? = nil, showsBarShadow: Bool = true) -> AnyView {
+        let normalized = customization.resolvingAssetReferences().normalized
+        let context = GamepadControlBarPreviewContext(profileName: profileName, hasProfiles: true,
+            isSelectedProfileDefault: isDefault, launchTarget: launchTarget, isConnected: isConnected)
+        return AnyView(GamepadControlBarOutputPreview(customization: normalized,
+            items: normalized.controlBarItems, isLandscape: isLandscape,
+            context: context, selectedItem: nil, onSelectItem: nil, onMoveItem: nil,
+            showsRevealHandle: false, isEditing: isEditing, layoutCollector: layoutCollector, showsBarShadow: showsBarShadow)
+            .environment(\.gamepadBarLeafCollector, layoutCollector))
+    }
 
     @ViewBuilder
     var body: some View {
@@ -7928,13 +8384,14 @@ struct GamepadRenderedControlFace: View {
                presentation.glowRadius > 0 {
                 controlSilhouette(fill: glowColor)
                     .blur(radius: presentation.glowRadius)
-                    .opacity(0.68)
+                    .opacity(0.68 * maskOpacity("face"))
                     .allowsHitTesting(false)
             }
 
             if !control.isText {
                 controlBackground(presentation: presentation)
                     .gamepadOuterShadows(presentation)
+                    .opacity(maskOpacity("face"))
             }
 
             if control.isText {
@@ -7948,19 +8405,43 @@ struct GamepadRenderedControlFace: View {
                 joystickFace(presentation: presentation)
             } else if control.isTrackpad {
                 trackpadFace(presentation: presentation)
+            } else if control.isTrigger {
+                triggerFace(presentation: presentation)
             } else {
                 buttonContent(presentation: presentation)
             }
         }
         .opacity(presentation.opacity)
         .blur(radius: presentation.blurRadius)
-        .scaleEffect(presentation.scale)
+        .scaleEffect(presentation.scale * GamepadNativeContentPresentation.stateScaleMultiplier(control: control, state: state))
         .frame(width: control.size.width, height: control.size.height)
-        .accessibilityLabel(control.label)
+        .accessibilityLabel(control.accessibilityName)
+    }
+
+    private func flowLayoutCollector(_ surface: String) -> GamepadNativeBarLayoutCollector? {
+        surfaceMask?.surface == surface ? surfaceMask?.layoutCollector : nil
+    }
+
+    private func maskOpacity(_ surface: String) -> Double {
+        surfaceMask == nil || surfaceMask?.surface == surface ? 1 : 0
     }
 
     private var resolvedPresentation: GamepadResolvedControlPresentation {
-        customization.resolvedPresentation(for: control, state: state, scheme: colorScheme)
+        var presentation = customization.resolvedPresentation(for: control, state: state, scheme: colorScheme)
+        if runtimeAdaptation?.increasedContrast == true {
+            presentation.strokeWidth = max(2, presentation.strokeWidth + 1.5)
+        }
+        if runtimeAdaptation?.reduceTransparency == true {
+            presentation.opacity = 1
+            presentation.blurRadius = 0
+            presentation.glowColor = nil
+            presentation.glowRadius = 0
+            presentation.shadowRadius = 0
+            presentation.shadows = []
+            presentation.innerShadowColor = nil
+            presentation.highlightColor = nil
+        }
+        return presentation
     }
 
     private var resolvedAccentStyle: GamepadAccentStyle {
@@ -8012,7 +8493,14 @@ struct GamepadRenderedControlFace: View {
     }
 
     private func textContent(presentation: GamepadResolvedControlPresentation) -> some View {
-        Text(control.label)
+        let native = nativeContent(presentation)
+        return VStack(spacing: 1) {
+            if presentation.content?.hasTypography == true {
+                authoredLabel(presentation: presentation, fallbackSize: max(10, control.size.height * 0.72))
+            } else {
+                Text(control.visualLegend)
+                .opacity(maskOpacity("legend"))
+                .modifier(GamepadNativeBarLayoutModifier(collector: flowLayoutCollector("legend"), id: "legend"))
             .font(
                 .system(
                     size: max(10, control.size.height * 0.72),
@@ -8023,8 +8511,14 @@ struct GamepadRenderedControlFace: View {
             .lineLimit(1)
             .minimumScaleFactor(0.12)
             .allowsTightening(true)
+            }
+            if let caption = control.presentationMetadata?.caption, !caption.isEmpty {
+                secondaryBindingLabel(caption, color: presentation.foregroundSwiftUIColor)
+            }
+        }
             .foregroundStyle(presentation.foregroundSwiftUIColor)
-            .padding(.horizontal, 2)
+            .padding(.horizontal, native.labelPadding)
+            .offset(native.labelOffset)
             .allowsHitTesting(false)
     }
 
@@ -8035,37 +8529,56 @@ struct GamepadRenderedControlFace: View {
                 .padding(.horizontal, 4)
         }
 
-        if customization.showsButtonLabels
-            && control.layoutCustomization.showsIntegratedLabel
-            && (presentation.icon?.placement != .center || control.label.count <= 2) {
+        if nativeContent(presentation).legendVisible {
             VStack(spacing: 1) {
-                nativeButtonLabel
-                if let visibleSecondaryBindingText {
-                    secondaryBindingLabel(visibleSecondaryBindingText, color: presentation.foregroundSwiftUIColor)
+                nativeButtonLabel(presentation: presentation)
+                if let caption = control.presentationMetadata?.caption, !caption.isEmpty {
+                        secondaryBindingLabel(caption, color: presentation.foregroundSwiftUIColor)
+                    }
+                    if let visibleSecondaryBindingText {
+                    secondaryBindingLabel(visibleSecondaryBindingText, color: presentation.foregroundSwiftUIColor, surface: "binding-hint")
                 }
             }
             .foregroundStyle(presentation.foregroundSwiftUIColor)
-            .padding(.horizontal, 4)
-            .offset(labelOffset(for: presentation.icon?.placement))
+            .padding(.horizontal, nativeContent(presentation).labelPadding)
+            .scaleEffect(runtimeAdaptation?.labelScale ?? 1)
+            .offset(authoredLabelOffset(presentation))
         }
     }
 
     @ViewBuilder
-    private var nativeButtonLabel: some View {
-        if control.label.count <= 2 {
-            Text(control.label)
+    private func nativeButtonLabel(presentation: GamepadResolvedControlPresentation) -> some View {
+        if presentation.content?.hasTypography == true {
+            authoredLabel(presentation: presentation, fallbackSize: nativeContent(presentation).fontSize ?? 14)
+        } else if control.isTrigger {
+            Text(control.visualLegend)
+                .opacity(maskOpacity("legend"))
+                .modifier(GamepadNativeBarLayoutModifier(collector: flowLayoutCollector("legend"), id: "legend"))
+                .geistTypography(control.size.height <= 44 ? .button12 : .button14)
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
+        } else if control.visualLegend.count <= 2 {
+            Text(control.visualLegend)
+                .opacity(maskOpacity("legend"))
+                .modifier(GamepadNativeBarLayoutModifier(collector: flowLayoutCollector("legend"), id: "legend"))
                 .geistTypography(.heading32)
                 .lineLimit(1)
                 .minimumScaleFactor(0.55)
         } else {
             ViewThatFits(in: .horizontal) {
-                Text(control.label)
+                Text(control.visualLegend)
+                .opacity(maskOpacity("legend"))
+                .modifier(GamepadNativeBarLayoutModifier(collector: flowLayoutCollector("legend"), id: "legend"))
                     .geistTypography(.button16)
                     .fixedSize(horizontal: true, vertical: false)
-                Text(control.label)
+                Text(control.visualLegend)
+                .opacity(maskOpacity("legend"))
+                .modifier(GamepadNativeBarLayoutModifier(collector: flowLayoutCollector("legend"), id: "legend"))
                     .geistTypography(.button14)
                     .fixedSize(horizontal: true, vertical: false)
-                Text(control.label)
+                Text(control.visualLegend)
+                .opacity(maskOpacity("legend"))
+                .modifier(GamepadNativeBarLayoutModifier(collector: flowLayoutCollector("legend"), id: "legend"))
                     .font(.system(size: 14, weight: .semibold, design: .rounded))
                     .fontWidth(.condensed)
                     .tracking(-0.35)
@@ -8076,9 +8589,53 @@ struct GamepadRenderedControlFace: View {
         }
     }
 
+    private func authoredLabel(presentation: GamepadResolvedControlPresentation, fallbackSize: CGFloat) -> some View {
+        let content = presentation.content
+        let weight: Font.Weight = switch content?.fontWeight {
+        case .regular: .regular
+        case .medium: .medium
+        case .bold: .bold
+        case .semibold, nil: .semibold
+        }
+        let design: Font.Design = switch content?.fontDesign {
+        case .system: .default
+        case .serif: .serif
+        case .monospaced: .monospaced
+        case .rounded, nil: .rounded
+        }
+        let textAlignment: TextAlignment = switch content?.alignment {
+        case .leading: .leading
+        case .trailing: .trailing
+        case .center, nil: .center
+        }
+        return Text(content?.legend ?? control.visualLegend)
+            .font(.system(size: content?.fontSize ?? fallbackSize, weight: weight, design: design))
+            .tracking(content?.tracking ?? 0)
+            .lineLimit(content?.lineLimit ?? 1)
+            .multilineTextAlignment(textAlignment)
+            .minimumScaleFactor(content?.fontSize == nil ? 0.48 : 1)
+            .opacity(maskOpacity("legend"))
+                .modifier(GamepadNativeBarLayoutModifier(collector: flowLayoutCollector("legend"), id: "legend"))
+            .allowsHitTesting(false)
+    }
+
+    private func nativeContent(_ presentation: GamepadResolvedControlPresentation) -> GamepadNativeContentPresentation {
+        GamepadNativeContentPresentation(control: control, showsButtonLabels: customization.showsButtonLabels,
+                                        content: presentation.content, icon: presentation.icon,
+                                        state: state, scheme: colorScheme, triggerValue: triggerInteraction?.value,
+                                        authoredScale: presentation.scale, foregroundColor: presentation.foregroundColor,
+                                        profileAccentStyle: customization.accentStyle,
+                                        trackpadTouchCount: pointingInteraction?.trackpadTouchCount ?? 0, secondaryBindingText: secondaryBindingText)
+    }
+
+    private func authoredLabelOffset(_ presentation: GamepadResolvedControlPresentation) -> CGSize {
+        nativeContent(presentation).labelOffset
+    }
+
     private func controlIcon(_ icon: GamepadControlIcon, presentation: GamepadResolvedControlPresentation) -> some View {
         let tint = icon.tintColor?.swiftUIColor ?? presentation.foregroundSwiftUIColor
-        let baseSize = max(12, min(control.size.width, control.size.height) * 0.34 * icon.scale)
+        let native = nativeContent(presentation)
+        let baseSize = native.iconSize ?? 12
 
         return Group {
             switch icon.source {
@@ -8105,80 +8662,88 @@ struct GamepadRenderedControlFace: View {
                 }
             }
         }
-        .offset(iconOffset(for: icon.placement))
+        .offset(native.iconOffset ?? .zero)
+        .opacity(maskOpacity("icon"))
+                .modifier(GamepadNativeBarLayoutModifier(collector: flowLayoutCollector("icon"), id: "icon"))
     }
 
-    private func iconOffset(for placement: GamepadControlIconPlacement) -> CGSize {
-        switch placement {
-        case .leading: CGSize(width: -control.size.width * 0.20, height: 0)
-        case .trailing: CGSize(width: control.size.width * 0.20, height: 0)
-        case .top: CGSize(width: 0, height: -control.size.height * 0.18)
-        case .bottom: CGSize(width: 0, height: control.size.height * 0.18)
-        case .center, .background: .zero
-        }
-    }
-
-    private func labelOffset(for placement: GamepadControlIconPlacement?) -> CGSize {
-        switch placement {
-        case .leading: CGSize(width: control.size.width * 0.11, height: 0)
-        case .trailing: CGSize(width: -control.size.width * 0.11, height: 0)
-        case .top: CGSize(width: 0, height: control.size.height * 0.15)
-        case .bottom: CGSize(width: 0, height: -control.size.height * 0.15)
-        case .center, .background, nil: .zero
+    private func triggerFace(presentation: GamepadResolvedControlPresentation) -> some View {
+        let native = nativeContent(presentation)
+        let frame = native.localSurfaceFrames["trigger-fill"] ?? .zero
+        let opacity = runtimeAdaptation?.reduceTransparency == true ? 0.62 : native.fixedProperties["triggerFillOpacity"] ?? 0.24
+        return ZStack {
+            Capsule()
+                .fill(presentation.foregroundSwiftUIColor.opacity(opacity))
+                .frame(width: frame.width, height: frame.height)
+                .offset(x: frame.midX - control.size.width / 2, y: frame.midY - control.size.height / 2)
+                .allowsHitTesting(false)
+                .opacity(maskOpacity("trigger-fill"))
+            buttonContent(presentation: presentation)
         }
     }
 
     private func joystickFace(presentation: GamepadResolvedControlPresentation) -> some View {
-        let knobFillColor = control.layoutCustomization.joystickKnobFill(accentStyle: resolvedAccentStyle, isPressed: state.usesPressedFallback, scheme: colorScheme)
-        let knobStrokeColor = control.layoutCustomization.joystickKnobStroke(accentStyle: resolvedAccentStyle, isPressed: state.usesPressedFallback, scheme: colorScheme)
+        let native = nativeContent(presentation)
+        let knobFillColor = native.resolvedPointingPaint?.joystickKnobFillColor?.swiftUIColor ?? .clear
+        let knobStrokeColor = native.resolvedPointingPaint?.joystickKnobStrokeColor?.swiftUIColor ?? .clear
         let visualSide = min(control.size.width, control.size.height)
-        let isThumbstick = control.layoutCustomization.joystickVisualStyle == .thumbstick
-        let knobRatio: CGFloat = isThumbstick ? 0.72 : 0.34
+        let knobSide = native.localSurfaceFrames["joystick-puck"]?.width ?? 0
+        let thumbstick = control.layoutCustomization.joystickVisualStyle == .thumbstick
+        let interactionSide = pointingInteraction?.interactionSize.map { max($0.width, $0.height) } ?? visualSide
+        let travel = max(0, ((thumbstick ? interactionSide : visualSide) - knobSide) / 2 - (thumbstick ? 6 : 4))
+        let vector = pointingInteraction?.joystickVector ?? .zero
 
         return ZStack {
-            if !isThumbstick {
+            if native.joystickRingVisible == true {
                 Circle()
-                    .stroke(Geist.color(.grayAlpha400, scheme: colorScheme), lineWidth: 1)
-                    .frame(width: visualSide * 0.70, height: visualSide * 0.70)
+                    .stroke(native.resolvedPointingPaint?.joystickRingColor?.swiftUIColor ?? .clear,
+                            lineWidth: native.joystickRingStrokeWidth ?? 1)
+                    .frame(width: native.localSurfaceFrames["joystick-well-ring"]?.width ?? 0,
+                           height: native.localSurfaceFrames["joystick-well-ring"]?.height ?? 0)
+                    .opacity(maskOpacity("joystick-well-ring"))
             }
 
             Circle()
                 .fill(knobFillColor)
-                .overlay(Circle().stroke(knobStrokeColor, lineWidth: 1))
-                .frame(width: visualSide * knobRatio, height: visualSide * knobRatio)
+                .overlay(Circle().stroke(knobStrokeColor, lineWidth: native.joystickKnobStrokeWidth ?? 1))
+                .frame(width: native.localSurfaceFrames["joystick-puck"]?.width ?? 0,
+                       height: native.localSurfaceFrames["joystick-puck"]?.height ?? 0)
+                .offset(x: vector.width * travel, y: vector.height * travel)
+                .opacity(maskOpacity("joystick-puck"))
 
-            if customization.showsButtonLabels && control.layoutCustomization.showsIntegratedLabel && !isThumbstick {
+            if native.legendVisible {
                 VStack(spacing: 1) {
-                    Text(control.label)
+                    if presentation.content?.hasTypography == true {
+                        authoredLabel(presentation: presentation, fallbackSize: visualSide <= 88 ? 12 : 14)
+                    } else {
+                    Text(control.visualLegend)
+                .opacity(maskOpacity("legend"))
+                .modifier(GamepadNativeBarLayoutModifier(collector: flowLayoutCollector("legend"), id: "legend"))
                         .geistTypography(visualSide <= 88 ? .button12 : .button14)
                         .lineLimit(1)
                         .minimumScaleFactor(0.48)
+                    }
+                    if let caption = control.presentationMetadata?.caption, !caption.isEmpty {
+                        secondaryBindingLabel(caption, color: presentation.foregroundSwiftUIColor)
+                    }
                     if let visibleSecondaryBindingText {
-                        secondaryBindingLabel(visibleSecondaryBindingText, color: presentation.foregroundSwiftUIColor)
+                        secondaryBindingLabel(visibleSecondaryBindingText, color: presentation.foregroundSwiftUIColor, surface: "binding-hint")
                     }
                 }
                 .foregroundStyle(presentation.foregroundSwiftUIColor)
-                .padding(.horizontal, 4)
-                .offset(y: control.size.height * 0.34)
+                .padding(.horizontal, native.labelPadding)
+                .scaleEffect(runtimeAdaptation?.labelScale ?? 1)
+            .offset(native.labelOffset)
             }
         }
         .allowsHitTesting(false)
     }
 
     private var visibleSecondaryBindingText: String? {
-        guard let text = secondaryBindingText?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !text.isEmpty,
-              text.caseInsensitiveCompare(control.label) != .orderedSame
-        else { return nil }
-        if let icon = resolvedPresentation.icon,
-           icon.source == .text,
-           text.caseInsensitiveCompare(icon.value) == .orderedSame {
-            return nil
-        }
-        return text
+        nativeContent(resolvedPresentation).bindingHint
     }
 
-    private func secondaryBindingLabel(_ text: String, color: Color) -> some View {
+    private func secondaryBindingLabel(_ text: String, color: Color, surface: String = "caption") -> some View {
         Text(text)
             .font(.system(size: 10, weight: .medium, design: .monospaced))
             .lineLimit(1)
@@ -8186,40 +8751,68 @@ struct GamepadRenderedControlFace: View {
             .allowsTightening(true)
             .foregroundStyle(color.opacity(0.76))
             .frame(maxWidth: control.size.width * 0.88)
+            .opacity(maskOpacity(surface))
+            .modifier(GamepadNativeBarLayoutModifier(collector: flowLayoutCollector(surface), id: surface))
             .accessibilityHidden(true)
     }
 
     private func trackpadFace(presentation: GamepadResolvedControlPresentation) -> some View {
         let foreground = presentation.foregroundSwiftUIColor
+        let native = nativeContent(presentation)
 
         return ZStack {
-            RoundedRectangle(cornerRadius: max(5, min(control.size.width, control.size.height) * 0.08), style: .continuous)
-                .stroke(foreground.opacity(0.24), lineWidth: 1)
-                .padding(max(5, min(control.size.width, control.size.height) * 0.08))
+            if native.trackpadFrameVisible == true {
+            RoundedRectangle(cornerRadius: native.trackpadFrameInset ?? 5, style: .continuous)
+                .stroke(native.resolvedPointingPaint?.trackpadFrameColor?.swiftUIColor ?? .clear,
+                        lineWidth: native.trackpadFrameStrokeWidth ?? 1)
+                .padding(native.trackpadFrameInset ?? 5)
+                .opacity(maskOpacity("trackpad-frame"))
+            }
 
             HStack(spacing: 9) {
-                Image(systemName: "cursorarrow")
-                    .font(.system(size: max(12, min(control.size.width, control.size.height) * 0.18), weight: .semibold))
-                if customization.showsButtonLabels && control.layoutCustomization.showsIntegratedLabel {
+                if native.trackpadCursorVisible == true {
+                    Image(systemName: (pointingInteraction?.trackpadTouchCount ?? 0) >= 2 ? "hand.draw" : "cursorarrow")
+                        .opacity(maskOpacity("trackpad-cursor"))
+                .modifier(GamepadNativeBarLayoutModifier(collector: flowLayoutCollector("trackpad-cursor"), id: "trackpad-cursor"))
+                        .font(.system(size: native.trackpadCursorFontSize ?? 12, weight: .semibold))
+                        .foregroundStyle(native.resolvedPointingPaint?.trackpadCursorColor?.swiftUIColor ?? .clear)
+                }
+                if native.legendVisible {
                     VStack(spacing: 1) {
-                        Text(control.label)
+                        if presentation.content?.hasTypography == true {
+                            authoredLabel(presentation: presentation, fallbackSize: control.size.width <= 96 ? 12 : 14)
+                        } else {
+                        Text(control.visualLegend)
+                .opacity(maskOpacity("legend"))
+                .modifier(GamepadNativeBarLayoutModifier(collector: flowLayoutCollector("legend"), id: "legend"))
                             .geistTypography(control.size.width <= 96 ? .button12 : .button14)
                             .lineLimit(1)
                             .minimumScaleFactor(0.48)
+                        }
+                        if let caption = control.presentationMetadata?.caption, !caption.isEmpty {
+                            secondaryBindingLabel(caption, color: presentation.foregroundSwiftUIColor)
+                        }
                         if let visibleSecondaryBindingText {
-                            secondaryBindingLabel(visibleSecondaryBindingText, color: foreground)
+                            secondaryBindingLabel(visibleSecondaryBindingText, color: foreground, surface: "binding-hint")
                         }
                     }
                 }
             }
             .foregroundStyle(foreground.opacity(0.82))
+            .padding(.horizontal, native.labelPadding)
+            .scaleEffect(runtimeAdaptation?.labelScale ?? 1)
+            .offset(native.labelOffset)
 
+            if native.trackpadIndicatorsVisible == true {
             HStack(spacing: 7) {
-                Capsule().fill(foreground.opacity(0.34))
-                Capsule().fill(foreground.opacity(0.18))
+                Capsule().fill(native.resolvedPointingPaint?.trackpadIndicatorColor?.swiftUIColor ?? .clear)
+                Capsule().fill(native.resolvedPointingPaint?.trackpadSecondaryIndicatorColor?.swiftUIColor ?? .clear)
             }
-            .frame(width: control.size.width * 0.34, height: 5)
-            .offset(y: control.size.height * 0.36)
+            .frame(width: native.localSurfaceFrames["trackpad-indicators"]?.width ?? 0,
+                   height: native.localSurfaceFrames["trackpad-indicators"]?.height ?? 0)
+            .offset(y: (native.localSurfaceFrames["trackpad-indicators"]?.midY ?? control.size.height / 2) - control.size.height / 2)
+            .opacity(maskOpacity("trackpad-indicators"))
+            }
         }
         .allowsHitTesting(false)
     }
@@ -8280,6 +8873,80 @@ private struct GamepadControlBarEditorItem<Content: View>: View {
     }
 }
 
+/// Settled drawer composition shared by live iOS and native review. Gesture, fade and pin
+/// policy stay with the caller; this view owns only spacing, padding and native surface paint.
+struct GamepadTopBarDrawerSurface: View {
+    let layout: GamepadTopBarDrawerLayout
+    let isVisible: Bool
+    let content: AnyView
+    let reveal: AnyView
+    var layoutCollector: GamepadNativeBarLayoutCollector? = nil
+    @Environment(\.colorScheme) private var colorScheme
+    var body: some View {
+        let paint = GamepadNativeBarContainerPresentation(isLandscape: true, colorScheme: colorScheme)
+        VStack(spacing: Geist.Spacing.s1) {
+            if isVisible {
+                content
+                    .shadow(color: paint.shadowColor.swiftUIColor, radius: paint.shadowRadius, y: paint.shadowY)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+            reveal.modifier(GamepadNativeBarLayoutModifier(collector: layoutCollector, id: "native-drawer/reveal"))
+        }
+        .padding(.top, layout.topPadding)
+        .padding(.leading, layout.leadingPadding)
+        .padding(.trailing, layout.trailingPadding)
+        .frame(maxWidth: .infinity, alignment: .top)
+        .modifier(GamepadNativeBarLayoutModifier(collector: layoutCollector, id: "native-drawer"))
+    }
+}
+
+/// Review-only layout capture. No observable state or runtime routing is involved.
+@MainActor
+final class GamepadNativeBarLayoutCollector {
+    static let coordinateSpace = "ThumbleNativeBarLayout"
+    private(set) var frames: [String: CGRect] = [:]
+    private(set) var paintItems: [String: GamepadNativeBarItemEvidence] = [:]
+    private(set) var paintIcons: [String: GamepadNativeBarIconEvidence] = [:]
+    func recordIcon(_ evidence: GamepadNativeBarIconEvidence) {
+        guard paintIcons.count < 10 || paintIcons[evidence.surfaceID] != nil else { return }
+        paintIcons[evidence.surfaceID] = evidence
+    }
+    var paint: GamepadNativeBarPaintEvidence { .init(items: paintItems, icons: paintIcons, surfaceIDs: Set(frames.keys)) }
+    func recordPaint(_ evidence: GamepadNativeBarItemEvidence) {
+        guard paintItems.count < 10 || paintItems[evidence.surfaceID] != nil else { return }
+        paintItems[evidence.surfaceID] = evidence
+    }
+    func record(_ id: String, frame: CGRect) {
+        guard frames.count < 32 || frames[id] != nil else { return }
+        frames[id] = frame
+    }
+}
+
+private struct GamepadNativeBarFrameProbe: View {
+    let collector: GamepadNativeBarLayoutCollector
+    let id: String
+    let frame: CGRect
+    var body: some View {
+        collector.record(id, frame: frame)
+        return Color.clear.allowsHitTesting(false).accessibilityHidden(true)
+    }
+}
+
+private struct GamepadNativeBarLayoutModifier: ViewModifier {
+    let collector: GamepadNativeBarLayoutCollector?
+    let id: String
+    func body(content: Content) -> some View {
+        content.background {
+            if let collector {
+                GeometryReader { proxy in
+                    GamepadNativeBarFrameProbe(collector: collector, id: id,
+                        frame: proxy.frame(in: .named(GamepadNativeBarLayoutCollector.coordinateSpace)))
+                }
+            }
+        }
+    }
+}
+
 private struct GamepadControlBarOutputPreview: View {
     @Environment(\.colorScheme) private var colorScheme
     let customization: GamepadCustomization
@@ -8289,8 +8956,13 @@ private struct GamepadControlBarOutputPreview: View {
     let selectedItem: GamepadControlBarItem?
     let onSelectItem: ((GamepadControlBarItem) -> Void)?
     let onMoveItem: ((GamepadControlBarItem, Int) -> Void)?
+    var showsRevealHandle: Bool = true
+    var isEditing: Bool = false
+    var layoutCollector: GamepadNativeBarLayoutCollector? = nil
+    var showsBarShadow: Bool = true
 
     var body: some View {
+        let paint = GamepadNativeBarContainerPresentation(isLandscape: isLandscape, colorScheme: colorScheme)
         VStack(spacing: Geist.Spacing.s1) {
             GamepadControlBarLayout(
                 items: visibleItems,
@@ -8304,16 +8976,21 @@ private struct GamepadControlBarOutputPreview: View {
                 ) {
                     previewItem(item, isCompact: isCompact)
                 }
+                .modifier(GamepadNativeBarLayoutModifier(collector: layoutCollector, id: "native-control-bar/" + item.rawValue))
             }
-            .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.22 : 0.08), radius: 10, y: 4)
+            .modifier(GamepadNativeBarLayoutModifier(collector: layoutCollector, id: "native-control-bar"))
+            .shadow(color: showsBarShadow ? paint.shadowColor.swiftUIColor : .clear, radius: paint.shadowRadius, y: paint.shadowY)
 
-            revealHandle
-                .allowsHitTesting(onSelectItem == nil)
+            if showsRevealHandle {
+                revealHandle.allowsHitTesting(onSelectItem == nil)
+            }
         }
     }
 
     private var visibleItems: [GamepadControlBarItem] {
-        items.filter { !customization.controlBarItemCustomization(for: $0).isHidden }
+        GamepadControllerPresentationRouting.visibleControlBarItems(items,
+            hiddenItems: Set(items.filter { customization.controlBarItemCustomization(for: $0).isHidden }),
+            hasProfiles: context.hasProfiles, hasLaunchTarget: context.launchTarget != nil)
     }
 
     @ViewBuilder
@@ -8341,7 +9018,7 @@ private struct GamepadControlBarOutputPreview: View {
         case .spacer:
             Spacer(minLength: (isCompact ? 2 : Geist.Spacing.s2) * customization.controlBarItemCustomization(for: .spacer).widthScale)
         case .editLayout:
-            iconButton(item: .editLayout, systemImage: "lock.fill")
+            editButton(isCompact: isCompact)
         case .settings:
             iconButton(item: .settings, systemImage: "gearshape.fill")
         case .home:
@@ -8351,155 +9028,36 @@ private struct GamepadControlBarOutputPreview: View {
         }
     }
 
-    private var profileButton: some View {
+    private var profileButton: some View { profileButton(compact: false) }
+    private var compactProfileButton: some View { profileButton(compact: true) }
+    private func profileButton(compact: Bool) -> some View {
         Button(action: {}) {
-            HStack(spacing: Geist.Spacing.s1) {
-                GamepadControlBarItemIcon(
-                    customization: customization,
-                    item: .profileMenu,
-                    defaultSystemImage: context.isSelectedProfileDefault ? "star.fill" : "rectangle.grid.2x2",
-                    fontSize: 11
-                )
-                Text(context.profileName)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.72)
-            }
-            .frame(maxWidth: 160)
-        }
-        .gamepadControlBarButtonStyle(customization: customization, item: .profileMenu)
+            GamepadControlBarItemLabel(customization: customization, content: .profile(
+                name: context.profileName, isDefault: context.isSelectedProfileDefault, compact: compact))
+        }.gamepadControlBarButtonStyle(customization: customization, item: .profileMenu).disabled(isEditing)
     }
-
-    private var compactProfileButton: some View {
-        Button(action: {}) {
-            GamepadControlBarItemIcon(
-                customization: customization,
-                item: .profileMenu,
-                defaultSystemImage: context.isSelectedProfileDefault ? "star.fill" : "rectangle.grid.2x2",
-                fontSize: 13,
-                frameWidth: 28
-            )
-        }
-        .gamepadControlBarButtonStyle(customization: customization, item: .profileMenu)
-    }
-
     private func launchTargetButton(_ launchTarget: GamepadProfileLaunchTarget, isCompact: Bool) -> some View {
         Button(action: {}) {
-            if customization.controlBarItemCustomization(for: .launchTarget).icon != nil {
-                GamepadControlBarItemIcon(
-                    customization: customization,
-                    item: .launchTarget,
-                    defaultSystemImage: "app.badge.fill",
-                    fontSize: isCompact ? 18 : 20,
-                    frameWidth: 28
-                )
-            } else {
-                launchTargetIcon(launchTarget, size: isCompact ? 18 : 20)
-                    .frame(width: 28, height: 28)
-            }
-        }
-        .gamepadControlBarButtonStyle(customization: customization, item: .launchTarget)
-        .disabled(!context.isConnected)
+            GamepadControlBarItemLabel(customization: customization, content: .launch(target: launchTarget, compact: isCompact))
+        }.gamepadControlBarButtonStyle(customization: customization, item: .launchTarget).disabled(!context.isConnected)
     }
-
-    @ViewBuilder
-    private func launchTargetIcon(_ launchTarget: GamepadProfileLaunchTarget, size: CGFloat) -> some View {
-#if os(macOS)
-        if let data = launchTarget.iconPNGData, let image = GamepadImageDecodeCache.image(for: data) {
-            Image(nsImage: image)
-                .renderingMode(.original)
-                .resizable()
-                .scaledToFit()
-                .frame(width: size, height: size)
-                .clipShape(RoundedRectangle(cornerRadius: max(4, size * 0.22), style: .continuous))
-        } else {
-            fallbackLaunchTargetIcon(size: size)
-        }
-#elseif os(iOS)
-        if let data = launchTarget.iconPNGData, let image = GamepadImageDecodeCache.image(for: data) {
-            Image(uiImage: image)
-                .renderingMode(.original)
-                .resizable()
-                .scaledToFit()
-                .frame(width: size, height: size)
-                .clipShape(RoundedRectangle(cornerRadius: max(4, size * 0.22), style: .continuous))
-        } else {
-            fallbackLaunchTargetIcon(size: size)
-        }
-#endif
-    }
-
-    private func fallbackLaunchTargetIcon(size: CGFloat) -> some View {
-        Image(systemName: "app.badge.fill")
-            .font(.system(size: size, weight: .semibold))
-            .frame(width: size, height: size)
-    }
-
     private func iconButton(item: GamepadControlBarItem, systemImage: String) -> some View {
         Button(action: {}) {
-            GamepadControlBarItemIcon(
-                customization: customization,
-                item: item,
-                defaultSystemImage: systemImage,
-                fontSize: 13,
-                frameWidth: 28
-            )
-        }
-        .gamepadControlBarButtonStyle(customization: customization, item: item)
+            GamepadControlBarItemLabel(customization: customization, content: .icon(item: item, symbol: systemImage))
+        }.gamepadControlBarButtonStyle(customization: customization, item: item)
     }
-
-    @ViewBuilder
+    private func editButton(isCompact: Bool) -> some View {
+        Button(action: {}) {
+            GamepadControlBarItemLabel(customization: customization, content: .edit(isEditing: isEditing, compact: isCompact))
+        }.gamepadControlBarButtonStyle(customization: customization, item: .editLayout, variant: isEditing ? .primary : .secondary)
+    }
     private func connectionButton(isCompact: Bool) -> some View {
-        if context.isConnected {
-            Button(action: {}) {
-                if isCompact {
-                    GamepadControlBarItemIcon(
-                        customization: customization,
-                        item: .connectionAction,
-                        defaultSystemImage: "wifi.slash",
-                        fontSize: 13,
-                        frameWidth: 28
-                    )
-                } else if customization.controlBarItemCustomization(for: .connectionAction).icon != nil {
-                    HStack(spacing: Geist.Spacing.s1) {
-                        GamepadControlBarItemIcon(
-                            customization: customization,
-                            item: .connectionAction,
-                            defaultSystemImage: "wifi.slash",
-                            fontSize: 13
-                        )
-                        Text("Disconnect")
-                    }
-                } else {
-                    Text("Disconnect")
-                }
-            }
-            .gamepadControlBarButtonStyle(customization: customization, item: .connectionAction, variant: .error)
-        } else {
-            Button(action: {}) {
-                if isCompact {
-                    GamepadControlBarItemIcon(
-                        customization: customization,
-                        item: .connectionAction,
-                        defaultSystemImage: "link",
-                        fontSize: 13,
-                        frameWidth: 28
-                    )
-                } else if customization.controlBarItemCustomization(for: .connectionAction).icon != nil {
-                    HStack(spacing: Geist.Spacing.s1) {
-                        GamepadControlBarItemIcon(
-                            customization: customization,
-                            item: .connectionAction,
-                            defaultSystemImage: "link",
-                            fontSize: 13
-                        )
-                        Text("Connect Mac")
-                    }
-                } else {
-                    Text("Connect Mac")
-                }
-            }
-            .gamepadControlBarButtonStyle(customization: customization, item: .connectionAction)
-        }
+        Button(action: {}) {
+            GamepadControlBarItemLabel(customization: customization, content: .connection(
+                title: context.isConnected ? "Disconnect" : "Connect Mac",
+                symbol: context.isConnected ? "wifi.slash" : "link", compact: isCompact))
+        }.gamepadControlBarButtonStyle(customization: customization, item: .connectionAction,
+            variant: context.isConnected ? .error : .secondary)
     }
 
     private var revealHandle: some View {
@@ -8613,10 +9171,10 @@ private struct GamepadEditorLayerModel {
 
     init(
         customization: GamepadCustomization,
-        defaultLabelProvider: ((GameButton) -> String?)? = nil
+        defaultLabelProvider: ((KeypadElementID) -> String?)? = nil
     ) {
-        let builtInControls = GameButton.builtInControls
-        var builtInLayouts: [GameButton: GamepadButtonCustomization] = [:]
+        let builtInControls = DefaultKeypadElements.ids
+        var builtInLayouts: [KeypadElementID: GamepadButtonCustomization] = [:]
         builtInLayouts.reserveCapacity(builtInControls.count)
         for button in builtInControls {
             builtInLayouts[button] = customization.buttonCustomization(for: button)
@@ -8664,7 +9222,7 @@ private struct GamepadEditorLayerModel {
             + normalizedCustomButtons.map { .custom($0.id) }
 
         _ = defaultLabelProvider
-        let visualLabelForButton: (GameButton) -> String = { button in
+        let visualLabelForButton: (KeypadElementID) -> String = { button in
             customization.visualLabel(for: button)
         }
 
@@ -9628,7 +10186,7 @@ struct GamepadCustomizationEditor: View {
     private let onImportProfiles: ((Data, String, Bool) throws -> String)?
     private let onRegisterProfileUndoSnapshot: ((String) -> Void)?
     private let onLaunchProfileTarget: ((UUID) -> Void)?
-    private let defaultLabelProvider: ((GameButton) -> String?)?
+    private let defaultLabelProvider: ((KeypadElementID) -> String?)?
     private let profileOutputModeContent: (() -> AnyView)?
     private let selectedElementOutputContent: ((KeypadElementInputID) -> AnyView)?
     private let connectedDeviceInfo: ControllerClientDeviceInfo?
@@ -9743,6 +10301,7 @@ struct GamepadCustomizationEditor: View {
     @AppStorage(GamepadEditorDeviceCatalog.didChooseFrameDefaultsKey) private var didChooseDeviceFrameManually = false
     @AppStorage("PocketPad.GamepadEditor.editingColorScheme") private var editingColorSchemeRawValue: String = GamepadEditorColorScheme.system.rawValue
 
+    private let configurationLoadError: String?
     private let externallyPressedElementInputs: Set<KeypadElementInputID>
     private let editorDeliveryStatusText: String?
     private let onTestElementInputChanged: ((KeypadElementInputID, Bool) -> Void)?
@@ -9760,7 +10319,7 @@ struct GamepadCustomizationEditor: View {
         onImportProfiles: ((Data, String, Bool) throws -> String)? = nil,
         onRegisterProfileUndoSnapshot: ((String) -> Void)? = nil,
         onLaunchProfileTarget: ((UUID) -> Void)? = nil,
-        defaultLabelProvider: ((GameButton) -> String?)? = nil,
+        defaultLabelProvider: ((KeypadElementID) -> String?)? = nil,
         profileOutputModeContent: (() -> AnyView)? = nil,
         selectedElementOutputContent: ((KeypadElementInputID) -> AnyView)? = nil,
         connectedDeviceInfo: ControllerClientDeviceInfo? = nil,
@@ -9770,6 +10329,7 @@ struct GamepadCustomizationEditor: View {
         onTestElementInputTap: ((KeypadElementInputID, Int) -> Void)? = nil
     ) {
         let loadedProfiles: GamepadConfigurationProfilePersistence.LoadedState
+        var loadError: String?
         if let initialProfiles {
             loadedProfiles = GamepadConfigurationProfilePersistence.normalizedState(
                 profiles: initialProfiles,
@@ -9778,10 +10338,15 @@ struct GamepadCustomizationEditor: View {
                 fallbackCustomization: customization.wrappedValue
             )
         } else {
-            loadedProfiles = GamepadConfigurationProfilePersistence.load(
-                activeCustomization: customization.wrappedValue
-            )
+            do {
+                loadedProfiles = try GamepadConfigurationProfilePersistence.load(activeCustomization: customization.wrappedValue)
+            } catch {
+                // An inert UI sentinel, never a recovered/persisted configuration.
+                loadedProfiles = .init(profiles: [], activeProfileID: UUID(), defaultProfileID: UUID())
+                loadError = error.localizedDescription
+            }
         }
+        self.configurationLoadError = loadError
 
         let initialCustomization = customization.wrappedValue.normalized
 
@@ -9812,7 +10377,7 @@ struct GamepadCustomizationEditor: View {
         self.editorDeliveryStatusText = editorDeliveryStatusText
         self.onTestElementInputChanged = onTestElementInputChanged
         self.onTestElementInputTap = onTestElementInputTap
-        self._selectedControlID = State(initialValue: .builtin(.jump))
+        self._selectedControlID = State(initialValue: .builtin(.preset(5)))
         self._selectedControlIDs = State(initialValue: [])
         self._isControlSelectionActive = State(initialValue: false)
         self._profiles = State(initialValue: loadedProfiles.profiles)
@@ -9932,7 +10497,11 @@ struct GamepadCustomizationEditor: View {
     }
 
     var body: some View {
-        presentedEditor
+        if let configurationLoadError {
+            ContentUnavailableView("Configuration Unavailable", systemImage: "exclamationmark.triangle", description: Text(configurationLoadError))
+        } else {
+            presentedEditor
+        }
     }
 
     private var editorCore: some View {
@@ -10523,14 +11092,16 @@ struct GamepadCustomizationEditor: View {
                 addControlPaletteButton(
                     title: "Button",
                     subtitle: "Drag to draw a key",
-                    systemImage: "rectangle.roundedtop"
+                    systemImage: "rectangle.roundedtop",
+                    isDisabled: !customization.canAddControl(ofKind: .button)
                 ) {
                     activeCanvasTool = .rectangle
                 }
                 addControlPaletteButton(
                     title: "Text",
                     subtitle: "Overlay a letter or caption",
-                    systemImage: "textformat"
+                    systemImage: "textformat",
+                    isDisabled: !customization.canAddControl(ofKind: .text)
                 ) {
                     addTextControl()
                 }
@@ -10538,7 +11109,7 @@ struct GamepadCustomizationEditor: View {
                     title: "Joystick",
                     subtitle: "Digital or analog stick",
                     systemImage: "circle.grid.cross",
-                    isDisabled: customization.customButtons.filter { $0.normalized.isJoystick }.count >= GamepadCustomization.maximumJoysticks
+                    isDisabled: !customization.canAddControl(ofKind: .joystick)
                 ) {
                     addJoystickControl()
                 }
@@ -10546,7 +11117,7 @@ struct GamepadCustomizationEditor: View {
                     title: "Trigger",
                     subtitle: "Digital or analog LT/RT",
                     systemImage: "slider.horizontal.3",
-                    isDisabled: customization.customButtons.filter { $0.normalized.isTrigger }.count >= GamepadCustomization.maximumTriggers
+                    isDisabled: !customization.canAddControl(ofKind: .trigger)
                 ) {
                     addTriggerControl()
                 }
@@ -10554,7 +11125,7 @@ struct GamepadCustomizationEditor: View {
                     title: "Trackpad",
                     subtitle: "Pointer, click, and scroll",
                     systemImage: "rectangle.and.hand.point.up.left",
-                    isDisabled: customization.customButtons.filter { $0.normalized.isTrackpad }.count >= GamepadCustomization.maximumTrackpads
+                    isDisabled: !customization.canAddControl(ofKind: .trackpad)
                 ) {
                     addTrackpadControl()
                 }
@@ -11378,7 +11949,8 @@ struct GamepadCustomizationEditor: View {
             }
             do {
                 let data = try Data(contentsOf: url)
-                onRegisterProfileUndoSnapshot?("Import Keypad Setups")
+                // The authority callback captures undo before import and registers
+                // it only after a successful commit, never for a rejected file.
                 profileImportNotice = try onImportProfiles(
                     data,
                     url.deletingPathExtension().lastPathComponent,
@@ -13194,7 +13766,7 @@ struct GamepadCustomizationEditor: View {
         guard let selectedStyleTokenID else { return }
         update(actionName: "Delete Style") { next in
             next.styleLibrary.styles.removeAll { $0.id == selectedStyleTokenID }
-            for button in GameButton.allCases {
+            for button in DefaultKeypadElements.ids {
                 var layout = next.buttonCustomization(for: button)
                 if layout.styleID == selectedStyleTokenID {
                     layout.styleID = nil
@@ -16163,18 +16735,18 @@ struct GamepadCustomizationEditor: View {
         let systemItems = GamepadSystemControl.allCases.map { GamepadControlIdentity.system($0) }
         let controlBarItems = customization.normalized.controlBarItems.map { GamepadControlIdentity.controlBarItem($0) }
         let builtinItems = shouldListBuiltInComponents(for: customization)
-            ? GameButton.builtInControls.map { GamepadControlIdentity.builtin($0) }
+            ? DefaultKeypadElements.ids.map { GamepadControlIdentity.builtin($0) }
             : []
         return systemItems + controlBarItems + builtinItems + customization.customButtons.map { GamepadControlIdentity.custom($0.id) }
     }
 
     private func shouldListBuiltInComponents(for customization: GamepadCustomization) -> Bool {
-        GameButton.builtInControls.contains { !customization.buttonCustomization(for: $0).isHidden }
+        DefaultKeypadElements.ids.contains { !customization.buttonCustomization(for: $0).isHidden }
     }
 
     private func preferredControlSelection(for customization: GamepadCustomization) -> GamepadControlIdentity? {
         let options = controlSelectionOptions(for: customization)
-        let preferred = GamepadControlIdentity.builtin(.jump)
+        let preferred = GamepadControlIdentity.builtin(.preset(5))
         return options.contains(preferred) ? preferred : options.first
     }
 
@@ -17582,12 +18154,12 @@ struct GamepadCustomizationEditor: View {
         setDeviceFrame(frame)
     }
 
-    private func defaultLabel(for button: GameButton) -> String {
+    private func defaultLabel(for button: KeypadElementID) -> String {
         let providedLabel = defaultLabelProvider?(button).map(normalizedGamepadLabel) ?? ""
         return providedLabel.isEmpty ? GamepadCustomization.defaultVisualLabel(for: button) : providedLabel
     }
 
-    private func visualLabel(for button: GameButton) -> String {
+    private func visualLabel(for button: KeypadElementID) -> String {
         customization.visualLabel(for: button, defaultLabel: defaultLabel(for: button))
     }
 
@@ -17629,20 +18201,11 @@ struct GamepadCustomizationEditor: View {
         }
     }
 
-    private func labelBinding(for button: GameButton) -> Binding<String> {
+    private func labelBinding(for button: KeypadElementID) -> Binding<String> {
         Binding(
             get: { customization.labelOverride(for: button) ?? "" },
             set: { newValue in
                 update { $0.setLabel(newValue, for: button) }
-            }
-        )
-    }
-
-    private func customMappedButtonBinding(id: UUID) -> Binding<GameButton> {
-        Binding(
-            get: { customButton(id: id)?.mappedButton ?? .jump },
-            set: { mappedButton in
-                updateCustomButton(id: id) { $0.mappedButton = mappedButton }
             }
         )
     }
@@ -17662,7 +18225,7 @@ struct GamepadCustomizationEditor: View {
             GamepadVisualRole.inferred(for: button, controlKind: .button)
         case .custom(let id):
             if let button = customButton(id: id)?.normalized {
-                GamepadVisualRole.inferred(for: button.mappedButton, controlKind: button.controlKind)
+                GamepadVisualRole.inferred(for: button.inputID, controlKind: button.controlKind)
             } else {
                 .custom
             }
@@ -17676,7 +18239,7 @@ struct GamepadCustomizationEditor: View {
             get: {
                 switch identity {
                 case .builtin(let button):
-                    customization.elements.first(where: { $0.builtInButton == button })?.visualRole
+                    customization.elements.first(where: { $0.defaultControlID == button })?.visualRole
                 case .custom(let id):
                     customButton(id: id)?.visualRole
                         ?? customization.elements.first(where: { $0.id == id })?.visualRole
@@ -17688,7 +18251,7 @@ struct GamepadCustomizationEditor: View {
                 switch identity {
                 case .builtin(let button):
                     update { next in
-                        guard let index = next.elements.firstIndex(where: { $0.builtInButton == button }) else { return }
+                        guard let index = next.elements.firstIndex(where: { $0.defaultControlID == button }) else { return }
                         next.elements[index].visualRole = role
                     }
                 case .custom(let id):
@@ -17727,26 +18290,6 @@ struct GamepadCustomizationEditor: View {
                 }
             }
         )
-    }
-
-    private func joystickDirectionBinding(id: UUID, direction: GamepadJoystickDirection) -> Binding<GameButton> {
-        Binding(
-            get: { joystickMappingValue(id: id)[direction] },
-            set: { button in
-                updateCustomButton(id: id) { customButton in
-                    var mapping = customButton.joystickMapping ?? .movement
-                    mapping[direction] = button
-                    customButton.joystickMapping = mapping
-                    if direction == .up {
-                        customButton.mappedButton = button
-                    }
-                }
-            }
-        )
-    }
-
-    private func joystickMappingValue(id: UUID) -> GamepadJoystickMapping {
-        customButton(id: id)?.normalized.joystickMapping ?? .movement
     }
 
     private func joystickVisualStyleValue(id: UUID) -> GamepadJoystickVisualStyle {
@@ -18003,7 +18546,7 @@ struct GamepadCustomizationEditor: View {
 
     private func selectPreferredComponent(for customization: GamepadCustomization) {
         guard let preferredSelection = preferredControlSelection(for: customization) else {
-            selectedControlID = .builtin(.jump)
+            selectedControlID = .builtin(.preset(5))
             isControlSelectionActive = false
             return
         }
@@ -19627,7 +20170,7 @@ struct GamepadCustomizationEditor: View {
             return buttonCustomization.resolvedShape(defaultShape: GamepadLayoutResolver.defaultShape(for: button))
         case .custom(let id):
             guard let customButton = customButton(id: id) else { return .roundedRectangle }
-            return customButton.layout.resolvedShape(defaultShape: GamepadLayoutResolver.defaultShape(for: customButton.mappedButton))
+            return customButton.layout.resolvedShape(defaultShape: GamepadLayoutResolver.defaultShape(for: customButton.inputID))
         case .system(.topBarActivation):
             return customization.topBarActivationRegion.resolvedShape(defaultShape: .capsule)
         case .controlBarItem(let item):
@@ -19773,19 +20316,20 @@ struct GamepadCustomizationEditor: View {
 
     private func resetKeyLayout() {
         update { $0.resetButtonLayout() }
-        selectComponent(.builtin(.jump))
+        selectComponent(.builtin(.preset(5)))
     }
 
     private func setBuiltInControlsHidden(_ hidden: Bool) {
         update { next in
-            for button in GameButton.builtInControls {
+            if !hidden { next.installDefaultControls() }
+            for button in DefaultKeypadElements.ids {
                 var buttonCustomization = next.buttonCustomization(for: button)
                 buttonCustomization.isHidden = hidden
                 next.setButtonCustomization(buttonCustomization, for: button)
             }
         }
         if !hidden {
-            selectComponent(.builtin(.jump))
+            selectComponent(.builtin(.preset(5)))
         }
     }
 
@@ -19846,7 +20390,7 @@ struct GamepadCustomizationEditor: View {
         } else if let firstSelectedControlID = options.first(where: { resolvedSelectionIDs.contains($0) }) {
             nextPrimaryControlID = firstSelectedControlID
         } else {
-            nextPrimaryControlID = preferredControlSelection(for: normalizedCustomization) ?? .builtin(.jump)
+            nextPrimaryControlID = preferredControlSelection(for: normalizedCustomization) ?? .builtin(.preset(5))
         }
 
         let nextIsControlSelectionActive = selectionWasExplicit
@@ -20036,6 +20580,7 @@ struct GamepadCustomizationEditor: View {
     }
 
     private func addJoystickControl() {
+        guard customization.canAddControl(ofKind: .joystick) else { return }
         let id = UUID()
         var next = customization
         next.addJoystick(id: id)
@@ -20044,6 +20589,7 @@ struct GamepadCustomizationEditor: View {
     }
 
     private func addTriggerControl() {
+        guard customization.canAddControl(ofKind: .trigger) else { return }
         let id = UUID()
         var next = customization
         next.addTrigger(id: id)
@@ -20052,6 +20598,7 @@ struct GamepadCustomizationEditor: View {
     }
 
     private func addTrackpadControl() {
+        guard customization.canAddControl(ofKind: .trackpad) else { return }
         let id = UUID()
         var next = customization
         next.addTrackpad(id: id)
@@ -20060,6 +20607,7 @@ struct GamepadCustomizationEditor: View {
     }
 
     private func addTextControl() {
+        guard customization.canAddControl(ofKind: .text) else { return }
         let id = UUID()
         var next = customization
         let sourceIdentity = selectedControlIDs.count == 1 && selectedControlIsButton
@@ -20132,6 +20680,7 @@ struct GamepadCustomizationEditor: View {
     }
 
     private func addDecorationControl(kind: GamepadDecorationTemplateKind) {
+        guard customization.canAddControl(ofKind: .decoration) else { return }
         let id = UUID()
         var next = customization
         switch kind {
@@ -20306,12 +20855,12 @@ struct GamepadCustomizationEditor: View {
         guard customization.customButtons.contains(where: { $0.id == id }) else { return false }
         var next = customization
         next.removeCustomButton(id: id)
-        applyCustomization(next, selecting: .builtin(.jump), undoActionName: "Delete Key")
+        applyCustomization(next, selecting: .builtin(.preset(5)), undoActionName: "Delete Key")
         return true
     }
 
     @discardableResult
-    private func deleteBuiltInControl(_ button: GameButton) -> Bool {
+    private func deleteBuiltInControl(_ button: KeypadElementID) -> Bool {
         var buttonCustomization = customization.buttonCustomization(for: button)
         guard !buttonCustomization.isHidden else { return false }
         var next = customization
@@ -20528,7 +21077,7 @@ struct GamepadCustomizationEditor: View {
 
     private func validControlSelection(_ selection: GamepadControlIdentity, in customization: GamepadCustomization) -> GamepadControlIdentity {
         let options = controlSelectionOptions(for: customization)
-        return options.contains(selection) ? selection : preferredControlSelection(for: customization) ?? .builtin(.jump)
+        return options.contains(selection) ? selection : preferredControlSelection(for: customization) ?? .builtin(.preset(5))
     }
 
     private func reconcileSelection(in customization: GamepadCustomization) {
@@ -20539,7 +21088,7 @@ struct GamepadCustomizationEditor: View {
         if !validSelectionIDs.contains(selectedControlID) {
             selectedControlID = options.first(where: { validSelectionIDs.contains($0) })
                 ?? preferredControlSelection(for: customization)
-                ?? .builtin(.jump)
+                ?? .builtin(.preset(5))
         }
         isControlSelectionActive = isControlSelectionActive && !validSelectionIDs.isEmpty
     }
@@ -20895,7 +21444,7 @@ struct GamepadCustomizationEditor: View {
 
     private func resetActiveConfiguration() {
         applyCustomization(.defaultValue, undoActionName: "Reset Keypad")
-        selectComponent(.builtin(.jump))
+        selectComponent(.builtin(.preset(5)))
         onReset?()
     }
 
@@ -20913,7 +21462,7 @@ struct GamepadCustomizationEditor: View {
                 customization.assetLibrary = normalizedCustomization.assetLibrary.normalized
                 let validStyleIDs = Set(customization.styleLibrary.styles.map(\.id))
 
-                for button in GameButton.allCases {
+                for button in DefaultKeypadElements.ids {
                     var layout = customization.buttonCustomization(for: button)
                     if let styleID = layout.styleID, !validStyleIDs.contains(styleID) {
                         layout.styleID = nil
@@ -23499,7 +24048,7 @@ private struct GamepadAlignmentSnapCandidate {
 struct GamepadResolvedControlsLayoutCacheKey: Equatable {
     struct Control: Equatable {
         let id: GamepadControlIdentity
-        let mappedButton: GameButton
+        let inputID: KeypadElementID?
         let controlKind: GamepadCustomControlKind
         let centerX: CGFloat?
         let centerY: CGFloat?
@@ -23511,12 +24060,12 @@ struct GamepadResolvedControlsLayoutCacheKey: Equatable {
 
         init(
             id: GamepadControlIdentity,
-            mappedButton: GameButton,
+            inputID: KeypadElementID?,
             controlKind: GamepadCustomControlKind,
             layout: GamepadButtonCustomization
         ) {
             self.id = id
-            self.mappedButton = mappedButton
+            self.inputID = inputID
             self.controlKind = controlKind
             self.centerX = layout.centerX
             self.centerY = layout.centerY
@@ -23537,32 +24086,25 @@ struct GamepadResolvedControlsLayoutCacheKey: Equatable {
         layoutMode = customization.layoutMode
         controlScale = customization.controlScale
 
-        let builtInControls = GameButton.builtInControls.map { button in
+        let mirrors = customization.customButtons.reduce(into: [UUID: GamepadCustomButton]()) { $0[$1.id] = $1 }
+        let elementControls = customization.elements.map { element in
             Control(
-                id: .builtin(button),
-                mappedButton: button,
-                controlKind: .button,
-                layout: customization.buttonCustomization(for: button)
-            )
-        }
-        let customControls = customization.customButtons.map { button in
-            Control(
-                id: .custom(button.id),
-                mappedButton: button.mappedButton,
-                controlKind: button.controlKind,
-                layout: button.layout
+                id: element.kind == .button ? (element.defaultControlID.map { .builtin($0) } ?? .custom(element.id)) : .custom(element.id),
+                inputID: element.inputID,
+                controlKind: mirrors[element.id]?.controlKind ?? element.kind,
+                layout: (mirrors[element.id]?.layout ?? customization.buttonCustomizations[element.inputID] ?? element.layout).normalized
             )
         }
         let systemControls = [
             Control(
                 id: .system(.topBarActivation),
-                mappedButton: .pause,
+                inputID: nil,
                 controlKind: .decoration,
                 layout: customization.topBarActivationRegion.normalized
             )
         ]
 
-        controls = builtInControls + customControls + systemControls
+        controls = elementControls + systemControls
         layerOrder = customization.orderedControlIdentitiesForDesign
     }
 }
@@ -23571,13 +24113,14 @@ private extension GamepadResolvedControl {
     func refreshingDynamicValues(from customization: GamepadCustomization) -> GamepadResolvedControl? {
         switch id {
         case .builtin(let button):
-            let layout = customization.buttonCustomization(for: button)
+            guard let element = customization.elements.first(where: { $0.inputID == button }) else { return nil }
+            let layout = (customization.buttonCustomizations[button] ?? element.layout).normalized
             guard !layout.isHidden else { return nil }
             return GamepadResolvedControl(
                 id: id,
                 elementID: KeypadElement.builtInID(for: button),
-                mappedButton: button,
-                label: customization.visualLabel(for: button),
+                inputID: button,
+                label: customization.labelOverride(for: button) ?? element.label,
                 normalizedCenter: normalizedCenter,
                 center: center,
                 size: size,
@@ -23587,7 +24130,7 @@ private extension GamepadResolvedControl {
                 isCustom: false,
                 isLocationLocked: layout.isLocationLocked,
                 controlKind: .button,
-                visualRole: customization.elements.first(where: { $0.builtInButton == button })?.visualRole
+                visualRole: customization.elements.first(where: { $0.defaultControlID == button })?.visualRole
                     ?? GamepadVisualRole.inferred(for: button, controlKind: .button),
                 joystickMapping: nil,
                 joystickOutputSettings: nil,
@@ -23596,14 +24139,18 @@ private extension GamepadResolvedControl {
             )
 
         case .custom(let id):
-            guard let button = customization.customButtons.first(where: { $0.id == id })?.normalized,
-                  !button.layout.isHidden
-            else { return nil }
-            let fallbackLabel = customization.visualLabel(for: button.mappedButton)
+            let element = customization.elements.first { $0.id == id }
+            let record = customization.customButtons.first(where: { $0.id == id }) ?? element.map {
+                GamepadCustomButton(id: $0.id, label: $0.label, layout: $0.layout, controlKind: $0.kind, visualRole: $0.visualRole,
+                                    joystickMapping: $0.joystickMapping, joystickOutputSettings: $0.joystickOutputSettings,
+                                    triggerSettings: $0.triggerSettings, trackpadSettings: $0.trackpadSettings)
+            }
+            guard let button = record?.normalized, !button.layout.isHidden else { return nil }
+            let fallbackLabel = customization.visualLabel(for: button.inputID)
             return GamepadResolvedControl(
                 id: self.id,
                 elementID: button.id,
-                mappedButton: button.mappedButton,
+                inputID: button.inputID,
                 label: button.visualLabel(fallback: fallbackLabel),
                 normalizedCenter: normalizedCenter,
                 center: center,
@@ -23615,8 +24162,8 @@ private extension GamepadResolvedControl {
                 isLocationLocked: button.layout.isLocationLocked,
                 controlKind: button.controlKind,
                 visualRole: button.visualRole
-                    ?? GamepadVisualRole.inferred(for: button.mappedButton, controlKind: button.controlKind),
-                joystickMapping: button.isJoystick ? (button.joystickMapping ?? .movement) : nil,
+                    ?? GamepadVisualRole.inferred(for: button.inputID, controlKind: button.controlKind),
+                joystickMapping: button.isJoystick ? button.joystickMapping : nil,
                 joystickOutputSettings: button.isJoystick ? (button.joystickOutputSettings ?? .defaultValue).normalized : nil,
                 triggerSettings: button.isTrigger ? (button.triggerSettings ?? .defaultValue).normalized : nil,
                 trackpadSettings: button.isTrackpad ? (button.trackpadSettings ?? .defaultValue).normalized : nil
@@ -23628,7 +24175,7 @@ private extension GamepadResolvedControl {
             return GamepadResolvedControl(
                 id: id,
                 elementID: nil,
-                mappedButton: .pause,
+                inputID: nil,
                 label: GamepadSystemControl.topBarActivation.displayName,
                 normalizedCenter: normalizedCenter,
                 center: center,
@@ -23655,16 +24202,16 @@ private extension GamepadResolvedControl {
 final class GamepadResolvedControlsCache {
     private var cachedLayoutKey: GamepadResolvedControlsLayoutCacheKey?
     private var cachedLayoutSize: CGSize?
-    private var cachedDefaultLabels: [GameButton: String] = [:]
+    private var cachedDefaultLabels: [KeypadElementID: String] = [:]
     private var cachedControls: [GamepadResolvedControl] = []
     private(set) var resolutionCount = 0
 
     func controls(
         for customization: GamepadCustomization,
         in layoutSize: CGSize,
-        defaultLabelProvider: ((GameButton) -> String?)?
+        defaultLabelProvider: ((KeypadElementID) -> String?)?
     ) -> [GamepadResolvedControl] {
-        let defaultLabels = Self.defaultLabels(from: defaultLabelProvider)
+        let defaultLabels = Self.defaultLabels(for: customization, from: defaultLabelProvider)
         let layoutKey = GamepadResolvedControlsLayoutCacheKey(customization: customization)
         if cachedLayoutSize == layoutSize,
            cachedDefaultLabels == defaultLabels,
@@ -23689,11 +24236,11 @@ final class GamepadResolvedControlsCache {
         return controls
     }
 
-    private static func defaultLabels(from provider: ((GameButton) -> String?)?) -> [GameButton: String] {
+    private static func defaultLabels(for customization: GamepadCustomization, from provider: ((KeypadElementID) -> String?)?) -> [KeypadElementID: String] {
         guard let provider else { return [:] }
-        var labels: [GameButton: String] = [:]
-        labels.reserveCapacity(GameButton.builtInControls.count)
-        for button in GameButton.builtInControls {
+        var labels: [KeypadElementID: String] = [:]
+        labels.reserveCapacity(customization.elements.count)
+        for button in customization.elements.map(\.inputID) {
             if let label = provider(button) {
                 labels[button] = label
             }
@@ -23717,7 +24264,7 @@ private struct GamepadLayoutDesigner: View {
     var onTestInputChanged: (KeypadElementInputID, Bool) -> Void = { _, _ in }
     var layoutSize: CGSize?
     var displayScale: CGFloat = 1
-    var defaultLabelProvider: ((GameButton) -> String?)? = nil
+    var defaultLabelProvider: ((KeypadElementID) -> String?)? = nil
     var groupedSelectionForControl: (GamepadControlIdentity) -> Set<GamepadControlIdentity>? = { _ in nil }
     var onBeginUndoableChange: (String) -> Void = { _ in }
     var onEndEditingGesture: () -> Void = {}
@@ -23812,7 +24359,7 @@ private struct GamepadLayoutDesigner: View {
                         customization: customization,
                         isSelected: isSelected,
                         isPressed: isPressed,
-                        secondaryBindingText: defaultLabelProvider?(control.mappedButton),
+                        secondaryBindingText: control.inputID.flatMap { defaultLabelProvider?($0) },
                         qualityHighlightSeverity: highlightedControlIDs.contains(control.id)
                             ? (highlightedIssueSeverity ?? .warning)
                             : nil,
@@ -24518,7 +25065,7 @@ private struct GamepadLayoutDesigner: View {
 
     private func createCustomButton(from rect: CGRect, tool: GamepadCanvasTool, canvasSize: CGSize) {
         guard let shape = tool.shapeStyle,
-              customization.customButtons.count < GamepadCustomization.maximumCustomButtons
+              customization.canAddControl(ofKind: .button)
         else {
             activeTool = .select
             return
@@ -26010,7 +26557,7 @@ private struct GamepadCustomizationPreview: View {
     var body: some View {
         GamepadLayoutDesigner(
             customization: .constant(customization),
-            selectedControlID: .constant(.builtin(.jump)),
+            selectedControlID: .constant(.builtin(.preset(5))),
             selectedControlIDs: .constant([]),
             isControlSelectionActive: .constant(false),
             activeTool: .constant(.select)

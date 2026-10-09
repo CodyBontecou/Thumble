@@ -8,7 +8,7 @@ Example CSS-authored Thumble skin workspace targeting `showcase-controller-v1`.
 
 ```bash
 thumble skin css lint .
-thumble skin css computed . --control builtin-jump --scheme dark --state pressed
+thumble skin css computed . --control builtin-00000000-0000-0000-0000-000000000105 --scheme dark --state pressed
 thumble skin compile . -o build/css-first-light-1.0.0.pocketpad --clean --strict
 thumble skin validate build/css-first-light-1.0.0.pocketpad --strict
 thumble skin preview . -o reviews/contact-sheet-1.png \

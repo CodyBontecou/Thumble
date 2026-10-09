@@ -22,6 +22,13 @@ public struct KeypadKeyboardBinding: Codable, Equatable, Hashable, Sendable {
         self.sequence = sequence
     }
 
+    public init?(keyName: String, modifierNames: [String] = []) {
+        guard let keyCode = KeypadKeyboardKeyCatalog.keyCode(named: keyName),
+              let modifiers = KeypadKeyboardKeyCatalog.modifierMask(named: modifierNames)
+        else { return nil }
+        self.init(keyCode: keyCode, modifiersRawValue: modifiers)
+    }
+
     public var strokes: [KeypadKeyboardStrokeBinding] {
         if let sequence, !sequence.isEmpty { return sequence }
         return [KeypadKeyboardStrokeBinding(keyCode: keyCode, modifiersRawValue: modifiersRawValue)]

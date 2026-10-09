@@ -31,7 +31,7 @@ Only one receiver may own input. Use the packaged CLI/helper siblings or install
 thumble gamepad status --json
 thumble gamepad doctor
 thumble gamepad retry
-thumble gamepad test jump                    # installed semantic control, released tap
+thumble gamepad test UUID                    # declared control UUID, released tap
 thumble test down --element UUID#part
 thumble test up --element UUID#part
 thumble release-all

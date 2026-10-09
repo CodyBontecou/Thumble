@@ -76,7 +76,7 @@ pub enum ProfileArtifactSelection {
 }
 
 /// Lossless raw JSON keyed first by profile ID and then, within each value, by
-/// button name. Known binding fields are parsed only during validation/import.
+/// element UUID. Known binding fields are parsed only during validation/import.
 pub type ProfileArtifactBindingMaps = BTreeMap<String, Value>;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -127,6 +127,9 @@ impl ProfileArtifact {
         selection: ProfileArtifactSelection,
         exported_at: i64,
     ) -> Result<Self, ProfileArtifactError> {
+        // Validate the original domain before selection or portable filtering.
+        // Otherwise stale/orphan maps could be silently discarded on export.
+        document.validate().map_err(ProfileArtifactError::InvalidConfiguration)?;
         let portable_profiles = document
             .profiles
             .iter()
@@ -134,9 +137,8 @@ impl ProfileArtifact {
             .collect::<Result<Vec<_>, _>>()?;
         let all_profile_ids = canonical_profile_ids(&portable_profiles)?;
 
-        // Persistent state can retain stale per-profile maps. Match the Swift
-        // exporter by filtering those maps rather than making unrelated stale
-        // entries prevent export.
+        // The original maps are valid. Filtering now only scopes an explicit
+        // single-profile export, never repairs malformed saved references.
         let all_key_bindings =
             filtered_binding_maps(&document.profile_key_bindings, &all_profile_ids)?;
         let all_output_bindings =
@@ -215,13 +217,13 @@ impl ProfileArtifact {
             return Err(ProfileArtifactError::TooLarge(data.len()));
         }
         let artifact: Self =
-            serde_json::from_slice(data).map_err(|_| ProfileArtifactError::DecodingFailed)?;
+            thumble_protocol::decode_unique_json(data).map_err(|_| ProfileArtifactError::DecodingFailed)?;
         artifact.validate()?;
         Ok(artifact)
     }
 
-    /// Decodes either a current hashed artifact or upgrades a legacy keypad
-    /// configuration envelope to the current portable artifact format.
+    /// Decodes a current hashed artifact or a current-version unhashed
+    /// configuration envelope. Obsolete input/configuration schemas are rejected.
     ///
     /// The top-level value is parsed only after applying the artifact byte
     /// bound. Presence of `artifactVersion` is authoritative: such input is
@@ -231,7 +233,7 @@ impl ProfileArtifact {
             return Err(ProfileArtifactError::TooLarge(data.len()));
         }
         let value: Value =
-            serde_json::from_slice(data).map_err(|_| ProfileArtifactError::DecodingFailed)?;
+            thumble_protocol::decode_unique_json(data).map_err(|_| ProfileArtifactError::DecodingFailed)?;
         let object = value
             .as_object()
             .ok_or(ProfileArtifactError::DecodingFailed)?;
@@ -241,17 +243,16 @@ impl ProfileArtifact {
             artifact.validate()?;
             return Ok(artifact);
         }
-        Self::upgrade_legacy_envelope(object)
+        Self::decode_current_envelope(object)
     }
 
-    fn upgrade_legacy_envelope(object: &Map<String, Value>) -> Result<Self, ProfileArtifactError> {
+    fn decode_current_envelope(object: &Map<String, Value>) -> Result<Self, ProfileArtifactError> {
         let schema: String = legacy_required_field(object, "schema")?;
         if schema != PROFILE_ARTIFACT_SCHEMA {
             return Err(ProfileArtifactError::UnsupportedSchema);
         }
-        let version: u32 =
-            legacy_optional_field(object, "version")?.unwrap_or(PROFILE_ARTIFACT_SCHEMA_VERSION);
-        if !(1..=PROFILE_ARTIFACT_SCHEMA_VERSION).contains(&version) {
+        let version: u32 = legacy_required_field(object, "version")?;
+        if version != PROFILE_ARTIFACT_SCHEMA_VERSION {
             return Err(ProfileArtifactError::UnsupportedSchemaVersion(version));
         }
 
@@ -290,6 +291,11 @@ impl ProfileArtifact {
             legacy_optional_field(object, "profileKeyBindings")?.unwrap_or_default();
         let raw_output_bindings: ProfileArtifactBindingMaps =
             legacy_optional_field(object, "profileOutputBindings")?.unwrap_or_default();
+
+        // Import validation precedes filtering/canonical spelling. An invalid
+        // or orphan map must not disappear and turn malformed input into valid data.
+        parse_binding_maps::<KeyBinding>(&raw_key_bindings, &profile_ids)?;
+        parse_binding_maps::<OutputBinding>(&raw_output_bindings, &profile_ids)?;
 
         const LEGACY_FIELDS: &[&str] = &[
             "schema",
@@ -963,10 +969,13 @@ impl Error for ProfileArtifactError {
 mod tests {
     use super::*;
     use crate::{KeyStroke, MAXIMUM_CONFIGURATION_PROFILES};
+    use thumble_protocol::KeypadElementID;
     use serde_json::json;
 
     const FIRST_ID: &str = "aaaaaaaa-0000-0000-0000-000000000201";
     const SECOND_ID: &str = "bbbbbbbb-0000-0000-0000-000000000202";
+    const FIRST_CONTROL: &str = "B2EC156E-F8B8-4D5B-9E82-D222ED2741BE";
+    const SECOND_CONTROL: &str = "11E2E839-0760-43C2-9150-280055D03F3E";
 
     fn profile(id: &str, name: &str) -> Value {
         json!({
@@ -976,7 +985,7 @@ mod tests {
             "orientationPreference": "automatic",
             "outputMode": "keyboard",
             "customization": {
-                "elements": [],
+                "elements": [{"id":if id == FIRST_ID { FIRST_CONTROL } else { SECOND_CONTROL },"kind":"button","label":"Owned"}],
                 "futureTuning": {"gain": 0.125, "label": "未来 🎛️"}
             },
             "futureProfileField": {"nested": [true, null, 3.5]}
@@ -985,13 +994,13 @@ mod tests {
 
     fn document() -> ConfigurationDocument {
         let mut first_keys = ButtonBindings::default();
-        first_keys.insert_raw(
-            "futureButton",
+        first_keys.insert(
+            KeypadElementID::parse(FIRST_CONTROL).unwrap(),
             KeyBinding::from_strokes(vec![KeyStroke::new(12, 1), KeyStroke::new(13, 0)]).unwrap(),
         );
         let mut first_outputs = ButtonBindings::default();
-        first_outputs.insert_raw(
-            "futureButton",
+        first_outputs.insert(
+            KeypadElementID::parse(FIRST_CONTROL).unwrap(),
             OutputBinding::keyboard(KeyBinding::new(12, 1)),
         );
         ConfigurationDocument {
@@ -1012,7 +1021,7 @@ mod tests {
         ProfileArtifact::from_configuration(&document(), ProfileArtifactSelection::All, 10).unwrap()
     }
 
-    fn legacy_envelope(version: u32) -> Value {
+    fn envelope(version: u32) -> Value {
         let mut value = serde_json::to_value(artifact()).unwrap();
         let object = value.as_object_mut().unwrap();
         object.remove("artifactVersion");
@@ -1023,155 +1032,94 @@ mod tests {
     }
 
     #[test]
-    fn legacy_versions_one_and_four_upgrade_to_the_same_deterministic_artifact() {
-        let version_one = serde_json::to_vec(&legacy_envelope(1)).unwrap();
-        let version_four = serde_json::to_vec(&legacy_envelope(4)).unwrap();
-        let upgraded_one = ProfileArtifact::decode_import_json(&version_one).unwrap();
-        let upgraded_four = ProfileArtifact::decode_import_json(&version_four).unwrap();
-
-        assert_eq!(upgraded_one, upgraded_four);
-        assert_eq!(upgraded_one.version, PROFILE_ARTIFACT_SCHEMA_VERSION);
-        assert_eq!(upgraded_one.artifact_version, PROFILE_ARTIFACT_VERSION);
-        assert_eq!(
-            upgraded_one.catalog_revision,
-            ProfileArtifactCatalogRevision::default()
-        );
-        assert_eq!(
-            upgraded_one.encode_compact_json().unwrap(),
-            upgraded_four.encode_compact_json().unwrap()
-        );
-        ProfileArtifact::decode_json(&upgraded_one.encode_compact_json().unwrap()).unwrap();
+    fn current_unhashed_envelope_import_is_deterministic_and_old_versions_are_rejected() {
+        let bytes = serde_json::to_vec(&envelope(PROFILE_ARTIFACT_SCHEMA_VERSION)).unwrap();
+        let first = ProfileArtifact::decode_import_json(&bytes).unwrap();
+        assert_eq!(first, ProfileArtifact::decode_import_json(&bytes).unwrap());
+        ProfileArtifact::decode_json(&first.encode_compact_json().unwrap()).unwrap();
+        for version in [0, 1, 2, 3, 5] {
+            assert_eq!(ProfileArtifact::decode_import_json(&serde_json::to_vec(&envelope(version)).unwrap()),
+                Err(ProfileArtifactError::UnsupportedSchemaVersion(version)));
+        }
     }
 
     #[test]
-    fn legacy_upgrade_defaults_missing_version_to_current_schema_version() {
-        let mut legacy = legacy_envelope(1);
-        legacy.as_object_mut().unwrap().remove("version");
-
-        let upgraded =
-            ProfileArtifact::decode_import_json(&serde_json::to_vec(&legacy).unwrap()).unwrap();
-        assert_eq!(upgraded.schema, PROFILE_ARTIFACT_SCHEMA);
-        assert_eq!(upgraded.version, PROFILE_ARTIFACT_SCHEMA_VERSION);
-        assert_eq!(upgraded.exported_at, 10);
+    fn missing_envelope_version_is_rejected_even_without_timestamp() {
+        for omit_timestamp in [false, true] {
+            let mut value = envelope(PROFILE_ARTIFACT_SCHEMA_VERSION);
+            value.as_object_mut().unwrap().remove("version");
+            if omit_timestamp { value.as_object_mut().unwrap().remove("exportedAt"); }
+            assert_eq!(ProfileArtifact::decode_import_json(&serde_json::to_vec(&value).unwrap()), Err(ProfileArtifactError::DecodingFailed));
+        }
     }
 
     #[test]
-    fn legacy_upgrade_defaults_missing_export_timestamp_to_zero() {
-        let mut legacy = legacy_envelope(1);
-        legacy.as_object_mut().unwrap().remove("exportedAt");
-
-        let upgraded =
-            ProfileArtifact::decode_import_json(&serde_json::to_vec(&legacy).unwrap()).unwrap();
-        assert_eq!(upgraded.schema, PROFILE_ARTIFACT_SCHEMA);
-        assert_eq!(upgraded.version, PROFILE_ARTIFACT_SCHEMA_VERSION);
-        assert_eq!(upgraded.exported_at, 0);
+    fn current_envelope_without_export_timestamp_uses_zero() {
+        let mut value = envelope(PROFILE_ARTIFACT_SCHEMA_VERSION);
+        value.as_object_mut().unwrap().remove("exportedAt");
+        let imported = ProfileArtifact::decode_import_json(&serde_json::to_vec(&value).unwrap()).unwrap();
+        assert_eq!(imported.exported_at, 0);
+        assert_eq!(imported.version, PROFILE_ARTIFACT_SCHEMA_VERSION);
     }
 
     #[test]
-    fn legacy_upgrade_defaults_missing_version_and_export_timestamp() {
-        let mut legacy = legacy_envelope(1);
-        let object = legacy.as_object_mut().unwrap();
-        object.remove("version");
-        object.remove("exportedAt");
-
-        let upgraded =
-            ProfileArtifact::decode_import_json(&serde_json::to_vec(&legacy).unwrap()).unwrap();
-        assert_eq!(upgraded.schema, PROFILE_ARTIFACT_SCHEMA);
-        assert_eq!(upgraded.version, PROFILE_ARTIFACT_SCHEMA_VERSION);
-        assert_eq!(upgraded.exported_at, 0);
-    }
-
-    #[test]
-    fn legacy_upgrade_preserves_safe_json_and_filters_and_remaps_binding_maps() {
-        let orphan = "00000000-0000-0000-0000-000000000999";
-        let mut legacy = legacy_envelope(4);
-        let object = legacy.as_object_mut().unwrap();
-        object.remove("activeProfileID");
-        object.insert("defaultProfileID".to_owned(), Value::Null);
-        object.insert(
-            "futureTopLevel".to_owned(),
-            json!({"nested": [true, null, "kept"]}),
-        );
-        legacy["profiles"][0]["launchTarget"] = json!({
-            "filePath": "/Users/example/Local.app",
-            "bookmarkData": "removed-with-target"
-        });
-        legacy["profiles"][0]["futureProfileField"]["upgrade"] = json!("kept");
-        let keys = legacy["profileKeyBindings"].as_object_mut().unwrap();
-        let mut first_bindings = keys.remove(FIRST_ID).unwrap();
-        first_bindings["futureButton"]["futureLegacyBinding"] = json!({"kept": 1});
-        keys.insert(FIRST_ID.to_ascii_uppercase(), first_bindings);
-        keys.insert(orphan.to_owned(), json!({"futureButton": {"keyCode": 1}}));
-        legacy["profileOutputBindings"][orphan] = json!({"futureButton": {}});
-
-        let upgraded =
-            ProfileArtifact::decode_import_json(&serde_json::to_vec(&legacy).unwrap()).unwrap();
-        assert_eq!(upgraded.active_profile_id.as_deref(), Some(FIRST_ID));
-        assert_eq!(upgraded.default_profile_id, None);
-        assert!(upgraded.profiles[0].get("launchTarget").is_none());
-        assert_eq!(
-            upgraded.profiles[0]["futureProfileField"]["upgrade"],
-            "kept"
-        );
-        assert_eq!(upgraded.extensions["futureTopLevel"]["nested"][2], "kept");
-        assert_eq!(
-            upgraded.profile_key_bindings[FIRST_ID]["futureButton"]["futureLegacyBinding"]["kept"],
-            1
-        );
-        assert!(!upgraded.profile_key_bindings.contains_key(orphan));
-        assert!(!upgraded.profile_output_bindings.contains_key(orphan));
-        let document = upgraded.to_configuration_document().unwrap();
+    fn current_envelope_preserves_safe_metadata_and_uuid_case_without_identity_translation() {
+        let mut value = envelope(PROFILE_ARTIFACT_SCHEMA_VERSION);
+        value.as_object_mut().unwrap().remove("activeProfileID");
+        value["defaultProfileID"] = Value::Null;
+        value["futureTopLevel"] = json!({"nested":[true,null,"kept"]});
+        value["profiles"][0]["futureProfileField"]["import"] = json!("kept");
+        let keys = value["profileKeyBindings"].as_object_mut().unwrap();
+        let mut first = keys.remove(FIRST_ID).unwrap();
+        first[FIRST_CONTROL]["futureBinding"] = json!({"kept":1});
+        keys.insert(FIRST_ID.to_uppercase(), first);
+        let imported = ProfileArtifact::decode_import_json(&serde_json::to_vec(&value).unwrap()).unwrap();
+        assert_eq!(imported.active_profile_id.as_deref(), Some(FIRST_ID));
+        assert_eq!(imported.default_profile_id, None);
+        assert_eq!(imported.profiles[0]["futureProfileField"]["import"], "kept");
+        assert_eq!(imported.extensions["futureTopLevel"]["nested"][2], "kept");
+        assert_eq!(imported.profile_key_bindings[FIRST_ID][FIRST_CONTROL]["futureBinding"]["kept"], 1);
+        let document = imported.to_configuration_document().unwrap();
         assert_eq!(document.active_profile_id, FIRST_ID);
         assert_eq!(document.default_profile_id, FIRST_ID);
     }
 
     #[test]
-    fn legacy_upgrade_rejects_nonportable_globals_references_schema_and_versions() {
-        let mut embedded = legacy_envelope(1);
-        embedded["profiles"][0]["customization"]["asset"] = json!({"data": "embedded"});
-        assert!(matches!(
-            ProfileArtifact::decode_import_json(&serde_json::to_vec(&embedded).unwrap()),
-            Err(ProfileArtifactError::ForbiddenField(field)) if field == "data"
-        ));
+    fn current_envelope_rejects_orphan_invalid_and_duplicate_binding_maps_without_filtering() {
+        let orphan = "00000000-0000-0000-0000-000000000999";
+        for map in ["profileKeyBindings", "profileOutputBindings"] {
+            for (profile, bindings) in [
+                (orphan.to_owned(), json!({FIRST_CONTROL:{"keyCode":1}})),
+                (orphan.to_owned(), json!({"jump":{"keyCode":1}})),
+                ("not-a-profile-uuid".to_owned(), json!({})),
+                (FIRST_ID.to_owned(), json!({"jump":{"keyCode":1}})),
+                (FIRST_ID.to_owned(), json!({FIRST_CONTROL:{"keyCode":1}, FIRST_CONTROL.to_lowercase():{"keyCode":2}})),
+            ] {
+                let mut value = envelope(PROFILE_ARTIFACT_SCHEMA_VERSION);
+                value[map][&profile] = bindings;
+                assert!(ProfileArtifact::decode_import_json(&serde_json::to_vec(&value).unwrap()).is_err(), "{map}: {profile}");
+            }
+        }
+    }
 
-        let mut missing_active_target = legacy_envelope(1);
-        missing_active_target["activeProfileID"] = json!("00000000-0000-0000-0000-000000000999");
-        assert_eq!(
-            ProfileArtifact::decode_import_json(
-                &serde_json::to_vec(&missing_active_target).unwrap()
-            ),
-            Err(ProfileArtifactError::ActiveProfileMissing)
-        );
-        let mut missing_default_target = legacy_envelope(1);
-        missing_default_target["defaultProfileID"] = json!("00000000-0000-0000-0000-000000000999");
-        assert_eq!(
-            ProfileArtifact::decode_import_json(
-                &serde_json::to_vec(&missing_default_target).unwrap()
-            ),
-            Err(ProfileArtifactError::DefaultProfileMissing)
-        );
-
+    #[test]
+    fn current_envelope_rejects_nonportable_globals_references_and_schema() {
+        let mut embedded = envelope(PROFILE_ARTIFACT_SCHEMA_VERSION);
+        embedded["profiles"][0]["customization"]["asset"] = json!({"data":"embedded"});
+        assert!(matches!(ProfileArtifact::decode_import_json(&serde_json::to_vec(&embedded).unwrap()), Err(ProfileArtifactError::ForbiddenField(field)) if field == "data"));
+        for (field, expected) in [("activeProfileID", ProfileArtifactError::ActiveProfileMissing), ("defaultProfileID", ProfileArtifactError::DefaultProfileMissing)] {
+            let mut value = envelope(PROFILE_ARTIFACT_SCHEMA_VERSION);
+            value[field] = json!("00000000-0000-0000-0000-000000000999");
+            assert_eq!(ProfileArtifact::decode_import_json(&serde_json::to_vec(&value).unwrap()), Err(expected));
+        }
         for field in ["keyBindings", "outputBindings", "contentHash"] {
-            let mut forbidden = legacy_envelope(1);
-            forbidden[field] = Value::Null;
-            assert!(
-                ProfileArtifact::decode_import_json(&serde_json::to_vec(&forbidden).unwrap())
-                    .is_err()
-            );
+            let mut value = envelope(PROFILE_ARTIFACT_SCHEMA_VERSION);
+            value[field] = Value::Null;
+            assert!(ProfileArtifact::decode_import_json(&serde_json::to_vec(&value).unwrap()).is_err());
         }
-        let mut wrong_schema = legacy_envelope(1);
+        let mut wrong_schema = envelope(PROFILE_ARTIFACT_SCHEMA_VERSION);
         wrong_schema["schema"] = json!("wrong");
-        assert_eq!(
-            ProfileArtifact::decode_import_json(&serde_json::to_vec(&wrong_schema).unwrap()),
-            Err(ProfileArtifactError::UnsupportedSchema)
-        );
-        for version in [0, 5] {
-            let unsupported = legacy_envelope(version);
-            assert_eq!(
-                ProfileArtifact::decode_import_json(&serde_json::to_vec(&unsupported).unwrap()),
-                Err(ProfileArtifactError::UnsupportedSchemaVersion(version))
-            );
-        }
+        assert_eq!(ProfileArtifact::decode_import_json(&serde_json::to_vec(&wrong_schema).unwrap()), Err(ProfileArtifactError::UnsupportedSchema));
     }
 
     #[test]
@@ -1195,12 +1143,12 @@ mod tests {
     fn artifact_round_trip_preserves_raw_unknown_fields_and_is_deterministic() {
         let mut artifact = artifact();
         let raw_keys = artifact.profile_key_bindings.get_mut(FIRST_ID).unwrap();
-        raw_keys["futureButton"]["futureBinding"] = json!({"label": "値"});
-        raw_keys["futureButton"]["sequence"][1]["futureStroke"] = json!(true);
+        raw_keys[FIRST_CONTROL]["futureBinding"] = json!({"label": "値"});
+        raw_keys[FIRST_CONTROL]["sequence"][1]["futureStroke"] = json!(true);
         let raw_outputs = artifact.profile_output_bindings.get_mut(FIRST_ID).unwrap();
-        raw_outputs["futureButton"]["futureOutput"] = json!(7);
-        raw_outputs["futureButton"]["keyboard"]["futureKeyboard"] = json!("kept");
-        raw_outputs["futureButton"]["gamepadButtons"] = json!(["futureButton", "south"]);
+        raw_outputs[FIRST_CONTROL]["futureOutput"] = json!(7);
+        raw_outputs[FIRST_CONTROL]["keyboard"]["futureKeyboard"] = json!("kept");
+        raw_outputs[FIRST_CONTROL]["gamepadButtons"] = json!(["futureButton", "south"]);
         artifact.extensions.insert(
             "futureTopLevel".to_owned(),
             json!({"ratio": 0.25, "nullable": null}),
@@ -1212,23 +1160,23 @@ mod tests {
         let decoded = ProfileArtifact::decode_json(&first).unwrap();
         assert_eq!(decoded, artifact);
         assert_eq!(
-            decoded.profile_key_bindings[FIRST_ID]["futureButton"]["futureBinding"]["label"],
+            decoded.profile_key_bindings[FIRST_ID][FIRST_CONTROL]["futureBinding"]["label"],
             "値"
         );
         assert_eq!(
-            decoded.profile_key_bindings[FIRST_ID]["futureButton"]["sequence"][1]["futureStroke"],
+            decoded.profile_key_bindings[FIRST_ID][FIRST_CONTROL]["sequence"][1]["futureStroke"],
             true
         );
         assert_eq!(
-            decoded.profile_output_bindings[FIRST_ID]["futureButton"]["futureOutput"],
+            decoded.profile_output_bindings[FIRST_ID][FIRST_CONTROL]["futureOutput"],
             7
         );
         let converted = decoded.to_configuration_document().unwrap();
         assert!(converted.profile_key_bindings[FIRST_ID]
-            .get_raw("futureButton")
+            .get_raw(FIRST_CONTROL)
             .is_some());
         assert!(converted.profile_output_bindings[FIRST_ID]
-            .get_raw("futureButton")
+            .get_raw(FIRST_CONTROL)
             .unwrap()
             .gamepad_buttons
             .contains("futureButton"));
@@ -1302,10 +1250,10 @@ mod tests {
         let mut source = document();
         source.active_profile_id = SECOND_ID.to_owned();
         let mut second_keys = ButtonBindings::default();
-        second_keys.insert_raw("secondButton", KeyBinding::new(14, 0));
+        second_keys.insert(KeypadElementID::parse(SECOND_CONTROL).unwrap(), KeyBinding::new(14, 0));
         let mut second_outputs = ButtonBindings::default();
-        second_outputs.insert_raw(
-            "secondButton",
+        second_outputs.insert(
+            KeypadElementID::parse(SECOND_CONTROL).unwrap(),
             OutputBinding::keyboard(KeyBinding::new(14, 0)),
         );
         source
@@ -1329,21 +1277,19 @@ mod tests {
     }
 
     #[test]
-    fn stale_orphan_maps_are_ignored_but_decoded_orphans_are_rejected() {
+    fn orphan_maps_are_rejected_before_export_selection_or_decoded_hashing() {
         let orphan = "00000000-0000-0000-0000-000000000999";
         let mut source = document();
         source
             .profile_key_bindings
             .insert(orphan.to_owned(), ButtonBindings::default());
-        let artifact = ProfileArtifact::from_configuration(
+        assert_eq!(ProfileArtifact::from_configuration(
             &source,
             ProfileArtifactSelection::ProfileId(FIRST_ID.to_owned()),
             10,
-        )
-        .unwrap();
-        assert!(!artifact.profile_key_bindings.contains_key(orphan));
+        ), Err(ProfileArtifactError::InvalidConfiguration(crate::ConfigurationDocumentError::BindingProfileMissing)));
 
-        let mut decoded = artifact;
+        let mut decoded = artifact();
         decoded
             .profile_key_bindings
             .insert(orphan.to_owned(), json!({}));

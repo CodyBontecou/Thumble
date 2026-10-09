@@ -2,94 +2,264 @@
   "customization": {
     "elements": [
       {
-        "builtInButton": "up",
+        "defaultOutput": {
+          "gamepadButtons": [
+            "dpadUp"
+          ],
+          "keyboard": {
+            "keyCode": 126,
+            "modifiersRawValue": 0
+          }
+        },
         "id": "00000000-0000-0000-0000-000000000101",
         "kind": "button",
         "label": "Up",
         "layout": {},
-        "legacySlot": "up",
-        "partOutputs": []
+        "output": {
+          "gamepadButtons": [
+            "dpadUp"
+          ],
+          "keyboard": {
+            "keyCode": 126,
+            "modifiersRawValue": 0
+          }
+        },
+        "partOutputs": [],
+        "visualRole": "movement"
       },
       {
-        "builtInButton": "down",
+        "defaultOutput": {
+          "gamepadButtons": [
+            "dpadDown"
+          ],
+          "keyboard": {
+            "keyCode": 125,
+            "modifiersRawValue": 0
+          }
+        },
         "id": "00000000-0000-0000-0000-000000000102",
         "kind": "button",
         "label": "Down",
         "layout": {},
-        "legacySlot": "down",
-        "partOutputs": []
+        "output": {
+          "gamepadButtons": [
+            "dpadDown"
+          ],
+          "keyboard": {
+            "keyCode": 125,
+            "modifiersRawValue": 0
+          }
+        },
+        "partOutputs": [],
+        "visualRole": "movement"
       },
       {
-        "builtInButton": "left",
+        "defaultOutput": {
+          "gamepadButtons": [
+            "dpadLeft"
+          ],
+          "keyboard": {
+            "keyCode": 123,
+            "modifiersRawValue": 0
+          }
+        },
         "id": "00000000-0000-0000-0000-000000000103",
         "kind": "button",
         "label": "Left",
         "layout": {},
-        "legacySlot": "left",
-        "partOutputs": []
+        "output": {
+          "gamepadButtons": [
+            "dpadLeft"
+          ],
+          "keyboard": {
+            "keyCode": 123,
+            "modifiersRawValue": 0
+          }
+        },
+        "partOutputs": [],
+        "visualRole": "movement"
       },
       {
-        "builtInButton": "right",
+        "defaultOutput": {
+          "gamepadButtons": [
+            "dpadRight"
+          ],
+          "keyboard": {
+            "keyCode": 124,
+            "modifiersRawValue": 0
+          }
+        },
         "id": "00000000-0000-0000-0000-000000000104",
         "kind": "button",
         "label": "Right",
         "layout": {},
-        "legacySlot": "right",
-        "partOutputs": []
+        "output": {
+          "gamepadButtons": [
+            "dpadRight"
+          ],
+          "keyboard": {
+            "keyCode": 124,
+            "modifiersRawValue": 0
+          }
+        },
+        "partOutputs": [],
+        "visualRole": "movement"
       },
       {
-        "builtInButton": "jump",
+        "defaultOutput": {
+          "gamepadButtons": [
+            "south"
+          ],
+          "keyboard": {
+            "keyCode": 36,
+            "modifiersRawValue": 0
+          }
+        },
         "id": "00000000-0000-0000-0000-000000000105",
         "kind": "button",
         "label": "Action 1",
         "layout": {},
-        "legacySlot": "jump",
-        "partOutputs": []
+        "output": {
+          "gamepadButtons": [
+            "south"
+          ],
+          "keyboard": {
+            "keyCode": 36,
+            "modifiersRawValue": 0
+          }
+        },
+        "partOutputs": [],
+        "visualRole": "primary_action"
       },
       {
-        "builtInButton": "attack",
+        "defaultOutput": {
+          "gamepadButtons": [
+            "east"
+          ],
+          "keyboard": {
+            "keyCode": 48,
+            "modifiersRawValue": 0
+          }
+        },
         "id": "00000000-0000-0000-0000-000000000106",
         "kind": "button",
         "label": "Action 2",
         "layout": {},
-        "legacySlot": "attack",
-        "partOutputs": []
+        "output": {
+          "gamepadButtons": [
+            "east"
+          ],
+          "keyboard": {
+            "keyCode": 48,
+            "modifiersRawValue": 0
+          }
+        },
+        "partOutputs": [],
+        "visualRole": "primary_action"
       },
       {
-        "builtInButton": "dash",
+        "defaultOutput": {
+          "gamepadButtons": [
+            "west"
+          ],
+          "keyboard": {
+            "keyCode": 40,
+            "modifiersRawValue": 1
+          }
+        },
         "id": "00000000-0000-0000-0000-000000000107",
         "kind": "button",
         "label": "Action 3",
         "layout": {},
-        "legacySlot": "dash",
-        "partOutputs": []
+        "output": {
+          "gamepadButtons": [
+            "west"
+          ],
+          "keyboard": {
+            "keyCode": 40,
+            "modifiersRawValue": 1
+          }
+        },
+        "partOutputs": [],
+        "visualRole": "secondary_action"
       },
       {
-        "builtInButton": "focus",
+        "defaultOutput": {
+          "gamepadButtons": [
+            "north"
+          ],
+          "keyboard": {
+            "keyCode": 11,
+            "modifiersRawValue": 8
+          }
+        },
         "id": "00000000-0000-0000-0000-000000000108",
         "kind": "button",
         "label": "Action 4",
         "layout": {},
-        "legacySlot": "focus",
-        "partOutputs": []
+        "output": {
+          "gamepadButtons": [
+            "north"
+          ],
+          "keyboard": {
+            "keyCode": 11,
+            "modifiersRawValue": 8
+          }
+        },
+        "partOutputs": [],
+        "visualRole": "secondary_action"
       },
       {
-        "builtInButton": "map",
+        "defaultOutput": {
+          "gamepadButtons": [
+            "select"
+          ],
+          "keyboard": {
+            "keyCode": 35,
+            "modifiersRawValue": 3
+          }
+        },
         "id": "00000000-0000-0000-0000-000000000109",
         "kind": "button",
         "label": "Menu",
         "layout": {},
-        "legacySlot": "map",
-        "partOutputs": []
+        "output": {
+          "gamepadButtons": [
+            "select"
+          ],
+          "keyboard": {
+            "keyCode": 35,
+            "modifiersRawValue": 3
+          }
+        },
+        "partOutputs": [],
+        "visualRole": "utility"
       },
       {
-        "builtInButton": "pause",
-        "id": "00000000-0000-0000-0000-000000000110",
+        "defaultOutput": {
+          "gamepadButtons": [
+            "start"
+          ],
+          "keyboard": {
+            "keyCode": 53,
+            "modifiersRawValue": 0
+          }
+        },
+        "id": "00000000-0000-0000-0000-00000000010A",
         "kind": "button",
         "label": "Pause",
         "layout": {},
-        "legacySlot": "pause",
-        "partOutputs": []
+        "output": {
+          "gamepadButtons": [
+            "start"
+          ],
+          "keyboard": {
+            "keyCode": 53,
+            "modifiersRawValue": 0
+          }
+        },
+        "partOutputs": [],
+        "visualRole": "menu"
       }
     ]
   },

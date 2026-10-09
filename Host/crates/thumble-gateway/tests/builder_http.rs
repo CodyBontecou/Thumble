@@ -136,6 +136,18 @@ async fn builder_streamable_http_lists_exact_catalog_and_replays_terminal_tools(
         );
     }
 
+    // These raw arguments would otherwise collapse before BuilderMcp sees them.
+    let ambiguous = reqwest::Client::new()
+        .post(format!("{base}/builder/mcp"))
+        .header("Authorization", format!("Bearer {token}"))
+        .header("Content-Type", "application/json")
+        .header("Accept", "application/json, text/event-stream")
+        .body(r#"{"jsonrpc":"2.0","id":99,"method":"tools/call","params":{"name":"begin_builder_session","arguments":{"name":"First","\u006eame":"Second"}}}"#)
+        .send().await.unwrap();
+    assert_eq!(ambiguous.status(), 400);
+    assert_eq!(ambiguous.json::<Value>().await.unwrap()["error"], "ambiguous_json");
+    assert_eq!(state.builder_mutation_semaphore.available_permits(), 4);
+
     let begun = call(
         client.peer(),
         "begin_builder_session",
@@ -200,7 +212,7 @@ async fn builder_streamable_http_lists_exact_catalog_and_replays_terminal_tools(
             "sessionID":session_id,"expectedRevision":3,
             "operationID":"00000000-0000-4000-8000-000000000003",
             "spec":{"name":"Generated Profile","controls":[
-                {"button":"jump","label":"Jump","key":"space"}
+                {"id":"41B18D3F-C021-4080-BAF6-56C78A6BF373","label":"Jump","key":"space"}
             ]}
         }),
     )
@@ -272,7 +284,7 @@ async fn builder_streamable_http_lists_exact_catalog_and_replays_terminal_tools(
                     "sessionID":oversized_id,"expectedRevision":1,
                     "operationID":"00000000-0000-4000-8000-000000000004",
                     "spec":{"source":large_source,"controls":[
-                        {"button":"jump","label":"Jump","key":"space"}
+                        {"id":"41B18D3F-C021-4080-BAF6-56C78A6BF373","label":"Jump","key":"space"}
                     ]}
                 }),
             )),

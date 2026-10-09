@@ -140,7 +140,7 @@ private final class ControllerInputTransport {
 
     @discardableResult
     func sendButton(
-        _ button: GameButton,
+        _ button: KeypadElementID,
         state: ButtonPressState,
         pressIdentifier: UInt64?
     ) -> Bool {
@@ -208,7 +208,7 @@ private final class ControllerInputTransport {
     }
 
     private func makeButtonSendSnapshot(
-        recording button: GameButton? = nil,
+        recording button: KeypadElementID? = nil,
         state: ButtonPressState? = nil,
         pressIdentifier: UInt64? = nil,
         expectedMirrorGeneration: UInt64? = nil,
@@ -1010,7 +1010,11 @@ final class ControllerClient: ObservableObject {
         supportsProfileArtifactAdoptionV1 ? currentKeypadSyncServerID : nil
     }
 
-    init() {
+    init() throws {
+        // Validate configuration before skin/startup work can save any state.
+        let savedCustomization = try GamepadCustomizationPersistence.load()
+        let loadedProfileState = try GamepadConfigurationProfilePersistence.load(activeCustomization: savedCustomization)
+        let loadedPendingLayouts = try PendingKeypadLayoutPersistence.load()
         inputTransport = ControllerInputTransport(networkQueue: networkQueue)
         let loadedSkinStore = Self.makeSkinStore()
         try? loadedSkinStore.installBundledSkinsIfNeeded()
@@ -1027,8 +1031,6 @@ final class ControllerClient: ObservableObject {
         )
         builderArtifactPracticePreview = nil
         builderArtifactAdoptionState = nil
-        let savedCustomization = GamepadCustomizationPersistence.load()
-        let loadedProfileState = GamepadConfigurationProfilePersistence.load(activeCustomization: savedCustomization)
         let savedTrustedMacCredential = Self.loadTrustedMacCredential()
         let startupProfile = loadedProfileState.defaultProfile ?? loadedProfileState.activeProfile ?? loadedProfileState.profiles[0]
         let startupCustomization = startupProfile.customization.normalized
@@ -1036,7 +1038,7 @@ final class ControllerClient: ObservableObject {
         gamepadCustomization = startupCustomization
         gamepadProfiles = loadedProfileState.profiles
         bindingPresentations = KeypadBindingPresentationPersistence.load()
-        pendingKeypadLayoutEdits = PendingKeypadLayoutPersistence.load()
+        pendingKeypadLayoutEdits = loadedPendingLayouts
         selectedGamepadProfileID = startupProfile.id
         defaultGamepadProfileID = loadedProfileState.defaultProfileID
         GamepadCustomizationPersistence.save(startupCustomization)
@@ -1418,11 +1420,11 @@ final class ControllerClient: ObservableObject {
         send(.init(type: .hello, timestamp: 0, pairingCode: normalizedCode, clientName: UIDevice.current.name, clientDeviceInfo: Self.currentDeviceInfo()))
     }
 
-    func setButton(_ button: GameButton, pressed: Bool, pressIdentifier: UInt64? = nil) {
+    func setButton(_ button: KeypadElementID, pressed: Bool, pressIdentifier: UInt64? = nil) {
         // Send raw per-touch edges immediately. The Mac helper keeps physical
         // touch identity so the injected key state can change without timer delays.
         let state: ButtonPressState = pressed ? .down : .up
-        guard permitsOutgoingInput(.builtInButton),
+        guard permitsOutgoingInput(.defaultControlID),
               inputTransport.sendButton(button, state: state, pressIdentifier: pressIdentifier)
         else { return }
         if Self.liveInputStatusUpdatesEnabled {

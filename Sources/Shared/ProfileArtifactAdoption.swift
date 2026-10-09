@@ -455,6 +455,14 @@ public struct ProfileArtifactAdoptionLedger: Codable, Equatable, Sendable {
         self.entries = entries
     }
 
+    static func decodeSaved(_ data: Data) throws -> ProfileArtifactAdoptionLedger {
+        let ledger = try JSONDecoder().decodeUnique(ProfileArtifactAdoptionLedger.self, from: data)
+        guard Set(ledger.entries.map { $0.metadata.operationID }).count == ledger.entries.count else {
+            throw GamepadSavedConfigurationError.invalid("saved adoption receipts must contain unique operation UUIDs")
+        }
+        return ledger
+    }
+
     public mutating func lookup(
         _ metadata: ProfileArtifactAdoptionMetadata,
         nowMilliseconds: Int64

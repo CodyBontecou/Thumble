@@ -2499,7 +2499,10 @@ private struct ControllerPadTopChrome: View {
             activationFrame: context.customization.topBarActivationFrame(in: context.size),
             collapsedTitle: client.isPracticeModeEnabled
                 ? "Practice • Input Off"
-                : (client.isConnected ? controllerConnectionTitle : "Saved keypad")
+                : (client.isConnected ? controllerConnectionTitle : "Saved keypad"),
+            revealAppearance: GamepadRenderedControlFace.revealHandle(
+                customization: context.customization, canvasSize: context.size,
+                state: isTopBarVisible ? .active : .normal)
         ) {
             ControllerPadTopBar(
                 context: context,
@@ -2864,13 +2867,13 @@ private struct ControllerPadUtilityButtons: View {
     var body: some View {
         HStack(spacing: spacing) {
             GamepadButton(
-                button: .map,
+                button: .preset(9),
                 size: mapButtonSize,
                 shape: .capsule,
                 customization: context.customization
             )
             GamepadButton(
-                button: .pause,
+                button: .preset(10),
                 size: pauseButtonSize,
                 shape: .capsule,
                 customization: context.customization
@@ -3082,49 +3085,12 @@ private struct ControllerPadProfileMenuItem: View {
 }
 
 private struct ControllerPadProfileMenuLabelRouter: View {
+    @EnvironmentObject private var client: ControllerClient
     let context: ControllerPadRenderContext
     let isCompact: Bool
-
-    var body: AnyView {
-        if isCompact {
-            return AnyView(ControllerPadCompactProfileMenuLabel(context: context))
-        }
-        return AnyView(ControllerPadExpandedProfileMenuLabel(context: context))
-    }
-}
-
-private struct ControllerPadCompactProfileMenuLabel: View {
-    @EnvironmentObject private var client: ControllerClient
-    let context: ControllerPadRenderContext
-
     var body: some View {
-        GamepadControlBarItemIcon(
-            customization: context.customization,
-            item: .profileMenu,
-            defaultSystemImage: client.isSelectedGamepadProfileDefault ? "star.fill" : "rectangle.grid.2x2",
-            fontSize: 13,
-            frameWidth: 28
-        )
-    }
-}
-
-private struct ControllerPadExpandedProfileMenuLabel: View {
-    @EnvironmentObject private var client: ControllerClient
-    let context: ControllerPadRenderContext
-
-    var body: some View {
-        HStack(spacing: Geist.Spacing.s1) {
-            GamepadControlBarItemIcon(
-                customization: context.customization,
-                item: .profileMenu,
-                defaultSystemImage: client.isSelectedGamepadProfileDefault ? "star.fill" : "rectangle.grid.2x2",
-                fontSize: 11
-            )
-            Text(client.selectedGamepadProfileName)
-                .lineLimit(1)
-                .minimumScaleFactor(0.72)
-        }
-        .frame(maxWidth: 160)
+        GamepadControlBarItemLabel(customization: context.customization, content: .profile(
+            name: client.selectedGamepadProfileName, isDefault: client.isSelectedGamepadProfileDefault, compact: isCompact))
     }
 }
 
@@ -3150,95 +3116,9 @@ private struct ControllerPadLaunchTargetLabelRouter: View {
     @EnvironmentObject private var client: ControllerClient
     let context: ControllerPadRenderContext
     let isCompact: Bool
-
-    var body: AnyView {
-        let size: CGFloat = isCompact ? 18 : 20
-        if context.customization.controlBarItemCustomization(for: .launchTarget).icon != nil {
-            return AnyView(
-                ControllerPadConfiguredLaunchTargetLabel(context: context, size: size)
-            )
-        }
-        if let launchTarget = client.selectedGamepadProfile?.launchTarget {
-            return AnyView(
-                ControllerPadApplicationLaunchTargetLabel(launchTarget: launchTarget, size: size)
-            )
-        }
-        return AnyView(ControllerPadFallbackLaunchTargetLabel(context: context))
-    }
-}
-
-private struct ControllerPadConfiguredLaunchTargetLabel: View {
-    let context: ControllerPadRenderContext
-    let size: CGFloat
-
     var body: some View {
-        GamepadControlBarItemIcon(
-            customization: context.customization,
-            item: .launchTarget,
-            defaultSystemImage: "app.badge.fill",
-            fontSize: size,
-            frameWidth: 28
-        )
-    }
-}
-
-private struct ControllerPadFallbackLaunchTargetLabel: View {
-    let context: ControllerPadRenderContext
-
-    var body: some View {
-        GamepadControlBarItemIcon(
-            customization: context.customization,
-            item: .launchTarget,
-            defaultSystemImage: "app.badge.fill",
-            fontSize: 13,
-            frameWidth: 28
-        )
-    }
-}
-
-private struct ControllerPadApplicationLaunchTargetLabel: View {
-    let launchTarget: GamepadProfileLaunchTarget
-    let size: CGFloat
-
-    var body: some View {
-        ControllerPadLaunchTargetIconRouter(launchTarget: launchTarget, size: size)
-            .frame(width: 28, height: 28)
-    }
-}
-
-private struct ControllerPadLaunchTargetIconRouter: View {
-    let launchTarget: GamepadProfileLaunchTarget
-    let size: CGFloat
-
-    var body: AnyView {
-        if let data = launchTarget.iconPNGData, let image = UIImage(data: data) {
-            return AnyView(ControllerPadLaunchTargetImage(image: image, size: size))
-        }
-        return AnyView(ControllerPadLaunchTargetSystemImage(size: size))
-    }
-}
-
-private struct ControllerPadLaunchTargetImage: View {
-    let image: UIImage
-    let size: CGFloat
-
-    var body: some View {
-        Image(uiImage: image)
-            .renderingMode(.original)
-            .resizable()
-            .scaledToFit()
-            .frame(width: size, height: size)
-            .clipShape(RoundedRectangle(cornerRadius: max(4, size * 0.22), style: .continuous))
-    }
-}
-
-private struct ControllerPadLaunchTargetSystemImage: View {
-    let size: CGFloat
-
-    var body: some View {
-        Image(systemName: "app.badge.fill")
-            .font(.system(size: size, weight: .semibold))
-            .frame(width: size, height: size)
+        GamepadControlBarItemLabel(customization: context.customization,
+            content: .launch(target: client.selectedGamepadProfile?.launchTarget, compact: isCompact))
     }
 }
 
@@ -3267,18 +3147,8 @@ private struct ControllerPadEditLayoutItem: View {
                 onToggleEditing()
             }
         } label: {
-            HStack(spacing: Geist.Spacing.s1) {
-                GamepadControlBarItemIcon(
-                    customization: context.customization,
-                    item: .editLayout,
-                    defaultSystemImage: isEditingLayout ? "checkmark" : "slider.horizontal.3",
-                    fontSize: 13
-                )
-                if !isCompact {
-                    Text(isEditingLayout ? "Done" : "Edit")
-                        .lineLimit(1)
-                }
-            }
+            GamepadControlBarItemLabel(customization: context.customization,
+                content: .edit(isEditing: isEditingLayout, compact: isCompact))
         }
         .gamepadControlBarButtonStyle(
             customization: context.customization,
@@ -3429,65 +3299,9 @@ private struct ControllerPadConnectionLabelRouter: View {
     let context: ControllerPadRenderContext
     let presentation: ControllerPadConnectionPresentation
     let isCompact: Bool
-
-    var body: AnyView {
-        if isCompact {
-            return AnyView(
-                ControllerPadCompactConnectionLabel(
-                    context: context,
-                    presentation: presentation
-                )
-            )
-        }
-        if context.customization.controlBarItemCustomization(for: .connectionAction).icon != nil {
-            return AnyView(
-                ControllerPadExpandedConnectionLabel(
-                    context: context,
-                    presentation: presentation
-                )
-            )
-        }
-        return AnyView(ControllerPadTextConnectionLabel(title: presentation.title))
-    }
-}
-
-private struct ControllerPadCompactConnectionLabel: View {
-    let context: ControllerPadRenderContext
-    let presentation: ControllerPadConnectionPresentation
-
     var body: some View {
-        GamepadControlBarItemIcon(
-            customization: context.customization,
-            item: .connectionAction,
-            defaultSystemImage: presentation.systemImage,
-            fontSize: 13,
-            frameWidth: 28
-        )
-    }
-}
-
-private struct ControllerPadExpandedConnectionLabel: View {
-    let context: ControllerPadRenderContext
-    let presentation: ControllerPadConnectionPresentation
-
-    var body: some View {
-        HStack(spacing: Geist.Spacing.s1) {
-            GamepadControlBarItemIcon(
-                customization: context.customization,
-                item: .connectionAction,
-                defaultSystemImage: presentation.systemImage,
-                fontSize: 13
-            )
-            Text(presentation.title)
-        }
-    }
-}
-
-private struct ControllerPadTextConnectionLabel: View {
-    let title: String
-
-    var body: some View {
-        Text(title)
+        GamepadControlBarItemLabel(customization: context.customization, content: .connection(
+            title: presentation.title, symbol: presentation.systemImage, compact: isCompact))
     }
 }
 
@@ -3668,6 +3482,7 @@ private struct ControllerTopBarDrawer<Content: View>: View {
     let isLandscape: Bool
     let activationFrame: CGRect
     let collapsedTitle: String
+    let revealAppearance: AnyView
     let content: Content
 
     init(
@@ -3677,6 +3492,7 @@ private struct ControllerTopBarDrawer<Content: View>: View {
         isLandscape: Bool,
         activationFrame: CGRect = .null,
         collapsedTitle: String = "Controls",
+        revealAppearance: AnyView,
         @ViewBuilder content: () -> Content
     ) {
         self._isVisible = isVisible
@@ -3685,22 +3501,13 @@ private struct ControllerTopBarDrawer<Content: View>: View {
         self.isLandscape = isLandscape
         self.activationFrame = activationFrame
         self.collapsedTitle = collapsedTitle
+        self.revealAppearance = revealAppearance
         self.content = content()
     }
 
     var body: some View {
-        VStack(spacing: Geist.Spacing.s1) {
-            if isVisible {
-                content
-                    .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.22 : 0.08), radius: 10, y: 4)
-                    .transition(.move(edge: .top).combined(with: .opacity))
-            }
-
-            revealHandle
-        }
-        .padding(.top, topPadding)
-        .padding(.leading, leadingPadding)
-        .padding(.trailing, trailingPadding)
+        GamepadTopBarDrawerSurface(layout: drawerLayout, isVisible: isVisible,
+            content: AnyView(content), reveal: AnyView(revealHandle))
         // Leave the empty width around the drawer transparent to touches. The
         // visible bar and compact reveal handle install their own drag gestures.
         .frame(maxWidth: .infinity, alignment: .top)
@@ -3732,28 +3539,7 @@ private struct ControllerTopBarDrawer<Content: View>: View {
         Button {
             setVisible(!isVisible)
         } label: {
-            Group {
-                if isVisible {
-                    VStack(spacing: 3) {
-                        RoundedRectangle(cornerRadius: 2.5, style: .continuous)
-                            .fill(Geist.color(.grayAlpha700, scheme: colorScheme))
-                            .frame(width: 36, height: 5)
-                        Image(systemName: isPinned ? "pin.fill" : "chevron.up")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(Geist.color(.gray900, scheme: colorScheme))
-                    }
-                } else {
-                    VStack(spacing: 3) {
-                        RoundedRectangle(cornerRadius: 2.5, style: .continuous)
-                            .fill(Geist.color(.grayAlpha700, scheme: colorScheme))
-                            .frame(width: 36, height: 5)
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(Geist.color(.gray900, scheme: colorScheme))
-                    }
-                }
-            }
-            .padding(.horizontal, Geist.Spacing.s3)
+            revealAppearance
             .frame(minWidth: 44, minHeight: 44)
         }
         .buttonStyle(.plain)
@@ -3784,18 +3570,9 @@ private struct ControllerTopBarDrawer<Content: View>: View {
         abs(predicted) > abs(current) ? predicted : current
     }
 
-    private var topPadding: CGFloat {
-        let topInset = max(effectiveSafeAreaInsets.top, minimumPortraitTopInset)
-        let extraPadding = isLandscape ? Geist.Spacing.s2 : 0
-        return max(isLandscape ? Geist.Spacing.s3 : Geist.Spacing.s2, topInset + extraPadding)
-    }
-
-    private var leadingPadding: CGFloat {
-        max(isLandscape ? Geist.Spacing.s6 : Geist.Spacing.s4, effectiveSafeAreaInsets.leading + Geist.Spacing.s3)
-    }
-
-    private var trailingPadding: CGFloat {
-        max(isLandscape ? Geist.Spacing.s6 : Geist.Spacing.s4, effectiveSafeAreaInsets.trailing + Geist.Spacing.s3)
+    private var drawerLayout: GamepadTopBarDrawerLayout {
+        .init(safeAreaInsets: effectiveSafeAreaInsets, isLandscape: isLandscape,
+            minimumPortraitTopInset: minimumPortraitTopInset)
     }
 
     private var effectiveSafeAreaInsets: EdgeInsets {
@@ -4253,10 +4030,11 @@ private struct ControllerPadResolvedJoystick: View {
             elementID: control.elementID,
             mapping: mapping,
             outputSettings: control.joystickOutputSettings ?? .defaultValue,
-            label: control.label,
+            label: control.visualLegend,
             size: control.size,
             elementCustomization: control.layoutCustomization,
-            customization: context.customization
+            customization: context.customization,
+            runtimeTarget: GamepadRuntimeControlFaceTarget(control: control)
         )
     }
 }
@@ -4267,15 +4045,18 @@ private struct ControllerPadResolvedTrigger: View {
     let settings: GamepadTriggerSettings
 
     var body: some View {
-        GamepadTrigger(
-            elementID: control.elementID,
-            mappedButton: control.mappedButton,
-            label: control.label,
-            size: control.size,
-            elementCustomization: control.layoutCustomization,
-            settings: settings,
-            customization: context.customization
-        )
+        if let inputID = control.inputID {
+            GamepadTrigger(
+                elementID: control.elementID,
+                inputID: inputID,
+                label: control.visualLegend,
+                size: control.size,
+                elementCustomization: control.layoutCustomization,
+                settings: settings,
+                customization: context.customization,
+                runtimeTarget: GamepadRuntimeControlFaceTarget(control: control)
+            )
+        }
     }
 }
 
@@ -4286,11 +4067,12 @@ private struct ControllerPadResolvedTrackpad: View {
     var body: some View {
         GamepadTrackpad(
             elementID: control.elementID,
-            label: control.label,
+            label: control.visualLegend,
             size: control.size,
             elementCustomization: control.layoutCustomization,
             settings: control.trackpadSettings ?? .defaultValue,
-            customization: context.customization
+            customization: context.customization,
+            runtimeTarget: GamepadRuntimeControlFaceTarget(control: control)
         )
     }
 }
@@ -4300,15 +4082,18 @@ private struct ControllerPadResolvedButton: View {
     let control: GamepadResolvedControl
 
     var body: some View {
-        GamepadButton(
-            elementID: control.elementID,
-            button: control.mappedButton,
-            size: control.size,
-            shape: control.shape,
-            labelOverride: control.label,
-            elementCustomization: control.layoutCustomization,
-            customization: context.customization
-        )
+        if let inputID = control.inputID {
+            GamepadButton(
+                elementID: control.elementID,
+                button: inputID,
+                size: control.size,
+                shape: control.shape,
+                labelOverride: control.visualLegend,
+                elementCustomization: control.layoutCustomization,
+                customization: context.customization,
+                runtimeTarget: GamepadRuntimeControlFaceTarget(control: control)
+            )
+        }
     }
 }
 
@@ -5152,11 +4937,11 @@ private struct DPadView: View {
         Grid(horizontalSpacing: 0, verticalSpacing: 0) {
             GridRow {
                 Color.clear.frame(width: hitSize.width, height: hitSize.height)
-                GamepadButton(button: .up, size: buttonSize, customization: customization)
+                GamepadButton(button: .preset(1), size: buttonSize, customization: customization)
                 Color.clear.frame(width: hitSize.width, height: hitSize.height)
             }
             GridRow {
-                GamepadButton(button: .left, size: buttonSize, customization: customization)
+                GamepadButton(button: .preset(3), size: buttonSize, customization: customization)
                 RoundedRectangle(cornerRadius: Geist.Radius.sm, style: .continuous)
                     .fill(Geist.color(.gray100, scheme: colorScheme))
                     .overlay(
@@ -5165,11 +4950,11 @@ private struct DPadView: View {
                     )
                     .frame(width: buttonSize.width, height: buttonSize.height)
                     .frame(width: hitSize.width, height: hitSize.height)
-                GamepadButton(button: .right, size: buttonSize, customization: customization)
+                GamepadButton(button: .preset(4), size: buttonSize, customization: customization)
             }
             GridRow {
                 Color.clear.frame(width: hitSize.width, height: hitSize.height)
-                GamepadButton(button: .down, size: buttonSize, customization: customization)
+                GamepadButton(button: .preset(2), size: buttonSize, customization: customization)
                 Color.clear.frame(width: hitSize.width, height: hitSize.height)
             }
         }
@@ -5183,12 +4968,12 @@ private struct ActionButtonsView: View {
     var body: some View {
         Grid(horizontalSpacing: 0, verticalSpacing: 0) {
             GridRow {
-                GamepadButton(button: .focus, size: buttonSize, customization: customization)
-                GamepadButton(button: .dash, size: buttonSize, customization: customization)
+                GamepadButton(button: .preset(8), size: buttonSize, customization: customization)
+                GamepadButton(button: .preset(7), size: buttonSize, customization: customization)
             }
             GridRow {
-                GamepadButton(button: .attack, size: buttonSize, customization: customization)
-                GamepadButton(button: .jump, size: buttonSize, customization: customization)
+                GamepadButton(button: .preset(6), size: buttonSize, customization: customization)
+                GamepadButton(button: .preset(5), size: buttonSize, customization: customization)
             }
         }
     }
@@ -5274,6 +5059,7 @@ private struct GamepadJoystick: View {
     let size: CGSize
     let elementCustomization: GamepadButtonCustomization
     let customization: GamepadCustomization
+    let runtimeTarget: GamepadRuntimeControlFaceTarget
 
     @State private var activeDirections: Set<GamepadJoystickDirection> = []
     @State private var normalizedOffset = CGSize.zero
@@ -5314,33 +5100,19 @@ private struct GamepadJoystick: View {
         joystickVisualStyle == .thumbstick ? max(44, visualSide) : nil
     }
 
-    private var knobSide: CGFloat {
-        switch joystickVisualStyle {
-        case .pad:
-            max(34, visualSide * 0.36)
-        case .thumbstick:
-            max(32, visualSide * 0.72)
-        }
-    }
-
-    private var knobTravelRadius: CGFloat {
-        switch joystickVisualStyle {
-        case .pad:
-            max(0, (visualSide - knobSide) / 2 - 4)
-        case .thumbstick:
-            max(0, (hitSide - knobSide) / 2 - 6)
-        }
+    private var presentationMetadata: GamepadControlPresentation? {
+        guard let elementID else { return nil }
+        return customization.element(for: elementID)?.presentation
     }
 
     private var accessibleLabel: String {
-        KeypadAccessibility.label(visibleTitle: label, fallback: "Joystick")
+        KeypadAccessibility.label(visibleTitle: presentationMetadata?.accessibilityName ?? label, fallback: "Joystick")
     }
 
     private var bindingPresentationsForDirections: [(GamepadJoystickDirection, KeypadBindingPresentation)] {
         GamepadJoystickDirection.allCases.compactMap { direction in
-            let input = elementID.map {
-                KeypadElementInputID(elementID: $0, part: KeypadElementInputPart(direction: direction))
-            } ?? KeypadElementInputID(elementID: KeypadElement.builtInID(for: mapping[direction]))
+            guard let elementID else { return nil }
+            let input = KeypadElementInputID(elementID: elementID, part: KeypadElementInputPart(direction: direction))
             return client.bindingPresentation(
                 orientation: customization.deviceCanvas.editorDeviceFrame.orientation,
                 input: input
@@ -5413,108 +5185,24 @@ private struct GamepadJoystick: View {
         }
     }
 
+    @ViewBuilder
     private var joystickBase: some View {
-        let accentStyle = elementCustomization.accentStyle ?? customization.accentStyle
         let isActive = !activeDirections.isEmpty || abs(normalizedOffset.width) > 0.001 || abs(normalizedOffset.height) > 0.001
-        let presentation = customization.resolvedPresentation(for: elementCustomization, fallbackAccentStyle: accentStyle, controlKind: .joystick, state: isActive ? .active : .normal, scheme: colorScheme)
-        let fillStyle = presentation.fillStyle
-        let strokeColor = presentation.strokeSwiftUIColor
-        let foregroundColor = presentation.foregroundSwiftUIColor
-        let strokeWidth = presentation.strokeWidth + (colorSchemeContrast == .increased ? 1.5 : 0)
-        let knobFillColor = elementCustomization.joystickKnobFill(accentStyle: accentStyle, isPressed: isActive, scheme: colorScheme)
-        let knobStrokeColor = elementCustomization.joystickKnobStroke(accentStyle: accentStyle, isPressed: isActive, scheme: colorScheme)
-        let knobOffset = CGSize(width: normalizedOffset.width * knobTravelRadius, height: normalizedOffset.height * knobTravelRadius)
-        let isThumbstick = joystickVisualStyle == .thumbstick
-
-        return ZStack {
-            if reduceTransparency {
-                Circle()
-                    .fill(Geist.color(.gray100, scheme: colorScheme))
-                    .frame(width: visualSide, height: visualSide)
-            }
-
-            if isThumbstick && isActive {
-                Circle()
-                    .stroke(foregroundColor.opacity(0.18), style: StrokeStyle(lineWidth: 1, dash: [5, 7]))
-                    .frame(width: hitSide * 0.72, height: hitSide * 0.72)
-                    .transition(.opacity)
-            }
-
-            GamepadFillShapeLayer(shape: Circle(), fillStyle: fillStyle)
-                .overlay(Circle().stroke(strokeColor, lineWidth: strokeWidth))
-                .overlay(GamepadControlEffectOverlay(shape: Circle(), presentation: presentation))
-                .gamepadOuterShadows(presentation)
-                .frame(width: visualSide, height: visualSide)
-
-            if !isThumbstick {
-                Circle()
-                    .stroke(Geist.color(.grayAlpha400, scheme: colorScheme), lineWidth: 1)
-                    .frame(width: visualSide * 0.70, height: visualSide * 0.70)
-
-                directionLabels(foregroundColor: foregroundColor)
-            }
-
-            Circle()
-                .fill(knobFillColor)
-                .overlay(Circle().stroke(knobStrokeColor, lineWidth: colorSchemeContrast == .increased ? 2.5 : 1))
+        if let face = GamepadRenderedControlFace.runtimePointing(
+            target: runtimeTarget, customization: customization, state: isActive ? .active : .normal,
+            secondaryBindingText: compactBindingText,
+            adaptation: GamepadControlFaceAdaptation(increasedContrast: colorSchemeContrast == .increased,
+                reduceTransparency: reduceTransparency, labelScale: visualLabelScale),
+            interaction: GamepadPointingFaceInteraction(joystickVector: normalizedOffset, interactionSize: interactionSize)) {
+            face
                 .overlay {
                     if differentiateWithoutColor && isActive {
                         Circle().stroke(style: StrokeStyle(lineWidth: 2.5, dash: [3, 3]))
+                            .foregroundStyle(Geist.color(.gray1000, scheme: colorScheme))
+                            .frame(width: visualSide * 0.88, height: visualSide * 0.88)
                     }
                 }
-                .frame(width: knobSide, height: knobSide)
-                .offset(knobOffset)
                 .animation(reduceMotion ? nil : .interactiveSpring(response: 0.16, dampingFraction: 0.82), value: normalizedOffset)
-
-            if isActive {
-                Circle()
-                    .stroke(style: StrokeStyle(lineWidth: colorSchemeContrast == .increased ? 3 : 2, dash: [5, 4]))
-                    .foregroundStyle(foregroundColor)
-                    .frame(width: visualSide * 0.88, height: visualSide * 0.88)
-                    .allowsHitTesting(false)
-            }
-
-            if customization.showsButtonLabels && elementCustomization.showsIntegratedLabel && !isThumbstick {
-                VStack(spacing: 1) {
-                    Text(label)
-                        .geistTypography(visualSide <= 88 ? .button12 : .button14)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.5)
-                    if let compactBindingText {
-                        KeypadSecondaryBindingText(
-                            text: compactBindingText,
-                            color: foregroundColor,
-                            maximumWidth: visualSide * 0.92
-                        )
-                    }
-                }
-                .foregroundStyle(foregroundColor)
-                .padding(.horizontal, 4)
-                .scaleEffect(visualLabelScale)
-                .offset(y: visualSide * 0.34)
-            }
-        }
-    }
-
-    private func directionLabels(foregroundColor: Color) -> some View {
-        ZStack {
-            ForEach(GamepadJoystickDirection.allCases) { direction in
-                Text(direction.shortLabel)
-                    .geistTypography(.label12)
-                    .foregroundStyle(foregroundColor.opacity(activeDirections.contains(direction) ? 1 : 0.42))
-                    .offset(labelOffset(for: direction))
-            }
-        }
-        .allowsHitTesting(false)
-    }
-
-    private func labelOffset(for direction: GamepadJoystickDirection) -> CGSize {
-        let radius = visualSide * 0.34
-        switch direction {
-        case .up: return CGSize(width: 0, height: -radius)
-        case .down: return CGSize(width: 0, height: radius)
-        case .left: return CGSize(width: -radius, height: 0)
-        case .right: return CGSize(width: radius, height: 0)
         }
     }
 
@@ -5526,8 +5214,6 @@ private struct GamepadJoystick: View {
                 pressed: pressed,
                 pressIdentifier: pressIdentifier
             )
-        } else {
-            client.setButton(mapping[direction], pressed: pressed, pressIdentifier: pressIdentifier)
         }
     }
 
@@ -5564,23 +5250,29 @@ private struct GamepadTrigger: View {
     @Environment(\.accessibilityDifferentiateWithoutColor) private var differentiateWithoutColor
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let elementID: UUID?
-    let mappedButton: GameButton
+    let inputID: KeypadElementID
     let label: String
     let size: CGSize
     let elementCustomization: GamepadButtonCustomization
     let settings: GamepadTriggerSettings
     let customization: GamepadCustomization
+    let runtimeTarget: GamepadRuntimeControlFaceTarget
 
     @State private var value: CGFloat = 0
     @State private var isDigitalPressed = false
 
+    private var presentationMetadata: GamepadControlPresentation? {
+        guard let elementID else { return nil }
+        return customization.element(for: elementID)?.presentation
+    }
+
     private var accessibleLabel: String {
-        KeypadAccessibility.label(visibleTitle: label, fallback: "Trigger")
+        KeypadAccessibility.label(visibleTitle: presentationMetadata?.accessibilityName ?? label, fallback: "Trigger")
     }
 
     private var bindingPresentation: KeypadBindingPresentation? {
         let input = KeypadElementInputID(
-            elementID: elementID ?? KeypadElement.builtInID(for: mappedButton),
+            elementID: elementID ?? KeypadElement.builtInID(for: inputID),
             part: elementID == nil ? .primary : .triggerDigital
         )
         return client.bindingPresentation(
@@ -5644,61 +5336,24 @@ private struct GamepadTrigger: View {
         }
     }
 
+    @ViewBuilder
     private var triggerFace: some View {
-        let normalizedSettings = settings.normalized
-        let accentStyle = elementCustomization.accentStyle ?? customization.accentStyle
-        let isPressed = value > normalizedSettings.deadZone
-        let presentation = customization.resolvedPresentation(for: elementCustomization, fallbackAccentStyle: accentStyle, controlKind: .trigger, state: isPressed ? .active : .normal, scheme: colorScheme)
-        let fillStyle = presentation.fillStyle
-        let strokeColor = presentation.strokeSwiftUIColor
-        let foregroundColor = presentation.foregroundSwiftUIColor
-        let fillFraction = max(0, min(1, value))
-        let strokeWidth = presentation.strokeWidth + (colorSchemeContrast == .increased ? 1.5 : 0)
-
-        return ZStack(alignment: normalizedSettings.orientation == .vertical ? .bottom : .leading) {
-            if reduceTransparency {
-                Capsule().fill(Geist.color(.gray100, scheme: colorScheme))
-            }
-
-            GamepadFillShapeLayer(shape: Capsule(), fillStyle: fillStyle)
-                .overlay(Capsule().stroke(strokeColor, lineWidth: strokeWidth))
-                .overlay(GamepadControlEffectOverlay(shape: Capsule(), presentation: presentation))
-                .gamepadOuterShadows(presentation)
-
-            Capsule()
-                .fill(foregroundColor.opacity(reduceTransparency ? 0.62 : (colorScheme == .dark ? 0.24 : 0.18)))
-                .frame(
-                    width: normalizedSettings.orientation == .vertical ? size.width : max(4, size.width * fillFraction),
-                    height: normalizedSettings.orientation == .vertical ? max(4, size.height * fillFraction) : size.height
-                )
-                .allowsHitTesting(false)
-
-            if customization.showsButtonLabels && elementCustomization.showsIntegratedLabel {
-                HStack(spacing: 5) {
-                    Text(label)
-                        .geistTypography(size.height <= 44 ? .button12 : .button14)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.5)
-                    if let compactBindingText, size.width >= 76 {
-                        KeypadSecondaryBindingText(
-                            text: compactBindingText,
-                            color: foregroundColor,
-                            maximumWidth: size.width * 0.46
-                        )
-                    }
+        let isPressed = value > settings.normalized.deadZone
+        if let face = GamepadRenderedControlFace.runtimeTrigger(
+            target: runtimeTarget, customization: customization, state: isPressed ? .active : .normal,
+            secondaryBindingText: compactBindingText,
+            adaptation: GamepadControlFaceAdaptation(increasedContrast: colorSchemeContrast == .increased,
+                reduceTransparency: reduceTransparency, labelScale: visualLabelScale),
+            interaction: GamepadTriggerFaceInteraction(value: value)) {
+            face.overlay {
+                if differentiateWithoutColor && value > 0.001 {
+                    Text(KeypadAccessibility.percentValue(value))
+                        .font(.caption2.monospacedDigit().weight(.bold))
+                        .foregroundStyle(Geist.color(.gray1000, scheme: colorScheme))
+                        .padding(4)
+                        .background(Geist.color(.gray100, scheme: colorScheme), in: Capsule())
+                        .padding(4)
                 }
-                .foregroundStyle(foregroundColor)
-                .padding(.horizontal, 8)
-                .scaleEffect(visualLabelScale)
-            }
-
-            if differentiateWithoutColor && fillFraction > 0.001 {
-                Text(KeypadAccessibility.percentValue(fillFraction))
-                    .font(.caption2.monospacedDigit().weight(.bold))
-                    .foregroundStyle(foregroundColor)
-                    .padding(4)
-                    .background(Geist.color(.gray100, scheme: colorScheme), in: Capsule())
-                    .padding(4)
             }
         }
     }
@@ -5732,7 +5387,7 @@ private struct GamepadTrigger: View {
                 pressed: pressed
             )
         } else {
-            client.setButton(mappedButton, pressed: pressed)
+            client.setButton(inputID, pressed: pressed)
         }
     }
 }
@@ -5899,6 +5554,7 @@ private struct GamepadTrackpad: View {
     let elementCustomization: GamepadButtonCustomization
     let settings: GamepadTrackpadSettings
     let customization: GamepadCustomization
+    let runtimeTarget: GamepadRuntimeControlFaceTarget
 
     @State private var isActive = false
     @State private var touchCount = 0
@@ -5907,8 +5563,13 @@ private struct GamepadTrackpad: View {
         settings.normalized
     }
 
+    private var presentationMetadata: GamepadControlPresentation? {
+        guard let elementID else { return nil }
+        return customization.element(for: elementID)?.presentation
+    }
+
     private var accessibleLabel: String {
-        KeypadAccessibility.label(visibleTitle: label, fallback: "Trackpad")
+        KeypadAccessibility.label(visibleTitle: presentationMetadata?.accessibilityName ?? label, fallback: "Trackpad")
     }
 
     private var bindingPresentation: KeypadBindingPresentation? {
@@ -5988,78 +5649,26 @@ private struct GamepadTrackpad: View {
         elementCustomization.accentStyle ?? customization.accentStyle
     }
 
-    private var resolvedCornerRadii: GamepadCornerRadii {
-        elementCustomization.resolvedCornerRadii(defaultRadius: GamepadButtonShapeStyle.roundedRectangle.defaultEditableCornerRadius(in: size))
-    }
-
+    @ViewBuilder
     private var trackpadSurface: some View {
-        let presentation = customization.resolvedPresentation(for: elementCustomization, fallbackAccentStyle: resolvedAccentStyle, controlKind: .trackpad, state: isActive ? .active : .normal, scheme: colorScheme)
-        let fillStyle = presentation.fillStyle
-        let strokeColor = presentation.strokeSwiftUIColor
-        let foregroundColor = presentation.foregroundSwiftUIColor
-        let shape = UnevenRoundedRectangle(cornerRadii: resolvedCornerRadii.rectangleCornerRadii, style: .continuous)
-        let strokeWidth = presentation.strokeWidth + (colorSchemeContrast == .increased ? 1.5 : 0)
-
-        return ZStack {
-            if reduceTransparency {
-                shape.fill(Geist.color(.gray100, scheme: colorScheme))
-            }
-
-            GamepadFillShapeLayer(shape: shape, fillStyle: fillStyle)
-                .overlay(shape.stroke(strokeColor, lineWidth: strokeWidth))
-                .overlay(GamepadControlEffectOverlay(shape: shape, presentation: presentation))
-                .gamepadOuterShadows(presentation)
-
-            RoundedRectangle(cornerRadius: max(8, min(size.width, size.height) * 0.08), style: .continuous)
-                .stroke(foregroundColor.opacity(isActive ? 0.28 : 0.18), lineWidth: 1)
-                .padding(max(8, min(size.width, size.height) * 0.08))
-
-            VStack(spacing: max(4, size.height * 0.06)) {
-                Image(systemName: touchCount >= 2 ? "hand.draw" : "cursorarrow")
-                    .font(.system(size: max(18, min(size.width, size.height) * 0.20), weight: .semibold))
-                    .foregroundStyle(foregroundColor.opacity(isActive ? 0.95 : 0.70))
-
-                if customization.showsButtonLabels && elementCustomization.showsIntegratedLabel {
-                    VStack(spacing: 2) {
-                        Text(label)
-                            .geistTypography(size.width <= 112 ? .button12 : .button14)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.5)
-                        if let compactBindingText {
-                            KeypadSecondaryBindingText(
-                                text: compactBindingText,
-                                color: foregroundColor,
-                                maximumWidth: size.width * 0.82
-                            )
-                        }
+        if let face = GamepadRenderedControlFace.runtimePointing(
+            target: runtimeTarget, customization: customization, state: isActive ? .active : .normal,
+            secondaryBindingText: compactBindingText,
+            adaptation: GamepadControlFaceAdaptation(increasedContrast: colorSchemeContrast == .increased,
+                reduceTransparency: reduceTransparency, labelScale: visualLabelScale),
+            interaction: GamepadPointingFaceInteraction(trackpadTouchCount: touchCount)) {
+            face
+                .overlay {
+                    if differentiateWithoutColor && isActive {
+                        RoundedRectangle(cornerRadius: 5).stroke(style: StrokeStyle(lineWidth: 2, dash: [6, 4]))
+                            .foregroundStyle(Geist.color(.gray1000, scheme: colorScheme))
+                            .padding(3)
+                            .scaleEffect(0.97)
                     }
-                    .foregroundStyle(foregroundColor.opacity(reduceTransparency ? 1 : 0.94))
-                    .padding(.horizontal, 8)
-                    .scaleEffect(visualLabelScale)
                 }
-            }
-
-            HStack(spacing: 7) {
-                Capsule().fill(foregroundColor.opacity(reduceTransparency ? 0.72 : (isActive ? 0.42 : 0.30)))
-                Capsule().fill(foregroundColor.opacity(reduceTransparency ? (touchCount >= 2 ? 0.72 : 0.32) : (touchCount >= 2 ? 0.42 : 0.16)))
-            }
-            .frame(width: size.width * 0.32, height: max(4, size.height * 0.045))
-            .offset(y: size.height * 0.37)
-
-            if isActive {
-                shape.stroke(
-                    foregroundColor,
-                    style: StrokeStyle(
-                        lineWidth: colorSchemeContrast == .increased ? 3 : 2,
-                        dash: differentiateWithoutColor ? [6, 4] : []
-                    )
-                )
-                .padding(3)
-            }
+                .animation(reduceMotion ? nil : .interactiveSpring(response: 0.14, dampingFraction: 0.82), value: isActive)
+                .animation(reduceMotion ? nil : .interactiveSpring(response: 0.14, dampingFraction: 0.82), value: touchCount)
         }
-        .scaleEffect(isActive ? 0.97 : 1)
-        .animation(reduceMotion ? nil : .interactiveSpring(response: 0.14, dampingFraction: 0.82), value: isActive)
-        .animation(reduceMotion ? nil : .interactiveSpring(response: 0.14, dampingFraction: 0.82), value: touchCount)
     }
 
     private func handleMove(_ delta: CGVector) {
@@ -6108,12 +5717,13 @@ private struct GamepadButton: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.keypadHapticIntensity) private var keypadHapticIntensity
     var elementID: UUID? = nil
-    let button: GameButton
+    let button: KeypadElementID
     let size: CGSize
     var shape: GamepadButtonShapeStyle = .roundedRectangle
     var labelOverride: String? = nil
     var elementCustomization: GamepadButtonCustomization? = nil
     let customization: GamepadCustomization
+    var runtimeTarget: GamepadRuntimeControlFaceTarget? = nil
 
     @State private var isPressed = false
 
@@ -6121,8 +5731,13 @@ private struct GamepadButton: View {
         labelOverride ?? customization.visualLabel(for: button)
     }
 
+    private var presentationMetadata: GamepadControlPresentation? {
+        guard let elementID else { return nil }
+        return customization.element(for: elementID)?.presentation
+    }
+
     private var accessibleTitle: String {
-        KeypadAccessibility.label(visibleTitle: title, fallback: button.displayName)
+        KeypadAccessibility.label(visibleTitle: presentationMetadata?.accessibilityName ?? title, fallback: button.displayName)
     }
 
     private var bindingPresentation: KeypadBindingPresentation? {
@@ -6162,19 +5777,17 @@ private struct GamepadButton: View {
 
         ZStack {
             ZStack {
-                buttonBackground(presentation: presentation)
-                    .gamepadOuterShadows(presentation)
-                    .overlay {
-                        if let glowColor = presentation.glowSwiftUIColor, presentation.glowRadius > 0 {
-                            buttonBackground(presentation: presentation)
-                                .blur(radius: presentation.glowRadius)
-                                .foregroundStyle(glowColor)
-                                .opacity(0.68)
-                                .allowsHitTesting(false)
-                        }
-                    }
-
-                buttonContent(presentation: presentation)
+                if let face = GamepadRenderedControlFace.runtimeButton(
+                    elementID: elementID, inputID: button, customization: customization,
+                    state: isPressed ? .pressed : .normal, secondaryBindingText: compactBindingText,
+                    adaptation: GamepadControlFaceAdaptation(
+                        increasedContrast: colorSchemeContrast == .increased,
+                        reduceTransparency: reduceTransparency, labelScale: visualLabelScale),
+                    target: runtimeTarget) {
+                    face
+                } else {
+                    legacyButtonFace(presentation: presentation)
+                }
 
                 if isPressed && differentiateWithoutColor {
                     Image(systemName: "checkmark")
@@ -6184,11 +5797,9 @@ private struct GamepadButton: View {
                         .background(Geist.color(.gray100, scheme: colorScheme), in: Circle())
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
                         .padding(4)
+                        .scaleEffect(0.94)
                 }
             }
-            .opacity(reduceTransparency ? 1 : presentation.opacity)
-            .blur(radius: reduceTransparency ? 0 : presentation.blurRadius)
-            .scaleEffect(presentation.scale * (isPressed ? 0.94 : 1))
             .allowsHitTesting(false)
             .accessibilityHidden(true)
             .frame(width: size.width, height: size.height)
@@ -6206,15 +5817,31 @@ private struct GamepadButton: View {
             }
         }
         .frame(width: hitSize.width, height: hitSize.height)
-        .onAppear {
-            prepareHapticIfNeeded()
+        .onAppear { prepareHapticIfNeeded() }
+        .onChange(of: keypadHapticIntensity) { _, _ in prepareHapticIfNeeded() }
+        .onDisappear { isPressed = false }
+    }
+
+    private func legacyButtonFace(presentation: GamepadResolvedControlPresentation) -> some View {
+        ZStack {
+                buttonBackground(presentation: presentation)
+                    .gamepadOuterShadows(presentation)
+                    .overlay {
+                        if let glowColor = presentation.glowSwiftUIColor, presentation.glowRadius > 0 {
+                            buttonBackground(presentation: presentation)
+                                .blur(radius: presentation.glowRadius)
+                                .foregroundStyle(glowColor)
+                                .opacity(0.68)
+                                .allowsHitTesting(false)
+                        }
+                    }
+
+                buttonContent(presentation: presentation)
+
         }
-        .onChange(of: keypadHapticIntensity) { _, _ in
-            prepareHapticIfNeeded()
-        }
-        .onDisappear {
-            isPressed = false
-        }
+        .opacity(reduceTransparency ? 1 : presentation.opacity)
+        .blur(radius: reduceTransparency ? 0 : presentation.blurRadius)
+        .scaleEffect(presentation.scale * (isPressed ? 0.94 : 1))
     }
 
     private var resolvedButtonCustomization: GamepadButtonCustomization {
@@ -6304,6 +5931,13 @@ private struct GamepadButton: View {
                     .geistTypography(title.count <= 2 ? .heading32 : .button16)
                     .lineLimit(1)
                     .minimumScaleFactor(0.55)
+                if let caption = presentationMetadata?.caption, !caption.isEmpty {
+                    KeypadSecondaryBindingText(
+                        text: caption,
+                        color: presentation.foregroundSwiftUIColor,
+                        maximumWidth: size.width * 0.88
+                    )
+                }
                 if let compactBindingText {
                     KeypadSecondaryBindingText(
                         text: compactBindingText,

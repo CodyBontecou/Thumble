@@ -150,7 +150,8 @@ public enum ThumbleSkinResolver {
             compatibility: ThumbleSkinCompatibilityEvaluation
         ) {
             guard let background = appearance.backgroundFillStyle,
-                  package.manifest.compatibility?.mode != .templateAligned || compatibility.allowsTemplateArtwork
+                  ![ThumbleSkinCompatibilityMode.templateAligned, .capturedController].contains(package.manifest.compatibility?.mode ?? .universal)
+                    || compatibility.allowsTemplateArtwork
             else { return }
             let shouldPreserve: Bool
             if options.preservesLocalKeypadAppearance, let baseline {
@@ -187,14 +188,15 @@ public enum ThumbleSkinResolver {
 
         private func applyBuiltInControls() {
             guard appearance != nil else { return }
-            for button in GameButton.builtInControls {
+            let declared = Set(original.elements.filter { $0.kind == .button }.compactMap(\.defaultControlID))
+            for button in DefaultKeypadElements.ids where declared.contains(button) {
                 applyBuiltInControl(button)
             }
         }
 
-        private func applyBuiltInControl(_ button: GameButton) {
+        private func applyBuiltInControl(_ button: KeypadElementID) {
             guard let appearance else { return }
-            let role = original.elements.first(where: { $0.builtInButton == button })?.visualRole
+            let role = original.elements.first(where: { $0.defaultControlID == button })?.visualRole
                 ?? GamepadVisualRole.inferred(for: button, controlKind: .button)
             let skinControl = appearance.controlAppearance(
                 for: button,
@@ -228,11 +230,11 @@ public enum ThumbleSkinResolver {
             let baselineLayout = baseline?.customButtons.first(where: { $0.id == control.id })?.layout
             let role = control.visualRole
                 ?? GamepadVisualRole.inferred(
-                    for: control.mappedButton,
+                    for: control.inputID,
                     controlKind: control.controlKind
                 )
             let skinControl = appearance.controlAppearance(
-                for: control.mappedButton,
+                for: control.inputID,
                 controlKind: control.controlKind,
                 visualRole: role
             )
@@ -336,6 +338,11 @@ public enum ThumbleSkinResolver {
         private func clearLocalAppearance() {
             // Geometry, hit insets, labels, mappings, and accessibility remain native/local.
             result.clearVisualAppearance()
+            // A material-only skin must retain the authored native silhouette.
+            // Explicit package shape/radius fields can still replace it below.
+            result.shape = local.shape
+            result.cornerRadius = local.cornerRadius
+            result.cornerRadii = local.cornerRadii
         }
 
         private func applySkinAppearance() {
@@ -524,7 +531,7 @@ public extension GamepadCustomization {
             return layer
         }
         styleLibrary = styleLibrary.dehydrating(packageAssets: packageAssets)
-        for button in GameButton.allCases {
+        for button in DefaultKeypadElements.ids {
             guard var layout = buttonCustomizations[button] else { continue }
             layout.dehydrateAssetReferences(packageAssets: packageAssets)
             buttonCustomizations[button] = layout
@@ -562,7 +569,7 @@ public extension GamepadCustomization {
             return layer
         }
         styleLibrary = styleLibrary.resolvingAssets(in: library)
-        for button in GameButton.allCases {
+        for button in DefaultKeypadElements.ids {
             guard var layout = buttonCustomizations[button] else { continue }
             layout.resolveAssetReferences(in: library)
             buttonCustomizations[button] = layout

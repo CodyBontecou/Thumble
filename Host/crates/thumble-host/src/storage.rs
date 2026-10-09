@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 #[cfg(target_os = "macos")]
 use std::process::{Command, Stdio};
 use thumble_core::{
-    minimal_default_customization, ButtonBindings, KeyBinding, OutputBinding, PersistentState,
+    ButtonBindings, KeyBinding, OutputBinding, PersistentState,
     TrustedClient,
 };
 use uuid::Uuid;
@@ -102,7 +102,7 @@ pub fn load(path: &Path) -> Result<PersistentState, String> {
             path.display()
         ));
     }
-    serde_json::from_slice(&data).map_err(|error| format!("decode {}: {error}", path.display()))
+    thumble_protocol::decode_unique_json(&data).map_err(|error| format!("decode {}: {error}", path.display()))
 }
 
 pub fn redact_known_auth_tokens(path: &Path, text: &str) -> String {
@@ -207,21 +207,17 @@ pub fn migrate_plist_bytes(data: &[u8], generated_id: &str) -> Result<Persistent
         }
     }
 
-    let v1_bindings = dictionary.get(KEY_BINDINGS_V1_KEY);
-    let migrated_key_bindings = match optional_data(dictionary, KEY_BINDINGS_V2_KEY)? {
-        Some(data) => match parse_bindings::<KeyBinding>(data) {
-            Some(bindings) => Some(bindings),
-            None => match v1_bindings {
-                Some(value) => Some(parse_legacy_key_bindings(value)?),
-                None => {
-                    return Err(format!(
-                        "legacy key {KEY_BINDINGS_V2_KEY} contains invalid binding JSON"
-                    ));
-                }
-            },
-        },
-        None => v1_bindings.map(parse_legacy_key_bindings).transpose()?,
-    };
+    // Fresh construction may use the starter profile, but imported declarations
+    // own their own maps. Never retain the constructor's unrelated UUIDs.
+    initialize_owned_bindings(&mut state);
+
+    if dictionary.contains_key(KEY_BINDINGS_V1_KEY) {
+        return Err("obsolete input-binding storage is no longer supported; recreate the setup with element UUIDs".to_owned());
+    }
+    let migrated_key_bindings = optional_data(dictionary, KEY_BINDINGS_V2_KEY)?
+        .map(|data| parse_bindings::<KeyBinding>(data).ok_or_else(||
+            "invalid input-binding map; recreate the setup with element UUIDs".to_owned()))
+        .transpose()?;
     if let Some(bindings) = migrated_key_bindings {
         state.key_bindings = bindings;
     }
@@ -233,7 +229,8 @@ pub fn migrate_plist_bytes(data: &[u8], generated_id: &str) -> Result<Persistent
             })?;
     }
 
-    let mut output_bindings = keyboard_outputs(&state.key_bindings);
+    let mut output_bindings = state.output_bindings.clone();
+    overlay_keyboard_bindings(&mut output_bindings, &state.key_bindings);
     if let Some(data) = optional_data(dictionary, OUTPUT_BINDINGS_KEY)? {
         let migrated = parse_bindings::<OutputBinding>(data).ok_or_else(|| {
             format!("legacy key {OUTPUT_BINDINGS_KEY} contains invalid output JSON")
@@ -242,20 +239,20 @@ pub fn migrate_plist_bytes(data: &[u8], generated_id: &str) -> Result<Persistent
     }
     state.output_bindings = output_bindings;
 
-    let mut profile_output_bindings = state
-        .profile_key_bindings
-        .iter()
-        .map(|(profile_id, bindings)| (profile_id.clone(), keyboard_outputs(bindings)))
-        .collect::<BTreeMap<_, _>>();
+    let mut profile_output_bindings = state.profile_output_bindings.clone();
+    for (profile_id, bindings) in &state.profile_key_bindings {
+        let canonical = profile_output_bindings.keys().find(|id| id.eq_ignore_ascii_case(profile_id))
+            .cloned().unwrap_or_else(|| profile_id.clone());
+        overlay_keyboard_bindings(profile_output_bindings.entry(canonical).or_default(), bindings);
+    }
     if let Some(data) = optional_data(dictionary, PROFILE_OUTPUT_BINDINGS_KEY)? {
         let migrated = parse_profile_bindings::<OutputBinding>(data).ok_or_else(|| {
             format!("legacy key {PROFILE_OUTPUT_BINDINGS_KEY} contains invalid output JSON")
         })?;
         for (profile_id, bindings) in migrated {
-            overlay_bindings(
-                profile_output_bindings.entry(profile_id).or_default(),
-                &bindings,
-            );
+            let canonical = profile_output_bindings.keys().find(|id| id.eq_ignore_ascii_case(&profile_id))
+                .cloned().unwrap_or(profile_id);
+            overlay_bindings(profile_output_bindings.entry(canonical).or_default(), &bindings);
         }
     }
     state.profile_output_bindings = profile_output_bindings;
@@ -395,7 +392,7 @@ fn migrate_trusted_clients(data: &[u8], state: &mut PersistentState) -> Result<(
 }
 
 fn migrate_profiles(data: &[u8], state: &mut PersistentState) -> Result<bool, String> {
-    let value = serde_json::from_slice::<JsonValue>(data)
+    let value = thumble_protocol::decode_unique_json::<JsonValue>(data)
         .map_err(|error| format!("decode legacy profile store: {error}"))?;
     let object = value
         .as_object()
@@ -413,15 +410,18 @@ fn migrate_profiles(data: &[u8], state: &mut PersistentState) -> Result<bool, St
             return Err("legacy profile store contains a profile without an ID".to_owned());
         }
     }
-    if !profiles.is_empty() {
+    if profiles.is_empty() {
+        return Err("saved profile catalogs must not be empty; obsolete setups are not reconstructed".to_owned());
+    }
+    {
         let mut migrated = profiles.clone();
         for profile in &mut migrated {
             let profile = profile
                 .as_object_mut()
                 .ok_or_else(|| "legacy profile is not a JSON object".to_owned())?;
-            profile
-                .entry("customization".to_owned())
-                .or_insert_with(minimal_default_customization);
+            if !profile.contains_key("customization") {
+                return Err("profiles must declare a primary customization and element UUIDs; obsolete setups are not reconstructed".to_owned());
+            }
             for key in [
                 "customization",
                 "landscapeCustomization",
@@ -434,28 +434,18 @@ fn migrate_profiles(data: &[u8], state: &mut PersistentState) -> Result<bool, St
         }
         state.profiles = migrated;
     }
-    if let Some(active) = object
-        .get("activeProfileID")
-        .or_else(|| object.get("activeProfileId"))
-        .and_then(JsonValue::as_str)
-    {
-        state.active_profile_id = active.to_owned();
-    }
-    if let Some(default) = object
-        .get("defaultProfileID")
-        .or_else(|| object.get("defaultProfileId"))
-        .and_then(JsonValue::as_str)
-    {
-        state.default_profile_id = default.to_owned();
-    }
-    Ok(!profiles.is_empty())
+    state.active_profile_id = object.get("activeProfileID").and_then(JsonValue::as_str)
+        .ok_or_else(|| "saved profile catalogs must declare an active profile UUID".to_owned())?.to_owned();
+    state.default_profile_id = object.get("defaultProfileID").and_then(JsonValue::as_str)
+        .ok_or_else(|| "saved profile catalogs must declare a default profile UUID".to_owned())?.to_owned();
+    Ok(true)
 }
 
 fn migrate_standalone_customization(
     data: &[u8],
     state: &mut PersistentState,
 ) -> Result<(), String> {
-    let customization = serde_json::from_slice::<JsonValue>(data)
+    let customization = thumble_protocol::decode_unique_json::<JsonValue>(data)
         .map_err(|error| format!("decode legacy standalone customization: {error}"))?;
     if !customization.is_object() {
         return Err("legacy standalone customization is not a JSON object".to_owned());
@@ -476,112 +466,10 @@ fn migrate_standalone_customization(
 }
 
 fn ensure_customization_elements(customization: &mut JsonValue) -> Result<(), String> {
-    let object = customization
-        .as_object_mut()
-        .ok_or_else(|| "legacy customization is not a JSON object".to_owned())?;
-    if object
-        .get("elements")
-        .and_then(JsonValue::as_array)
-        .is_some_and(|elements| !elements.is_empty())
-    {
-        return Ok(());
+    let profile = serde_json::json!({"customization": customization});
+    if !thumble_core::validate_element_identities(&profile) {
+        return Err("named input slots are no longer supported; recreate this setup with element UUIDs".to_owned());
     }
-
-    let button_customizations = object.get("buttonCustomizations");
-    let label_overrides = object.get("labelOverrides");
-    let mut elements = Vec::new();
-    for (id, label, button) in [
-        ("00000000-0000-0000-0000-000000000101", "Up", "up"),
-        ("00000000-0000-0000-0000-000000000102", "Down", "down"),
-        ("00000000-0000-0000-0000-000000000103", "Left", "left"),
-        ("00000000-0000-0000-0000-000000000104", "Right", "right"),
-        ("00000000-0000-0000-0000-000000000105", "Action 1", "jump"),
-        ("00000000-0000-0000-0000-000000000106", "Action 2", "attack"),
-        ("00000000-0000-0000-0000-000000000107", "Action 3", "dash"),
-        ("00000000-0000-0000-0000-000000000108", "Action 4", "focus"),
-        ("00000000-0000-0000-0000-000000000109", "Menu", "map"),
-        ("00000000-0000-0000-0000-000000000110", "Pause", "pause"),
-    ] {
-        let layout = swift_dictionary_value(button_customizations, button)
-            .cloned()
-            .unwrap_or_else(|| serde_json::json!({}));
-        if layout.get("isHidden").and_then(JsonValue::as_bool) == Some(true) {
-            continue;
-        }
-        let label = swift_dictionary_value(label_overrides, button)
-            .and_then(JsonValue::as_str)
-            .filter(|label| !label.trim().is_empty())
-            .unwrap_or(label);
-        elements.push(serde_json::json!({
-            "id": id,
-            "label": label,
-            "kind": "button",
-            "layout": layout,
-            "builtInButton": button,
-            "legacySlot": button,
-            "partOutputs": []
-        }));
-    }
-
-    if let Some(custom_buttons) = object.get("customButtons").and_then(JsonValue::as_array) {
-        for custom in custom_buttons {
-            let custom = custom
-                .as_object()
-                .ok_or_else(|| "legacy custom button is not a JSON object".to_owned())?;
-            let id = custom
-                .get("id")
-                .and_then(JsonValue::as_str)
-                .filter(|id| !id.trim().is_empty())
-                .ok_or_else(|| "legacy custom button has no stable ID".to_owned())?;
-            let layout = custom
-                .get("layout")
-                .cloned()
-                .unwrap_or_else(|| serde_json::json!({}));
-            if layout.get("isHidden").and_then(JsonValue::as_bool) == Some(true) {
-                continue;
-            }
-            let mapped_button = custom
-                .get("mappedButton")
-                .and_then(JsonValue::as_str)
-                .unwrap_or("custom1");
-            let label = custom
-                .get("label")
-                .and_then(JsonValue::as_str)
-                .filter(|label| !label.trim().is_empty())
-                .unwrap_or("Button");
-            let mut element = serde_json::Map::from_iter([
-                ("id".to_owned(), JsonValue::String(id.to_owned())),
-                ("label".to_owned(), JsonValue::String(label.to_owned())),
-                (
-                    "kind".to_owned(),
-                    custom
-                        .get("controlKind")
-                        .cloned()
-                        .unwrap_or_else(|| JsonValue::String("button".to_owned())),
-                ),
-                ("layout".to_owned(), layout),
-                (
-                    "legacySlot".to_owned(),
-                    JsonValue::String(mapped_button.to_owned()),
-                ),
-                ("partOutputs".to_owned(), JsonValue::Array(Vec::new())),
-            ]);
-            for key in [
-                "visualRole",
-                "joystickMapping",
-                "joystickOutputSettings",
-                "triggerSettings",
-                "trackpadSettings",
-            ] {
-                if let Some(value) = custom.get(key) {
-                    element.insert(key.to_owned(), value.clone());
-                }
-            }
-            elements.push(JsonValue::Object(element));
-        }
-    }
-
-    object.insert("elements".to_owned(), JsonValue::Array(elements));
     Ok(())
 }
 
@@ -623,63 +511,55 @@ fn normalized_binding_json(mut value: JsonValue) -> JsonValue {
 }
 
 fn parse_bindings<T: DeserializeOwned>(data: &[u8]) -> Option<ButtonBindings<T>> {
-    let value = serde_json::from_slice::<JsonValue>(data).ok()?;
+    let value = thumble_protocol::decode_unique_json::<JsonValue>(data).ok()?;
     serde_json::from_value(normalized_binding_json(value)).ok()
 }
 
 fn parse_profile_bindings<T: DeserializeOwned>(
     data: &[u8],
 ) -> Option<BTreeMap<String, ButtonBindings<T>>> {
-    let value = serde_json::from_slice::<JsonValue>(data).ok()?;
-    serde_json::from_value(normalized_binding_json(value)).ok()
+    let value = thumble_protocol::decode_unique_json::<JsonValue>(data).ok()?;
+    let maps: BTreeMap<String, ButtonBindings<T>> = serde_json::from_value(normalized_binding_json(value)).ok()?;
+    let mut seen = std::collections::BTreeSet::new();
+    for id in maps.keys() {
+        let parsed = uuid::Uuid::parse_str(id).ok()?;
+        if !parsed.hyphenated().to_string().eq_ignore_ascii_case(id) || !seen.insert(parsed) { return None; }
+    }
+    Some(maps)
 }
 
-fn parse_legacy_key_bindings(value: &plist::Value) -> Result<ButtonBindings<KeyBinding>, String> {
-    if let Some(data) = value.as_data() {
-        if let Some(bindings) = parse_bindings::<KeyBinding>(data) {
-            return Ok(bindings);
+fn initialize_owned_bindings(state: &mut PersistentState) {
+    state.profile_key_bindings.clear();
+    state.profile_output_bindings.clear();
+    for profile in &state.profiles {
+        let Some(id) = profile.get("id").and_then(JsonValue::as_str) else { continue; };
+        let outputs = thumble_core::profile_owned_outputs(profile);
+        let mut keys = ButtonBindings::default();
+        for (input, output) in outputs.iter_ids() {
+            if let Some(keyboard) = &output.keyboard { keys.insert(input, keyboard.clone()); }
         }
-        let value = serde_json::from_slice::<JsonValue>(data)
-            .map_err(|error| format!("decode legacy numeric key bindings: {error}"))?;
-        let object = value
-            .as_object()
-            .ok_or_else(|| "legacy numeric key bindings are not a JSON object".to_owned())?;
-        let mut bindings = ButtonBindings::default();
-        for (button, key_code) in object {
-            let key_code = key_code
-                .as_u64()
-                .and_then(|value| u16::try_from(value).ok())
-                .ok_or_else(|| format!("legacy key binding {button} has an invalid key code"))?;
-            bindings.insert_raw(button.clone(), KeyBinding::new(key_code, 0));
-        }
-        return Ok(bindings);
+        state.profile_key_bindings.insert(id.to_owned(), keys);
+        state.profile_output_bindings.insert(id.to_owned(), outputs);
     }
-
-    let dictionary = value
-        .as_dictionary()
-        .ok_or_else(|| format!("legacy key {KEY_BINDINGS_V1_KEY} has an unsupported type"))?;
-    let mut bindings = ButtonBindings::default();
-    for (button, key_code) in dictionary {
-        let key_code = key_code
-            .as_signed_integer()
-            .and_then(|value| u16::try_from(value).ok())
-            .ok_or_else(|| format!("legacy key binding {button} has an invalid key code"))?;
-        bindings.insert_raw(button.clone(), KeyBinding::new(key_code, 0));
-    }
-    Ok(bindings)
+    state.key_bindings = state.profile_key_bindings.iter()
+        .find(|(id, _)| id.eq_ignore_ascii_case(&state.active_profile_id))
+        .map(|(_, bindings)| bindings.clone()).unwrap_or_default();
+    state.output_bindings = state.profile_output_bindings.iter()
+        .find(|(id, _)| id.eq_ignore_ascii_case(&state.active_profile_id))
+        .map(|(_, bindings)| bindings.clone()).unwrap_or_default();
 }
 
-fn keyboard_outputs(bindings: &ButtonBindings<KeyBinding>) -> ButtonBindings<OutputBinding> {
-    let mut outputs = ButtonBindings::default();
-    for (button, binding) in bindings.iter() {
-        outputs.insert_raw(button.to_owned(), OutputBinding::keyboard(binding.clone()));
+fn overlay_keyboard_bindings(outputs: &mut ButtonBindings<OutputBinding>, keys: &ButtonBindings<KeyBinding>) {
+    for (id, keyboard) in keys.iter_ids() {
+        let mut output = outputs.get(&id).cloned().unwrap_or_default();
+        output.keyboard = Some(keyboard.clone());
+        outputs.insert(id, output);
     }
-    outputs
 }
 
 fn overlay_bindings<T: Clone>(target: &mut ButtonBindings<T>, overlay: &ButtonBindings<T>) {
-    for (button, binding) in overlay.iter() {
-        target.insert_raw(button.to_owned(), binding.clone());
+    for (button, binding) in overlay.iter_ids() {
+        target.insert(button, binding.clone());
     }
 }
 
@@ -695,6 +575,11 @@ mod tests {
     use serde_json::json;
     use tempfile::tempdir;
 
+    const PRIMARY: &str = "00000000-0000-0000-0000-000000000105";
+    const SECONDARY: &str = "00000000-0000-0000-0000-000000000106";
+    const MENU: &str = "00000000-0000-0000-0000-00000000010A";
+    const EXTRA: &str = "BC157B10-AC03-4630-BB24-DF26A326541A";
+
     fn fixture_plist() -> Vec<u8> {
         let profile_id = "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE";
         let trusted = json!([{
@@ -706,25 +591,28 @@ mod tests {
         let profiles = json!({
             "profiles": [{
                 "id": profile_id,
-                "name": "Migrated",
-                "customization": {"elements": []},
+                "name": "Imported",
+                "customization": {"elements": [
+                    {"id":PRIMARY,"kind":"button"}, {"id":SECONDARY,"kind":"button"},
+                    {"id":MENU,"kind":"button"}, {"id":EXTRA,"kind":"button"}
+                ]},
                 "futureField": {"survives": true}
             }],
             "activeProfileID": profile_id,
             "defaultProfileID": profile_id
         });
         let key_bindings = json!({
-            "jump": {"keyCode": 49, "modifiers": {"rawValue": 3}},
-            "futureButton": {"keyCode": 7, "modifiers": 0}
+            PRIMARY: {"keyCode": 49, "modifiers": {"rawValue": 3}},
+            EXTRA: {"keyCode": 7, "modifiers": 0}
         });
         let profile_key_bindings = json!({
-            profile_id: {"attack": {"keyCode": 40, "modifiers": 8}}
+            profile_id: {SECONDARY: {"keyCode": 40, "modifiers": 8}}
         });
         let output_bindings = json!({
-            "jump": {"keyboard": {"keyCode": 36, "modifiers": 1}, "gamepadButtons": ["south"]}
+            PRIMARY: {"keyboard": {"keyCode": 36, "modifiers": 1}, "gamepadButtons": ["south"]}
         });
         let profile_output_bindings = json!({
-            profile_id: {"pause": {"keyboard": {"keyCode": 53, "modifiers": 0}, "gamepadButtons": []}}
+            profile_id: {MENU: {"keyboard": {"keyCode": 53, "modifiers": 0}, "gamepadButtons": []}}
         });
 
         let mut dictionary = Dictionary::new();
@@ -762,7 +650,7 @@ mod tests {
     }
 
     #[test]
-    fn realistic_xml_defaults_migration_preserves_every_independent_layer() {
+    fn current_uuid_xml_defaults_import_preserves_every_independent_layer() {
         let state = migrate_plist_bytes(&fixture_plist(), "generated-fallback").unwrap();
         let profile_id = "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE";
 
@@ -774,14 +662,14 @@ mod tests {
         assert_eq!(state.active_profile_id, profile_id);
         assert_eq!(state.default_profile_id, profile_id);
         assert_eq!(state.profiles[0]["futureField"]["survives"], true);
-        assert_eq!(state.key_bindings.get_raw("jump").unwrap().modifiers, 3);
+        assert_eq!(state.key_bindings.get_raw(PRIMARY).unwrap().modifiers, 3);
         assert_eq!(
-            state.key_bindings.get_raw("futureButton").unwrap().key_code,
+            state.key_bindings.get_raw(EXTRA).unwrap().key_code,
             7
         );
         assert_eq!(
             state.profile_key_bindings[profile_id]
-                .get_raw("attack")
+                .get_raw(SECONDARY)
                 .unwrap()
                 .modifiers,
             8
@@ -789,7 +677,7 @@ mod tests {
         assert_eq!(
             state
                 .output_bindings
-                .get_raw("jump")
+                .get_raw(PRIMARY)
                 .unwrap()
                 .keyboard
                 .as_ref()
@@ -799,13 +687,13 @@ mod tests {
         );
         assert!(state
             .output_bindings
-            .get_raw("jump")
+            .get_raw(PRIMARY)
             .unwrap()
             .gamepad_buttons
             .contains("south"));
         assert_eq!(
             state.profile_output_bindings[profile_id]
-                .get_raw("attack")
+                .get_raw(SECONDARY)
                 .unwrap()
                 .keyboard
                 .as_ref()
@@ -815,7 +703,7 @@ mod tests {
         );
         assert_eq!(
             state.profile_output_bindings[profile_id]
-                .get_raw("pause")
+                .get_raw(MENU)
                 .unwrap()
                 .keyboard
                 .as_ref()
@@ -826,7 +714,23 @@ mod tests {
     }
 
     #[test]
-    fn malformed_v2_key_bindings_fall_back_to_v1_data() {
+    fn defaults_profile_without_primary_declarations_is_rejected_without_writing_state() {
+        let directory = tempdir().unwrap();
+        let paths = HostPaths::new(directory.path().join("state"), directory.path().join("control.sock"));
+        paths.ensure_state_dir().unwrap();
+        let profile_id = "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE";
+        let profiles = json!({"profiles":[{"id":profile_id,"name":"Missing declaration"}],
+            "activeProfileID":profile_id,"defaultProfileID":profile_id});
+        let mut defaults = Dictionary::new();
+        defaults.insert(PROFILES_KEY.to_owned(), Value::Data(serde_json::to_vec(&profiles).unwrap()));
+        let mut source = Vec::new();
+        plist::to_writer_xml(&mut source, &Value::Dictionary(defaults)).unwrap();
+        assert!(install_initial_state(&paths, Some(source), "server").is_err());
+        assert!(!paths.state_file.exists());
+    }
+
+    #[test]
+    fn obsolete_numeric_binding_storage_is_rejected_instead_of_recovered() {
         let mut root = Dictionary::new();
         root.insert(
             KEY_BINDINGS_V2_KEY.to_owned(),
@@ -837,11 +741,14 @@ mod tests {
             Value::Data(br#"{"jump":{"keyCode":49,"modifiers":2}}"#.to_vec()),
         );
         let mut bytes = Vec::new();
-        plist::to_writer_xml(&mut bytes, &Value::Dictionary(root)).unwrap();
+        plist::to_writer_xml(&mut bytes, &Value::Dictionary(root.clone())).unwrap();
 
-        let state = migrate_plist_bytes(&bytes, "fallback").unwrap();
-        assert_eq!(state.key_bindings.get_raw("jump").unwrap().key_code, 49);
-        assert_eq!(state.key_bindings.get_raw("jump").unwrap().modifiers, 2);
+        let error = migrate_plist_bytes(&bytes, "fallback").unwrap_err();
+        assert!(error.contains("obsolete input-binding storage"), "{error}");
+        root.remove(KEY_BINDINGS_V1_KEY);
+        let mut malformed = Vec::new();
+        plist::to_writer_xml(&mut malformed, &Value::Dictionary(root)).unwrap();
+        assert!(migrate_plist_bytes(&malformed, "fallback").unwrap_err().contains("invalid input-binding map"));
     }
 
     #[test]
@@ -873,7 +780,7 @@ mod tests {
     }
 
     #[test]
-    fn pre_profile_customization_and_keyboard_outputs_are_preserved() {
+    fn obsolete_pre_profile_routing_is_rejected_before_installation() {
         let customization = json!({
             "labelOverrides": ["attack", "Strike"],
             "buttonCustomizations": ["jump", {"isHidden": true}],
@@ -910,43 +817,11 @@ mod tests {
         let mut bytes = Vec::new();
         plist::to_writer_xml(&mut bytes, &Value::Dictionary(root)).unwrap();
 
-        let state = migrate_plist_bytes(&bytes, "fallback").unwrap();
-        assert_eq!(state.profiles[0]["name"], "Current Setup");
-        assert_eq!(
-            state.profiles[0]["customization"]["futureCustomizationField"]["survives"],
-            true
-        );
-        let elements = state.profiles[0]["customization"]["elements"]
-            .as_array()
-            .unwrap();
-        assert!(!elements
-            .iter()
-            .any(|element| element["builtInButton"] == "jump"));
-        assert!(elements
-            .iter()
-            .any(|element| element["builtInButton"] == "attack" && element["label"] == "Strike"));
-        assert!(elements.iter().any(|element| {
-            element["id"] == "BBBBBBBB-CCCC-DDDD-EEEE-FFFFFFFFFFFF"
-                && element["legacySlot"] == "custom3"
-        }));
-        assert_eq!(
-            state
-                .resolve_element_output(
-                    "BBBBBBBB-CCCC-DDDD-EEEE-FFFFFFFFFFFF",
-                    thumble_protocol::KeypadElementInputPart::Primary,
-                )
-                .unwrap()
-                .keyboard,
-            Some(KeyBinding::new(7, 1))
-        );
-        assert_eq!(
-            state.output_bindings.get_raw("jump").unwrap().keyboard,
-            Some(KeyBinding::new(49, 2))
-        );
-        assert_eq!(
-            state.output_bindings.get_raw("attack").unwrap(),
-            &OutputBinding::default()
-        );
+        assert!(migrate_plist_bytes(&bytes, "fallback").is_err());
+        let directory = tempdir().unwrap();
+        let paths = HostPaths::new(directory.path().to_path_buf(), directory.path().join("control.sock"));
+        assert!(install_initial_state(&paths, Some(bytes), "fallback").is_err());
+        assert!(!paths.state_file.exists());
     }
 
     #[test]
@@ -970,7 +845,122 @@ mod tests {
     }
 
     #[test]
-    fn existing_schema_one_state_is_atomically_upgraded_with_initial_revision() {
+    fn literal_duplicate_saved_keys_and_default_maps_reject_without_writes() {
+        let raw = serde_json::to_string(&PersistentState::minimal("server").unwrap()).unwrap();
+        let original = "\"kind\":\"button\"";
+        assert!(raw.contains(original));
+        let before = raw.replacen(original, "\"kind\":\"joystick\",\"kind\":\"button\"", 1).into_bytes();
+        let directory = tempdir().unwrap();
+        let paths = HostPaths::new(directory.path().to_path_buf(), directory.path().join("control.sock"));
+        paths.ensure_state_dir().unwrap();
+        fs::write(&paths.state_file, &before).unwrap();
+        fs::set_permissions(&paths.state_file, fs::Permissions::from_mode(0o600)).unwrap();
+        assert!(load_or_migrate(&paths).is_err());
+        assert_eq!(fs::read(&paths.state_file).unwrap(), before);
+        let id = "00000000-0000-0000-0000-000000000105";
+        let binding = r#"{"keyCode":49,"modifiers":0}"#;
+        let ambiguous = format!(r#"{{"{id}":{binding},"{id}":{binding}}}"#);
+        assert!(parse_bindings::<KeyBinding>(ambiguous.as_bytes()).is_none());
+        let ambiguous_profiles = format!(r#"{{"4B6B62C7-367D-44C7-BA78-2AC30E6E22F4":{ambiguous}}}"#);
+        assert!(parse_profile_bindings::<KeyBinding>(ambiguous_profiles.as_bytes()).is_none());
+    }
+
+    #[test]
+    fn existing_invalid_references_are_rejected_without_rewriting_saved_state() {
+        let valid = serde_json::to_value(PersistentState::minimal("server").unwrap()).unwrap();
+        let other = "4B6B62C7-367D-44C7-BA78-2AC30E6E22F4";
+        let mut cases = Vec::new();
+        let mut empty = valid.clone();
+        empty["profiles"] = json!([]);
+        cases.push(empty);
+        for field in ["activeProfileID", "defaultProfileID"] {
+            let mut dangling = valid.clone();
+            dangling[field] = json!(other);
+            cases.push(dangling);
+        }
+        let mut duplicate = valid.clone();
+        let profile = duplicate["profiles"][0].clone();
+        duplicate["profiles"].as_array_mut().unwrap().push(profile);
+        cases.push(duplicate);
+        for field in ["profileKeyBindings", "profileOutputBindings"] {
+            let mut orphan = valid.clone();
+            orphan[field][other] = json!({});
+            cases.push(orphan);
+        }
+        for (index, document) in cases.into_iter().enumerate() {
+            let directory = tempdir().unwrap();
+            let paths = HostPaths::new(directory.path().to_path_buf(), directory.path().join("control.sock"));
+            paths.ensure_state_dir().unwrap();
+            let before = serde_json::to_vec(&document).unwrap();
+            fs::write(&paths.state_file, &before).unwrap();
+            fs::set_permissions(&paths.state_file, fs::Permissions::from_mode(0o600)).unwrap();
+            assert!(load_or_migrate(&paths).is_err(), "accepted reference case {index}");
+            assert_eq!(fs::read(&paths.state_file).unwrap(), before);
+        }
+    }
+
+    #[test]
+    fn defaults_references_reject_before_initial_installation() {
+        let state = PersistentState::minimal("server").unwrap();
+        let valid = json!({"profiles":state.profiles,"activeProfileID":state.active_profile_id,"defaultProfileID":state.default_profile_id});
+        let mut cases = Vec::new();
+        let mut empty = valid.clone();
+        empty["profiles"] = json!([]);
+        cases.push(empty);
+        for field in ["activeProfileID", "defaultProfileID"] {
+            let mut missing = valid.clone();
+            missing.as_object_mut().unwrap().remove(field);
+            cases.push(missing);
+            let mut dangling = valid.clone();
+            dangling[field] = json!("4B6B62C7-367D-44C7-BA78-2AC30E6E22F4");
+            cases.push(dangling);
+        }
+        let mut duplicate = valid.clone();
+        let profile = duplicate["profiles"][0].clone();
+        duplicate["profiles"].as_array_mut().unwrap().push(profile);
+        cases.push(duplicate);
+        for (index, profiles) in cases.into_iter().enumerate() {
+            let directory = tempdir().unwrap();
+            let paths = HostPaths::new(directory.path().join("state"), directory.path().join("control.sock"));
+            paths.ensure_state_dir().unwrap();
+            let mut defaults = Dictionary::new();
+            defaults.insert(PROFILES_KEY.to_owned(), Value::Data(serde_json::to_vec(&profiles).unwrap()));
+            let mut source = Vec::new();
+            plist::to_writer_xml(&mut source, &Value::Dictionary(defaults)).unwrap();
+            let before = source.clone();
+            assert!(install_initial_state(&paths, Some(source), "server").is_err(), "accepted defaults reference case {index}");
+            assert!(!paths.state_file.exists());
+            assert!(!before.is_empty());
+        }
+    }
+
+    #[test]
+    fn missing_defaults_maps_derive_only_from_each_profiles_owned_outputs() {
+        let first = "4B6B62C7-367D-44C7-BA78-2AC30E6E22F4";
+        let second = "B16C0A67-B9EA-42CA-966B-9F23A09CDE8B";
+        let input = "82782DD6-D823-44AD-B9FC-9655E16160B1";
+        let profiles = json!({"profiles":[
+            {"id":first,"name":"Owned","customization":{"elements":[{"id":input,"kind":"button","output":{"keyboard":{"keyCode":49,"modifiersRawValue":8},"gamepadButtons":["south"]}}]}},
+            {"id":second,"name":"Blank","customization":{"elements":[]}}
+        ],"activeProfileID":first,"defaultProfileID":first});
+        let mut defaults = Dictionary::new();
+        defaults.insert(PROFILES_KEY.to_owned(), Value::Data(serde_json::to_vec(&profiles).unwrap()));
+        let mut source = Vec::new();
+        plist::to_writer_xml(&mut source, &Value::Dictionary(defaults)).unwrap();
+        let imported = migrate_plist_bytes(&source, "server").unwrap();
+        assert_eq!(imported.key_bindings.len(), 1);
+        assert_eq!(imported.key_bindings.get_raw(input).unwrap(), &KeyBinding::new(49, 8));
+        assert_eq!(imported.output_bindings.len(), 1);
+        assert!(imported.output_bindings.get_raw(input).unwrap().gamepad_buttons.contains("south"));
+        assert_eq!(imported.profile_key_bindings[first].len(), 1);
+        assert_eq!(imported.profile_output_bindings[first].len(), 1);
+        assert!(imported.profile_key_bindings[second].is_empty());
+        assert!(imported.profile_output_bindings[second].is_empty());
+        assert_eq!(imported.profiles.len(), 2);
+    }
+
+    #[test]
+    fn existing_obsolete_state_is_rejected_without_rewriting_the_file() {
         let directory = tempdir().unwrap();
         let paths = HostPaths::new(
             directory.path().to_path_buf(),
@@ -987,17 +977,9 @@ mod tests {
         fs::write(&paths.state_file, serde_json::to_vec(&legacy).unwrap()).unwrap();
         fs::set_permissions(&paths.state_file, fs::Permissions::from_mode(0o600)).unwrap();
 
-        let migrated = load_or_migrate(&paths).unwrap();
-        assert_eq!(
-            migrated.schema_version,
-            thumble_core::CURRENT_SCHEMA_VERSION
-        );
-        assert_eq!(
-            migrated.configuration_revision,
-            thumble_core::INITIAL_CONFIGURATION_REVISION
-        );
-        let persisted = load(&paths.state_file).unwrap();
-        assert_eq!(persisted, migrated);
+        let before = fs::read(&paths.state_file).unwrap();
+        assert!(load_or_migrate(&paths).unwrap_err().contains("unsupported persistent-state schema version 1"));
+        assert_eq!(fs::read(&paths.state_file).unwrap(), before);
     }
 
     #[test]

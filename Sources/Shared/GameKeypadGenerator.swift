@@ -21,7 +21,7 @@ public struct GeneratedGameKeypadProfile: Codable, Equatable, Sendable {
     public var requestedGameName: String
     public var resolvedGameName: String
     public var profile: GamepadConfigurationProfile
-    public var keyBindings: [GameButton: GeneratedKeyBindingSpec]
+    public var keyBindings: [KeypadElementID: GeneratedKeyBindingSpec]
     public var source: String
     public var confidence: GeneratedKeypadConfidence
     public var notes: [String]
@@ -30,7 +30,7 @@ public struct GeneratedGameKeypadProfile: Codable, Equatable, Sendable {
         requestedGameName: String,
         resolvedGameName: String,
         profile: GamepadConfigurationProfile,
-        keyBindings: [GameButton: GeneratedKeyBindingSpec],
+        keyBindings: [KeypadElementID: GeneratedKeyBindingSpec],
         source: String,
         confidence: GeneratedKeypadConfidence,
         notes: [String] = []
@@ -55,7 +55,6 @@ public enum AgentKeypadControlRole: String, Codable, CaseIterable, Sendable {
 
 public struct AgentKeypadControlSpec: Codable, Equatable, Sendable {
     public var id: String?
-    public var button: GameButton?
     public var label: String
     public var key: String
     public var modifiers: [String]
@@ -84,7 +83,6 @@ public struct AgentKeypadControlSpec: Codable, Equatable, Sendable {
 
     public init(
         id: String? = nil,
-        button: GameButton? = nil,
         label: String,
         key: String,
         modifiers: [String] = [],
@@ -112,7 +110,6 @@ public struct AgentKeypadControlSpec: Codable, Equatable, Sendable {
         trackpadSettings: GamepadTrackpadSettings? = nil
     ) {
         self.id = id
-        self.button = button
         self.label = label
         self.key = key
         self.modifiers = modifiers
@@ -141,16 +138,13 @@ public struct AgentKeypadControlSpec: Codable, Equatable, Sendable {
     }
 
     public init(from decoder: Decoder) throws {
+        try KeypadElementSchema.requireIndependentIdentity(from: decoder)
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decodeIfPresent(String.self, forKey: .id)
-        button = try container.decodeIfPresent(GameButton.self, forKey: .button)
-        if button == nil, let id, let idButton = GameButton(rawValue: id) {
-            button = idButton
+        if let id, KeypadElementID(rawValue: id) == nil {
+            throw DecodingError.dataCorruptedError(forKey: .id, in: container, debugDescription: "A control id must be a UUID. Named input slots are no longer supported.")
         }
-        label = try container.decodeIfPresent(String.self, forKey: .label)
-            ?? button?.displayName
-            ?? id
-            ?? "Button"
+        label = try container.decodeIfPresent(String.self, forKey: .label) ?? "Button"
         key = try container.decodeIfPresent(String.self, forKey: .key) ?? ""
         modifiers = try container.decodeIfPresent([String].self, forKey: .modifiers) ?? []
         role = try container.decodeIfPresent(AgentKeypadControlRole.self, forKey: .role)
@@ -186,7 +180,6 @@ public struct AgentKeypadControlSpec: Codable, Equatable, Sendable {
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encodeIfPresent(id, forKey: .id)
-        try container.encodeIfPresent(button, forKey: .button)
         try container.encode(label, forKey: .label)
         try container.encode(key, forKey: .key)
         try container.encode(modifiers, forKey: .modifiers)
@@ -437,29 +430,11 @@ public struct AgentKeypadControlSpec: Codable, Equatable, Sendable {
         }
     }
 
-    private static func decodeGameButtonAlias(from container: KeyedDecodingContainer<CodingKeys>, forKey key: CodingKeys) -> GameButton? {
-        guard let rawValue = try? container.decodeIfPresent(String.self, forKey: key) else { return nil }
-        return GameButton(rawValue: rawValue)
-    }
-
     private static func decodeJoystickMapping(from container: KeyedDecodingContainer<CodingKeys>) throws -> GamepadJoystickMapping? {
-        let explicitMapping = try container.decodeIfPresent(GamepadJoystickMapping.self, forKey: .joystickMapping)
-        let up = decodeGameButtonAlias(from: container, forKey: .up)
-        let down = decodeGameButtonAlias(from: container, forKey: .down)
-        let left = decodeGameButtonAlias(from: container, forKey: .left)
-        let right = decodeGameButtonAlias(from: container, forKey: .right)
-
-        guard up != nil || down != nil || left != nil || right != nil else {
-            return explicitMapping
+        for field in [CodingKeys.up, .down, .left, .right] where container.contains(field) {
+            throw DecodingError.dataCorruptedError(forKey: field, in: container, debugDescription: "Directional slot aliases are no longer supported. Provide explicit joystick output bindings.")
         }
-
-        let baseMapping = explicitMapping ?? .movement
-        return GamepadJoystickMapping(
-            up: up ?? baseMapping.up,
-            down: down ?? baseMapping.down,
-            left: left ?? baseMapping.left,
-            right: right ?? baseMapping.right
-        )
+        return try container.decodeIfPresent(GamepadJoystickMapping.self, forKey: .joystickMapping)
     }
 
     private static func decodeTrackpadSettings(from container: KeyedDecodingContainer<CodingKeys>) throws -> GamepadTrackpadSettings? {
@@ -489,7 +464,6 @@ public struct AgentKeypadControlSpec: Codable, Equatable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case id
-        case button
         case label
         case key
         case modifiers
@@ -617,6 +591,9 @@ public struct AgentKeypadSpec: Codable, Equatable, Sendable {
         confidence = try container.decodeIfPresent(GeneratedKeypadConfidence.self, forKey: .confidence)
         notes = try container.decodeIfPresent([String].self, forKey: .notes) ?? []
         controls = try container.decode([AgentKeypadControlSpec].self, forKey: .controls)
+        guard controls.count <= GamepadCustomization.maximumCustomButtons else {
+            throw DecodingError.dataCorruptedError(forKey: .controls, in: container, debugDescription: "At most 128 controls are supported.")
+        }
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -699,9 +676,10 @@ private enum KeypadRole {
 }
 
 private struct GeneratedControlDefinition {
-    var button: GameButton
+    var button: KeypadElementID
     var label: String
     var binding: GeneratedKeyBindingSpec
+    var gamepadButtons: Set<VirtualGamepadButton>
     var role: KeypadRole
     var centerX: CGFloat
     var centerY: CGFloat
@@ -726,10 +704,11 @@ private struct GeneratedControlDefinition {
     var trackpadSettings: GamepadTrackpadSettings?
 
     init(
-        _ button: GameButton,
+        _ button: KeypadElementID,
         label: String,
         key: String,
         modifiers: [String] = [],
+        gamepadButtons: Set<VirtualGamepadButton> = [],
         role: KeypadRole,
         x: CGFloat,
         y: CGFloat,
@@ -757,6 +736,7 @@ private struct GeneratedControlDefinition {
         self.button = button
         self.label = label
         self.binding = GeneratedKeyBindingSpec(key: key, modifiers: modifiers)
+        self.gamepadButtons = gamepadButtons
         self.role = role
         self.centerX = x
         self.centerY = y
@@ -799,7 +779,7 @@ private enum GeneratedProfileBuilder {
         customization.accentStyle = accentStyle
         customization.showsButtonLabels = true
 
-        var keyBindings: [GameButton: GeneratedKeyBindingSpec] = [:]
+        var keyBindings: [KeypadElementID: GeneratedKeyBindingSpec] = [:]
         var customButtons: [GamepadCustomButton] = []
 
         for control in controls {
@@ -825,13 +805,13 @@ private enum GeneratedProfileBuilder {
             )
 
             let controlKind = control.controlKind ?? (control.trackpadSettings == nil ? (control.joystickMapping == nil ? .button : .joystick) : .trackpad)
-            if GameButton.builtInControls.contains(control.button), controlKind == .button {
+            if DefaultKeypadElements.ids.contains(control.button), controlKind == .button {
                 customization.setButtonCustomization(layout, for: control.button)
                 customization.setLabel(control.label, for: control.button)
             } else {
                 customButtons.append(
                     GamepadCustomButton(
-                        mappedButton: control.button,
+                        id: control.button.uuid,
                         label: control.label,
                         layout: layout,
                         controlKind: controlKind,
@@ -849,6 +829,8 @@ private enum GeneratedProfileBuilder {
         }
 
         customization.customButtons = customButtons
+        customization = customization.normalized
+        authorOwnedOutputs(controls, in: &customization)
         customization.updatedAt = Date.currentMilliseconds
 
         let profile = GamepadConfigurationProfile(
@@ -865,6 +847,30 @@ private enum GeneratedProfileBuilder {
             confidence: confidence,
             notes: notes
         )
+    }
+
+    private static func authorOwnedOutputs(
+        _ controls: [GeneratedControlDefinition],
+        in customization: inout GamepadCustomization
+    ) {
+        let definitions = Dictionary(uniqueKeysWithValues: controls.map { ($0.button, $0) })
+        for index in customization.elements.indices {
+            let element = customization.elements[index]
+            guard let definition = definitions[element.inputID] else { continue }
+            guard element.kind != .text, element.kind != .decoration else {
+                customization.elements[index].output = nil
+                customization.elements[index].defaultOutput = nil
+                continue
+            }
+            let binding = KeypadElementOutputBinding(
+                keyboard: KeypadKeyboardBinding(keyName: definition.binding.key, modifierNames: definition.binding.modifiers),
+                gamepadButtons: definition.gamepadButtons
+            )
+            // Empty primaries are intentional. Appearance anchors must not retain
+            // a starter prototype's executable binding or reset recommendation.
+            customization.elements[index].output = binding
+            customization.elements[index].defaultOutput = binding
+        }
     }
 
     private static func resolvedCornerRadius(for shape: GamepadButtonShapeStyle) -> CGFloat? {
@@ -887,15 +893,37 @@ private enum AgentSpecTemplate {
     }
 
     static func make(spec: AgentKeypadSpec, requestedGameName: String?) -> GeneratedGameKeypadProfile {
-        var usedButtons = Set<GameButton>()
+        var usedButtons = Set<KeypadElementID>()
         var roleCounts: [KeypadRole: Int] = [:]
+        var kindCounts: [GamepadCustomControlKind: Int] = [:]
         var controls: [GeneratedControlDefinition] = []
+        let reservedButtons = Set(spec.controls.compactMap { $0.id.flatMap(KeypadElementID.init(rawValue:)) })
+        var authoringNotices: [String] = []
 
-        for controlSpec in spec.controls {
-            guard let button = assignButton(for: controlSpec, usedButtons: usedButtons) else { continue }
+        for (ordinal, controlSpec) in spec.controls.enumerated() {
+            let controlKind = inferredControlKind(for: controlSpec)
+            let kind = controlKind ?? .button
+            guard controls.count < GamepadCustomization.maximumCustomButtons else {
+                authoringNotices.append("Control \(ordinal + 1) dropped because total control capacity was exceeded.")
+                continue
+            }
+            let capacity: Int? = switch kind {
+            case .joystick: GamepadCustomization.maximumJoysticks
+            case .trigger: GamepadCustomization.maximumTriggers
+            case .trackpad: GamepadCustomization.maximumTrackpads
+            default: nil
+            }
+            if let capacity, kindCounts[kind, default: 0] >= capacity {
+                authoringNotices.append("Control \(ordinal + 1) dropped because \(kind.rawValue) capacity was exceeded.")
+                continue
+            }
+            kindCounts[kind, default: 0] += 1
+            let button = assignButton(for: controlSpec, usedButtons: usedButtons, reservedButtons: reservedButtons)
+            if let requested = controlSpec.id.flatMap(KeypadElementID.init(rawValue:)), usedButtons.contains(requested) {
+                authoringNotices.append("Control \(ordinal + 1) requested a duplicate UUID; authored it with a fresh UUID.")
+            }
             usedButtons.insert(button)
 
-            let controlKind = inferredControlKind(for: controlSpec)
             let role = inferRole(for: controlSpec, button: button)
             let roleIndex = roleCounts[role, default: 0]
             roleCounts[role] = roleIndex + 1
@@ -947,6 +975,7 @@ private enum AgentSpecTemplate {
         if notes.isEmpty {
             notes = ["Installed from an agent-provided keypad spec."]
         }
+        notes.append(contentsOf: authoringNotices)
 
         return GeneratedProfileBuilder.build(
             requestedGameName: requestedGameName ?? resolvedName,
@@ -965,38 +994,22 @@ private enum AgentSpecTemplate {
         return nil
     }
 
-    private static func assignButton(for control: AgentKeypadControlSpec, usedButtons: Set<GameButton>) -> GameButton? {
-        if let button = control.button, !usedButtons.contains(button) {
-            return button
+    private static func assignButton(
+        for control: AgentKeypadControlSpec,
+        usedButtons: Set<KeypadElementID>,
+        reservedButtons: Set<KeypadElementID>
+    ) -> KeypadElementID {
+        if let requested = control.id.flatMap(KeypadElementID.init(rawValue:)), !usedButtons.contains(requested) {
+            return requested
         }
-
-        if let controlKind = inferredControlKind(for: control), controlKind != .button {
-            return GameButton.customSlots.first { !usedButtons.contains($0) }
+        var id = KeypadElementID()
+        while usedButtons.contains(id) || reservedButtons.contains(id) {
+            id = KeypadElementID()
         }
-
-        let normalized = normalizedControlText(control)
-        let preferredButton: GameButton? = {
-            if normalized.contains("left") || normalized.contains("arrowleft") { return .left }
-            if normalized.contains("right") || normalized.contains("arrowright") { return .right }
-            if normalized.contains("up") || normalized.contains("arrowup") { return .up }
-            if normalized.contains("down") || normalized.contains("arrowdown") { return .down }
-            if normalized.contains("jump") { return .jump }
-            if normalized.contains("attack") || normalized.contains("nail") || normalized.contains("fire") || normalized.contains("shoot") { return .attack }
-            if normalized.contains("dash") || normalized.contains("dodge") || normalized.contains("sprint") { return .dash }
-            if normalized.contains("focus") || normalized.contains("cast") || normalized.contains("special") || normalized.contains("magic") { return .focus }
-            if normalized.contains("map") { return .map }
-            if normalized.contains("pause") || normalized.contains("escape") || normalized.contains("menu") { return .pause }
-            return nil
-        }()
-
-        if let preferredButton, !usedButtons.contains(preferredButton) {
-            return preferredButton
-        }
-
-        return GameButton.customSlots.first { !usedButtons.contains($0) }
+        return id
     }
 
-    private static func inferRole(for control: AgentKeypadControlSpec, button: GameButton) -> KeypadRole {
+    private static func inferRole(for control: AgentKeypadControlSpec, button: KeypadElementID) -> KeypadRole {
         if let role = control.role {
             return KeypadRole(role)
         }
@@ -1006,17 +1019,17 @@ private enum AgentSpecTemplate {
         }
 
         switch button {
-        case .up, .down, .left, .right:
+        case .preset(1), .preset(2), .preset(3), .preset(4):
             return .movement
-        case .jump, .attack, .dash:
+        case .preset(5), .preset(6), .preset(7):
             return .primary
-        case .focus:
+        case .preset(8):
             return .secondary
-        case .map:
+        case .preset(9):
             return .utility
-        case .pause:
+        case .preset(10):
             return .system
-        case .custom1, .custom2, .custom3, .custom4, .custom5, .custom6, .custom7, .custom8:
+        default:
             break
         }
 
@@ -1051,19 +1064,19 @@ private enum AgentSpecTemplate {
     /// clusters keep ≥20pt visual gaps so runtime hit regions stay separate.
     /// `layout validate` reports no issues for the common 4-movement + 4-action
     /// + secondary + utility + system mixes generated from these values.
-    private static func layoutDefaults(for button: GameButton, role: KeypadRole, index: Int) -> LayoutDefaults {
+    private static func layoutDefaults(for button: KeypadElementID, role: KeypadRole, index: Int) -> LayoutDefaults {
         switch button {
-        case .up:
+        case .preset(1):
             return LayoutDefaults(x: 0.20, y: 0.42, width: 1.12, height: 1.05, shape: .roundedRectangle)
-        case .down:
+        case .preset(2):
             return LayoutDefaults(x: 0.20, y: 0.70, width: 1.12, height: 1.05, shape: .roundedRectangle)
-        case .left:
+        case .preset(3):
             return LayoutDefaults(x: 0.066, y: 0.56, width: 1.12, height: 1.05, shape: .roundedRectangle)
-        case .right:
+        case .preset(4):
             return LayoutDefaults(x: 0.334, y: 0.56, width: 1.12, height: 1.05, shape: .roundedRectangle)
-        case .map:
+        case .preset(9):
             return LayoutDefaults(x: 0.29, y: 0.16, width: 1.0, height: 1.1, shape: .capsule)
-        case .pause:
+        case .preset(10):
             return LayoutDefaults(x: 0.78, y: 0.21, width: 0.95, height: 1.1, shape: .capsule)
         default:
             break
@@ -1116,7 +1129,7 @@ private enum AgentSpecTemplate {
     }
 
     private static func normalizedControlText(_ control: AgentKeypadControlSpec) -> String {
-        normalizedGameName([control.id, control.button?.rawValue, control.label, control.key].compactMap { $0 }.joined(separator: " "))
+        normalizedGameName([control.id, control.label, control.key].compactMap { $0 }.joined(separator: " "))
     }
 
     private static func normalizedDisplayName(_ name: String, fallback: String) -> String {
@@ -1145,23 +1158,23 @@ private enum HollowKnightTemplate {
         // Thumb-first sizing: d-pad ~96×91pt, face buttons ~91pt circles on the
         // reference landscape canvas, with ≥20pt gaps so hit regions stay separate.
         let controls: [GeneratedControlDefinition] = [
-            .init(.up, label: "↑", key: "UpArrow", role: .movement, x: 0.205, y: 0.46, width: 1.12, height: 1.06, fill: dPadFill, cornerRadius: 8),
-            .init(.down, label: "↓", key: "DownArrow", role: .movement, x: 0.205, y: 0.86, width: 1.12, height: 1.06, fill: dPadFill, cornerRadius: 8),
-            .init(.left, label: "←", key: "LeftArrow", role: .movement, x: 0.065, y: 0.655, width: 1.12, height: 1.06, fill: dPadFill, cornerRadius: 8),
-            .init(.right, label: "→", key: "RightArrow", role: .movement, x: 0.345, y: 0.655, width: 1.12, height: 1.06, fill: dPadFill, cornerRadius: 8),
+            .init(.preset(1), label: "↑", key: "UpArrow", gamepadButtons: [.dpadUp], role: .movement, x: 0.205, y: 0.46, width: 1.12, height: 1.06, fill: dPadFill, cornerRadius: 8),
+            .init(.preset(2), label: "↓", key: "DownArrow", gamepadButtons: [.dpadDown], role: .movement, x: 0.205, y: 0.86, width: 1.12, height: 1.06, fill: dPadFill, cornerRadius: 8),
+            .init(.preset(3), label: "←", key: "LeftArrow", gamepadButtons: [.dpadLeft], role: .movement, x: 0.065, y: 0.655, width: 1.12, height: 1.06, fill: dPadFill, cornerRadius: 8),
+            .init(.preset(4), label: "→", key: "RightArrow", gamepadButtons: [.dpadRight], role: .movement, x: 0.345, y: 0.655, width: 1.12, height: 1.06, fill: dPadFill, cornerRadius: 8),
 
-            .init(.focus, label: "Soul", key: "A", role: .secondary, x: 0.815, y: 0.40, width: 1.06, height: 1.06, shape: .circle, fill: "#22C55E", shadowStrength: 1.25),
-            .init(.dash, label: "Dash", key: "C", role: .primary, x: 0.945, y: 0.65, width: 1.06, height: 1.06, shape: .circle, fill: "#EF4444", shadowStrength: 1.25),
-            .init(.jump, label: "Jump", key: "Z", role: .primary, x: 0.815, y: 0.88, width: 1.06, height: 1.06, shape: .circle, fill: "#3B82F6", shadowStrength: 1.25),
-            .init(.attack, label: "Nail", key: "X", role: .primary, x: 0.685, y: 0.65, width: 1.06, height: 1.06, shape: .circle, fill: "#EC4899", shadowStrength: 1.25),
+            .init(.preset(8), label: "Soul", key: "A", gamepadButtons: [.north], role: .secondary, x: 0.815, y: 0.40, width: 1.06, height: 1.06, shape: .circle, fill: "#22C55E", shadowStrength: 1.25),
+            .init(.preset(7), label: "Dash", key: "C", gamepadButtons: [.east], role: .primary, x: 0.945, y: 0.65, width: 1.06, height: 1.06, shape: .circle, fill: "#EF4444", shadowStrength: 1.25),
+            .init(.preset(5), label: "Jump", key: "Z", gamepadButtons: [.south], role: .primary, x: 0.815, y: 0.88, width: 1.06, height: 1.06, shape: .circle, fill: "#3B82F6", shadowStrength: 1.25),
+            .init(.preset(6), label: "Nail", key: "X", gamepadButtons: [.west], role: .primary, x: 0.685, y: 0.65, width: 1.06, height: 1.06, shape: .circle, fill: "#EC4899", shadowStrength: 1.25),
 
-            .init(.map, label: "Map", key: "Tab", role: .utility, x: 0.47, y: 0.905, width: 1.0, height: 1.1, shape: .capsule, fill: utilityFill, shadowStrength: 0.75),
-            .init(.pause, label: "Pause", key: "Escape", role: .system, x: 0.655, y: 0.905, width: 1.0, height: 1.1, shape: .capsule, fill: utilityFill, shadowStrength: 0.75),
+            .init(.preset(9), label: "Map", key: "Tab", gamepadButtons: [.select], role: .utility, x: 0.47, y: 0.905, width: 1.0, height: 1.1, shape: .capsule, fill: utilityFill, shadowStrength: 0.75),
+            .init(.preset(10), label: "Pause", key: "Escape", gamepadButtons: [.start], role: .system, x: 0.655, y: 0.905, width: 1.0, height: 1.1, shape: .capsule, fill: utilityFill, shadowStrength: 0.75),
 
-            .init(.custom5, label: "Quick Cast", key: "F", role: .secondary, x: 0.20, y: 0.10, width: 1.0, height: 0.78, shape: .capsule, fill: utilityFill),
-            .init(.custom6, label: "Dream Nail", key: "D", role: .secondary, x: 0.80, y: 0.10, width: 1.0, height: 0.78, shape: .capsule, fill: utilityFill),
-            .init(.custom7, label: "Super Dash", key: "S", role: .utility, x: 0.345, y: 0.23, width: 1.0, height: 0.78, shape: .capsule, fill: dPadFill),
-            .init(.custom8, label: "Inventory", key: "I", role: .utility, x: 0.63, y: 0.17, width: 1.0, height: 0.78, shape: .capsule, fill: dPadFill)
+            .init(.preset(15), label: "Quick Cast", key: "F", role: .secondary, x: 0.20, y: 0.10, width: 1.0, height: 0.78, shape: .capsule, fill: utilityFill),
+            .init(.preset(16), label: "Dream Nail", key: "D", role: .secondary, x: 0.80, y: 0.10, width: 1.0, height: 0.78, shape: .capsule, fill: utilityFill),
+            .init(.preset(17), label: "Super Dash", key: "S", role: .utility, x: 0.345, y: 0.23, width: 1.0, height: 0.78, shape: .capsule, fill: dPadFill),
+            .init(.preset(18), label: "Inventory", key: "I", role: .utility, x: 0.63, y: 0.17, width: 1.0, height: 0.78, shape: .capsule, fill: dPadFill)
         ]
 
         var generated = GeneratedProfileBuilder.build(

@@ -1,6 +1,27 @@
 import XCTest
 
 final class KeypadBindingPresentationTests: XCTestCase {
+    func testKeyboardAuthoringVocabularyMatchesNativeAdaptersAndRejectsUnknownKeys() throws {
+        for code: UInt16 in 0...127 {
+            let name = KeypadKeyboardKeyCatalog.displayName(for: code)
+            if name.hasPrefix("Key ") { continue }
+            XCTAssertEqual(KeypadKeyboardKeyCatalog.keyCode(named: name), code)
+            XCTAssertEqual(MacVirtualKey.displayName(for: code), name)
+            let shared = try XCTUnwrap(KeypadKeyboardBinding(keyName: name, modifierNames: ["CTRL", "Alt", "Shift", "Meta", "ctrl"]))
+            let native = try XCTUnwrap(MacKeyBinding(generatedSpec: GeneratedKeyBindingSpec(key: name, modifiers: ["CTRL", "Alt", "Shift", "Meta", "ctrl"])))
+            XCTAssertEqual(native.sharedBinding, shared)
+            XCTAssertEqual(shared.modifiersRawValue, 15)
+        }
+        for name in ["left-arrow", "arrow left", "LeftArrow", "←"] {
+            XCTAssertEqual(KeypadKeyboardKeyCatalog.keyCode(named: name), 123)
+        }
+        for name in ["!", "💡", "not-a-key", "10", "65535", ""] {
+            XCTAssertNil(KeypadKeyboardBinding(keyName: name), name)
+            XCTAssertNil(MacKeyBinding(generatedSpec: GeneratedKeyBindingSpec(key: name)), name)
+        }
+        XCTAssertNil(KeypadKeyboardBinding(keyName: "Space", modifierNames: ["unknown"]))
+    }
+
     func testControllerMessageWithoutPresentationsRemainsDecodable() throws {
         let oldPayload = Data(#"{"type":"gamepad_profiles","timestamp":0,"gamepadProfiles":[]}"#.utf8)
         let decoded = try JSONDecoder().decode(ControllerMessage.self, from: oldPayload)
@@ -52,18 +73,22 @@ final class KeypadBindingPresentationTests: XCTestCase {
     }
 
     func testPerProfilePresentationsAreIsolated() throws {
-        let first = GamepadConfigurationProfile(name: "First", customization: .defaultValue)
-        let second = GamepadConfigurationProfile(name: "Second", customization: .defaultValue)
-        let firstOutputs: [GameButton: KeypadElementOutputBinding] = [
-            .jump: KeypadElementOutputBinding(keyboard: KeypadKeyboardBinding(keyCode: 49))
+        var firstCustomization = GamepadCustomization.defaultValue
+        try firstCustomization.setStandaloneElementOutput(KeypadElementOutputBinding(keyboard: KeypadKeyboardBinding(keyCode: 49)), for: .builtin(.preset(5)), part: .primary)
+        var secondCustomization = GamepadCustomization.defaultValue
+        try secondCustomization.setStandaloneElementOutput(KeypadElementOutputBinding(keyboard: KeypadKeyboardBinding(keyCode: 36)), for: .builtin(.preset(5)), part: .primary)
+        let first = GamepadConfigurationProfile(name: "First", customization: firstCustomization)
+        let second = GamepadConfigurationProfile(name: "Second", customization: secondCustomization)
+        let firstOutputs: [KeypadElementID: KeypadElementOutputBinding] = [
+            .preset(5): KeypadElementOutputBinding(keyboard: KeypadKeyboardBinding(keyCode: 49))
         ]
-        let secondOutputs: [GameButton: KeypadElementOutputBinding] = [
-            .jump: KeypadElementOutputBinding(keyboard: KeypadKeyboardBinding(keyCode: 36))
+        let secondOutputs: [KeypadElementID: KeypadElementOutputBinding] = [
+            .preset(5): KeypadElementOutputBinding(keyboard: KeypadKeyboardBinding(keyCode: 36))
         ]
 
-        let all = KeypadBindingPresentationBuilder.presentations(for: first, effectiveLegacyOutputs: firstOutputs)
-            + KeypadBindingPresentationBuilder.presentations(for: second, effectiveLegacyOutputs: secondOutputs)
-        let jumpInput = KeypadElementInputID(elementID: KeypadElement.builtInID(for: .jump))
+        let all = KeypadBindingPresentationBuilder.presentations(for: first, elementOutputs: firstOutputs)
+            + KeypadBindingPresentationBuilder.presentations(for: second, elementOutputs: secondOutputs)
+        let jumpInput = KeypadElementInputID(elementID: KeypadElement.builtInID(for: .preset(5)))
         XCTAssertEqual(
             all.bindingPresentation(profileID: first.id, orientation: .landscape, input: jumpInput)?.compactText,
             "Space"
@@ -74,20 +99,20 @@ final class KeypadBindingPresentationTests: XCTestCase {
         )
     }
 
-    func testDirectElementAndLegacyOutputsAreBothPresented() throws {
+    func testOwnedOutputsOverrideStaleSidecars() throws {
         var customization = GamepadCustomization.defaultValue.normalized
-        let jumpID = KeypadElement.builtInID(for: .jump)
-        let pauseID = KeypadElement.builtInID(for: .pause)
+        let jumpID = KeypadElement.builtInID(for: .preset(5))
+        let pauseID = KeypadElement.builtInID(for: .preset(10))
         let jumpIndex = try XCTUnwrap(customization.elements.firstIndex { $0.id == jumpID })
         customization.elements[jumpIndex].setOutputBinding(
             KeypadElementOutputBinding(keyboard: KeypadKeyboardBinding(keyCode: 53))
         )
         let profile = GamepadConfigurationProfile(name: "Mixed", customization: customization)
-        let legacy: [GameButton: KeypadElementOutputBinding] = [
-            .jump: KeypadElementOutputBinding(keyboard: KeypadKeyboardBinding(keyCode: 49)),
-            .pause: KeypadElementOutputBinding(keyboard: KeypadKeyboardBinding(keyCode: 49))
+        let staleSidecar: [KeypadElementID: KeypadElementOutputBinding] = [
+            .preset(5): KeypadElementOutputBinding(keyboard: KeypadKeyboardBinding(keyCode: 49)),
+            .preset(10): KeypadElementOutputBinding(keyboard: KeypadKeyboardBinding(keyCode: 49))
         ]
-        let presentations = KeypadBindingPresentationBuilder.presentations(for: profile, effectiveLegacyOutputs: legacy)
+        let presentations = KeypadBindingPresentationBuilder.presentations(for: profile, elementOutputs: staleSidecar)
 
         XCTAssertEqual(
             presentations.bindingPresentation(
@@ -96,7 +121,7 @@ final class KeypadBindingPresentationTests: XCTestCase {
                 input: KeypadElementInputID(elementID: jumpID)
             )?.compactText,
             "Esc",
-            "Direct element output must override its legacy slot"
+            "Owned output must override a stale sidecar"
         )
         XCTAssertEqual(
             presentations.bindingPresentation(
@@ -104,9 +129,21 @@ final class KeypadBindingPresentationTests: XCTestCase {
                 orientation: .landscape,
                 input: KeypadElementInputID(elementID: pauseID)
             )?.compactText,
-            "Space",
-            "Legacy profile output must remain available"
+            "Esc",
+            "The declared control's owned output must not be replaced by a sidecar"
         )
+    }
+
+    func testPresentationsFilterOutputModeWithoutChangingOwnedBindings() throws {
+        let element = KeypadElement(label: "Same label", output: KeypadElementOutputBinding(keyboard: KeypadKeyboardBinding(keyCode: 53), gamepadButtons: [.south]))
+        var profile = GamepadConfigurationProfile(name: "Modes", customization: GamepadCustomization(elements: [element]))
+        let input = KeypadElementInputID(elementID: element.id)
+        for (mode, expected) in [(GamepadProfileOutputMode.keyboard, "Esc"), (.controller, "A"), (.custom, "Esc + A")] {
+            profile.outputMode = mode
+            let presentations = KeypadBindingPresentationBuilder.presentations(for: profile, elementOutputs: [:])
+            XCTAssertEqual(presentations.bindingPresentation(profileID: profile.id, orientation: .landscape, input: input)?.compactText, expected)
+            XCTAssertEqual(profile.customization.elements.first?.output, element.output)
+        }
     }
 
     func testOfflinePresentationPersistenceReplacesSnapshot() throws {

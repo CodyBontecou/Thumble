@@ -107,7 +107,7 @@ struct GamepadLayoutCanvasSummary: Codable, Equatable {
 
 struct GamepadLayoutControlSummary: Codable, Equatable {
     var id: String
-    var mappedButton: GameButton
+    var inputID: KeypadElementID?
     var kind: String
     var label: String
     var shape: GamepadButtonShapeStyle
@@ -121,7 +121,7 @@ struct GamepadLayoutControlSummary: Codable, Equatable {
 
     init(requested: GamepadResolvedControl, resolved: GamepadResolvedControl, canvasSize: CGSize) {
         id = requested.id.id
-        mappedButton = requested.mappedButton
+        inputID = requested.inputID
         if requested.isDecoration {
             kind = "decoration"
         } else if requested.isJoystick {
@@ -167,27 +167,14 @@ enum GamepadLayoutErgonomicRole {
     case exempt
 
     static func role(for control: GamepadResolvedControl) -> GamepadLayoutErgonomicRole {
-        guard !control.isJoystick, !control.isTrackpad, !control.isTrigger else { return .exempt }
-        if control.isCustom, isUtilityLabel(control.label) { return .utility }
-        switch control.mappedButton {
-        case .up, .down, .left, .right:
-            return .movement
-        case .jump, .attack, .dash, .focus, .custom1, .custom2, .custom3, .custom4, .custom5, .custom6, .custom7, .custom8:
-            return .action
-        case .map, .pause:
-            return .utility
+        guard !control.isDecoration, !control.isJoystick, !control.isTrackpad, !control.isTrigger else { return .exempt }
+        switch control.visualRole {
+        case .movement: return .movement
+        case .utility, .menu: return .utility
+        case .decoration, .system, .joystick, .trackpad, .trigger: return .exempt
+        case .primaryAction, .secondaryAction: return .action
+        case .custom: return .exempt
         }
-    }
-
-    private static func isUtilityLabel(_ label: String) -> Bool {
-        let normalized = label.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        let utilities: Set<String> = [
-            "+", "-", "−", "l", "r", "zl", "zr", "lb", "rb", "lt", "rt",
-            "menu", "start", "select", "back", "home", "options", "share", "coin", "utility"
-        ]
-        return utilities.contains(normalized)
-            || normalized.contains("shoulder")
-            || normalized.contains("bumper")
     }
 }
 

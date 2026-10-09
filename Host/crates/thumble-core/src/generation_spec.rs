@@ -4,7 +4,7 @@
 //! bounded, and compatible with Swift's normalized control-style encoding.
 
 use crate::{
-    canonical_default_profile_key_bindings, generated_modifier_mask, generated_semantic_key_code,
+    generated_modifier_mask, generated_semantic_key_code,
     semantic_key_name, ButtonBindings, ControllerLayoutQualitySnapshot, KeyBinding, OutputBinding,
     PersistentState, ProfileArtifact, ProfileArtifactError, ProfileArtifactSelection,
 };
@@ -14,7 +14,7 @@ use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashSet};
 use std::error::Error;
 use std::fmt;
-use thumble_protocol::GameButton;
+use thumble_protocol::KeypadElementID;
 use unicode_segmentation::UnicodeSegmentation;
 use uuid::Uuid;
 
@@ -288,7 +288,7 @@ struct ParsedSpec {
 #[serde(rename_all = "camelCase")]
 struct ParsedControl {
     id: Option<String>,
-    button: Option<GameButton>,
+    button: Option<KeypadElementID>,
     label: String,
     key: String,
     modifiers: Vec<String>,
@@ -405,30 +405,30 @@ impl Color {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 struct JoystickMapping {
-    up: GameButton,
-    down: GameButton,
-    left: GameButton,
-    right: GameButton,
+    up: OutputBinding,
+    down: OutputBinding,
+    left: OutputBinding,
+    right: OutputBinding,
 }
 
 impl Default for JoystickMapping {
     fn default() -> Self {
         Self {
-            up: GameButton::Up,
-            down: GameButton::Down,
-            left: GameButton::Left,
-            right: GameButton::Right,
+            up: OutputBinding::keyboard(KeyBinding::new(126, 0)),
+            down: OutputBinding::keyboard(KeyBinding::new(125, 0)),
+            left: OutputBinding::keyboard(KeyBinding::new(123, 0)),
+            right: OutputBinding::keyboard(KeyBinding::new(124, 0)),
         }
     }
 }
 
 impl JoystickMapping {
-    fn value(self) -> Value {
+    fn value(&self) -> Value {
         json!({
-            "up": button_name(self.up), "down": button_name(self.down),
-            "left": button_name(self.left), "right": button_name(self.right)
+            "up": self.up.element_value(), "down": self.down.element_value(),
+            "left": self.left.element_value(), "right": self.right.element_value()
         })
     }
 }
@@ -479,7 +479,7 @@ struct Layout {
 struct Assigned<'a> {
     ordinal: usize,
     source: &'a ParsedControl,
-    button: GameButton,
+    button: KeypadElementID,
     kind: Kind,
     role: Role,
     layout: Layout,
@@ -497,7 +497,7 @@ pub fn plan_generation_spec(
         return Err(GenerationSpecError::TooLarge(spec_json.len()));
     }
     let value: Value =
-        serde_json::from_slice(spec_json).map_err(|_| GenerationSpecError::DecodingFailed)?;
+        thumble_protocol::decode_unique_json(spec_json).map_err(|_| GenerationSpecError::DecodingFailed)?;
     scan_for_control_characters(&value, "$")?;
     if let Some(requested_game_name) = requestedGameName {
         ensure_no_control_characters(requested_game_name, "requestedGameName")?;
@@ -582,27 +582,15 @@ pub fn plan_generation_spec(
             });
             continue;
         }
-        let explicit_available = control.button.filter(|button| !used.contains(button));
-        let button = explicit_available.or_else(|| assign_fallback(control, kind, &used));
-        let Some(button) = button else {
-            push_warning(
-                &mut warnings,
-                &mut omitted_warning_count,
-                "slot-exhaustion",
-                ordinal,
-                "control dropped because all 18 game-button slots are assigned",
-            );
-            dropped_controls.push(GenerationDroppedControl {
-                source_ordinal: ordinal,
-                reason: "slot-exhaustion".to_owned(),
-            });
-            continue;
-        };
+        let explicit_available = control.button.filter(|id| !used.contains(id));
+        let generated_id = Uuid::new_v5(&GENERATION_UUID_NAMESPACE,
+            format!("element:{descriptor_digest}:{ordinal}").as_bytes()).hyphenated().to_string();
+        let button = explicit_available.unwrap_or_else(|| KeypadElementID::parse(&generated_id).unwrap());
         if let Some(explicit_button) = control.button.filter(|_| explicit_available.is_none()) {
             push_warning(
                 &mut warnings,
                 &mut omitted_warning_count,
-                "duplicate-explicit-button-fallback",
+                "duplicate-element-id",
                 ordinal,
                 &format!(
                     "explicit button {} was already assigned; used {}",
@@ -618,7 +606,7 @@ pub fn plan_generation_spec(
             Kind::Trackpad => trackpad_count += 1,
             _ => {}
         }
-        let role = infer_role(control, button, kind);
+        let role = infer_role(control, kind);
         let index = *role_counts.get(&role).unwrap_or(&0);
         role_counts.insert(role, index + 1);
         let layout = match kind {
@@ -669,7 +657,7 @@ pub fn plan_generation_spec(
                 }
             }
             _ => {
-                let (layout, reused) = role_layout(button, role, index);
+                let (layout, reused) = role_layout(role, index);
                 if reused {
                     push_warning(
                         &mut warnings,
@@ -682,21 +670,7 @@ pub fn plan_generation_spec(
                 layout
             }
         };
-        let is_builtin = is_builtin(button) && kind == Kind::Button;
-        let element_id = if is_builtin {
-            built_in_id(button).to_owned()
-        } else {
-            Uuid::new_v5(
-                &GENERATION_UUID_NAMESPACE,
-                format!(
-                    "element:{descriptor_digest}:{ordinal}:{}",
-                    button_name(button)
-                )
-                .as_bytes(),
-            )
-            .hyphenated()
-            .to_string()
-        };
+        let element_id = button.to_string();
         assigned.push(Assigned {
             ordinal,
             source: control,
@@ -722,7 +696,7 @@ pub fn plan_generation_spec(
 
     let mut semantic_bindings = Vec::new();
     let mut generated_binding_pairs = Vec::new();
-    let mut profile_key_bindings = canonical_default_profile_key_bindings();
+    let mut profile_key_bindings = ButtonBindings::default();
     for control in &assigned {
         if matches!(control.kind, Kind::Text | Kind::Decoration)
             || control.source.key.trim().is_empty()
@@ -770,10 +744,9 @@ pub fn plan_generation_spec(
     generated_binding_pairs.sort_by_key(|(button, _, _)| button_rank(*button));
 
     let mut profile_output_bindings = ButtonBindings::default();
-    for button in GameButton::ALL {
-        if let Some(binding) = profile_key_bindings.get(&button).cloned() {
-            profile_output_bindings.insert(button, OutputBinding::keyboard(binding));
-        }
+    for (raw_id, binding) in profile_key_bindings.iter() {
+        let id = KeypadElementID::parse(raw_id).unwrap();
+        profile_output_bindings.insert(id, OutputBinding::keyboard(binding.clone()));
     }
 
     let notes = if parsed.notes.is_empty() {
@@ -880,7 +853,6 @@ const TOP_FIELDS: &[&str] = &[
 
 const CONTROL_FIELDS: &[&str] = &[
     "id",
-    "button",
     "label",
     "key",
     "modifiers",
@@ -1037,10 +1009,9 @@ fn parse_control(index: usize, value: &Value) -> Result<ParsedControl, Generatio
     if let Some(id) = &id {
         ensure_byte_bound(id, MAX_IDENTIFIER_BYTES, &format!("{path}.id"))?;
     }
-    let mut button = optional_button(object, "button", &format!("{path}.button"))?;
-    if button.is_none() {
-        button = id.as_deref().and_then(parse_button);
-    }
+    let button = id.as_deref().map(|id| KeypadElementID::parse(id).ok_or_else(||
+        GenerationSpecError::InvalidEnum { path: format!("{path}.id"), value: id.to_owned() }
+    )).transpose()?;
     let default_label = button
         .map(button_display_name)
         .or(id.as_deref())
@@ -2280,21 +2251,17 @@ fn parse_joystick_mapping(
                 &["up", "down", "left", "right"],
             )?;
             Some(JoystickMapping {
-                up: optional_button(mapping, "up", &format!("{path}.joystickMapping.up"))?
-                    .unwrap_or(GameButton::Up),
-                down: optional_button(mapping, "down", &format!("{path}.joystickMapping.down"))?
-                    .unwrap_or(GameButton::Down),
-                left: optional_button(mapping, "left", &format!("{path}.joystickMapping.left"))?
-                    .unwrap_or(GameButton::Left),
-                right: optional_button(mapping, "right", &format!("{path}.joystickMapping.right"))?
-                    .unwrap_or(GameButton::Right),
+                up: optional_direction_output(mapping, "up", path)?.unwrap_or_else(|| JoystickMapping::default().up),
+                down: optional_direction_output(mapping, "down", path)?.unwrap_or_else(|| JoystickMapping::default().down),
+                left: optional_direction_output(mapping, "left", path)?.unwrap_or_else(|| JoystickMapping::default().left),
+                right: optional_direction_output(mapping, "right", path)?.unwrap_or_else(|| JoystickMapping::default().right),
             })
         }
     };
-    let up = optional_button(object, "up", &format!("{path}.up"))?;
-    let down = optional_button(object, "down", &format!("{path}.down"))?;
-    let left = optional_button(object, "left", &format!("{path}.left"))?;
-    let right = optional_button(object, "right", &format!("{path}.right"))?;
+    let up = optional_direction_output(object, "up", path)?;
+    let down = optional_direction_output(object, "down", path)?;
+    let left = optional_direction_output(object, "left", path)?;
+    let right = optional_direction_output(object, "right", path)?;
     if up.is_none() && down.is_none() && left.is_none() && right.is_none() {
         return Ok(explicit);
     }
@@ -2305,6 +2272,13 @@ fn parse_joystick_mapping(
         left: left.unwrap_or(base.left),
         right: right.unwrap_or(base.right),
     }))
+}
+
+fn optional_direction_output(object: &Map<String, Value>, field: &str, path: &str) -> Result<Option<OutputBinding>, GenerationSpecError> {
+    match object.get(field) {
+        None | Some(Value::Null) => Ok(None),
+        Some(value) => serde_json::from_value(value.clone()).map(Some).map_err(|_| invalid_type(&format!("{path}.{field}"), "an explicit output binding")),
+    }
 }
 
 fn parse_trackpad_settings(
@@ -2435,69 +2409,14 @@ fn infer_kind(control: &ParsedControl) -> Kind {
     })
 }
 
-fn assign_fallback(
-    control: &ParsedControl,
-    kind: Kind,
-    used: &HashSet<GameButton>,
-) -> Option<GameButton> {
-    if kind != Kind::Button {
-        return custom_slots().find(|button| !used.contains(button));
-    }
-    let normalized = normalized_control_text(control);
-    let preferred = if normalized.contains("left") || normalized.contains("arrowleft") {
-        Some(GameButton::Left)
-    } else if normalized.contains("right") || normalized.contains("arrowright") {
-        Some(GameButton::Right)
-    } else if normalized.contains("up") || normalized.contains("arrowup") {
-        Some(GameButton::Up)
-    } else if normalized.contains("down") || normalized.contains("arrowdown") {
-        Some(GameButton::Down)
-    } else if normalized.contains("jump") {
-        Some(GameButton::Jump)
-    } else if ["attack", "nail", "fire", "shoot"]
-        .iter()
-        .any(|word| normalized.contains(word))
-    {
-        Some(GameButton::Attack)
-    } else if ["dash", "dodge", "sprint"]
-        .iter()
-        .any(|word| normalized.contains(word))
-    {
-        Some(GameButton::Dash)
-    } else if ["focus", "cast", "special", "magic"]
-        .iter()
-        .any(|word| normalized.contains(word))
-    {
-        Some(GameButton::Focus)
-    } else if normalized.contains("map") {
-        Some(GameButton::Map)
-    } else if ["pause", "escape", "menu"]
-        .iter()
-        .any(|word| normalized.contains(word))
-    {
-        Some(GameButton::Pause)
-    } else {
-        None
-    };
-    preferred
-        .filter(|button| !used.contains(button))
-        .or_else(|| custom_slots().find(|button| !used.contains(button)))
-}
-
-fn infer_role(control: &ParsedControl, button: GameButton, kind: Kind) -> Role {
+fn infer_role(control: &ParsedControl, kind: Kind) -> Role {
     if let Some(role) = control.role {
         return role;
     }
     if kind != Kind::Button {
         return Role::Movement;
     }
-    match button {
-        GameButton::Up | GameButton::Down | GameButton::Left | GameButton::Right => Role::Movement,
-        GameButton::Jump | GameButton::Attack | GameButton::Dash => Role::Primary,
-        GameButton::Focus => Role::Secondary,
-        GameButton::Map => Role::Utility,
-        GameButton::Pause => Role::System,
-        _ => {
+    {
             let normalized = normalized_control_text(control);
             if ["inventory", "map", "item"]
                 .iter()
@@ -2517,23 +2436,10 @@ fn infer_role(control: &ParsedControl, button: GameButton, kind: Kind) -> Role {
             } else {
                 Role::Primary
             }
-        }
     }
 }
 
-fn role_layout(button: GameButton, role: Role, index: usize) -> (Layout, bool) {
-    let fixed = match button {
-        GameButton::Up => Some(layout(0.20, 0.42, 1.12, 1.05, "rounded_rectangle")),
-        GameButton::Down => Some(layout(0.20, 0.70, 1.12, 1.05, "rounded_rectangle")),
-        GameButton::Left => Some(layout(0.066, 0.56, 1.12, 1.05, "rounded_rectangle")),
-        GameButton::Right => Some(layout(0.334, 0.56, 1.12, 1.05, "rounded_rectangle")),
-        GameButton::Map => Some(layout(0.29, 0.16, 1.0, 1.1, "capsule")),
-        GameButton::Pause => Some(layout(0.78, 0.21, 0.95, 1.1, "capsule")),
-        _ => None,
-    };
-    if let Some(layout) = fixed {
-        return (layout, false);
-    }
+fn role_layout(role: Role, index: usize) -> (Layout, bool) {
     let table: &[Layout] = match role {
         Role::Movement => &[
             layout(0.20, 0.42, 1.12, 1.05, "rounded_rectangle"),
@@ -2682,13 +2588,11 @@ fn element_value(control: &Assigned<'_>) -> Value {
     element.insert("label".to_owned(), json!(label));
     element.insert("kind".to_owned(), json!(control.kind.as_str()));
     element.insert("layout".to_owned(), Value::Object(layout_object));
-    if is_builtin(control.button) && control.kind == Kind::Button {
-        element.insert(
-            "builtInButton".to_owned(),
-            json!(button_name(control.button)),
-        );
+    if !source.key.trim().is_empty() {
+        if let (Some(key_code), Some(modifiers)) = (generated_semantic_key_code(source.key.trim()), generated_modifier_mask(&source.modifiers)) {
+            element.insert("output".to_owned(), OutputBinding::keyboard(KeyBinding::new(key_code, modifiers)).element_value());
+        }
     }
-    element.insert("legacySlot".to_owned(), json!(button_name(control.button)));
     element.insert(
         "visualRole".to_owned(),
         json!(control.role.visual_role(control.kind)),
@@ -2697,10 +2601,12 @@ fn element_value(control: &Assigned<'_>) -> Value {
     // key/value arrays, including the empty dictionary.
     element.insert("partOutputs".to_owned(), json!([]));
     if control.kind == Kind::Joystick {
-        element.insert(
-            "joystickMapping".to_owned(),
-            source.joystick_mapping.unwrap_or_default().value(),
-        );
+        let mapping = source.joystick_mapping.clone().unwrap_or_default();
+        element.insert("joystickMapping".to_owned(), mapping.value());
+        element.insert("partOutputs".to_owned(), json!([
+            "joystick_up", mapping.up.element_value(), "joystick_down", mapping.down.element_value(),
+            "joystick_left", mapping.left.element_value(), "joystick_right", mapping.right.element_value()
+        ]));
         element.insert("joystickOutputSettings".to_owned(), json!({"analogTarget":"none","sendsDigitalDirections":true,"deadZone":0.12,"sensitivity":1.0,"invertX":false,"invertY":false,"snapToCardinal":false}));
     }
     if control.kind == Kind::Trigger {
@@ -2726,35 +2632,11 @@ fn element_value(control: &Assigned<'_>) -> Value {
 }
 
 fn customization_value(assigned: &[Assigned<'_>], elements: &[Value]) -> Value {
-    let mut button_pairs = Vec::new();
-    let mut label_pairs = Vec::new();
     let mut custom_buttons = Vec::new();
-    for button in GameButton::ALL.into_iter().take(10) {
-        if let Some(control) = assigned
-            .iter()
-            .find(|control| control.button == button && control.kind == Kind::Button)
-        {
-            let element = element_value(control);
-            button_pairs.push(Value::String(button_name(button).to_owned()));
-            button_pairs.push(element["layout"].clone());
-            label_pairs.push(Value::String(button_name(button).to_owned()));
-            label_pairs.push(element["label"].clone());
-        } else {
-            button_pairs.push(Value::String(button_name(button).to_owned()));
-            button_pairs.push(json!({"widthScale":1.0,"heightScale":1.0,"rotationDegrees":0,"zIndex":0,"shadowStrength":1.0,"isLocationLocked":false,"isHidden":true}));
-        }
-    }
-    for control in assigned
-        .iter()
-        .filter(|control| !(is_builtin(control.button) && control.kind == Kind::Button))
-    {
+    for control in assigned {
         let element = element_value(control);
         let mut custom = Map::new();
         custom.insert("id".to_owned(), element["id"].clone());
-        custom.insert(
-            "mappedButton".to_owned(),
-            json!(button_name(control.button)),
-        );
         custom.insert("label".to_owned(), element["label"].clone());
         custom.insert("layout".to_owned(), element["layout"].clone());
         custom.insert("controlKind".to_owned(), json!(control.kind.as_str()));
@@ -2774,12 +2656,12 @@ fn customization_value(assigned: &[Assigned<'_>], elements: &[Value]) -> Value {
     json!({
         "layoutMode":"standard", "controlScale":"standard", "colorSchemePreference":"system",
         "deviceCanvas":{"frameID":"iphone-17-pro-landscape"}, "accentStyle":"purple",
-        "showsButtonLabels":true, "labelOverrides":label_pairs, "buttonCustomizations":button_pairs,
+        "showsButtonLabels":true, "labelOverrides":[], "buttonCustomizations":[],
         "customButtons":custom_buttons, "elements":elements, "updatedAt":0
     })
 }
 
-fn generated_bindings_value(bindings: &[(GameButton, String, Vec<String>)]) -> Value {
+fn generated_bindings_value(bindings: &[(KeypadElementID, String, Vec<String>)]) -> Value {
     let mut values = Vec::with_capacity(bindings.len() * 2);
     for (button, key, modifiers) in bindings {
         values.push(json!(button_name(*button)));
@@ -3103,7 +2985,7 @@ fn optional_button(
     object: &Map<String, Value>,
     field: &str,
     path: &str,
-) -> Result<Option<GameButton>, GenerationSpecError> {
+) -> Result<Option<KeypadElementID>, GenerationSpecError> {
     optional_string(object, field, path)?
         .map(|value| {
             parse_button(&value).ok_or_else(|| GenerationSpecError::InvalidEnum {
@@ -3241,7 +3123,6 @@ fn normalized_control_text(control: &ParsedControl) -> String {
     normalized_text(
         &[
             control.id.as_deref(),
-            control.button.map(button_name),
             Some(control.label.as_str()),
             Some(control.key.as_str()),
         ]
@@ -3252,85 +3133,17 @@ fn normalized_control_text(control: &ParsedControl) -> String {
     )
 }
 
-fn parse_button(value: &str) -> Option<GameButton> {
-    GameButton::ALL
-        .into_iter()
-        .find(|button| button_name(*button) == value)
+fn parse_button(value: &str) -> Option<KeypadElementID> {
+    KeypadElementID::parse(value)
 }
-fn custom_slots() -> impl Iterator<Item = GameButton> {
-    GameButton::ALL.into_iter().skip(10)
-}
-fn is_builtin(button: GameButton) -> bool {
-    button_rank(button) < 10
-}
-fn button_rank(button: GameButton) -> usize {
-    GameButton::ALL
-        .iter()
-        .position(|candidate| *candidate == button)
-        .unwrap_or(usize::MAX)
+fn button_rank(button: KeypadElementID) -> usize {
+    button.starter_index().map(|index| index - 1).unwrap_or(usize::MAX)
 }
 fn button_rank_name(button: &str) -> usize {
     parse_button(button).map_or(usize::MAX, button_rank)
 }
-fn button_name(button: GameButton) -> &'static str {
-    match button {
-        GameButton::Up => "up",
-        GameButton::Down => "down",
-        GameButton::Left => "left",
-        GameButton::Right => "right",
-        GameButton::Jump => "jump",
-        GameButton::Attack => "attack",
-        GameButton::Dash => "dash",
-        GameButton::Focus => "focus",
-        GameButton::Map => "map",
-        GameButton::Pause => "pause",
-        GameButton::Custom1 => "custom1",
-        GameButton::Custom2 => "custom2",
-        GameButton::Custom3 => "custom3",
-        GameButton::Custom4 => "custom4",
-        GameButton::Custom5 => "custom5",
-        GameButton::Custom6 => "custom6",
-        GameButton::Custom7 => "custom7",
-        GameButton::Custom8 => "custom8",
-    }
-}
-fn button_display_name(button: GameButton) -> &'static str {
-    match button {
-        GameButton::Up => "Up",
-        GameButton::Down => "Down",
-        GameButton::Left => "Left",
-        GameButton::Right => "Right",
-        GameButton::Jump => "Jump",
-        GameButton::Attack => "Attack",
-        GameButton::Dash => "Dash",
-        GameButton::Focus => "Focus",
-        GameButton::Map => "Map",
-        GameButton::Pause => "Pause",
-        GameButton::Custom1 => "Custom 1",
-        GameButton::Custom2 => "Custom 2",
-        GameButton::Custom3 => "Custom 3",
-        GameButton::Custom4 => "Custom 4",
-        GameButton::Custom5 => "Custom 5",
-        GameButton::Custom6 => "Custom 6",
-        GameButton::Custom7 => "Custom 7",
-        GameButton::Custom8 => "Custom 8",
-    }
-}
-fn built_in_id(button: GameButton) -> &'static str {
-    match button {
-        GameButton::Up => "00000000-0000-0000-0000-000000000101",
-        GameButton::Down => "00000000-0000-0000-0000-000000000102",
-        GameButton::Left => "00000000-0000-0000-0000-000000000103",
-        GameButton::Right => "00000000-0000-0000-0000-000000000104",
-        GameButton::Jump => "00000000-0000-0000-0000-000000000105",
-        GameButton::Attack => "00000000-0000-0000-0000-000000000106",
-        GameButton::Dash => "00000000-0000-0000-0000-000000000107",
-        GameButton::Focus => "00000000-0000-0000-0000-000000000108",
-        GameButton::Map => "00000000-0000-0000-0000-000000000109",
-        GameButton::Pause => "00000000-0000-0000-0000-000000000110",
-        _ => unreachable!("custom buttons have generated IDs"),
-    }
-}
+fn button_name(button: KeypadElementID) -> String { button.to_string() }
+fn button_display_name(_button: KeypadElementID) -> &'static str { "Button" }
 fn role_name(role: Role) -> &'static str {
     match role {
         Role::Movement => "movement",

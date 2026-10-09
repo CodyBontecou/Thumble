@@ -37,6 +37,25 @@ enum GamepadResolvedControlRoute: Equatable, Sendable {
 }
 
 enum GamepadControllerPresentationRouting {
+    /// Native bar leaf inventory follows the shared label branches, independent of
+    /// label text, input bindings and selected colors. Spacers carry no paint.
+    static func barLeafSurfaceIDs(items: [GamepadControlBarItem], isLandscape: Bool,
+                                  customization: GamepadCustomization) -> [String] {
+        items.flatMap { item -> [String] in
+            let leaves: [String]
+            switch item {
+            case .spacer: leaves = []
+            case .connectionStatus: leaves = ["legend", "icon"]
+            case .profileMenu, .editLayout: leaves = isLandscape ? ["legend", "icon"] : ["icon"]
+            case .launchTarget, .settings, .home: leaves = ["icon"]
+            case .connectionAction:
+                leaves = !isLandscape ? ["icon"] : customization.controlBarItemCustomization(for: item).icon != nil
+                    ? ["legend", "icon"] : ["legend"]
+            }
+            return leaves.map { "native-control-bar/" + item.rawValue + "/" + $0 }
+        }
+    }
+
     static func orientation(for size: CGSize) -> GamepadEditorDeviceOrientation {
         size.width >= size.height ? .landscape : .portrait
     }

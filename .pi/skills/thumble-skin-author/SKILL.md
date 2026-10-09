@@ -43,7 +43,7 @@ thumble skin scaffold "Skin Name" \
   -o PATH                      # add --css for a CSS-authored workspace
 thumble skin css capabilities
 thumble skin css lint PATH
-thumble skin css computed PATH --control builtin-jump --scheme dark --state pressed
+thumble skin css computed PATH --control builtin-00000000-0000-0000-0000-000000000105 --scheme dark --state pressed
 
 thumble skin compile PATH -o PATH/build/skin.pocketpad --clean
 thumble skin validate PATH/build/skin.pocketpad --strict

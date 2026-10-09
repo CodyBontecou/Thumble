@@ -2,118 +2,92 @@ use serde_json::json;
 use thumble_protocol::{
     ButtonPressState, ControllerCapability, ControllerMessage, ControllerMessageType,
     ControllerPointerButton, ControllerPointerEventKind, ControllerWireCodec,
-    ControllerWireCodecError, GameButton, GamepadProfileOrientationPreference,
+    ControllerWireCodecError, KeypadElementID, GamepadProfileOrientationPreference,
     KeypadElementInputPart, VirtualGamepadStick, VirtualGamepadTrigger,
 };
 
 #[test]
-fn v1_encodes_and_decodes_every_button_code_and_state() {
-    for button in GameButton::ALL {
+fn uuid_inputs_encode_unbounded_identities_and_both_states() {
+    for number in 1..=128 {
+        let id = KeypadElementID::parse(&format!("A74530D9-83A9-41AB-A82D-{number:012X}")).unwrap();
         for state in ButtonPressState::ALL {
-            let frame = ControllerWireCodec::encode_button(button, state);
-            assert_eq!(frame.len(), 14);
-            assert_eq!(&frame[0..4], &[b'P', b'P', 1, 1]);
-            assert_eq!(&frame[4..12], &[0; 8]);
-            assert_eq!(frame[12], button.compact_wire_code());
-            assert_eq!(frame[13], state.compact_wire_code());
-
+            let frame = ControllerWireCodec::encode_button(id, state);
+            assert_eq!(frame.len(), 56);
+            assert_eq!(&frame[..4], &[b'P', b'P', 3, 1]);
+            assert_eq!(&frame[4..20], &id.0);
+            assert_eq!(frame[20], 0);
+            assert_eq!(frame[21], state.compact_wire_code());
             let decoded = ControllerWireCodec::decode(&frame).unwrap();
-            assert_eq!(decoded.message_type, ControllerMessageType::Button);
-            assert_eq!(decoded.button, Some(button));
+            assert_eq!(decoded.button, Some(id));
             assert_eq!(decoded.state, Some(state));
-            assert_eq!(decoded.timestamp, 0);
             assert_eq!(decoded.input_protocol_version, None);
         }
     }
 }
 
 #[test]
-fn v2_encodes_and_decodes_every_button_code_and_state() {
-    for button in GameButton::ALL {
+fn v3_metadata_layout_preserves_uuid_generation_sequence_and_press() {
+    for number in 1..=128 {
+        let id = KeypadElementID::parse(&format!("A74530D9-83A9-41AB-A82D-{number:012X}")).unwrap();
         for state in ButtonPressState::ALL {
-            let generation = u64::MAX - u64::from(button.compact_wire_code());
+            let generation = u64::MAX - number;
             let sequence = 0x0102_0304_0506_0708;
-            let press_identifier = 0x8877_6655_4433_2211;
-            let frame = ControllerWireCodec::encode_button_with_sequence(
-                button,
-                state,
-                sequence,
-                Some(press_identifier),
-                Some(generation),
-            );
-
-            assert_eq!(frame.len(), 32);
-            assert_eq!(&frame[0..4], &[b'P', b'P', 2, 1]);
-            assert_eq!(frame[4], button.compact_wire_code());
-            assert_eq!(frame[5], state.compact_wire_code());
-            assert_eq!(frame[6], 1);
-            assert_eq!(frame[7], 0);
-            assert_eq!(&frame[8..16], &generation.to_le_bytes());
-            assert_eq!(&frame[16..24], &sequence.to_le_bytes());
-            assert_eq!(&frame[24..32], &press_identifier.to_le_bytes());
-
+            let press = 0x8877_6655_4433_2211;
+            let frame = ControllerWireCodec::encode_button_with_sequence(id, state, sequence, Some(press), Some(generation));
+            assert_eq!(frame.len(), 56);
+            assert_eq!(&frame[..4], &[b'P', b'P', 3, 1]);
+            assert_eq!(&frame[4..20], &id.0);
+            assert_eq!(frame[22], 15);
+            assert_eq!(&frame[24..32], &generation.to_le_bytes());
+            assert_eq!(&frame[32..40], &sequence.to_le_bytes());
+            assert_eq!(&frame[40..48], &press.to_le_bytes());
             let decoded = ControllerWireCodec::decode(&frame).unwrap();
-            assert_eq!(decoded.message_type, ControllerMessageType::Button);
-            assert_eq!(decoded.button, Some(button));
+            assert_eq!(decoded.button, Some(id));
             assert_eq!(decoded.state, Some(state));
-            assert_eq!(decoded.timestamp, 0);
-            assert_eq!(decoded.input_protocol_version, Some(2));
+            assert_eq!(decoded.input_protocol_version, Some(3));
             assert_eq!(decoded.input_generation, Some(generation));
             assert_eq!(decoded.input_sequence, Some(sequence));
-            assert_eq!(decoded.press_identifier, Some(press_identifier));
-            assert_eq!(
-                ControllerWireCodec::input_sequence_number(&decoded),
-                Some(sequence)
-            );
-            assert_eq!(
-                ControllerWireCodec::input_press_identifier(&decoded),
-                Some(press_identifier)
-            );
+            assert_eq!(decoded.press_identifier, Some(press));
         }
     }
 }
 
 #[test]
-fn generic_encode_selects_exact_v2_layout() {
+fn generic_encoding_preserves_v3_timestamp_and_metadata() {
     let mut message = ControllerMessage::new(ControllerMessageType::Button, i64::MIN);
-    message.button = Some(GameButton::Attack);
+    message.button = Some(KeypadElementID::preset(6));
     message.state = Some(ButtonPressState::Up);
-    message.sent_at = Some(999);
-    message.input_protocol_version = Some(2);
+    message.input_protocol_version = Some(3);
     message.input_generation = Some(u64::MAX - 10);
     message.input_sequence = Some(u64::MAX - 20);
     message.press_identifier = Some(u64::MAX - 30);
-
     let frame = ControllerWireCodec::encode(&message).unwrap();
-    let expected = ControllerWireCodec::encode_button_with_sequence(
-        GameButton::Attack,
-        ButtonPressState::Up,
-        u64::MAX - 20,
-        Some(u64::MAX - 30),
-        Some(u64::MAX - 10),
-    );
-    assert_eq!(frame, expected);
-
-    let decoded = ControllerWireCodec::decode(&frame).unwrap();
-    assert_eq!(decoded.timestamp, 0);
-    assert_eq!(decoded.sent_at, None);
+    assert_eq!(&frame[..4], &[b'P', b'P', 3, 1]);
+    assert_eq!(&frame[48..56], &i64::MIN.to_le_bytes());
+    assert_eq!(ControllerWireCodec::decode(&frame).unwrap(), message);
 }
 
 #[test]
-fn v2_absent_press_identifier_uses_zero_storage_and_ignores_it_when_decoding() {
-    let mut frame = ControllerWireCodec::encode_button_with_sequence(
-        GameButton::Map,
-        ButtonPressState::Down,
-        4,
-        None,
-        Some(3),
-    );
-    assert_eq!(frame[6], 0);
-    assert_eq!(&frame[24..32], &[0; 8]);
+fn input_sent_at_uses_json_instead_of_being_discarded() {
+    let mut message = ControllerMessage::new(ControllerMessageType::ElementInput, i64::MIN);
+    message.element_id = Some("992A6272-A934-462D-8DC7-3058F80363F7".into());
+    message.element_part = Some(KeypadElementInputPart::JoystickRight);
+    message.state = Some(ButtonPressState::Down);
+    message.input_protocol_version = Some(3);
+    message.input_sequence = Some(u64::MAX);
+    message.sent_at = Some(123456);
+    let encoded = ControllerWireCodec::encode(&message).unwrap();
+    assert_eq!(encoded.first(), Some(&b'{'));
+    assert_eq!(ControllerWireCodec::decode(&encoded).unwrap(), message);
+}
 
-    frame[24..32].copy_from_slice(&u64::MAX.to_le_bytes());
-    let decoded = ControllerWireCodec::decode(&frame).unwrap();
-    assert_eq!(decoded.press_identifier, None);
+#[test]
+fn absent_press_identifier_is_not_inferred_from_storage_bytes() {
+    let mut frame = ControllerWireCodec::encode_button_with_sequence(KeypadElementID::preset(9), ButtonPressState::Down, 4, None, Some(3));
+    assert_eq!(frame[22] & 1, 0);
+    assert_eq!(&frame[40..48], &[0; 8]);
+    frame[40..48].copy_from_slice(&u64::MAX.to_le_bytes());
+    assert_eq!(ControllerWireCodec::decode(&frame).unwrap().press_identifier, None);
 }
 
 #[test]
@@ -138,13 +112,13 @@ fn v1_control_message_codes_and_signed_timestamp_layout_match_swift() {
 #[test]
 fn v1_sequence_packing_matches_swift_clamping_and_helpers() {
     let frame = ControllerWireCodec::encode_button_with_sequence(
-        GameButton::Dash,
+        KeypadElementID::preset(7),
         ButtonPressState::Down,
         42,
         Some(1_234),
         None,
     );
-    assert_eq!(frame.len(), 14);
+    assert_eq!(frame.len(), 56);
     let decoded = ControllerWireCodec::decode(&frame).unwrap();
     assert_eq!(
         ControllerWireCodec::button_sequence_number(&decoded),
@@ -155,13 +129,9 @@ fn v1_sequence_packing_matches_swift_clamping_and_helpers() {
         Some(1_234)
     );
 
-    let clamped = ControllerWireCodec::encode_button_with_sequence(
-        GameButton::Dash,
-        ButtonPressState::Up,
-        0,
-        Some(u64::MAX),
-        None,
-    );
+    let mut message = ControllerMessage::new(ControllerMessageType::Button, ControllerWireCodec::input_sequence_timestamp(0, Some(u64::MAX)));
+    message.button = Some(KeypadElementID::preset(7)); message.state = Some(ButtonPressState::Up);
+    let clamped = ControllerWireCodec::encode(&message).unwrap();
     let decoded = ControllerWireCodec::decode(&clamped).unwrap();
     assert_eq!(
         ControllerWireCodec::input_sequence_number(&decoded),
@@ -185,7 +155,7 @@ fn noncompact_types_and_rich_compact_types_fall_back_to_json() {
     for message_type in ControllerMessageType::ALL {
         let mut message = ControllerMessage::new(message_type, 1);
         if message_type == ControllerMessageType::Button {
-            message.button = Some(GameButton::Jump);
+            message.button = Some(KeypadElementID::preset(5));
             message.state = Some(ButtonPressState::Down);
         }
         message.client_name = Some("forces JSON without changing the kind".into());
@@ -201,7 +171,7 @@ fn noncompact_types_and_rich_compact_types_fall_back_to_json() {
     );
 
     let mut wrong_v2 = ControllerMessage::new(ControllerMessageType::Button, 1);
-    wrong_v2.button = Some(GameButton::Jump);
+    wrong_v2.button = Some(KeypadElementID::preset(5));
     wrong_v2.state = Some(ButtonPressState::Down);
     wrong_v2.input_protocol_version = Some(1);
     wrong_v2.input_generation = Some(2);
@@ -217,6 +187,9 @@ fn every_swift_json_only_field_prevents_lossy_compact_encoding() {
     let base = || ControllerMessage::new(ControllerMessageType::Heartbeat, 1);
     let mut messages = Vec::new();
 
+    let mut value = base();
+    value.sent_at = Some(123456);
+    messages.push(value);
     let mut value = base();
     value.pairing_code = Some("1".into());
     messages.push(value);
@@ -308,61 +281,34 @@ fn every_swift_json_only_field_prevents_lossy_compact_encoding() {
 }
 
 #[test]
-fn malformed_compact_candidates_use_json_fallback_instead_of_partial_decode() {
-    let valid_v1 = ControllerWireCodec::encode_button(GameButton::Up, ButtonPressState::Down);
-    let v1_mutations: &[(usize, u8)] = &[(0, b'X'), (1, b'X'), (2, 2), (3, 0), (12, 0), (13, 0)];
-    for &(index, byte) in v1_mutations {
-        let mut malformed = valid_v1.clone();
-        malformed[index] = byte;
-        assert!(matches!(
-            ControllerWireCodec::decode(&malformed),
-            Err(ControllerWireCodecError::Json(_))
-        ));
+fn malformed_uuid_frames_and_all_slot_index_frames_are_rejected() {
+    let valid = ControllerWireCodec::encode_button(KeypadElementID::preset(1), ButtonPressState::Down);
+    for (index, byte) in [(0, b'X'), (1, b'X'), (2, 2), (3, 0), (20, 1), (21, 0), (22, 16), (23, 1)] {
+        let mut malformed = valid.clone(); malformed[index] = byte;
+        assert!(ControllerWireCodec::decode(&malformed).is_err());
     }
-
-    let valid_v2 = ControllerWireCodec::encode_button_with_sequence(
-        GameButton::Up,
-        ButtonPressState::Down,
-        1,
-        Some(2),
-        Some(3),
-    );
-    let v2_mutations: &[(usize, u8)] = &[
-        (0, b'X'),
-        (1, b'X'),
-        (2, 1),
-        (3, 2),
-        (4, 0),
-        (5, 0),
-        (6, 2),
-        (7, 1),
-    ];
-    for &(index, byte) in v2_mutations {
-        let mut malformed = valid_v2.clone();
-        malformed[index] = byte;
-        assert!(matches!(
-            ControllerWireCodec::decode(&malformed),
-            Err(ControllerWireCodecError::Json(_))
-        ));
+    for version in [1, 2] {
+        let mut legacy = vec![0; if version == 1 { 14 } else { 32 }];
+        legacy[..4].copy_from_slice(&[b'P', b'P', version, 1]);
+        assert!(ControllerWireCodec::decode(&legacy).is_err());
+    }
+    for part in [KeypadElementInputPart::Primary, KeypadElementInputPart::JoystickUp, KeypadElementInputPart::JoystickDown, KeypadElementInputPart::JoystickLeft, KeypadElementInputPart::JoystickRight, KeypadElementInputPart::TriggerDigital] {
+        let mut message = ControllerMessage::new(ControllerMessageType::ElementInput, 42);
+        message.element_id = Some(KeypadElementID::preset(42).to_string()); message.element_part = Some(part); message.state = Some(ButtonPressState::Down);
+        assert_eq!(ControllerWireCodec::decode(&ControllerWireCodec::encode(&message).unwrap()).unwrap(), message);
     }
 }
 
 #[test]
-fn nonbutton_v1_frames_tolerate_unknown_optional_button_and_state_codes() {
-    let mut frame =
-        ControllerWireCodec::encode(&ControllerMessage::new(ControllerMessageType::Heartbeat, 5))
-            .unwrap();
-    frame[12] = 0;
-    frame[13] = 254;
-    let decoded = ControllerWireCodec::decode(&frame).unwrap();
-    assert_eq!(decoded.message_type, ControllerMessageType::Heartbeat);
-    assert_eq!(decoded.button, None);
-    assert_eq!(decoded.state, None);
+fn control_frames_cannot_smuggle_slot_indices() {
+    let mut frame = ControllerWireCodec::encode(&ControllerMessage::new(ControllerMessageType::Heartbeat, 5)).unwrap();
+    frame[12] = 0; frame[13] = 254;
+    assert!(ControllerWireCodec::decode(&frame).is_err());
 }
 
 #[test]
-fn json_fallback_accepts_legacy_and_large_messages_up_to_eight_mib() {
-    let json = br#"{"type":"element_input","elementID":"id","elementPart":"joystick_left","state":"down","timestamp":1,"inputProtocolVersion":2,"inputGeneration":3,"inputSequence":4,"pressIdentifier":5}"#;
+fn json_fallback_accepts_uuid_inputs_and_large_messages_up_to_eight_mib() {
+    let json = br#"{"type":"element_input","elementID":"A74530D9-83A9-41AB-A82D-000000000001","elementPart":"joystick_left","state":"down","timestamp":1,"inputProtocolVersion":3,"inputGeneration":3,"inputSequence":4,"pressIdentifier":5}"#;
     let decoded = ControllerWireCodec::decode(json).unwrap();
     assert_eq!(decoded.message_type, ControllerMessageType::ElementInput);
     assert_eq!(

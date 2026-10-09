@@ -41,47 +41,7 @@
         "kind": "solid"
       },
       "buttonCustomizations": [
-        "up",
-        {
-          "heightScale": 1,
-          "isHidden": true,
-          "isLocationLocked": false,
-          "rotationDegrees": 0,
-          "shadowStrength": 1,
-          "widthScale": 1,
-          "zIndex": 0
-        },
-        "down",
-        {
-          "heightScale": 1,
-          "isHidden": true,
-          "isLocationLocked": false,
-          "rotationDegrees": 0,
-          "shadowStrength": 1,
-          "widthScale": 1,
-          "zIndex": 0
-        },
-        "left",
-        {
-          "heightScale": 1,
-          "isHidden": true,
-          "isLocationLocked": false,
-          "rotationDegrees": 0,
-          "shadowStrength": 1,
-          "widthScale": 1,
-          "zIndex": 0
-        },
-        "right",
-        {
-          "heightScale": 1,
-          "isHidden": true,
-          "isLocationLocked": false,
-          "rotationDegrees": 0,
-          "shadowStrength": 1,
-          "widthScale": 1,
-          "zIndex": 0
-        },
-        "jump",
+        "00000000-0000-0000-0000-000000000105",
         {
           "centerX": 0.875,
           "centerY": 0.56,
@@ -250,7 +210,7 @@
           "widthScale": 0.7,
           "zIndex": 0
         },
-        "attack",
+        "00000000-0000-0000-0000-000000000106",
         {
           "centerX": 0.785,
           "centerY": 0.43,
@@ -419,7 +379,7 @@
           "widthScale": 0.64,
           "zIndex": 0
         },
-        "dash",
+        "00000000-0000-0000-0000-000000000107",
         {
           "centerX": 0.735,
           "centerY": 0.725,
@@ -588,7 +548,7 @@
           "widthScale": 0.92,
           "zIndex": 0
         },
-        "focus",
+        "00000000-0000-0000-0000-000000000108",
         {
           "centerX": 0.642,
           "centerY": 0.525,
@@ -756,26 +716,6 @@
           },
           "widthScale": 0.92,
           "zIndex": 0
-        },
-        "map",
-        {
-          "heightScale": 1,
-          "isHidden": true,
-          "isLocationLocked": false,
-          "rotationDegrees": 0,
-          "shadowStrength": 1,
-          "widthScale": 1,
-          "zIndex": 0
-        },
-        "pause",
-        {
-          "heightScale": 1,
-          "isHidden": true,
-          "isLocationLocked": false,
-          "rotationDegrees": 0,
-          "shadowStrength": 1,
-          "widthScale": 1,
-          "zIndex": 0
         }
       ],
       "colorSchemePreference": "light",
@@ -903,8 +843,7 @@
             },
             "widthScale": 9.62,
             "zIndex": 0
-          },
-          "mappedButton": "custom8"
+          }
         },
         {
           "controlKind": "decoration",
@@ -1009,17 +948,40 @@
             },
             "widthScale": 2.12,
             "zIndex": 0
-          },
-          "mappedButton": "custom8"
+          }
         },
         {
           "controlKind": "joystick",
           "id": "D0DE67B0-4F62-5ED1-B421-2B5AAF3CD2A1",
           "joystickMapping": {
-            "down": "down",
-            "left": "left",
-            "right": "right",
-            "up": "up"
+            "down": {
+              "gamepadButtons": [],
+              "keyboard": {
+                "keyCode": 125,
+                "modifiersRawValue": 0
+              }
+            },
+            "left": {
+              "gamepadButtons": [],
+              "keyboard": {
+                "keyCode": 123,
+                "modifiersRawValue": 0
+              }
+            },
+            "right": {
+              "gamepadButtons": [],
+              "keyboard": {
+                "keyCode": 124,
+                "modifiersRawValue": 0
+              }
+            },
+            "up": {
+              "gamepadButtons": [],
+              "keyboard": {
+                "keyCode": 126,
+                "modifiersRawValue": 0
+              }
+            }
           },
           "joystickOutputSettings": {
             "analogTarget": "none",
@@ -1136,8 +1098,7 @@
             },
             "widthScale": 1.38,
             "zIndex": 0
-          },
-          "mappedButton": "custom1"
+          }
         },
         {
           "controlKind": "decoration",
@@ -1237,8 +1198,7 @@
             },
             "widthScale": 1.06,
             "zIndex": 0
-          },
-          "mappedButton": "custom8"
+          }
         },
         {
           "controlKind": "decoration",
@@ -1301,8 +1261,7 @@
             },
             "widthScale": 0.3,
             "zIndex": 0
-          },
-          "mappedButton": "custom8"
+          }
         },
         {
           "controlKind": "decoration",
@@ -1365,8 +1324,7 @@
             },
             "widthScale": 0.3,
             "zIndex": 0
-          },
-          "mappedButton": "custom8"
+          }
         },
         {
           "controlKind": "decoration",
@@ -1429,8 +1387,7 @@
             },
             "widthScale": 0.3,
             "zIndex": 0
-          },
-          "mappedButton": "custom8"
+          }
         },
         {
           "controlKind": "decoration",
@@ -1493,8 +1450,7 @@
             },
             "widthScale": 0.3,
             "zIndex": 0
-          },
-          "mappedButton": "custom8"
+          }
         },
         {
           "controlKind": "decoration",
@@ -1569,8 +1525,7 @@
             },
             "widthScale": 0.48,
             "zIndex": 0
-          },
-          "mappedButton": "custom8"
+          }
         },
         {
           "controlKind": "button",
@@ -1743,8 +1698,7 @@
             },
             "widthScale": 0.56,
             "zIndex": 0
-          },
-          "mappedButton": "custom6"
+          }
         },
         {
           "controlKind": "button",
@@ -1917,8 +1871,7 @@
             },
             "widthScale": 0.56,
             "zIndex": 0
-          },
-          "mappedButton": "custom7"
+          }
         },
         {
           "controlKind": "button",
@@ -2092,8 +2045,7 @@
             },
             "widthScale": 0.8,
             "zIndex": 0
-          },
-          "mappedButton": "custom2"
+          }
         },
         {
           "controlKind": "button",
@@ -2267,8 +2219,7 @@
             },
             "widthScale": 0.8,
             "zIndex": 0
-          },
-          "mappedButton": "custom3"
+          }
         },
         {
           "controlKind": "button",
@@ -2442,8 +2393,7 @@
             },
             "widthScale": 0.8,
             "zIndex": 0
-          },
-          "mappedButton": "custom4"
+          }
         },
         {
           "controlKind": "button",
@@ -2617,8 +2567,7 @@
             },
             "widthScale": 0.8,
             "zIndex": 0
-          },
-          "mappedButton": "custom5"
+          }
         }
       ],
       "designMetadata": {
@@ -2665,19 +2614,19 @@
             "kind": "custom"
           },
           {
-            "button": "focus",
+            "button": "00000000-0000-0000-0000-000000000108",
             "kind": "builtin"
           },
           {
-            "button": "attack",
+            "button": "00000000-0000-0000-0000-000000000106",
             "kind": "builtin"
           },
           {
-            "button": "jump",
+            "button": "00000000-0000-0000-0000-000000000105",
             "kind": "builtin"
           },
           {
-            "button": "dash",
+            "button": "00000000-0000-0000-0000-000000000107",
             "kind": "builtin"
           },
           {
@@ -2709,30 +2658,6 @@
             "kind": "custom"
           },
           {
-            "button": "up",
-            "kind": "builtin"
-          },
-          {
-            "button": "down",
-            "kind": "builtin"
-          },
-          {
-            "button": "left",
-            "kind": "builtin"
-          },
-          {
-            "button": "right",
-            "kind": "builtin"
-          },
-          {
-            "button": "map",
-            "kind": "builtin"
-          },
-          {
-            "button": "pause",
-            "kind": "builtin"
-          },
-          {
             "kind": "system",
             "system": "top_bar_activation"
           }
@@ -2754,556 +2679,15 @@
       },
       "elements": [
         {
-          "builtInButton": "jump",
-          "id": "00000000-0000-0000-0000-000000000105",
-          "kind": "button",
-          "label": "A",
-          "layout": {
-            "centerX": 0.875,
-            "centerY": 0.56,
-            "fillColor": {
-              "alpha": 1,
-              "blue": 0.9686274509803922,
-              "green": 0.9490196078431372,
-              "red": 0.9607843137254902
-            },
-            "heightScale": 0.7,
-            "icon": {
-              "placement": "center",
-              "renderingMode": "template",
-              "scale": 1.32,
-              "source": "text",
-              "tintColor": {
-                "alpha": 1,
-                "blue": 0.6352941176470588,
-                "green": 0.3843137254901961,
-                "red": 0.47843137254901963
-              },
-              "value": "A"
-            },
-            "isHidden": false,
-            "isLocationLocked": false,
-            "rotationDegrees": 0,
-            "shadowStrength": 0,
-            "shape": "circle",
-            "styleID": "reference-white-raised",
-            "visualStyle": {
-              "hapticFeedback": {
-                "duration": 0.06,
-                "intensity": 0.42,
-                "pattern": "single",
-                "sharpness": 0.22,
-                "style": "soft"
-              },
-              "normal": {
-                "bevelHighlightColor": {
-                  "alpha": 0.78,
-                  "blue": 1,
-                  "green": 1,
-                  "red": 1
-                },
-                "bevelShadowColor": {
-                  "alpha": 0.58,
-                  "blue": 0.7254901960784313,
-                  "green": 0.6509803921568628,
-                  "red": 0.6862745098039216
-                },
-                "bevelWidth": 1,
-                "fillStyle": {
-                  "color": {
-                    "alpha": 1,
-                    "blue": 0.9725490196078431,
-                    "green": 0.9568627450980393,
-                    "red": 0.9686274509803922
-                  },
-                  "kind": "solid"
-                },
-                "foregroundColor": {
-                  "alpha": 1,
-                  "blue": 0.6352941176470588,
-                  "green": 0.3843137254901961,
-                  "red": 0.47843137254901963
-                },
-                "highlightColor": {
-                  "alpha": 1,
-                  "blue": 1,
-                  "green": 1,
-                  "red": 1
-                },
-                "highlightOpacity": 0.28,
-                "highlightRadius": 6,
-                "highlightX": -3,
-                "highlightY": -3,
-                "shadows": [
-                  {
-                    "color": {
-                      "alpha": 0.9,
-                      "blue": 1,
-                      "green": 1,
-                      "red": 1
-                    },
-                    "radius": 5,
-                    "x": -2,
-                    "y": -2
-                  },
-                  {
-                    "color": {
-                      "alpha": 0.34,
-                      "blue": 0.5176470588235295,
-                      "green": 0.4235294117647059,
-                      "red": 0.4666666666666667
-                    },
-                    "radius": 5,
-                    "x": 0,
-                    "y": 3
-                  },
-                  {
-                    "color": {
-                      "alpha": 0.2,
-                      "blue": 0.7058823529411765,
-                      "green": 0.6235294117647059,
-                      "red": 0.6627450980392157
-                    },
-                    "radius": 12,
-                    "x": 5,
-                    "y": 7
-                  }
-                ],
-                "strokeColor": {
-                  "alpha": 0.76,
-                  "blue": 1,
-                  "green": 1,
-                  "red": 1
-                },
-                "strokeWidth": 1.2
-              },
-              "pressed": {
-                "fillStyle": {
-                  "color": {
-                    "alpha": 1,
-                    "blue": 0.9450980392156862,
-                    "green": 0.9098039215686274,
-                    "red": 0.9294117647058824
-                  },
-                  "kind": "solid"
-                },
-                "innerShadowColor": {
-                  "alpha": 0.32,
-                  "blue": 0.6705882352941176,
-                  "green": 0.5803921568627451,
-                  "red": 0.6196078431372549
-                },
-                "innerShadowRadius": 4,
-                "innerShadowX": 1,
-                "innerShadowY": 2,
-                "scale": 0.975,
-                "shadows": [
-                  {
-                    "color": {
-                      "alpha": 0.54,
-                      "blue": 1,
-                      "green": 1,
-                      "red": 1
-                    },
-                    "radius": 3,
-                    "x": -1,
-                    "y": -1
-                  },
-                  {
-                    "color": {
-                      "alpha": 0.24,
-                      "blue": 0.5333333333333333,
-                      "green": 0.44313725490196076,
-                      "red": 0.4823529411764706
-                    },
-                    "radius": 4,
-                    "x": 1,
-                    "y": 2
-                  }
-                ]
-              }
-            },
-            "widthScale": 0.7,
-            "zIndex": 0
-          },
-          "legacySlot": "jump",
-          "output": {
-            "gamepadButtons": [],
+          "defaultOutput": {
+            "gamepadButtons": [
+              "north"
+            ],
             "keyboard": {
-              "keyCode": 49,
+              "keyCode": 14,
               "modifiersRawValue": 0
             }
           },
-          "partOutputs": []
-        },
-        {
-          "builtInButton": "attack",
-          "id": "00000000-0000-0000-0000-000000000106",
-          "kind": "button",
-          "label": "X",
-          "layout": {
-            "centerX": 0.785,
-            "centerY": 0.43,
-            "fillColor": {
-              "alpha": 1,
-              "blue": 0.9686274509803922,
-              "green": 0.9490196078431372,
-              "red": 0.9607843137254902
-            },
-            "heightScale": 0.64,
-            "icon": {
-              "placement": "center",
-              "renderingMode": "template",
-              "scale": 1.36,
-              "source": "text",
-              "tintColor": {
-                "alpha": 1,
-                "blue": 0.6352941176470588,
-                "green": 0.3843137254901961,
-                "red": 0.47843137254901963
-              },
-              "value": "X"
-            },
-            "isHidden": false,
-            "isLocationLocked": false,
-            "rotationDegrees": 0,
-            "shadowStrength": 0,
-            "shape": "circle",
-            "styleID": "reference-white-raised",
-            "visualStyle": {
-              "hapticFeedback": {
-                "duration": 0.06,
-                "intensity": 0.42,
-                "pattern": "single",
-                "sharpness": 0.22,
-                "style": "soft"
-              },
-              "normal": {
-                "bevelHighlightColor": {
-                  "alpha": 0.78,
-                  "blue": 1,
-                  "green": 1,
-                  "red": 1
-                },
-                "bevelShadowColor": {
-                  "alpha": 0.58,
-                  "blue": 0.7254901960784313,
-                  "green": 0.6509803921568628,
-                  "red": 0.6862745098039216
-                },
-                "bevelWidth": 1,
-                "fillStyle": {
-                  "color": {
-                    "alpha": 1,
-                    "blue": 0.9725490196078431,
-                    "green": 0.9568627450980393,
-                    "red": 0.9686274509803922
-                  },
-                  "kind": "solid"
-                },
-                "foregroundColor": {
-                  "alpha": 1,
-                  "blue": 0.6352941176470588,
-                  "green": 0.3843137254901961,
-                  "red": 0.47843137254901963
-                },
-                "highlightColor": {
-                  "alpha": 1,
-                  "blue": 1,
-                  "green": 1,
-                  "red": 1
-                },
-                "highlightOpacity": 0.28,
-                "highlightRadius": 6,
-                "highlightX": -3,
-                "highlightY": -3,
-                "shadows": [
-                  {
-                    "color": {
-                      "alpha": 0.9,
-                      "blue": 1,
-                      "green": 1,
-                      "red": 1
-                    },
-                    "radius": 5,
-                    "x": -2,
-                    "y": -2
-                  },
-                  {
-                    "color": {
-                      "alpha": 0.34,
-                      "blue": 0.5176470588235295,
-                      "green": 0.4235294117647059,
-                      "red": 0.4666666666666667
-                    },
-                    "radius": 5,
-                    "x": 0,
-                    "y": 3
-                  },
-                  {
-                    "color": {
-                      "alpha": 0.2,
-                      "blue": 0.7058823529411765,
-                      "green": 0.6235294117647059,
-                      "red": 0.6627450980392157
-                    },
-                    "radius": 12,
-                    "x": 5,
-                    "y": 7
-                  }
-                ],
-                "strokeColor": {
-                  "alpha": 0.76,
-                  "blue": 1,
-                  "green": 1,
-                  "red": 1
-                },
-                "strokeWidth": 1.2
-              },
-              "pressed": {
-                "fillStyle": {
-                  "color": {
-                    "alpha": 1,
-                    "blue": 0.9450980392156862,
-                    "green": 0.9098039215686274,
-                    "red": 0.9294117647058824
-                  },
-                  "kind": "solid"
-                },
-                "innerShadowColor": {
-                  "alpha": 0.32,
-                  "blue": 0.6705882352941176,
-                  "green": 0.5803921568627451,
-                  "red": 0.6196078431372549
-                },
-                "innerShadowRadius": 4,
-                "innerShadowX": 1,
-                "innerShadowY": 2,
-                "scale": 0.975,
-                "shadows": [
-                  {
-                    "color": {
-                      "alpha": 0.54,
-                      "blue": 1,
-                      "green": 1,
-                      "red": 1
-                    },
-                    "radius": 3,
-                    "x": -1,
-                    "y": -1
-                  },
-                  {
-                    "color": {
-                      "alpha": 0.24,
-                      "blue": 0.5333333333333333,
-                      "green": 0.44313725490196076,
-                      "red": 0.4823529411764706
-                    },
-                    "radius": 4,
-                    "x": 1,
-                    "y": 2
-                  }
-                ]
-              }
-            },
-            "widthScale": 0.64,
-            "zIndex": 0
-          },
-          "legacySlot": "attack",
-          "output": {
-            "gamepadButtons": [],
-            "keyboard": {
-              "keyCode": 38,
-              "modifiersRawValue": 0
-            }
-          },
-          "partOutputs": []
-        },
-        {
-          "builtInButton": "dash",
-          "id": "00000000-0000-0000-0000-000000000107",
-          "kind": "button",
-          "label": "B",
-          "layout": {
-            "centerX": 0.735,
-            "centerY": 0.725,
-            "fillColor": {
-              "alpha": 1,
-              "blue": 0.9686274509803922,
-              "green": 0.9490196078431372,
-              "red": 0.9607843137254902
-            },
-            "heightScale": 0.92,
-            "icon": {
-              "placement": "center",
-              "renderingMode": "template",
-              "scale": 1.28,
-              "source": "text",
-              "tintColor": {
-                "alpha": 1,
-                "blue": 0.6352941176470588,
-                "green": 0.3843137254901961,
-                "red": 0.47843137254901963
-              },
-              "value": "B"
-            },
-            "isHidden": false,
-            "isLocationLocked": false,
-            "rotationDegrees": 0,
-            "shadowStrength": 0,
-            "shape": "circle",
-            "styleID": "reference-white-raised",
-            "visualStyle": {
-              "hapticFeedback": {
-                "duration": 0.06,
-                "intensity": 0.42,
-                "pattern": "single",
-                "sharpness": 0.22,
-                "style": "soft"
-              },
-              "normal": {
-                "bevelHighlightColor": {
-                  "alpha": 0.78,
-                  "blue": 1,
-                  "green": 1,
-                  "red": 1
-                },
-                "bevelShadowColor": {
-                  "alpha": 0.58,
-                  "blue": 0.7254901960784313,
-                  "green": 0.6509803921568628,
-                  "red": 0.6862745098039216
-                },
-                "bevelWidth": 1,
-                "fillStyle": {
-                  "color": {
-                    "alpha": 1,
-                    "blue": 0.9725490196078431,
-                    "green": 0.9568627450980393,
-                    "red": 0.9686274509803922
-                  },
-                  "kind": "solid"
-                },
-                "foregroundColor": {
-                  "alpha": 1,
-                  "blue": 0.6352941176470588,
-                  "green": 0.3843137254901961,
-                  "red": 0.47843137254901963
-                },
-                "highlightColor": {
-                  "alpha": 1,
-                  "blue": 1,
-                  "green": 1,
-                  "red": 1
-                },
-                "highlightOpacity": 0.28,
-                "highlightRadius": 6,
-                "highlightX": -3,
-                "highlightY": -3,
-                "shadows": [
-                  {
-                    "color": {
-                      "alpha": 0.9,
-                      "blue": 1,
-                      "green": 1,
-                      "red": 1
-                    },
-                    "radius": 5,
-                    "x": -2,
-                    "y": -2
-                  },
-                  {
-                    "color": {
-                      "alpha": 0.34,
-                      "blue": 0.5176470588235295,
-                      "green": 0.4235294117647059,
-                      "red": 0.4666666666666667
-                    },
-                    "radius": 5,
-                    "x": 0,
-                    "y": 3
-                  },
-                  {
-                    "color": {
-                      "alpha": 0.2,
-                      "blue": 0.7058823529411765,
-                      "green": 0.6235294117647059,
-                      "red": 0.6627450980392157
-                    },
-                    "radius": 12,
-                    "x": 5,
-                    "y": 7
-                  }
-                ],
-                "strokeColor": {
-                  "alpha": 0.76,
-                  "blue": 1,
-                  "green": 1,
-                  "red": 1
-                },
-                "strokeWidth": 1.2
-              },
-              "pressed": {
-                "fillStyle": {
-                  "color": {
-                    "alpha": 1,
-                    "blue": 0.9450980392156862,
-                    "green": 0.9098039215686274,
-                    "red": 0.9294117647058824
-                  },
-                  "kind": "solid"
-                },
-                "innerShadowColor": {
-                  "alpha": 0.32,
-                  "blue": 0.6705882352941176,
-                  "green": 0.5803921568627451,
-                  "red": 0.6196078431372549
-                },
-                "innerShadowRadius": 4,
-                "innerShadowX": 1,
-                "innerShadowY": 2,
-                "scale": 0.975,
-                "shadows": [
-                  {
-                    "color": {
-                      "alpha": 0.54,
-                      "blue": 1,
-                      "green": 1,
-                      "red": 1
-                    },
-                    "radius": 3,
-                    "x": -1,
-                    "y": -1
-                  },
-                  {
-                    "color": {
-                      "alpha": 0.24,
-                      "blue": 0.5333333333333333,
-                      "green": 0.44313725490196076,
-                      "red": 0.4823529411764706
-                    },
-                    "radius": 4,
-                    "x": 1,
-                    "y": 2
-                  }
-                ]
-              }
-            },
-            "widthScale": 0.92,
-            "zIndex": 0
-          },
-          "legacySlot": "dash",
-          "output": {
-            "gamepadButtons": [],
-            "keyboard": {
-              "keyCode": 56,
-              "modifiersRawValue": 0
-            }
-          },
-          "partOutputs": []
-        },
-        {
-          "builtInButton": "focus",
           "id": "00000000-0000-0000-0000-000000000108",
           "kind": "button",
           "label": "Y",
@@ -3475,15 +2859,596 @@
             "widthScale": 0.92,
             "zIndex": 0
           },
-          "legacySlot": "focus",
           "output": {
-            "gamepadButtons": [],
+            "gamepadButtons": [
+              "north"
+            ],
             "keyboard": {
               "keyCode": 14,
               "modifiersRawValue": 0
             }
           },
-          "partOutputs": []
+          "partOutputs": [],
+          "visualRole": "secondary_action"
+        },
+        {
+          "defaultOutput": {
+            "gamepadButtons": [
+              "west"
+            ],
+            "keyboard": {
+              "keyCode": 38,
+              "modifiersRawValue": 0
+            }
+          },
+          "id": "00000000-0000-0000-0000-000000000106",
+          "kind": "button",
+          "label": "X",
+          "layout": {
+            "centerX": 0.785,
+            "centerY": 0.43,
+            "fillColor": {
+              "alpha": 1,
+              "blue": 0.9686274509803922,
+              "green": 0.9490196078431372,
+              "red": 0.9607843137254902
+            },
+            "heightScale": 0.64,
+            "icon": {
+              "placement": "center",
+              "renderingMode": "template",
+              "scale": 1.36,
+              "source": "text",
+              "tintColor": {
+                "alpha": 1,
+                "blue": 0.6352941176470588,
+                "green": 0.3843137254901961,
+                "red": 0.47843137254901963
+              },
+              "value": "X"
+            },
+            "isHidden": false,
+            "isLocationLocked": false,
+            "rotationDegrees": 0,
+            "shadowStrength": 0,
+            "shape": "circle",
+            "styleID": "reference-white-raised",
+            "visualStyle": {
+              "hapticFeedback": {
+                "duration": 0.06,
+                "intensity": 0.42,
+                "pattern": "single",
+                "sharpness": 0.22,
+                "style": "soft"
+              },
+              "normal": {
+                "bevelHighlightColor": {
+                  "alpha": 0.78,
+                  "blue": 1,
+                  "green": 1,
+                  "red": 1
+                },
+                "bevelShadowColor": {
+                  "alpha": 0.58,
+                  "blue": 0.7254901960784313,
+                  "green": 0.6509803921568628,
+                  "red": 0.6862745098039216
+                },
+                "bevelWidth": 1,
+                "fillStyle": {
+                  "color": {
+                    "alpha": 1,
+                    "blue": 0.9725490196078431,
+                    "green": 0.9568627450980393,
+                    "red": 0.9686274509803922
+                  },
+                  "kind": "solid"
+                },
+                "foregroundColor": {
+                  "alpha": 1,
+                  "blue": 0.6352941176470588,
+                  "green": 0.3843137254901961,
+                  "red": 0.47843137254901963
+                },
+                "highlightColor": {
+                  "alpha": 1,
+                  "blue": 1,
+                  "green": 1,
+                  "red": 1
+                },
+                "highlightOpacity": 0.28,
+                "highlightRadius": 6,
+                "highlightX": -3,
+                "highlightY": -3,
+                "shadows": [
+                  {
+                    "color": {
+                      "alpha": 0.9,
+                      "blue": 1,
+                      "green": 1,
+                      "red": 1
+                    },
+                    "radius": 5,
+                    "x": -2,
+                    "y": -2
+                  },
+                  {
+                    "color": {
+                      "alpha": 0.34,
+                      "blue": 0.5176470588235295,
+                      "green": 0.4235294117647059,
+                      "red": 0.4666666666666667
+                    },
+                    "radius": 5,
+                    "x": 0,
+                    "y": 3
+                  },
+                  {
+                    "color": {
+                      "alpha": 0.2,
+                      "blue": 0.7058823529411765,
+                      "green": 0.6235294117647059,
+                      "red": 0.6627450980392157
+                    },
+                    "radius": 12,
+                    "x": 5,
+                    "y": 7
+                  }
+                ],
+                "strokeColor": {
+                  "alpha": 0.76,
+                  "blue": 1,
+                  "green": 1,
+                  "red": 1
+                },
+                "strokeWidth": 1.2
+              },
+              "pressed": {
+                "fillStyle": {
+                  "color": {
+                    "alpha": 1,
+                    "blue": 0.9450980392156862,
+                    "green": 0.9098039215686274,
+                    "red": 0.9294117647058824
+                  },
+                  "kind": "solid"
+                },
+                "innerShadowColor": {
+                  "alpha": 0.32,
+                  "blue": 0.6705882352941176,
+                  "green": 0.5803921568627451,
+                  "red": 0.6196078431372549
+                },
+                "innerShadowRadius": 4,
+                "innerShadowX": 1,
+                "innerShadowY": 2,
+                "scale": 0.975,
+                "shadows": [
+                  {
+                    "color": {
+                      "alpha": 0.54,
+                      "blue": 1,
+                      "green": 1,
+                      "red": 1
+                    },
+                    "radius": 3,
+                    "x": -1,
+                    "y": -1
+                  },
+                  {
+                    "color": {
+                      "alpha": 0.24,
+                      "blue": 0.5333333333333333,
+                      "green": 0.44313725490196076,
+                      "red": 0.4823529411764706
+                    },
+                    "radius": 4,
+                    "x": 1,
+                    "y": 2
+                  }
+                ]
+              }
+            },
+            "widthScale": 0.64,
+            "zIndex": 0
+          },
+          "output": {
+            "gamepadButtons": [
+              "west"
+            ],
+            "keyboard": {
+              "keyCode": 38,
+              "modifiersRawValue": 0
+            }
+          },
+          "partOutputs": [],
+          "visualRole": "primary_action"
+        },
+        {
+          "defaultOutput": {
+            "gamepadButtons": [
+              "south"
+            ],
+            "keyboard": {
+              "keyCode": 49,
+              "modifiersRawValue": 0
+            }
+          },
+          "id": "00000000-0000-0000-0000-000000000105",
+          "kind": "button",
+          "label": "A",
+          "layout": {
+            "centerX": 0.875,
+            "centerY": 0.56,
+            "fillColor": {
+              "alpha": 1,
+              "blue": 0.9686274509803922,
+              "green": 0.9490196078431372,
+              "red": 0.9607843137254902
+            },
+            "heightScale": 0.7,
+            "icon": {
+              "placement": "center",
+              "renderingMode": "template",
+              "scale": 1.32,
+              "source": "text",
+              "tintColor": {
+                "alpha": 1,
+                "blue": 0.6352941176470588,
+                "green": 0.3843137254901961,
+                "red": 0.47843137254901963
+              },
+              "value": "A"
+            },
+            "isHidden": false,
+            "isLocationLocked": false,
+            "rotationDegrees": 0,
+            "shadowStrength": 0,
+            "shape": "circle",
+            "styleID": "reference-white-raised",
+            "visualStyle": {
+              "hapticFeedback": {
+                "duration": 0.06,
+                "intensity": 0.42,
+                "pattern": "single",
+                "sharpness": 0.22,
+                "style": "soft"
+              },
+              "normal": {
+                "bevelHighlightColor": {
+                  "alpha": 0.78,
+                  "blue": 1,
+                  "green": 1,
+                  "red": 1
+                },
+                "bevelShadowColor": {
+                  "alpha": 0.58,
+                  "blue": 0.7254901960784313,
+                  "green": 0.6509803921568628,
+                  "red": 0.6862745098039216
+                },
+                "bevelWidth": 1,
+                "fillStyle": {
+                  "color": {
+                    "alpha": 1,
+                    "blue": 0.9725490196078431,
+                    "green": 0.9568627450980393,
+                    "red": 0.9686274509803922
+                  },
+                  "kind": "solid"
+                },
+                "foregroundColor": {
+                  "alpha": 1,
+                  "blue": 0.6352941176470588,
+                  "green": 0.3843137254901961,
+                  "red": 0.47843137254901963
+                },
+                "highlightColor": {
+                  "alpha": 1,
+                  "blue": 1,
+                  "green": 1,
+                  "red": 1
+                },
+                "highlightOpacity": 0.28,
+                "highlightRadius": 6,
+                "highlightX": -3,
+                "highlightY": -3,
+                "shadows": [
+                  {
+                    "color": {
+                      "alpha": 0.9,
+                      "blue": 1,
+                      "green": 1,
+                      "red": 1
+                    },
+                    "radius": 5,
+                    "x": -2,
+                    "y": -2
+                  },
+                  {
+                    "color": {
+                      "alpha": 0.34,
+                      "blue": 0.5176470588235295,
+                      "green": 0.4235294117647059,
+                      "red": 0.4666666666666667
+                    },
+                    "radius": 5,
+                    "x": 0,
+                    "y": 3
+                  },
+                  {
+                    "color": {
+                      "alpha": 0.2,
+                      "blue": 0.7058823529411765,
+                      "green": 0.6235294117647059,
+                      "red": 0.6627450980392157
+                    },
+                    "radius": 12,
+                    "x": 5,
+                    "y": 7
+                  }
+                ],
+                "strokeColor": {
+                  "alpha": 0.76,
+                  "blue": 1,
+                  "green": 1,
+                  "red": 1
+                },
+                "strokeWidth": 1.2
+              },
+              "pressed": {
+                "fillStyle": {
+                  "color": {
+                    "alpha": 1,
+                    "blue": 0.9450980392156862,
+                    "green": 0.9098039215686274,
+                    "red": 0.9294117647058824
+                  },
+                  "kind": "solid"
+                },
+                "innerShadowColor": {
+                  "alpha": 0.32,
+                  "blue": 0.6705882352941176,
+                  "green": 0.5803921568627451,
+                  "red": 0.6196078431372549
+                },
+                "innerShadowRadius": 4,
+                "innerShadowX": 1,
+                "innerShadowY": 2,
+                "scale": 0.975,
+                "shadows": [
+                  {
+                    "color": {
+                      "alpha": 0.54,
+                      "blue": 1,
+                      "green": 1,
+                      "red": 1
+                    },
+                    "radius": 3,
+                    "x": -1,
+                    "y": -1
+                  },
+                  {
+                    "color": {
+                      "alpha": 0.24,
+                      "blue": 0.5333333333333333,
+                      "green": 0.44313725490196076,
+                      "red": 0.4823529411764706
+                    },
+                    "radius": 4,
+                    "x": 1,
+                    "y": 2
+                  }
+                ]
+              }
+            },
+            "widthScale": 0.7,
+            "zIndex": 0
+          },
+          "output": {
+            "gamepadButtons": [
+              "south"
+            ],
+            "keyboard": {
+              "keyCode": 49,
+              "modifiersRawValue": 0
+            }
+          },
+          "partOutputs": [],
+          "visualRole": "primary_action"
+        },
+        {
+          "defaultOutput": {
+            "gamepadButtons": [
+              "east"
+            ],
+            "keyboard": {
+              "keyCode": 56,
+              "modifiersRawValue": 0
+            }
+          },
+          "id": "00000000-0000-0000-0000-000000000107",
+          "kind": "button",
+          "label": "B",
+          "layout": {
+            "centerX": 0.735,
+            "centerY": 0.725,
+            "fillColor": {
+              "alpha": 1,
+              "blue": 0.9686274509803922,
+              "green": 0.9490196078431372,
+              "red": 0.9607843137254902
+            },
+            "heightScale": 0.92,
+            "icon": {
+              "placement": "center",
+              "renderingMode": "template",
+              "scale": 1.28,
+              "source": "text",
+              "tintColor": {
+                "alpha": 1,
+                "blue": 0.6352941176470588,
+                "green": 0.3843137254901961,
+                "red": 0.47843137254901963
+              },
+              "value": "B"
+            },
+            "isHidden": false,
+            "isLocationLocked": false,
+            "rotationDegrees": 0,
+            "shadowStrength": 0,
+            "shape": "circle",
+            "styleID": "reference-white-raised",
+            "visualStyle": {
+              "hapticFeedback": {
+                "duration": 0.06,
+                "intensity": 0.42,
+                "pattern": "single",
+                "sharpness": 0.22,
+                "style": "soft"
+              },
+              "normal": {
+                "bevelHighlightColor": {
+                  "alpha": 0.78,
+                  "blue": 1,
+                  "green": 1,
+                  "red": 1
+                },
+                "bevelShadowColor": {
+                  "alpha": 0.58,
+                  "blue": 0.7254901960784313,
+                  "green": 0.6509803921568628,
+                  "red": 0.6862745098039216
+                },
+                "bevelWidth": 1,
+                "fillStyle": {
+                  "color": {
+                    "alpha": 1,
+                    "blue": 0.9725490196078431,
+                    "green": 0.9568627450980393,
+                    "red": 0.9686274509803922
+                  },
+                  "kind": "solid"
+                },
+                "foregroundColor": {
+                  "alpha": 1,
+                  "blue": 0.6352941176470588,
+                  "green": 0.3843137254901961,
+                  "red": 0.47843137254901963
+                },
+                "highlightColor": {
+                  "alpha": 1,
+                  "blue": 1,
+                  "green": 1,
+                  "red": 1
+                },
+                "highlightOpacity": 0.28,
+                "highlightRadius": 6,
+                "highlightX": -3,
+                "highlightY": -3,
+                "shadows": [
+                  {
+                    "color": {
+                      "alpha": 0.9,
+                      "blue": 1,
+                      "green": 1,
+                      "red": 1
+                    },
+                    "radius": 5,
+                    "x": -2,
+                    "y": -2
+                  },
+                  {
+                    "color": {
+                      "alpha": 0.34,
+                      "blue": 0.5176470588235295,
+                      "green": 0.4235294117647059,
+                      "red": 0.4666666666666667
+                    },
+                    "radius": 5,
+                    "x": 0,
+                    "y": 3
+                  },
+                  {
+                    "color": {
+                      "alpha": 0.2,
+                      "blue": 0.7058823529411765,
+                      "green": 0.6235294117647059,
+                      "red": 0.6627450980392157
+                    },
+                    "radius": 12,
+                    "x": 5,
+                    "y": 7
+                  }
+                ],
+                "strokeColor": {
+                  "alpha": 0.76,
+                  "blue": 1,
+                  "green": 1,
+                  "red": 1
+                },
+                "strokeWidth": 1.2
+              },
+              "pressed": {
+                "fillStyle": {
+                  "color": {
+                    "alpha": 1,
+                    "blue": 0.9450980392156862,
+                    "green": 0.9098039215686274,
+                    "red": 0.9294117647058824
+                  },
+                  "kind": "solid"
+                },
+                "innerShadowColor": {
+                  "alpha": 0.32,
+                  "blue": 0.6705882352941176,
+                  "green": 0.5803921568627451,
+                  "red": 0.6196078431372549
+                },
+                "innerShadowRadius": 4,
+                "innerShadowX": 1,
+                "innerShadowY": 2,
+                "scale": 0.975,
+                "shadows": [
+                  {
+                    "color": {
+                      "alpha": 0.54,
+                      "blue": 1,
+                      "green": 1,
+                      "red": 1
+                    },
+                    "radius": 3,
+                    "x": -1,
+                    "y": -1
+                  },
+                  {
+                    "color": {
+                      "alpha": 0.24,
+                      "blue": 0.5333333333333333,
+                      "green": 0.44313725490196076,
+                      "red": 0.4823529411764706
+                    },
+                    "radius": 4,
+                    "x": 1,
+                    "y": 2
+                  }
+                ]
+              }
+            },
+            "widthScale": 0.92,
+            "zIndex": 0
+          },
+          "output": {
+            "gamepadButtons": [
+              "east"
+            ],
+            "keyboard": {
+              "keyCode": 56,
+              "modifiersRawValue": 0
+            }
+          },
+          "partOutputs": [],
+          "visualRole": "secondary_action"
         },
         {
           "id": "C5EC51F7-C610-572F-9171-A8699D614ED6",
@@ -3608,7 +3573,6 @@
             "widthScale": 9.62,
             "zIndex": 0
           },
-          "legacySlot": "custom8",
           "partOutputs": []
         },
         {
@@ -3715,16 +3679,39 @@
             "widthScale": 2.12,
             "zIndex": 0
           },
-          "legacySlot": "custom8",
           "partOutputs": []
         },
         {
           "id": "D0DE67B0-4F62-5ED1-B421-2B5AAF3CD2A1",
           "joystickMapping": {
-            "down": "down",
-            "left": "left",
-            "right": "right",
-            "up": "up"
+            "down": {
+              "gamepadButtons": [],
+              "keyboard": {
+                "keyCode": 125,
+                "modifiersRawValue": 0
+              }
+            },
+            "left": {
+              "gamepadButtons": [],
+              "keyboard": {
+                "keyCode": 123,
+                "modifiersRawValue": 0
+              }
+            },
+            "right": {
+              "gamepadButtons": [],
+              "keyboard": {
+                "keyCode": 124,
+                "modifiersRawValue": 0
+              }
+            },
+            "up": {
+              "gamepadButtons": [],
+              "keyboard": {
+                "keyCode": 126,
+                "modifiersRawValue": 0
+              }
+            }
           },
           "joystickOutputSettings": {
             "analogTarget": "none",
@@ -3843,15 +3830,51 @@
             "widthScale": 1.38,
             "zIndex": 0
           },
-          "legacySlot": "custom1",
           "output": {
-            "gamepadButtons": [],
-            "keyboard": {
-              "keyCode": 126,
-              "modifiersRawValue": 0
-            }
+            "gamepadButtons": []
           },
-          "partOutputs": []
+          "partOutputs": [
+            "joystick_down",
+            {
+              "gamepadButtons": [
+                "dpadDown"
+              ],
+              "keyboard": {
+                "keyCode": 125,
+                "modifiersRawValue": 0
+              }
+            },
+            "joystick_left",
+            {
+              "gamepadButtons": [
+                "dpadLeft"
+              ],
+              "keyboard": {
+                "keyCode": 123,
+                "modifiersRawValue": 0
+              }
+            },
+            "joystick_right",
+            {
+              "gamepadButtons": [
+                "dpadRight"
+              ],
+              "keyboard": {
+                "keyCode": 124,
+                "modifiersRawValue": 0
+              }
+            },
+            "joystick_up",
+            {
+              "gamepadButtons": [
+                "dpadUp"
+              ],
+              "keyboard": {
+                "keyCode": 126,
+                "modifiersRawValue": 0
+              }
+            }
+          ]
         },
         {
           "id": "A91AA704-1EDD-5E98-925A-40708B689194",
@@ -3952,7 +3975,6 @@
             "widthScale": 1.06,
             "zIndex": 0
           },
-          "legacySlot": "custom8",
           "partOutputs": []
         },
         {
@@ -4017,7 +4039,6 @@
             "widthScale": 0.3,
             "zIndex": 0
           },
-          "legacySlot": "custom8",
           "partOutputs": []
         },
         {
@@ -4082,7 +4103,6 @@
             "widthScale": 0.3,
             "zIndex": 0
           },
-          "legacySlot": "custom8",
           "partOutputs": []
         },
         {
@@ -4147,7 +4167,6 @@
             "widthScale": 0.3,
             "zIndex": 0
           },
-          "legacySlot": "custom8",
           "partOutputs": []
         },
         {
@@ -4212,7 +4231,6 @@
             "widthScale": 0.3,
             "zIndex": 0
           },
-          "legacySlot": "custom8",
           "partOutputs": []
         },
         {
@@ -4289,10 +4307,14 @@
             "widthScale": 0.48,
             "zIndex": 0
           },
-          "legacySlot": "custom8",
           "partOutputs": []
         },
         {
+          "defaultOutput": {
+            "gamepadButtons": [
+              "select"
+            ]
+          },
           "id": "9B0368A6-A8D1-582C-A0DF-46D26639F8AC",
           "kind": "button",
           "label": "−",
@@ -4464,17 +4486,19 @@
             "widthScale": 0.56,
             "zIndex": 0
           },
-          "legacySlot": "custom6",
           "output": {
-            "gamepadButtons": [],
-            "keyboard": {
-              "keyCode": 15,
-              "modifiersRawValue": 0
-            }
+            "gamepadButtons": [
+              "select"
+            ]
           },
           "partOutputs": []
         },
         {
+          "defaultOutput": {
+            "gamepadButtons": [
+              "start"
+            ]
+          },
           "id": "95C3643D-784D-5F89-BB9E-BC6F6E3CDBBE",
           "kind": "button",
           "label": "+",
@@ -4646,17 +4670,23 @@
             "widthScale": 0.56,
             "zIndex": 0
           },
-          "legacySlot": "custom7",
           "output": {
-            "gamepadButtons": [],
-            "keyboard": {
-              "keyCode": 6,
-              "modifiersRawValue": 0
-            }
+            "gamepadButtons": [
+              "start"
+            ]
           },
           "partOutputs": []
         },
         {
+          "defaultOutput": {
+            "gamepadButtons": [
+              "leftTriggerButton"
+            ],
+            "keyboard": {
+              "keyCode": 12,
+              "modifiersRawValue": 0
+            }
+          },
           "id": "D78CC1A8-D829-5EAB-B8C7-E3058FE7B1AE",
           "kind": "button",
           "label": "ZL",
@@ -4829,17 +4859,27 @@
             "widthScale": 0.8,
             "zIndex": 0
           },
-          "legacySlot": "custom2",
           "output": {
-            "gamepadButtons": [],
+            "gamepadButtons": [
+              "leftTriggerButton"
+            ],
             "keyboard": {
-              "keyCode": 125,
+              "keyCode": 12,
               "modifiersRawValue": 0
             }
           },
           "partOutputs": []
         },
         {
+          "defaultOutput": {
+            "gamepadButtons": [
+              "leftShoulder"
+            ],
+            "keyboard": {
+              "keyCode": 12,
+              "modifiersRawValue": 0
+            }
+          },
           "id": "1CF4C828-7A75-5FC1-AAD4-0956B6C8E6D1",
           "kind": "button",
           "label": "L",
@@ -5012,17 +5052,27 @@
             "widthScale": 0.8,
             "zIndex": 0
           },
-          "legacySlot": "custom3",
           "output": {
-            "gamepadButtons": [],
+            "gamepadButtons": [
+              "leftShoulder"
+            ],
             "keyboard": {
-              "keyCode": 123,
+              "keyCode": 12,
               "modifiersRawValue": 0
             }
           },
           "partOutputs": []
         },
         {
+          "defaultOutput": {
+            "gamepadButtons": [
+              "rightShoulder"
+            ],
+            "keyboard": {
+              "keyCode": 14,
+              "modifiersRawValue": 0
+            }
+          },
           "id": "0210198D-7601-58A7-9FA1-BD1B7DA94DA2",
           "kind": "button",
           "label": "R",
@@ -5195,17 +5245,27 @@
             "widthScale": 0.8,
             "zIndex": 0
           },
-          "legacySlot": "custom4",
           "output": {
-            "gamepadButtons": [],
+            "gamepadButtons": [
+              "rightShoulder"
+            ],
             "keyboard": {
-              "keyCode": 124,
+              "keyCode": 14,
               "modifiersRawValue": 0
             }
           },
           "partOutputs": []
         },
         {
+          "defaultOutput": {
+            "gamepadButtons": [
+              "rightTriggerButton"
+            ],
+            "keyboard": {
+              "keyCode": 15,
+              "modifiersRawValue": 0
+            }
+          },
           "id": "65264172-F6F4-52FF-AE72-85D4E70A3682",
           "kind": "button",
           "label": "ZR",
@@ -5378,11 +5438,12 @@
             "widthScale": 0.8,
             "zIndex": 0
           },
-          "legacySlot": "custom5",
           "output": {
-            "gamepadButtons": [],
+            "gamepadButtons": [
+              "rightTriggerButton"
+            ],
             "keyboard": {
-              "keyCode": 12,
+              "keyCode": 15,
               "modifiersRawValue": 0
             }
           },
@@ -5390,13 +5451,13 @@
         }
       ],
       "labelOverrides": [
-        "jump",
+        "00000000-0000-0000-0000-000000000105",
         "A",
-        "attack",
+        "00000000-0000-0000-0000-000000000106",
         "X",
-        "dash",
+        "00000000-0000-0000-0000-000000000107",
         "B",
-        "focus",
+        "00000000-0000-0000-0000-000000000108",
         "Y"
       ],
       "layoutMode": "standard",
@@ -5893,203 +5954,122 @@
     "updatedAt": 0
   },
   "profileKeyBindings": {
-    "attack": {
-      "keyCode": 38,
-      "modifiers": 0
-    },
-    "custom1": {
-      "keyCode": 126,
-      "modifiers": 0
-    },
-    "custom2": {
-      "keyCode": 125,
-      "modifiers": 0
-    },
-    "custom3": {
-      "keyCode": 123,
-      "modifiers": 0
-    },
-    "custom4": {
-      "keyCode": 124,
-      "modifiers": 0
-    },
-    "custom5": {
-      "keyCode": 12,
-      "modifiers": 0
-    },
-    "custom6": {
-      "keyCode": 15,
-      "modifiers": 0
-    },
-    "custom7": {
-      "keyCode": 6,
-      "modifiers": 0
-    },
-    "custom8": {
-      "keyCode": 7,
-      "modifiers": 0
-    },
-    "dash": {
-      "keyCode": 56,
-      "modifiers": 0
-    },
-    "down": {
-      "keyCode": 1,
-      "modifiers": 0
-    },
-    "focus": {
-      "keyCode": 14,
-      "modifiers": 0
-    },
-    "jump": {
+    "00000000-0000-0000-0000-000000000105": {
       "keyCode": 49,
       "modifiers": 0
     },
-    "left": {
-      "keyCode": 0,
+    "00000000-0000-0000-0000-000000000106": {
+      "keyCode": 38,
       "modifiers": 0
     },
-    "map": {
-      "keyCode": 48,
+    "00000000-0000-0000-0000-000000000107": {
+      "keyCode": 56,
       "modifiers": 0
     },
-    "pause": {
-      "keyCode": 53,
+    "00000000-0000-0000-0000-000000000108": {
+      "keyCode": 14,
       "modifiers": 0
     },
-    "right": {
-      "keyCode": 2,
+    "0210198D-7601-58A7-9FA1-BD1B7DA94DA2": {
+      "keyCode": 14,
       "modifiers": 0
     },
-    "up": {
-      "keyCode": 13,
+    "1CF4C828-7A75-5FC1-AAD4-0956B6C8E6D1": {
+      "keyCode": 12,
+      "modifiers": 0
+    },
+    "65264172-F6F4-52FF-AE72-85D4E70A3682": {
+      "keyCode": 15,
+      "modifiers": 0
+    },
+    "D78CC1A8-D829-5EAB-B8C7-E3058FE7B1AE": {
+      "keyCode": 12,
       "modifiers": 0
     }
   },
   "profileOutputBindings": {
-    "attack": {
-      "gamepadButtons": [],
-      "keyboard": {
-        "keyCode": 38,
-        "modifiers": 0
-      }
-    },
-    "custom1": {
-      "gamepadButtons": [],
-      "keyboard": {
-        "keyCode": 126,
-        "modifiers": 0
-      }
-    },
-    "custom2": {
-      "gamepadButtons": [],
-      "keyboard": {
-        "keyCode": 125,
-        "modifiers": 0
-      }
-    },
-    "custom3": {
-      "gamepadButtons": [],
-      "keyboard": {
-        "keyCode": 123,
-        "modifiers": 0
-      }
-    },
-    "custom4": {
-      "gamepadButtons": [],
-      "keyboard": {
-        "keyCode": 124,
-        "modifiers": 0
-      }
-    },
-    "custom5": {
-      "gamepadButtons": [],
-      "keyboard": {
-        "keyCode": 12,
-        "modifiers": 0
-      }
-    },
-    "custom6": {
-      "gamepadButtons": [],
-      "keyboard": {
-        "keyCode": 15,
-        "modifiers": 0
-      }
-    },
-    "custom7": {
-      "gamepadButtons": [],
-      "keyboard": {
-        "keyCode": 6,
-        "modifiers": 0
-      }
-    },
-    "custom8": {
-      "gamepadButtons": [],
-      "keyboard": {
-        "keyCode": 7,
-        "modifiers": 0
-      }
-    },
-    "dash": {
-      "gamepadButtons": [],
-      "keyboard": {
-        "keyCode": 56,
-        "modifiers": 0
-      }
-    },
-    "down": {
-      "gamepadButtons": [],
-      "keyboard": {
-        "keyCode": 1,
-        "modifiers": 0
-      }
-    },
-    "focus": {
-      "gamepadButtons": [],
-      "keyboard": {
-        "keyCode": 14,
-        "modifiers": 0
-      }
-    },
-    "jump": {
-      "gamepadButtons": [],
+    "00000000-0000-0000-0000-000000000105": {
+      "gamepadButtons": [
+        "south"
+      ],
       "keyboard": {
         "keyCode": 49,
         "modifiers": 0
       }
     },
-    "left": {
-      "gamepadButtons": [],
+    "00000000-0000-0000-0000-000000000106": {
+      "gamepadButtons": [
+        "west"
+      ],
       "keyboard": {
-        "keyCode": 0,
+        "keyCode": 38,
         "modifiers": 0
       }
     },
-    "map": {
-      "gamepadButtons": [],
+    "00000000-0000-0000-0000-000000000107": {
+      "gamepadButtons": [
+        "east"
+      ],
       "keyboard": {
-        "keyCode": 48,
+        "keyCode": 56,
         "modifiers": 0
       }
     },
-    "pause": {
-      "gamepadButtons": [],
+    "00000000-0000-0000-0000-000000000108": {
+      "gamepadButtons": [
+        "north"
+      ],
       "keyboard": {
-        "keyCode": 53,
+        "keyCode": 14,
         "modifiers": 0
       }
     },
-    "right": {
-      "gamepadButtons": [],
+    "0210198D-7601-58A7-9FA1-BD1B7DA94DA2": {
+      "gamepadButtons": [
+        "rightShoulder"
+      ],
       "keyboard": {
-        "keyCode": 2,
+        "keyCode": 14,
         "modifiers": 0
       }
     },
-    "up": {
-      "gamepadButtons": [],
+    "1CF4C828-7A75-5FC1-AAD4-0956B6C8E6D1": {
+      "gamepadButtons": [
+        "leftShoulder"
+      ],
       "keyboard": {
-        "keyCode": 13,
+        "keyCode": 12,
+        "modifiers": 0
+      }
+    },
+    "65264172-F6F4-52FF-AE72-85D4E70A3682": {
+      "gamepadButtons": [
+        "rightTriggerButton"
+      ],
+      "keyboard": {
+        "keyCode": 15,
+        "modifiers": 0
+      }
+    },
+    "95C3643D-784D-5F89-BB9E-BC6F6E3CDBBE": {
+      "gamepadButtons": [
+        "start"
+      ]
+    },
+    "9B0368A6-A8D1-582C-A0DF-46D26639F8AC": {
+      "gamepadButtons": [
+        "select"
+      ]
+    },
+    "D0DE67B0-4F62-5ED1-B421-2B5AAF3CD2A1": {
+      "gamepadButtons": []
+    },
+    "D78CC1A8-D829-5EAB-B8C7-E3058FE7B1AE": {
+      "gamepadButtons": [
+        "leftTriggerButton"
+      ],
+      "keyboard": {
+        "keyCode": 12,
         "modifiers": 0
       }
     }

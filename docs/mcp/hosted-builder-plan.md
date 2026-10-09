@@ -103,7 +103,7 @@ Swift bridge and (b) needed full profile/package export+import. Since then:
 
 - The agent-spec generation path (the `generate --spec` JSON documented
   in repo `SKILL.md`) now lives in `thumble-core` as strict generation
-  spec v1: aliases, roles, slots, thumb layout, basic/rich appearance,
+  spec v1: output-key aliases, roles, independent UUID controls, thumb layout, basic/rich appearance,
   joystick/trigger/trackpad settings, semantic keys, deterministic UUIDs,
   bounded warnings, layout quality, generated JSON, and artifact v1.
 - The schema-8 CLI bridge exposes read-only `generation.plan-spec`; the

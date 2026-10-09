@@ -43,14 +43,14 @@ public enum GamepadSharedOperationError: LocalizedError, Equatable, Sendable {
 }
 
 public extension GamepadControlIdentity {
-    /// Parses the stable IDs returned by `id`, plus the legacy unprefixed values
-    /// accepted by saved design metadata.
+    /// Parses stable appearance IDs and unprefixed actual control UUIDs.
+    /// Named input slots are never accepted.
     init?(stableID value: String) {
         let raw = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !raw.isEmpty else { return nil }
 
         let prefixes: [(String, (String) -> GamepadControlIdentity?)] = [
-            ("builtin.", { GameButton(rawValue: $0).map(GamepadControlIdentity.builtin) }),
+            ("builtin.", { KeypadElementID(rawValue: $0).map(GamepadControlIdentity.builtin) }),
             ("custom.", { UUID(uuidString: $0).map(GamepadControlIdentity.custom) }),
             ("system.", { GamepadSystemControl(rawValue: $0).map(GamepadControlIdentity.system) }),
             ("control_bar_item.", { GamepadControlBarItem(rawValue: $0).map(GamepadControlIdentity.controlBarItem) })
@@ -63,10 +63,8 @@ public extension GamepadControlIdentity {
             }
         }
 
-        if let button = GameButton(rawValue: raw) {
-            self = .builtin(button)
-        } else if let id = UUID(uuidString: raw) {
-            self = .custom(id)
+        if let element = KeypadElementID(rawValue: raw) {
+            self = DefaultKeypadElements.ids.contains(element) ? .builtin(element) : .custom(element.uuid)
         } else if let control = GamepadSystemControl(rawValue: raw) {
             self = .system(control)
         } else if let item = GamepadControlBarItem(rawValue: raw) {
@@ -97,8 +95,9 @@ public extension GamepadCustomization {
     }
 
     mutating func deleteReusableStyle(id: String) {
+        normalizeInPlace()
         styleLibrary.styles.removeAll { $0.id == id }
-        for button in GameButton.allCases {
+        for button in elements.compactMap({ $0.kind == .button ? $0.defaultControlID : nil }) {
             var layout = buttonCustomization(for: button)
             if layout.styleID == id {
                 layout.styleID = nil
@@ -127,11 +126,14 @@ public extension GamepadCustomization {
     ) -> Bool {
         switch identity {
         case .builtin(let button):
+            guard elements.contains(where: { $0.inputID == button }) else { return false }
             var layout = buttonCustomization(for: button)
             layout.styleID = styleID
             setButtonCustomization(layout, for: button)
             return true
         case .custom(let id):
+            guard elements.contains(where: { $0.id == id }) else { return false }
+            if !customButtons.contains(where: { $0.id == id }) { normalizeInPlace() }
             guard let index = customButtons.firstIndex(where: { $0.id == id }) else { return false }
             customButtons[index].layout.styleID = styleID
             return true
@@ -220,12 +222,13 @@ public extension GamepadCustomization {
         self = normalized
     }
 
-    /// Updates both legacy custom-control storage and the synchronized element
-    /// mirror. Output metadata already stored on the element survives the overlay.
+    /// Updates the edit/appearance mirror and its declared element record.
+    /// Output metadata already stored on the element survives the overlay.
     mutating func mutateStandaloneCustomControl(
         id: UUID,
         mutate: (inout GamepadCustomButton) throws -> Void
     ) throws {
+        normalizeInPlace()
         guard let index = customButtons.firstIndex(where: { $0.id == id }) else {
             throw GamepadSharedOperationError.controlNotFound(id.uuidString)
         }
@@ -271,6 +274,7 @@ public extension GamepadCustomization {
     /// Restores one installed control to the same type-specific defaults used by
     /// the standalone CLI while preserving the control's stable identity.
     mutating func resetControl(_ identity: GamepadControlIdentity) throws {
+        normalizeInPlace()
         switch identity {
         case .builtin(let button):
             setButtonCustomization(.defaultValue, for: button)
@@ -290,7 +294,6 @@ public extension GamepadCustomization {
                     heightScale: 1.35,
                     shape: .circle
                 )
-                customButtons[index].joystickMapping = customButtons[index].joystickMapping ?? .movement
                 customButtons[index].joystickOutputSettings = customButtons[index].joystickOutputSettings ?? .defaultValue
                 customButtons[index].triggerSettings = nil
                 customButtons[index].trackpadSettings = nil
@@ -400,7 +403,9 @@ public extension GamepadCustomization {
         for identity in requested {
             switch identity {
             case .builtin(let button):
-                guard GameButton.builtInControls.contains(button) else {
+                guard DefaultKeypadElements.ids.contains(button),
+                      source.elements.contains(where: { $0.inputID == button && $0.kind == .button })
+                else {
                     throw GamepadSharedOperationError.controlNotFound(identity.id)
                 }
                 var layout = source.buttonCustomization(for: button)
@@ -415,7 +420,6 @@ public extension GamepadCustomization {
                 sourceButtons.append((
                     identity,
                     GamepadCustomButton(
-                        mappedButton: button,
                         label: source.visualLabel(for: button),
                         layout: layout,
                         controlKind: .button
@@ -442,25 +446,21 @@ public extension GamepadCustomization {
             let newIdentity = GamepadControlIdentity.custom(newID)
             var duplicate = sourceButton
             duplicate.id = newID
+            duplicate.visualRole = sourceElement?.visualRole ?? duplicate.visualRole
             duplicate.layout.centerX = Self.offsetCoordinate(duplicate.layout.centerX ?? 0.5, by: normalizedOffset.width)
             duplicate.layout.centerY = Self.offsetCoordinate(duplicate.layout.centerY ?? 0.5, by: normalizedOffset.height)
             next.customButtons.append(duplicate)
-            next.elements.append(
-                KeypadElement(
-                    id: newID,
-                    label: duplicate.label,
-                    kind: duplicate.controlKind,
-                    layout: duplicate.layout,
-                    builtInButton: nil,
-                    legacySlot: sourceElement?.legacySlot ?? duplicate.mappedButton,
-                    output: sourceElement?.output,
-                    partOutputs: sourceElement?.partOutputs ?? [:],
-                    joystickMapping: duplicate.joystickMapping,
-                    joystickOutputSettings: duplicate.joystickOutputSettings,
-                    triggerSettings: duplicate.triggerSettings,
-                    trackpadSettings: duplicate.trackpadSettings
-                )
-            )
+            var duplicatedElement = sourceElement ?? KeypadElement()
+            duplicatedElement.id = newID
+            duplicatedElement.label = duplicate.label
+            duplicatedElement.kind = duplicate.controlKind
+            duplicatedElement.layout = duplicate.layout
+            duplicatedElement.visualRole = duplicate.visualRole
+            duplicatedElement.joystickMapping = duplicate.joystickMapping
+            duplicatedElement.joystickOutputSettings = duplicate.joystickOutputSettings
+            duplicatedElement.triggerSettings = duplicate.triggerSettings
+            duplicatedElement.trackpadSettings = duplicate.trackpadSettings
+            next.elements.append(duplicatedElement)
             identityMap[sourceIdentity] = newIdentity
         }
 
@@ -929,14 +929,12 @@ public extension GamepadCustomization {
     }
 
     private static func ergonomicControlSort(_ lhs: GamepadResolvedControl, _ rhs: GamepadResolvedControl) -> Bool {
-        let order: [GameButton: Int] = [
-            .up: 0, .left: 1, .right: 2, .down: 3,
-            .jump: 4, .attack: 5, .dash: 6, .focus: 7,
-            .custom1: 8, .custom2: 9, .custom3: 10, .custom4: 11,
-            .custom5: 12, .custom6: 13, .custom7: 14, .custom8: 15
+        let order: [KeypadElementID: Int] = [
+            .preset(1): 0, .preset(3): 1, .preset(4): 2, .preset(2): 3,
+            .preset(5): 4, .preset(6): 5, .preset(7): 6, .preset(8): 7
         ]
-        let lhsOrder = order[lhs.mappedButton] ?? 100
-        let rhsOrder = order[rhs.mappedButton] ?? 100
+        let lhsOrder = lhs.inputID.flatMap { order[$0] } ?? 100
+        let rhsOrder = rhs.inputID.flatMap { order[$0] } ?? 100
         return lhsOrder == rhsOrder ? lhs.id.id < rhs.id.id : lhsOrder < rhsOrder
     }
 
@@ -1001,10 +999,11 @@ public extension GamepadCustomization {
     }
 
     private func validateDuplicationCapacity(_ kinds: [GamepadCustomControlKind]) throws {
-        guard customButtons.count + kinds.count <= Self.maximumCustomButtons else {
+        let controlKinds = controlKindsByID
+        guard controlKinds.count + kinds.count <= Self.maximumCustomButtons else {
             throw GamepadSharedOperationError.customControlLimitReached
         }
-        let existingKinds = Dictionary(grouping: customButtons.map { $0.normalized.controlKind }, by: { $0 }).mapValues(\.count)
+        let existingKinds = Dictionary(grouping: Array(controlKinds.values), by: { $0 }).mapValues(\.count)
         let addedKinds = Dictionary(grouping: kinds, by: { $0 }).mapValues(\.count)
         let limits: [(GamepadCustomControlKind, Int)] = [
             (.joystick, Self.maximumJoysticks),
@@ -1128,9 +1127,12 @@ extension GamepadCustomization {
 
         switch repair {
         case .showDefaultControls:
-            for button in GameButton.builtInControls {
+            let existingIDs = Set(elements.map(\.inputID))
+            installDefaultControls()
+            for button in DefaultKeypadElements.ids {
+                guard elements.contains(where: { $0.inputID == button && $0.kind == .button }) else { continue }
                 var layout = buttonCustomization(for: button)
-                guard layout.isHidden else { continue }
+                guard layout.isHidden || !existingIDs.contains(button) else { continue }
                 layout.isHidden = false
                 setButtonCustomization(layout, for: button)
                 changedIDs.insert(.builtin(button))

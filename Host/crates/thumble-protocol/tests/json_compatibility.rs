@@ -1,7 +1,7 @@
 use serde_json::{json, Value};
 use thumble_protocol::{
     ButtonPressState, ControllerCapability, ControllerMessage, ControllerMessageType,
-    ControllerPointerButton, ControllerPointerEventKind, GameButton,
+    ControllerPointerButton, ControllerPointerEventKind, KeypadElementID,
     GamepadProfileOrientationPreference, KeypadElementInputPart, VirtualGamepadStick,
     VirtualGamepadTrigger,
 };
@@ -52,12 +52,13 @@ fn every_controller_message_kind_has_the_swift_wire_name_and_round_trips() {
 #[test]
 fn full_message_uses_swift_camel_case_keys_and_preserves_complex_unknown_fields() {
     let customization = json!({
-        "buttonCustomizations": {"jump": {"futureStyle": {"revision": 9}}},
+        "elements": [],
+        "buttonCustomizations": {"00000000-0000-0000-0000-000000000105": {"futureStyle": {"revision": 9}}},
         "unknownCustomizationField": [1, true, null]
     });
     let profiles = vec![json!({
         "id": "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE",
-        "customization": {"newNestedProfileField": {"enabled": true}},
+        "customization": {"elements": [], "newNestedProfileField": {"enabled": true}},
         "unknownProfileField": "retained"
     })];
     let device = json!({
@@ -69,7 +70,7 @@ fn full_message_uses_swift_camel_case_keys_and_preserves_complex_unknown_fields(
     });
 
     let mut message = ControllerMessage::new(ControllerMessageType::GamepadProfiles, 123);
-    message.button = Some(GameButton::Custom8);
+    message.button = Some(KeypadElementID::preset(18));
     message.element_id = Some("729B071A-B5BB-4A91-B2A7-F644C61E5920".into());
     message.element_part = Some(KeypadElementInputPart::TriggerDigital);
     message.state = Some(ButtonPressState::Up);
@@ -105,7 +106,7 @@ fn full_message_uses_swift_camel_case_keys_and_preserves_complex_unknown_fields(
     message.analog_y = Some(0.75);
     message.analog_value = Some(0.875);
     message.analog_sequence = Some(u64::MAX);
-    message.input_protocol_version = Some(2);
+    message.input_protocol_version = Some(3);
     message.input_generation = Some(u64::MAX - 1);
     message.input_sequence = Some(u64::MAX - 2);
     message.press_identifier = Some(u64::MAX - 3);
@@ -155,12 +156,17 @@ fn absent_optional_fields_are_omitted_like_swift_json_encoder() {
 }
 
 #[test]
-fn legacy_json_without_v2_fields_decodes() {
+fn uuid_json_without_generation_metadata_decodes_but_named_inputs_do_not() {
+    for name in ["jump", "attack", "up", "custom1", "custom8"] {
+        assert!(serde_json::from_value::<ControllerMessage>(json!({
+            "type":"button", "button":name, "state":"down", "timestamp":1
+        })).is_err());
+    }
     let message: ControllerMessage =
-        serde_json::from_str(r#"{"type":"button","button":"jump","state":"down","timestamp":1}"#)
+        serde_json::from_str(r#"{"type":"button","button":"00000000-0000-0000-0000-000000000105","state":"down","timestamp":1}"#)
             .unwrap();
     assert_eq!(message.message_type, ControllerMessageType::Button);
-    assert_eq!(message.button, Some(GameButton::Jump));
+    assert_eq!(message.button, Some(KeypadElementID::preset(5)));
     assert_eq!(message.state, Some(ButtonPressState::Down));
     assert_eq!(message.input_protocol_version, None);
     assert_eq!(message.input_generation, None);
@@ -200,10 +206,11 @@ fn supporting_enum_names_match_swift_raw_values() {
         assert_eq!(actual, expected);
     }
 
-    for (button, expected) in GameButton::ALL.into_iter().zip([
-        "up", "down", "left", "right", "jump", "attack", "dash", "focus", "map", "pause",
-        "custom1", "custom2", "custom3", "custom4", "custom5", "custom6", "custom7", "custom8",
-    ]) {
-        assert_eq!(serde_json::to_value(button).unwrap(), expected);
+    for element in (1..=10).map(KeypadElementID::preset) {
+        let value = serde_json::to_value(element).unwrap();
+        assert_eq!(value, element.to_string());
+        assert_eq!(value.as_str().unwrap().len(), 36);
+        assert_eq!(KeypadElementID::parse(value.as_str().unwrap()), Some(element));
+        assert_eq!(serde_json::from_value::<KeypadElementID>(value).unwrap(), element);
     }
 }

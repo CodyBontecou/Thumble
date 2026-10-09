@@ -105,17 +105,18 @@ struct MacContentView: View {
     /// authority import used by `thumble profile import`. The sheet owns review;
     /// this path registers undo and mutates authority state once.
     private func adoptSharedKeypadArtifact(_ review: MacSharedKeypadReview, appendAsCopies: Bool) throws -> String {
-        registerMacGamepadUndoSnapshot(
-            server.editorUndoSnapshot(),
-            undoManager: undoManager,
-            undoTarget: gamepadEditorUndoTarget,
-            server: server,
-            actionName: appendAsCopies ? "Import Shared Keypad as New Setups" : "Import Shared Keypad"
-        )
+        let snapshot = server.editorUndoSnapshot()
         let summary = try server.importKeypadConfiguration(
             data: review.artifact.rawData,
             sourceName: review.profileNames.first ?? "Shared Controller",
             mode: appendAsCopies ? .appendAsCopies : .replaceMatching
+        )
+        registerMacGamepadUndoSnapshot(
+            snapshot,
+            undoManager: undoManager,
+            undoTarget: gamepadEditorUndoTarget,
+            server: server,
+            actionName: appendAsCopies ? "Import Shared Keypad as New Setups" : "Import Shared Keypad"
         )
         return summary.message
     }
@@ -1198,7 +1199,7 @@ struct MacContentView: View {
     private func installTemplate(_ template: GamepadControllerTemplate) {
         var profiles = server.gamepadProfiles
         let selectedProfileID: UUID
-        var seededBindings: [UUID: [GameButton: MacControlOutputBinding]] = [:]
+        var seededBindings: [UUID: [KeypadElementID: MacControlOutputBinding]] = [:]
 
         if let existingID = existingProfileID(for: template) {
             selectedProfileID = existingID
@@ -1206,9 +1207,7 @@ struct MacContentView: View {
             let profile = template.makeProfile()
             profiles.append(profile)
             selectedProfileID = profile.id
-            if let recommendedBindings = template.recommendedMacOutputBindings {
-                seededBindings[profile.id] = recommendedBindings
-            }
+            seededBindings[profile.id] = profile.configuredMacOutputBindings
         }
 
         server.setGamepadProfileState(
@@ -1278,11 +1277,14 @@ struct MacContentView: View {
                     )
                 },
                 onImportProfiles: { data, sourceName, appendAsCopies in
+                    let snapshot = server.editorUndoSnapshot()
                     let summary = try server.importKeypadConfiguration(
                         data: data,
                         sourceName: sourceName,
                         mode: appendAsCopies ? .appendAsCopies : .replaceMatching
                     )
+                    registerMacGamepadUndoSnapshot(snapshot, undoManager: undoManager,
+                        undoTarget: gamepadEditorUndoTarget, server: server, actionName: "Import Keypad Setups")
                     return summary.message
                 },
                 onRegisterProfileUndoSnapshot: { actionName in
@@ -1738,9 +1740,10 @@ struct MacContentView: View {
             }
 
             Grid(alignment: .leading, horizontalSpacing: Geist.Spacing.s3, verticalSpacing: Geist.Spacing.s2) {
-                ForEach(GameButton.allCases) { button in
+                ForEach(server.gamepadCustomization.normalized.elements.filter { $0.kind != .text && $0.kind != .decoration }) { element in
+                    let button = element.inputID
                     GridRow {
-                        Text(button.displayName)
+                        Text(element.label)
                             .geistTypography(.heading14)
                             .foregroundStyle(Geist.color(.gray1000, scheme: colorScheme))
                             .frame(width: 82, alignment: .leading)
@@ -1980,55 +1983,6 @@ private struct MacInputDiagnosticsRows: View {
     }
 }
 
-private enum MacOnboardingStep: String, CaseIterable, Identifiable, Hashable {
-    case welcome
-    case permissions
-    case connect
-    case editor
-
-    var id: Self { self }
-
-    var title: String {
-        switch self {
-        case .welcome: "Welcome"
-        case .permissions: "Permissions"
-        case .connect: "Connect iPhone"
-        case .editor: "Keypad Editor"
-        }
-    }
-
-    var subtitle: String {
-        switch self {
-        case .welcome: "What Thumble does"
-        case .permissions: "Allow shortcuts and local discovery"
-        case .connect: "Pair over local or nearby network"
-        case .editor: "Build and sync your controls"
-        }
-    }
-
-    var systemImage: String {
-        switch self {
-        case .welcome: "macbook.and.iphone"
-        case .permissions: "checkmark.shield.fill"
-        case .connect: "qrcode.viewfinder"
-        case .editor: "slider.horizontal.3"
-        }
-    }
-
-    /// Slide tag shown above the title, e.g. "01 / WELCOME".
-    var tag: String {
-        let index = MacOnboardingStep.allCases.firstIndex(of: self) ?? 0
-        let label: String
-        switch self {
-        case .welcome: label = "WELCOME"
-        case .permissions: label = "PERMISSIONS"
-        case .connect: label = "CONNECT"
-        case .editor: label = "EDITOR"
-        }
-        return String(format: "%02d / %@", index + 1, label)
-    }
-}
-
 private struct MacOnboardingView: View {
     @EnvironmentObject private var server: MacControllerServer
     @Environment(\.colorScheme) private var colorScheme
@@ -2048,10 +2002,16 @@ private struct MacOnboardingView: View {
         VStack(spacing: 0) {
             dots
 
-            stepContent
+            GeometryReader { geometry in
+                ScrollView(.vertical) {
+                    stepContent
+                        .frame(maxWidth: .infinity)
+                        .frame(minHeight: geometry.size.height)
+                }
                 .id(selectedStep)
                 .transition(stepTransition)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            .clipped()
 
             bottomBar
         }
@@ -2129,7 +2089,7 @@ private struct MacOnboardingView: View {
                 .accessibilityAddTraits(isSelected ? .isSelected : [])
             }
         }
-        .animation(.spring(response: 0.4, dampingFraction: 0.75), value: selectedStep)
+        .animation(accessibilityReduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.75), value: selectedStep)
         .padding(.top, 28)
         .padding(.bottom, 16)
     }
@@ -2144,73 +2104,13 @@ private struct MacOnboardingView: View {
         )
     }
 
-    /// time.md-style slide scaffold: mono tag, title, one-sentence subtitle, single content element.
-    private func slideScaffold<Content: View>(
-        title: String,
-        subtitle: String,
-        @ViewBuilder content: () -> Content
-    ) -> some View {
-        VStack(spacing: 0) {
-            Spacer(minLength: 0)
-
-            VStack(spacing: Geist.Spacing.s4) {
-                Text(selectedStep.tag)
-                    .geistTypography(.label12Mono)
-                    .foregroundStyle(Geist.color(.gray800, scheme: colorScheme))
-
-                Text(title)
-                    .geistTypography(.heading32)
-                    .foregroundStyle(Geist.color(.gray1000, scheme: colorScheme))
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityAddTraits(.isHeader)
-
-                Text(subtitle)
-                    .geistTypography(.copy16)
-                    .foregroundStyle(Geist.color(.gray900, scheme: colorScheme))
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: 520)
-            }
-
-            content()
-                .padding(.top, Geist.Spacing.s6)
-                .frame(maxWidth: 640)
-
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, Geist.Spacing.s8)
-        .frame(maxWidth: 720)
-    }
-
-    private func slideFeatureRow(icon: String, title: String, text: String) -> some View {
-        HStack(alignment: .top, spacing: Geist.Spacing.s3) {
-            Image(systemName: icon)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Geist.color(.blue900, scheme: colorScheme))
-                .frame(width: 30, height: 30)
-                .background(Geist.color(.blue100, scheme: colorScheme), in: Circle())
-
-            VStack(alignment: .leading, spacing: Geist.Spacing.s1) {
-                Text(title)
-                    .geistTypography(.heading14)
-                    .foregroundStyle(Geist.color(.gray1000, scheme: colorScheme))
-                Text(text)
-                    .geistTypography(.copy13)
-                    .foregroundStyle(Geist.color(.gray900, scheme: colorScheme))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            Spacer(minLength: 0)
-        }
-        .accessibilityElement(children: .combine)
-    }
-
     @ViewBuilder
     private var stepContent: some View {
         switch selectedStep {
         case .welcome:
             welcomeStep
+        case .iPhoneApp, .localNetwork:
+            MacOnboardingSetupStepView(step: selectedStep)
         case .permissions:
             permissionsStep
         case .connect:
@@ -2221,33 +2121,22 @@ private struct MacOnboardingView: View {
     }
 
     private var welcomeStep: some View {
-        slideScaffold(
-            title: "Your shortcuts, exactly where you need them.",
-            subtitle: "Thumble turns iPhone presses into keyboard shortcuts, pointer actions, or controller input for the focused Mac app."
-        ) {
+        MacOnboardingSlide(step: .welcome) {
             MacOnboardingSystemPreview()
         }
     }
 
     private var permissionsStep: some View {
-        slideScaffold(
-            title: "Grant two focused permissions.",
-            subtitle: "macOS controls keyboard injection and local discovery. Shortcuts will not fire until Accessibility is allowed."
-        ) {
+        MacOnboardingSlide(step: .permissions) {
             VStack(alignment: .leading, spacing: Geist.Spacing.s3) {
-                MacOnboardingPermissionCard(
-                    title: "Accessibility",
-                    subtitle: server.accessibilityTrusted ? "Thumble can send keyboard and pointer events." : "Open System Settings → Privacy & Security → Accessibility, then enable Thumble Mac.",
-                    systemImage: "checkmark.shield.fill",
-                    isComplete: server.accessibilityTrusted
-                )
-
-                MacOnboardingPermissionCard(
-                    title: "Local Network",
-                    subtitle: "If macOS asks, allow Thumble to find devices on your local network. This enables Smart Connect and QR pairing.",
-                    systemImage: "network",
-                    isComplete: server.isRunning
-                )
+                ForEach(MacOnboardingStep.permissions.instructions) { instruction in
+                    MacOnboardingPermissionCard(
+                        title: instruction.title,
+                        subtitle: server.accessibilityTrusted ? "Thumble can send keyboard and pointer events." : instruction.text,
+                        systemImage: instruction.systemImage,
+                        isComplete: server.accessibilityTrusted
+                    )
+                }
 
                 HStack(spacing: Geist.Spacing.s2) {
                     Button("Request Accessibility Permission") { server.promptForAccessibility() }
@@ -2260,11 +2149,13 @@ private struct MacOnboardingView: View {
     }
 
     private var connectStep: some View {
-        slideScaffold(
-            title: "Connect the iPhone.",
-            subtitle: "Open Thumble on iPhone and scan this code, or use Smart Connect on the same network."
-        ) {
-            pairingCard
+        MacOnboardingSlide(step: .connect) {
+            VStack(alignment: .leading, spacing: Geist.Spacing.s3) {
+                pairingCard
+                ForEach(MacOnboardingStep.connect.instructions) { instruction in
+                    MacOnboardingFeatureRow(instruction: instruction)
+                }
+            }
         }
     }
 
@@ -2312,26 +2203,11 @@ private struct MacOnboardingView: View {
     }
 
     private var editorStep: some View {
-        slideScaffold(
-            title: "Make the keypad yours.",
-            subtitle: "A short spotlight tour walks you through the editor when you arrive."
-        ) {
+        MacOnboardingSlide(step: .editor) {
             VStack(alignment: .leading, spacing: Geist.Spacing.s3) {
-                slideFeatureRow(
-                    icon: "wand.and.rulers",
-                    title: "Build on the canvas",
-                    text: "Drag controls, add joysticks and trackpads, or draw your own keys."
-                )
-                slideFeatureRow(
-                    icon: "iphone.gen3",
-                    title: "Match your iPhone",
-                    text: "Pick the connected device frame so controls land where your thumbs expect."
-                )
-                slideFeatureRow(
-                    icon: "keyboard",
-                    title: "Record shortcuts",
-                    text: "Press any Mac shortcut onto a control — it saves automatically."
-                )
+                ForEach(MacOnboardingStep.editor.instructions) { instruction in
+                    MacOnboardingFeatureRow(instruction: instruction)
+                }
             }
         }
     }
@@ -2647,7 +2523,7 @@ private struct InfoTile: View {
 struct MacKeypadMiniPreview: View {
     @Environment(\.colorScheme) private var colorScheme
     let customization: GamepadCustomization
-    var defaultLabelProvider: ((GameButton) -> String?)? = nil
+    var defaultLabelProvider: ((KeypadElementID) -> String?)? = nil
 
     private var designSize: CGSize {
         customization.deviceCanvas.editorDeviceFrame.screenRect.size
@@ -2689,7 +2565,7 @@ struct MacKeypadMiniPreview: View {
                             control: control,
                             customization: customization,
                             state: .normal,
-                            secondaryBindingText: defaultLabelProvider?(control.mappedButton)
+                            secondaryBindingText: control.inputID.flatMap { defaultLabelProvider?($0) }
                         )
                         .environment(\.colorScheme, previewColorScheme)
                         .rotationEffect(.degrees(control.rotationDegrees))
@@ -2872,10 +2748,10 @@ private struct MacLocalInputTestConsole: View {
     @Environment(\.colorScheme) private var colorScheme
     let compact: Bool
 
-    @State private var selectedButton: GameButton = .jump
+    @State private var selectedButton: KeypadElementID = .preset(5)
     @State private var holdMilliseconds: Double = 120
-    @State private var locallyHeldButtons: Set<GameButton> = []
-    @State private var pendingTapButton: GameButton?
+    @State private var locallyHeldButtons: Set<KeypadElementID> = []
+    @State private var pendingTapButton: KeypadElementID?
     @State private var pendingTapTask: Task<Void, Never>?
 
     var body: some View {
@@ -2910,16 +2786,29 @@ private struct MacLocalInputTestConsole: View {
         .disabled(!server.accessibilityTrusted || !server.isRunning)
         .opacity((server.accessibilityTrusted && server.isRunning) ? 1 : 0.52)
         .onDisappear(perform: releaseLocallyHeldInputs)
+        .onAppear(perform: selectInstalledInputIfNeeded)
+        .onChange(of: testElements.map(\.id)) { _, _ in selectInstalledInputIfNeeded() }
+        .disabled(!testElements.contains { $0.inputID == selectedButton })
         .onChange(of: selectedButton) { oldButton, _ in
             release(oldButton)
         }
     }
 
+    private var testElements: [KeypadElement] {
+        server.gamepadCustomization.normalized.elements.filter { $0.kind != .text && $0.kind != .decoration }
+    }
+
+    private func selectInstalledInputIfNeeded() {
+        if !testElements.contains(where: { $0.inputID == selectedButton }), let first = testElements.first {
+            selectedButton = first.inputID
+        }
+    }
+
     private var buttonPicker: some View {
         Picker("Test input", selection: $selectedButton) {
-            ForEach(GameButton.allCases) { button in
-                Text("\(button.displayName) · \(server.keyLabel(for: button))")
-                    .tag(button)
+            ForEach(testElements) { element in
+                Text("\(element.label) · \(server.keyLabel(for: element.inputID))")
+                    .tag(element.inputID)
             }
         }
         .pickerStyle(.menu)
@@ -2958,13 +2847,13 @@ private struct MacLocalInputTestConsole: View {
             .keyboardShortcut(.escape, modifiers: [.command])
     }
 
-    private func press(_ button: GameButton) {
+    private func press(_ button: KeypadElementID) {
         guard !locallyHeldButtons.contains(button) else { return }
         locallyHeldButtons.insert(button)
         server.sendTestDown(button)
     }
 
-    private func release(_ button: GameButton, cancelsPendingTap: Bool = true) {
+    private func release(_ button: KeypadElementID, cancelsPendingTap: Bool = true) {
         if cancelsPendingTap, pendingTapButton == button {
             pendingTapTask?.cancel()
             pendingTapTask = nil
@@ -2974,7 +2863,7 @@ private struct MacLocalInputTestConsole: View {
         server.sendTestUp(button)
     }
 
-    private func tap(_ button: GameButton) {
+    private func tap(_ button: KeypadElementID) {
         pendingTapTask?.cancel()
         pendingTapTask = nil
         pendingTapButton = nil
@@ -3051,7 +2940,7 @@ private func registerMacGamepadUndoSnapshot(
     guard let undoManager else { return }
     undoManager.registerUndo(withTarget: undoTarget) { _ in
         let redoSnapshot = server.editorUndoSnapshot()
-        server.restoreEditorUndoSnapshot(snapshot, reason: actionName)
+        guard server.restoreEditorUndoSnapshot(snapshot, reason: actionName) else { return }
         registerMacGamepadUndoSnapshot(
             redoSnapshot,
             undoManager: undoManager,
@@ -3208,7 +3097,7 @@ private struct MacGamepadSelectedKeyBindingInspector: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.undoManager) private var undoManager
     @State private var undoTarget = MacGamepadEditorUndoTarget()
-    let button: GameButton
+    let button: KeypadElementID
 
     private var gamepadButtonSelection: Binding<VirtualGamepadButton?> {
         Binding(
@@ -3305,17 +3194,18 @@ private struct MacGamepadKeyBindingsInspector: View {
             }
 
             VStack(spacing: Geist.Spacing.s2) {
-                ForEach(GameButton.allCases) { button in
-                    keyBindingRow(for: button)
+                ForEach(server.gamepadCustomization.normalized.elements.filter { $0.kind != .text && $0.kind != .decoration }) { element in
+                    keyBindingRow(for: element)
                 }
             }
         }
     }
 
-    private func keyBindingRow(for button: GameButton) -> some View {
-        VStack(alignment: .leading, spacing: Geist.Spacing.s2) {
+    private func keyBindingRow(for element: KeypadElement) -> some View {
+        let button = element.inputID
+        return VStack(alignment: .leading, spacing: Geist.Spacing.s2) {
             HStack(alignment: .firstTextBaseline, spacing: Geist.Spacing.s3) {
-                Text(button.displayName)
+                Text(element.label)
                     .geistTypography(.heading14)
                     .foregroundStyle(Geist.color(.gray1000, scheme: colorScheme))
                     .lineLimit(1)
@@ -3542,7 +3432,7 @@ private struct MacKeyBindingRecorderField: View {
     @Environment(\.undoManager) private var undoManager
     @State private var undoTarget = MacGamepadEditorUndoTarget()
 
-    let button: GameButton
+    let button: KeypadElementID
     @State private var recorderID = UUID().uuidString
     @State private var isRecording = false
     @State private var eventMonitor: Any?

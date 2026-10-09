@@ -446,7 +446,7 @@ impl futures::Stream for AxumRpcStream {
                         eprintln!("gateway: dropped oversized session frame");
                         return std::task::Poll::Ready(None);
                     }
-                    match serde_json::from_slice(&bytes) {
+                    match thumble_core::decode_unique_json(&bytes) {
                         Ok(message) => return std::task::Poll::Ready(Some(message)),
                         Err(error) => {
                             eprintln!("gateway: dropped undecodable session frame: {error}");
@@ -810,9 +810,35 @@ async fn security_headers(
     response
 }
 
+/// Inspect the original MCP body before rmcp's Value/argument decoding loses
+/// repeated keys. Authentication remains outermost; GET/DELETE have no JSON body.
+async fn reject_ambiguous_mcp_json(
+    State(limit): State<usize>,
+    request: Request<axum::body::Body>,
+    next: Next,
+) -> Response {
+    if request.method() != axum::http::Method::POST {
+        return next.run(request).await;
+    }
+    let (parts, body) = request.into_parts();
+    let bytes = match axum::body::to_bytes(body, limit).await {
+        Ok(bytes) => bytes,
+        Err(_) => return StatusCode::PAYLOAD_TOO_LARGE.into_response(),
+    };
+    if let Err(error) = thumble_core::validate_unique_json(&bytes) {
+        if error.to_string().contains("duplicate JSON object key") {
+            return (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error":"ambiguous_json"}))).into_response();
+        }
+        // Preserve rmcp's HTTP/content-negotiation and malformed-JSON errors.
+        // No successfully decoded payload can bypass the uniqueness check.
+    }
+    next.run(Request::from_parts(parts, axum::body::Body::from(bytes))).await
+}
+
 pub fn router(state: Arc<AppState>) -> Router {
     let mcp = Router::new()
         .route_service("/mcp", mcp_service(state.clone()))
+        .layer(axum::middleware::from_fn_with_state(thumble_tunnel::MAXIMUM_FRAME_BYTES, reject_ambiguous_mcp_json))
         .layer(tower_http::limit::RequestBodyLimitLayer::new(
             thumble_tunnel::MAXIMUM_FRAME_BYTES,
         ))
@@ -822,6 +848,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         ));
     let builder_mcp = Router::new()
         .route_service("/builder/mcp", builder_mcp_service(state.clone()))
+        .layer(axum::middleware::from_fn_with_state(BUILDER_MCP_MAXIMUM_BODY_BYTES, reject_ambiguous_mcp_json))
         .layer(tower_http::limit::RequestBodyLimitLayer::new(
             BUILDER_MCP_MAXIMUM_BODY_BYTES,
         ))

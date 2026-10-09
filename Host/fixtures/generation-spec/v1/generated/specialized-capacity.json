@@ -1,27 +1,27 @@
 {
   "confidence": "low",
   "keyBindings": [
-    "custom1",
+    "7B6AFA3F-81E3-5B0B-930D-D82A3EC9529E",
     {
       "key": "A",
       "modifiers": []
     },
-    "custom2",
+    "FC6D4EA4-3619-5BD3-84CC-7609D5F64E07",
     {
       "key": "B",
       "modifiers": []
     },
-    "custom4",
+    "28D6A0AD-5CF7-5A27-9A63-E0364BC887F2",
     {
       "key": "D",
       "modifiers": []
     },
-    "custom5",
+    "1FF04475-6D1E-57D5-8A41-4D454D78C7EE",
     {
       "key": "E",
       "modifiers": []
     },
-    "custom7",
+    "1A539C00-8D79-55CB-A9AC-45372B6E737D",
     {
       "key": "G",
       "modifiers": []
@@ -33,119 +33,42 @@
   "profile": {
     "customization": {
       "accentStyle": "purple",
-      "buttonCustomizations": [
-        "up",
-        {
-          "heightScale": 1.0,
-          "isHidden": true,
-          "isLocationLocked": false,
-          "rotationDegrees": 0,
-          "shadowStrength": 1.0,
-          "widthScale": 1.0,
-          "zIndex": 0
-        },
-        "down",
-        {
-          "heightScale": 1.0,
-          "isHidden": true,
-          "isLocationLocked": false,
-          "rotationDegrees": 0,
-          "shadowStrength": 1.0,
-          "widthScale": 1.0,
-          "zIndex": 0
-        },
-        "left",
-        {
-          "heightScale": 1.0,
-          "isHidden": true,
-          "isLocationLocked": false,
-          "rotationDegrees": 0,
-          "shadowStrength": 1.0,
-          "widthScale": 1.0,
-          "zIndex": 0
-        },
-        "right",
-        {
-          "heightScale": 1.0,
-          "isHidden": true,
-          "isLocationLocked": false,
-          "rotationDegrees": 0,
-          "shadowStrength": 1.0,
-          "widthScale": 1.0,
-          "zIndex": 0
-        },
-        "jump",
-        {
-          "heightScale": 1.0,
-          "isHidden": true,
-          "isLocationLocked": false,
-          "rotationDegrees": 0,
-          "shadowStrength": 1.0,
-          "widthScale": 1.0,
-          "zIndex": 0
-        },
-        "attack",
-        {
-          "heightScale": 1.0,
-          "isHidden": true,
-          "isLocationLocked": false,
-          "rotationDegrees": 0,
-          "shadowStrength": 1.0,
-          "widthScale": 1.0,
-          "zIndex": 0
-        },
-        "dash",
-        {
-          "heightScale": 1.0,
-          "isHidden": true,
-          "isLocationLocked": false,
-          "rotationDegrees": 0,
-          "shadowStrength": 1.0,
-          "widthScale": 1.0,
-          "zIndex": 0
-        },
-        "focus",
-        {
-          "heightScale": 1.0,
-          "isHidden": true,
-          "isLocationLocked": false,
-          "rotationDegrees": 0,
-          "shadowStrength": 1.0,
-          "widthScale": 1.0,
-          "zIndex": 0
-        },
-        "map",
-        {
-          "heightScale": 1.0,
-          "isHidden": true,
-          "isLocationLocked": false,
-          "rotationDegrees": 0,
-          "shadowStrength": 1.0,
-          "widthScale": 1.0,
-          "zIndex": 0
-        },
-        "pause",
-        {
-          "heightScale": 1.0,
-          "isHidden": true,
-          "isLocationLocked": false,
-          "rotationDegrees": 0,
-          "shadowStrength": 1.0,
-          "widthScale": 1.0,
-          "zIndex": 0
-        }
-      ],
+      "buttonCustomizations": [],
       "colorSchemePreference": "system",
       "controlScale": "standard",
       "customButtons": [
         {
           "controlKind": "joystick",
-          "id": "95e98733-8394-53b3-9a63-95f364da5cad",
+          "id": "7B6AFA3F-81E3-5B0B-930D-D82A3EC9529E",
           "joystickMapping": {
-            "down": "down",
-            "left": "left",
-            "right": "right",
-            "up": "up"
+            "down": {
+              "gamepadButtons": [],
+              "keyboard": {
+                "keyCode": 125,
+                "modifiersRawValue": 0
+              }
+            },
+            "left": {
+              "gamepadButtons": [],
+              "keyboard": {
+                "keyCode": 123,
+                "modifiersRawValue": 0
+              }
+            },
+            "right": {
+              "gamepadButtons": [],
+              "keyboard": {
+                "keyCode": 124,
+                "modifiersRawValue": 0
+              }
+            },
+            "up": {
+              "gamepadButtons": [],
+              "keyboard": {
+                "keyCode": 126,
+                "modifiersRawValue": 0
+              }
+            }
           },
           "joystickOutputSettings": {
             "analogTarget": "none",
@@ -176,17 +99,40 @@
             "widthScale": 1.35,
             "zIndex": 0
           },
-          "mappedButton": "custom1",
           "visualRole": "joystick"
         },
         {
           "controlKind": "joystick",
-          "id": "e31e8da3-f034-538f-8e47-cdac8de728a3",
+          "id": "FC6D4EA4-3619-5BD3-84CC-7609D5F64E07",
           "joystickMapping": {
-            "down": "down",
-            "left": "left",
-            "right": "right",
-            "up": "up"
+            "down": {
+              "gamepadButtons": [],
+              "keyboard": {
+                "keyCode": 125,
+                "modifiersRawValue": 0
+              }
+            },
+            "left": {
+              "gamepadButtons": [],
+              "keyboard": {
+                "keyCode": 123,
+                "modifiersRawValue": 0
+              }
+            },
+            "right": {
+              "gamepadButtons": [],
+              "keyboard": {
+                "keyCode": 124,
+                "modifiersRawValue": 0
+              }
+            },
+            "up": {
+              "gamepadButtons": [],
+              "keyboard": {
+                "keyCode": 126,
+                "modifiersRawValue": 0
+              }
+            }
           },
           "joystickOutputSettings": {
             "analogTarget": "none",
@@ -217,12 +163,11 @@
             "widthScale": 1.35,
             "zIndex": 0
           },
-          "mappedButton": "custom2",
           "visualRole": "joystick"
         },
         {
           "controlKind": "trigger",
-          "id": "d1f85e97-c08b-5757-b400-50f8cfd4eefa",
+          "id": "28D6A0AD-5CF7-5A27-9A63-E0364BC887F2",
           "label": "Trigger One",
           "layout": {
             "accentStyle": "monochrome",
@@ -244,7 +189,6 @@
             "widthScale": 1.12,
             "zIndex": 0
           },
-          "mappedButton": "custom4",
           "triggerSettings": {
             "deadZone": 0.03,
             "digitalThreshold": 0.5,
@@ -257,7 +201,7 @@
         },
         {
           "controlKind": "trigger",
-          "id": "cd604c20-d5a4-5bc2-a4a5-b300a32f1138",
+          "id": "1FF04475-6D1E-57D5-8A41-4D454D78C7EE",
           "label": "Trigger Two",
           "layout": {
             "accentStyle": "monochrome",
@@ -279,7 +223,6 @@
             "widthScale": 1.12,
             "zIndex": 0
           },
-          "mappedButton": "custom5",
           "triggerSettings": {
             "deadZone": 0.03,
             "digitalThreshold": 0.5,
@@ -292,7 +235,7 @@
         },
         {
           "controlKind": "trackpad",
-          "id": "213a5b40-5a29-5437-b1e6-b2cdf42ee0a1",
+          "id": "1A539C00-8D79-55CB-A9AC-45372B6E737D",
           "label": "Trackpad One",
           "layout": {
             "accentStyle": "monochrome",
@@ -314,7 +257,6 @@
             "widthScale": 1.25,
             "zIndex": 0
           },
-          "mappedButton": "custom7",
           "trackpadSettings": {
             "naturalScrolling": true,
             "scrollSensitivity": 0.85,
@@ -330,12 +272,36 @@
       },
       "elements": [
         {
-          "id": "95e98733-8394-53b3-9a63-95f364da5cad",
+          "id": "7B6AFA3F-81E3-5B0B-930D-D82A3EC9529E",
           "joystickMapping": {
-            "down": "down",
-            "left": "left",
-            "right": "right",
-            "up": "up"
+            "down": {
+              "gamepadButtons": [],
+              "keyboard": {
+                "keyCode": 125,
+                "modifiersRawValue": 0
+              }
+            },
+            "left": {
+              "gamepadButtons": [],
+              "keyboard": {
+                "keyCode": 123,
+                "modifiersRawValue": 0
+              }
+            },
+            "right": {
+              "gamepadButtons": [],
+              "keyboard": {
+                "keyCode": 124,
+                "modifiersRawValue": 0
+              }
+            },
+            "up": {
+              "gamepadButtons": [],
+              "keyboard": {
+                "keyCode": 126,
+                "modifiersRawValue": 0
+              }
+            }
           },
           "joystickOutputSettings": {
             "analogTarget": "none",
@@ -367,17 +333,80 @@
             "widthScale": 1.35,
             "zIndex": 0
           },
-          "legacySlot": "custom1",
-          "partOutputs": [],
+          "output": {
+            "gamepadButtons": [],
+            "keyboard": {
+              "keyCode": 0,
+              "modifiersRawValue": 0
+            }
+          },
+          "partOutputs": [
+            "joystick_up",
+            {
+              "gamepadButtons": [],
+              "keyboard": {
+                "keyCode": 126,
+                "modifiersRawValue": 0
+              }
+            },
+            "joystick_down",
+            {
+              "gamepadButtons": [],
+              "keyboard": {
+                "keyCode": 125,
+                "modifiersRawValue": 0
+              }
+            },
+            "joystick_left",
+            {
+              "gamepadButtons": [],
+              "keyboard": {
+                "keyCode": 123,
+                "modifiersRawValue": 0
+              }
+            },
+            "joystick_right",
+            {
+              "gamepadButtons": [],
+              "keyboard": {
+                "keyCode": 124,
+                "modifiersRawValue": 0
+              }
+            }
+          ],
           "visualRole": "joystick"
         },
         {
-          "id": "e31e8da3-f034-538f-8e47-cdac8de728a3",
+          "id": "FC6D4EA4-3619-5BD3-84CC-7609D5F64E07",
           "joystickMapping": {
-            "down": "down",
-            "left": "left",
-            "right": "right",
-            "up": "up"
+            "down": {
+              "gamepadButtons": [],
+              "keyboard": {
+                "keyCode": 125,
+                "modifiersRawValue": 0
+              }
+            },
+            "left": {
+              "gamepadButtons": [],
+              "keyboard": {
+                "keyCode": 123,
+                "modifiersRawValue": 0
+              }
+            },
+            "right": {
+              "gamepadButtons": [],
+              "keyboard": {
+                "keyCode": 124,
+                "modifiersRawValue": 0
+              }
+            },
+            "up": {
+              "gamepadButtons": [],
+              "keyboard": {
+                "keyCode": 126,
+                "modifiersRawValue": 0
+              }
+            }
           },
           "joystickOutputSettings": {
             "analogTarget": "none",
@@ -409,12 +438,51 @@
             "widthScale": 1.35,
             "zIndex": 0
           },
-          "legacySlot": "custom2",
-          "partOutputs": [],
+          "output": {
+            "gamepadButtons": [],
+            "keyboard": {
+              "keyCode": 11,
+              "modifiersRawValue": 0
+            }
+          },
+          "partOutputs": [
+            "joystick_up",
+            {
+              "gamepadButtons": [],
+              "keyboard": {
+                "keyCode": 126,
+                "modifiersRawValue": 0
+              }
+            },
+            "joystick_down",
+            {
+              "gamepadButtons": [],
+              "keyboard": {
+                "keyCode": 125,
+                "modifiersRawValue": 0
+              }
+            },
+            "joystick_left",
+            {
+              "gamepadButtons": [],
+              "keyboard": {
+                "keyCode": 123,
+                "modifiersRawValue": 0
+              }
+            },
+            "joystick_right",
+            {
+              "gamepadButtons": [],
+              "keyboard": {
+                "keyCode": 124,
+                "modifiersRawValue": 0
+              }
+            }
+          ],
           "visualRole": "joystick"
         },
         {
-          "id": "d1f85e97-c08b-5757-b400-50f8cfd4eefa",
+          "id": "28D6A0AD-5CF7-5A27-9A63-E0364BC887F2",
           "kind": "trigger",
           "label": "Trigger One",
           "layout": {
@@ -437,7 +505,13 @@
             "widthScale": 1.12,
             "zIndex": 0
           },
-          "legacySlot": "custom4",
+          "output": {
+            "gamepadButtons": [],
+            "keyboard": {
+              "keyCode": 2,
+              "modifiersRawValue": 0
+            }
+          },
           "partOutputs": [],
           "triggerSettings": {
             "deadZone": 0.03,
@@ -450,7 +524,7 @@
           "visualRole": "trigger"
         },
         {
-          "id": "cd604c20-d5a4-5bc2-a4a5-b300a32f1138",
+          "id": "1FF04475-6D1E-57D5-8A41-4D454D78C7EE",
           "kind": "trigger",
           "label": "Trigger Two",
           "layout": {
@@ -473,7 +547,13 @@
             "widthScale": 1.12,
             "zIndex": 0
           },
-          "legacySlot": "custom5",
+          "output": {
+            "gamepadButtons": [],
+            "keyboard": {
+              "keyCode": 14,
+              "modifiersRawValue": 0
+            }
+          },
           "partOutputs": [],
           "triggerSettings": {
             "deadZone": 0.03,
@@ -486,7 +566,7 @@
           "visualRole": "trigger"
         },
         {
-          "id": "213a5b40-5a29-5437-b1e6-b2cdf42ee0a1",
+          "id": "1A539C00-8D79-55CB-A9AC-45372B6E737D",
           "kind": "trackpad",
           "label": "Trackpad One",
           "layout": {
@@ -509,7 +589,13 @@
             "widthScale": 1.25,
             "zIndex": 0
           },
-          "legacySlot": "custom7",
+          "output": {
+            "gamepadButtons": [],
+            "keyboard": {
+              "keyCode": 5,
+              "modifiersRawValue": 0
+            }
+          },
           "partOutputs": [],
           "trackpadSettings": {
             "naturalScrolling": true,
@@ -526,7 +612,7 @@
       "showsButtonLabels": true,
       "updatedAt": 0
     },
-    "id": "64542b15-5a6f-5c8d-ba94-99cd24da68f7",
+    "id": "0772045b-0d1e-57c1-8523-0ea4b4602463",
     "name": "Specialized Capacity",
     "orientationPreference": "automatic",
     "outputMode": "keyboard",

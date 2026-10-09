@@ -1,15 +1,18 @@
 mod common;
 
-use common::{no_tokens, pair};
+use common::{no_tokens, pair, set_owned_output};
 use serde_json::json;
 use thumble_core::{
     Effect, HostCore, KeyBinding, OutputBinding, PersistentState, VirtualGamepadButton,
     DEFAULT_PROFILE_ID,
 };
 use thumble_protocol::{
-    ButtonPressState, ControllerMessage, ControllerMessageType, ControllerWireCodec, GameButton,
+    ButtonPressState, ControllerMessage, ControllerMessageType, ControllerWireCodec, KeypadElementID,
     KeypadElementInputPart, VirtualGamepadStick, VirtualGamepadTrigger,
 };
+
+const NEXT_PROFILE: &str = "53cb646b-39f0-4874-a4e1-405a1edc0fbe";
+const ELEMENT: &str = "779260ae-bfbc-499f-ad09-b3856dd2a1e3";
 
 fn state() -> PersistentState {
     let mut state = PersistentState::minimal("server-1").unwrap();
@@ -18,12 +21,8 @@ fn state() -> PersistentState {
         keyboard: Some(KeyBinding::new(36, 0)),
         gamepad_buttons: ["south", "futureButton"].map(str::to_owned).into(),
     };
-    let outputs = state
-        .profile_output_bindings
-        .get_mut(DEFAULT_PROFILE_ID)
-        .unwrap();
-    outputs.insert(GameButton::Jump, mixed.clone());
-    outputs.insert(GameButton::Attack, mixed);
+    set_owned_output(&mut state, DEFAULT_PROFILE_ID, KeypadElementID::preset(5), mixed.clone());
+    set_owned_output(&mut state, DEFAULT_PROFILE_ID, KeypadElementID::preset(6), mixed);
     state
 }
 
@@ -31,13 +30,13 @@ fn core() -> HostCore {
     let mut state = state();
     state
         .profiles
-        .push(json!({"id":"next", "outputMode":"keyboard"}));
+        .push(json!({"id":NEXT_PROFILE, "name":"Keyboard", "outputMode":"keyboard", "customization":{"elements":[]}}));
     let mut core = HostCore::new(state, "111111").unwrap();
     pair(&mut core, 1, "token");
     core
 }
 
-fn digital(button: GameButton, pressed: bool, sequence: u64, press: u64) -> ControllerMessage {
+fn digital(button: KeypadElementID, pressed: bool, sequence: u64, press: u64) -> ControllerMessage {
     let mut message = ControllerMessage::new(ControllerMessageType::Button, 0);
     message.button = Some(button);
     message.state = Some(if pressed {
@@ -45,7 +44,7 @@ fn digital(button: GameButton, pressed: bool, sequence: u64, press: u64) -> Cont
     } else {
         ButtonPressState::Up
     });
-    message.input_protocol_version = Some(2);
+    message.input_protocol_version = Some(3);
     message.input_generation = Some(1);
     message.input_sequence = Some(sequence);
     message.press_identifier = Some(press);
@@ -54,7 +53,7 @@ fn digital(button: GameButton, pressed: bool, sequence: u64, press: u64) -> Cont
 
 fn stick(stick: VirtualGamepadStick, sequence: u64, x: f64, y: f64) -> ControllerMessage {
     let mut message = ControllerMessage::new(ControllerMessageType::GamepadAnalog, 0);
-    message.input_protocol_version = Some(2);
+    message.input_protocol_version = Some(3);
     message.input_generation = Some(1);
     message.analog_sequence = Some(sequence);
     message.analog_stick = Some(stick);
@@ -141,35 +140,91 @@ fn local_held_tests_share_phone_ownership_and_expire_when_the_cli_exits() {
     let mut core = core();
     let binding = core
         .persistent_state()
-        .resolve_button_output(GameButton::Jump)
+        .resolve_button_output(KeypadElementID::preset(5))
         .unwrap();
     let local = core
-        .set_local_output_binding("button:jump", Some(binding), true, 0)
+        .set_local_output_binding("button:00000000-0000-0000-0000-000000000105", Some(binding), true, 0)
         .unwrap();
     assert_eq!(buttons(&local), vec![(VirtualGamepadButton::South, true)]);
-    assert!(buttons(&send(&mut core, digital(GameButton::Jump, true, 1, 42), 10)).is_empty());
+    assert!(buttons(&send(&mut core, digital(KeypadElementID::preset(5), true, 1, 42), 10)).is_empty());
     let up = core
-        .set_local_output_binding("button:jump", None, false, 20)
+        .set_local_output_binding("button:00000000-0000-0000-0000-000000000105", None, false, 20)
         .unwrap();
     assert!(buttons(&up).is_empty());
     assert_eq!(
         buttons(&send(
             &mut core,
-            digital(GameButton::Jump, false, 2, 42),
+            digital(KeypadElementID::preset(5), false, 2, 42),
             30
         )),
         vec![(VirtualGamepadButton::South, false)]
     );
     let binding = core
         .persistent_state()
-        .resolve_button_output(GameButton::Jump)
+        .resolve_button_output(KeypadElementID::preset(5))
         .unwrap();
-    core.set_local_output_binding("button:jump", Some(binding), true, 100)
+    core.set_local_output_binding("button:00000000-0000-0000-0000-000000000105", Some(binding), true, 100)
         .unwrap();
     assert!(buttons(&core.expire_holds(30_099, 1_750)).is_empty());
     assert_eq!(
         buttons(&core.expire_holds(30_100, 1_750)),
         vec![(VirtualGamepadButton::South, false)]
+    );
+}
+
+#[test]
+fn dreamcast_template_trigger_inputs_use_trigger_channels_without_shoulders() {
+    let fixture: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../fixtures/controller-templates/v1/dreamcast.json"
+    ))
+    .unwrap();
+    let mut profile = fixture["profile"].clone();
+    profile["outputMode"] = json!("controller");
+    let owner = |label: &str| {
+        profile["customization"]["elements"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|element| element["label"] == label)
+            .unwrap()["id"]
+            .as_str()
+            .and_then(KeypadElementID::parse)
+            .unwrap()
+    };
+    let left = owner("L");
+    let right = owner("R");
+    assert_ne!(left, right);
+    let mut state = PersistentState::minimal("dreamcast-runtime-test").unwrap();
+    state.active_profile_id = profile["id"].as_str().unwrap().into();
+    state.default_profile_id = state.active_profile_id.clone();
+    state.profiles = vec![profile];
+    state.key_bindings = Default::default();
+    state.output_bindings = Default::default();
+    state.profile_key_bindings.clear();
+    state.profile_output_bindings.clear();
+    let mut core = HostCore::new(state, "111111").unwrap();
+    pair(&mut core, 1, "token");
+    let left_down = send(&mut core, digital(left, true, 1, 10), 0);
+    let right_down = send(&mut core, digital(right, true, 2, 20), 1);
+    assert_eq!(
+        buttons(&left_down),
+        vec![(VirtualGamepadButton::LeftTriggerButton, true)]
+    );
+    assert_eq!(
+        buttons(&right_down),
+        vec![(VirtualGamepadButton::RightTriggerButton, true)]
+    );
+    assert!(!left_down.iter().chain(&right_down).any(|effect| matches!(
+        effect,
+        Effect::KeyDown(_) | Effect::KeyUp(_) | Effect::TapSequence(_)
+    )));
+    assert_eq!(
+        buttons(&send(&mut core, digital(left, false, 3, 10), 2)),
+        vec![(VirtualGamepadButton::LeftTriggerButton, false)]
+    );
+    assert_eq!(
+        buttons(&send(&mut core, digital(right, false, 4, 20), 3)),
+        vec![(VirtualGamepadButton::RightTriggerButton, false)]
     );
 }
 
@@ -181,30 +236,23 @@ fn keyboard_sequences_do_not_skip_gamepad_holds_and_digital_triggers_are_indepen
         thumble_core::KeyStroke::new(48, 0),
     ])
     .unwrap();
-    state
-        .profile_output_bindings
-        .get_mut(DEFAULT_PROFILE_ID)
-        .unwrap()
-        .insert(
-            GameButton::Jump,
-            OutputBinding {
-                keyboard: Some(keyboard.clone()),
-                gamepad_buttons: ["leftTriggerButton".to_owned()].into(),
-            },
-        );
+    set_owned_output(&mut state, DEFAULT_PROFILE_ID, KeypadElementID::preset(5), OutputBinding {
+        keyboard: Some(keyboard.clone()),
+        gamepad_buttons: ["leftTriggerButton".to_owned()].into(),
+    });
     let mut core = HostCore::new(state, "111111").unwrap();
     pair(&mut core, 1, "token");
-    let down = send(&mut core, digital(GameButton::Jump, true, 1, 10), 0);
+    let down = send(&mut core, digital(KeypadElementID::preset(5), true, 1, 10), 0);
     assert!(down.contains(&Effect::TapSequence(keyboard.strokes())));
     assert_eq!(
         buttons(&down),
         vec![(VirtualGamepadButton::LeftTriggerButton, true)]
     );
     assert!(analog(&down).is_empty());
-    let duplicate = send(&mut core, digital(GameButton::Jump, true, 2, 10), 40);
+    let duplicate = send(&mut core, digital(KeypadElementID::preset(5), true, 2, 10), 40);
     assert!(buttons(&duplicate).is_empty());
     assert!(!duplicate.contains(&Effect::TapSequence(keyboard.strokes())));
-    let overlap = send(&mut core, digital(GameButton::Jump, true, 3, 11), 50);
+    let overlap = send(&mut core, digital(KeypadElementID::preset(5), true, 3, 11), 50);
     assert!(overlap.contains(&Effect::TapSequence(keyboard.strokes())));
     assert!(buttons(&overlap).is_empty());
     assert!(buttons(&core.expire_holds(100, 60)).is_empty());
@@ -215,35 +263,34 @@ fn keyboard_sequences_do_not_skip_gamepad_holds_and_digital_triggers_are_indepen
 }
 
 #[test]
-fn missing_legacy_mode_keeps_mixed_outputs_and_keyboard_gates_direct_elements() {
+fn missing_output_mode_defaults_to_keyboard_and_gates_direct_elements() {
     let mut state = state();
     state.profiles[0]
         .as_object_mut()
         .unwrap()
         .remove("outputMode");
-    assert!(state.needs_virtual_gamepad());
-    state.profiles[0]["customization"] = json!({"elements":[
-        {"id":"e", "output":{"keyboard":{"keyCode":48}, "gamepadButtons":["east"]}}
-    ]});
+    assert!(!state.needs_virtual_gamepad());
+    state.profiles[0]["customization"]["elements"].as_array_mut().unwrap().push(json!(
+        {"id":ELEMENT, "kind":"button", "output":{"keyboard":{"keyCode":48}, "gamepadButtons":["east"]}}
+    ));
     let mut core = HostCore::new(state, "111111").unwrap();
     pair(&mut core, 1, "token");
-    assert_eq!(
-        buttons(&send(&mut core, digital(GameButton::Jump, true, 1, 1), 0)),
-        vec![(VirtualGamepadButton::South, true)]
-    );
+    let first = send(&mut core, digital(KeypadElementID::preset(5), true, 1, 1), 0);
+    assert!(buttons(&first).is_empty());
+    assert!(first.contains(&Effect::KeyDown(KeyBinding::new(36, 0))));
     let mut replacement = core.persistent_state().clone();
     replacement.profiles[0]["outputMode"] = json!("keyboard");
     core.install_validated_persisted_state(replacement);
-    let mut element = digital(GameButton::Jump, true, 2, 2);
+    let mut element = digital(KeypadElementID::preset(5), true, 2, 2);
     element.input_generation = core.status().active_generation;
     element.message_type = ControllerMessageType::ElementInput;
     element.button = None;
-    element.element_id = Some("e".into());
+    element.element_id = Some(ELEMENT.into());
     let effects = send(&mut core, element, 1);
     assert!(buttons(&effects).is_empty());
     assert!(effects.contains(&Effect::KeyDown(KeyBinding::new(48, 0))));
     assert!(
-        core.persistent_state().profiles[0]["customization"]["elements"][0]["output"]
+        core.persistent_state().profiles[0]["customization"]["elements"][10]["output"]
             ["gamepadButtons"]
             .as_array()
             .unwrap()
@@ -252,23 +299,40 @@ fn missing_legacy_mode_keeps_mixed_outputs_and_keyboard_gates_direct_elements() 
 }
 
 #[test]
-fn materialization_scans_custom_buttons_part_outputs_and_resolved_global_fallback() {
-    let base = PersistentState::minimal("server-1").unwrap();
+fn materialization_scans_declared_parts_and_explicit_joystick_outputs_not_orphan_mirrors() {
+    let mut base = PersistentState::minimal("server-1").unwrap();
+    base.profiles[0]["customization"] = json!({"elements":[]});
+    base.key_bindings = Default::default();
+    base.output_bindings = Default::default();
+    base.profile_key_bindings.clear();
+    base.profile_output_bindings.clear();
     for customization in [
         "customization",
         "landscapeCustomization",
         "portraitCustomization",
     ] {
         for control in [
-            json!({"controlKind":"trigger"}),
-            json!({"controlKind":"joystick", "joystickOutputSettings":{"analogTarget":"right_stick"}}),
-            json!({"controlKind":"button", "partOutputs":{"primary":{"gamepadButtons":["south"]}}}),
-            json!({"controlKind":"button", "partOutputs":["primary", {"gamepadButtons":["south"]}]}),
+            json!({"id":ELEMENT, "kind":"trigger"}),
+            json!({"id":ELEMENT, "kind":"joystick", "joystickOutputSettings":{"analogTarget":"right_stick","sendsDigitalDirections":false,"deadZone":0.12,"sensitivity":1,"invertX":false,"invertY":false,"snapToCardinal":false}}),
+            json!({"id":ELEMENT, "kind":"button", "partOutputs":{"trigger_digital":{"gamepadButtons":["south"]}}}),
+            json!({"id":ELEMENT, "kind":"button", "partOutputs":["trigger_digital", {"gamepadButtons":["south"]}]}),
+            json!({"id":ELEMENT, "kind":"joystick", "joystickMapping":{
+                "up":{"gamepadButtons":["dpadUp"]}, "down":{"gamepadButtons":[]},
+                "left":{"gamepadButtons":[]}, "right":{"gamepadButtons":[]}
+            }}),
         ] {
             let mut state = base.clone();
             state.profiles[0]["outputMode"] = json!("custom");
-            state.profiles[0][customization] = json!({"customButtons":[control]});
-            assert!(state.needs_virtual_gamepad());
+            let mut mirror = control.clone();
+            mirror["controlKind"] = control["kind"].clone();
+            mirror.as_object_mut().unwrap().remove("kind");
+            state.profiles[0][customization] = json!({"elements":[control.clone()], "customButtons":[mirror]});
+            state.normalize().unwrap();
+            assert!(state.needs_virtual_gamepad(), "{customization}: {control}");
+            state.profiles[0][customization]["elements"] = json!([]);
+            assert!(!state.needs_virtual_gamepad(), "orphan mirrors cannot create inputs");
+            assert!(state.normalize().is_err(), "orphan mirrors must also reject at the import/startup boundary");
+            state.profiles[0][customization]["elements"] = json!([control]);
             state.profiles[0]["outputMode"] = json!("keyboard");
             assert!(!state.needs_virtual_gamepad());
         }
@@ -278,15 +342,26 @@ fn materialization_scans_custom_buttons_part_outputs_and_resolved_global_fallbac
     state.profile_output_bindings.clear();
     state.profile_key_bindings.clear();
     state.output_bindings.insert(
-        GameButton::Jump,
+        KeypadElementID::preset(5),
         OutputBinding {
             keyboard: None,
             gamepad_buttons: ["south".to_owned()].into(),
         },
     );
+    assert!(!state.needs_virtual_gamepad(), "a global map cannot create a control");
+    state.profiles[0]["customization"]["elements"] = json!([
+        {"id":KeypadElementID::preset(5), "kind":"button", "output":{"gamepadButtons":[]}}
+    ]);
+    assert!(!state.needs_virtual_gamepad(), "an explicit clear beats unrelated global outputs");
+    set_owned_output(&mut state, DEFAULT_PROFILE_ID, KeypadElementID::preset(5), OutputBinding {
+        keyboard: None, gamepad_buttons: ["south".to_owned()].into(),
+    });
     assert!(state.needs_virtual_gamepad());
+    set_owned_output(&mut state, DEFAULT_PROFILE_ID, KeypadElementID::preset(5), OutputBinding {
+        keyboard: None, gamepad_buttons: ["futureButton".to_owned()].into(),
+    });
     state.output_bindings.insert(
-        GameButton::Jump,
+        KeypadElementID::preset(5),
         OutputBinding {
             keyboard: None,
             gamepad_buttons: ["futureButton".to_owned()].into(),
@@ -298,47 +373,40 @@ fn materialization_scans_custom_buttons_part_outputs_and_resolved_global_fallbac
 #[test]
 fn mixed_outputs_refcount_each_button_and_capture_complete_binding() {
     let mut core = core();
-    let first = send(&mut core, digital(GameButton::Jump, true, 1, 10), 0);
+    let first = send(&mut core, digital(KeypadElementID::preset(5), true, 1, 10), 0);
     assert_eq!(buttons(&first), vec![(VirtualGamepadButton::South, true)]);
     assert!(first.contains(&Effect::KeyDown(KeyBinding::new(36, 0))));
-    let overlap = send(&mut core, digital(GameButton::Jump, true, 2, 11), 10);
+    let overlap = send(&mut core, digital(KeypadElementID::preset(5), true, 2, 11), 10);
     assert!(buttons(&overlap).is_empty());
     assert!(overlap.contains(&Effect::PulseKey(KeyBinding::new(36, 0))));
     assert!(buttons(&send(
         &mut core,
-        digital(GameButton::Attack, true, 3, 20),
+        digital(KeypadElementID::preset(6), true, 3, 20),
         20
     ))
     .is_empty());
     assert!(buttons(&send(
         &mut core,
-        digital(GameButton::Jump, false, 4, 10),
+        digital(KeypadElementID::preset(5), false, 4, 10),
         30
     ))
     .is_empty());
     assert!(buttons(&send(
         &mut core,
-        digital(GameButton::Jump, false, 5, 11),
+        digital(KeypadElementID::preset(5), false, 5, 11),
         40
     ))
     .is_empty());
-    let last = send(&mut core, digital(GameButton::Attack, false, 6, 20), 50);
+    let last = send(&mut core, digital(KeypadElementID::preset(6), false, 6, 20), 50);
     assert_eq!(buttons(&last), vec![(VirtualGamepadButton::South, false)]);
     assert!(last.contains(&Effect::KeyUp(KeyBinding::new(36, 0))));
     // A replacement releases the captured old binding, never the new mapping.
-    send(&mut core, digital(GameButton::Jump, true, 7, 30), 60);
+    send(&mut core, digital(KeypadElementID::preset(5), true, 7, 30), 60);
     let mut replacement = core.persistent_state().clone();
-    replacement
-        .profile_output_bindings
-        .get_mut(DEFAULT_PROFILE_ID)
-        .unwrap()
-        .insert(
-            GameButton::Jump,
-            OutputBinding {
-                keyboard: Some(KeyBinding::new(48, 0)),
-                gamepad_buttons: ["east".to_owned()].into(),
-            },
-        );
+    set_owned_output(&mut replacement, DEFAULT_PROFILE_ID, KeypadElementID::preset(5), OutputBinding {
+        keyboard: Some(KeyBinding::new(48, 0)),
+        gamepad_buttons: ["east".to_owned()].into(),
+    });
     let released = core.install_validated_persisted_state(replacement);
     assert_eq!(
         buttons(&released),
@@ -348,7 +416,7 @@ fn mixed_outputs_refcount_each_button_and_capture_complete_binding() {
     assert!(released.contains(&Effect::GamepadReset));
     assert!(buttons(&send(
         &mut core,
-        digital(GameButton::Jump, false, 8, 30),
+        digital(KeypadElementID::preset(5), false, 8, 30),
         70
     ))
     .is_empty());
@@ -357,21 +425,21 @@ fn mixed_outputs_refcount_each_button_and_capture_complete_binding() {
 #[test]
 fn element_and_button_counts_share_typed_outputs_and_ignore_future_names_losslessly() {
     let mut state = state();
-    state.profiles[0]["customization"] = json!({"elements": [{"id":"element", "partOutputs": ["trigger_digital", {"gamepadButtons":["south", "east", "futureButton"]}]}]});
+    state.profiles[0]["customization"]["elements"].as_array_mut().unwrap().push(json!({"id":ELEMENT, "kind":"trigger", "partOutputs": ["trigger_digital", {"gamepadButtons":["south", "east", "futureButton"]}]}));
     let roundtrip: PersistentState =
         serde_json::from_value(serde_json::to_value(&state).unwrap()).unwrap();
     assert!(roundtrip
-        .resolve_button_output(GameButton::Jump)
+        .resolve_button_output(KeypadElementID::preset(5))
         .unwrap()
         .gamepad_buttons
         .contains("futureButton"));
     let mut core = HostCore::new(roundtrip, "111111").unwrap();
     pair(&mut core, 1, "token");
-    send(&mut core, digital(GameButton::Jump, true, 1, 1), 0);
-    let mut element = digital(GameButton::Jump, true, 2, 2);
+    send(&mut core, digital(KeypadElementID::preset(5), true, 1, 1), 0);
+    let mut element = digital(KeypadElementID::preset(5), true, 2, 2);
     element.message_type = ControllerMessageType::ElementInput;
     element.button = None;
-    element.element_id = Some("ELEMENT".into());
+    element.element_id = Some(ELEMENT.to_uppercase());
     element.element_part = Some(KeypadElementInputPart::TriggerDigital);
     assert_eq!(
         buttons(&send(&mut core, element, 1)),
@@ -543,11 +611,11 @@ fn authentication_generation_and_keyboard_mode_gate_all_controller_paths() {
     let mut state = core.persistent_state().clone();
     state.profiles[0]["outputMode"] = json!("keyboard");
     state.profiles[0]["landscapeCustomization"] =
-        json!({"elements":[{"id":"e", "kind":"trigger", "output":{"gamepadButtons":["south"]}}]});
+        json!({"elements":[{"id":ELEMENT, "kind":"trigger", "output":{"gamepadButtons":["south"]}}]});
     assert!(!state.needs_virtual_gamepad());
     core.install_validated_persisted_state(state);
     assert!(!core.needs_virtual_gamepad());
-    let mut fresh = digital(GameButton::Jump, true, 1, 1);
+    let mut fresh = digital(KeypadElementID::preset(5), true, 1, 1);
     fresh.input_generation = core.status().active_generation;
     let effects = send(&mut core, fresh, 2);
     assert!(buttons(&effects).is_empty());
@@ -566,8 +634,13 @@ fn authentication_generation_and_keyboard_mode_gate_all_controller_paths() {
 }
 
 #[test]
-fn materialization_scans_active_variants_and_legacy_missing_mode_is_custom() {
+fn materialization_scans_active_variants_with_keyboard_as_the_missing_mode_default() {
     let mut state = PersistentState::minimal("server-1").unwrap();
+    state.profiles[0]["customization"] = json!({"elements":[]});
+    state.key_bindings = Default::default();
+    state.output_bindings = Default::default();
+    state.profile_key_bindings.clear();
+    state.profile_output_bindings.clear();
     state.profiles[0]
         .as_object_mut()
         .unwrap()
@@ -579,12 +652,15 @@ fn materialization_scans_active_variants_and_legacy_missing_mode_is_custom() {
         "portraitCustomization",
     ] {
         for control in [
-            json!({"kind":"button", "output":{"gamepadButtons":["south"]}}),
-            json!({"kind":"joystick", "joystickOutputSettings":{"analogTarget":"left_stick"}}),
-            json!({"kind":"trigger"}),
+            json!({"id":ELEMENT, "kind":"button", "output":{"gamepadButtons":["south"]}}),
+            json!({"id":ELEMENT, "kind":"joystick", "joystickOutputSettings":{"analogTarget":"left_stick"}}),
+            json!({"id":ELEMENT, "kind":"trigger"}),
         ] {
             let mut candidate = state.clone();
             candidate.profiles[0][customization] = json!({"elements":[control]});
+            candidate.normalize().unwrap();
+            assert!(!candidate.needs_virtual_gamepad(), "missing mode defaults to keyboard");
+            candidate.profiles[0]["outputMode"] = json!("custom");
             assert!(candidate.needs_virtual_gamepad(), "{customization}");
         }
     }
@@ -593,7 +669,8 @@ fn materialization_scans_active_variants_and_legacy_missing_mode_is_custom() {
     state.profiles[0]["outputMode"] = json!("custom");
     state
         .profiles
-        .push(json!({"id":"inactive", "outputMode":"controller"}));
+        .push(json!({"id":NEXT_PROFILE, "name":"Controller", "outputMode":"controller", "customization":{"elements":[]}}));
+    state.normalize().unwrap();
     assert!(!state.needs_virtual_gamepad());
 }
 
@@ -604,7 +681,7 @@ fn analog_refresh_expiry_is_per_axis_and_heartbeat_does_not_refresh_it() {
     send(&mut core, trigger(VirtualGamepadTrigger::Right, 1, 0.7), 20);
     send(&mut core, stick(VirtualGamepadStick::Left, 2, 0.5, 0.5), 50);
     let mut heartbeat = ControllerMessage::new(ControllerMessageType::Heartbeat, 0);
-    heartbeat.input_protocol_version = Some(2);
+    heartbeat.input_protocol_version = Some(3);
     heartbeat.input_generation = Some(1);
     send(&mut core, heartbeat, 110);
     assert!(analog(&core.expire_holds(119, 100)).is_empty());
@@ -643,7 +720,7 @@ fn analog_refresh_expiry_is_per_axis_and_heartbeat_does_not_refresh_it() {
 fn every_lifecycle_boundary_resets_and_generation_reset_precedes_new_analog() {
     for boundary in 0..6 {
         let mut core = core();
-        send(&mut core, digital(GameButton::Jump, true, 1, 1), 0);
+        send(&mut core, digital(KeypadElementID::preset(5), true, 1, 1), 0);
         send(&mut core, stick(VirtualGamepadStick::Left, 1, 0.5, 0.5), 0);
         send(&mut core, trigger(VirtualGamepadTrigger::Right, 1, 0.7), 0);
         let effects = match boundary {
@@ -655,7 +732,7 @@ fn every_lifecycle_boundary_resets_and_generation_reset_precedes_new_analog() {
                 next.input_generation = Some(2);
                 send(&mut core, next, 1)
             }
-            4 => core.select_profile_locally("next").unwrap(),
+            4 => core.select_profile_locally(NEXT_PROFILE).unwrap(),
             _ => core.install_validated_persisted_state(core.persistent_state().clone()),
         };
         assert!(
@@ -690,10 +767,10 @@ fn every_lifecycle_boundary_resets_and_generation_reset_precedes_new_analog() {
 #[test]
 fn digital_expiry_and_bounded_local_taps_preserve_existing_holds() {
     let mut core = core();
-    send(&mut core, digital(GameButton::Jump, true, 1, 1), 0);
+    send(&mut core, digital(KeypadElementID::preset(5), true, 1, 1), 0);
     let output = core
         .persistent_state()
-        .resolve_button_output(GameButton::Jump)
+        .resolve_button_output(KeypadElementID::preset(5))
         .unwrap();
     assert!(buttons(&core.tap_output_binding(&output)).is_empty());
     assert_eq!(
@@ -717,7 +794,7 @@ fn legacy_analog_retains_expiry_when_v2_establishes_and_neutral_cancels_expiry()
     legacy.input_generation = None;
     legacy.analog_sequence = None;
     send(&mut core, legacy, 0);
-    send(&mut core, digital(GameButton::Jump, true, 1, 1), 20);
+    send(&mut core, digital(KeypadElementID::preset(5), true, 1, 1), 20);
     assert_eq!(
         analog(&core.expire_holds(100, 100)),
         vec![Effect::GamepadStick {

@@ -23,7 +23,7 @@ final class ThumbleSkinPackageTests: XCTestCase {
         XCTAssertEqual(appearance.accentStyle, .purple)
         XCTAssertEqual(appearance.showsButtonLabels, false)
         XCTAssertEqual(
-            appearance.controlAppearance(for: .jump, controlKind: .button).styleID,
+            appearance.controlAppearance(for: .preset(5), controlKind: .button, visualRole: .primaryAction).styleID,
             "neon-primary"
         )
     }
@@ -79,14 +79,14 @@ final class ThumbleSkinPackageTests: XCTestCase {
         XCTAssertEqual(landscapeLight.defaultControl?.styleID, "base")
     }
 
-    func testVisualRolesDoNotDependOnProfileUUIDsOrLabels() {
-        XCTAssertEqual(GamepadVisualRole.inferred(for: .up, controlKind: .button), .movement)
-        XCTAssertEqual(GamepadVisualRole.inferred(for: .jump, controlKind: .button), .primaryAction)
-        XCTAssertEqual(GamepadVisualRole.inferred(for: .pause, controlKind: .button), .menu)
-        XCTAssertEqual(GamepadVisualRole.inferred(for: .custom8, controlKind: .button), .custom)
-        XCTAssertEqual(GamepadVisualRole.inferred(for: .jump, controlKind: .joystick), .joystick)
-        XCTAssertEqual(GamepadVisualRole.inferred(for: .jump, controlKind: .text), .decoration)
-        XCTAssertEqual(GamepadVisualRole.inferred(for: .jump, controlKind: .decoration), .decoration)
+    func testUndeclaredVisualRolesDoNotDependOnHistoricalInputSlots() {
+        XCTAssertEqual(GamepadVisualRole.inferred(for: .preset(1), controlKind: .button), .custom)
+        XCTAssertEqual(GamepadVisualRole.inferred(for: .preset(5), controlKind: .button), .custom)
+        XCTAssertEqual(GamepadVisualRole.inferred(for: .preset(10), controlKind: .button), .custom)
+        XCTAssertEqual(GamepadVisualRole.inferred(for: .preset(18), controlKind: .button), .custom)
+        XCTAssertEqual(GamepadVisualRole.inferred(for: .preset(5), controlKind: .joystick), .joystick)
+        XCTAssertEqual(GamepadVisualRole.inferred(for: .preset(5), controlKind: .text), .decoration)
+        XCTAssertEqual(GamepadVisualRole.inferred(for: .preset(5), controlKind: .decoration), .decoration)
     }
 
     func testValidatorRejectsBadIdentityVersionAndMissingStyle() {
@@ -172,6 +172,26 @@ final class ThumbleSkinPackageTests: XCTestCase {
         let report = ThumbleSkinPackageValidator.validate(package)
         XCTAssertTrue(report.errors.contains { $0.code == "unsafe-asset-path" })
         XCTAssertThrowsError(try ThumbleSkinPackageCodec.encode(package))
+    }
+
+    func testDecoderRejectsAmbiguousManifestBeforeUnknownFieldsDisappear() throws {
+        let original = try ThumbleSkinPackageCodec.encode(makePackage(assetData: Data("asset".utf8)))
+        XCTAssertNoThrow(try ThumbleSkinPackageCodec.decode(original))
+        let archive = try Archive(data: original, accessMode: .update)
+        let manifest = try XCTUnwrap(archive["manifest.json"])
+        var bytes = Data()
+        _ = try archive.extract(manifest) { bytes.append($0) }
+        let raw = String(decoding: bytes, as: UTF8.self)
+        XCTAssertTrue(raw.hasPrefix("{"))
+        let ambiguous = Data(("{\"futureMetadata\":0,\"futureMetadata\":1," + raw.dropFirst()).utf8)
+        try archive.remove(manifest)
+        try archive.addEntry(with: "manifest.json", type: .file, uncompressedSize: Int64(ambiguous.count), compressionMethod: .deflate) { position, size in
+            let start = Int(position)
+            return ambiguous.subdata(in: start..<(start + size))
+        }
+        XCTAssertThrowsError(try ThumbleSkinPackageCodec.decode(try XCTUnwrap(archive.data))) { error in
+            XCTAssertEqual(error as? ThumbleSkinPackageCodecError, .corruptEntry("manifest.json"))
+        }
     }
 
     func testDecoderRejectsUndeclaredArchiveEntries() throws {

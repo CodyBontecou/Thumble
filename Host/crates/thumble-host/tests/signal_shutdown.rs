@@ -7,7 +7,7 @@ use thumble_host::control::{send_request, ControlRequest, ControlResponse, HostS
 use thumble_host::paths::{HostPaths, CONTROL_SOCKET_ENV, STATE_DIR_ENV};
 use thumble_host::storage::save_atomic;
 use thumble_protocol::{
-    ButtonPressState, ControllerMessage, ControllerMessageType, ControllerWireCodec, GameButton,
+    ButtonPressState, ControllerMessage, ControllerMessageType, ControllerWireCodec, KeypadElementID,
 };
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream};
@@ -70,7 +70,7 @@ async fn sigterm_releases_held_input_before_process_exit() {
     socket
         .send(Message::Binary(
             ControllerWireCodec::encode_button_with_sequence(
-                GameButton::Jump,
+                KeypadElementID::preset(5),
                 ButtonPressState::Down,
                 1,
                 Some(1),

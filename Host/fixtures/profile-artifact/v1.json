@@ -6,7 +6,13 @@
   "profiles": [
     {
       "customization": {
-        "elements": [],
+        "elements": [
+          {
+            "id": "81C296ED-309D-4F05-BB11-F5A2E2027801",
+            "kind": "button",
+            "label": "Owned Fixture"
+          }
+        ],
         "futureTuning": {
           "gain": 0.125,
           "nullable": null
@@ -49,7 +55,7 @@
   "defaultProfileID": null,
   "profileKeyBindings": {
     "00000000-0000-0000-0000-000000000201": {
-      "futureButton": {
+      "81C296ED-309D-4F05-BB11-F5A2E2027801": {
         "futureBindingField": {
           "label": "保持"
         },
@@ -71,7 +77,7 @@
   },
   "profileOutputBindings": {
     "00000000-0000-0000-0000-000000000201": {
-      "futureButton": {
+      "81C296ED-309D-4F05-BB11-F5A2E2027801": {
         "futureOutputField": {
           "mode": "next"
         },
@@ -94,7 +100,7 @@
   "contentHash": {
     "algorithm": "sha256",
     "canonicalization": "rfc8785",
-    "value": "71bb1a2c4832391a93df43ff42cc970b2ff90e8e85bc4041eebbfaa6d2cee3ff"
+    "value": "c2a7a65503c80d94648642ae57c1721181fd8ad2274113846bc32d3d6670507b"
   },
   "bindingPresentations": [
     {

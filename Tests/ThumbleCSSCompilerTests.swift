@@ -119,7 +119,7 @@ final class ThumbleCSSCompilerTests: XCTestCase {
             :root { --ink: #111111; }
             control { color: #AAAAAA; background: #DDDDDD; }
             control[role="primary_action"] { background: #702653; }
-            #builtin-jump { background: #0000FF; }
+            #builtin-00000000-0000-0000-0000-000000000105 { background: #0000FF; }
             control:pressed { transform: scale(0.9); }
             @media (prefers-color-scheme: dark) {
               :root { --ink: #EEEEEE; }
@@ -136,7 +136,7 @@ final class ThumbleCSSCompilerTests: XCTestCase {
             try XCTUnwrap(element.states.first { $0.state == state }?.declarations)
         }
 
-        let jump = try XCTUnwrap(light.elements.first { $0.id == "builtin-jump" })
+        let jump = try XCTUnwrap(light.elements.first { $0.id == "builtin-00000000-0000-0000-0000-000000000105" })
         // ID selector wins over attribute and type selectors.
         XCTAssertEqual(try declarations(jump, "normal")["background"], "#0000FF")
         // State declarations appear only on their state.
@@ -144,11 +144,11 @@ final class ThumbleCSSCompilerTests: XCTestCase {
         XCTAssertEqual(try declarations(jump, "pressed")["transform"], "scale(0.9)")
         // Custom properties inherit from the controller root and resolve per scheme.
         XCTAssertEqual(try declarations(jump, "normal")["--ink"], "#111111")
-        let darkJump = try XCTUnwrap(dark.elements.first { $0.id == "builtin-jump" })
+        let darkJump = try XCTUnwrap(dark.elements.first { $0.id == "builtin-00000000-0000-0000-0000-000000000105" })
         XCTAssertEqual(try declarations(darkJump, "normal")["--ink"], "#EEEEEE")
 
         // Attribute selector beats the bare type selector for other primary-action controls.
-        let attack = try XCTUnwrap(light.elements.first { $0.id == "builtin-attack" })
+        let attack = try XCTUnwrap(light.elements.first { $0.id == "builtin-00000000-0000-0000-0000-000000000106" })
         XCTAssertEqual(try declarations(attack, "normal")["background"], "#702653")
     }
 
@@ -236,7 +236,7 @@ final class ThumbleCSSCompilerTests: XCTestCase {
         let primaryRule = try XCTUnwrap(light.roleRules.first { $0.role == .primaryAction })
         let primaryStyle = try XCTUnwrap(light.styleLibrary.style(id: primaryRule.appearance.styleID ?? "")?.visualStyle)
         XCTAssertEqual(primaryStyle.normal.fillStyle?.representativeColor.hexString, "#702653")
-        let jumpAppearance = light.controlAppearance(for: .jump, controlKind: .button)
+        let jumpAppearance = light.controlAppearance(for: .preset(5), controlKind: .button)
         let jumpStyle = try XCTUnwrap(light.styleLibrary.style(id: jumpAppearance.styleID ?? "")?.visualStyle)
         XCTAssertEqual(jumpStyle.normal.fillStyle?.representativeColor.hexString, "#702653")
     }
@@ -433,15 +433,36 @@ final class ThumbleCSSCompilerTests: XCTestCase {
             colorScheme: .light,
             options: .replacingAppearance
         )
-        let jump = applied.buttonCustomization(for: .jump)
-        XCTAssertEqual(jump.styleID, "css-button-jump")
+        let jump = applied.buttonCustomization(for: .preset(5))
+        XCTAssertEqual(jump.styleID, "css-button-00000000-0000-0000-0000-000000000105")
         let size = customization.deviceCanvas.editorDeviceFrame.screenRect.size
         let controls = applied.resolvedControls(in: size)
-        let jumpControl = try XCTUnwrap(controls.first(where: { $0.mappedButton == GameButton.jump && $0.controlKind == .button }))
+        let jumpControl = try XCTUnwrap(controls.first(where: { $0.inputID == KeypadElementID.preset(5) && $0.controlKind == .button }))
         let presentation = applied.resolvedPresentation(for: jumpControl, state: .normal, scheme: .light)
         XCTAssertEqual(presentation.fillStyle.representativeColor.hexString, "#702653")
         let pressed = applied.resolvedPresentation(for: jumpControl, state: .pressed, scheme: .light)
         XCTAssertEqual(pressed.scale, 0.9, accuracy: 0.001)
+    }
+
+    func testSyntheticStyleControlsHaveNoInventedInputUUID() {
+        XCTAssertNil(ThumbleCSSControlElement.synthetic(kind: nil, role: nil, button: nil).button)
+        XCTAssertNil(ThumbleCSSControlElement.synthetic(kind: .decoration, role: .system, button: nil).button)
+        XCTAssertEqual(ThumbleCSSControlElement.synthetic(kind: .button, role: .menu, button: .preset(10)).button, .preset(10))
+    }
+
+    func testSystemControlDoesNotMatchAnElementBindingSelector() throws {
+        let source = try makeCSSWorkspace(css: """
+            control { background: #001122; }
+            control[button="00000000-0000-0000-0000-00000000010A"] { background: #FF0000; }
+            """)
+        let documents = try ThumbleCSSCompiler.computed(workspace: try loadWorkspace(source), sourceRoot: source)
+        for document in documents {
+            let system = try XCTUnwrap(document.elements.first { $0.id == "system-top-bar-activation" })
+            XCTAssertNil(system.button)
+            XCTAssertEqual(try XCTUnwrap(system.states.first { $0.state == "normal" }).declarations["background"], "#001122")
+            let element = try XCTUnwrap(document.elements.first { $0.button == KeypadElementID.preset(10).rawValue })
+            XCTAssertEqual(try XCTUnwrap(element.states.first { $0.state == "normal" }).declarations["background"], "#FF0000")
+        }
     }
 
     func testMultipleStylesheetsCascadeInDeclaredOrder() throws {
@@ -459,7 +480,7 @@ final class ThumbleCSSCompilerTests: XCTestCase {
         )
         let documents = try ThumbleCSSCompiler.computed(workspace: workspace, sourceRoot: source)
         let light = try XCTUnwrap(documents.first { $0.orientation == "landscape" && $0.colorScheme == "light" })
-        let jump = try XCTUnwrap(light.elements.first { $0.id == "builtin-jump" })
+        let jump = try XCTUnwrap(light.elements.first { $0.id == "builtin-00000000-0000-0000-0000-000000000105" })
         let normal = try XCTUnwrap(jump.states.first { $0.state == "normal" }?.declarations)
         // Later stylesheets override earlier ones at equal specificity.
         XCTAssertEqual(normal["background"], "#00FF00")
@@ -480,7 +501,7 @@ final class ThumbleCSSCompilerTests: XCTestCase {
         )
 
         XCTAssertEqual(result.packageData, try Data(contentsOf: golden))
-        XCTAssertEqual(result.packageData.thumbleSHA256, "9900347f3a02fef762e83beacd0021ba82a95f7c3edf6a4be51e357cc2aa7a0c")
+        XCTAssertEqual(result.packageData.thumbleSHA256, "750e09d3094783b32d3f70ba7f44e2250b522d49a8407be1ac3b1e3bd0afc14c")
 
         let quality = ThumbleSkinQualityEvaluator.evaluate(
             package: result.package,
@@ -517,5 +538,170 @@ final class ThumbleCSSCompilerTests: XCTestCase {
         XCTAssertEqual(radii.topTrailing, 4)
         XCTAssertEqual(radii.bottomTrailing, 2)
         XCTAssertEqual(radii.bottomLeading, 1)
+    }
+}
+
+extension ThumbleCSSCompilerTests {
+    func testPointingPaintLowersAndInheritsIndependentlyAcrossNativeStates() throws {
+        let source = try makeCSSWorkspace(css: """
+        control { -thumble-trackpad-frame-color: #112233; -thumble-trackpad-frame-stroke-width: 3px;
+          -thumble-trackpad-cursor-color: #445566; -thumble-trackpad-indicator-color: #778899;
+          -thumble-trackpad-secondary-indicator-color: #aabbcc; -thumble-joystick-ring-color: #334455;
+          -thumble-joystick-ring-stroke-width: 2px; -thumble-joystick-knob-fill: #cc2211;
+          -thumble-joystick-knob-stroke: #556677; }
+        control:active { -thumble-joystick-knob-fill: #22cc11; -thumble-trackpad-frame-color: #ffeedd; }
+        """, artboardID: "xbox-v1")
+        let result = try ThumbleSkinCompiler.compile(source: source)
+        let appearance = try XCTUnwrap(result.package.skin?.variants.first { $0.orientation == .landscape && $0.colorScheme == .light }?.appearance)
+        let styleID = try XCTUnwrap(appearance.defaultControl?.styleID)
+        let style = try XCTUnwrap(appearance.styleLibrary.style(id: styleID)?.visualStyle)
+        let normal = try XCTUnwrap(style.stateStyle(for: .normal).content?.pointing)
+        let active = try XCTUnwrap(style.stateStyle(for: .active).content?.pointing)
+        XCTAssertEqual(normal.joystickKnobFillColor?.hexString, "#CC2211")
+        XCTAssertEqual(active.joystickKnobFillColor?.hexString, "#22CC11")
+        XCTAssertEqual(active.trackpadFrameColor?.hexString, "#FFEEDD")
+        XCTAssertEqual(active.joystickRingColor, normal.joystickRingColor)
+        XCTAssertEqual(active.trackpadFrameStrokeWidth, 3)
+        XCTAssertEqual(active.joystickRingStrokeWidth, 2)
+        XCTAssertEqual(active.trackpadSecondaryIndicatorColor?.hexString, "#AABBCC")
+        XCTAssertEqual(try JSONDecoder().decode(GamepadControlVisualStyle.self, from: JSONEncoder().encode(style)), style)
+        for declaration in ["-thumble-trackpad-frame-color: url(#image)", "-thumble-joystick-ring-color: nonsense",
+                            "-thumble-trackpad-frame-stroke-width: -1px", "-thumble-joystick-ring-stroke-width: 13px"] {
+            let invalid = try makeCSSWorkspace(css: "control { \(declaration); }")
+            XCTAssertTrue(ThumbleCSSCompiler.lint(workspace: try loadWorkspace(invalid), sourceRoot: invalid)
+                .errors.contains { $0.code == "invalid-value" })
+        }
+    }
+
+    func testBoundedNativeTypographyAndPointingChromeLowerAndMergeAcrossStates() throws {
+        let source = try makeCSSWorkspace(css: """
+        control { -thumble-legend: "Q"; font-size: 22px; font-weight: medium; -thumble-font-design: monospaced;
+          letter-spacing: 1px; -thumble-line-limit: 2; text-align: center;
+          -thumble-label-padding: 6px; -thumble-label-placement: bottom; }
+        control:pressed { font-weight: bold; }
+        trackpad { -thumble-trackpad-frame: none; -thumble-trackpad-cursor: none;
+          -thumble-trackpad-indicators: none; }
+        joystick { -thumble-joystick-ring: none; -thumble-joystick-knob-ratio: 0.6;
+          -thumble-joystick-knob-stroke-width: 0px; }
+        """, artboardID: "xbox-v1")
+        let result = try ThumbleSkinCompiler.compile(source: source)
+        let appearance = try XCTUnwrap(result.package.skin?.variants.first { $0.orientation == .landscape && $0.colorScheme == .light }?.appearance)
+        let styleID = try XCTUnwrap(appearance.defaultControl?.styleID)
+        let style = try XCTUnwrap(appearance.styleLibrary.style(id: styleID)?.visualStyle)
+        let normal = try XCTUnwrap(style.stateStyle(for: .normal).content)
+        let pressed = try XCTUnwrap(style.stateStyle(for: .pressed).content)
+        XCTAssertEqual(normal.legend, "Q")
+        XCTAssertEqual(pressed.legend, "Q")
+        XCTAssertEqual(normal.fontSize, 22)
+        XCTAssertEqual(normal.fontWeight, .medium)
+        XCTAssertEqual(normal.fontDesign, .monospaced)
+        XCTAssertEqual(normal.labelPlacement, .bottom)
+        XCTAssertEqual(pressed.fontWeight, .bold)
+        XCTAssertEqual(pressed.fontSize, 22)
+        XCTAssertEqual(pressed.labelPadding, 6)
+        let decoded = try JSONDecoder().decode(GamepadControlVisualStyle.self, from: JSONEncoder().encode(style))
+        XCTAssertEqual(decoded, style)
+        XCTAssertTrue(ThumbleCSSCapabilities.current.properties.contains { $0.name == "-thumble-trackpad-frame" })
+    }
+
+    func testNativePresentationRejectsValuesOutsideItsDeclaredBounds() throws {
+        for declaration in ["-thumble-legend: Q", "-thumble-legend: \"\"", "font-size: 100px", "font-weight: 900", "letter-spacing: -8px",
+                            "-thumble-line-limit: 2.5", "-thumble-label-padding: -1px",
+                            "-thumble-trackpad-frame: hidden", "-thumble-joystick-knob-ratio: 1.2"] {
+            let source = try makeCSSWorkspace(css: "control { \(declaration); }")
+            let report = ThumbleCSSCompiler.lint(workspace: try loadWorkspace(source), sourceRoot: source)
+            XCTAssertTrue(report.errors.contains { $0.code == "invalid-value" }, "\(declaration): \(report)")
+        }
+    }
+}
+
+
+extension ThumbleCSSCompilerTests {
+    func testExactPointingSelectorsAndNativeIconsLowerWithoutChangingIdentity() throws {
+        var workspace = ThumbleSkinWorkspace.starterCSS(name: "Exact", identifier: "com.test.exact", artboardID: "xbox-v1")
+        var profile = GamepadControllerTemplate.xbox.makeProfile()
+        profile.landscapeCustomization = nil
+        profile.portraitCustomization = nil
+        let artboard = try ThumbleSkinArtboard.capture(profile: profile, identifier: "captured-test", safeAreas: [.landscape: .init()])
+        workspace.schemaVersion = 3
+        workspace.artboardID = artboard.id
+        workspace.capturedArtboards = [artboard]
+        workspace.orientations = [.landscape]
+        let aim = try XCTUnwrap(artboard.variants.first?.controls.first { $0.kind == .joystick || $0.kind == .trackpad })
+        let alias = ThumbleCSSDocumentBuilder.kebabIdentifier(aim.id)
+        XCTAssertEqual(ThumbleCSSDocumentBuilder.kebabIdentifier("custom.FDA838A1-0F46-53D2-A856-A807B3A5E1E0"), "custom-fda838a1-0f46-53d2-a856-a807b3a5e1e0")
+        let source = temporaryDirectory.appendingPathComponent("native-icon")
+        try FileManager.default.createDirectory(at: source.appendingPathComponent("styles"), withIntermediateDirectories: true)
+        try JSONEncoder().encode(workspace).write(to: source.appendingPathComponent("skin-source.json"))
+        try Data("#\(alias) { -thumble-legend: \"Aim\"; -thumble-icon-symbol: \"scope\"; -thumble-icon-placement: top; -thumble-icon-scale: 1.1; -thumble-icon-tint: #76BDCE; -thumble-icon-rendering: template; } #system-top-bar-activation { -thumble-icon-symbol: \"chevron.down\"; }".utf8).write(to: source.appendingPathComponent("styles/controller.css"))
+        let result = try ThumbleSkinCompiler.compile(source: source)
+        let appearance = try XCTUnwrap(result.package.skin?.variants.first { $0.orientation == .landscape && $0.colorScheme == .light }?.appearance)
+        let rule = try XCTUnwrap(appearance.buttonRules.first { $0.button == aim.inputID })
+        let style = try XCTUnwrap(appearance.styleLibrary.style(id: rule.appearance.styleID)?.visualStyle)
+        XCTAssertEqual(style.normal.content?.legend, "Aim")
+        XCTAssertEqual(style.normal.content?.icon?.value, "scope")
+        XCTAssertEqual(style.normal.content?.icon?.scale, 1.1)
+        let system = try XCTUnwrap(appearance.roleRules.first { $0.role == .system })
+        let systemStyle = try XCTUnwrap(appearance.styleLibrary.style(id: system.appearance.styleID)?.visualStyle)
+        XCTAssertEqual(systemStyle.normal.content?.icon?.value, "chevron.down")
+        let rendered = profile.customization.applying(skinPackage: result.package, orientation: .landscape, colorScheme: .light, options: .replacingAppearance)
+        let control = try XCTUnwrap(rendered.resolvedControls(in: rendered.deviceCanvas.editorDeviceFrame.screenRect.size).first { $0.id.id == aim.id })
+        XCTAssertEqual(rendered.resolvedPresentation(for: control, state: .normal, scheme: .light).icon?.value, "scope")
+    }
+}
+
+
+extension ThumbleCSSCompilerTests {
+    func testBorderShorthandAndLonghandRespectStateSpecificityAndDeclarationOrder() throws {
+        let source = try makeCSSWorkspace(css: """
+        control { border-color: #FF0000; border: 1px solid #00FF00; }
+        control:active { border: 2px solid #76BDCE; }
+        @media (prefers-color-scheme: dark) { control { border-color: #BFA36A; } }
+        """)
+        let result = try ThumbleSkinCompiler.compile(source: source)
+        let appearance = try XCTUnwrap(result.package.skin?.variants.first { $0.orientation == .landscape && $0.colorScheme == .dark }?.appearance)
+        let id = try XCTUnwrap(appearance.defaultControl?.styleID)
+        let style = try XCTUnwrap(appearance.styleLibrary.style(id: id)?.visualStyle)
+        XCTAssertEqual(style.stateStyle(for: .active).strokeColor, GamepadRGBAColor(hexString: "76BDCE"))
+        XCTAssertEqual(style.stateStyle(for: .normal).strokeColor, GamepadRGBAColor(hexString: "BFA36A"))
+        let light = try XCTUnwrap(result.package.skin?.variants.first { $0.orientation == .landscape && $0.colorScheme == .light }?.appearance)
+        let lightID = try XCTUnwrap(light.defaultControl?.styleID)
+        XCTAssertEqual(light.styleLibrary.style(id: lightID)?.visualStyle.normal.strokeColor, GamepadRGBAColor(hexString: "00FF00"))
+    }
+}
+
+
+extension ThumbleCSSCompilerTests {
+    func testSemanticSelectorsUseExactAppearanceMetadataAndPreserveInputIdentity() throws {
+        var workspace = ThumbleSkinWorkspace.starterCSS(name: "Semantic", identifier: "com.test.semantic", artboardID: "xbox-v1")
+        var profile = GamepadControllerTemplate.xbox.makeProfile()
+        profile.landscapeCustomization = nil
+        profile.portraitCustomization = nil
+        let artboard = try ThumbleSkinArtboard.capture(profile: profile, identifier: "captured-semantic", safeAreas: [.landscape: .init()])
+        let target = try XCTUnwrap(artboard.variants.first?.controls.first { $0.inputID != nil })
+        workspace.schemaVersion = 3
+        workspace.artboardID = artboard.id
+        workspace.capturedArtboards = [artboard]
+        workspace.orientations = [.landscape]
+        workspace.controlSemantics = [.init(controlID: target.id, action: "lux.light-binding", purpose: "ability.q", groups: ["abilities", "primary-action"])]
+        let source = temporaryDirectory.appendingPathComponent("semantic")
+        let css = """
+        control { -thumble-legend: "Other"; }
+        control[action="lux.light-binding"][purpose="ability.q"][group~="abilities"] { -thumble-legend: "Q"; }
+        control[group~="primary"] { -thumble-legend: "Wrong partial match"; }
+        """
+        try write(workspace, css: css, to: source)
+        let result = try ThumbleSkinCompiler.compile(source: source)
+        let appearance = try XCTUnwrap(result.package.skin?.variants.first { $0.orientation == .landscape && $0.colorScheme == .light }?.appearance)
+        let rule = try XCTUnwrap(appearance.buttonRules.first { $0.button == target.inputID })
+        let style = try XCTUnwrap(appearance.styleLibrary.style(id: rule.appearance.styleID)?.visualStyle)
+        XCTAssertEqual(style.normal.content?.legend, "Q")
+        XCTAssertEqual(rule.button, target.inputID)
+        XCTAssertEqual(try loadWorkspace(source).controlSemantics, workspace.controlSemantics)
+        workspace.controlSemantics[0].controlID = "unknown-control"
+        XCTAssertTrue(ThumbleSkinSourceValidator.validate(workspace).errors.contains { $0.code == "unknown-semantic-control" })
+        workspace.controlSemantics[0].controlID = target.id
+        workspace.controlSemantics[0].groups = ["abilities", "abilities"]
+        XCTAssertTrue(ThumbleSkinSourceValidator.validate(workspace).errors.contains { $0.code == "invalid-semantic-tag" })
     }
 }

@@ -1,10 +1,16 @@
+mod common;
+
 use serde_json::json;
+
+const ELEMENT: &str = "ab765b39-dfa7-4b24-a30f-bcc05bf85f3a";
+const JOYSTICK: &str = "25a4f41a-7c43-4d12-b7c0-51e0f259c695";
+const PROFILE: &str = "B16C0A67-B9EA-42CA-966B-9F23A09CDE8B";
 use std::collections::{BTreeMap, BTreeSet};
 use thumble_core::{
     ButtonBindings, KeyBinding, KeyStroke, OutputBinding, PersistentState, StateError,
     TrustedClient, CURRENT_SCHEMA_VERSION, DEFAULT_PROFILE_ID, INITIAL_CONFIGURATION_REVISION,
 };
-use thumble_protocol::{GameButton, KeypadElementInputPart};
+use thumble_protocol::{KeypadElementID, KeypadElementInputPart};
 
 #[test]
 fn key_bindings_accept_legacy_mac_and_direct_shared_json_shapes() {
@@ -56,7 +62,7 @@ fn portable_state_round_trips_tokens_profiles_and_binding_layers_losslessly() {
         .profile_key_bindings
         .get_mut(DEFAULT_PROFILE_ID)
         .unwrap()
-        .insert(GameButton::Custom8, KeyBinding::new(99, 4));
+        .insert(KeypadElementID::preset(18), KeyBinding::new(99, 4));
 
     let bytes = serde_json::to_vec(&state).unwrap();
     let decoded: PersistentState = serde_json::from_slice(&bytes).unwrap();
@@ -73,58 +79,81 @@ fn portable_state_round_trips_tokens_profiles_and_binding_layers_losslessly() {
 }
 
 #[test]
-fn empty_migration_state_gets_a_swift_decodable_minimal_profile() {
-    let mut state = PersistentState::minimal("stable-server").unwrap();
-    state.profiles.clear();
-    state.active_profile_id = "missing".to_owned();
-    state.default_profile_id = "missing".to_owned();
-    state.normalize().unwrap();
-
-    assert_eq!(state.profiles.len(), 1);
-    assert_eq!(state.active_profile_id, DEFAULT_PROFILE_ID);
-    assert_eq!(state.default_profile_id, DEFAULT_PROFILE_ID);
-    let profile = &state.profiles[0];
-    assert_eq!(profile["id"], DEFAULT_PROFILE_ID);
-    assert_eq!(profile["name"], "Default");
-    assert!(profile["customization"].is_object());
-    assert_eq!(
-        profile["customization"]["elements"]
-            .as_array()
-            .unwrap()
-            .len(),
-        10
-    );
-    assert_eq!(
-        state
-            .resolve_element_output(
-                "00000000-0000-0000-0000-000000000105",
-                KeypadElementInputPart::Primary,
-            )
-            .unwrap()
-            .keyboard,
-        Some(KeyBinding::new(36, 0))
-    );
-    assert_eq!(profile["orientationPreference"], "automatic");
-    assert_eq!(profile["outputMode"], "keyboard");
+fn unsupported_output_modes_reject_without_normalization_or_runtime_construction() {
+    for mode in [
+        json!("gamepad"),
+        json!("future-mode"),
+        json!(""),
+        json!(true),
+        json!(1),
+        json!([]),
+        json!({}),
+    ] {
+        let mut state = PersistentState::minimal("mode-rejection").unwrap();
+        state.profiles[0]["outputMode"] = mode.clone();
+        let before = state.clone();
+        assert!(
+            state.validate().is_err(),
+            "invalid mode was accepted: {mode}"
+        );
+        assert!(
+            state.normalize().is_err(),
+            "invalid mode was normalized: {mode}"
+        );
+        assert_eq!(state, before);
+        assert!(thumble_core::ConfigurationDocument::from_state(&state).is_err());
+        assert!(thumble_core::HostCore::new(state, "111111").is_err());
+    }
+    for mode in [
+        None,
+        Some(json!(null)),
+        Some(json!("keyboard")),
+        Some(json!("controller")),
+        Some(json!("custom")),
+    ] {
+        let mut state = PersistentState::minimal("valid-mode").unwrap();
+        if let Some(mode) = mode {
+            state.profiles[0]["outputMode"] = mode;
+        } else {
+            state.profiles[0].as_object_mut().unwrap().remove("outputMode");
+        }
+        state.profiles[0]["futureProfileField"] = json!({"outputMode":"future-mode"});
+        state.normalize().unwrap();
+        assert_eq!(
+            state.profiles[0]["futureProfileField"],
+            json!({"outputMode":"future-mode"})
+        );
+        thumble_core::ConfigurationDocument::from_state(&state).unwrap();
+        thumble_core::HostCore::new(state, "111111").unwrap();
+    }
 }
 
 #[test]
-fn direct_element_output_in_orientation_variant_beats_primary_legacy_mapping() {
+fn explicit_empty_profile_catalog_rejects_without_constructing_a_default_profile() {
+    let mut state = PersistentState::minimal("stable-server").unwrap();
+    state.profiles.clear();
+    let before = state.clone();
+    assert!(state.normalize().is_err());
+    assert_eq!(state, before);
+}
+
+#[test]
+fn direct_element_output_in_orientation_variant_beats_primary_sidecar() {
     let mut state = PersistentState::minimal("server").unwrap();
     state.profiles = vec![json!({
-        "id": "profile-a",
+        "id": PROFILE,
         "name": "Raw",
+        "outputMode": "custom",
         "unknown": {"preserve": true},
         "customization": {
             "elements": [{
-                "id": "ELEMENT-1",
-                "legacySlot": "jump",
+                "id": ELEMENT.to_uppercase(),
                 "futureElementField": 42
             }]
         },
         "landscapeCustomization": {
             "elements": [{
-                "id": "element-1",
+                "id": ELEMENT,
                 "output": {
                     "keyboard": {
                         "keyCode": 7,
@@ -140,12 +169,19 @@ fn direct_element_output_in_orientation_variant_beats_primary_legacy_mapping() {
             }]
         }
     })];
-    state.active_profile_id = "profile-a".to_owned();
-    state.default_profile_id = "profile-a".to_owned();
+    state.active_profile_id = PROFILE.to_owned();
+    state.default_profile_id = PROFILE.to_owned();
+    state.key_bindings = Default::default();
+    state.output_bindings = Default::default();
+    state.profile_key_bindings.clear();
+    state.profile_output_bindings.clear();
+    let mut sidecar = ButtonBindings::default();
+    sidecar.insert(KeypadElementID::parse(ELEMENT).unwrap(), OutputBinding::keyboard(KeyBinding::new(99, 0)));
+    state.profile_output_bindings.insert(PROFILE.to_owned(), sidecar);
     state.normalize().unwrap();
 
     let output = state
-        .resolve_element_output("Element-1", KeypadElementInputPart::Primary)
+        .resolve_element_output(&ELEMENT.to_uppercase(), KeypadElementInputPart::Primary)
         .unwrap();
     let keyboard = output.keyboard.unwrap();
     assert_eq!(
@@ -161,48 +197,54 @@ fn direct_element_output_in_orientation_variant_beats_primary_legacy_mapping() {
 }
 
 #[test]
-fn part_outputs_support_swift_dictionary_arrays_and_joystick_legacy_fallback() {
+fn part_outputs_support_swift_dictionary_arrays_and_owned_joystick_defaults() {
     let mut state = PersistentState::minimal("server").unwrap();
     state.profiles = vec![json!({
-        "id": "profile-a",
+        "id": PROFILE,
+        "name": "Directional",
         "customization": {
             "elements": [{
-                "id": "joystick",
+                "id": JOYSTICK,
+                "kind": "joystick",
                 "partOutputs": [
                     "joystick_left",
                     {"keyboard": {"keyCode": 12, "modifiersRawValue": 1}}
                 ],
                 "joystickMapping": {
-                    "up": "custom1",
-                    "down": "custom2",
-                    "left": "custom3",
-                    "right": "custom4"
+                    "up": {"keyboard":{"keyCode":126}},
+                    "down": {"keyboard":{"keyCode":125}},
+                    "left": {"keyboard":{"keyCode":123}},
+                    "right": {"keyboard":{"keyCode":124}}
                 }
             }]
         }
     })];
-    state.active_profile_id = "profile-a".to_owned();
-    state.default_profile_id = "profile-a".to_owned();
+    state.active_profile_id = PROFILE.to_owned();
+    state.default_profile_id = PROFILE.to_owned();
+    state.key_bindings = Default::default();
+    state.output_bindings = Default::default();
+    state.profile_key_bindings.clear();
+    state.profile_output_bindings.clear();
     let mut profile_outputs = ButtonBindings::default();
     profile_outputs.insert(
-        GameButton::Custom1,
-        OutputBinding::keyboard(KeyBinding::new(126, 0)),
+        KeypadElementID::parse(JOYSTICK).unwrap(),
+        OutputBinding::keyboard(KeyBinding::new(99, 0)),
     );
     state
         .profile_output_bindings
-        .insert("profile-a".to_owned(), profile_outputs);
+        .insert(PROFILE.to_owned(), profile_outputs);
     state.normalize().unwrap();
 
     assert_eq!(
         state
-            .resolve_element_output("joystick", KeypadElementInputPart::JoystickLeft)
+            .resolve_element_output(JOYSTICK, KeypadElementInputPart::JoystickLeft)
             .unwrap()
             .keyboard,
         Some(KeyBinding::new(12, 1))
     );
     assert_eq!(
         state
-            .resolve_element_output("joystick", KeypadElementInputPart::JoystickUp)
+            .resolve_element_output(JOYSTICK, KeypadElementInputPart::JoystickUp)
             .unwrap()
             .keyboard,
         Some(KeyBinding::new(126, 0))
@@ -210,47 +252,52 @@ fn part_outputs_support_swift_dictionary_arrays_and_joystick_legacy_fallback() {
 }
 
 #[test]
-fn profile_output_overlays_global_and_explicit_empty_output_suppresses_key_fallback() {
+fn profile_sidecars_apply_to_declared_controls_and_explicit_empty_output_suppresses_key_fallback() {
     let mut state = PersistentState::minimal("server").unwrap();
-    let global_jump = state.resolve_button_output(GameButton::Jump).unwrap();
+    let global_jump = state.resolve_button_output(KeypadElementID::preset(5)).unwrap();
     assert_eq!(global_jump.keyboard, Some(KeyBinding::new(36, 0)));
 
+    state.profiles[0]["customization"] = json!({"elements":[
+        {"id":KeypadElementID::preset(5), "kind":"button"},
+        {"id":KeypadElementID::preset(6), "kind":"button"}
+    ]});
     let mut profile_outputs = ButtonBindings::default();
     profile_outputs.insert(
-        GameButton::Jump,
+        KeypadElementID::preset(5),
         OutputBinding::keyboard(KeyBinding::new(49, 2)),
     );
-    profile_outputs.insert(GameButton::Attack, OutputBinding::default());
+    profile_outputs.insert(KeypadElementID::preset(6), OutputBinding::default());
     state
         .profile_output_bindings
         .insert(DEFAULT_PROFILE_ID.to_owned(), profile_outputs);
 
     assert_eq!(
         state
-            .resolve_button_output(GameButton::Jump)
+            .resolve_button_output(KeypadElementID::preset(5))
             .unwrap()
             .keyboard,
         Some(KeyBinding::new(49, 2))
     );
     assert_eq!(
-        state.resolve_button_output(GameButton::Attack).unwrap(),
+        state.resolve_button_output(KeypadElementID::preset(6)).unwrap(),
         OutputBinding::default()
     );
 }
 
 #[test]
-fn profile_keyboard_binding_precedes_global_output_fallback() {
+fn profile_keyboard_binding_applies_only_to_a_declared_unconfigured_control() {
     let mut state = PersistentState::minimal("server").unwrap();
+    state.profiles[0]["customization"] = json!({"elements":[{"id":KeypadElementID::preset(5), "kind":"button"}]});
     state.profile_output_bindings.clear();
     state
         .profile_key_bindings
         .get_mut(DEFAULT_PROFILE_ID)
         .unwrap()
-        .insert(GameButton::Jump, KeyBinding::new(49, 2));
+        .insert(KeypadElementID::preset(5), KeyBinding::new(49, 2));
 
     assert_eq!(
         state
-            .resolve_button_output(GameButton::Jump)
+            .resolve_button_output(KeypadElementID::preset(5))
             .unwrap()
             .keyboard,
         Some(KeyBinding::new(49, 2))
@@ -260,12 +307,12 @@ fn profile_keyboard_binding_precedes_global_output_fallback() {
 #[test]
 fn trusted_clients_are_keyed_by_token_not_duplicated_inside_values() {
     let value = json!({
-        "schemaVersion": 1,
+        "schemaVersion": CURRENT_SCHEMA_VERSION,
         "serverID": "server",
         "trustedClients": {
             "opaque": {"name": "Phone", "createdAt": 1, "lastSeenAt": 2}
         },
-        "profiles": [{"id": "p", "customization": {}}],
+        "profiles": [{"id": "p", "customization": {"elements":[]}}],
         "activeProfileID": "p",
         "defaultProfileID": "p",
         "keyBindings": {},
@@ -280,10 +327,12 @@ fn trusted_clients_are_keyed_by_token_not_duplicated_inside_values() {
 }
 
 #[test]
-fn unknown_binding_keys_survive_deterministic_serialization() {
+fn arbitrary_uuid_binding_keys_survive_deterministic_serialization_and_names_are_rejected() {
     let mut bindings = ButtonBindings::default();
-    bindings.insert_raw("future-button", KeyBinding::new(1, 0));
-    bindings.insert(GameButton::Up, KeyBinding::new(126, 0));
+    bindings.insert(KeypadElementID::parse(ELEMENT).unwrap(), KeyBinding::new(1, 0));
+    assert!(bindings.get_raw("future-button").is_none());
+    assert!(serde_json::from_value::<ButtonBindings<KeyBinding>>(json!({"future-button":{"keyCode":1}})).is_err());
+    bindings.insert(KeypadElementID::preset(1), KeyBinding::new(126, 0));
     let value = serde_json::to_value(&bindings).unwrap();
     let keys = value
         .as_object()
@@ -291,36 +340,28 @@ fn unknown_binding_keys_survive_deterministic_serialization() {
         .keys()
         .cloned()
         .collect::<Vec<_>>();
-    assert_eq!(keys, vec!["future-button", "up"]);
+    assert_eq!(keys, vec![KeypadElementID::preset(1).to_string(), ELEMENT.to_uppercase()]);
+    assert_eq!(bindings.iter_ids().map(|(id, _)| id.to_string()).collect::<Vec<_>>(), keys);
 
     let round_trip: ButtonBindings<KeyBinding> = serde_json::from_value(value).unwrap();
     assert_eq!(
-        round_trip.get_raw("future-button"),
+        round_trip.get_raw(ELEMENT),
         Some(&KeyBinding::new(1, 0))
     );
 }
 
 #[test]
-fn schema_one_state_migrates_to_a_revisioned_configuration() {
-    let state = PersistentState::minimal("stable-server").unwrap();
-    let mut encoded = serde_json::to_value(state).unwrap();
-    encoded["schemaVersion"] = json!(1);
-    encoded
-        .as_object_mut()
-        .unwrap()
-        .remove("configurationRevision");
-
-    let mut decoded: PersistentState = serde_json::from_value(encoded).unwrap();
-    assert_eq!(
-        decoded.configuration_revision,
-        INITIAL_CONFIGURATION_REVISION
-    );
-    decoded.normalize().unwrap();
-    assert_eq!(decoded.schema_version, CURRENT_SCHEMA_VERSION);
-    assert_eq!(
-        decoded.configuration_revision,
-        INITIAL_CONFIGURATION_REVISION
-    );
+fn obsolete_state_schemas_are_rejected_without_migration() {
+    for version in [1, 2] {
+        let mut encoded = serde_json::to_value(PersistentState::minimal("stable-server").unwrap()).unwrap();
+        encoded["schemaVersion"] = json!(version);
+        encoded.as_object_mut().unwrap().remove("configurationRevision");
+        let mut decoded: PersistentState = serde_json::from_value(encoded).unwrap();
+        assert_eq!(decoded.configuration_revision, INITIAL_CONFIGURATION_REVISION);
+        let before = decoded.clone();
+        assert_eq!(decoded.normalize(), Err(StateError::UnsupportedSchemaVersion(version)));
+        assert_eq!(decoded, before);
+    }
 }
 
 #[test]

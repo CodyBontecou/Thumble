@@ -63,8 +63,7 @@ fn decode_request(data: &[u8]) -> Result<Request, ()> {
     if data.len() + 1 > MAXIMUM_FRAME_BYTES {
         return Err(());
     }
-    let value: Value = serde_json::from_slice(data).map_err(|_| ())?;
-    reject_duplicate_keys(data)?;
+    let value: Value = thumble_protocol::decode_unique_json(data).map_err(|_| ())?;
     let envelope = value.as_object().ok_or(())?;
     if envelope.len() != 3
         || !envelope
@@ -139,50 +138,9 @@ fn decode_request(data: &[u8]) -> Result<Request, ()> {
     })
 }
 
-// serde_json::Value keeps the last duplicate key. Reject duplicates before
-// projecting it so actions/identity can never have two interpretations. Syntax
-// has already been validated by serde_json; requests contain no array fields.
-fn reject_duplicate_keys(data: &[u8]) -> Result<(), ()> {
-    let mut objects = Vec::<std::collections::BTreeSet<String>>::new();
-    let mut cursor = 0;
-    while cursor < data.len() {
-        match data[cursor] {
-            b'{' => objects.push(Default::default()),
-            b'}' => {
-                objects.pop().ok_or(())?;
-            }
-            b'[' => return Err(()),
-            b'"' => {
-                let start = cursor;
-                cursor += 1;
-                while cursor < data.len() && data[cursor] != b'"' {
-                    if data[cursor] == b'\\' {
-                        cursor += 1;
-                    }
-                    cursor += 1;
-                }
-                let mut next = cursor + 1;
-                while next < data.len() && data[next].is_ascii_whitespace() {
-                    next += 1;
-                }
-                if data.get(next) == Some(&b':') {
-                    let key: String =
-                        serde_json::from_slice(&data[start..=cursor]).map_err(|_| ())?;
-                    if !objects.last_mut().ok_or(())?.insert(key) {
-                        return Err(());
-                    }
-                }
-            }
-            _ => {}
-        }
-        cursor += 1;
-    }
-    Ok(())
-}
-
 /// Called before profile decoding, so runtime envelopes can never become offline profile work.
 pub fn run(data: &[u8]) -> bool {
-    let id = serde_json::from_slice::<Value>(data)
+    let id = thumble_protocol::decode_unique_json::<Value>(data)
         .ok()
         .and_then(|v| {
             v.get("invocationID")?

@@ -1,12 +1,12 @@
 {
   "confidence": "high",
   "keyBindings": [
-    "up",
+    "D673535A-975B-4D72-93BE-FDF87C93001A",
     {
       "key": "up arrow",
       "modifiers": []
     },
-    "jump",
+    "F3AE856B-4F4D-46E4-898F-6F97DA70002A",
     {
       "key": "space-bar",
       "modifiers": [
@@ -20,144 +20,16 @@
   "profile": {
     "customization": {
       "accentStyle": "purple",
-      "buttonCustomizations": [
-        "up",
-        {
-          "accentStyle": "monochrome",
-          "centerX": 0.2,
-          "centerY": 0.42,
-          "cornerRadius": 12.0,
-          "fillColor": {
-            "alpha": 1.0,
-            "blue": 0.21568627450980393,
-            "green": 0.1607843137254902,
-            "red": 0.12156862745098039
-          },
-          "heightScale": 1.05,
-          "isHidden": false,
-          "isLocationLocked": false,
-          "rotationDegrees": 0,
-          "shadowStrength": 1.0,
-          "shape": "rounded_rectangle",
-          "widthScale": 1.12,
-          "zIndex": 0
-        },
-        "down",
-        {
-          "heightScale": 1.0,
-          "isHidden": true,
-          "isLocationLocked": false,
-          "rotationDegrees": 0,
-          "shadowStrength": 1.0,
-          "widthScale": 1.0,
-          "zIndex": 0
-        },
-        "left",
-        {
-          "heightScale": 1.0,
-          "isHidden": true,
-          "isLocationLocked": false,
-          "rotationDegrees": 0,
-          "shadowStrength": 1.0,
-          "widthScale": 1.0,
-          "zIndex": 0
-        },
-        "right",
-        {
-          "heightScale": 1.0,
-          "isHidden": true,
-          "isLocationLocked": false,
-          "rotationDegrees": 0,
-          "shadowStrength": 1.0,
-          "widthScale": 1.0,
-          "zIndex": 0
-        },
-        "jump",
-        {
-          "accentStyle": "purple",
-          "centerX": 0.82,
-          "centerY": 0.84,
-          "cornerRadius": 12.0,
-          "fillColor": {
-            "alpha": 1.0,
-            "blue": 0.9294117647058824,
-            "green": 0.22745098039215686,
-            "red": 0.48627450980392156
-          },
-          "heightScale": 1.28,
-          "isHidden": false,
-          "isLocationLocked": false,
-          "rotationDegrees": 0,
-          "shadowStrength": 1.25,
-          "shape": "rounded_rectangle",
-          "widthScale": 1.42,
-          "zIndex": 0
-        },
-        "attack",
-        {
-          "heightScale": 1.0,
-          "isHidden": true,
-          "isLocationLocked": false,
-          "rotationDegrees": 0,
-          "shadowStrength": 1.0,
-          "widthScale": 1.0,
-          "zIndex": 0
-        },
-        "dash",
-        {
-          "heightScale": 1.0,
-          "isHidden": true,
-          "isLocationLocked": false,
-          "rotationDegrees": 0,
-          "shadowStrength": 1.0,
-          "widthScale": 1.0,
-          "zIndex": 0
-        },
-        "focus",
-        {
-          "heightScale": 1.0,
-          "isHidden": true,
-          "isLocationLocked": false,
-          "rotationDegrees": 0,
-          "shadowStrength": 1.0,
-          "widthScale": 1.0,
-          "zIndex": 0
-        },
-        "map",
-        {
-          "heightScale": 1.0,
-          "isHidden": true,
-          "isLocationLocked": false,
-          "rotationDegrees": 0,
-          "shadowStrength": 1.0,
-          "widthScale": 1.0,
-          "zIndex": 0
-        },
-        "pause",
-        {
-          "heightScale": 1.0,
-          "isHidden": true,
-          "isLocationLocked": false,
-          "rotationDegrees": 0,
-          "shadowStrength": 1.0,
-          "widthScale": 1.0,
-          "zIndex": 0
-        }
-      ],
+      "buttonCustomizations": [],
       "colorSchemePreference": "system",
       "controlScale": "standard",
-      "customButtons": [],
-      "deviceCanvas": {
-        "frameID": "iphone-17-pro-landscape"
-      },
-      "elements": [
+      "customButtons": [
         {
-          "builtInButton": "up",
-          "id": "00000000-0000-0000-0000-000000000101",
-          "kind": "button",
+          "controlKind": "button",
+          "id": "D673535A-975B-4D72-93BE-FDF87C93001A",
           "label": "Move Up",
           "layout": {
-            "accentStyle": "monochrome",
+            "accentStyle": "purple",
             "centerX": 0.2,
             "centerY": 0.42,
             "cornerRadius": 12.0,
@@ -171,18 +43,80 @@
             "isHidden": false,
             "isLocationLocked": false,
             "rotationDegrees": 0,
-            "shadowStrength": 1.0,
+            "shadowStrength": 1.25,
             "shape": "rounded_rectangle",
             "widthScale": 1.12,
             "zIndex": 0
           },
-          "legacySlot": "up",
-          "partOutputs": [],
-          "visualRole": "movement"
+          "visualRole": "primary_action"
         },
         {
-          "builtInButton": "jump",
-          "id": "00000000-0000-0000-0000-000000000105",
+          "controlKind": "button",
+          "id": "F3AE856B-4F4D-46E4-898F-6F97DA70002A",
+          "label": "Jump",
+          "layout": {
+            "accentStyle": "purple",
+            "centerX": 0.82,
+            "centerY": 0.84,
+            "cornerRadius": 12.0,
+            "fillColor": {
+              "alpha": 1.0,
+              "blue": 0.9294117647058824,
+              "green": 0.22745098039215686,
+              "red": 0.48627450980392156
+            },
+            "heightScale": 1.2,
+            "isHidden": false,
+            "isLocationLocked": false,
+            "rotationDegrees": 0,
+            "shadowStrength": 1.25,
+            "shape": "rounded_rectangle",
+            "widthScale": 1.34,
+            "zIndex": 0
+          },
+          "visualRole": "primary_action"
+        }
+      ],
+      "deviceCanvas": {
+        "frameID": "iphone-17-pro-landscape"
+      },
+      "elements": [
+        {
+          "id": "D673535A-975B-4D72-93BE-FDF87C93001A",
+          "kind": "button",
+          "label": "Move Up",
+          "layout": {
+            "accentStyle": "purple",
+            "centerX": 0.2,
+            "centerY": 0.42,
+            "cornerRadius": 12.0,
+            "fillColor": {
+              "alpha": 1.0,
+              "blue": 0.21568627450980393,
+              "green": 0.1607843137254902,
+              "red": 0.12156862745098039
+            },
+            "heightScale": 1.05,
+            "isHidden": false,
+            "isLocationLocked": false,
+            "rotationDegrees": 0,
+            "shadowStrength": 1.25,
+            "shape": "rounded_rectangle",
+            "widthScale": 1.12,
+            "zIndex": 0
+          },
+          "output": {
+            "gamepadButtons": [],
+            "keyboard": {
+              "keyCode": 126,
+              "modifiersRawValue": 0
+            }
+          },
+          "partOutputs": [],
+          "visualRole": "primary_action"
+        },
+        {
+          "id": "F3AE856B-4F4D-46E4-898F-6F97DA70002A",
           "kind": "button",
           "label": "Jump",
           "layout": {
@@ -196,31 +130,32 @@
               "green": 0.22745098039215686,
               "red": 0.48627450980392156
             },
-            "heightScale": 1.28,
+            "heightScale": 1.2,
             "isHidden": false,
             "isLocationLocked": false,
             "rotationDegrees": 0,
             "shadowStrength": 1.25,
             "shape": "rounded_rectangle",
-            "widthScale": 1.42,
+            "widthScale": 1.34,
             "zIndex": 0
           },
-          "legacySlot": "jump",
+          "output": {
+            "gamepadButtons": [],
+            "keyboard": {
+              "keyCode": 49,
+              "modifiersRawValue": 2
+            }
+          },
           "partOutputs": [],
           "visualRole": "primary_action"
         }
       ],
-      "labelOverrides": [
-        "up",
-        "Move Up",
-        "jump",
-        "Jump"
-      ],
+      "labelOverrides": [],
       "layoutMode": "standard",
       "showsButtonLabels": true,
       "updatedAt": 0
     },
-    "id": "b6e5fb93-be66-5a82-9801-88da1dbb4c49",
+    "id": "76ee5047-12b2-5c28-b1d0-37391d988fd7",
     "name": "Alias Arcade",
     "orientationPreference": "automatic",
     "outputMode": "keyboard",

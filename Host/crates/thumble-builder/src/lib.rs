@@ -21,7 +21,7 @@ use thumble_core::{
     GenerationSpecError, KeyBinding, OutputBinding, PersistentState, ProfileArtifact,
     ProfileArtifactSelection,
 };
-use thumble_protocol::GameButton;
+use thumble_protocol::KeypadElementID;
 use uuid::Uuid;
 
 pub const BUILDER_SESSION_VERSION: u32 = 1;
@@ -871,7 +871,7 @@ impl BuilderSession {
         if bytes.len() > MAXIMUM_BUILDER_SESSION_JSON_BYTES {
             return Err(BuilderError::SessionJsonTooLarge(bytes.len()));
         }
-        serde_json::from_slice(bytes).map_err(|_| BuilderError::DecodingFailed)
+        thumble_core::decode_unique_json(bytes).map_err(|_| BuilderError::DecodingFailed)
     }
 
     fn replay(
@@ -1231,9 +1231,7 @@ fn apply_edit_to_document(
             if elements.len() == before {
                 return Err(BuilderError::ControlNotFound);
             }
-            if let Some(button) = metadata.built_in_button {
-                set_pair_hidden(customization, "buttonCustomizations", &button);
-            }
+            remove_control_references(customization, &metadata.element_id);
             if let Some(customs) = customization
                 .get_mut("customButtons")
                 .and_then(Value::as_array_mut)
@@ -1243,6 +1241,18 @@ fn apply_edit_to_document(
                 });
             }
             paths.push("/profiles/active/customization/elements".to_owned());
+            let input = parse_button(&metadata.element_id)?;
+            let still_declared = ["customization", "landscapeCustomization", "portraitCustomization"].into_iter()
+                .filter_map(|name| profile.get(name))
+                .filter_map(|customization| customization.get("elements").and_then(Value::as_array)).flatten()
+                .any(|element| element.get("id").and_then(Value::as_str).and_then(KeypadElementID::parse) == Some(input));
+            if !still_declared {
+                document.key_bindings.remove(input);
+                document.output_bindings.remove(input);
+                if let Some(keys) = document.profile_key_bindings.get_mut(&active_id) { keys.remove(input); }
+                if let Some(outputs) = document.profile_output_bindings.get_mut(&active_id) { outputs.remove(input); }
+                paths.extend(["/keyBindings", "/outputBindings", "/profileKeyBindings/active", "/profileOutputBindings/active"].into_iter().map(str::to_owned));
+            }
         }
         BuilderEdit::BindingSet {
             button,
@@ -1250,6 +1260,7 @@ fn apply_edit_to_document(
             modifiers,
         } => {
             let button_value = parse_button(button)?;
+            let owned_output = owned_control_output(profile, button_value)?;
             let code = generated_semantic_key_code(key).ok_or(BuilderError::InvalidSemanticKey)?;
             let mask = generated_modifier_mask(modifiers).ok_or(BuilderError::InvalidModifier)?;
             let binding = KeyBinding::new(code, mask);
@@ -1265,12 +1276,13 @@ fn apply_edit_to_document(
                 &mut document.output_bindings,
                 button_value,
                 Some(binding.clone()),
+                owned_output.as_ref(),
             );
             let profile_outputs = document
                 .profile_output_bindings
                 .entry(active_id.clone())
                 .or_default();
-            changed |= set_keyboard_output(profile_outputs, button_value, Some(binding));
+            changed |= set_keyboard_output(profile_outputs, button_value, Some(binding), owned_output.as_ref());
             let semantic_output = profile_outputs.get(&button_value).cloned();
             let elements_changed =
                 sync_mapped_element_outputs(profile, button_value, semantic_output.as_ref())?;
@@ -1289,18 +1301,15 @@ fn apply_edit_to_document(
         }
         BuilderEdit::BindingClear { button } => {
             let button_value = parse_button(button)?;
+            let owned_output = owned_control_output(profile, button_value)?;
             let mut changed = document.key_bindings.remove(button_value).is_some();
             if let Some(bindings) = document.profile_key_bindings.get_mut(&active_id) {
                 changed |= bindings.remove(button_value).is_some();
             }
-            changed |= set_keyboard_output(&mut document.output_bindings, button_value, None);
-            let semantic_output =
-                if let Some(outputs) = document.profile_output_bindings.get_mut(&active_id) {
-                    changed |= set_keyboard_output(outputs, button_value, None);
-                    outputs.get(&button_value).cloned()
-                } else {
-                    None
-                };
+            changed |= set_keyboard_output(&mut document.output_bindings, button_value, None, owned_output.as_ref());
+            let outputs = document.profile_output_bindings.entry(active_id.clone()).or_default();
+            changed |= set_keyboard_output(outputs, button_value, None, owned_output.as_ref());
+            let semantic_output = outputs.get(&button_value).cloned();
             let elements_changed =
                 sync_mapped_element_outputs(profile, button_value, semantic_output.as_ref())?;
             changed |= elements_changed;
@@ -1341,7 +1350,6 @@ fn apply_edit_to_document(
 #[derive(Clone)]
 struct ElementMetadata {
     element_id: String,
-    built_in_button: Option<String>,
 }
 
 fn find_element_metadata(
@@ -1359,10 +1367,6 @@ fn find_element_metadata(
         .ok_or(BuilderError::ControlNotFound)?;
     Ok(ElementMetadata {
         element_id: element_id.to_owned(),
-        built_in_button: element
-            .get("builtInButton")
-            .and_then(Value::as_str)
-            .map(str::to_owned),
     })
 }
 
@@ -1399,7 +1403,8 @@ fn update_layout_mirrors(
     locked: Option<bool>,
 ) -> bool {
     let mut changed = false;
-    if let Some(button) = &metadata.built_in_button {
+    {
+        let button = &metadata.element_id;
         if let Some(values) = customization
             .get_mut("buttonCustomizations")
             .and_then(Value::as_array_mut)
@@ -1459,24 +1464,57 @@ fn update_layout(
     changed
 }
 
-fn set_pair_hidden(customization: &mut Map<String, Value>, field: &str, button: &str) {
-    if let Some(values) = customization.get_mut(field).and_then(Value::as_array_mut) {
-        let mut index = 0;
-        while index + 1 < values.len() {
-            let (key, tail) = values.split_at_mut(index + 1);
-            if key[index].as_str() == Some(button) {
-                if let Some(layout) = tail[0].as_object_mut() {
-                    layout.insert("isHidden".to_owned(), Value::Bool(true));
-                }
+fn remove_control_references(customization: &mut Map<String, Value>, element: &str) {
+    let id = KeypadElementID::parse(element).expect("validated control UUID");
+    for field in ["buttonCustomizations", "labelOverrides"] {
+        match customization.get_mut(field) {
+            Some(Value::Object(values)) => values.retain(|key, _| KeypadElementID::parse(key) != Some(id)),
+            Some(Value::Array(values)) => {
+                *values = values.chunks_exact(2).filter(|pair| pair[0].as_str().and_then(KeypadElementID::parse) != Some(id))
+                    .flat_map(|pair| pair.iter().cloned()).collect();
             }
-            index += 2;
+            _ => {}
+        }
+    }
+    let points_to_removed = |value: &Value| {
+        let raw = if let Some(raw) = value.as_str() { raw.split_once('.').map(|(_, raw)| raw).unwrap_or(raw) }
+            else { match value.get("kind").and_then(Value::as_str) {
+                Some("builtin") => value.get("button").and_then(Value::as_str).unwrap_or_default(),
+                Some("custom") => value.get("id").and_then(Value::as_str).unwrap_or_default(),
+                _ => "",
+            }};
+        KeypadElementID::parse(raw) == Some(id)
+    };
+    if let Some(metadata) = customization.get_mut("designMetadata") {
+        if let Some(order) = metadata.get_mut("layerOrder").and_then(Value::as_array_mut) { order.retain(|value| !points_to_removed(value)); }
+        if let Some(groups) = metadata.get_mut("groups").and_then(Value::as_array_mut) {
+            for group in groups {
+                if let Some(children) = group.get_mut("children").and_then(Value::as_array_mut) { children.retain(|value| !points_to_removed(value)); }
+            }
         }
     }
 }
 
+/// Validate actual ownership before any edit. A sidecar entry cannot create a
+/// control; configured/default outputs remain authoritative over stale maps.
+fn owned_control_output(profile: &Map<String, Value>, id: KeypadElementID) -> Result<Option<OutputBinding>, BuilderError> {
+    let mut found = false;
+    for name in ["customization", "landscapeCustomization", "portraitCustomization"] {
+        let Some(elements) = profile.get(name).and_then(|c| c.get("elements")).and_then(Value::as_array) else { continue; };
+        for element in elements {
+            if element.get("id").and_then(Value::as_str).and_then(KeypadElementID::parse) != Some(id) { continue; }
+            found = true;
+            if let Some(value) = element.get("output").filter(|v| !v.is_null()).or_else(|| element.get("defaultOutput").filter(|v| !v.is_null())) {
+                return serde_json::from_value(value.clone()).map(Some).map_err(|_| BuilderError::InvalidDocument);
+            }
+        }
+    }
+    if found { Ok(None) } else { Err(BuilderError::ControlNotFound) }
+}
+
 fn sync_mapped_element_outputs(
     profile: &mut Map<String, Value>,
-    button: GameButton,
+    button: KeypadElementID,
     output: Option<&OutputBinding>,
 ) -> Result<bool, BuilderError> {
     let mut changed = false;
@@ -1494,38 +1532,30 @@ fn sync_mapped_element_outputs(
             continue;
         };
         for element in elements {
-            let mapped = element
-                .get("legacySlot")
-                .or_else(|| element.get("builtInButton"))
-                .and_then(|value| serde_json::from_value::<GameButton>(value.clone()).ok());
+            let mapped = element.get("id").and_then(Value::as_str).and_then(KeypadElementID::parse);
             if mapped != Some(button) {
                 continue;
             }
             let object = element
                 .as_object_mut()
                 .ok_or(BuilderError::InvalidDocument)?;
-            let mut next = output.cloned();
-            if next.is_none() {
-                if let Some(mut existing) = object
-                    .get("output")
-                    .and_then(|value| serde_json::from_value::<OutputBinding>(value.clone()).ok())
-                {
-                    existing.keyboard = None;
-                    if !existing.gamepad_buttons.is_empty() {
-                        next = Some(existing);
-                    }
-                }
+            // Keyboard authoring updates each canvas owner's own output, not
+            // the first owner's gamepad channel. Keep safe raw output metadata.
+            let mut next_value = object.get("output").filter(|value| value.is_object())
+                .or_else(|| object.get("defaultOutput").filter(|value| value.is_object()))
+                .cloned().unwrap_or_else(|| element_output_value(&output.cloned().unwrap_or_default()));
+            let next = next_value.as_object_mut().ok_or(BuilderError::InvalidDocument)?;
+            let authored = element_output_value(&output.cloned().unwrap_or_default());
+            if let Some(keyboard) = authored.get("keyboard") {
+                let mut raw_keyboard = next.get("keyboard").and_then(Value::as_object).cloned().unwrap_or_default();
+                for field in ["keyCode", "modifiers", "modifiersRawValue", "sequence"] { raw_keyboard.remove(field); }
+                raw_keyboard.extend(keyboard.as_object().ok_or(BuilderError::InvalidDocument)?.clone());
+                next.insert("keyboard".to_owned(), Value::Object(raw_keyboard));
+            } else {
+                next.remove("keyboard");
             }
-            let next_value = next.as_ref().map(element_output_value);
-            if object.get("output") != next_value.as_ref() {
-                match next_value {
-                    Some(value) => {
-                        object.insert("output".to_owned(), value);
-                    }
-                    None => {
-                        object.remove("output");
-                    }
-                }
+            if object.get("output") != Some(&next_value) {
+                object.insert("output".to_owned(), next_value);
                 changed = true;
             }
         }
@@ -1572,17 +1602,15 @@ fn element_output_value(output: &OutputBinding) -> Value {
 
 fn set_keyboard_output(
     outputs: &mut ButtonBindings<OutputBinding>,
-    button: GameButton,
+    button: KeypadElementID,
     keyboard: Option<KeyBinding>,
+    owned_output: Option<&OutputBinding>,
 ) -> bool {
     let previous = outputs.get(&button).cloned();
-    let mut next = previous.clone().unwrap_or_default();
+    let mut next = owned_output.cloned().or_else(|| previous.clone()).unwrap_or_default();
     next.keyboard = keyboard;
-    if next.keyboard.is_none() && next.gamepad_buttons.is_empty() {
-        outputs.remove(button);
-    } else {
-        outputs.insert(button, next);
-    }
+    // Empty is an authoritative clear, never a request to restore defaults.
+    outputs.insert(button, next);
     outputs.get(&button) != previous.as_ref()
 }
 
@@ -1619,8 +1647,8 @@ fn generation_summary(
             .iter()
             .map(|control| BuilderGenerationAssignment {
                 source_ordinal: control.source_ordinal,
-                button: bounded_string(&control.button, 32),
-                element_id: bounded_string(&control.element_id, MAXIMUM_ELEMENT_ID_BYTES),
+                button: control.button.clone(),
+                element_id: control.element_id.clone(),
                 kind: bounded_string(&control.kind, 32),
                 used_explicit_button: control.used_explicit_button,
             })
@@ -1740,6 +1768,7 @@ fn valid_changed_paths(record: &BuilderOperationRecord) -> bool {
     let Ok(edit) = serde_json::from_value::<BuilderEdit>(record.descriptor.clone()) else {
         return false;
     };
+    let binding_maps_optional = matches!(&edit, BuilderEdit::ControlRemove { .. });
     let (mut expected, element_output_optional): (Vec<&str>, bool) = match edit {
         BuilderEdit::ProfileRename { .. } => (
             vec!["/profiles/active/name", "/profiles/active/updatedAt"],
@@ -1801,6 +1830,12 @@ fn valid_changed_paths(record: &BuilderOperationRecord) -> bool {
     let expected = expected.into_iter().map(str::to_owned).collect::<Vec<_>>();
     if record.changed_paths == expected {
         return true;
+    }
+    if binding_maps_optional {
+        let mut with_bindings = expected.clone();
+        with_bindings.extend(["/keyBindings", "/outputBindings", "/profileKeyBindings/active", "/profileOutputBindings/active"].into_iter().map(str::to_owned));
+        with_bindings.sort();
+        if record.changed_paths == with_bindings { return true; }
     }
     if element_output_optional {
         let mut with_elements = expected;
@@ -1882,28 +1917,8 @@ fn bounded_chars(value: &str, maximum: usize) -> String {
     value.chars().take(maximum).collect()
 }
 
-fn parse_button(value: &str) -> Result<GameButton, BuilderError> {
-    match value {
-        "up" => Ok(GameButton::Up),
-        "down" => Ok(GameButton::Down),
-        "left" => Ok(GameButton::Left),
-        "right" => Ok(GameButton::Right),
-        "jump" => Ok(GameButton::Jump),
-        "attack" => Ok(GameButton::Attack),
-        "dash" => Ok(GameButton::Dash),
-        "focus" => Ok(GameButton::Focus),
-        "map" => Ok(GameButton::Map),
-        "pause" => Ok(GameButton::Pause),
-        "custom1" => Ok(GameButton::Custom1),
-        "custom2" => Ok(GameButton::Custom2),
-        "custom3" => Ok(GameButton::Custom3),
-        "custom4" => Ok(GameButton::Custom4),
-        "custom5" => Ok(GameButton::Custom5),
-        "custom6" => Ok(GameButton::Custom6),
-        "custom7" => Ok(GameButton::Custom7),
-        "custom8" => Ok(GameButton::Custom8),
-        _ => Err(BuilderError::InvalidButton),
-    }
+fn parse_button(value: &str) -> Result<KeypadElementID, BuilderError> {
+    KeypadElementID::parse(value).ok_or(BuilderError::InvalidButton)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

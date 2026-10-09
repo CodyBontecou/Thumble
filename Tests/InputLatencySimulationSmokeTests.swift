@@ -5,8 +5,8 @@ import Foundation
 #endif
 struct InputLatencySimulationSmokeTests {
     static func main() {
-        testV2CompactButtonRoundTrip()
-        testV1CompactButtonCompatibility()
+        testV3CompactButtonRoundTrip()
+        testUUIDInputWithoutMetadataAndRejectedSlotFrames()
         testJSONInputFields()
         testPipelineCaptureFieldsRoundTrip()
 
@@ -72,7 +72,7 @@ struct InputLatencySimulationSmokeTests {
         )
         expect(
             heldRecovery.samples.contains {
-                $0.button == .left && $0.state == .down && $0.heartbeatResync
+                $0.button == .preset(3) && $0.state == .down && $0.heartbeatResync
             },
             "held direction heartbeat recovery emits a left down re-sync frame"
         )
@@ -90,50 +90,51 @@ struct InputLatencySimulationSmokeTests {
         print("Input latency simulation smoke tests passed")
     }
 
-    private static func testV2CompactButtonRoundTrip() {
+    private static func testV3CompactButtonRoundTrip() {
         let generation = UInt64.max - 10
         let sequence = UInt64.max - 20
         let pressIdentifier = UInt64.max - 30
         let data = ControllerWireCodec.encodeButton(
-            .attack,
+            .preset(6),
             state: .up,
             sequenceNumber: sequence,
             pressIdentifier: pressIdentifier,
             generation: generation
         )
 
-        expect(data.count == 32, "v2 compact button has the fixed 32-byte layout")
-        expect(data[2] == UInt8(ControllerWireCodec.currentInputProtocolVersion), "v2 compact button has the v2 version byte")
+        expect(data.count == 56, "v3 UUID input has the fixed 56-byte layout")
+        expect(data[2] == UInt8(ControllerWireCodec.currentInputProtocolVersion), "compact input has the current version byte")
 
-        let decoded = decode(data, "v2 compact button")
-        expect(decoded.type == .button, "v2 compact button preserves type")
-        expect(decoded.button == .attack, "v2 compact button preserves button")
-        expect(decoded.state == .up, "v2 compact button preserves state")
-        expect(decoded.inputProtocolVersion == 2, "v2 compact button preserves protocol version")
-        expect(decoded.inputGeneration == generation, "v2 compact button preserves full generation")
-        expect(decoded.inputSequence == sequence, "v2 compact button preserves full sequence")
-        expect(decoded.pressIdentifier == pressIdentifier, "v2 compact button preserves full press identifier")
-        expect(ControllerWireCodec.inputSequenceNumber(from: decoded) == sequence, "sequence helper prefers the explicit v2 sequence")
-        expect(ControllerWireCodec.inputPressIdentifier(from: decoded) == pressIdentifier, "press helper prefers the explicit v2 identifier")
+        let decoded = decode(data, "v3 compact button")
+        expect(decoded.type == .button, "UUID input preserves type")
+        expect(decoded.button == .preset(6), "UUID input preserves identity")
+        expect(decoded.state == .up, "UUID input preserves state")
+        expect(decoded.inputProtocolVersion == 3, "UUID input preserves protocol version")
+        expect(decoded.inputGeneration == generation, "UUID input preserves full generation")
+        expect(decoded.inputSequence == sequence, "UUID input preserves full sequence")
+        expect(decoded.pressIdentifier == pressIdentifier, "UUID input preserves full press identifier")
+        expect(ControllerWireCodec.inputSequenceNumber(from: decoded) == sequence, "sequence helper uses explicit sequence")
+        expect(ControllerWireCodec.inputPressIdentifier(from: decoded) == pressIdentifier, "press helper uses explicit identifier")
     }
 
-    private static func testV1CompactButtonCompatibility() {
-        let data = ControllerWireCodec.encodeButton(
-            .dash,
-            state: .down,
-            sequenceNumber: 42,
-            pressIdentifier: 1234
-        )
-
-        expect(data.count == 14, "v1 compact button remains 14 bytes")
-        expect(data[2] == 1, "v1 compact button retains the v1 version byte")
-
-        let decoded = decode(data, "v1 compact button")
-        expect(decoded.button == .dash, "v1 compact button preserves button")
-        expect(decoded.state == .down, "v1 compact button preserves state")
-        expect(decoded.inputProtocolVersion == nil, "v1 compact button has no explicit protocol version")
-        expect(ControllerWireCodec.inputSequenceNumber(from: decoded) == 42, "v1 compact sequence still decodes from timestamp packing")
-        expect(ControllerWireCodec.inputPressIdentifier(from: decoded) == 1234, "v1 compact press identifier still decodes from timestamp packing")
+    private static func testUUIDInputWithoutMetadataAndRejectedSlotFrames() {
+        let message = ControllerMessage(type: .button, button: .preset(7), state: .down,
+                                        timestamp: ControllerWireCodec.inputSequenceTimestamp(for: 42, pressIdentifier: 1234))
+        let data = encode(message, using: JSONEncoder(), "UUID input without explicit metadata")
+        expect(data.count == 56 && data[2] == 3, "all compact inputs carry UUIDs")
+        let decoded = decode(data, "UUID input")
+        expect(decoded.button == .preset(7), "compact input preserves UUID identity")
+        expect(decoded.inputProtocolVersion == nil, "absent explicit metadata stays absent")
+        expect(ControllerWireCodec.inputSequenceNumber(from: decoded) == 42, "timestamp sequence packing is preserved")
+        expect(ControllerWireCodec.inputPressIdentifier(from: decoded) == 1234, "timestamp identifier packing is preserved")
+        for version in [UInt8(1), UInt8(2)] {
+            var obsolete = Data(repeating: 0, count: version == 1 ? 14 : 32)
+            obsolete[0] = 80; obsolete[1] = 80; obsolete[2] = version; obsolete[3] = 1
+            do {
+                _ = try ControllerWireCodec.decode(obsolete, using: JSONDecoder())
+                expect(false, "slot-index inputs must be rejected")
+            } catch {}
+        }
     }
 
     private static func testJSONInputFields() {
@@ -144,13 +145,13 @@ struct InputLatencySimulationSmokeTests {
             elementID: elementID,
             elementPart: .joystickLeft,
             state: .down,
-            inputProtocolVersion: 2,
+            inputProtocolVersion: 3,
             inputGeneration: 91,
             inputSequence: UInt64.max - 1,
             pressIdentifier: UInt64.max
         )
-        let elementData = encode(element, using: encoder, "JSON element input")
-        expect(elementData.first == 0x7B, "element input with v2 fields uses JSON")
+        let elementData = encode(element, using: encoder, "UUID element input")
+        expect(elementData.count == 56 && elementData[2] == 3, "UUID element input uses compact v3")
         let decodedElement = decode(elementData, "JSON element input")
         expect(decodedElement.elementID == elementID, "JSON element input preserves element ID")
         expect(decodedElement.elementPart == .joystickLeft, "JSON element input preserves element part")
@@ -160,25 +161,24 @@ struct InputLatencySimulationSmokeTests {
 
         let release = ControllerMessage(
             type: .releaseAll,
-            inputProtocolVersion: 2,
+            inputProtocolVersion: 3,
             inputGeneration: 92,
             inputSequence: UInt64.max,
             pressIdentifier: UInt64.max - 2
         )
         let releaseData = encode(release, using: encoder, "JSON release-all")
-        expect(releaseData.first == 0x7B, "release-all with v2 fields uses JSON instead of lossy compact encoding")
+        expect(releaseData.first == 0x7B, "release-all with input metadata uses JSON instead of lossy compact encoding")
         let decodedRelease = decode(releaseData, "JSON release-all")
-        expect(decodedRelease.inputProtocolVersion == 2, "JSON release-all preserves protocol version")
+        expect(decodedRelease.inputProtocolVersion == 3, "JSON release-all preserves protocol version")
         expect(decodedRelease.inputGeneration == 92, "JSON release-all preserves generation")
         expect(decodedRelease.inputSequence == UInt64.max, "JSON release-all preserves full sequence")
         expect(decodedRelease.pressIdentifier == UInt64.max - 2, "JSON release-all preserves full press identifier")
 
         let legacyJSON = Data(#"{"type":"button","button":"jump","state":"down","timestamp":1}"#.utf8)
-        let decodedLegacyJSON = decode(legacyJSON, "legacy JSON button")
-        expect(decodedLegacyJSON.inputProtocolVersion == nil, "legacy JSON remains decodable without v2 fields")
-        expect(decodedLegacyJSON.inputGeneration == nil, "legacy JSON has no generation")
-        expect(decodedLegacyJSON.inputSequence == nil, "legacy JSON has no explicit sequence")
-        expect(decodedLegacyJSON.pressIdentifier == nil, "legacy JSON has no explicit press identifier")
+        do {
+            _ = try ControllerWireCodec.decode(legacyJSON, using: JSONDecoder())
+            expect(false, "named JSON input must be rejected")
+        } catch {}
     }
 
     private static func testPipelineCaptureFieldsRoundTrip() {

@@ -7,13 +7,29 @@ use std::path::PathBuf;
 use thumble_host::paths::HostPaths;
 use thumble_mcp::relay::{run_doctor, run_link, run_relay, run_relink, run_revoke, RelayConfig};
 use thumble_mcp::{environment_allows_input_with_legacy, ThumbleMcp};
-use tokio_util::codec::{FramedRead, FramedWrite};
+use tokio_util::codec::{FramedRead, FramedWrite, LinesCodec};
 
 const INPUT_ENV: &str = "THUMBLE_MCP_ALLOW_INPUT";
 const LEGACY_INPUT_ENV: &str = "POCKETPAD_MCP_ALLOW_INPUT";
 const CONFIG_WRITE_ENV: &str = "THUMBLE_MCP_ALLOW_CONFIG_WRITE";
 const LEGACY_CONFIG_WRITE_ENV: &str = "POCKETPAD_MCP_ALLOW_CONFIG_WRITE";
-const MAXIMUM_MCP_REQUEST_BYTES: usize = 256 * 1024;
+const MAXIMUM_ORDINARY_MCP_REQUEST_BYTES: usize = 256 * 1024;
+// Covers base64 for the 16 MiB decoded source budget plus bounded edit metadata.
+// Relay/tunnel limits remain independent; this applies only to local stdio.
+const MAXIMUM_MCP_REQUEST_BYTES: usize = 24 * 1024 * 1024;
+
+fn decode_stdio_request(data: &[u8]) -> Result<RxJsonRpcMessage<RoleServer>, &'static str> {
+    if data.len() > MAXIMUM_MCP_REQUEST_BYTES { return Err("oversized request"); }
+    let value: serde_json::Value = thumble_protocol::decode_unique_json(data)
+        .map_err(|_| "ambiguous or invalid request")?;
+    let source_update = value.get("method").and_then(serde_json::Value::as_str) == Some("tools/call")
+        && value.get("params").and_then(|params| params.get("name"))
+            .and_then(serde_json::Value::as_str) == Some("update_controller_design");
+    if data.len() > MAXIMUM_ORDINARY_MCP_REQUEST_BYTES && !source_update {
+        return Err("oversized ordinary request");
+    }
+    serde_json::from_value(value).map_err(|_| "invalid request")
+}
 
 #[derive(Debug, Parser)]
 #[command(
@@ -214,13 +230,19 @@ async fn run() -> Result<(), String> {
         );
         let input = FramedRead::new(
             tokio::io::stdin(),
-            JsonRpcMessageCodec::<RxJsonRpcMessage<RoleServer>>::new_with_max_length(
-                MAXIMUM_MCP_REQUEST_BYTES,
-            ),
+            LinesCodec::new_with_max_length(MAXIMUM_MCP_REQUEST_BYTES),
         )
         .filter_map(|result| {
             futures::future::ready(match result {
-                Ok(message) => Some(message),
+                Ok(line) => {
+                    match decode_stdio_request(line.as_bytes()) {
+                        Ok(message) => Some(message),
+                        Err(_) => {
+                            eprintln!("thumble-mcp rejected an ambiguous or invalid request");
+                            None
+                        }
+                    }
+                }
                 Err(_) => {
                     eprintln!("thumble-mcp rejected an invalid or oversized request");
                     None
@@ -241,5 +263,31 @@ async fn run() -> Result<(), String> {
             .map_err(|error| format!("serve MCP stdio session: {error}"))?;
         eprintln!("thumble-mcp stopped transport=stdio");
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod stdio_request_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn large_source_updates_preserve_the_ordinary_request_limit() {
+        let data = "A".repeat(MAXIMUM_ORDINARY_MCP_REQUEST_BYTES + 1);
+        let mut request = json!({"jsonrpc":"2.0","id":1,"method":"tools/call",
+            "params":{"name":"update_controller_design","arguments":{
+                "workspacePath":"/private/tmp/design","expectedRevision":1,
+                "edits":[{"path":"sources/texture.png","data":data}]}}});
+        assert!(decode_stdio_request(&serde_json::to_vec(&request).unwrap()).is_ok());
+        request["params"]["name"] = json!("review_controller_design");
+        assert_eq!(decode_stdio_request(&serde_json::to_vec(&request).unwrap()).unwrap_err(), "oversized ordinary request");
+    }
+
+    #[test]
+    fn update_classification_rejects_ambiguous_keys_and_absolute_overflow() {
+        let duplicate = br#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"update_controller_design","\u006eame":"review_controller_design","arguments":{}}}"#;
+        assert_eq!(decode_stdio_request(duplicate).unwrap_err(), "ambiguous or invalid request");
+        assert_eq!(decode_stdio_request(&vec![b' '; MAXIMUM_MCP_REQUEST_BYTES + 1]).unwrap_err(), "oversized request");
+        assert!(decode_stdio_request(br#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#).is_ok());
     }
 }

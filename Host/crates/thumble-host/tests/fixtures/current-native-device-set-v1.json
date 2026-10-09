@@ -1,0 +1,351 @@
+{
+  "after": {
+    "activeProfileID": "DD0B476A-0458-5AAF-A2DA-EA17D3CF2558",
+    "defaultProfileID": "DD0B476A-0458-5AAF-A2DA-EA17D3CF2558",
+    "keyBindings": {},
+    "outputBindings": {
+      "81C296ED-309D-4F05-BB11-F5A2E2027801": {
+        "gamepadButtons": []
+      }
+    },
+    "profileKeyBindings": {
+      "00000000-0000-0000-0000-000000000201": {},
+      "DD0B476A-0458-5AAF-A2DA-EA17D3CF2558": {}
+    },
+    "profileOutputBindings": {
+      "00000000-0000-0000-0000-000000000201": {
+        "81C296ED-309D-4F05-BB11-F5A2E2027801": {
+          "gamepadButtons": []
+        }
+      },
+      "DD0B476A-0458-5AAF-A2DA-EA17D3CF2558": {
+        "81C296ED-309D-4F05-BB11-F5A2E2027801": {
+          "gamepadButtons": []
+        }
+      }
+    },
+    "profiles": [
+      {
+        "customization": {
+          "elements": [
+            {
+              "defaultOutput": {
+                "gamepadButtons": []
+              },
+              "futureElement": {
+                "source": "Owned"
+              },
+              "id": "81C296ED-309D-4F05-BB11-F5A2E2027801",
+              "kind": "button",
+              "label": "Owned Fixture",
+              "output": {
+                "gamepadButtons": []
+              }
+            }
+          ],
+          "futureCustomization": {
+            "source": "Owned"
+          },
+          "futureTuning": {
+            "gain": 0.125,
+            "nullable": null
+          }
+        },
+        "futureProfile": {
+          "source": "Owned"
+        },
+        "futureProfileField": {
+          "nested": [
+            true,
+            null,
+            3.5
+          ]
+        },
+        "id": "00000000-0000-0000-0000-000000000201",
+        "landscapeCustomization": {
+          "elements": [],
+          "futureCustomization": {
+            "source": "Owned"
+          }
+        },
+        "landscapeSkinBaselineCustomization": {
+          "elements": []
+        },
+        "name": "Renamed",
+        "orientationPreference": "automatic",
+        "outputMode": "keyboard",
+        "portraitCustomization": {
+          "elements": [],
+          "futureCustomization": {
+            "source": "Owned"
+          }
+        },
+        "portraitSkinBaselineCustomization": {
+          "elements": []
+        },
+        "skinBaselineCustomization": {
+          "elements": []
+        },
+        "skinReference": {
+          "identifier": "com.codybontecou.thumble.fixture",
+          "version": "1.2.3"
+        },
+        "updatedAt": 1791292470745
+      },
+      {
+        "customization": {
+          "elements": [
+            {
+              "defaultOutput": {
+                "gamepadButtons": []
+              },
+              "futureElement": {
+                "source": "Owned"
+              },
+              "id": "81C296ED-309D-4F05-BB11-F5A2E2027801",
+              "kind": "button",
+              "label": "Owned Fixture",
+              "output": {
+                "gamepadButtons": []
+              }
+            }
+          ],
+          "futureCustomization": {
+            "source": "Owned"
+          },
+          "futureTuning": {
+            "gain": 0.125,
+            "nullable": null
+          }
+        },
+        "futureProfile": {
+          "source": "Owned"
+        },
+        "futureProfileField": {
+          "nested": [
+            true,
+            null,
+            3.5
+          ]
+        },
+        "id": "dd0b476a-0458-5aaf-a2da-ea17d3cf2558",
+        "landscapeCustomization": {
+          "elements": [
+            {
+              "defaultOutput": {
+                "gamepadButtons": []
+              },
+              "futureElement": {
+                "source": "Owned"
+              },
+              "id": "81C296ED-309D-4F05-BB11-F5A2E2027801",
+              "kind": "button",
+              "label": "Owned Fixture",
+              "output": {
+                "gamepadButtons": []
+              }
+            }
+          ],
+          "futureCustomization": {
+            "source": "Owned"
+          },
+          "futureTuning": {
+            "gain": 0.125,
+            "nullable": null
+          }
+        },
+        "landscapeSkinBaselineCustomization": {
+          "elements": []
+        },
+        "name": "Copy",
+        "orientationPreference": "automatic",
+        "outputMode": "custom",
+        "portraitCustomization": {
+          "elements": [],
+          "futureCustomization": {
+            "source": "Owned"
+          }
+        },
+        "portraitSkinBaselineCustomization": {
+          "elements": []
+        },
+        "skinBaselineCustomization": {
+          "elements": []
+        },
+        "skinReference": {
+          "identifier": "com.codybontecou.thumble.fixture",
+          "version": "1.2.3"
+        },
+        "updatedAt": 42
+      }
+    ]
+  },
+  "before": {
+    "activeProfileID": "DD0B476A-0458-5AAF-A2DA-EA17D3CF2558",
+    "defaultProfileID": "DD0B476A-0458-5AAF-A2DA-EA17D3CF2558",
+    "keyBindings": {},
+    "outputBindings": {
+      "81C296ED-309D-4F05-BB11-F5A2E2027801": {
+        "gamepadButtons": []
+      }
+    },
+    "profileKeyBindings": {
+      "00000000-0000-0000-0000-000000000201": {},
+      "DD0B476A-0458-5AAF-A2DA-EA17D3CF2558": {}
+    },
+    "profileOutputBindings": {
+      "00000000-0000-0000-0000-000000000201": {
+        "81C296ED-309D-4F05-BB11-F5A2E2027801": {
+          "gamepadButtons": []
+        }
+      },
+      "DD0B476A-0458-5AAF-A2DA-EA17D3CF2558": {
+        "81C296ED-309D-4F05-BB11-F5A2E2027801": {
+          "gamepadButtons": []
+        }
+      }
+    },
+    "profiles": [
+      {
+        "customization": {
+          "elements": [
+            {
+              "defaultOutput": {
+                "gamepadButtons": []
+              },
+              "futureElement": {
+                "source": "Owned"
+              },
+              "id": "81C296ED-309D-4F05-BB11-F5A2E2027801",
+              "kind": "button",
+              "label": "Owned Fixture",
+              "output": {
+                "gamepadButtons": []
+              }
+            }
+          ],
+          "futureCustomization": {
+            "source": "Owned"
+          },
+          "futureTuning": {
+            "gain": 0.125,
+            "nullable": null
+          }
+        },
+        "futureProfile": {
+          "source": "Owned"
+        },
+        "futureProfileField": {
+          "nested": [
+            true,
+            null,
+            3.5
+          ]
+        },
+        "id": "00000000-0000-0000-0000-000000000201",
+        "landscapeCustomization": {
+          "elements": [],
+          "futureCustomization": {
+            "source": "Owned"
+          }
+        },
+        "landscapeSkinBaselineCustomization": {
+          "elements": []
+        },
+        "name": "Renamed",
+        "orientationPreference": "automatic",
+        "outputMode": "keyboard",
+        "portraitCustomization": {
+          "elements": [],
+          "futureCustomization": {
+            "source": "Owned"
+          }
+        },
+        "portraitSkinBaselineCustomization": {
+          "elements": []
+        },
+        "skinBaselineCustomization": {
+          "elements": []
+        },
+        "skinReference": {
+          "identifier": "com.codybontecou.thumble.fixture",
+          "version": "1.2.3"
+        },
+        "updatedAt": 1791292470745
+      },
+      {
+        "customization": {
+          "elements": [
+            {
+              "defaultOutput": {
+                "gamepadButtons": []
+              },
+              "futureElement": {
+                "source": "Owned"
+              },
+              "id": "81C296ED-309D-4F05-BB11-F5A2E2027801",
+              "kind": "button",
+              "label": "Owned Fixture",
+              "output": {
+                "gamepadButtons": []
+              }
+            }
+          ],
+          "futureCustomization": {
+            "source": "Owned"
+          },
+          "futureTuning": {
+            "gain": 0.125,
+            "nullable": null
+          }
+        },
+        "futureProfile": {
+          "source": "Owned"
+        },
+        "futureProfileField": {
+          "nested": [
+            true,
+            null,
+            3.5
+          ]
+        },
+        "id": "dd0b476a-0458-5aaf-a2da-ea17d3cf2558",
+        "landscapeCustomization": {
+          "elements": [],
+          "futureCustomization": {
+            "source": "Owned"
+          }
+        },
+        "landscapeSkinBaselineCustomization": {
+          "elements": []
+        },
+        "name": "Copy",
+        "orientationPreference": "automatic",
+        "outputMode": "custom",
+        "portraitCustomization": {
+          "elements": [],
+          "futureCustomization": {
+            "source": "Owned"
+          }
+        },
+        "portraitSkinBaselineCustomization": {
+          "elements": []
+        },
+        "skinBaselineCustomization": {
+          "elements": []
+        },
+        "skinReference": {
+          "identifier": "com.codybontecou.thumble.fixture",
+          "version": "1.2.3"
+        },
+        "updatedAt": 1791292471151
+      }
+    ]
+  },
+  "operation": {
+    "frameID": "iphone-17-pro-landscape",
+    "profileID": "DD0B476A-0458-5AAF-A2DA-EA17D3CF2558",
+    "type": "device.set",
+    "variant": "primary"
+  }
+}

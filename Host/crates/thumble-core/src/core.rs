@@ -11,7 +11,7 @@ use std::error::Error;
 use std::fmt;
 use thumble_protocol::{
     ButtonPressState, ControllerMessage, ControllerMessageType, ControllerPointerButton,
-    ControllerPointerEventKind, ControllerWireCodec, GameButton, KeypadElementInputPart,
+    ControllerPointerEventKind, ControllerWireCodec, KeypadElementID, KeypadElementInputPart,
     VirtualGamepadStick, VirtualGamepadTrigger,
 };
 
@@ -181,7 +181,7 @@ pub struct StatusSnapshot {
     pub client_name: Option<String>,
     pub pairing_pending: bool,
     pub active_generation: Option<u64>,
-    pub pressed_buttons: Vec<GameButton>,
+    pub pressed_buttons: Vec<KeypadElementID>,
     pub pressed_elements: Vec<String>,
     pub active_pointer_buttons: Vec<ControllerPointerButton>,
     #[serde(rename = "activeProfileID")]
@@ -220,7 +220,7 @@ struct PendingPairing {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 enum InputIdentity {
-    Button(GameButton),
+    Button(KeypadElementID),
     LocalControl(String),
     Element {
         element_id: String,
@@ -231,7 +231,7 @@ enum InputIdentity {
 impl InputIdentity {
     fn sort_key(&self) -> String {
         match self {
-            Self::Button(button) => format!("0:{:02}", button.compact_wire_code()),
+            Self::Button(button) => format!("0:{button}"),
             Self::LocalControl(id) => format!("2:{id}"),
             Self::Element { element_id, part } => {
                 format!(
@@ -447,14 +447,13 @@ impl HostCore {
     }
 
     pub fn status(&self) -> StatusSnapshot {
-        let pressed_buttons = GameButton::ALL
-            .into_iter()
-            .filter(|button| {
-                self.physical_holds
-                    .get(&InputIdentity::Button(*button))
-                    .is_some_and(PhysicalHold::is_held)
-            })
-            .collect();
+        let mut pressed_buttons = self.physical_holds.iter().filter_map(|(identity, hold)| {
+            match identity {
+                InputIdentity::Button(id) if hold.is_held() => Some(*id),
+                _ => None,
+            }
+        }).collect::<Vec<_>>();
+        pressed_buttons.sort();
 
         let mut pressed_elements = self
             .physical_holds
@@ -696,22 +695,11 @@ impl HostCore {
         Ok(effects)
     }
 
-    /// Restore the active profile if a local adapter could not persist a
-    /// selection. This intentionally does not recreate released holds or emit
-    /// effects: disk and an attached iPhone still reference the old profile.
-    pub fn restore_profile_after_failed_local_selection(
-        &mut self,
-        profile_id: &str,
-        configuration_revision: u64,
-    ) -> Result<(), LocalControlError> {
-        let profile_id = self
-            .state
-            .canonical_profile_id(profile_id)
-            .map(str::to_owned)
-            .ok_or(LocalControlError::ProfileNotFound)?;
-        self.state.active_profile_id = profile_id;
-        self.state.configuration_revision = configuration_revision;
-        Ok(())
+    /// Restore the complete previously validated state after a failed local
+    /// selection save, including its binding mirrors. Released holds are not
+    /// recreated and no effects are emitted.
+    pub fn restore_state_after_failed_local_selection(&mut self, previous: PersistentState) {
+        self.state = previous;
     }
 
     /// Install a configuration state that the host adapter already validated
@@ -1522,6 +1510,16 @@ impl HostCore {
                     self.send_diagnostic(connection_id, "Active profile is malformed", effects);
                     return;
                 }
+                let mut candidate_profile = self.state.profile(&active_profile_id).unwrap().clone();
+                candidate_profile["customization"] = customization.clone();
+                if !crate::validate_element_identities(&candidate_profile) {
+                    self.send_diagnostic(
+                        connection_id,
+                        "Customization must declare unique element UUIDs and valid references; obsolete input-slot setups are not supported",
+                        effects,
+                    );
+                    return;
+                }
                 if self.state.bump_configuration_revision().is_err() {
                     self.send_diagnostic(
                         connection_id,
@@ -1537,6 +1535,7 @@ impl HostCore {
                     .and_then(Value::as_object_mut)
                     .expect("active profile shape was validated above");
                 profile.insert("customization".to_owned(), customization.clone());
+                self.state.reconcile_active_profile_binding_maps();
                 effects.push(Effect::PersistState);
                 effects.push(Effect::SendMessage {
                     connection_id,
@@ -1565,6 +1564,7 @@ impl HostCore {
                 .map_err(|_| LocalControlError::ConfigurationRevisionExhausted)?;
             self.release_all_and_notify_client(effects);
             self.state.active_profile_id = profile_id;
+            self.state.refresh_global_binding_mirrors();
             effects.push(Effect::PersistState);
         }
         if let Some(connection_id) = self

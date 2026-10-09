@@ -38,7 +38,7 @@ use thumble_core::{
     TokenSource,
 };
 use thumble_protocol::{
-    ControllerMessage, ControllerMessageType, ControllerWireCodec, GameButton,
+    ControllerMessage, ControllerMessageType, ControllerWireCodec, KeypadElementID,
     KeypadElementInputPart,
 };
 use tokio::net::{TcpListener, TcpStream};
@@ -341,19 +341,13 @@ impl SharedRuntime {
             return Err("profile ID must contain between 1 and 512 bytes".to_owned());
         }
         let mut inner = self.inner.lock().expect("runtime mutex poisoned");
-        let previous = inner.core.persistent_state().active_profile_id.clone();
-        let previous_revision = inner.core.persistent_state().configuration_revision;
+        let previous = inner.core.persistent_state().clone();
         let effects = inner
             .core
             .select_profile_locally(profile_id)
             .map_err(|error| error.to_string())?;
         if let Err(error) = self.execute_effects(&mut inner, effects) {
-            inner
-                .core
-                .restore_profile_after_failed_local_selection(&previous, previous_revision)
-                .map_err(|rollback| {
-                    format!("{error}; failed to roll back profile selection: {rollback}")
-                })?;
+            inner.core.restore_state_after_failed_local_selection(previous);
             return Err(error);
         }
         let state = inner.core.persistent_state();
@@ -365,7 +359,7 @@ impl SharedRuntime {
             .collect::<Vec<_>>();
         Ok((
             redacted(&selected, &auth_tokens),
-            !selected.eq_ignore_ascii_case(&previous),
+            !selected.eq_ignore_ascii_case(&previous.active_profile_id),
             state.configuration_revision,
         ))
     }
@@ -688,29 +682,6 @@ fn testable_output(binding: &OutputBinding) -> bool {
 fn installed_controls(state: &thumble_core::PersistentState) -> Vec<InstalledControl> {
     let mut controls = BTreeMap::<String, InstalledControl>::new();
 
-    for button in GameButton::ALL {
-        let Some(binding) = state.resolve_button_output(button) else {
-            continue;
-        };
-        if !testable_output(&binding) {
-            continue;
-        }
-        let name = game_button_name(button);
-        let control_id = format!("button:{name}");
-        controls.insert(
-            control_id.clone(),
-            InstalledControl {
-                summary: ControlSummary {
-                    control_id,
-                    label: game_button_label(button),
-                    kind: "button".to_owned(),
-                    part: KeypadElementInputPart::Primary,
-                },
-                binding,
-            },
-        );
-    }
-
     let Some(profile) = state.active_profile() else {
         return controls.into_values().collect();
     };
@@ -787,50 +758,6 @@ fn installed_controls(state: &thumble_core::PersistentState) -> Vec<InstalledCon
             .cmp(&right.summary.control_id.to_ascii_lowercase())
     });
     controls
-}
-
-const fn game_button_name(button: GameButton) -> &'static str {
-    match button {
-        GameButton::Up => "up",
-        GameButton::Down => "down",
-        GameButton::Left => "left",
-        GameButton::Right => "right",
-        GameButton::Jump => "jump",
-        GameButton::Attack => "attack",
-        GameButton::Dash => "dash",
-        GameButton::Focus => "focus",
-        GameButton::Map => "map",
-        GameButton::Pause => "pause",
-        GameButton::Custom1 => "custom1",
-        GameButton::Custom2 => "custom2",
-        GameButton::Custom3 => "custom3",
-        GameButton::Custom4 => "custom4",
-        GameButton::Custom5 => "custom5",
-        GameButton::Custom6 => "custom6",
-        GameButton::Custom7 => "custom7",
-        GameButton::Custom8 => "custom8",
-    }
-}
-
-fn game_button_label(button: GameButton) -> String {
-    match button {
-        GameButton::Custom1 => "Custom 1".to_owned(),
-        GameButton::Custom2 => "Custom 2".to_owned(),
-        GameButton::Custom3 => "Custom 3".to_owned(),
-        GameButton::Custom4 => "Custom 4".to_owned(),
-        GameButton::Custom5 => "Custom 5".to_owned(),
-        GameButton::Custom6 => "Custom 6".to_owned(),
-        GameButton::Custom7 => "Custom 7".to_owned(),
-        GameButton::Custom8 => "Custom 8".to_owned(),
-        _ => {
-            let name = game_button_name(button);
-            let mut chars = name.chars();
-            match chars.next() {
-                Some(first) => first.to_uppercase().chain(chars).collect(),
-                None => String::new(),
-            }
-        }
-    }
 }
 
 const fn element_part_name(part: KeypadElementInputPart) -> &'static str {
@@ -2281,13 +2208,22 @@ mod tests {
         fn stop(&mut self) {}
     }
 
+    const CONTROLLER_ID: &str = "16d3ee52-d5a4-4b86-ad72-f16d15a0187c";
+    const SAFE_ID: &str = "ade6bcd2-c35f-49c6-a239-5a0286a481ba";
+    const STICK_ID: &str = "867b044c-34cd-433d-bef8-7d422b66540a";
+    const DECORATION_ID: &str = "1dcae3f9-e2ba-4e73-9903-10883e53b04a";
+
     fn failing_controller_runtime(paths: HostPaths) -> SharedRuntime {
         let mut state = thumble_core::PersistentState::minimal("server").unwrap();
         state.profiles[0]["outputMode"] = serde_json::json!("custom");
         state.profiles[0]["customization"]["elements"] = serde_json::json!([{
-            "id":"controller", "label":"Controller", "kind":"button",
+            "id":CONTROLLER_ID, "label":"Controller", "kind":"button",
             "output":{"gamepadButtons":["south"]}
         }]);
+        state.key_bindings = Default::default();
+        state.output_bindings = Default::default();
+        state.profile_key_bindings.clear();
+        state.profile_output_bindings.clear();
         state.normalize().unwrap();
         let (shutdown, _) = watch::channel(false);
         SharedRuntime {
@@ -2321,7 +2257,7 @@ mod tests {
             directory.path().join("control.sock"),
         ));
         let request = || ControlRequest::TestControl {
-            control_id: "element:controller".into(),
+            control_id: format!("element:{CONTROLLER_ID}"),
             pressed: true,
         };
         for _ in 0..2 {
@@ -2331,7 +2267,7 @@ mod tests {
             let mut inner = shared.inner.lock().unwrap();
             assert!(inner
                 .core
-                .set_local_output_binding("element:controller", None, false, 2)
+                .set_local_output_binding(&format!("element:{CONTROLLER_ID}"), None, false, 2)
                 .unwrap()
                 .is_empty());
             assert_eq!(inner.output.gamepad_status().phase, "report-failed");
@@ -2347,7 +2283,7 @@ mod tests {
             directory.path().join("control.sock"),
         ));
         let response = shared.handle(ControlRequest::PressControl {
-            control_id: "element:CONTROLLER".into(),
+            control_id: format!("element:{}", CONTROLLER_ID.to_uppercase()),
         });
         assert!(!response.ok);
         assert!(response.error.unwrap().contains("mock HID report failed"));
@@ -2384,7 +2320,7 @@ mod tests {
                 .observe(-10_000, HOLD_EXPIRY_AGE_MILLIS);
         }
         let mut old = ControllerMessage::new(ControllerMessageType::Button, 0);
-        old.button = Some(GameButton::Jump);
+        old.button = Some(KeypadElementID::preset(5));
         old.state = Some(thumble_protocol::ButtonPressState::Down);
         assert!(shared
             .handle_message(1, old)
@@ -2452,19 +2388,20 @@ mod tests {
     #[test]
     fn installed_controls_are_allowlisted_profile_targets_without_raw_keys() {
         let mut state = thumble_core::PersistentState::minimal("server").unwrap();
+        let profile_id = "B16C0A67-B9EA-42CA-966B-9F23A09CDE8B";
         state.profiles = vec![serde_json::json!({
-            "id": "profile",
+            "id": profile_id,
             "name": "Profile",
             "customization": {
                 "elements": [
                     {
-                        "id": "safe-button",
+                        "id": SAFE_ID,
                         "label": "Safe Button",
                         "kind": "button",
                         "output": {"keyboard": {"keyCode": 77, "modifiersRawValue": 2}}
                     },
                     {
-                        "id": "stick",
+                        "id": STICK_ID,
                         "label": "Stick",
                         "kind": "joystick",
                         "partOutputs": {
@@ -2473,7 +2410,7 @@ mod tests {
                         }
                     },
                     {
-                        "id": "decoration",
+                        "id": DECORATION_ID,
                         "label": "Ignore Me",
                         "kind": "decoration",
                         "output": {"keyboard": {"keyCode": 12}}
@@ -2481,8 +2418,12 @@ mod tests {
                 ]
             }
         })];
-        state.active_profile_id = "profile".to_owned();
-        state.default_profile_id = "profile".to_owned();
+        state.active_profile_id = profile_id.to_owned();
+        state.default_profile_id = profile_id.to_owned();
+        state.key_bindings = Default::default();
+        state.output_bindings = Default::default();
+        state.profile_key_bindings.clear();
+        state.profile_output_bindings.clear();
         state.normalize().unwrap();
 
         let controls = installed_controls(&state);
@@ -2490,11 +2431,11 @@ mod tests {
             .iter()
             .map(|control| control.summary.control_id.as_str())
             .collect::<Vec<_>>();
-        assert!(ids.contains(&"element:safe-button"));
-        assert!(ids.contains(&"element:stick#joystick_up"));
-        assert!(ids.contains(&"element:stick#joystick_down"));
-        assert!(!ids.iter().any(|id| id.contains("decoration")));
-        assert!(!ids.iter().any(|id| id.contains("77")));
+        assert!(ids.contains(&format!("element:{SAFE_ID}").as_str()));
+        assert!(ids.contains(&format!("element:{STICK_ID}#joystick_up").as_str()));
+        assert!(ids.contains(&format!("element:{STICK_ID}#joystick_down").as_str()));
+        assert!(!ids.iter().any(|id| id.contains(DECORATION_ID)));
+        assert!(!serde_json::to_string(&controls.iter().map(|c| &c.summary).collect::<Vec<_>>()).unwrap().contains("keyCode"));
         assert!(!ids.iter().any(|id| id.contains("shell")));
     }
 
@@ -2557,7 +2498,7 @@ mod tests {
     }
 
     #[test]
-    fn online_legacy_profile_import_uses_the_same_draft_and_cas_path_as_offline_import() {
+    fn online_current_envelope_import_uses_draft_cas_and_rejects_obsolete_versions() {
         let directory = tempdir().unwrap();
         let paths = HostPaths::new(
             directory.path().join("state"),
@@ -2576,7 +2517,7 @@ mod tests {
         object.remove("artifactVersion");
         object.remove("catalogRevision");
         object.remove("contentHash");
-        object.insert("version".to_owned(), Value::from(1));
+        object.insert("version".to_owned(), Value::from(thumble_core::PROFILE_ARTIFACT_SCHEMA_VERSION));
         let artifact_json = serde_json::to_string(&legacy).unwrap();
         let core = HostCore::new(state, "123456").unwrap();
         let (shutdown, _) = watch::channel(false);
@@ -2599,6 +2540,23 @@ mod tests {
             shutdown,
             started_at: crate::input_liveness::InputClock::now(),
         };
+        for version in [1, 2, 3] {
+            let mut obsolete: Value = serde_json::from_str(&artifact_json).unwrap();
+            obsolete["version"] = Value::from(version);
+            let rejected = shared.cli_profile_transaction(&CliProfileRequest {
+                schema_version: cli_profile::CLI_PROFILE_SCHEMA_VERSION,
+                invocation_id: Some(Uuid::parse_str("abcdefab-cdef-5abc-8def-abcdefabcdef").unwrap()),
+                expected_configuration_revision: Some(1),
+                command: cli_profile::CliProfileCommand::Import {
+                    artifact_json: serde_json::to_string(&obsolete).unwrap(),
+                    append_as_copies: true, select: true, make_default: false,
+                },
+            });
+            assert!(!rejected.ok, "obsolete schema {version} must not be imported");
+            assert_eq!(shared.inner.lock().unwrap().core.persistent_state().configuration_revision, 1);
+            assert!(!paths.state_file.exists());
+            assert!(!paths.drafts_dir.exists());
+        }
         let response = shared.cli_profile_transaction(&CliProfileRequest {
             schema_version: cli_profile::CLI_PROFILE_SCHEMA_VERSION,
             invocation_id: Some(Uuid::parse_str("abcdefab-cdef-5abc-8def-abcdefabcdef").unwrap()),

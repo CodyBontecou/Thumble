@@ -167,7 +167,9 @@ def inspect_signature(executable, *, arch):
     if not adhoc:
         with tempfile.TemporaryDirectory(prefix="thumble-signing-check-") as directory:
             prefix = Path(directory) / "signer"
-            run_command(["codesign", "--display", "--arch", arch, "--extract-certificates", str(prefix), str(executable)])
+            # codesign's prefix is an optional argument: a separate token is
+            # treated as another input path, not the certificate destination.
+            run_command(["codesign", "--display", "--arch", arch, f"--extract-certificates={prefix}", str(executable)])
             leaf = Path(str(prefix) + "0")
             require(leaf.is_file(), "codesign leaf certificate missing")
             certificate = leaf.read_bytes()
@@ -257,8 +259,9 @@ def verify_artifact(app, *, bundle_id, team_id=TEAM_ID, distribution="developer-
     if not diagnose_ad_hoc:
         # Displayed certificate names are diagnostics, not trust evidence. Test
         # Apple's anchor and real certificate OU/OID on the main executable only.
+        # The leading '=' selects literal requirement text rather than a file.
         run_command(["codesign", "--verify", "--strict", "--all-architectures", "--test-requirement",
-                     signer_requirement(bundle_id, team_id, distribution), str(executable)])
+                     "=" + signer_requirement(bundle_id, team_id, distribution), str(executable)])
     verify_nested_code(contents, executable, diagnose_ad_hoc=diagnose_ad_hoc)
 
 

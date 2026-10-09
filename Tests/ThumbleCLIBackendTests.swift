@@ -4,6 +4,17 @@ import XCTest
 
 final class ThumbleCLIBackendTests: XCTestCase {
     private let invocationID = UUID(uuidString: "AAAAAAAA-BBBB-5CCC-8DDD-EEEEEEEEEEEE")!
+    private let generatedControlID = "954361D0-559A-4F70-BF56-9CA387E45DFA";
+
+    func testLegacyRuntimeIdentityRejectsAmbiguousBytesBeforeCorrelatedRouting() throws {
+        let fields = "\"updatedAt\":1000,\"runtimeProcessID\":42,\"runtimeInstanceID\":\"\(UUID())\",\"runtimeStatusRequestID\":\"\(invocationID)\""
+        let valid = Data(("{" + fields + "}").utf8)
+        XCTAssertNoThrow(try ThumbleCLIRuntimeBackend.verifyLegacyStatus(valid, requestID: invocationID, now: 1000, processIsLive: { $0 == 42 }))
+        for duplicate in [",\"runtimeProcessID\":42", ",\"\\u0072untimeStatusRequestID\":\"\(invocationID)\""] {
+            let ambiguous = Data(("{" + fields + duplicate + "}").utf8)
+            XCTAssertThrowsError(try ThumbleCLIRuntimeBackend.verifyLegacyStatus(ambiguous, requestID: invocationID, now: 1000, processIsLive: { $0 == 42 }))
+        }
+    }
 
     func testTypedHelperAcceptsOneStrictBoundedResponseAndPreservesInvocation() throws {
         let helper = try makeHelper(body: """
@@ -175,7 +186,7 @@ final class ThumbleCLIBackendTests: XCTestCase {
     func testBindingProjectionIsStrictBoundedSemanticAndRevisionTagged() throws {
         let helper = try makeHelper(body: """
         IFS= read -r line || exit 3
-        printf '%s\\n' '{"schemaVersion":8,"ok":true,"invocationID":"AAAAAAAA-BBBB-5CCC-8DDD-EEEEEEEEEEEE","authorityMode":"offline","projection":{"kind":"bindingList","configurationRevision":11,"profileID":"00000000-0000-0000-0000-000000000201","profileName":"Arcade","outputMode":"custom","rows":[{"button":"jump","output":{"keyboard":[{"key":"Space","modifiers":["shift"]}],"gamepadButtons":["south"]}}]}}'
+        printf '%s\\n' '{"schemaVersion":8,"ok":true,"invocationID":"AAAAAAAA-BBBB-5CCC-8DDD-EEEEEEEEEEEE","authorityMode":"offline","projection":{"kind":"bindingList","configurationRevision":11,"profileID":"00000000-0000-0000-0000-000000000201","profileName":"Arcade","outputMode":"custom","rows":[{"button":"00000000-0000-0000-0000-000000000105","output":{"keyboard":[{"key":"Space","modifiers":["shift"]}],"gamepadButtons":["south"]}}]}}'
         """)
         let backend = try ThumbleCLIProfileBackend(executableURL: helper)
         let response = try backend.perform(
@@ -184,15 +195,49 @@ final class ThumbleCLIBackendTests: XCTestCase {
         )
         XCTAssertEqual(response.projection?.configurationRevision, 11)
         XCTAssertEqual(response.projection?.kind, .bindingList)
-        XCTAssertEqual(response.projection?.rows?.first?.button, .jump)
+        XCTAssertEqual(response.projection?.rows?.first?.button, .preset(5))
         XCTAssertEqual(response.projection?.rows?.first?.output?.keyboard.first?.key, "Space")
         XCTAssertEqual(response.projection?.rows?.first?.output?.gamepadButtons, [.south])
+    }
+
+    func testBindingProjectionSupportsTheThreeCanvasOwnershipUnion() throws {
+        for count in [128, 129, 384, 385] {
+            let rows: [[String: Any]] = (0..<count).map { index in
+                ["button": String(format: "52FBCB39-D4A7-4A98-9D2B-%012X", index), "output": ["keyboard": [], "gamepadButtons": ["south"]]]
+            }
+            let root: [String: Any] = ["schemaVersion": 8, "ok": true, "invocationID": invocationID.uuidString, "authorityMode": "offline", "projection": ["kind": "bindingList", "configurationRevision": 11, "profileID": "00000000-0000-0000-0000-000000000201", "profileName": "Wide", "rows": rows]]
+            let raw = String(decoding: try JSONSerialization.data(withJSONObject: root), as: UTF8.self)
+            let helper = try makeHelper(body: "IFS= read -r line || exit 3\nprintf '%s\\n' '\(raw)'\n")
+            let backend = try ThumbleCLIProfileBackend(executableURL: helper)
+            if count <= 384 {
+                XCTAssertEqual(try backend.perform(.bindingList(.active), invocationID: invocationID).projection?.rows?.count, count)
+            } else {
+                XCTAssertThrowsError(try backend.perform(.bindingList(.active), invocationID: invocationID)) {
+                    XCTAssertEqual($0 as? ThumbleCLIProfileBackend.BackendError, .malformedResponse)
+                }
+            }
+        }
+    }
+
+    func testBindingProjectionRejectsLiteralAndEscapedDuplicateFieldsBeforeProjection() throws {
+        let valid = #"{"schemaVersion":8,"ok":true,"invocationID":"AAAAAAAA-BBBB-5CCC-8DDD-EEEEEEEEEEEE","authorityMode":"offline","projection":{"kind":"bindingList","configurationRevision":11,"profileID":"00000000-0000-0000-0000-000000000201","profileName":"Arcade","rows":[{"button":"00000000-0000-0000-0000-000000000105","output":{"keyboard":[],"gamepadButtons":[]}}]}}"#
+        for raw in [
+            valid.replacingOccurrences(of: #""schemaVersion":8"#, with: #""schemaVersion":8,"schemaVersion":8"#),
+            valid.replacingOccurrences(of: #""button":"00000000-0000-0000-0000-000000000105""#, with: #""button":"00000000-0000-0000-0000-000000000105","\u0062utton":"00000000-0000-0000-0000-000000000105""#)
+        ] {
+            let helper = try makeHelper(body: "IFS= read -r line || exit 3\nprintf '%s\\n' '\(raw)'\n")
+            XCTAssertThrowsError(try ThumbleCLIProfileBackend(executableURL: helper).perform(.bindingList(.active), invocationID: invocationID)) {
+                XCTAssertEqual($0 as? ThumbleCLIProfileBackend.BackendError, .malformedResponse)
+            }
+        }
+        let baseline = try makeHelper(body: "IFS= read -r line || exit 3\nprintf '%s\\n' '\(valid)'\n")
+        XCTAssertNoThrow(try ThumbleCLIProfileBackend(executableURL: baseline).perform(.bindingList(.active), invocationID: invocationID))
     }
 
     func testBindingProjectionRejectsUnknownNestedFields() throws {
         let helper = try makeHelper(body: """
         IFS= read -r line || exit 3
-        printf '%s\\n' '{"schemaVersion":8,"ok":true,"invocationID":"AAAAAAAA-BBBB-5CCC-8DDD-EEEEEEEEEEEE","authorityMode":"offline","projection":{"kind":"bindingList","configurationRevision":11,"profileID":"00000000-0000-0000-0000-000000000201","profileName":"Arcade","rows":[{"button":"jump","output":{"keyboard":[{"key":"Space","modifiers":[],"keyCode":49}],"gamepadButtons":[]}}]}}'
+        printf '%s\\n' '{"schemaVersion":8,"ok":true,"invocationID":"AAAAAAAA-BBBB-5CCC-8DDD-EEEEEEEEEEEE","authorityMode":"offline","projection":{"kind":"bindingList","configurationRevision":11,"profileID":"00000000-0000-0000-0000-000000000201","profileName":"Arcade","rows":[{"button":"00000000-0000-0000-0000-000000000105","output":{"keyboard":[{"key":"Space","modifiers":[],"keyCode":49}],"gamepadButtons":[]}}]}}'
         """)
         XCTAssertThrowsError(
             try ThumbleCLIProfileBackend(executableURL: helper)
@@ -234,7 +279,7 @@ final class ThumbleCLIBackendTests: XCTestCase {
     func testLayerProjectionIsStrictSanitizedAndRevisionTagged() throws {
         let helper = try makeHelper(body: """
         IFS= read -r line || exit 3
-        printf '%s\\n' '{"schemaVersion":8,"ok":true,"invocationID":"AAAAAAAA-BBBB-5CCC-8DDD-EEEEEEEEEEEE","authorityMode":"offline","layers":{"configurationRevision":17,"profileID":"00000000-0000-0000-0000-000000000201","profileName":"Arcade","variant":"primary","layers":[{"targetID":"jump","stableID":"builtin.jump","label":"Action 1","kind":"button","zIndex":3,"isHidden":false,"isLocationLocked":false,"styleID":"soul"}]}}'
+        printf '%s\\n' '{"schemaVersion":8,"ok":true,"invocationID":"AAAAAAAA-BBBB-5CCC-8DDD-EEEEEEEEEEEE","authorityMode":"offline","layers":{"configurationRevision":17,"profileID":"00000000-0000-0000-0000-000000000201","profileName":"Arcade","variant":"primary","layers":[{"targetID":"jump","stableID":"builtin.preset(5)","label":"Action 1","kind":"button","zIndex":3,"isHidden":false,"isLocationLocked":false,"styleID":"soul"}]}}'
         """)
         let response = try ThumbleCLIProfileBackend(executableURL: helper).perform(
             .layerList(.active, .primary),
@@ -242,14 +287,14 @@ final class ThumbleCLIBackendTests: XCTestCase {
         )
         XCTAssertEqual(response.layers?.configurationRevision, 17)
         XCTAssertEqual(response.layers?.variant, .primary)
-        XCTAssertEqual(response.layers?.layers.first?.stableID, "builtin.jump")
+        XCTAssertEqual(response.layers?.layers.first?.stableID, "builtin.preset(5)")
         XCTAssertEqual(response.layers?.layers.first?.styleID, "soul")
     }
 
     func testGroupProjectionIsStrictSanitizedVariantScopedAndRevisionTagged() throws {
         let helper = try makeHelper(body: """
         IFS= read -r line || exit 3
-        printf '%s\\n' '{"schemaVersion":8,"ok":true,"invocationID":"AAAAAAAA-BBBB-5CCC-8DDD-EEEEEEEEEEEE","authorityMode":"offline","groups":{"configurationRevision":18,"profileID":"00000000-0000-0000-0000-000000000201","profileName":"Arcade","variant":"portrait","groups":[{"id":"00000000-0000-0000-0000-000000000801","name":"Actions","childTargetIDs":["00000000-0000-0000-0000-000000000105"],"childStableIDs":["builtin.jump"],"isLocked":false,"isHidden":true}]}}'
+        printf '%s\\n' '{"schemaVersion":8,"ok":true,"invocationID":"AAAAAAAA-BBBB-5CCC-8DDD-EEEEEEEEEEEE","authorityMode":"offline","groups":{"configurationRevision":18,"profileID":"00000000-0000-0000-0000-000000000201","profileName":"Arcade","variant":"portrait","groups":[{"id":"00000000-0000-0000-0000-000000000801","name":"Actions","childTargetIDs":["00000000-0000-0000-0000-000000000105"],"childStableIDs":["builtin.preset(5)"],"isLocked":false,"isHidden":true}]}}'
         """)
         let response = try ThumbleCLIProfileBackend(executableURL: helper).perform(
             .groupList(.active, .portrait),
@@ -258,7 +303,7 @@ final class ThumbleCLIBackendTests: XCTestCase {
         XCTAssertEqual(response.groups?.configurationRevision, 18)
         XCTAssertEqual(response.groups?.variant, .portrait)
         XCTAssertEqual(response.groups?.groups.first?.name, "Actions")
-        XCTAssertEqual(response.groups?.groups.first?.childStableIDs, ["builtin.jump"])
+        XCTAssertEqual(response.groups?.groups.first?.childStableIDs, ["builtin.preset(5)"])
         XCTAssertEqual(response.groups?.groups.first?.isHidden, true)
     }
 
@@ -430,13 +475,35 @@ final class ThumbleCLIBackendTests: XCTestCase {
         XCTAssertEqual(plan.artifactJSON, artifactJSON)
         XCTAssertEqual(plan.warnings.first?.code, "duplicate-explicit-button-fallback")
         XCTAssertEqual(plan.warnings.first?.sourceOrdinal, 0)
-        XCTAssertEqual(plan.assignedControls.first?.elementID, "element-0")
+        XCTAssertEqual(plan.assignedControls.first?.elementID, generatedControlID)
         XCTAssertEqual(plan.assignedControls.first?.usedExplicitButton, true)
         XCTAssertEqual(plan.droppedControls.first?.sourceOrdinal, 1)
         XCTAssertEqual(plan.layoutQuality.issueCount, 1)
         XCTAssertEqual(plan.layoutQuality.errorCount, 1)
-        XCTAssertEqual(plan.layoutQuality.issues.first?.controlIDs, ["element-0"])
+        XCTAssertEqual(plan.layoutQuality.issues.first?.controlIDs, [generatedControlID])
         XCTAssertEqual(plan.layoutQuality.issues.first?.metric, 0.25)
+    }
+
+    func testGenerationPlanAcceptsTwentyIndependentUUIDsAndRejectsNamedOrMismatchedIdentities() throws {
+        let controls = (0..<20).map { ordinal -> [String: Any] in
+            let id = String(format: "9A93B80F-2D49-4737-AB31-%012X", ordinal)
+            return ["sourceOrdinal": ordinal, "button": id, "elementID": id, "kind": "button", "usedExplicitButton": true]
+        }
+        let valid = try generationPlanObject { plan in
+            plan["assignedControls"] = controls
+            plan["droppedControls"] = []
+        }
+        let response = try ThumbleCLIProfileBackend(executableURL: makeHelper(body: generationPlanResponseBody(planObject: valid)))
+            .perform(.generationPlanSpec(specJSON: "{}", requestedGameName: nil), invocationID: invocationID)
+        XCTAssertEqual(response.generationPlan?.assignedControls.count, 20)
+        for value in ["jump", "3ADC6816-8850-4099-8AF0-B19190A34C2D"] {
+            let invalid = try generationPlanObject { plan in
+                var assigned = plan["assignedControls"] as! [[String: Any]]
+                assigned[0]["button"] = value
+                plan["assignedControls"] = assigned
+            }
+            assertMalformedGenerationPlanResponse(try makeHelper(body: generationPlanResponseBody(planObject: invalid)))
+        }
     }
 
     func testGenerationPlanResponseRejectsAcronymCasingAndUnknownNestedFields() throws {
@@ -488,12 +555,12 @@ final class ThumbleCLIBackendTests: XCTestCase {
             "code": "warning", "sourceOrdinal": 0, "message": "message"
         ]
         let assigned: [String: Any] = [
-            "sourceOrdinal": 2, "button": "attack", "elementID": "element-2",
+            "sourceOrdinal": 2, "button": "3ADC6816-8850-4099-8AF0-B19190A34C2D", "elementID": "3ADC6816-8850-4099-8AF0-B19190A34C2D",
             "kind": "button", "usedExplicitButton": false
         ]
-        let dropped: [String: Any] = ["sourceOrdinal": 2, "reason": "slot-exhaustion"]
+        let dropped: [String: Any] = ["sourceOrdinal": 2, "reason": "unsupported-kind"]
         let issue: [String: Any] = [
-            "code": "control-overlap", "severity": "error", "controlIDs": ["element-0"],
+            "code": "control-overlap", "severity": "error", "controlIDs": [generatedControlID],
             "controlCount": 1, "metric": 0.25, "suggestedRepairs": ["resolve-overlap"]
         ]
 
@@ -524,7 +591,7 @@ final class ThumbleCLIBackendTests: XCTestCase {
                 plan["warnings"] = warnings
             },
             generationPlanObject { $0["omittedWarningCount"] = 1 },
-            generationPlanObject { $0["assignedControls"] = Array(repeating: assigned, count: 19) },
+            generationPlanObject { $0["assignedControls"] = Array(repeating: assigned, count: 129) },
             generationPlanObject { $0["droppedControls"] = Array(repeating: dropped, count: 129) },
             generationPlanObject { plan in
                 var controls = plan["assignedControls"] as! [[String: Any]]
@@ -677,7 +744,7 @@ final class ThumbleCLIBackendTests: XCTestCase {
 
         let binding = ThumbleCLIProfileBackend.Command.bindingSet(
             .active,
-            .jump,
+            .preset(5),
             [.init(key: "B", modifiers: [.control])]
         )
         let bindingData = try JSONEncoder().encode(
@@ -941,19 +1008,19 @@ final class ThumbleCLIBackendTests: XCTestCase {
             "warnings": [[
                 "code": "duplicate-explicit-button-fallback",
                 "sourceOrdinal": 0,
-                "message": "used the next available button"
+                "message": "used an independent generated UUID"
             ]],
             "omittedWarningCount": 0,
             "assignedControls": [[
                 "sourceOrdinal": 0,
-                "button": "jump",
-                "elementID": "element-0",
+                "button": generatedControlID,
+                "elementID": generatedControlID,
                 "kind": "button",
                 "usedExplicitButton": true
             ]],
             "droppedControls": [[
                 "sourceOrdinal": 1,
-                "reason": "slot-exhaustion"
+                "reason": "unsupported-kind"
             ]],
             "layoutQuality": [
                 "issueCount": 1,
@@ -962,7 +1029,7 @@ final class ThumbleCLIBackendTests: XCTestCase {
                 "issues": [[
                     "code": "control-overlap",
                     "severity": "error",
-                    "controlIDs": ["element-0"],
+                    "controlIDs": [generatedControlID],
                     "controlCount": 1,
                     "metric": 0.25,
                     "suggestedRepairs": ["resolve-overlap"]

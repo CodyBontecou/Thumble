@@ -301,7 +301,662 @@ public struct GamepadControlShadowStyle: Codable, Equatable, Sendable {
     }
 }
 
+/// Bounded per-state paint for native pointing interiors. Immutable storage keeps
+/// appearance aggregates small and preserves value semantics across profile copies.
+public final class GamepadPointingPaint: Codable, Equatable, Sendable {
+    public let trackpadFrameColor: GamepadRGBAColor?
+    public let trackpadCursorColor: GamepadRGBAColor?
+    public let trackpadIndicatorColor: GamepadRGBAColor?
+    public let trackpadSecondaryIndicatorColor: GamepadRGBAColor?
+    public let joystickRingColor: GamepadRGBAColor?
+    public let joystickKnobFillColor: GamepadRGBAColor?
+    public let joystickKnobStrokeColor: GamepadRGBAColor?
+    public let trackpadFrameStrokeWidth: CGFloat?
+    public let joystickRingStrokeWidth: CGFloat?
+    public init(
+        trackpadFrameColor: GamepadRGBAColor? = nil,
+        trackpadCursorColor: GamepadRGBAColor? = nil,
+        trackpadIndicatorColor: GamepadRGBAColor? = nil,
+        trackpadSecondaryIndicatorColor: GamepadRGBAColor? = nil,
+        joystickRingColor: GamepadRGBAColor? = nil,
+        joystickKnobFillColor: GamepadRGBAColor? = nil,
+        joystickKnobStrokeColor: GamepadRGBAColor? = nil,
+        trackpadFrameStrokeWidth: CGFloat? = nil,
+        joystickRingStrokeWidth: CGFloat? = nil
+    ) {
+        self.trackpadFrameColor = trackpadFrameColor
+        self.trackpadCursorColor = trackpadCursorColor
+        self.trackpadIndicatorColor = trackpadIndicatorColor
+        self.trackpadSecondaryIndicatorColor = trackpadSecondaryIndicatorColor
+        self.joystickRingColor = joystickRingColor
+        self.joystickKnobFillColor = joystickKnobFillColor
+        self.joystickKnobStrokeColor = joystickKnobStrokeColor
+        self.trackpadFrameStrokeWidth = trackpadFrameStrokeWidth
+        self.joystickRingStrokeWidth = joystickRingStrokeWidth
+    }
+    public static func == (lhs: GamepadPointingPaint, rhs: GamepadPointingPaint) -> Bool {
+        lhs.trackpadFrameColor == rhs.trackpadFrameColor
+            && lhs.trackpadCursorColor == rhs.trackpadCursorColor
+            && lhs.trackpadIndicatorColor == rhs.trackpadIndicatorColor
+            && lhs.trackpadSecondaryIndicatorColor == rhs.trackpadSecondaryIndicatorColor
+            && lhs.joystickRingColor == rhs.joystickRingColor
+            && lhs.joystickKnobFillColor == rhs.joystickKnobFillColor
+            && lhs.joystickKnobStrokeColor == rhs.joystickKnobStrokeColor
+            && lhs.trackpadFrameStrokeWidth == rhs.trackpadFrameStrokeWidth
+            && lhs.joystickRingStrokeWidth == rhs.joystickRingStrokeWidth
+    }
+    var isEmpty: Bool { trackpadFrameColor == nil && trackpadCursorColor == nil && trackpadIndicatorColor == nil && trackpadSecondaryIndicatorColor == nil && joystickRingColor == nil && joystickKnobFillColor == nil && joystickKnobStrokeColor == nil && trackpadFrameStrokeWidth == nil && joystickRingStrokeWidth == nil }
+    var normalized: GamepadPointingPaint {
+        GamepadPointingPaint(
+            trackpadFrameColor: trackpadFrameColor?.normalized,
+            trackpadCursorColor: trackpadCursorColor?.normalized,
+            trackpadIndicatorColor: trackpadIndicatorColor?.normalized,
+            trackpadSecondaryIndicatorColor: trackpadSecondaryIndicatorColor?.normalized,
+            joystickRingColor: joystickRingColor?.normalized,
+            joystickKnobFillColor: joystickKnobFillColor?.normalized,
+            joystickKnobStrokeColor: joystickKnobStrokeColor?.normalized,
+            trackpadFrameStrokeWidth: trackpadFrameStrokeWidth.map { $0.isFinite ? min(max($0, 0), 12) : 0 },
+            joystickRingStrokeWidth: joystickRingStrokeWidth.map { $0.isFinite ? min(max($0, 0), 12) : 0 }
+        )
+    }
+    func merged(over base: GamepadPointingPaint?) -> GamepadPointingPaint {
+        GamepadPointingPaint(
+            trackpadFrameColor: trackpadFrameColor ?? base?.trackpadFrameColor,
+            trackpadCursorColor: trackpadCursorColor ?? base?.trackpadCursorColor,
+            trackpadIndicatorColor: trackpadIndicatorColor ?? base?.trackpadIndicatorColor,
+            trackpadSecondaryIndicatorColor: trackpadSecondaryIndicatorColor ?? base?.trackpadSecondaryIndicatorColor,
+            joystickRingColor: joystickRingColor ?? base?.joystickRingColor,
+            joystickKnobFillColor: joystickKnobFillColor ?? base?.joystickKnobFillColor,
+            joystickKnobStrokeColor: joystickKnobStrokeColor ?? base?.joystickKnobStrokeColor,
+            trackpadFrameStrokeWidth: trackpadFrameStrokeWidth ?? base?.trackpadFrameStrokeWidth,
+            joystickRingStrokeWidth: joystickRingStrokeWidth ?? base?.joystickRingStrokeWidth
+        ).normalized
+    }
+}
+
+/// Bounded native content presentation. Immutable reference storage keeps typography and
+/// pointing-surface chrome out of the inline stack footprint of every control state.
+public final class GamepadControlContentStyle: Codable, Equatable, Sendable {
+    public enum Weight: String, Codable, Sendable { case regular, medium, semibold, bold }
+    public enum Design: String, Codable, Sendable { case system, rounded, serif, monospaced }
+    public enum Alignment: String, Codable, Sendable { case leading, center, trailing }
+    public enum Placement: String, Codable, Sendable { case center, top, bottom, leading, trailing }
+    /// Presentation-only legend; routing and accessibility keep the profile label.
+    public let pointing: GamepadPointingPaint?
+    public let icon: GamepadControlIcon?
+    public let legend: String?
+    public let fontSize: CGFloat?
+    public let fontWeight: Weight?
+    public let fontDesign: Design?
+    public let tracking: CGFloat?
+    public let lineLimit: Int?
+    public let alignment: Alignment?
+    public let labelPadding: CGFloat?
+    public let labelPlacement: Placement?
+    public let trackpadFrameVisible: Bool?
+    public let trackpadCursorVisible: Bool?
+    public let trackpadIndicatorsVisible: Bool?
+    public let joystickRingVisible: Bool?
+    public let joystickKnobRatio: CGFloat?
+    public let joystickKnobStrokeWidth: CGFloat?
+    public init(
+        icon: GamepadControlIcon? = nil,
+        legend: String? = nil,
+        fontSize: CGFloat? = nil,
+        fontWeight: Weight? = nil,
+        fontDesign: Design? = nil,
+        tracking: CGFloat? = nil,
+        lineLimit: Int? = nil,
+        alignment: Alignment? = nil,
+        labelPadding: CGFloat? = nil,
+        labelPlacement: Placement? = nil,
+        trackpadFrameVisible: Bool? = nil,
+        trackpadCursorVisible: Bool? = nil,
+        trackpadIndicatorsVisible: Bool? = nil,
+        joystickRingVisible: Bool? = nil,
+        joystickKnobRatio: CGFloat? = nil,
+        joystickKnobStrokeWidth: CGFloat? = nil,
+        pointing: GamepadPointingPaint? = nil
+    ) {
+        self.pointing = pointing
+        self.icon = icon
+        self.legend = legend
+        self.fontSize = fontSize
+        self.fontWeight = fontWeight
+        self.fontDesign = fontDesign
+        self.tracking = tracking
+        self.lineLimit = lineLimit
+        self.alignment = alignment
+        self.labelPadding = labelPadding
+        self.labelPlacement = labelPlacement
+        self.trackpadFrameVisible = trackpadFrameVisible
+        self.trackpadCursorVisible = trackpadCursorVisible
+        self.trackpadIndicatorsVisible = trackpadIndicatorsVisible
+        self.joystickRingVisible = joystickRingVisible
+        self.joystickKnobRatio = joystickKnobRatio
+        self.joystickKnobStrokeWidth = joystickKnobStrokeWidth
+    }
+    public static func == (lhs: GamepadControlContentStyle, rhs: GamepadControlContentStyle) -> Bool {
+        lhs.pointing == rhs.pointing
+            && lhs.icon == rhs.icon
+            && lhs.legend == rhs.legend
+            && lhs.fontSize == rhs.fontSize
+            && lhs.fontWeight == rhs.fontWeight
+            && lhs.fontDesign == rhs.fontDesign
+            && lhs.tracking == rhs.tracking
+            && lhs.lineLimit == rhs.lineLimit
+            && lhs.alignment == rhs.alignment
+            && lhs.labelPadding == rhs.labelPadding
+            && lhs.labelPlacement == rhs.labelPlacement
+            && lhs.trackpadFrameVisible == rhs.trackpadFrameVisible
+            && lhs.trackpadCursorVisible == rhs.trackpadCursorVisible
+            && lhs.trackpadIndicatorsVisible == rhs.trackpadIndicatorsVisible
+            && lhs.joystickRingVisible == rhs.joystickRingVisible
+            && lhs.joystickKnobRatio == rhs.joystickKnobRatio
+            && lhs.joystickKnobStrokeWidth == rhs.joystickKnobStrokeWidth
+    }
+    var isEmpty: Bool { (pointing?.isEmpty ?? true) && icon == nil && legend == nil && fontSize == nil && fontWeight == nil && fontDesign == nil && tracking == nil && lineLimit == nil && alignment == nil && labelPadding == nil && labelPlacement == nil && trackpadFrameVisible == nil && trackpadCursorVisible == nil && trackpadIndicatorsVisible == nil && joystickRingVisible == nil && joystickKnobRatio == nil && joystickKnobStrokeWidth == nil }
+    var hasTypography: Bool { legend != nil || fontSize != nil || fontWeight != nil || fontDesign != nil || tracking != nil || lineLimit != nil || alignment != nil || labelPadding != nil || labelPlacement != nil }
+    var normalized: GamepadControlContentStyle {
+        GamepadControlContentStyle(
+            icon: icon?.normalized,
+            legend: legend.map { String(String($0.unicodeScalars.filter { !CharacterSet.controlCharacters.contains($0) }).prefix(64)) },
+            fontSize: fontSize.map { $0.isFinite ? min(max($0, 8), 72) : 8 },
+            fontWeight: fontWeight,
+            fontDesign: fontDesign,
+            tracking: tracking.map { $0.isFinite ? min(max($0, -4), 12) : -4 },
+            lineLimit: lineLimit.map { min(max($0, 1), 4) },
+            alignment: alignment,
+            labelPadding: labelPadding.map { $0.isFinite ? min(max($0, 0), 32) : 0 },
+            labelPlacement: labelPlacement,
+            trackpadFrameVisible: trackpadFrameVisible,
+            trackpadCursorVisible: trackpadCursorVisible,
+            trackpadIndicatorsVisible: trackpadIndicatorsVisible,
+            joystickRingVisible: joystickRingVisible,
+            joystickKnobRatio: joystickKnobRatio.map { $0.isFinite ? min(max($0, 0.2), 0.9) : 0.2 },
+            joystickKnobStrokeWidth: joystickKnobStrokeWidth.map { $0.isFinite ? min(max($0, 0), 12) : 0 },
+            pointing: pointing?.normalized
+        )
+    }
+    func merged(over base: GamepadControlContentStyle?) -> GamepadControlContentStyle {
+        GamepadControlContentStyle(
+            icon: icon ?? base?.icon,
+            legend: legend ?? base?.legend,
+            fontSize: fontSize ?? base?.fontSize,
+            fontWeight: fontWeight ?? base?.fontWeight,
+            fontDesign: fontDesign ?? base?.fontDesign,
+            tracking: tracking ?? base?.tracking,
+            lineLimit: lineLimit ?? base?.lineLimit,
+            alignment: alignment ?? base?.alignment,
+            labelPadding: labelPadding ?? base?.labelPadding,
+            labelPlacement: labelPlacement ?? base?.labelPlacement,
+            trackpadFrameVisible: trackpadFrameVisible ?? base?.trackpadFrameVisible,
+            trackpadCursorVisible: trackpadCursorVisible ?? base?.trackpadCursorVisible,
+            trackpadIndicatorsVisible: trackpadIndicatorsVisible ?? base?.trackpadIndicatorsVisible,
+            joystickRingVisible: joystickRingVisible ?? base?.joystickRingVisible,
+            joystickKnobRatio: joystickKnobRatio ?? base?.joystickKnobRatio,
+            joystickKnobStrokeWidth: joystickKnobStrokeWidth ?? base?.joystickKnobStrokeWidth,
+            pointing: pointing?.merged(over: base?.pointing) ?? base?.pointing
+        ).normalized
+    }
+}
+
+/// Native per-surface paint bounds measured from transparent masks. Samples include
+/// viewport clipping and state transforms, before sibling/artwork occlusion.
+/// Immutable native drawer placement inputs and resolved padding, in canvas points.
+public final class GamepadTopBarDrawerLayout: Codable, Sendable {
+    public let isLandscape: Bool
+    public let effectiveTopInset: CGFloat
+    public let effectiveLeadingInset: CGFloat
+    public let effectiveBottomInset: CGFloat
+    public let effectiveTrailingInset: CGFloat
+    public let minimumPortraitTopInset: CGFloat
+    public let topPadding: CGFloat
+    public let leadingPadding: CGFloat
+    public let trailingPadding: CGFloat
+    init(safeAreaInsets: EdgeInsets, isLandscape: Bool, minimumPortraitTopInset: CGFloat) {
+        func finiteInset(_ value: CGFloat) -> CGFloat { value.isFinite ? max(0, value) : 0 }
+        self.isLandscape = isLandscape
+        effectiveTopInset = finiteInset(safeAreaInsets.top)
+        effectiveLeadingInset = finiteInset(safeAreaInsets.leading)
+        effectiveBottomInset = finiteInset(safeAreaInsets.bottom)
+        effectiveTrailingInset = finiteInset(safeAreaInsets.trailing)
+        self.minimumPortraitTopInset = isLandscape ? 0 : finiteInset(minimumPortraitTopInset)
+        let topInset = max(effectiveTopInset, self.minimumPortraitTopInset)
+        topPadding = max(isLandscape ? Geist.Spacing.s3 : Geist.Spacing.s2, topInset + (isLandscape ? Geist.Spacing.s2 : 0))
+        leadingPadding = max(isLandscape ? Geist.Spacing.s6 : Geist.Spacing.s4, effectiveLeadingInset + Geist.Spacing.s3)
+        trailingPadding = max(isLandscape ? Geist.Spacing.s6 : Geist.Spacing.s4, effectiveTrailingInset + Geist.Spacing.s3)
+    }
+}
+
+/// Fixed native bar/container paint used by runtime and exact review evidence.
+public final class GamepadNativeBarContainerPresentation: Codable, Equatable, Sendable {
+    public let schemaVersion: Int
+    public let shape: String
+    public let cornerRadius: CGFloat?
+    public let fillColor: GamepadRGBAColor
+    public let strokeColor: GamepadRGBAColor
+    public let strokeWidth: CGFloat
+    public let spacing: CGFloat
+    public let padding: CGFloat
+    public let shadowColor: GamepadRGBAColor
+    public let shadowRadius: CGFloat
+    public let shadowY: CGFloat
+    init(isLandscape: Bool, colorScheme: ColorScheme) {
+        schemaVersion = 1
+        shape = isLandscape ? "capsule" : "roundedRectangle"
+        cornerRadius = isLandscape ? nil : Geist.Radius.lg
+        fillColor = Geist.rgba(.background100, scheme: colorScheme)
+        strokeColor = Geist.rgba(.grayAlpha400, scheme: colorScheme)
+        strokeWidth = 1
+        spacing = isLandscape ? Geist.Spacing.s3 : Geist.Spacing.s2
+        padding = Geist.Spacing.s2
+        shadowColor = GamepadRGBAColor(red: 0, green: 0, blue: 0, alpha: colorScheme == .dark ? 0.22 : 0.08)
+        shadowRadius = 10; shadowY = 4
+    }
+    public static func == (lhs: GamepadNativeBarContainerPresentation, rhs: GamepadNativeBarContainerPresentation) -> Bool {
+        lhs.schemaVersion == rhs.schemaVersion && lhs.shape == rhs.shape && lhs.cornerRadius == rhs.cornerRadius
+            && lhs.fillColor == rhs.fillColor && lhs.strokeColor == rhs.strokeColor && lhs.strokeWidth == rhs.strokeWidth
+            && lhs.spacing == rhs.spacing && lhs.padding == rhs.padding && lhs.shadowColor == rhs.shadowColor
+            && lhs.shadowRadius == rhs.shadowRadius && lhs.shadowY == rhs.shadowY
+    }
+}
+
+/// Paint captured at the native item surface seam, with no routing identity.
+public final class GamepadNativeBarItemEvidence: Codable, Equatable, Sendable {
+    public let schemaVersion: Int
+    public let surfaceID: String
+    public let state: GamepadControlPresentationState
+    public let requested: GamepadButtonCustomization
+    public let resolvedOverride: GamepadResolvedControlPresentation?
+    public let fallbackForeground: GamepadRGBAColor
+    public let fallbackBackground: GamepadRGBAColor
+    public let fallbackBorder: GamepadRGBAColor
+    public let fallbackBorderWidth: CGFloat
+    public let fallbackCornerRadius: CGFloat
+    public let rendererShape: String
+    public let cornerRadii: GamepadCornerRadii?
+    public let height: CGFloat
+    public let horizontalPadding: CGFloat
+    public let fallbacks: [String]
+    init(item: GamepadControlBarItem, state: GamepadControlPresentationState, requested: GamepadButtonCustomization,
+         resolved: GamepadResolvedControlPresentation?, foreground: GamepadRGBAColor, background: GamepadRGBAColor,
+         border: GamepadRGBAColor, borderWidth: CGFloat, cornerRadius: CGFloat, height: CGFloat, padding: CGFloat, rendererShape: String, cornerRadii: GamepadCornerRadii?, reasons: [String] = []) {
+        schemaVersion = 1; surfaceID = "native-control-bar/" + item.rawValue; self.state = state
+        self.requested = requested; resolvedOverride = resolved
+        fallbackForeground = foreground; fallbackBackground = background; fallbackBorder = border
+        fallbackBorderWidth = borderWidth; fallbackCornerRadius = cornerRadius
+        self.height = height; horizontalPadding = padding
+        self.rendererShape = rendererShape; self.cornerRadii = cornerRadii
+        fallbacks = (resolved == nil ? ["no authored surface overrides; native item fallback paint"] : []) + reasons
+    }
+    public static func == (lhs: GamepadNativeBarItemEvidence, rhs: GamepadNativeBarItemEvidence) -> Bool {
+        lhs.schemaVersion == rhs.schemaVersion && lhs.surfaceID == rhs.surfaceID && lhs.state == rhs.state && lhs.requested == rhs.requested
+            && lhs.resolvedOverride == rhs.resolvedOverride && lhs.fallbackForeground == rhs.fallbackForeground
+            && lhs.fallbackBackground == rhs.fallbackBackground && lhs.fallbackBorder == rhs.fallbackBorder
+            && lhs.fallbackBorderWidth == rhs.fallbackBorderWidth && lhs.fallbackCornerRadius == rhs.fallbackCornerRadius
+            && lhs.rendererShape == rhs.rendererShape && lhs.cornerRadii == rhs.cornerRadii && lhs.height == rhs.height && lhs.horizontalPadding == rhs.horizontalPadding && lhs.fallbacks == rhs.fallbacks
+    }
+}
+
+public final class GamepadNativeBarIconEvidence: Codable, Equatable, Sendable {
+    public let schemaVersion: Int
+    public let surfaceID: String
+    public let requested: GamepadControlIcon?
+    public let resolvedSource: String
+    public let resolvedValue: String
+    public let assetSHA256: String?
+    public let resolvedRenderingMode: String
+    public let tintColor: GamepadRGBAColor?
+    public let fontSize: CGFloat
+    public let frameWidth: CGFloat?
+    public let fallbacks: [String]
+    init(item: GamepadControlBarItem, requested: GamepadControlIcon?, source: String, value: String,
+         fontSize: CGFloat, frameWidth: CGFloat?, fallbacks: [String], renderingMode: String = "monochrome", tintColor: GamepadRGBAColor? = nil, assetSHA256: String? = nil) {
+        schemaVersion = 1; surfaceID = "native-control-bar/" + item.rawValue + "/icon"
+        self.requested = requested; resolvedSource = source; resolvedValue = value
+        self.fontSize = fontSize; self.frameWidth = frameWidth; self.fallbacks = fallbacks
+        resolvedRenderingMode = renderingMode; self.tintColor = tintColor; self.assetSHA256 = assetSHA256
+    }
+    public static func == (lhs: GamepadNativeBarIconEvidence, rhs: GamepadNativeBarIconEvidence) -> Bool {
+        lhs.schemaVersion == rhs.schemaVersion && lhs.surfaceID == rhs.surfaceID && lhs.requested == rhs.requested
+            && lhs.resolvedSource == rhs.resolvedSource && lhs.resolvedValue == rhs.resolvedValue
+            && lhs.assetSHA256 == rhs.assetSHA256 && lhs.resolvedRenderingMode == rhs.resolvedRenderingMode && lhs.tintColor == rhs.tintColor
+            && lhs.fontSize == rhs.fontSize && lhs.frameWidth == rhs.frameWidth && lhs.fallbacks == rhs.fallbacks
+    }
+}
+
+public final class GamepadNativeBarPaintEvidence: Codable, Equatable, Sendable {
+    public let schemaVersion: Int
+    public let items: [String: GamepadNativeBarItemEvidence]
+    public let icons: [String: GamepadNativeBarIconEvidence]
+    public let foregroundBySurfaceID: [String: GamepadRGBAColor]
+    public let scope: String
+    init(items: [String: GamepadNativeBarItemEvidence], icons: [String: GamepadNativeBarIconEvidence], surfaceIDs: Set<String> = []) {
+        schemaVersion = 1; self.items = items; self.icons = icons
+        var foregrounds: [String: GamepadRGBAColor] = [:]
+        for (id, item) in items {
+            let color = item.resolvedOverride?.foregroundColor ?? item.fallbackForeground
+            foregrounds[id] = color
+            if surfaceIDs.contains(id + "/legend") { foregrounds[id + "/legend"] = color }
+        }
+        for (id, icon) in icons where icon.resolvedRenderingMode != "original" && icon.resolvedRenderingMode != "none" {
+            let parent = String(id.dropLast("/icon".count))
+            foregrounds[id] = icon.tintColor ?? foregrounds[parent]
+        }
+        foregroundBySurfaceID = foregrounds
+        scope = "paint recorded by native SwiftUI item surfaces for the actual enabled/pressed context; fallback colors are sRGB; resolvedOverride is used only when surface overrides exist; glyph ink, selected fonts, and hit geometry remain separate"
+    }
+    public static func == (lhs: GamepadNativeBarPaintEvidence, rhs: GamepadNativeBarPaintEvidence) -> Bool {
+        lhs.schemaVersion == rhs.schemaVersion && lhs.items == rhs.items && lhs.icons == rhs.icons && lhs.foregroundBySurfaceID == rhs.foregroundBySurfaceID && lhs.scope == rhs.scope
+    }
+}
+
+public final class GamepadNativeBarLayoutEvidence: Codable, Sendable {
+    public let paint: GamepadNativeBarPaintEvidence?
+    public let frames: [String: CGRect]
+    public let viewport: CGRect
+    public let clippedFrames: [String: CGRect]
+    public let outOfViewportIDs: [String]
+    public let scope: String
+    init(frames: [String: CGRect], viewport: CGRect, coordinateDescription: String = "bar-image", paint: GamepadNativeBarPaintEvidence? = nil) {
+        self.paint = paint; self.frames = frames; self.viewport = viewport
+        clippedFrames = frames.mapValues { frame in
+            let clipped = frame.intersection(viewport)
+            return clipped.isNull ? .zero : clipped
+        }
+        outOfViewportIDs = frames.filter { !viewport.insetBy(dx: -0.001, dy: -0.001).contains($0.value) }.map(\.key).sorted()
+        scope = "native SwiftUI bar/item and legend/icon leaf layout bounds in \(coordinateDescription) point coordinates; spacers are layout only; leaf frames include ancestor paint transforms, but selected fonts, glyph ink, shadows and hit geometry are separate; text-sized frames can vary with raster scale; clippedFrames intersect the raster viewport"
+    }
+}
+
+/// Native leaf layout at the surface opacity seam; separate from painted ink.
+public final class GamepadNativeSurfaceLayoutEvidence: Codable, Sendable {
+    public let canvasBounds: CGRect
+    public let clippedCanvasBounds: CGRect
+    public let scope: String
+    init(canvasBounds: CGRect, viewport: CGRect) {
+        self.canvasBounds = canvasBounds
+        let clipped = canvasBounds.intersection(viewport)
+        clippedCanvasBounds = clipped.isNull ? .zero : clipped
+        scope = "native SwiftUI leaf layout bounds at the surface opacity seam in canvas points, including ancestor scale/rotation; viewport intersection separate; excludes outer padding, shadow, ink and selected font; text-sized bounds can vary with raster scale"
+    }
+}
+
+public final class GamepadNativeSurfaceInkEvidence: Codable, Sendable {
+    public struct Sample: Codable, Sendable {
+        public let pixelBounds: CGRect?
+        public let canvasPointBounds: CGRect?
+        public let rgbaSHA256: String
+        public var nativeLayout: GamepadNativeSurfaceLayoutEvidence? = nil
+    }
+    public let samples: [String: Sample]
+    public let rasterWidth: Int
+    public let rasterHeight: Int
+    public let pixelScale: CGFloat
+    public let alphaThreshold: UInt8
+    public let scope: String
+    init(samples: [String: Sample], width: Int, height: Int, scale: CGFloat) {
+        self.samples = samples; rasterWidth = width; rasterHeight = height
+        pixelScale = scale; alphaThreshold = 1
+        scope = "native surface masks in canvas coordinates after rotation/state scale and viewport clipping, before inter-layer occlusion; RGBA8 premultiplied sRGB; alpha > 1"
+    }
+}
+
+/// Immutable native layout facts shared by the control face and review evidence. Frames
+/// are local layout bounds before the parent's rotation/scale, never glyph ink bounds.
+public final class GamepadNativeContentPresentation: Codable, Sendable {
+    public let caption: String?
+    public let effectiveFaceScale: CGFloat?
+    public let triggerValue: CGFloat?
+    public let triggerOrientation: GamepadTriggerOrientation?
+    public let pointingPaint: GamepadPointingPaint?
+    public let resolvedPointingPaint: GamepadPointingPaint?
+    public let bindingHint: String?
+    public let trackpadFrameStrokeWidth: CGFloat?
+    public let joystickRingStrokeWidth: CGFloat?
+    public let legend: String
+    public let legendVisible: Bool
+    public let legendHiddenReasons: [String]
+    public let typographyMode: String
+    public let fontSize: CGFloat?
+    public let fontCandidates: [CGFloat]
+    public let lineLimit: Int
+    public let minimumScaleFactor: CGFloat
+    public let labelPadding: CGFloat
+    public let labelOffset: CGSize
+    public let iconSize: CGFloat?
+    public let iconOffset: CGSize?
+    public let trackpadFrameVisible: Bool?
+    public let trackpadCursorVisible: Bool?
+    public let trackpadIndicatorsVisible: Bool?
+    public let trackpadFrameInset: CGFloat?
+    public let trackpadCursorFontSize: CGFloat?
+    public let joystickRingVisible: Bool?
+    public let joystickKnobRatio: CGFloat?
+    public let joystickKnobStrokeWidth: CGFloat?
+    public let localSurfaceFrames: [String: CGRect]
+    public let visibleSurfaceIDs: [String]
+    public let nativeFlowSurfaceIDs: [String]
+    public let fixedProperties: [String: CGFloat]
+    public let fallbacks: [String]
+
+    /// Settled native input feedback composes with the authored state scale.
+    /// System chrome does not inherit the input-button press contraction.
+    static func stateScaleMultiplier(control: GamepadResolvedControl, state: GamepadControlPresentationState) -> CGFloat {
+        if control.controlKind == .button && control.inputID != nil && state == .pressed { return 0.94 }
+        if control.isTrackpad && state == .active { return 0.97 }
+        return 1
+    }
+
+    init(control: GamepadResolvedControl, showsButtonLabels: Bool,
+         content: GamepadControlContentStyle?, icon: GamepadControlIcon?,
+         state: GamepadControlPresentationState = .normal, scheme: ColorScheme = .dark,
+         triggerValue requestedTriggerValue: CGFloat? = nil, authoredScale: CGFloat = 1,
+         foregroundColor: GamepadRGBAColor? = nil, profileAccentStyle: GamepadAccentStyle = .monochrome,
+         trackpadTouchCount: Int = 0, secondaryBindingText: String? = nil) {
+        effectiveFaceScale = authoredScale * Self.stateScaleMultiplier(control: control, state: state)
+        let value = requestedTriggerValue ?? (state.usesPressedFallback ? 1 : 0)
+        triggerValue = control.isTrigger ? (value.isFinite ? min(1, max(0, value)) : 0) : nil
+        triggerOrientation = control.isTrigger ? control.triggerSettings?.normalized.orientation ?? .vertical : nil
+        pointingPaint = content?.pointing
+        trackpadFrameStrokeWidth = control.isTrackpad ? content?.pointing?.trackpadFrameStrokeWidth ?? 1 : nil
+        joystickRingStrokeWidth = control.isJoystick ? content?.pointing?.joystickRingStrokeWidth ?? 1 : nil
+        let accent = control.layoutCustomization.accentStyle ?? profileAccentStyle
+        let foreground = foregroundColor?.normalized ?? GamepadRGBAColor(color:
+            control.layoutCustomization.buttonForeground(accentStyle: accent, isPressed: state.usesPressedFallback, scheme: scheme)).normalized
+        func tint(_ opacity: CGFloat) -> GamepadRGBAColor {
+            GamepadRGBAColor(red: foreground.red, green: foreground.green, blue: foreground.blue,
+                alpha: foreground.alpha * opacity).normalized
+        }
+        if control.isJoystick {
+            resolvedPointingPaint = GamepadPointingPaint(
+                joystickRingColor: content?.pointing?.joystickRingColor ?? GamepadRGBAColor(color: Geist.color(.grayAlpha400, scheme: scheme)),
+                joystickKnobFillColor: content?.pointing?.joystickKnobFillColor ?? GamepadRGBAColor(color:
+                    control.layoutCustomization.joystickKnobFill(accentStyle: accent, isPressed: state.usesPressedFallback, scheme: scheme)),
+                joystickKnobStrokeColor: content?.pointing?.joystickKnobStrokeColor ?? GamepadRGBAColor(color:
+                    control.layoutCustomization.joystickKnobStroke(accentStyle: accent, isPressed: state.usesPressedFallback, scheme: scheme)),
+                joystickRingStrokeWidth: joystickRingStrokeWidth).normalized
+        } else if control.isTrackpad {
+            resolvedPointingPaint = GamepadPointingPaint(
+                trackpadFrameColor: content?.pointing?.trackpadFrameColor ?? tint(0.24),
+                trackpadCursorColor: content?.pointing?.trackpadCursorColor ?? tint(0.82),
+                trackpadIndicatorColor: content?.pointing?.trackpadIndicatorColor ?? tint(0.34),
+                trackpadSecondaryIndicatorColor: content?.pointing?.trackpadSecondaryIndicatorColor ?? tint(trackpadTouchCount >= 2 ? 0.42 : 0.18),
+                trackpadFrameStrokeWidth: trackpadFrameStrokeWidth).normalized
+        } else {
+            resolvedPointingPaint = nil
+        }
+        let size = control.size
+        let side = min(size.width, size.height)
+        let thumbstick = control.layoutCustomization.joystickVisualStyle == .thumbstick
+        legend = content?.legend ?? control.visualLegend
+        caption = control.presentationMetadata?.caption
+        let labels = showsButtonLabels && control.layoutCustomization.showsIntegratedLabel
+        legendVisible = control.isText || (!control.isDecoration && labels
+            && (!control.isJoystick || !thumbstick)
+            && (control.isJoystick || control.isTrackpad || icon?.placement != .center || legend.count <= 2))
+        var hidden: [String] = []
+        if !control.isText {
+            if control.isDecoration { hidden.append("non-text-decoration") }
+            if !showsButtonLabels { hidden.append("profile-labels-disabled") }
+            if !control.layoutCustomization.showsIntegratedLabel { hidden.append("external-label-policy") }
+            if control.isJoystick && thumbstick { hidden.append("thumbstick-has-no-integrated-legend") }
+            if !control.isJoystick && !control.isTrackpad && icon?.placement == .center && legend.count > 2 {
+                hidden.append("centered-icon-with-long-legend")
+            }
+        }
+        legendHiddenReasons = hidden
+        bindingHint = legendVisible && !control.isText
+            ? KeypadBindingPresentationBuilder.visibleHint(secondaryBindingText, label: control.label, icon: icon) : nil
+        let fallbackSize: CGFloat = control.isText ? max(10, size.height * 0.72)
+            : control.isJoystick ? (side <= 88 ? 12 : 14)
+            : control.isTrackpad ? (size.width <= 96 ? 12 : 14)
+            : control.isTrigger ? (size.height <= 44 ? 12 : 14)
+            : (legend.count <= 2 ? 32 : 14)
+        let authored = content?.hasTypography == true
+        let nativeFit = !authored && !control.isText && !control.isJoystick && !control.isTrackpad && !control.isTrigger && legend.count > 2
+        typographyMode = authored ? "authored-system" : nativeFit ? "native-geist-fit" : control.isText ? "native-system" : "native-geist"
+        fontSize = nativeFit ? nil : content?.fontSize ?? fallbackSize
+        fontCandidates = nativeFit ? [16, 14, 14] : [content?.fontSize ?? fallbackSize]
+        lineLimit = authored ? content?.lineLimit ?? 1 : 1
+        minimumScaleFactor = authored ? (content?.fontSize == nil ? 0.48 : 1)
+            : control.isText ? 0.12 : control.isTrigger ? 0.5 : nativeFit ? 1 : (control.isJoystick || control.isTrackpad ? 0.48 : 0.55)
+        labelPadding = content?.labelPadding ?? (control.isText ? 2 : control.isTrackpad ? 0 : control.isTrigger ? 8 : 4)
+        if let placement = content?.labelPlacement {
+            switch placement {
+            case .top: labelOffset = .init(width: 0, height: -size.height * 0.32 + labelPadding)
+            case .bottom: labelOffset = .init(width: 0, height: size.height * 0.32 - labelPadding)
+            case .leading: labelOffset = .init(width: -size.width * 0.28 + labelPadding, height: 0)
+            case .trailing: labelOffset = .init(width: size.width * 0.28 - labelPadding, height: 0)
+            case .center: labelOffset = .zero
+            }
+        } else if control.isJoystick {
+            labelOffset = .init(width: 0, height: size.height * 0.34)
+        } else if control.isTrackpad || control.isText {
+            labelOffset = .zero
+        } else {
+            switch icon?.placement {
+            case .leading: labelOffset = .init(width: size.width * 0.11, height: 0)
+            case .trailing: labelOffset = .init(width: -size.width * 0.11, height: 0)
+            case .top: labelOffset = .init(width: 0, height: size.height * 0.15)
+            case .bottom: labelOffset = .init(width: 0, height: -size.height * 0.15)
+            case .center, .background, nil: labelOffset = .zero
+            }
+        }
+        iconSize = icon.map { max(12, side * 0.34 * $0.scale) }
+        iconOffset = icon.map { icon in
+            switch icon.placement {
+            case .leading: CGSize(width: -size.width * 0.20, height: 0)
+            case .trailing: CGSize(width: size.width * 0.20, height: 0)
+            case .top: CGSize(width: 0, height: -size.height * 0.18)
+            case .bottom: CGSize(width: 0, height: size.height * 0.18)
+            case .center, .background: CGSize.zero
+            }
+        }
+        trackpadFrameVisible = control.isTrackpad ? content?.trackpadFrameVisible ?? true : nil
+        trackpadCursorVisible = control.isTrackpad ? content?.trackpadCursorVisible ?? true : nil
+        trackpadIndicatorsVisible = control.isTrackpad ? content?.trackpadIndicatorsVisible ?? true : nil
+        trackpadFrameInset = control.isTrackpad ? max(5, side * 0.08) : nil
+        trackpadCursorFontSize = control.isTrackpad ? max(12, side * 0.18) : nil
+        joystickRingVisible = control.isJoystick ? content?.joystickRingVisible ?? !thumbstick : nil
+        joystickKnobRatio = control.isJoystick ? content?.joystickKnobRatio ?? (thumbstick ? 0.72 : 0.34) : nil
+        joystickKnobStrokeWidth = control.isJoystick ? content?.joystickKnobStrokeWidth ?? 1 : nil
+        var frames: [String: CGRect] = [:]
+        if control.isJoystick {
+            let knob = side * (joystickKnobRatio ?? 0.34)
+            frames["joystick-puck"] = CGRect(x: (size.width - knob) / 2, y: (size.height - knob) / 2, width: knob, height: knob)
+            if joystickRingVisible == true {
+                let ring = side * 0.70
+                frames["joystick-well-ring"] = CGRect(x: (size.width - ring) / 2, y: (size.height - ring) / 2, width: ring, height: ring)
+            }
+        }
+        if control.isTrackpad {
+            if trackpadFrameVisible == true { frames["trackpad-frame"] = CGRect(origin: .zero, size: size).insetBy(dx: trackpadFrameInset ?? 5, dy: trackpadFrameInset ?? 5) }
+            if trackpadIndicatorsVisible == true {
+                frames["trackpad-indicators"] = CGRect(x: size.width * 0.33, y: size.height * 0.86 - 2.5, width: size.width * 0.34, height: 5)
+            }
+        }
+        if control.isTrigger {
+            let fraction = triggerValue ?? 0
+            if triggerOrientation == .vertical {
+                let height = min(size.height, max(4, size.height * fraction))
+                frames["trigger-fill"] = CGRect(x: 0, y: size.height - height, width: size.width, height: height)
+            } else {
+                frames["trigger-fill"] = CGRect(x: 0, y: 0, width: min(size.width, max(4, size.width * fraction)), height: size.height)
+            }
+        }
+        localSurfaceFrames = frames
+        var surfaces = control.isText ? [String]() : ["face"]
+        if legendVisible { surfaces.append("legend") }
+        if legendVisible && caption?.isEmpty == false { surfaces.append("caption") }
+        if bindingHint != nil { surfaces.append("binding-hint") }
+        if icon != nil && !control.isText && !control.isJoystick && !control.isTrackpad { surfaces.append("icon") }
+        if control.isTrigger { surfaces.append("trigger-fill") }
+        if control.isJoystick {
+            surfaces.append("joystick-puck")
+            if joystickRingVisible == true { surfaces.append("joystick-well-ring") }
+        }
+        if control.isTrackpad {
+            if trackpadFrameVisible == true { surfaces.append("trackpad-frame") }
+            if trackpadCursorVisible == true { surfaces.append("trackpad-cursor") }
+            if trackpadIndicatorsVisible == true { surfaces.append("trackpad-indicators") }
+        }
+        visibleSurfaceIDs = surfaces
+        nativeFlowSurfaceIDs = surfaces.filter { ["legend", "caption", "binding-hint", "icon", "trackpad-cursor"].contains($0) }
+        var fixed: [String: CGFloat] = control.isTrackpad ? ["legendOpacity": 0.82,
+            "cursorLegendSpacing": 9, "indicatorSpacing": 7] : control.isJoystick ? ["ringDiameterRatio": 0.70] : [:]
+        if control.isTrackpad {
+            if content?.pointing?.trackpadFrameColor == nil { fixed["fallbackFrameTintOpacity"] = 0.24 }
+            if content?.pointing?.trackpadCursorColor == nil { fixed["fallbackCursorOpacity"] = 0.82 }
+            if content?.pointing?.trackpadIndicatorColor == nil { fixed["fallbackFirstIndicatorOpacity"] = 0.34 }
+            if content?.pointing?.trackpadSecondaryIndicatorColor == nil { fixed["fallbackSecondIndicatorOpacity"] = 0.18 }
+        }
+        if legendVisible && caption?.isEmpty == false {
+            fixed["captionFontSize"] = 10; fixed["captionOpacity"] = 0.76; fixed["captionMinimumScaleFactor"] = 0.5
+            fixed["captionWidthRatio"] = 0.88
+        }
+        if bindingHint != nil {
+            fixed["bindingHintFontSize"] = 10; fixed["bindingHintOpacity"] = 0.76
+            fixed["bindingHintMinimumScaleFactor"] = 0.5; fixed["bindingHintWidthRatio"] = 0.88
+        }
+        if control.isTrigger {
+            fixed["triggerMinimumFillDimension"] = 4
+            fixed["triggerFillOpacity"] = scheme == .dark ? 0.24 : 0.18
+        }
+        fixed["nativeStateScaleMultiplier"] = Self.stateScaleMultiplier(control: control, state: state)
+        fixedProperties = fixed
+        var defaults: [String] = []
+        if icon != nil && control.isText { defaults.append("native-text-icon-not-rendered") }
+        if content?.legend == nil { defaults.append(control.presentationMetadata?.legend == nil ? "profile-label" : "native-model-legend") }
+        if content?.fontSize == nil { defaults.append("native-font-size") }
+        if nativeFit { defaults.append("native-font-fit-selection") }
+        if control.isTrackpad {
+            if content?.trackpadFrameVisible == nil { defaults.append("native-trackpad-frame") }
+            if content?.pointing?.trackpadFrameColor == nil { defaults.append("native-trackpad-frame-color") }
+            if content?.pointing?.trackpadFrameStrokeWidth == nil { defaults.append("native-trackpad-frame-stroke-width") }
+            if content?.pointing?.trackpadCursorColor == nil { defaults.append("native-trackpad-cursor-color") }
+            if content?.pointing?.trackpadIndicatorColor == nil { defaults.append("native-trackpad-indicator-color") }
+            if content?.pointing?.trackpadSecondaryIndicatorColor == nil { defaults.append("native-trackpad-secondary-indicator-color") }
+            if content?.trackpadCursorVisible == nil { defaults.append("native-trackpad-cursor") }
+            if content?.trackpadIndicatorsVisible == nil { defaults.append("native-trackpad-indicators") }
+        }
+        if control.isJoystick {
+            if content?.joystickRingVisible == nil { defaults.append("native-joystick-ring") }
+            if content?.pointing?.joystickRingColor == nil { defaults.append("native-joystick-ring-color") }
+            if content?.pointing?.joystickRingStrokeWidth == nil { defaults.append("native-joystick-ring-stroke-width") }
+            if content?.pointing?.joystickKnobFillColor == nil { defaults.append("native-joystick-puck-fill") }
+            if content?.pointing?.joystickKnobStrokeColor == nil { defaults.append("native-joystick-puck-stroke") }
+            if content?.joystickKnobRatio == nil { defaults.append("native-joystick-puck-ratio") }
+            if content?.joystickKnobStrokeWidth == nil { defaults.append("native-joystick-puck-stroke-width") }
+        }
+        if control.isTrigger { defaults.append("native-trigger-fill-foreground-tint") }
+        fallbacks = defaults
+    }
+}
+
 public struct GamepadControlStateStyle: Codable, Equatable, Sendable {
+    public var content: GamepadControlContentStyle?
     public var fillStyle: GamepadFillStyle?
     public var foregroundColor: GamepadRGBAColor?
     public var strokeColor: GamepadRGBAColor?
@@ -360,8 +1015,10 @@ public struct GamepadControlStateStyle: Codable, Equatable, Sendable {
         indexWidth: CGFloat? = nil,
         opacity: CGFloat? = nil,
         scale: CGFloat? = nil,
-        blurRadius: CGFloat? = nil
+        blurRadius: CGFloat? = nil,
+        content: GamepadControlContentStyle? = nil
     ) {
+        self.content = content
         self.fillStyle = fillStyle
         self.foregroundColor = foregroundColor
         self.strokeColor = strokeColor
@@ -423,12 +1080,14 @@ public struct GamepadControlStateStyle: Codable, Equatable, Sendable {
             indexWidth: indexWidth.map { Self.clamp($0, lower: 0, upper: 12) },
             opacity: opacity.map { Self.clamp($0, lower: 0, upper: 1) },
             scale: scale.map { Self.clamp($0, lower: 0.5, upper: 1.5) },
-            blurRadius: blurRadius.map { Self.clamp($0, lower: 0, upper: 24) }
+            blurRadius: blurRadius.map { Self.clamp($0, lower: 0, upper: 24) },
+            content: content?.isEmpty == false ? content?.normalized : nil
         )
     }
 
     var isEmpty: Bool {
-        fillStyle == nil
+        (content?.isEmpty ?? true)
+            && fillStyle == nil
             && foregroundColor == nil
             && strokeColor == nil
             && strokeWidth == nil
@@ -487,7 +1146,8 @@ public struct GamepadControlStateStyle: Codable, Equatable, Sendable {
             indexWidth: indexWidth ?? base.indexWidth,
             opacity: opacity ?? base.opacity,
             scale: scale ?? base.scale,
-            blurRadius: blurRadius ?? base.blurRadius
+            blurRadius: blurRadius ?? base.blurRadius,
+            content: content?.merged(over: base.content) ?? base.content
         ).normalized
     }
 
@@ -1149,6 +1809,69 @@ public struct GamepadLayerGroup: Codable, Equatable, Identifiable, Sendable {
     }
 }
 
+/// Persistent descriptive intent. Output routing remains owned by the element's bindings.
+/// Immutable storage keeps native presentation metadata small in aggregate values.
+public final class GamepadControlPresentation: Codable, Equatable, Sendable {
+    public let schemaVersion: Int
+    public let actionID: String?
+    public let purposeID: String?
+    public let groupIDs: [String]
+    public let legend: String?
+    public let caption: String?
+    public let accessibilityName: String?
+
+    public init(schemaVersion: Int = 1, actionID: String? = nil, purposeID: String? = nil,
+                groupIDs: [String] = [], legend: String? = nil, caption: String? = nil,
+                accessibilityName: String? = nil) {
+        self.schemaVersion = schemaVersion; self.actionID = actionID; self.purposeID = purposeID
+        self.groupIDs = groupIDs; self.legend = legend; self.caption = caption; self.accessibilityName = accessibilityName
+    }
+    public var isValid: Bool {
+        func tag(_ value: String) -> Bool {
+            !value.isEmpty && value.utf8.count <= 64 && value.unicodeScalars.allSatisfy {
+                (97...122).contains($0.value) || (48...57).contains($0.value) || [45, 46, 95].contains($0.value)
+            }
+        }
+        func text(_ value: String?, limit: Int) -> Bool {
+            value.map { $0.unicodeScalars.count <= limit && !$0.unicodeScalars.contains(where: { $0.value < 32 || (127...159).contains($0.value) }) } ?? true
+        }
+        return schemaVersion == 1 && [actionID, purposeID].compactMap { $0 }.allSatisfy(tag)
+            && groupIDs.count <= 16 && Set(groupIDs).count == groupIDs.count && groupIDs.allSatisfy(tag)
+            && text(legend, limit: 64) && text(caption, limit: 128) && text(accessibilityName, limit: 128)
+            && (accessibilityName.map { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty } ?? true)
+    }
+    public static func == (lhs: GamepadControlPresentation, rhs: GamepadControlPresentation) -> Bool {
+        lhs.schemaVersion == rhs.schemaVersion && lhs.actionID == rhs.actionID && lhs.purposeID == rhs.purposeID
+            && lhs.groupIDs == rhs.groupIDs && lhs.legend == rhs.legend && lhs.caption == rhs.caption
+            && lhs.accessibilityName == rhs.accessibilityName
+    }
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case schemaVersion, actionID, purposeID, groupIDs, legend, caption, accessibilityName
+    }
+    private struct Key: CodingKey {
+        let stringValue: String; let intValue: Int? = nil
+        init?(stringValue: String) { self.stringValue = stringValue }
+        init?(intValue: Int) { return nil }
+    }
+    public convenience init(from decoder: Decoder) throws {
+        let all = try decoder.container(keyedBy: Key.self)
+        guard Set(all.allKeys.map(\.stringValue)).isSubset(of: Set(CodingKeys.allCases.map(\.rawValue))) else {
+            throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "Unsupported native presentation field."))
+        }
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(schemaVersion: try c.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1,
+            actionID: try c.decodeIfPresent(String.self, forKey: .actionID),
+            purposeID: try c.decodeIfPresent(String.self, forKey: .purposeID),
+            groupIDs: try c.decodeIfPresent([String].self, forKey: .groupIDs) ?? [],
+            legend: try c.decodeIfPresent(String.self, forKey: .legend),
+            caption: try c.decodeIfPresent(String.self, forKey: .caption),
+            accessibilityName: try c.decodeIfPresent(String.self, forKey: .accessibilityName))
+        guard isValid else {
+            throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "Native presentation exceeds its versioned text/tag bounds."))
+        }
+    }
+}
+
 public struct GamepadDesignMetadata: Codable, Equatable, Sendable {
     public var schemaVersion: Int
     public var layerOrder: [GamepadControlIdentity]
@@ -1249,7 +1972,7 @@ extension GamepadControlIdentity: Codable {
         if let single = try? decoder.singleValueContainer(), let raw = try? single.decode(String.self) {
             if raw.hasPrefix("builtin.") {
                 let buttonRaw = String(raw.dropFirst("builtin.".count))
-                if let button = GameButton(rawValue: buttonRaw) {
+                if let button = KeypadElementID(rawValue: buttonRaw) {
                     self = .builtin(button)
                     return
                 }
@@ -1274,7 +1997,7 @@ extension GamepadControlIdentity: Codable {
             } else if let control = GamepadSystemControl(rawValue: raw) {
                 self = .system(control)
                 return
-            } else if let button = GameButton(rawValue: raw) {
+            } else if let button = KeypadElementID(rawValue: raw) {
                 self = .builtin(button)
                 return
             } else if let id = UUID(uuidString: raw) {
@@ -1287,7 +2010,7 @@ extension GamepadControlIdentity: Codable {
         let kind = try container.decode(Kind.self, forKey: .kind)
         switch kind {
         case .builtin:
-            self = .builtin(try container.decode(GameButton.self, forKey: .button))
+            self = .builtin(try container.decode(KeypadElementID.self, forKey: .button))
         case .custom:
             self = .custom(try container.decode(UUID.self, forKey: .id))
         case .system:
@@ -1320,7 +2043,8 @@ extension GamepadControlIdentity: Codable {
     }
 }
 
-public struct GamepadResolvedControlPresentation: Equatable, Sendable {
+public struct GamepadResolvedControlPresentation: Codable, Equatable, Sendable {
+    public var content: GamepadControlContentStyle? = nil
     public var fillStyle: GamepadFillStyle
     public var foregroundColor: GamepadRGBAColor
     public var strokeColor: GamepadRGBAColor
@@ -1520,6 +2244,9 @@ public enum GamepadThemePreset: String, Codable, CaseIterable, Identifiable, Sen
     }
 
     public func apply(to customization: inout GamepadCustomization) {
+        // Materialize appearance mirrors only from installed declarations. A
+        // theme is not an instruction to construct absent starter controls.
+        customization.normalizeInPlace()
         switch self {
         case .cavernGlow:
             Self.applyCavernGlow(to: &customization)
@@ -1591,7 +2318,7 @@ public enum GamepadThemePreset: String, Codable, CaseIterable, Identifiable, Sen
         customization.backgroundDarkColor = nil
         customization.styleLibrary = cavernGlowStyleLibrary
 
-        for button in GameButton.builtInControls {
+        for button in customization.elements.filter({ $0.kind == .button && DefaultKeypadElements.ids.contains($0.inputID) }).map(\.inputID) {
             var layout = customization.buttonCustomization(for: button)
             applyCavernGlowRole(to: &layout, button: button, label: customization.visualLabel(for: button), controlKind: .button)
             customization.setButtonCustomization(layout, for: button)
@@ -1602,7 +2329,7 @@ public enum GamepadThemePreset: String, Codable, CaseIterable, Identifiable, Sen
             let custom = customization.customButtons[index]
             applyCavernGlowRole(
                 to: &layout,
-                button: custom.mappedButton,
+                button: custom.inputID,
                 label: custom.label,
                 controlKind: custom.controlKind
             )
@@ -1649,7 +2376,7 @@ public enum GamepadThemePreset: String, Codable, CaseIterable, Identifiable, Sen
         customization.backgroundDarkColor = nil
         customization.styleLibrary = softWhiteStyleLibrary
 
-        for button in GameButton.builtInControls {
+        for button in customization.elements.filter({ $0.kind == .button && DefaultKeypadElements.ids.contains($0.inputID) }).map(\.inputID) {
             var layout = customization.buttonCustomization(for: button)
             applySoftWhiteRole(to: &layout, button: button, controlKind: .button)
             customization.setButtonCustomization(layout, for: button)
@@ -1658,7 +2385,7 @@ public enum GamepadThemePreset: String, Codable, CaseIterable, Identifiable, Sen
         for index in customization.customButtons.indices {
             var layout = customization.customButtons[index].layout
             let custom = customization.customButtons[index]
-            applySoftWhiteRole(to: &layout, button: custom.mappedButton, controlKind: custom.controlKind)
+            applySoftWhiteRole(to: &layout, button: custom.inputID, controlKind: custom.controlKind)
             customization.customButtons[index].layout = layout.normalized
         }
 
@@ -1692,7 +2419,7 @@ public enum GamepadThemePreset: String, Codable, CaseIterable, Identifiable, Sen
 
     private static func applySoftWhiteRole(
         to layout: inout GamepadButtonCustomization,
-        button: GameButton,
+        button: KeypadElementID,
         controlKind: GamepadCustomControlKind
     ) {
         layout.shadowStrength = 0
@@ -1712,7 +2439,7 @@ public enum GamepadThemePreset: String, Codable, CaseIterable, Identifiable, Sen
         case .decoration:
             layout.styleID = "soft-white-plate"
         case .button:
-            if [.jump, .attack, .dash, .focus].contains(button) {
+            if [.preset(5), .preset(6), .preset(7), .preset(8)].contains(button) {
                 layout.styleID = "soft-white-lavender"
             } else {
                 layout.styleID = "soft-white-raised"
@@ -1848,7 +2575,7 @@ public enum GamepadThemePreset: String, Codable, CaseIterable, Identifiable, Sen
 
     private static func applyCavernGlowRole(
         to layout: inout GamepadButtonCustomization,
-        button: GameButton,
+        button: KeypadElementID,
         label: String,
         controlKind: GamepadCustomControlKind
     ) {
@@ -1870,36 +2597,36 @@ public enum GamepadThemePreset: String, Codable, CaseIterable, Identifiable, Sen
 
         let normalizedLabel = normalizedLookup(label)
         switch button {
-        case .up, .down, .left, .right:
+        case .preset(1), .preset(2), .preset(3), .preset(4):
             layout.styleID = "cavern-stone"
             layout.shape = .roundedRectangle
             layout.cornerRadius = layout.cornerRadius ?? 10
             layout.icon = movementIcon(for: button)
-        case .attack:
+        case .preset(6):
             layout.styleID = "cavern-nail"
             layout.shape = .circle
             layout.icon = GamepadControlIcon(source: .sfSymbol, value: "slash.circle.fill", placement: .top, scale: 0.88)
-        case .focus:
+        case .preset(8):
             layout.styleID = "cavern-soul"
             layout.shape = .circle
             layout.icon = GamepadControlIcon(source: .sfSymbol, value: "sparkles", placement: .top, scale: 0.92)
-        case .dash:
+        case .preset(7):
             layout.styleID = "cavern-dash"
             layout.shape = .circle
             layout.icon = GamepadControlIcon(source: .sfSymbol, value: "wind", placement: .top, scale: 0.88)
-        case .jump:
+        case .preset(5):
             layout.styleID = "cavern-jump"
             layout.shape = .circle
             layout.icon = GamepadControlIcon(source: .sfSymbol, value: "arrow.up.circle.fill", placement: .top, scale: 0.88)
-        case .map:
+        case .preset(9):
             layout.styleID = "cavern-parchment"
             layout.shape = .capsule
             layout.icon = GamepadControlIcon(source: .sfSymbol, value: "map.fill", placement: .leading, scale: 0.70)
-        case .pause:
+        case .preset(10):
             layout.styleID = "cavern-rune"
             layout.shape = .capsule
             layout.icon = GamepadControlIcon(source: .sfSymbol, value: "pause.fill", placement: .leading, scale: 0.70)
-        case .custom1, .custom2, .custom3, .custom4, .custom5, .custom6, .custom7, .custom8:
+        default:
             layout.icon = nil
             if normalizedLabel.contains("cast") || normalizedLabel.contains("soul") || normalizedLabel.contains("focus") {
                 layout.styleID = "cavern-soul"
@@ -1921,12 +2648,12 @@ public enum GamepadThemePreset: String, Codable, CaseIterable, Identifiable, Sen
         layout.hapticFeedback = nil
     }
 
-    private static func movementIcon(for button: GameButton) -> GamepadControlIcon? {
+    private static func movementIcon(for button: KeypadElementID) -> GamepadControlIcon? {
         switch button {
-        case .up: GamepadControlIcon.sfSymbol("chevron.up", placement: .center)
-        case .down: GamepadControlIcon.sfSymbol("chevron.down", placement: .center)
-        case .left: GamepadControlIcon.sfSymbol("chevron.left", placement: .center)
-        case .right: GamepadControlIcon.sfSymbol("chevron.right", placement: .center)
+        case .preset(1): GamepadControlIcon.sfSymbol("chevron.up", placement: .center)
+        case .preset(2): GamepadControlIcon.sfSymbol("chevron.down", placement: .center)
+        case .preset(3): GamepadControlIcon.sfSymbol("chevron.left", placement: .center)
+        case .preset(4): GamepadControlIcon.sfSymbol("chevron.right", placement: .center)
         default: nil
         }
     }
@@ -2002,8 +2729,9 @@ public enum GamepadThemePreset: String, Codable, CaseIterable, Identifiable, Sen
 extension GamepadCustomization {
     var allControlIdentitiesForDesign: [GamepadControlIdentity] {
         GamepadSystemControl.allCases.map { .system($0) }
-            + GameButton.builtInControls.map { .builtin($0) }
-            + customButtons.map { .custom($0.id) }
+            + elements.map { element in
+                (element.kind == .button ? element.defaultControlID : nil).map { .builtin($0) } ?? .custom(element.id)
+            }
     }
 
     var orderedControlIdentitiesForDesign: [GamepadControlIdentity] {
@@ -2020,7 +2748,7 @@ extension GamepadCustomization {
         let orderLookup = Dictionary(uniqueKeysWithValues: baseOrder.enumerated().map { ($0.element, $0.offset) })
         var zIndexLookup: [GamepadControlIdentity: Int] = [:]
         zIndexLookup.reserveCapacity(controls.count)
-        for button in GameButton.builtInControls {
+        for button in DefaultKeypadElements.ids {
             zIndexLookup[.builtin(button)] = buttonCustomization(for: button).zIndex
         }
         for control in GamepadSystemControl.allCases {
@@ -2113,6 +2841,7 @@ extension GamepadCustomization {
             presentation.apply(style: inline, state: state)
         }
         if let icon = layout.icon?.normalized { presentation.icon = icon }
+        if let icon = presentation.content?.icon?.normalized { presentation.icon = icon }
         if let hapticFeedback = layout.hapticFeedback?.normalized {
             presentation.hapticFeedback = hapticFeedback
             presentation.hapticStyle = hapticFeedback.style
@@ -2234,6 +2963,7 @@ private extension GamepadResolvedControlPresentation {
     mutating func apply(style: GamepadControlVisualStyle, state: GamepadControlPresentationState) {
         let normalizedStyle = style.normalized ?? .empty
         let stateStyle = normalizedStyle.stateStyle(for: state).normalized
+        if let content = stateStyle.content { self.content = content.merged(over: self.content) }
         if let fillStyle = stateStyle.fillStyle { self.fillStyle = fillStyle.normalized }
         if let foregroundColor = stateStyle.foregroundColor { self.foregroundColor = foregroundColor.normalized }
         if let strokeColor = stateStyle.strokeColor { self.strokeColor = strokeColor.normalized }

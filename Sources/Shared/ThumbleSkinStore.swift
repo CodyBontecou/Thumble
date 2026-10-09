@@ -282,7 +282,9 @@ public final class ThumbleSkinStore {
             guard values?.isSymbolicLink != true else { throw ThumbleSkinStoreError.invalidIdentity }
         }
         let root = rootURL.standardizedFileURL.resolvingSymlinksInPath()
-        let package = rawPackage.standardizedFileURL.resolvingSymlinksInPath()
+        let package = root.appendingPathComponent(reference.identifier, isDirectory: true)
+            .appendingPathComponent("\(reference.version).\(Self.packageExtension)")
+            .standardizedFileURL.resolvingSymlinksInPath()
         guard package.path.hasPrefix(root.path + "/") else {
             throw ThumbleSkinStoreError.invalidIdentity
         }
@@ -305,7 +307,7 @@ public enum ThumbleBundledSkins {
         let themed = preset.applying(to: baseCustomization)
         let lightBackground = themed.backgroundFillStyle(for: ColorScheme.light)
         let darkBackground = themed.backgroundFillStyle(for: ColorScheme.dark)
-        let buttonRules = GameButton.builtInControls.map { button in
+        let buttonRules = DefaultKeypadElements.ids.map { button in
             ThumbleSkinButtonRule(
                 button: button,
                 appearance: appearance(from: themed.buttonCustomization(for: button))

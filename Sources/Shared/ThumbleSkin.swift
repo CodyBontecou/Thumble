@@ -32,21 +32,14 @@ public enum GamepadVisualRole: String, Codable, CaseIterable, Identifiable, Send
         }
     }
 
-    public static func inferred(for button: GameButton, controlKind: GamepadCustomControlKind) -> GamepadVisualRole {
+    /// Kind-only fallback. Button position, UUID, label and output never imply importance.
+    public static func inferred(for button: KeypadElementID, controlKind: GamepadCustomControlKind) -> GamepadVisualRole {
         switch controlKind {
         case .joystick: return .joystick
         case .trigger: return .trigger
         case .trackpad: return .trackpad
         case .text, .decoration: return .decoration
-        case .button:
-            switch button {
-            case .up, .down, .left, .right: return .movement
-            case .jump, .attack: return .primaryAction
-            case .dash, .focus: return .secondaryAction
-            case .map: return .utility
-            case .pause: return .menu
-            case .custom1, .custom2, .custom3, .custom4, .custom5, .custom6, .custom7, .custom8: return .custom
-            }
+        case .button: return .custom
         }
     }
 }
@@ -284,10 +277,10 @@ public struct ThumbleSkinRoleRule: Codable, Equatable, Sendable {
 }
 
 public struct ThumbleSkinButtonRule: Codable, Equatable, Sendable {
-    public var button: GameButton
+    public var button: KeypadElementID
     public var appearance: ThumbleSkinControlAppearance
 
-    public init(button: GameButton, appearance: ThumbleSkinControlAppearance) {
+    public init(button: KeypadElementID, appearance: ThumbleSkinControlAppearance) {
         self.button = button
         self.appearance = appearance
     }
@@ -371,7 +364,7 @@ public struct ThumbleSkinAppearance: Codable, Equatable, Sendable {
     }
 
     private mutating func normalizeButtonRulesInPlace() {
-        var byButton: [GameButton: ThumbleSkinControlAppearance] = [:]
+        var byButton: [KeypadElementID: ThumbleSkinControlAppearance] = [:]
         for rule in buttonRules {
             var appearance = rule.appearance
             appearance.normalizeInPlace()
@@ -381,7 +374,7 @@ public struct ThumbleSkinAppearance: Codable, Equatable, Sendable {
         }
         var normalizedRules: [ThumbleSkinButtonRule] = []
         normalizedRules.reserveCapacity(byButton.count)
-        for button in GameButton.allCases {
+        for button in byButton.keys.sorted(by: { $0.rawValue < $1.rawValue }) {
             if let appearance = byButton[button] {
                 normalizedRules.append(ThumbleSkinButtonRule(button: button, appearance: appearance))
             }
@@ -407,7 +400,7 @@ public struct ThumbleSkinAppearance: Codable, Equatable, Sendable {
     }
 
     public func controlAppearance(
-        for button: GameButton,
+        for button: KeypadElementID,
         controlKind: GamepadCustomControlKind,
         visualRole: GamepadVisualRole? = nil
     ) -> ThumbleSkinControlAppearance {
@@ -428,14 +421,14 @@ public struct ThumbleSkinAppearance: Codable, Equatable, Sendable {
 
     private final class ControlAppearanceResolutionWorkspace {
         private var appearance: ThumbleSkinAppearance
-        private let button: GameButton?
+        private let button: KeypadElementID?
         private let controlKind: GamepadCustomControlKind?
         private let requestedRole: GamepadVisualRole?
         private var result = ThumbleSkinControlAppearance.empty
 
         init(
             appearance: ThumbleSkinAppearance,
-            button: GameButton,
+            button: KeypadElementID,
             controlKind: GamepadCustomControlKind,
             visualRole: GamepadVisualRole?
         ) {
@@ -647,20 +640,31 @@ public struct ThumbleSkin: Codable, Equatable, Sendable {
         return ThumbleSkin(base: base.normalized, variants: variants)
     }
 
+    private func matchingVariants(orientation: ThumbleSkinOrientation, colorScheme: ThumbleSkinColorScheme) -> [ThumbleSkinVariant] {
+        variants.filter { $0.matches(orientation: orientation, colorScheme: colorScheme) }
+            .sorted { lhs, rhs in
+                if lhs.specificity == rhs.specificity { return lhs.id < rhs.id }
+                return lhs.specificity < rhs.specificity
+            }
+    }
+
+    /// Exact definition provenance for the same style-token cascade used by native paint.
+    public func styleSources(orientation: ThumbleSkinOrientation, colorScheme: ThumbleSkinColorScheme) -> [String: String] {
+        let value = normalized
+        var sources = Dictionary(uniqueKeysWithValues: value.base.styleLibrary.styles.map { ($0.id, "base") })
+        for variant in value.matchingVariants(orientation: orientation, colorScheme: colorScheme) {
+            for style in variant.appearance.styleLibrary.styles { sources[style.id] = "variant." + variant.id }
+        }
+        return sources
+    }
+
     public func appearance(
         orientation: ThumbleSkinOrientation,
         colorScheme: ThumbleSkinColorScheme
     ) -> ThumbleSkinAppearance {
         let value = normalized
-        return value.variants
-            .filter { $0.matches(orientation: orientation, colorScheme: colorScheme) }
-            .sorted { lhs, rhs in
-                if lhs.specificity == rhs.specificity { return lhs.id < rhs.id }
-                return lhs.specificity < rhs.specificity
-            }
-            .reduce(value.base) { appearance, variant in
-                variant.appearance.merged(over: appearance)
-            }
+        return value.matchingVariants(orientation: orientation, colorScheme: colorScheme)
+            .reduce(value.base) { appearance, variant in variant.appearance.merged(over: appearance) }
             .normalized
     }
 }
