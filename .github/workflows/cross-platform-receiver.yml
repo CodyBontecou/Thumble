@@ -1,0 +1,63 @@
+name: Windows and Linux receiver
+on:
+  workflow_dispatch:
+  push:
+    paths: ["Host/**", "docs/cross-platform-receiver.md", "packaging/receiver/**", ".github/workflows/cross-platform-receiver.yml"]
+  pull_request:
+    paths: ["Host/**", "docs/cross-platform-receiver.md", "packaging/receiver/**", ".github/workflows/cross-platform-receiver.yml"]
+permissions:
+  contents: read
+jobs:
+  receiver:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: Host
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: Host
+      - run: cargo fmt -p thumble-receiver -- --check
+      - run: cargo clippy --locked -p thumble-receiver --all-targets --no-deps -- -D warnings
+      - run: cargo test --locked -p thumble-protocol -p thumble-core -p thumble-receiver
+      - name: Prepare isolated Linux native input witness
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y acl
+          sudo modprobe uinput
+          printf 'SUBSYSTEM=="input", ATTRS{name}=="Thumble Keyboard and Mouse", OWNER="%s", MODE="0600"\n' "$(id -un)" | sudo tee /etc/udev/rules.d/71-thumble-native-test.rules
+          sudo udevadm control --reload-rules
+          sudo setfacl -m "u:$(id -u):rw" /dev/uinput
+      - name: Verify native OS delivery through the receiver WebSocket
+        shell: bash
+        env:
+          THUMBLE_NATIVE_EVIDENCE: ${{ runner.temp }}/thumble-native-evidence.json
+        run: cargo test --locked -p thumble-receiver --test native_delivery -- --ignored --nocapture 2>&1 | tee "$RUNNER_TEMP/thumble-native-test.log"
+      - run: cargo build --locked --release -p thumble-receiver
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-delivery-${{ matrix.os }}
+          path: |
+            ${{ runner.temp }}/thumble-native-evidence.json
+            ${{ runner.temp }}/thumble-native-test.log
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@v4
+        with:
+          name: thumble-receiver-${{ matrix.os }}
+          path: |
+            Host/target/release/thumble-receiver
+            Host/target/release/thumble-receiver.exe
+            docs/cross-platform-receiver.md
+            packaging/receiver/
+          if-no-files-found: error

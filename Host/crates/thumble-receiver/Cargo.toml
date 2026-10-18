@@ -1,0 +1,29 @@
+[package]
+name = "thumble-receiver"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+clap = { version = "=4.5.47", features = ["derive"] }
+directories = "=6.0.0"
+fs2 = "=0.4.3"
+futures-util = "=0.3.31"
+if-addrs = "=0.15.0"
+libc = "=0.2.175"
+mdns-sd = "=0.13.11"
+rand = "=0.9.2"
+serde.workspace = true
+serde_json.workspace = true
+tempfile = "=3.22.0"
+thumble-core = { path = "../thumble-core" }
+thumble-protocol = { path = "../thumble-protocol" }
+tokio = { version = "=1.47.1", features = ["io-util", "macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
+tokio-tungstenite = "=0.27.0"
+uuid = { version = "=1.18.1", features = ["v4"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+evdev = "=0.13.2"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_System_Threading", "Win32_System_Memory", "Win32_System_SystemInformation", "Win32_UI_Input_KeyboardAndMouse", "Win32_Storage_FileSystem", "Win32_UI_WindowsAndMessaging", "Win32_Graphics_Gdi"] }
