@@ -1,5 +1,10 @@
 name: iOS app to disposable Windows desktop
 on:
+  # Register the workflow while developing it on the isolated test branch.
+  # Push runs are skipped; an explicit dispatch starts an interactive session.
+  push:
+    branches: [codex/receiver-native-ci]
+    paths: [.github/workflows/windows-ios-acceptance.yml]
   workflow_dispatch:
     inputs:
       operator_public_key:
@@ -10,6 +15,7 @@ permissions:
   contents: read
 jobs:
   desktop:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: windows-latest
     timeout-minutes: 25
     steps:
