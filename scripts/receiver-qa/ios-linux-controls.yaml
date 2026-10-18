@@ -1,0 +1,18 @@
+steps:
+  - tap:
+      id: keypad.button.00000000-0000-0000-0000-000000000105
+  - tap:
+      id: keypad.button.00000000-0000-0000-0000-000000000106
+  - tool: gesture-swipe
+    args:
+      fromX: 0.35
+      fromY: 0.3
+      toX: 0.55
+      toY: 0.32
+      durationMs: 400
+      momentum: false
+  - tap:
+      id: keypad.trackpad.00000000-0000-0000-0000-000000000107
+executionPrerequisite: Thumble iOS app paired to isolated Linux receiver on port
+  18865, Linux VM Acceptance profile visible with A, S and Trackpad; guest
+  desktop witness entry focused and mouse positioned inside it.
