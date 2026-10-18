@@ -82,7 +82,7 @@ async fn send(socket: &mut Socket, message: ControllerMessage) {
         .await
         .unwrap();
 }
-async fn key(socket: &mut Socket, number: u16, down: bool, sequence: u64) {
+async fn key(socket: &mut Socket, number: u16, down: bool, sequence: u64, press: u64) {
     socket
         .send(Message::Binary(
             ControllerWireCodec::encode_button_with_sequence(
@@ -93,7 +93,7 @@ async fn key(socket: &mut Socket, number: u16, down: bool, sequence: u64) {
                     ButtonPressState::Up
                 },
                 sequence,
-                Some(sequence),
+                Some(press),
                 Some(17),
             )
             .into(),
@@ -202,18 +202,18 @@ async fn receiver_delivers_native_input_and_releases_on_disconnect() {
     })
     .await
     .unwrap();
-    key(&mut socket, 5, true, 1).await;
+    key(&mut socket, 5, true, 1, 50).await;
     witness.wait("key", 30, 1).await;
     witness.wait("key", 29, 1).await;
-    key(&mut socket, 6, true, 2).await;
+    key(&mut socket, 6, true, 2, 60).await;
     witness.wait("key", 31, 1).await;
-    key(&mut socket, 5, false, 3).await;
+    key(&mut socket, 5, false, 3, 50).await;
     witness.wait("key", 30, 0).await;
     assert!(
         !witness.has("key", 29, 0),
         "Shared Ctrl released while second chord remained held"
     );
-    key(&mut socket, 6, false, 4).await;
+    key(&mut socket, 6, false, 4, 60).await;
     witness.wait("key", 31, 0).await;
     witness.wait("key", 29, 0).await;
     let moves_before = witness
@@ -253,7 +253,7 @@ async fn receiver_delivers_native_input_and_releases_on_disconnect() {
     witness.wait("scroll", 0, 1).await;
     pointer(&mut socket, ControllerPointerEventKind::Button, 3).await;
     witness.wait("button", 272, 1).await;
-    key(&mut socket, 5, true, 5).await;
+    key(&mut socket, 5, true, 5, 51).await;
     // Ensure a new down, rather than an earlier cached observation, reached the OS.
     for _ in 0..200 {
         if witness

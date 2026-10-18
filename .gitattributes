@@ -1,0 +1,3 @@
+# These fixtures are compared byte-for-byte against canonical codec output.
+Host/fixtures/**/*.json text eol=lf
+Host/crates/thumble-receiver/fixtures/*.json text eol=lf
