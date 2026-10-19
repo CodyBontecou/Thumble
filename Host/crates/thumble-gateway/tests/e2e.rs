@@ -11,6 +11,8 @@
 //! - scope denial and locally-blocked tools
 //! - 401 without a token
 
+mod common;
+
 use std::os::unix::fs::PermissionsExt as _;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -1075,15 +1077,13 @@ async fn chatgpt_style_connector_drives_a_device_end_to_end() {
     assert!(challenge_header.contains("thumble.config"));
     assert!(challenge_header.contains("offline_access"));
 
-    let oversized = http
-        .post(format!("{base}/mcp"))
-        .header("Authorization", format!("Bearer {access_token}"))
-        .header("Content-Type", "application/json")
-        .body(vec![b'x'; thumble_tunnel::MAXIMUM_FRAME_BYTES + 1])
-        .send()
-        .await
-        .unwrap();
-    assert_eq!(oversized.status(), 413, "MCP body cap must be enforced");
+    common::assert_oversized_request_rejected(
+        &base,
+        "/mcp",
+        &access_token,
+        thumble_tunnel::MAXIMUM_FRAME_BYTES + 1,
+    )
+    .await;
 
     let disallowed_origin = http
         .post(format!("{base}/mcp"))

@@ -1,3 +1,5 @@
+mod common;
+
 use std::sync::Arc;
 
 use rmcp::model::CallToolRequestParams;
@@ -298,15 +300,7 @@ async fn builder_streamable_http_lists_exact_catalog_and_replays_terminal_tools(
     assert!(generation_error.contains("256 KiB"));
     assert!(!generation_error.contains(secret_marker));
 
-    let body_limit = reqwest::Client::new()
-        .post(format!("{base}/builder/mcp"))
-        .header("Authorization", format!("Bearer {token}"))
-        .header("Content-Type", "application/json")
-        .body(vec![b' '; 512 * 1024 + 1])
-        .send()
-        .await
-        .unwrap();
-    assert_eq!(body_limit.status(), 413);
+    common::assert_oversized_request_rejected(&base, "/builder/mcp", &token, 512 * 1024 + 1).await;
 
     client.cancel().await.ok();
     task.abort();
