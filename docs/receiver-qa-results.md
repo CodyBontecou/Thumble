@@ -123,6 +123,11 @@ permission wait, and are not presented as passing standalone pairing regressions
 
 Both receivers and the test forwarding connections were stopped afterward.
 Thumble retains the Local Network permission needed for its intended LAN use.
+The hardware run also exposed a test-harness shutdown ordering issue: waiting
+for the proxy server to close before retiring the receiver could wait on the
+phone's open WebSocket. Closing the test phone connection completed the passing
+run. The harness now retires the receiver first and bounds the final proxy-close
+wait; Python syntax was checked after that cleanup-only change.
 
 ## Repeating the Linux app check
 

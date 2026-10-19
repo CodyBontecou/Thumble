@@ -49,6 +49,7 @@ async def session(args):
     print(f"::add-mask::{token}", flush=True)
     processes = []
     logs = []
+    server = None
     finished = asyncio.Event()
 
     def spawn(argv, name):
@@ -172,8 +173,12 @@ async def session(args):
         (evidence_dir / "result.json").write_text(json.dumps(result, indent=2))
         print("Actual iOS desktop acceptance completed.", flush=True)
         server.close()
-        await server.wait_closed()
     finally:
+        if server:
+            server.close()
+        # Retire the receiver before waiting for proxy connections. A physical
+        # phone can keep its WebSocket open after the acceptance request returns.
+        # Server.wait_closed() otherwise waits on that connection indefinitely.
         try:
             await asyncio.to_thread(control, "stop")
         except (OSError, subprocess.SubprocessError):
@@ -187,6 +192,11 @@ async def session(args):
                     process.kill()
         for log in logs:
             log.close()
+        if server:
+            try:
+                await asyncio.wait_for(server.wait_closed(), timeout=5)
+            except asyncio.TimeoutError:
+                pass
         (directory / "complete").write_text("complete")
 
 
