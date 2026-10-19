@@ -10,6 +10,8 @@ passed on both `windows-latest` and `ubuntu-latest`, testing commit
 | Linux hosted runner | Same protocol client | Receiver uinput-device key/modifier, mouse, wheel, and disconnect-release events passed |
 | Debian 13 ARM64 VM, Xorg/libinput, kernel 6.12.113 | Actual Thumble iOS app in iOS 26.5 Simulator | Manual pairing, profile delivery, A/S typing, pointer movement, and left click reached a desktop Tk window |
 | Disposable Windows hosted VM | Actual Thumble iOS app in the same Simulator | Manual pairing, profile delivery, A/S typing, cursor movement, and left click reached a native Windows Forms text field; recorded controls replayed successfully |
+| Debian 13 ARM64 VM, Xorg/libinput | Physical iPhone 13 Pro Max, iOS 26.3.1 | LAN pairing, native A/S typing, cursor movement and left click passed; controls replay passed |
+| Disposable Windows hosted VM | Same physical iPhone | WSS pairing, native A/S typing, cursor movement and left click passed; controls replay produced `asas` |
 
 Both Actions jobs also passed formatting, Clippy, core/protocol/receiver tests,
 and release builds. The run publishes native executable artifacts and
@@ -75,6 +77,53 @@ Local evidence is under `build/ReceiverVMs/evidence/`: native JSON/logs in
 `ios-linux-desktop-events.jsonl`, and `ios-linux-app.png`. Build output and runtime
 credentials are not committed.
 
+## Physical iPhone acceptance
+
+The connected physical iPhone 13 Pro Max running iOS 26.3.1 was tested through
+Argent's hardware XCUITest runner, after the other authorized phone test returned
+exclusive access. These results are separate from the Simulator checks above.
+
+Linux used the phone's real LAN connection to the Mac's temporary port 18866,
+forwarded into the isolated guest's receiver port 18865. The first request
+waited on the actual iOS Local Network permission dialog; allowing Thumble made
+the pairing challenge arrive immediately. Six-digit pairing and delivery of
+the Linux acceptance profile then succeeded.
+
+The phone typed `as` into the Linux desktop entry. The witness recorded A/S
+down/up, pointer movement from (550, 220) to (656, 242), and left-button down/up.
+After restarting only the empty desktop witness, the four-step hardware control
+fragment replayed with 4 passed and no failures/skips. The new desktop entry
+again contained `as`, with both key pairs, cursor movement and the click
+independently recorded by Xorg/Tk. The first and replay passes covered 23 and
+25 distinct pointer positions respectively.
+
+[Physical iPhone Windows run 39182896955](https://github.com/CodyBontecou/Thumble/actions/runs/39182896955)
+used a fresh disposable Windows VM and the already-approved protected WSS
+tunnel. The receiver identified its client as `iPhone`, rather than the
+Simulator's `Thumble Receiver QA`. Manual pairing and acceptance-profile delivery
+succeeded. The physical phone produced `as`, VK_A/VK_S down/up, movement from
+(210, 218) to (293, 236), and left-button down/up in the native Windows witness.
+The control fragment replay passed all 4 steps, and the desktop then contained
+`asas`, with 8 key messages and 4 mouse-button messages.
+
+Local hardware evidence lives in `build/ReceiverVMs/physical-phone/`: Linux
+first/replay screenshots and event logs under `linux/`, Windows first/replay
+screenshots, native JSON and receiver status under `windows/`, and screenshots
+of the connected physical phone for each platform. The Windows run also uploads
+its native evidence artifact. Only test-window input was observed; the phone's
+other apps, accounts and purchases were preserved.
+
+The saved hardware control fragments are
+`scripts/receiver-qa/physical-iphone-linux-controls.yaml` and
+`scripts/receiver-qa/physical-iphone-windows-controls.yaml`. Both were polished to
+the stable app identifiers observed on the phone and replayed successfully.
+The trackpad drag remains a raw gesture because movement itself is under test.
+The pairing recordings are exploratory diagnostics, including the initial
+permission wait, and are not presented as passing standalone pairing regressions.
+
+Both receivers and the test forwarding connections were stopped afterward.
+Thumble retains the Local Network permission needed for its intended LAN use.
+
 ## Repeating the Linux app check
 
 Use an isolated desktop with uinput access, then stop the receiver and import
@@ -97,10 +146,10 @@ both.
 
 ## Remaining acceptance coverage
 
-A physical-iPhone session on either platform remains unverified. The actual iOS
-application now controls both Windows and Linux through Simulator; the Windows
-check traversed an encrypted tunnel, and the Linux check used loopback forwarding.
-Linux Wayland, real LAN discovery and
+The actual iOS application now controls both Windows and Linux from Simulator
+and a physical iPhone. The physical Linux check used LAN forwarding into its VM;
+the Windows check traversed an encrypted tunnel. Direct Windows LAN firewall
+configuration, Linux Wayland, Bonjour discovery and
 permission prompts, suspend/resume, elevated Windows applications, and physical
 hardware still need acceptance checks. Virtual gamepad output remains
 unsupported; the iOS connection bar correctly shows controller unavailable
