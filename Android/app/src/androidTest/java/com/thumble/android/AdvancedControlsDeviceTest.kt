@@ -185,6 +185,48 @@ class AdvancedControlsDeviceTest {
         assertEquals(listOf("right" to true, "right" to false), clicks)
     }
 
+    @Test fun trackpadAccessibilityActionsRetirePhysicalTouchesAndRefreshPressedState() {
+        instrumentation.runOnMainSync {
+            val surface = ControllerSurface(instrumentation.targetContext)
+            val clicks = mutableListOf<Pair<String?, Boolean?>>()
+            val edges = mutableListOf<Boolean>()
+            surface.onPointer = { kind, _, _, button, down ->
+                assertEquals("retired fingers must not emit movement", "button", kind)
+                clicks.add(button to down)
+            }
+            surface.onEdge = { _, down, _ -> edges.add(down) }
+            surface.show(ControllerProfile.parse(profile()),1,true,false)
+            surface.measure(View.MeasureSpec.makeMeasureSpec(1600,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(700,View.MeasureSpec.EXACTLY))
+            surface.layout(0,0,1600,700)
+            fun touch(action: Int, vararg indices: Int) {
+                val props = indices.map { MotionEvent.PointerProperties().apply { id=it; toolType=MotionEvent.TOOL_TYPE_FINGER } }.toTypedArray()
+                val coords = indices.map { index -> MotionEvent.PointerCoords().apply {
+                    val child=surface.getChildAt(index)
+                    x=child.left+child.width/2f; y=child.top+child.height/2f; pressure=1f; size=1f
+                } }.toTypedArray()
+                val event=MotionEvent.obtain(0,SystemClock.uptimeMillis(),action,indices.size,props,coords,0,0,1f,1f,0,0,InputDevice.SOURCE_TOUCHSCREEN,0)
+                surface.dispatchTouchEvent(event);event.recycle()
+            }
+            val pad=surface.getChildAt(3); val button=surface.getChildAt(0)
+            touch(MotionEvent.ACTION_DOWN,3)
+            touch(MotionEvent.ACTION_POINTER_DOWN or (1 shl MotionEvent.ACTION_POINTER_INDEX_SHIFT),3,0)
+            assertTrue(pad.isPressed);assertTrue(button.isPressed)
+            assertTrue(pad.performAccessibilityAction(R.id.control_right_click,null))
+            assertFalse("right-click refreshes the retired face",pad.isPressed);assertTrue(button.isPressed)
+            touch(MotionEvent.ACTION_MOVE,3,0)
+            touch(MotionEvent.ACTION_POINTER_UP,3,0)
+            assertEquals(listOf("right" to true,"right" to false),clicks)
+            assertEquals(listOf(true),edges)
+            touch(MotionEvent.ACTION_POINTER_DOWN or (1 shl MotionEvent.ACTION_POINTER_INDEX_SHIFT),0,3)
+            assertTrue(pad.isPressed)
+            assertTrue(pad.performClick())
+            assertFalse("standard click refreshes the retired face",pad.isPressed)
+            touch(MotionEvent.ACTION_CANCEL,0,3)
+            assertEquals(listOf("right" to true,"right" to false,"left" to true,"left" to false),clicks)
+            assertEquals(listOf(true,false),edges)
+        }
+    }
+
     /** Only invoked by verify-advanced.py against its private recording-only receiver. */
     @Test fun optionalRustAdvancedInterop() {
         val arguments = InstrumentationRegistry.getArguments()

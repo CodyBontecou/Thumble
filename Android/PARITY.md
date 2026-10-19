@@ -79,3 +79,18 @@ This milestone does not complete the full iOS parity goal.
 - Whole-face blur uses a premultiplied three-box Gaussian approximation. Exact
   native blur/kernel/color comparison, actual older devices and release performance
   remain unverified. Raster/cache budgets do not substitute for performance acceptance.
+
+## Trackpad accessibility capture follow-up (2026-10-19)
+
+Native iOS ends an active trackpad gesture before its accessibility Click or Right
+Click action. Android now retires that trackpad's physical captures, emits only the
+requested click pair, and refreshes the pressed face for either action. Other held
+controls remain active. Retired fingers stay suppressed until lift; a fresh touch
+can start a new gesture.
+
+All 45 local unit tests pass; debug app/instrumentation builds and lint pass. New
+unit coverage exercises two-finger retirement, no post-action movement/tap, another
+button's retained physical identity, fresh touch recovery, and explicit clicks with
+physical tap/scroll disabled. The native-view regression compiles but has not run:
+Pixel is reserved by another chat. This is not physical-device or real Mac pointer
+acceptance; those gates remain open.

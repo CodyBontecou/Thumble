@@ -156,6 +156,43 @@ class AdvancedControlTest {
         assertEquals("heartbeat", JSONObject(frames.last().toString(Charsets.UTF_8)).getString("type"))
     }
 
+    @Test fun `trackpad accessibility click retires both fingers until lift without releasing another hold`() {
+        val pad = control("trackpad")
+        val button = control("button")
+        val h = Harness(listOf(pad, button))
+        h.event(TouchPhase.DOWN, 1, 0, Triple(1, 20.0, 20.0))
+        h.event(TouchPhase.DOWN, 2, 10, Triple(1, 20.0, 20.0), Triple(2, 70.0, 70.0))
+        h.event(TouchPhase.DOWN, 3, 20, Triple(1, 20.0, 20.0), Triple(2, 70.0, 70.0), Triple(3, 250.0, 50.0))
+        h.router.accessibilityClick(pad, "right")
+        assertEquals(listOf("right", "right"), h.pointers.map { it.button })
+        assertEquals(listOf(true, false), h.pointers.map { it.down })
+        assertEquals(setOf(button.id), h.router.pressedIDs())
+        h.event(TouchPhase.MOVE, 1, 30, Triple(1, 35.0, 25.0), Triple(2, 75.0, 80.0), Triple(3, 250.0, 50.0))
+        h.event(TouchPhase.UP, 1, 40, Triple(1, 35.0, 25.0), Triple(2, 75.0, 80.0), Triple(3, 250.0, 50.0))
+        h.event(TouchPhase.UP, 2, 50, Triple(2, 75.0, 80.0), Triple(3, 250.0, 50.0))
+        assertEquals("retired touches neither move nor tap", 2, h.pointers.size)
+        assertEquals(1, h.edges.size)
+        h.event(TouchPhase.DOWN, 1, 60, Triple(1, 20.0, 20.0), Triple(3, 250.0, 50.0))
+        h.event(TouchPhase.UP, 1, 70, Triple(1, 20.0, 20.0), Triple(3, 250.0, 50.0))
+        assertEquals(listOf("right", "right", "left", "left"), h.pointers.map { it.button })
+        h.event(TouchPhase.UP, 3, 80, Triple(3, 250.0, 50.0))
+        assertEquals(listOf(true, false), h.edges.map { it.down })
+        assertEquals(h.edges.first().press, h.edges.last().press)
+    }
+
+    @Test fun `accessibility click remains available with physical tap and scrolling disabled`() {
+        val pad = control("trackpad", JSONObject("""{"trackpadSettings":{"tapToClick":false,"twoFingerScroll":false}}"""))
+        val h = Harness(listOf(pad))
+        h.event(TouchPhase.DOWN, 1, 0, Triple(1, 20.0, 20.0))
+        h.event(TouchPhase.DOWN, 2, 10, Triple(1, 20.0, 20.0), Triple(2, 60.0, 60.0))
+        h.event(TouchPhase.MOVE, 1, 20, Triple(1, 30.0, 30.0), Triple(2, 70.0, 70.0))
+        assertTrue(h.pointers.isEmpty())
+        h.router.accessibilityClick(pad, "left")
+        h.router.cancel()
+        assertEquals(listOf("left", "left"), h.pointers.map { it.button })
+        assertTrue(h.router.pressedIDs().isEmpty())
+    }
+
     @Test fun `accessibility direction retires the physical capture without releasing another control`() {
         val joystick = control("joystick", JSONObject("""{"joystickOutputSettings":{"analogTarget":"leftStick"}}"""))
         val button = control("button")

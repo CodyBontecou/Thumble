@@ -167,6 +167,10 @@ internal class ControlGestures(
     fun click(button: String) {
         pointer("button", 0.0, 0.0, button, true); pointer("button", 0.0, 0.0, button, false)
     }
+    fun accessibilityClick(control: Control, button: String) {
+        retireCapture(control.id)
+        click(button)
+    }
 
     private fun release(id: Int, time: Long, allowsTap: Boolean) {
         buttons.move(id, null)

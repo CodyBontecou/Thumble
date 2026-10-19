@@ -84,7 +84,7 @@ internal class ControllerSurface(context: Context, private val legacyArtworkBlen
                             onEdge(control.id, true, token); onEdge(control.id, false, token)
                         }
                         "joystick" -> router.accessibilityDirection(control, InputPart.JOYSTICK_UP)
-                        "trackpad" -> router.click("left")
+                        "trackpad" -> router.accessibilityClick(control, "left")
                     }
                     renderColors(); invalidate()
                 }
@@ -323,7 +323,9 @@ internal class ControllerSurface(context: Context, private val legacyArtworkBlen
                 }
                 if (value != null) { router.accessibilityTrigger(control, value); renderColors(); invalidate(); return true }
             }
-            if (control.kind == "trackpad" && action == R.id.control_right_click) { router.click("right"); return true }
+            if (control.kind == "trackpad" && action == R.id.control_right_click) {
+                router.accessibilityClick(control, "right"); renderColors(); invalidate(); return true
+            }
             return super.performAccessibilityAction(host, action, args)
         }
     }

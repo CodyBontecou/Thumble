@@ -412,3 +412,9 @@ simultaneous pressed faces and visible practice-mode captures. Evidence is in
 `app/build/evidence/effects/`. Blur uses a premultiplied three-box approximation;
 exact native kernels/color, older-device behavior and release performance remain
 open acceptance work.
+
+Trackpad accessibility Click/Right Click ends only that control's active gesture.
+Existing fingers are retired until lift so an accessibility action cannot leave
+pointer movement active or cause a second tap on release. Independent button holds
+remain active. Local regression coverage passes; the added native-view regression
+still requires a device run (see PARITY.md).
