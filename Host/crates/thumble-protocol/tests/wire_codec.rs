@@ -2,7 +2,7 @@ use serde_json::json;
 use thumble_protocol::{
     ButtonPressState, ControllerCapability, ControllerMessage, ControllerMessageType,
     ControllerPointerButton, ControllerPointerEventKind, ControllerWireCodec,
-    ControllerWireCodecError, KeypadElementID, GamepadProfileOrientationPreference,
+    ControllerWireCodecError, GamepadProfileOrientationPreference, KeypadElementID,
     KeypadElementInputPart, VirtualGamepadStick, VirtualGamepadTrigger,
 };
 
@@ -33,7 +33,13 @@ fn v3_metadata_layout_preserves_uuid_generation_sequence_and_press() {
             let generation = u64::MAX - number;
             let sequence = 0x0102_0304_0506_0708;
             let press = 0x8877_6655_4433_2211;
-            let frame = ControllerWireCodec::encode_button_with_sequence(id, state, sequence, Some(press), Some(generation));
+            let frame = ControllerWireCodec::encode_button_with_sequence(
+                id,
+                state,
+                sequence,
+                Some(press),
+                Some(generation),
+            );
             assert_eq!(frame.len(), 56);
             assert_eq!(&frame[..4], &[b'P', b'P', 3, 1]);
             assert_eq!(&frame[4..20], &id.0);
@@ -83,11 +89,22 @@ fn input_sent_at_uses_json_instead_of_being_discarded() {
 
 #[test]
 fn absent_press_identifier_is_not_inferred_from_storage_bytes() {
-    let mut frame = ControllerWireCodec::encode_button_with_sequence(KeypadElementID::preset(9), ButtonPressState::Down, 4, None, Some(3));
+    let mut frame = ControllerWireCodec::encode_button_with_sequence(
+        KeypadElementID::preset(9),
+        ButtonPressState::Down,
+        4,
+        None,
+        Some(3),
+    );
     assert_eq!(frame[22] & 1, 0);
     assert_eq!(&frame[40..48], &[0; 8]);
     frame[40..48].copy_from_slice(&u64::MAX.to_le_bytes());
-    assert_eq!(ControllerWireCodec::decode(&frame).unwrap().press_identifier, None);
+    assert_eq!(
+        ControllerWireCodec::decode(&frame)
+            .unwrap()
+            .press_identifier,
+        None
+    );
 }
 
 #[test]
@@ -129,8 +146,12 @@ fn v1_sequence_packing_matches_swift_clamping_and_helpers() {
         Some(1_234)
     );
 
-    let mut message = ControllerMessage::new(ControllerMessageType::Button, ControllerWireCodec::input_sequence_timestamp(0, Some(u64::MAX)));
-    message.button = Some(KeypadElementID::preset(7)); message.state = Some(ButtonPressState::Up);
+    let mut message = ControllerMessage::new(
+        ControllerMessageType::Button,
+        ControllerWireCodec::input_sequence_timestamp(0, Some(u64::MAX)),
+    );
+    message.button = Some(KeypadElementID::preset(7));
+    message.state = Some(ButtonPressState::Up);
     let clamped = ControllerWireCodec::encode(&message).unwrap();
     let decoded = ControllerWireCodec::decode(&clamped).unwrap();
     assert_eq!(
@@ -282,9 +303,20 @@ fn every_swift_json_only_field_prevents_lossy_compact_encoding() {
 
 #[test]
 fn malformed_uuid_frames_and_all_slot_index_frames_are_rejected() {
-    let valid = ControllerWireCodec::encode_button(KeypadElementID::preset(1), ButtonPressState::Down);
-    for (index, byte) in [(0, b'X'), (1, b'X'), (2, 2), (3, 0), (20, 1), (21, 0), (22, 16), (23, 1)] {
-        let mut malformed = valid.clone(); malformed[index] = byte;
+    let valid =
+        ControllerWireCodec::encode_button(KeypadElementID::preset(1), ButtonPressState::Down);
+    for (index, byte) in [
+        (0, b'X'),
+        (1, b'X'),
+        (2, 2),
+        (3, 0),
+        (20, 1),
+        (21, 0),
+        (22, 16),
+        (23, 1),
+    ] {
+        let mut malformed = valid.clone();
+        malformed[index] = byte;
         assert!(ControllerWireCodec::decode(&malformed).is_err());
     }
     for version in [1, 2] {
@@ -292,17 +324,32 @@ fn malformed_uuid_frames_and_all_slot_index_frames_are_rejected() {
         legacy[..4].copy_from_slice(&[b'P', b'P', version, 1]);
         assert!(ControllerWireCodec::decode(&legacy).is_err());
     }
-    for part in [KeypadElementInputPart::Primary, KeypadElementInputPart::JoystickUp, KeypadElementInputPart::JoystickDown, KeypadElementInputPart::JoystickLeft, KeypadElementInputPart::JoystickRight, KeypadElementInputPart::TriggerDigital] {
+    for part in [
+        KeypadElementInputPart::Primary,
+        KeypadElementInputPart::JoystickUp,
+        KeypadElementInputPart::JoystickDown,
+        KeypadElementInputPart::JoystickLeft,
+        KeypadElementInputPart::JoystickRight,
+        KeypadElementInputPart::TriggerDigital,
+    ] {
         let mut message = ControllerMessage::new(ControllerMessageType::ElementInput, 42);
-        message.element_id = Some(KeypadElementID::preset(42).to_string()); message.element_part = Some(part); message.state = Some(ButtonPressState::Down);
-        assert_eq!(ControllerWireCodec::decode(&ControllerWireCodec::encode(&message).unwrap()).unwrap(), message);
+        message.element_id = Some(KeypadElementID::preset(42).to_string());
+        message.element_part = Some(part);
+        message.state = Some(ButtonPressState::Down);
+        assert_eq!(
+            ControllerWireCodec::decode(&ControllerWireCodec::encode(&message).unwrap()).unwrap(),
+            message
+        );
     }
 }
 
 #[test]
 fn control_frames_cannot_smuggle_slot_indices() {
-    let mut frame = ControllerWireCodec::encode(&ControllerMessage::new(ControllerMessageType::Heartbeat, 5)).unwrap();
-    frame[12] = 0; frame[13] = 254;
+    let mut frame =
+        ControllerWireCodec::encode(&ControllerMessage::new(ControllerMessageType::Heartbeat, 5))
+            .unwrap();
+    frame[12] = 0;
+    frame[13] = 254;
     assert!(ControllerWireCodec::decode(&frame).is_err());
 }
 

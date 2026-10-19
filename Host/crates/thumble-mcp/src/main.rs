@@ -19,12 +19,18 @@ const MAXIMUM_ORDINARY_MCP_REQUEST_BYTES: usize = 256 * 1024;
 const MAXIMUM_MCP_REQUEST_BYTES: usize = 24 * 1024 * 1024;
 
 fn decode_stdio_request(data: &[u8]) -> Result<RxJsonRpcMessage<RoleServer>, &'static str> {
-    if data.len() > MAXIMUM_MCP_REQUEST_BYTES { return Err("oversized request"); }
-    let value: serde_json::Value = thumble_protocol::decode_unique_json(data)
-        .map_err(|_| "ambiguous or invalid request")?;
-    let source_update = value.get("method").and_then(serde_json::Value::as_str) == Some("tools/call")
-        && value.get("params").and_then(|params| params.get("name"))
-            .and_then(serde_json::Value::as_str) == Some("update_controller_design");
+    if data.len() > MAXIMUM_MCP_REQUEST_BYTES {
+        return Err("oversized request");
+    }
+    let value: serde_json::Value =
+        thumble_protocol::decode_unique_json(data).map_err(|_| "ambiguous or invalid request")?;
+    let source_update = value.get("method").and_then(serde_json::Value::as_str)
+        == Some("tools/call")
+        && value
+            .get("params")
+            .and_then(|params| params.get("name"))
+            .and_then(serde_json::Value::as_str)
+            == Some("update_controller_design");
     if data.len() > MAXIMUM_ORDINARY_MCP_REQUEST_BYTES && !source_update {
         return Err("oversized ordinary request");
     }
@@ -234,15 +240,13 @@ async fn run() -> Result<(), String> {
         )
         .filter_map(|result| {
             futures::future::ready(match result {
-                Ok(line) => {
-                    match decode_stdio_request(line.as_bytes()) {
-                        Ok(message) => Some(message),
-                        Err(_) => {
-                            eprintln!("thumble-mcp rejected an ambiguous or invalid request");
-                            None
-                        }
+                Ok(line) => match decode_stdio_request(line.as_bytes()) {
+                    Ok(message) => Some(message),
+                    Err(_) => {
+                        eprintln!("thumble-mcp rejected an ambiguous or invalid request");
+                        None
                     }
-                }
+                },
                 Err(_) => {
                     eprintln!("thumble-mcp rejected an invalid or oversized request");
                     None
@@ -280,14 +284,23 @@ mod stdio_request_tests {
                 "edits":[{"path":"sources/texture.png","data":data}]}}});
         assert!(decode_stdio_request(&serde_json::to_vec(&request).unwrap()).is_ok());
         request["params"]["name"] = json!("review_controller_design");
-        assert_eq!(decode_stdio_request(&serde_json::to_vec(&request).unwrap()).unwrap_err(), "oversized ordinary request");
+        assert_eq!(
+            decode_stdio_request(&serde_json::to_vec(&request).unwrap()).unwrap_err(),
+            "oversized ordinary request"
+        );
     }
 
     #[test]
     fn update_classification_rejects_ambiguous_keys_and_absolute_overflow() {
         let duplicate = br#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"update_controller_design","\u006eame":"review_controller_design","arguments":{}}}"#;
-        assert_eq!(decode_stdio_request(duplicate).unwrap_err(), "ambiguous or invalid request");
-        assert_eq!(decode_stdio_request(&vec![b' '; MAXIMUM_MCP_REQUEST_BYTES + 1]).unwrap_err(), "oversized request");
+        assert_eq!(
+            decode_stdio_request(duplicate).unwrap_err(),
+            "ambiguous or invalid request"
+        );
+        assert_eq!(
+            decode_stdio_request(&vec![b' '; MAXIMUM_MCP_REQUEST_BYTES + 1]).unwrap_err(),
+            "oversized request"
+        );
         assert!(decode_stdio_request(br#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#).is_ok());
     }
 }

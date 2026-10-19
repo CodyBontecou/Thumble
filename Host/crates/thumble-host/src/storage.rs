@@ -9,10 +9,7 @@ use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 #[cfg(target_os = "macos")]
 use std::process::{Command, Stdio};
-use thumble_core::{
-    ButtonBindings, KeyBinding, OutputBinding, PersistentState,
-    TrustedClient,
-};
+use thumble_core::{ButtonBindings, KeyBinding, OutputBinding, PersistentState, TrustedClient};
 use uuid::Uuid;
 
 // These legacy defaults identifiers are an interoperability contract with
@@ -102,7 +99,8 @@ pub fn load(path: &Path) -> Result<PersistentState, String> {
             path.display()
         ));
     }
-    thumble_protocol::decode_unique_json(&data).map_err(|error| format!("decode {}: {error}", path.display()))
+    thumble_protocol::decode_unique_json(&data)
+        .map_err(|error| format!("decode {}: {error}", path.display()))
 }
 
 pub fn redact_known_auth_tokens(path: &Path, text: &str) -> String {
@@ -215,8 +213,11 @@ pub fn migrate_plist_bytes(data: &[u8], generated_id: &str) -> Result<Persistent
         return Err("obsolete input-binding storage is no longer supported; recreate the setup with element UUIDs".to_owned());
     }
     let migrated_key_bindings = optional_data(dictionary, KEY_BINDINGS_V2_KEY)?
-        .map(|data| parse_bindings::<KeyBinding>(data).ok_or_else(||
-            "invalid input-binding map; recreate the setup with element UUIDs".to_owned()))
+        .map(|data| {
+            parse_bindings::<KeyBinding>(data).ok_or_else(|| {
+                "invalid input-binding map; recreate the setup with element UUIDs".to_owned()
+            })
+        })
         .transpose()?;
     if let Some(bindings) = migrated_key_bindings {
         state.key_bindings = bindings;
@@ -241,18 +242,30 @@ pub fn migrate_plist_bytes(data: &[u8], generated_id: &str) -> Result<Persistent
 
     let mut profile_output_bindings = state.profile_output_bindings.clone();
     for (profile_id, bindings) in &state.profile_key_bindings {
-        let canonical = profile_output_bindings.keys().find(|id| id.eq_ignore_ascii_case(profile_id))
-            .cloned().unwrap_or_else(|| profile_id.clone());
-        overlay_keyboard_bindings(profile_output_bindings.entry(canonical).or_default(), bindings);
+        let canonical = profile_output_bindings
+            .keys()
+            .find(|id| id.eq_ignore_ascii_case(profile_id))
+            .cloned()
+            .unwrap_or_else(|| profile_id.clone());
+        overlay_keyboard_bindings(
+            profile_output_bindings.entry(canonical).or_default(),
+            bindings,
+        );
     }
     if let Some(data) = optional_data(dictionary, PROFILE_OUTPUT_BINDINGS_KEY)? {
         let migrated = parse_profile_bindings::<OutputBinding>(data).ok_or_else(|| {
             format!("legacy key {PROFILE_OUTPUT_BINDINGS_KEY} contains invalid output JSON")
         })?;
         for (profile_id, bindings) in migrated {
-            let canonical = profile_output_bindings.keys().find(|id| id.eq_ignore_ascii_case(&profile_id))
-                .cloned().unwrap_or(profile_id);
-            overlay_bindings(profile_output_bindings.entry(canonical).or_default(), &bindings);
+            let canonical = profile_output_bindings
+                .keys()
+                .find(|id| id.eq_ignore_ascii_case(&profile_id))
+                .cloned()
+                .unwrap_or(profile_id);
+            overlay_bindings(
+                profile_output_bindings.entry(canonical).or_default(),
+                &bindings,
+            );
         }
     }
     state.profile_output_bindings = profile_output_bindings;
@@ -411,7 +424,10 @@ fn migrate_profiles(data: &[u8], state: &mut PersistentState) -> Result<bool, St
         }
     }
     if profiles.is_empty() {
-        return Err("saved profile catalogs must not be empty; obsolete setups are not reconstructed".to_owned());
+        return Err(
+            "saved profile catalogs must not be empty; obsolete setups are not reconstructed"
+                .to_owned(),
+        );
     }
     {
         let mut migrated = profiles.clone();
@@ -434,10 +450,16 @@ fn migrate_profiles(data: &[u8], state: &mut PersistentState) -> Result<bool, St
         }
         state.profiles = migrated;
     }
-    state.active_profile_id = object.get("activeProfileID").and_then(JsonValue::as_str)
-        .ok_or_else(|| "saved profile catalogs must declare an active profile UUID".to_owned())?.to_owned();
-    state.default_profile_id = object.get("defaultProfileID").and_then(JsonValue::as_str)
-        .ok_or_else(|| "saved profile catalogs must declare a default profile UUID".to_owned())?.to_owned();
+    state.active_profile_id = object
+        .get("activeProfileID")
+        .and_then(JsonValue::as_str)
+        .ok_or_else(|| "saved profile catalogs must declare an active profile UUID".to_owned())?
+        .to_owned();
+    state.default_profile_id = object
+        .get("defaultProfileID")
+        .and_then(JsonValue::as_str)
+        .ok_or_else(|| "saved profile catalogs must declare a default profile UUID".to_owned())?
+        .to_owned();
     Ok(true)
 }
 
@@ -468,22 +490,12 @@ fn migrate_standalone_customization(
 fn ensure_customization_elements(customization: &mut JsonValue) -> Result<(), String> {
     let profile = serde_json::json!({"customization": customization});
     if !thumble_core::validate_element_identities(&profile) {
-        return Err("named input slots are no longer supported; recreate this setup with element UUIDs".to_owned());
+        return Err(
+            "named input slots are no longer supported; recreate this setup with element UUIDs"
+                .to_owned(),
+        );
     }
     Ok(())
-}
-
-fn swift_dictionary_value<'a>(
-    dictionary: Option<&'a JsonValue>,
-    key: &str,
-) -> Option<&'a JsonValue> {
-    match dictionary? {
-        JsonValue::Object(object) => object.get(key),
-        JsonValue::Array(entries) => entries
-            .chunks_exact(2)
-            .find_map(|entry| (entry[0].as_str() == Some(key)).then_some(&entry[1])),
-        _ => None,
-    }
 }
 
 fn normalized_binding_json(mut value: JsonValue) -> JsonValue {
@@ -519,11 +531,14 @@ fn parse_profile_bindings<T: DeserializeOwned>(
     data: &[u8],
 ) -> Option<BTreeMap<String, ButtonBindings<T>>> {
     let value = thumble_protocol::decode_unique_json::<JsonValue>(data).ok()?;
-    let maps: BTreeMap<String, ButtonBindings<T>> = serde_json::from_value(normalized_binding_json(value)).ok()?;
+    let maps: BTreeMap<String, ButtonBindings<T>> =
+        serde_json::from_value(normalized_binding_json(value)).ok()?;
     let mut seen = std::collections::BTreeSet::new();
     for id in maps.keys() {
         let parsed = uuid::Uuid::parse_str(id).ok()?;
-        if !parsed.hyphenated().to_string().eq_ignore_ascii_case(id) || !seen.insert(parsed) { return None; }
+        if !parsed.hyphenated().to_string().eq_ignore_ascii_case(id) || !seen.insert(parsed) {
+            return None;
+        }
     }
     Some(maps)
 }
@@ -532,24 +547,37 @@ fn initialize_owned_bindings(state: &mut PersistentState) {
     state.profile_key_bindings.clear();
     state.profile_output_bindings.clear();
     for profile in &state.profiles {
-        let Some(id) = profile.get("id").and_then(JsonValue::as_str) else { continue; };
+        let Some(id) = profile.get("id").and_then(JsonValue::as_str) else {
+            continue;
+        };
         let outputs = thumble_core::profile_owned_outputs(profile);
         let mut keys = ButtonBindings::default();
         for (input, output) in outputs.iter_ids() {
-            if let Some(keyboard) = &output.keyboard { keys.insert(input, keyboard.clone()); }
+            if let Some(keyboard) = &output.keyboard {
+                keys.insert(input, keyboard.clone());
+            }
         }
         state.profile_key_bindings.insert(id.to_owned(), keys);
         state.profile_output_bindings.insert(id.to_owned(), outputs);
     }
-    state.key_bindings = state.profile_key_bindings.iter()
+    state.key_bindings = state
+        .profile_key_bindings
+        .iter()
         .find(|(id, _)| id.eq_ignore_ascii_case(&state.active_profile_id))
-        .map(|(_, bindings)| bindings.clone()).unwrap_or_default();
-    state.output_bindings = state.profile_output_bindings.iter()
+        .map(|(_, bindings)| bindings.clone())
+        .unwrap_or_default();
+    state.output_bindings = state
+        .profile_output_bindings
+        .iter()
         .find(|(id, _)| id.eq_ignore_ascii_case(&state.active_profile_id))
-        .map(|(_, bindings)| bindings.clone()).unwrap_or_default();
+        .map(|(_, bindings)| bindings.clone())
+        .unwrap_or_default();
 }
 
-fn overlay_keyboard_bindings(outputs: &mut ButtonBindings<OutputBinding>, keys: &ButtonBindings<KeyBinding>) {
+fn overlay_keyboard_bindings(
+    outputs: &mut ButtonBindings<OutputBinding>,
+    keys: &ButtonBindings<KeyBinding>,
+) {
     for (id, keyboard) in keys.iter_ids() {
         let mut output = outputs.get(&id).cloned().unwrap_or_default();
         output.keyboard = Some(keyboard.clone());
@@ -663,10 +691,7 @@ mod tests {
         assert_eq!(state.default_profile_id, profile_id);
         assert_eq!(state.profiles[0]["futureField"]["survives"], true);
         assert_eq!(state.key_bindings.get_raw(PRIMARY).unwrap().modifiers, 3);
-        assert_eq!(
-            state.key_bindings.get_raw(EXTRA).unwrap().key_code,
-            7
-        );
+        assert_eq!(state.key_bindings.get_raw(EXTRA).unwrap().key_code, 7);
         assert_eq!(
             state.profile_key_bindings[profile_id]
                 .get_raw(SECONDARY)
@@ -716,13 +741,19 @@ mod tests {
     #[test]
     fn defaults_profile_without_primary_declarations_is_rejected_without_writing_state() {
         let directory = tempdir().unwrap();
-        let paths = HostPaths::new(directory.path().join("state"), directory.path().join("control.sock"));
+        let paths = HostPaths::new(
+            directory.path().join("state"),
+            directory.path().join("control.sock"),
+        );
         paths.ensure_state_dir().unwrap();
         let profile_id = "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE";
         let profiles = json!({"profiles":[{"id":profile_id,"name":"Missing declaration"}],
             "activeProfileID":profile_id,"defaultProfileID":profile_id});
         let mut defaults = Dictionary::new();
-        defaults.insert(PROFILES_KEY.to_owned(), Value::Data(serde_json::to_vec(&profiles).unwrap()));
+        defaults.insert(
+            PROFILES_KEY.to_owned(),
+            Value::Data(serde_json::to_vec(&profiles).unwrap()),
+        );
         let mut source = Vec::new();
         plist::to_writer_xml(&mut source, &Value::Dictionary(defaults)).unwrap();
         assert!(install_initial_state(&paths, Some(source), "server").is_err());
@@ -748,7 +779,9 @@ mod tests {
         root.remove(KEY_BINDINGS_V1_KEY);
         let mut malformed = Vec::new();
         plist::to_writer_xml(&mut malformed, &Value::Dictionary(root)).unwrap();
-        assert!(migrate_plist_bytes(&malformed, "fallback").unwrap_err().contains("invalid input-binding map"));
+        assert!(migrate_plist_bytes(&malformed, "fallback")
+            .unwrap_err()
+            .contains("invalid input-binding map"));
     }
 
     #[test]
@@ -819,7 +852,10 @@ mod tests {
 
         assert!(migrate_plist_bytes(&bytes, "fallback").is_err());
         let directory = tempdir().unwrap();
-        let paths = HostPaths::new(directory.path().to_path_buf(), directory.path().join("control.sock"));
+        let paths = HostPaths::new(
+            directory.path().to_path_buf(),
+            directory.path().join("control.sock"),
+        );
         assert!(install_initial_state(&paths, Some(bytes), "fallback").is_err());
         assert!(!paths.state_file.exists());
     }
@@ -849,9 +885,14 @@ mod tests {
         let raw = serde_json::to_string(&PersistentState::minimal("server").unwrap()).unwrap();
         let original = "\"kind\":\"button\"";
         assert!(raw.contains(original));
-        let before = raw.replacen(original, "\"kind\":\"joystick\",\"kind\":\"button\"", 1).into_bytes();
+        let before = raw
+            .replacen(original, "\"kind\":\"joystick\",\"kind\":\"button\"", 1)
+            .into_bytes();
         let directory = tempdir().unwrap();
-        let paths = HostPaths::new(directory.path().to_path_buf(), directory.path().join("control.sock"));
+        let paths = HostPaths::new(
+            directory.path().to_path_buf(),
+            directory.path().join("control.sock"),
+        );
         paths.ensure_state_dir().unwrap();
         fs::write(&paths.state_file, &before).unwrap();
         fs::set_permissions(&paths.state_file, fs::Permissions::from_mode(0o600)).unwrap();
@@ -861,7 +902,8 @@ mod tests {
         let binding = r#"{"keyCode":49,"modifiers":0}"#;
         let ambiguous = format!(r#"{{"{id}":{binding},"{id}":{binding}}}"#);
         assert!(parse_bindings::<KeyBinding>(ambiguous.as_bytes()).is_none());
-        let ambiguous_profiles = format!(r#"{{"4B6B62C7-367D-44C7-BA78-2AC30E6E22F4":{ambiguous}}}"#);
+        let ambiguous_profiles =
+            format!(r#"{{"4B6B62C7-367D-44C7-BA78-2AC30E6E22F4":{ambiguous}}}"#);
         assert!(parse_profile_bindings::<KeyBinding>(ambiguous_profiles.as_bytes()).is_none());
     }
 
@@ -889,12 +931,18 @@ mod tests {
         }
         for (index, document) in cases.into_iter().enumerate() {
             let directory = tempdir().unwrap();
-            let paths = HostPaths::new(directory.path().to_path_buf(), directory.path().join("control.sock"));
+            let paths = HostPaths::new(
+                directory.path().to_path_buf(),
+                directory.path().join("control.sock"),
+            );
             paths.ensure_state_dir().unwrap();
             let before = serde_json::to_vec(&document).unwrap();
             fs::write(&paths.state_file, &before).unwrap();
             fs::set_permissions(&paths.state_file, fs::Permissions::from_mode(0o600)).unwrap();
-            assert!(load_or_migrate(&paths).is_err(), "accepted reference case {index}");
+            assert!(
+                load_or_migrate(&paths).is_err(),
+                "accepted reference case {index}"
+            );
             assert_eq!(fs::read(&paths.state_file).unwrap(), before);
         }
     }
@@ -921,14 +969,23 @@ mod tests {
         cases.push(duplicate);
         for (index, profiles) in cases.into_iter().enumerate() {
             let directory = tempdir().unwrap();
-            let paths = HostPaths::new(directory.path().join("state"), directory.path().join("control.sock"));
+            let paths = HostPaths::new(
+                directory.path().join("state"),
+                directory.path().join("control.sock"),
+            );
             paths.ensure_state_dir().unwrap();
             let mut defaults = Dictionary::new();
-            defaults.insert(PROFILES_KEY.to_owned(), Value::Data(serde_json::to_vec(&profiles).unwrap()));
+            defaults.insert(
+                PROFILES_KEY.to_owned(),
+                Value::Data(serde_json::to_vec(&profiles).unwrap()),
+            );
             let mut source = Vec::new();
             plist::to_writer_xml(&mut source, &Value::Dictionary(defaults)).unwrap();
             let before = source.clone();
-            assert!(install_initial_state(&paths, Some(source), "server").is_err(), "accepted defaults reference case {index}");
+            assert!(
+                install_initial_state(&paths, Some(source), "server").is_err(),
+                "accepted defaults reference case {index}"
+            );
             assert!(!paths.state_file.exists());
             assert!(!before.is_empty());
         }
@@ -944,14 +1001,25 @@ mod tests {
             {"id":second,"name":"Blank","customization":{"elements":[]}}
         ],"activeProfileID":first,"defaultProfileID":first});
         let mut defaults = Dictionary::new();
-        defaults.insert(PROFILES_KEY.to_owned(), Value::Data(serde_json::to_vec(&profiles).unwrap()));
+        defaults.insert(
+            PROFILES_KEY.to_owned(),
+            Value::Data(serde_json::to_vec(&profiles).unwrap()),
+        );
         let mut source = Vec::new();
         plist::to_writer_xml(&mut source, &Value::Dictionary(defaults)).unwrap();
         let imported = migrate_plist_bytes(&source, "server").unwrap();
         assert_eq!(imported.key_bindings.len(), 1);
-        assert_eq!(imported.key_bindings.get_raw(input).unwrap(), &KeyBinding::new(49, 8));
+        assert_eq!(
+            imported.key_bindings.get_raw(input).unwrap(),
+            &KeyBinding::new(49, 8)
+        );
         assert_eq!(imported.output_bindings.len(), 1);
-        assert!(imported.output_bindings.get_raw(input).unwrap().gamepad_buttons.contains("south"));
+        assert!(imported
+            .output_bindings
+            .get_raw(input)
+            .unwrap()
+            .gamepad_buttons
+            .contains("south"));
         assert_eq!(imported.profile_key_bindings[first].len(), 1);
         assert_eq!(imported.profile_output_bindings[first].len(), 1);
         assert!(imported.profile_key_bindings[second].is_empty());
@@ -978,7 +1046,9 @@ mod tests {
         fs::set_permissions(&paths.state_file, fs::Permissions::from_mode(0o600)).unwrap();
 
         let before = fs::read(&paths.state_file).unwrap();
-        assert!(load_or_migrate(&paths).unwrap_err().contains("unsupported persistent-state schema version 1"));
+        assert!(load_or_migrate(&paths)
+            .unwrap_err()
+            .contains("unsupported persistent-state schema version 1"));
         assert_eq!(fs::read(&paths.state_file).unwrap(), before);
     }
 

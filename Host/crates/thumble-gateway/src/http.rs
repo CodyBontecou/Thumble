@@ -827,18 +827,26 @@ async fn reject_ambiguous_mcp_json(
     };
     if let Err(error) = thumble_core::validate_unique_json(&bytes) {
         if error.to_string().contains("duplicate JSON object key") {
-            return (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error":"ambiguous_json"}))).into_response();
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({"error":"ambiguous_json"})),
+            )
+                .into_response();
         }
         // Preserve rmcp's HTTP/content-negotiation and malformed-JSON errors.
         // No successfully decoded payload can bypass the uniqueness check.
     }
-    next.run(Request::from_parts(parts, axum::body::Body::from(bytes))).await
+    next.run(Request::from_parts(parts, axum::body::Body::from(bytes)))
+        .await
 }
 
 pub fn router(state: Arc<AppState>) -> Router {
     let mcp = Router::new()
         .route_service("/mcp", mcp_service(state.clone()))
-        .layer(axum::middleware::from_fn_with_state(thumble_tunnel::MAXIMUM_FRAME_BYTES, reject_ambiguous_mcp_json))
+        .layer(axum::middleware::from_fn_with_state(
+            thumble_tunnel::MAXIMUM_FRAME_BYTES,
+            reject_ambiguous_mcp_json,
+        ))
         .layer(tower_http::limit::RequestBodyLimitLayer::new(
             thumble_tunnel::MAXIMUM_FRAME_BYTES,
         ))
@@ -848,7 +856,10 @@ pub fn router(state: Arc<AppState>) -> Router {
         ));
     let builder_mcp = Router::new()
         .route_service("/builder/mcp", builder_mcp_service(state.clone()))
-        .layer(axum::middleware::from_fn_with_state(BUILDER_MCP_MAXIMUM_BODY_BYTES, reject_ambiguous_mcp_json))
+        .layer(axum::middleware::from_fn_with_state(
+            BUILDER_MCP_MAXIMUM_BODY_BYTES,
+            reject_ambiguous_mcp_json,
+        ))
         .layer(tower_http::limit::RequestBodyLimitLayer::new(
             BUILDER_MCP_MAXIMUM_BODY_BYTES,
         ))

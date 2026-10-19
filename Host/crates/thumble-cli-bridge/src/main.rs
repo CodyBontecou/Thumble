@@ -46,18 +46,19 @@ fn main() {
         }
         return;
     }
-    let mut request = match thumble_protocol::decode_unique_json::<CliProfileRequest>(&data).map_err(|_| ()) {
-        Ok(request) => request,
-        Err(()) => {
-            emit(&CliProfileResponse::transport_failure(
-                Uuid::new_v4(),
-                "none",
-                "invalid_request",
-                "CLI helper requires one bounded newline-terminated typed JSON request",
-            ));
-            std::process::exit(2);
-        }
-    };
+    let mut request =
+        match thumble_protocol::decode_unique_json::<CliProfileRequest>(&data).map_err(|_| ()) {
+            Ok(request) => request,
+            Err(()) => {
+                emit(&CliProfileResponse::transport_failure(
+                    Uuid::new_v4(),
+                    "none",
+                    "invalid_request",
+                    "CLI helper requires one bounded newline-terminated typed JSON request",
+                ));
+                std::process::exit(2);
+            }
+        };
     let invocation_id = request.invocation_id.unwrap_or_else(Uuid::new_v4);
     request.invocation_id = Some(invocation_id);
     if let Some(response) = unsupported_schema_response(&request, invocation_id) {
@@ -85,7 +86,9 @@ fn main() {
     if thumble_host::native_configuration::endpoint_present(&paths) {
         let response = thumble_host::native_configuration::execute(&paths, &request);
         emit(&response);
-        if !response.ok { std::process::exit(1); }
+        if !response.ok {
+            std::process::exit(1);
+        }
         return;
     }
 
@@ -403,7 +406,10 @@ mod tests {
 
         let response = execute_after_online_failure(&paths, &generation_request());
 
-        assert!(!response.ok, "obsolete state must not be normalized or migrated");
+        assert!(
+            !response.ok,
+            "obsolete state must not be normalized or migrated"
+        );
         assert!(response.error.is_some());
         assert_eq!(fs::read(&paths.state_file).unwrap(), outdated);
         assert!(!paths.lock_file.exists());

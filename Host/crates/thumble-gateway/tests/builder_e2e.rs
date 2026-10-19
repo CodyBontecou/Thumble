@@ -1,6 +1,8 @@
 //! Full tunnel-free hosted-builder acceptance over real loopback HTTP and the
 //! rmcp Streamable HTTP client. The relay e2e remains in `e2e.rs`.
 
+mod common;
+
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -741,15 +743,13 @@ async fn full_builder_oauth_tools_share_and_isolation_e2e() {
         .to_str()
         .unwrap()
         .contains("oauth-protected-resource\""));
-    let body_rejection = http
-        .post(format!("{}/builder/mcp", gateway.base))
-        .header("Authorization", format!("Bearer {}", other.access))
-        .header("Content-Type", "application/json")
-        .body(vec![b'x'; 512 * 1024 + 1])
-        .send()
-        .await
-        .unwrap();
-    assert_eq!(body_rejection.status(), 413);
+    common::assert_oversized_request_rejected(
+        &gateway.base,
+        "/builder/mcp",
+        &other.access,
+        512 * 1024 + 1,
+    )
+    .await;
 
     client.cancel().await.ok();
     other_client.cancel().await.ok();

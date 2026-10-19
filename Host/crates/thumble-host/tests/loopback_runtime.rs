@@ -563,7 +563,10 @@ async fn current_ios_loopback_pairs_reconnects_records_input_and_releases_on_shu
     assert_ping_round_trip(&mut second, 56).await;
     let active_status = wait_for_status(&paths).await;
     assert!(active_status.core.paired);
-    assert_eq!(active_status.core.pressed_buttons, vec![KeypadElementID::preset(5)]);
+    assert_eq!(
+        active_status.core.pressed_buttons,
+        vec![KeypadElementID::preset(5)]
+    );
     assert_eq!(active_status.output.held_key_count, 1);
     assert!(active_status
         .output

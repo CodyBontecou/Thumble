@@ -177,7 +177,11 @@ impl PersistentState {
         if self.server_id.trim().is_empty() {
             return Err(StateError::EmptyServerId);
         }
-        if self.profiles.iter().any(|profile| !crate::validate_element_identities(profile)) {
+        if self
+            .profiles
+            .iter()
+            .any(|profile| !crate::validate_element_identities(profile))
+        {
             return Err(StateError::UnsupportedInputSlots);
         }
 
@@ -187,12 +191,19 @@ impl PersistentState {
     pub fn normalize(&mut self) -> Result<(), StateError> {
         // Invalid storage must not be repaired into another setup.
         self.validate()?;
-        let active = self.canonical_profile_id(&self.active_profile_id).unwrap().to_owned();
-        let default = self.canonical_profile_id(&self.default_profile_id).unwrap().to_owned();
+        let active = self
+            .canonical_profile_id(&self.active_profile_id)
+            .unwrap()
+            .to_owned();
+        let default = self
+            .canonical_profile_id(&self.default_profile_id)
+            .unwrap()
+            .to_owned();
         self.active_profile_id = active;
         self.default_profile_id = default;
         if self.recent_configuration_commits.len() > MAXIMUM_RECENT_CONFIGURATION_COMMITS {
-            let remove = self.recent_configuration_commits.len() - MAXIMUM_RECENT_CONFIGURATION_COMMITS;
+            let remove =
+                self.recent_configuration_commits.len() - MAXIMUM_RECENT_CONFIGURATION_COMMITS;
             self.recent_configuration_commits.drain(..remove);
         }
         Ok(())
@@ -238,15 +249,36 @@ impl PersistentState {
             return true;
         }
         if self.active_profile().is_some_and(|profile| {
-            ["customization", "landscapeCustomization", "portraitCustomization"]
-                .into_iter().filter_map(|name| profile.get(name))
-                .filter_map(|customization| customization.get("elements").and_then(Value::as_array))
-                .flatten().filter_map(|element| element.get("id").and_then(Value::as_str).and_then(KeypadElementID::parse))
-                .any(|id| [KeypadElementInputPart::Primary, KeypadElementInputPart::JoystickUp,
-                    KeypadElementInputPart::JoystickDown, KeypadElementInputPart::JoystickLeft,
-                    KeypadElementInputPart::JoystickRight, KeypadElementInputPart::TriggerDigital]
-                    .into_iter().any(|part| self.resolve_element_output(&id.to_string(), part)
-                        .is_some_and(|output| output.supported_gamepad_buttons().next().is_some())))
+            [
+                "customization",
+                "landscapeCustomization",
+                "portraitCustomization",
+            ]
+            .into_iter()
+            .filter_map(|name| profile.get(name))
+            .filter_map(|customization| customization.get("elements").and_then(Value::as_array))
+            .flatten()
+            .filter_map(|element| {
+                element
+                    .get("id")
+                    .and_then(Value::as_str)
+                    .and_then(KeypadElementID::parse)
+            })
+            .any(|id| {
+                [
+                    KeypadElementInputPart::Primary,
+                    KeypadElementInputPart::JoystickUp,
+                    KeypadElementInputPart::JoystickDown,
+                    KeypadElementInputPart::JoystickLeft,
+                    KeypadElementInputPart::JoystickRight,
+                    KeypadElementInputPart::TriggerDigital,
+                ]
+                .into_iter()
+                .any(|part| {
+                    self.resolve_element_output(&id.to_string(), part)
+                        .is_some_and(|output| output.supported_gamepad_buttons().next().is_some())
+                })
+            })
         }) {
             return true;
         }
@@ -304,10 +336,21 @@ impl PersistentState {
 }
 
 fn customization_needs_gamepad(customization: &Value) -> bool {
-    customization.get("elements").and_then(Value::as_array).is_some_and(|controls| {
-        controls.iter().filter(|control| control.get("id").and_then(Value::as_str)
-            .and_then(KeypadElementID::parse).is_some()).any(control_needs_gamepad)
-    })
+    customization
+        .get("elements")
+        .and_then(Value::as_array)
+        .is_some_and(|controls| {
+            controls
+                .iter()
+                .filter(|control| {
+                    control
+                        .get("id")
+                        .and_then(Value::as_str)
+                        .and_then(KeypadElementID::parse)
+                        .is_some()
+                })
+                .any(control_needs_gamepad)
+        })
 }
 
 fn control_needs_gamepad(control: &Value) -> bool {
@@ -351,9 +394,23 @@ pub fn minimal_default_profile() -> Value {
 
 /// Starter elements own their identities and explicit default outputs.
 pub fn minimal_default_customization() -> Value {
-    let labels = ["Up", "Down", "Left", "Right", "Action 1", "Action 2", "Action 3", "Action 4", "Menu", "Pause"];
+    let labels = [
+        "Up", "Down", "Left", "Right", "Action 1", "Action 2", "Action 3", "Action 4", "Menu",
+        "Pause",
+    ];
     let keys = canonical_default_profile_key_bindings();
-    let gamepad = ["dpadUp", "dpadDown", "dpadLeft", "dpadRight", "south", "east", "west", "north", "select", "start"];
+    let gamepad = [
+        "dpadUp",
+        "dpadDown",
+        "dpadLeft",
+        "dpadRight",
+        "south",
+        "east",
+        "west",
+        "north",
+        "select",
+        "start",
+    ];
     let elements = (1..=10).map(|number| {
         let id = KeypadElementID::preset(number);
         let output = OutputBinding { keyboard: keys.get(&id).cloned(), gamepad_buttons: std::collections::BTreeSet::from([gamepad[number as usize - 1].to_owned()]) }.element_value();

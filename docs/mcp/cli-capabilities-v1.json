@@ -1236,14 +1236,19 @@
         },
         {
           "id": "runtime.gamepad.status",
-          "cli": ["gamepad status", "gamepad doctor"],
+          "cli": [
+            "gamepad status",
+            "gamepad doctor"
+          ],
           "status": "partial",
           "mcpTool": "host_status",
           "notes": "Rust host_status.output.virtualGamepadStatus exposes HID readiness, not consumer recognition or signed-artifact certification."
         },
         {
           "id": "runtime.gamepad.retry",
-          "cli": ["gamepad retry"],
+          "cli": [
+            "gamepad retry"
+          ],
           "status": "host-cli-only",
           "mcpTool": "retry_gamepad",
           "gate": "input",
@@ -1251,7 +1256,9 @@
         },
         {
           "id": "runtime.gamepad.test",
-          "cli": ["gamepad test"],
+          "cli": [
+            "gamepad test"
+          ],
           "status": "partial",
           "mcpTool": "press_control",
           "gate": "input",
@@ -1459,21 +1466,98 @@
         },
         {
           "id": "app.setup-guide",
-          "cli": ["app setup-guide"],
+          "cli": [
+            "app setup-guide"
+          ],
           "status": "planned",
           "mcpTool": "legacy_mac_app_action"
         },
         {
           "id": "app.local-network-settings",
-          "cli": ["app local-network-settings"],
+          "cli": [
+            "app local-network-settings"
+          ],
           "status": "planned",
           "mcpTool": "legacy_mac_app_action"
         },
         {
           "id": "app.ios-app",
-          "cli": ["app ios-app"],
+          "cli": [
+            "app ios-app"
+          ],
           "status": "planned",
           "mcpTool": "legacy_mac_app_action"
+        }
+      ]
+    },
+    {
+      "id": "controller-design",
+      "executor": "swift-cli-through-mcp",
+      "gate": "artifact-write",
+      "phoneEffect": "apply synchronizes the reviewed profile through host authority",
+      "operations": [
+        {
+          "id": "controller-design.capabilities",
+          "cli": [
+            "design capabilities"
+          ],
+          "status": "current",
+          "mcpTool": "controller_design_capabilities",
+          "gate": "none"
+        },
+        {
+          "id": "controller-design.begin",
+          "cli": [
+            "design begin"
+          ],
+          "status": "current",
+          "mcpTool": "begin_controller_design",
+          "gate": "configuration-write"
+        },
+        {
+          "id": "controller-design.update",
+          "cli": [
+            "design update"
+          ],
+          "status": "current",
+          "mcpTool": "update_controller_design",
+          "gate": "artifact-write"
+        },
+        {
+          "id": "controller-design.review",
+          "cli": [
+            "design review"
+          ],
+          "status": "current",
+          "mcpTool": "review_controller_design",
+          "gate": "artifact-write"
+        },
+        {
+          "id": "controller-design.critique",
+          "cli": [
+            "design critique"
+          ],
+          "status": "current",
+          "mcpTool": "critique_controller_design",
+          "gate": "artifact-write"
+        },
+        {
+          "id": "controller-design.apply",
+          "cli": [
+            "design apply"
+          ],
+          "status": "current",
+          "mcpTool": "apply_controller_design",
+          "gate": "configuration-write"
+        },
+        {
+          "id": "controller-design.inspect",
+          "cli": [
+            "design inspect"
+          ],
+          "status": "current",
+          "mcpTool": "inspect_controller_design",
+          "gate": "none"
         }
       ]
     }

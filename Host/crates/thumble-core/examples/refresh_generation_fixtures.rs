@@ -6,9 +6,25 @@ use thumble_core::plan_generation_spec;
 
 fn main() {
     let directory = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/generation-spec/v1");
-    for name in ["aliases-basic", "duplicate-exhaustion-reused-layout", "joystick-trackpad-text-decoration", "materials", "rich-appearance", "specialized-capacity", "trigger-defaults"] {
-        let plan = plan_generation_spec(&fs::read(directory.join(format!("{name}.json"))).unwrap(), None).unwrap();
-        fs::write(directory.join(format!("generated/{name}.json")), plan.generated_json).unwrap();
+    for name in [
+        "aliases-basic",
+        "duplicate-exhaustion-reused-layout",
+        "joystick-trackpad-text-decoration",
+        "materials",
+        "rich-appearance",
+        "specialized-capacity",
+        "trigger-defaults",
+    ] {
+        let plan = plan_generation_spec(
+            &fs::read(directory.join(format!("{name}.json"))).unwrap(),
+            None,
+        )
+        .unwrap();
+        fs::write(
+            directory.join(format!("generated/{name}.json")),
+            plan.generated_json,
+        )
+        .unwrap();
         println!("generated/{name}.json");
     }
     let mut vectors = Map::new();
@@ -16,7 +32,11 @@ fn main() {
         ("aliasesBasic", "aliases-basic", Some("Requested Override")),
         ("mixedControls", "joystick-trackpad-text-decoration", None),
     ] {
-        let plan = plan_generation_spec(&fs::read(directory.join(format!("{source}.json"))).unwrap(), requested).unwrap();
+        let plan = plan_generation_spec(
+            &fs::read(directory.join(format!("{source}.json"))).unwrap(),
+            requested,
+        )
+        .unwrap();
         vectors.insert(name.to_owned(), json!({
             "descriptorDigest": plan.descriptor_digest,
             "profileID": plan.profile_id,
@@ -35,9 +55,21 @@ fn main() {
             }
         }));
     }
-    fs::write(directory.join("expected-semantic-vectors.json"), format!("{}\n", serde_json::to_string_pretty(&Value::Object(vectors)).unwrap())).unwrap();
-    let rich = plan_generation_spec(&fs::read(directory.join("rich-appearance.json")).unwrap(), None).unwrap();
-    let materials = plan_generation_spec(&fs::read(directory.join("materials.json")).unwrap(), None).unwrap();
+    fs::write(
+        directory.join("expected-semantic-vectors.json"),
+        format!(
+            "{}\n",
+            serde_json::to_string_pretty(&Value::Object(vectors)).unwrap()
+        ),
+    )
+    .unwrap();
+    let rich = plan_generation_spec(
+        &fs::read(directory.join("rich-appearance.json")).unwrap(),
+        None,
+    )
+    .unwrap();
+    let materials =
+        plan_generation_spec(&fs::read(directory.join("materials.json")).unwrap(), None).unwrap();
     let rich_vectors = json!({
         "richAppearance": {
             "descriptorDigest": rich.descriptor_digest, "profileID": rich.profile_id,
@@ -53,5 +85,9 @@ fn main() {
             "visualStyles": materials.elements.iter().map(|element| &element["layout"]["visualStyle"]).collect::<Vec<_>>()
         }
     });
-    fs::write(directory.join("expected-rich-semantic-vectors.json"), format!("{}\n", serde_json::to_string_pretty(&rich_vectors).unwrap())).unwrap();
+    fs::write(
+        directory.join("expected-rich-semantic-vectors.json"),
+        format!("{}\n", serde_json::to_string_pretty(&rich_vectors).unwrap()),
+    )
+    .unwrap();
 }

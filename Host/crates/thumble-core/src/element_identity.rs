@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use crate::{ButtonBindings, OutputBinding};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thumble_protocol::KeypadElementID;
 
@@ -25,19 +25,39 @@ pub struct ElementPresentation {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub accessibility_name: Option<String>,
 }
-fn presentation_version() -> u32 { 1 }
+fn presentation_version() -> u32 {
+    1
+}
 impl ElementPresentation {
     pub fn is_valid(&self) -> bool {
-        let tag = |s: &str| !s.is_empty() && s.len() <= 64
-            && s.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b"-._".contains(&b));
-        let text = |s: &Option<String>, limit: usize| s.as_ref().is_none_or(|s|
-            s.chars().count() <= limit && !s.chars().any(char::is_control));
-        self.schema_version == 1 && self.action_id.as_deref().is_none_or(tag)
+        let tag = |s: &str| {
+            !s.is_empty()
+                && s.len() <= 64
+                && s.bytes()
+                    .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b"-._".contains(&b))
+        };
+        let text = |s: &Option<String>, limit: usize| {
+            s.as_ref()
+                .is_none_or(|s| s.chars().count() <= limit && !s.chars().any(char::is_control))
+        };
+        self.schema_version == 1
+            && self.action_id.as_deref().is_none_or(tag)
             && self.purpose_id.as_deref().is_none_or(tag)
-            && self.group_ids.len() <= 16 && self.group_ids.iter().all(|s| tag(s))
-            && self.group_ids.iter().collect::<std::collections::HashSet<_>>().len() == self.group_ids.len()
-            && text(&self.legend, 64) && text(&self.caption, 128) && text(&self.accessibility_name, 128)
-            && self.accessibility_name.as_ref().is_none_or(|s| !s.trim().is_empty())
+            && self.group_ids.len() <= 16
+            && self.group_ids.iter().all(|s| tag(s))
+            && self
+                .group_ids
+                .iter()
+                .collect::<std::collections::HashSet<_>>()
+                .len()
+                == self.group_ids.len()
+            && text(&self.legend, 64)
+            && text(&self.caption, 128)
+            && text(&self.accessibility_name, 128)
+            && self
+                .accessibility_name
+                .as_ref()
+                .is_none_or(|s| !s.trim().is_empty())
     }
 }
 
@@ -113,7 +133,9 @@ pub fn validate_element_identities(profile: &Value) -> bool {
                     return false;
                 };
                 if let Some(presentation) = object.get("presentation").filter(|v| !v.is_null()) {
-                    if !serde_json::from_value::<ElementPresentation>(presentation.clone()).is_ok_and(|p| p.is_valid()) {
+                    if !serde_json::from_value::<ElementPresentation>(presentation.clone())
+                        .is_ok_and(|p| p.is_valid())
+                    {
                         return false;
                     }
                 }
@@ -545,10 +567,16 @@ mod presentation_regression_tests {
         let mut profile = serde_json::json!({"customization":{"elements":[{"id":"b6fd297d-7508-4ff4-aff7-97b3831f6ad0",
             "kind":"button","label":"Legacy","presentation":metadata}]}});
         assert!(validate_element_identities(&profile));
-        for invalid in [serde_json::json!({"schemaVersion":2}), serde_json::json!({"actionID":"Q"}),
-            serde_json::json!({"actionId":"ability.q"}), serde_json::json!({"groupIDs":["a","a"]}),
-            serde_json::json!({"legend":"x".repeat(65)}), serde_json::json!({"caption":"line\nbreak"}),
-            serde_json::json!({"accessibilityName":" "}), serde_json::json!({"legend":"Q","output":{}})] {
+        for invalid in [
+            serde_json::json!({"schemaVersion":2}),
+            serde_json::json!({"actionID":"Q"}),
+            serde_json::json!({"actionId":"ability.q"}),
+            serde_json::json!({"groupIDs":["a","a"]}),
+            serde_json::json!({"legend":"x".repeat(65)}),
+            serde_json::json!({"caption":"line\nbreak"}),
+            serde_json::json!({"accessibilityName":" "}),
+            serde_json::json!({"legend":"Q","output":{}}),
+        ] {
             profile["customization"]["elements"][0]["presentation"] = invalid;
             assert!(!validate_element_identities(&profile));
         }

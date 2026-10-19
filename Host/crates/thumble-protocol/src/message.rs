@@ -15,7 +15,9 @@ impl KeypadElementID {
         let mut index = 0;
         let mut high = None;
         for (position, byte) in raw.iter().copied().enumerate() {
-            if [8, 13, 18, 23].contains(&position) { continue; }
+            if [8, 13, 18, 23].contains(&position) {
+                continue;
+            }
             let nibble = match byte {
                 b'0'..=b'9' => byte - b'0',
                 b'a'..=b'f' => byte - b'a' + 10,
@@ -42,14 +44,18 @@ impl KeypadElementID {
     }
 
     pub fn starter_index(self) -> Option<usize> {
-        (1..=10).find(|number| self == Self::preset(*number)).map(usize::from)
+        (1..=10)
+            .find(|number| self == Self::preset(*number))
+            .map(usize::from)
     }
 }
 
 impl std::fmt::Display for KeypadElementID {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for (i, byte) in self.0.iter().enumerate() {
-            if [4, 6, 8, 10].contains(&i) { formatter.write_str("-")?; }
+            if [4, 6, 8, 10].contains(&i) {
+                formatter.write_str("-")?;
+            }
             write!(formatter, "{byte:02X}")?;
         }
         Ok(())
@@ -65,14 +71,25 @@ impl Serialize for KeypadElementID {
 impl<'de> Deserialize<'de> for KeypadElementID {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let raw = String::deserialize(deserializer)?;
-        Self::parse(&raw).ok_or_else(|| serde::de::Error::custom("expected an element UUID; named input slots are no longer supported"))
+        Self::parse(&raw).ok_or_else(|| {
+            serde::de::Error::custom(
+                "expected an element UUID; named input slots are no longer supported",
+            )
+        })
     }
 }
 
-fn deserialize_optional_element_id<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<Option<String>, D::Error> {
+fn deserialize_optional_element_id<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<String>, D::Error> {
     let raw = Option::<String>::deserialize(deserializer)?;
-    if raw.as_deref().is_some_and(|value| KeypadElementID::parse(value).is_none()) {
-        return Err(serde::de::Error::custom("elementID must be a UUID; named input slots are not supported"));
+    if raw
+        .as_deref()
+        .is_some_and(|value| KeypadElementID::parse(value).is_none())
+    {
+        return Err(serde::de::Error::custom(
+            "elementID must be a UUID; named input slots are not supported",
+        ));
     }
     Ok(raw)
 }
@@ -279,7 +296,12 @@ pub struct ControllerMessage {
     pub message_type: ControllerMessageType,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub button: Option<KeypadElementID>,
-    #[serde(rename = "elementID", default, deserialize_with = "deserialize_optional_element_id", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "elementID",
+        default,
+        deserialize_with = "deserialize_optional_element_id",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub element_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub element_part: Option<KeypadElementInputPart>,
@@ -411,9 +433,15 @@ mod tests {
             let id = KeypadElementID::preset(number);
             let json = serde_json::to_string(&id).unwrap();
             assert_eq!(serde_json::from_str::<KeypadElementID>(&json).unwrap(), id);
-            assert_eq!(KeypadElementID::parse(&id.to_string().to_lowercase()), Some(id));
+            assert_eq!(
+                KeypadElementID::parse(&id.to_string().to_lowercase()),
+                Some(id)
+            );
         }
-        for name in ["up", "down", "left", "right", "jump", "attack", "dash", "focus", "map", "pause", "custom1", "custom8"] {
+        for name in [
+            "up", "down", "left", "right", "jump", "attack", "dash", "focus", "map", "pause",
+            "custom1", "custom8",
+        ] {
             assert!(serde_json::from_value::<KeypadElementID>(serde_json::json!(name)).is_err());
         }
     }

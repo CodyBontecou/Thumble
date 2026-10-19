@@ -4,7 +4,8 @@ use std::error::Error;
 use std::fmt;
 pub(crate) use thumble_core::{semantic_key_code, semantic_key_name};
 use thumble_core::{
-    ConfigurationDocument, KeyBinding, KeyStroke, OutputBinding, MAXIMUM_CONFIGURATION_BINDING_STROKES,
+    ConfigurationDocument, KeyBinding, KeyStroke, OutputBinding,
+    MAXIMUM_CONFIGURATION_BINDING_STROKES,
 };
 use thumble_protocol::KeypadElementID;
 use uuid::Uuid;
@@ -473,9 +474,17 @@ pub enum ConfigurationOperation {
         profile_sha256: String,
         #[serde(rename = "evidenceSHA256")]
         evidence_sha256: String,
-        #[serde(rename = "baseProfileSHA256", default, skip_serializing_if = "Option::is_none")]
+        #[serde(
+            rename = "baseProfileSHA256",
+            default,
+            skip_serializing_if = "Option::is_none"
+        )]
         base_profile_sha256: Option<String>,
-        #[serde(rename = "layoutEditsJSON", default, skip_serializing_if = "Option::is_none")]
+        #[serde(
+            rename = "layoutEditsJSON",
+            default,
+            skip_serializing_if = "Option::is_none"
+        )]
         layout_edits_json: Option<String>,
     },
     #[serde(rename = "theme.apply")]
@@ -1354,7 +1363,10 @@ pub struct ElementJoystickMapping {
     pub right: OutputBinding,
 }
 
-fn serialize_shared_element_output<S: serde::Serializer>(binding: &OutputBinding, serializer: S) -> Result<S::Ok, S::Error> {
+fn serialize_shared_element_output<S: serde::Serializer>(
+    binding: &OutputBinding,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
     binding.element_value().serialize(serializer)
 }
 
@@ -1566,7 +1578,8 @@ pub struct ElementChanges {
 impl ElementChanges {
     pub fn is_presentation_only(&self) -> bool {
         let mut remainder = self.clone();
-        remainder.presentation = None; remainder.clear_presentation = false;
+        remainder.presentation = None;
+        remainder.clear_presentation = false;
         (self.presentation.is_some() || self.clear_presentation) && remainder == Self::default()
     }
     pub fn is_output_only(&self) -> bool {
@@ -1692,36 +1705,75 @@ pub struct ConfigurationOperationOutcome {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DesignLayoutEdit {
     pub variant: ConfigurationVariant,
-    #[serde(rename = "controlID")] pub control_id: String,
-    pub center_x: Option<f64>, pub center_y: Option<f64>,
-    pub width_scale: Option<f64>, pub height_scale: Option<f64>,
+    #[serde(rename = "controlID")]
+    pub control_id: String,
+    pub center_x: Option<f64>,
+    pub center_y: Option<f64>,
+    pub width_scale: Option<f64>,
+    pub height_scale: Option<f64>,
     pub rotation_degrees: Option<f64>,
     pub presentation: Option<ElementPresentation>,
-    #[serde(default)] pub clear_presentation: bool,
+    #[serde(default)]
+    pub clear_presentation: bool,
     pub visual_role: Option<ElementVisualRole>,
-    #[serde(default)] pub clear_visual_role: bool,
+    #[serde(default)]
+    pub clear_visual_role: bool,
 }
 
 pub(crate) const DESIGN_REVEAL_CONTROL_ID: &str = "system.top_bar_activation";
 
-pub(crate) fn decode_design_layout_plan(raw: &str) -> Result<Vec<DesignLayoutEdit>, ConfigurationOperationError> {
-    if raw.len() > 64 * 1024 { return Err(ConfigurationOperationError::InvalidOutput); }
+pub(crate) fn decode_design_layout_plan(
+    raw: &str,
+) -> Result<Vec<DesignLayoutEdit>, ConfigurationOperationError> {
+    if raw.len() > 64 * 1024 {
+        return Err(ConfigurationOperationError::InvalidOutput);
+    }
     let edits: Vec<DesignLayoutEdit> = thumble_protocol::decode_unique_json(raw.as_bytes())
         .map_err(|_| ConfigurationOperationError::InvalidOutput)?;
-    if edits.is_empty() || edits.len() > 256 { return Err(ConfigurationOperationError::InvalidOutput); }
+    if edits.is_empty() || edits.len() > 256 {
+        return Err(ConfigurationOperationError::InvalidOutput);
+    }
     let mut identities = std::collections::BTreeSet::new();
     for edit in &edits {
-        let identity = edit.control_id == DESIGN_REVEAL_CONTROL_ID || edit.control_id.split_once('.')
-            .is_some_and(|(prefix, id)| ["builtin", "custom"].contains(&prefix) && Uuid::parse_str(id).is_ok());
-        if !identity || !identities.insert(format!("{:?}:{}", edit.variant, edit.control_id))
-            || ([edit.center_x, edit.center_y, edit.width_scale, edit.height_scale, edit.rotation_degrees].iter().all(Option::is_none) && edit.presentation.is_none() && !edit.clear_presentation && edit.visual_role.is_none() && !edit.clear_visual_role)
+        let identity = edit.control_id == DESIGN_REVEAL_CONTROL_ID
+            || edit.control_id.split_once('.').is_some_and(|(prefix, id)| {
+                ["builtin", "custom"].contains(&prefix) && Uuid::parse_str(id).is_ok()
+            });
+        if !identity
+            || !identities.insert(format!("{:?}:{}", edit.variant, edit.control_id))
+            || ([
+                edit.center_x,
+                edit.center_y,
+                edit.width_scale,
+                edit.height_scale,
+                edit.rotation_degrees,
+            ]
+            .iter()
+            .all(Option::is_none)
+                && edit.presentation.is_none()
+                && !edit.clear_presentation
+                && edit.visual_role.is_none()
+                && !edit.clear_visual_role)
             || edit.presentation.as_ref().is_some_and(|p| !p.is_valid())
             || (edit.presentation.is_some() && edit.clear_presentation)
             || (edit.visual_role.is_some() && edit.clear_visual_role)
-            || (edit.control_id == DESIGN_REVEAL_CONTROL_ID && (edit.presentation.is_some() || edit.clear_presentation || edit.visual_role.is_some() || edit.clear_visual_role))
-            || [edit.center_x, edit.center_y].into_iter().flatten().any(|n| !n.is_finite() || !(0.0..=1.0).contains(&n))
-            || [edit.width_scale, edit.height_scale].into_iter().flatten().any(|n| !n.is_finite() || !(0.1..=8.0).contains(&n))
-            || edit.rotation_degrees.is_some_and(|n| !n.is_finite() || !(-180.0..=180.0).contains(&n)) {
+            || (edit.control_id == DESIGN_REVEAL_CONTROL_ID
+                && (edit.presentation.is_some()
+                    || edit.clear_presentation
+                    || edit.visual_role.is_some()
+                    || edit.clear_visual_role))
+            || [edit.center_x, edit.center_y]
+                .into_iter()
+                .flatten()
+                .any(|n| !n.is_finite() || !(0.0..=1.0).contains(&n))
+            || [edit.width_scale, edit.height_scale]
+                .into_iter()
+                .flatten()
+                .any(|n| !n.is_finite() || !(0.1..=8.0).contains(&n))
+            || edit
+                .rotation_degrees
+                .is_some_and(|n| !n.is_finite() || !(-180.0..=180.0).contains(&n))
+        {
             return Err(ConfigurationOperationError::InvalidOutput);
         }
     }
@@ -1731,15 +1783,33 @@ pub(crate) fn decode_design_layout_plan(raw: &str) -> Result<Vec<DesignLayoutEdi
 impl ConfigurationOperation {
     pub fn validate_bridge_input(&self) -> Result<(), ConfigurationOperationError> {
         match self {
-            Self::DesignApply { profile_id, package_base64, package_sha256, profile_sha256, evidence_sha256, base_profile_sha256, layout_edits_json } => {
+            Self::DesignApply {
+                profile_id,
+                package_base64,
+                package_sha256,
+                profile_sha256,
+                evidence_sha256,
+                base_profile_sha256,
+                layout_edits_json,
+            } => {
                 validate_profile_id(profile_id)?;
                 match (base_profile_sha256, layout_edits_json) {
-                    (Some(hash), Some(plan)) if hash.len() == 64 && hash.bytes().all(|b| b.is_ascii_hexdigit()) => { decode_design_layout_plan(plan)?; }
-                    (None, None) => {},
+                    (Some(hash), Some(plan))
+                        if hash.len() == 64 && hash.bytes().all(|b| b.is_ascii_hexdigit()) =>
+                    {
+                        decode_design_layout_plan(plan)?;
+                    }
+                    (None, None) => {}
                     _ => return Err(ConfigurationOperationError::InvalidOutput),
                 }
-                if package_base64.is_empty() || package_base64.len() > 12 * 1024 * 1024
-                    || [package_sha256, profile_sha256, evidence_sha256].iter().any(|hash| hash.len() != 64 || !hash.bytes().all(|b| b.is_ascii_hexdigit())) {
+                if package_base64.is_empty()
+                    || package_base64.len() > 12 * 1024 * 1024
+                    || [package_sha256, profile_sha256, evidence_sha256]
+                        .iter()
+                        .any(|hash| {
+                            hash.len() != 64 || !hash.bytes().all(|b| b.is_ascii_hexdigit())
+                        })
+                {
                     return Err(ConfigurationOperationError::InvalidOutput);
                 }
             }
@@ -2412,7 +2482,10 @@ fn apply_binding_set(
             continue;
         };
         for element in elements {
-            let mapped = element.get("id").and_then(Value::as_str).and_then(KeypadElementID::parse);
+            let mapped = element
+                .get("id")
+                .and_then(Value::as_str)
+                .and_then(KeypadElementID::parse);
             if mapped == Some(button) {
                 if let Some(element) = element.as_object_mut() {
                     element.insert("output".to_owned(), output_value.clone());
@@ -2685,7 +2758,8 @@ fn validate_element_changes(
         return Err(ConfigurationOperationError::EmptyChanges);
     }
     if changes.presentation.as_ref().is_some_and(|p| !p.is_valid())
-        || changes.presentation.is_some() && changes.clear_presentation {
+        || changes.presentation.is_some() && changes.clear_presentation
+    {
         return Err(ConfigurationOperationError::InvalidElementLabel);
     }
     if changes.label.as_ref().is_some_and(|label| {
@@ -3041,10 +3115,17 @@ mod tests {
             serde_json::json!({"clearPresentation":true}),
         ] {
             let mut invalid = valid.clone();
-            invalid[0].as_object_mut().unwrap().extend(forbidden.as_object().unwrap().clone());
+            invalid[0]
+                .as_object_mut()
+                .unwrap()
+                .extend(forbidden.as_object().unwrap().clone());
             assert!(decode_design_layout_plan(&invalid.to_string()).is_err());
         }
-        for unknown in ["system.topBarActivation", "system.not_a_surface", "system.top_bar_activation.extra"] {
+        for unknown in [
+            "system.topBarActivation",
+            "system.not_a_surface",
+            "system.top_bar_activation.extra",
+        ] {
             let mut invalid = valid.clone();
             invalid[0]["controlID"] = serde_json::json!(unknown);
             assert!(decode_design_layout_plan(&invalid.to_string()).is_err());

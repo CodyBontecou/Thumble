@@ -484,12 +484,14 @@ impl HostCore {
     }
 
     pub fn status(&self) -> StatusSnapshot {
-        let mut pressed_buttons = self.physical_holds.iter().filter_map(|(identity, hold)| {
-            match identity {
+        let mut pressed_buttons = self
+            .physical_holds
+            .iter()
+            .filter_map(|(identity, hold)| match identity {
                 InputIdentity::Button(id) if hold.is_held() => Some(*id),
                 _ => None,
-            }
-        }).collect::<Vec<_>>();
+            })
+            .collect::<Vec<_>>();
         pressed_buttons.sort();
 
         let mut pressed_elements = self

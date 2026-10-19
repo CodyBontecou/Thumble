@@ -9,11 +9,16 @@ use thumble_protocol::KeypadElementID;
 
 // Starter appearance anchors only. Missing elements are never synthesized.
 const BUILTINS: [&str; 10] = [
-    "00000000-0000-0000-0000-000000000101", "00000000-0000-0000-0000-000000000102",
-    "00000000-0000-0000-0000-000000000103", "00000000-0000-0000-0000-000000000104",
-    "00000000-0000-0000-0000-000000000105", "00000000-0000-0000-0000-000000000106",
-    "00000000-0000-0000-0000-000000000107", "00000000-0000-0000-0000-000000000108",
-    "00000000-0000-0000-0000-000000000109", "00000000-0000-0000-0000-00000000010A",
+    "00000000-0000-0000-0000-000000000101",
+    "00000000-0000-0000-0000-000000000102",
+    "00000000-0000-0000-0000-000000000103",
+    "00000000-0000-0000-0000-000000000104",
+    "00000000-0000-0000-0000-000000000105",
+    "00000000-0000-0000-0000-000000000106",
+    "00000000-0000-0000-0000-000000000107",
+    "00000000-0000-0000-0000-000000000108",
+    "00000000-0000-0000-0000-000000000109",
+    "00000000-0000-0000-0000-00000000010A",
 ];
 const HIT_OUTSET: f64 = 10.0;
 
@@ -79,8 +84,16 @@ pub(super) fn constrained_layout_fix_delta(
     if *variant != ConfigurationVariant::Primary {
         correct_customization_frame_orientation(&mut expected, *variant);
     }
-    let Some(mut actual) = after_profile.get("customization").and_then(Value::as_object).cloned() else { return false; };
-    if !materialize_declared_custom_mirrors(&mut actual) { return false; }
+    let Some(mut actual) = after_profile
+        .get("customization")
+        .and_then(Value::as_object)
+        .cloned()
+    else {
+        return false;
+    };
+    if !materialize_declared_custom_mirrors(&mut actual) {
+        return false;
+    }
     layout_fix_semantically_equal(&Value::Object(actual), &Value::Object(expected), None)
 }
 
@@ -97,25 +110,54 @@ pub(super) fn constrained_element_arrangement_delta(
         | ConfigurationOperation::ElementDistribute { element_ids, .. } => element_ids,
         _ => return false,
     };
-    let Some(requested) = ids.iter().map(|id| thumble_protocol::KeypadElementID::parse(id))
-        .collect::<Option<std::collections::HashSet<_>>>() else { return false; };
-    let Some(canvas) = customization_canvas_size(source) else { return false; };
+    let Some(requested) = ids
+        .iter()
+        .map(|id| thumble_protocol::KeypadElementID::parse(id))
+        .collect::<Option<std::collections::HashSet<_>>>()
+    else {
+        return false;
+    };
+    let Some(canvas) = customization_canvas_size(source) else {
+        return false;
+    };
     let mut expected = source.clone();
     let mut actual = result.clone();
     if !materialize_declared_custom_mirrors(&mut expected)
-        || !materialize_declared_custom_mirrors(&mut actual) { return false; }
-    let Some(controls) = resolved_repair_controls(&expected, canvas.0, canvas.1) else { return false; };
-    let mut controls = controls.into_iter().filter(|control| {
-        !control.locked && control.element_id.is_some_and(|id| requested.contains(&id))
-    }).collect::<Vec<_>>();
+        || !materialize_declared_custom_mirrors(&mut actual)
+    {
+        return false;
+    }
+    let Some(controls) = resolved_repair_controls(&expected, canvas.0, canvas.1) else {
+        return false;
+    };
+    let mut controls = controls
+        .into_iter()
+        .filter(|control| {
+            !control.locked && control.element_id.is_some_and(|id| requested.contains(&id))
+        })
+        .collect::<Vec<_>>();
     let mut positions = Vec::new();
     match operation {
         ConfigurationOperation::ElementAlign { alignment, .. } => {
-            if controls.len() < 2 { return false; }
-            let left = controls.iter().map(|c| c.frame().min_x()).fold(f64::INFINITY, f64::min);
-            let right = controls.iter().map(|c| c.frame().max_x()).fold(f64::NEG_INFINITY, f64::max);
-            let top = controls.iter().map(|c| c.frame().min_y()).fold(f64::INFINITY, f64::min);
-            let bottom = controls.iter().map(|c| c.frame().max_y()).fold(f64::NEG_INFINITY, f64::max);
+            if controls.len() < 2 {
+                return false;
+            }
+            let left = controls
+                .iter()
+                .map(|c| c.frame().min_x())
+                .fold(f64::INFINITY, f64::min);
+            let right = controls
+                .iter()
+                .map(|c| c.frame().max_x())
+                .fold(f64::NEG_INFINITY, f64::max);
+            let top = controls
+                .iter()
+                .map(|c| c.frame().min_y())
+                .fold(f64::INFINITY, f64::min);
+            let bottom = controls
+                .iter()
+                .map(|c| c.frame().max_y())
+                .fold(f64::NEG_INFINITY, f64::max);
             for control in &controls {
                 let (x, y) = match alignment {
                     A::Left => (left + control.width / 2.0, control.center_y),
@@ -125,11 +167,16 @@ pub(super) fn constrained_element_arrangement_delta(
                     A::Bottom => (control.center_x, bottom - control.height / 2.0),
                     A::VerticalCenters => (control.center_x, (top + bottom) / 2.0),
                 };
-                positions.push((control.identity.clone(), normalized_position(x, y, control.width, control.height, canvas)));
+                positions.push((
+                    control.identity.clone(),
+                    normalized_position(x, y, control.width, control.height, canvas),
+                ));
             }
         }
         ConfigurationOperation::ElementDistribute { distribution, .. } => {
-            if controls.len() < 3 { return false; }
+            if controls.len() < 3 {
+                return false;
+            }
             let horizontal = matches!(distribution, D::HorizontalCenters | D::HorizontalSpacing);
             let centers = matches!(distribution, D::HorizontalCenters | D::VerticalCenters);
             let coordinate = |c: &RepairControl| if horizontal { c.center_x } else { c.center_y };
@@ -141,21 +188,39 @@ pub(super) fn constrained_element_arrangement_delta(
             let end = coordinate(last);
             let step = (end - start) / (controls.len() - 1) as f64;
             let span = (end + dimension(last) / 2.0) - (start - dimension(first) / 2.0);
-            let spacing = (span - controls.iter().map(dimension).sum::<f64>()) / (controls.len() - 1) as f64;
+            let spacing =
+                (span - controls.iter().map(dimension).sum::<f64>()) / (controls.len() - 1) as f64;
             let mut trailing = start + dimension(first) / 2.0;
             for (index, control) in controls.iter().enumerate().skip(1).take(controls.len() - 2) {
-                let target = if centers { start + index as f64 * step } else { trailing + spacing + dimension(control) / 2.0 };
+                let target = if centers {
+                    start + index as f64 * step
+                } else {
+                    trailing + spacing + dimension(control) / 2.0
+                };
                 trailing = target + dimension(control) / 2.0;
-                let (x, y) = if horizontal { (target, control.center_y) } else { (control.center_x, target) };
-                positions.push((control.identity.clone(), normalized_position(x, y, control.width, control.height, canvas)));
+                let (x, y) = if horizontal {
+                    (target, control.center_y)
+                } else {
+                    (control.center_x, target)
+                };
+                positions.push((
+                    control.identity.clone(),
+                    normalized_position(x, y, control.width, control.height, canvas),
+                ));
             }
         }
         _ => return false,
     }
     for (identity, (x, y)) in positions {
-        let Some((actual_x, actual_y)) = group_child_position(&actual, &identity) else { return false; };
-        if (x - actual_x).abs() > 1e-12 || (y - actual_y).abs() > 1e-12
-            || !set_group_child_position(&mut expected, &identity, actual_x, actual_y) { return false; }
+        let Some((actual_x, actual_y)) = group_child_position(&actual, &identity) else {
+            return false;
+        };
+        if (x - actual_x).abs() > 1e-12
+            || (y - actual_y).abs() > 1e-12
+            || !set_group_child_position(&mut expected, &identity, actual_x, actual_y)
+        {
+            return false;
+        }
     }
     let variant = match operation {
         ConfigurationOperation::ElementAlign { variant, .. }
@@ -404,7 +469,11 @@ struct RepairEngine {
 }
 
 impl RepairEngine {
-    fn new(mut customization: Map<String, Value>, canvas: (f64, f64), respecting_locks: bool) -> Self {
+    fn new(
+        mut customization: Map<String, Value>,
+        canvas: (f64, f64),
+        respecting_locks: bool,
+    ) -> Self {
         let valid_declarations = materialize_declared_custom_mirrors(&mut customization);
         Self {
             customization,
@@ -532,38 +601,85 @@ impl RepairEngine {
     }
 
     fn show_default_controls(&mut self) -> bool {
-        let Some(elements) = self.customization.get("elements").and_then(Value::as_array) else { return false; };
-        let Some(existing) = elements.iter().map(|element| element.get("id").and_then(Value::as_str).and_then(KeypadElementID::parse))
-            .collect::<Option<std::collections::BTreeSet<_>>>() else { return false; };
-        let missing_count = BUILTINS.iter().filter(|id| !existing.contains(&KeypadElementID::parse(id).unwrap())).count();
+        let Some(elements) = self.customization.get("elements").and_then(Value::as_array) else {
+            return false;
+        };
+        let Some(existing) = elements
+            .iter()
+            .map(|element| {
+                element
+                    .get("id")
+                    .and_then(Value::as_str)
+                    .and_then(KeypadElementID::parse)
+            })
+            .collect::<Option<std::collections::BTreeSet<_>>>()
+        else {
+            return false;
+        };
+        let missing_count = BUILTINS
+            .iter()
+            .filter(|id| !existing.contains(&KeypadElementID::parse(id).unwrap()))
+            .count();
         let mut changed = false;
         if existing.len() + missing_count <= 128 {
             // Explicit authoring requested by this repair, not an import or runtime fallback.
             let starter = thumble_core::minimal_default_customization();
             for prototype in starter["elements"].as_array().unwrap() {
                 let id = prototype["id"].as_str().unwrap();
-                if existing.contains(&KeypadElementID::parse(id).unwrap()) { continue; }
+                if existing.contains(&KeypadElementID::parse(id).unwrap()) {
+                    continue;
+                }
                 let mut element = prototype.clone();
                 element["label"] = Value::String(builtin_visual_label(&self.customization, id));
                 let mut layout = default_button_layout();
                 layout.insert("centerX".to_owned(), Value::from(0.5));
                 layout.insert("centerY".to_owned(), Value::from(0.5));
-                layout.insert("shape".to_owned(), Value::String("rounded_rectangle".to_owned()));
+                layout.insert(
+                    "shape".to_owned(),
+                    Value::String("rounded_rectangle".to_owned()),
+                );
                 element["layout"] = Value::Object(layout);
-                self.customization.get_mut("elements").and_then(Value::as_array_mut).unwrap().push(element);
+                self.customization
+                    .get_mut("elements")
+                    .and_then(Value::as_array_mut)
+                    .unwrap()
+                    .push(element);
                 changed = true;
             }
         }
         for button in BUILTINS {
-            if !self.customization.get("elements").and_then(Value::as_array).unwrap().iter().any(|element| {
-                element.get("id").and_then(Value::as_str).is_some_and(|id| id.eq_ignore_ascii_case(button))
-                    && element.get("kind").and_then(Value::as_str).unwrap_or("button") == "button"
-            }) { continue; }
-            let Some(layout) = builtin_layout(&self.customization, button) else { return false; };
-            if layout.get("isHidden").and_then(Value::as_bool).unwrap_or(false)
+            if !self
+                .customization
+                .get("elements")
+                .and_then(Value::as_array)
+                .unwrap()
+                .iter()
+                .any(|element| {
+                    element
+                        .get("id")
+                        .and_then(Value::as_str)
+                        .is_some_and(|id| id.eq_ignore_ascii_case(button))
+                        && element
+                            .get("kind")
+                            .and_then(Value::as_str)
+                            .unwrap_or("button")
+                            == "button"
+                })
+            {
+                continue;
+            }
+            let Some(layout) = builtin_layout(&self.customization, button) else {
+                return false;
+            };
+            if layout
+                .get("isHidden")
+                .and_then(Value::as_bool)
+                .unwrap_or(false)
                 || !existing.contains(&KeypadElementID::parse(button).unwrap())
             {
-                if !set_builtin_layout_state(&mut self.customization, button, "isHidden", false) { return false; }
+                if !set_builtin_layout_state(&mut self.customization, button, "isHidden", false) {
+                    return false;
+                }
                 changed = true;
             }
         }
@@ -992,11 +1108,30 @@ fn resolved_repair_controls(
         .unwrap_or("standard");
     let mut controls = Vec::new();
     for button in BUILTINS {
-        let Some(element) = customization.get("elements").and_then(Value::as_array).into_iter().flatten()
-            .find(|element| element.get("kind").and_then(Value::as_str).unwrap_or("button") == "button"
-                && element.get("id").and_then(Value::as_str).is_some_and(|id| id.eq_ignore_ascii_case(button)))
-        else { continue; };
-        let layout = element.get("layout").and_then(Value::as_object).cloned().or_else(|| builtin_layout(customization, button))?;
+        let Some(element) = customization
+            .get("elements")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .find(|element| {
+                element
+                    .get("kind")
+                    .and_then(Value::as_str)
+                    .unwrap_or("button")
+                    == "button"
+                    && element
+                        .get("id")
+                        .and_then(Value::as_str)
+                        .is_some_and(|id| id.eq_ignore_ascii_case(button))
+            })
+        else {
+            continue;
+        };
+        let layout = element
+            .get("layout")
+            .and_then(Value::as_object)
+            .cloned()
+            .or_else(|| builtin_layout(customization, button))?;
         if layout
             .get("isHidden")
             .and_then(Value::as_bool)
@@ -1028,7 +1163,10 @@ fn resolved_repair_controls(
             identity: format!("builtin:{button}"),
             stable_id: format!("builtin.{button}"),
             element_id: thumble_protocol::KeypadElementID::parse(button),
-            visual_role: element.get("visualRole").and_then(Value::as_str).map(str::to_owned),
+            visual_role: element
+                .get("visualRole")
+                .and_then(Value::as_str)
+                .map(str::to_owned),
             label: builtin_visual_label(customization, button),
             kind: "button".to_owned(),
             center_x,
@@ -1057,11 +1195,28 @@ fn resolved_repair_controls(
         let button = button.as_object()?;
         let id = button.get("id").and_then(Value::as_str)?;
         let canonical_id = Uuid::parse_str(id).ok()?.hyphenated().to_string();
-        if customization.get("elements").and_then(Value::as_array).into_iter().flatten().any(|element| {
-            element.get("kind").and_then(Value::as_str).unwrap_or("button") == "button"
-                && element.get("id").and_then(Value::as_str).is_some_and(|value| value.eq_ignore_ascii_case(id))
-                && thumble_protocol::KeypadElementID::parse(id).and_then(|id| id.starter_index()).is_some()
-        }) { continue; }
+        if customization
+            .get("elements")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .any(|element| {
+                element
+                    .get("kind")
+                    .and_then(Value::as_str)
+                    .unwrap_or("button")
+                    == "button"
+                    && element
+                        .get("id")
+                        .and_then(Value::as_str)
+                        .is_some_and(|value| value.eq_ignore_ascii_case(id))
+                    && thumble_protocol::KeypadElementID::parse(id)
+                        .and_then(|id| id.starter_index())
+                        .is_some()
+            })
+        {
+            continue;
+        }
         let layout = button
             .get("layout")
             .and_then(Value::as_object)
@@ -1094,7 +1249,10 @@ fn resolved_repair_controls(
             identity: format!("custom:{canonical_id}"),
             stable_id: format!("custom.{canonical_id}"),
             element_id: thumble_protocol::KeypadElementID::parse(id),
-            visual_role: button.get("visualRole").and_then(Value::as_str).map(str::to_owned),
+            visual_role: button
+                .get("visualRole")
+                .and_then(Value::as_str)
+                .map(str::to_owned),
             label: button
                 .get("label")
                 .and_then(Value::as_str)
@@ -1314,7 +1472,9 @@ fn replace_builtin_layout(
     let mut before_layout = normalized_known_layout(before_layout);
     let mut layout = normalized_known_layout(layout);
     for value in [&mut before_layout, &mut layout] {
-        value.entry("shape".to_owned()).or_insert_with(|| Value::String("rounded_rectangle".to_owned()));
+        value
+            .entry("shape".to_owned())
+            .or_insert_with(|| Value::String("rounded_rectangle".to_owned()));
     }
     let Some(values) = customization
         .entry("buttonCustomizations".to_owned())
@@ -1882,13 +2042,19 @@ enum ErgonomicRole {
 }
 
 fn ergonomic_role(control: &RepairControl) -> ErgonomicRole {
-    if control.is_decoration() || control.is_joystick() || control.is_trackpad() || control.is_trigger() {
+    if control.is_decoration()
+        || control.is_joystick()
+        || control.is_trackpad()
+        || control.is_trigger()
+    {
         return ErgonomicRole::Exempt;
     }
     match control.visual_role.as_deref() {
         Some("movement") => return ErgonomicRole::Movement,
         Some("utility" | "menu") => return ErgonomicRole::Utility,
-        Some("decoration" | "system" | "joystick" | "trackpad" | "trigger") => return ErgonomicRole::Exempt,
+        Some("decoration" | "system" | "joystick" | "trackpad" | "trigger") => {
+            return ErgonomicRole::Exempt
+        }
         Some("primary_action" | "secondary_action") => return ErgonomicRole::Action,
         _ => {}
     }
@@ -2294,9 +2460,13 @@ mod tests {
                     .unwrap();
                 let custom = elements
                     .iter_mut()
-                    .find(|element| element.get("id").and_then(Value::as_str)
-                        .and_then(thumble_protocol::KeypadElementID::parse)
-                        .is_some_and(|id| id.starter_index().is_none()))
+                    .find(|element| {
+                        element
+                            .get("id")
+                            .and_then(Value::as_str)
+                            .and_then(thumble_protocol::KeypadElementID::parse)
+                            .is_some_and(|id| id.starter_index().is_none())
+                    })
                     .unwrap();
                 custom["layout"]["centerX"] = Value::from(0.9);
                 assert!(!valid_operation_delta(

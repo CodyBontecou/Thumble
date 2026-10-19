@@ -107,9 +107,15 @@ fn aliases_precedence_bindings_and_uuid_rules_match_the_basic_contract() {
     );
     assert_eq!(plan.elements[1]["layout"]["centerX"], 0.82);
     assert_eq!(plan.elements[1]["layout"]["centerY"], 0.84);
-    assert_eq!(plan.semantic_bindings[0].button, plan.assigned_controls[0].element_id);
+    assert_eq!(
+        plan.semantic_bindings[0].button,
+        plan.assigned_controls[0].element_id
+    );
     assert_eq!(plan.semantic_bindings[0].key_code, 126);
-    assert_eq!(plan.semantic_bindings[1].button, plan.assigned_controls[1].element_id);
+    assert_eq!(
+        plan.semantic_bindings[1].button,
+        plan.assigned_controls[1].element_id
+    );
     assert_eq!(plan.semantic_bindings[1].key_code, 49);
     assert_eq!(plan.semantic_bindings[1].modifier_mask, 2);
 
@@ -120,8 +126,14 @@ fn aliases_precedence_bindings_and_uuid_rules_match_the_basic_contract() {
     assert_eq!(plan.profile_key_bindings.len(), 2);
     assert_eq!(plan.profile_output_bindings.len(), 2);
     for control in &plan.assigned_controls {
-        assert!(plan.profile_key_bindings.get_raw(&control.element_id).is_some());
-        assert!(plan.profile_output_bindings.get_raw(&control.element_id).is_some());
+        assert!(plan
+            .profile_key_bindings
+            .get_raw(&control.element_id)
+            .is_some());
+        assert!(plan
+            .profile_output_bindings
+            .get_raw(&control.element_id)
+            .is_some());
     }
 
     let expected_profile = Uuid::new_v5(
@@ -138,8 +150,15 @@ fn joystick_trackpad_text_and_decoration_defaults_are_explicit_and_safe() {
     let joystick = &plan.elements[0];
     assert_eq!(joystick["kind"], "joystick");
     assert_eq!(joystick["layout"]["joystickVisualStyle"], "thumbstick");
-    assert_eq!(joystick["joystickMapping"]["right"]["keyboard"]["keyCode"], 2);
-    assert!(joystick["joystickMapping"].as_object().unwrap().values().all(Value::is_object));
+    assert_eq!(
+        joystick["joystickMapping"]["right"]["keyboard"]["keyCode"],
+        2
+    );
+    assert!(joystick["joystickMapping"]
+        .as_object()
+        .unwrap()
+        .values()
+        .all(Value::is_object));
     assert_eq!(joystick["layout"]["widthScale"], 0.58);
     let trackpad = &plan.elements[1];
     assert_eq!(trackpad["kind"], "trackpad");
@@ -295,10 +314,21 @@ fn repeated_labels_have_independent_ids_and_no_slot_capacity() {
     }))
     .unwrap();
     let duplicate_plan = plan_generation_spec(&duplicate, None).unwrap();
-    assert_ne!(duplicate_plan.assigned_controls[0].element_id, duplicate_plan.assigned_controls[1].element_id);
-    for control in &duplicate_plan.assigned_controls { Uuid::parse_str(&control.element_id).unwrap(); }
-    assert_eq!(duplicate_plan.elements[0]["output"]["keyboard"]["keyCode"], 49);
-    assert_eq!(duplicate_plan.elements[1]["output"]["keyboard"]["keyCode"], 0);
+    assert_ne!(
+        duplicate_plan.assigned_controls[0].element_id,
+        duplicate_plan.assigned_controls[1].element_id
+    );
+    for control in &duplicate_plan.assigned_controls {
+        Uuid::parse_str(&control.element_id).unwrap();
+    }
+    assert_eq!(
+        duplicate_plan.elements[0]["output"]["keyboard"]["keyCode"],
+        49
+    );
+    assert_eq!(
+        duplicate_plan.elements[1]["output"]["keyboard"]["keyCode"],
+        0
+    );
 
     let reused_specialized = serde_json::to_vec(&json!({
         "controls": [
@@ -328,9 +358,16 @@ fn repeated_labels_have_independent_ids_and_no_slot_capacity() {
     let plan = plan_generation_spec(EXHAUSTION, None).unwrap();
     assert_eq!(plan.assigned_controls.len(), 20);
     assert!(plan.dropped_controls.is_empty());
-    let ids = plan.assigned_controls.iter().map(|control| &control.element_id).collect::<std::collections::BTreeSet<_>>();
+    let ids = plan
+        .assigned_controls
+        .iter()
+        .map(|control| &control.element_id)
+        .collect::<std::collections::BTreeSet<_>>();
     assert_eq!(ids.len(), 20);
-    assert!(!plan.warnings.iter().any(|warning| warning.code == "slot-exhaustion"));
+    assert!(!plan
+        .warnings
+        .iter()
+        .any(|warning| warning.code == "slot-exhaustion"));
     assert!(plan
         .warnings
         .iter()
@@ -839,25 +876,39 @@ fn repeated_requested_uuid_authoring_retains_each_owned_output_but_saved_duplica
         {"id": requested, "label": "Same", "key": "A"},
         {"id": requested.to_lowercase(), "label": "Same", "key": "C"},
         {"id": later, "label": "Same", "key": "Tab"}
-    ]})).unwrap();
+    ]}))
+    .unwrap();
     let plan = plan_generation_spec(&input, None).unwrap();
     let replay = plan_generation_spec(&input, None).unwrap();
     assert_eq!(plan.assigned_controls.len(), 3);
     assert_eq!(plan.elements.len(), 3);
     assert!(plan.dropped_controls.is_empty());
-    let ids = plan.assigned_controls.iter().map(|control| Uuid::parse_str(&control.element_id).unwrap()).collect::<std::collections::BTreeSet<_>>();
+    let ids = plan
+        .assigned_controls
+        .iter()
+        .map(|control| Uuid::parse_str(&control.element_id).unwrap())
+        .collect::<std::collections::BTreeSet<_>>();
     assert_eq!(ids.len(), 3);
     assert_eq!(plan.assigned_controls[0].element_id, requested);
     assert_eq!(plan.assigned_controls[2].element_id, later);
     assert_eq!(plan.assigned_controls, replay.assigned_controls);
-    let duplicates = plan.warnings.iter().filter(|warning| warning.code == "duplicate-element-id").collect::<Vec<_>>();
+    let duplicates = plan
+        .warnings
+        .iter()
+        .filter(|warning| warning.code == "duplicate-element-id")
+        .collect::<Vec<_>>();
     assert_eq!(duplicates.len(), 1);
     assert_eq!(duplicates[0].source_ordinal, 1);
-    assert!(duplicates[0].message.contains(&plan.assigned_controls[1].element_id));
+    assert!(duplicates[0]
+        .message
+        .contains(&plan.assigned_controls[1].element_id));
     for (ordinal, code) in [0, 8, 48].into_iter().enumerate() {
         let owner = &plan.assigned_controls[ordinal].element_id;
         assert_eq!(plan.elements[ordinal]["id"], *owner);
-        assert_eq!(plan.elements[ordinal]["output"]["keyboard"]["keyCode"], code);
+        assert_eq!(
+            plan.elements[ordinal]["output"]["keyboard"]["keyCode"],
+            code
+        );
         assert_eq!(plan.semantic_bindings[ordinal].button, *owner);
         assert_eq!(plan.semantic_bindings[ordinal].key_code, code);
         assert!(plan.profile_key_bindings.get_raw(owner).is_some());

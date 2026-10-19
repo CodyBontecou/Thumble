@@ -17,7 +17,6 @@ mod resolver;
 mod semantic_key;
 mod state;
 
-pub use thumble_protocol::{decode_unique_json, validate_unique_json};
 pub use binding::{ButtonBindings, KeyBinding, KeyStroke, OutputBinding};
 pub use configuration::{
     ConfigurationDocument, ConfigurationDocumentError, MAXIMUM_CONFIGURATION_BINDING_STROKES,
@@ -38,7 +37,10 @@ pub use core::{
     ConnectionId, CoreError, CoreTime, Effect, HostCore, LocalControlError, StatusCounters,
     StatusSnapshot, TokenSource,
 };
-pub use element_identity::{profile_configured_outputs, profile_default_outputs, profile_owned_outputs, validate_element_identities};
+pub use element_identity::{
+    profile_configured_outputs, profile_default_outputs, profile_owned_outputs,
+    validate_element_identities,
+};
 pub use gamepad::VirtualGamepadButton;
 pub use generation_spec::{
     plan_generation_spec, GeneratedSemanticBinding, GenerationAssignedControl,
@@ -62,3 +64,4 @@ pub use state::{
     ConfigurationCommitRecord, PersistentState, StateError, TrustedClient, CURRENT_SCHEMA_VERSION,
     DEFAULT_PROFILE_ID, INITIAL_CONFIGURATION_REVISION, MAXIMUM_RECENT_CONFIGURATION_COMMITS,
 };
+pub use thumble_protocol::{decode_unique_json, validate_unique_json};

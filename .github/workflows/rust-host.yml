@@ -8,6 +8,7 @@ on:
       - "Sources/CLI/ThumbleCLI.swift"
       - "Sources/CLI/ThumbleCLIBackend.swift"
       - "Sources/Shared/ControllerProtocol.swift"
+      - "Sources/Shared/ControllerDesignSession.swift"
       - "Sources/Shared/GameKeypadGenerator.swift"
       - "Sources/Shared/GamepadCustomization.swift"
       - "Sources/Shared/GamepadDesignSystem.swift"
@@ -51,6 +52,7 @@ on:
       - "Sources/CLI/ThumbleCLI.swift"
       - "Sources/CLI/ThumbleCLIBackend.swift"
       - "Sources/Shared/ControllerProtocol.swift"
+      - "Sources/Shared/ControllerDesignSession.swift"
       - "Sources/Shared/GameKeypadGenerator.swift"
       - "Sources/Shared/GamepadCustomization.swift"
       - "Sources/Shared/GamepadDesignSystem.swift"
@@ -147,9 +149,17 @@ jobs:
         run: ./scripts/verify-hosted-builder-local.sh --focused
 
   macos-host:
-    runs-on: macos-15
+    runs-on: macos-26
+    timeout-minutes: 60
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
     steps:
       - uses: actions/checkout@v4
+      - name: Show release build toolchain
+        run: |
+          test "$(uname -m)" = arm64
+          xcodebuild -version
+          swift --version
       - uses: dtolnay/rust-toolchain@1.88.0
         with:
           components: rustfmt, clippy
@@ -263,7 +273,12 @@ jobs:
           process.stdin.write('{"jsonrpc":"2.0","method":"notifications/initialized"}\n')
           process.stdin.flush()
           tools = request(2, "tools/list", {})["tools"]
-          assert len(tools) == 21
+          assert len(tools) == 28
+          assert {
+              "controller_design_capabilities", "begin_controller_design", "update_controller_design",
+              "review_controller_design", "critique_controller_design", "apply_controller_design",
+              "inspect_controller_design",
+          }.issubset({tool["name"] for tool in tools})
           render = next(tool for tool in tools if tool["name"] == "render_controller")
           uri = render["_meta"]["ui"]["resourceUri"]
           assert uri == "ui://thumble/controller-builder-v1.html"

@@ -165,7 +165,11 @@ fn all_edit_variants_apply_and_keep_active_maps_synchronized() {
         )
         .unwrap();
     let active = session.document().active_profile_id.clone();
-    let key = session.document().key_bindings.get_raw(DEFAULT_JUMP).unwrap();
+    let key = session
+        .document()
+        .key_bindings
+        .get_raw(DEFAULT_JUMP)
+        .unwrap();
     assert_eq!(key.key_code, 49);
     assert_eq!(key.modifiers, 9);
     assert_eq!(
@@ -193,8 +197,16 @@ fn all_edit_variants_apply_and_keep_active_maps_synchronized() {
             1_004,
         )
         .unwrap();
-    assert!(session.document().key_bindings.get_raw(DEFAULT_JUMP).is_none());
-    let cleared = session.document().output_bindings.get_raw(DEFAULT_JUMP).unwrap();
+    assert!(session
+        .document()
+        .key_bindings
+        .get_raw(DEFAULT_JUMP)
+        .is_none());
+    let cleared = session
+        .document()
+        .output_bindings
+        .get_raw(DEFAULT_JUMP)
+        .unwrap();
     assert!(cleared.keyboard.is_none());
     assert!(cleared.gamepad_buttons.contains("south"));
 
@@ -311,8 +323,14 @@ fn edits_reject_unknown_fields_and_every_invalid_shape() {
         BuilderEdit::BindingClear {
             button: "south".into(),
         },
-        BuilderEdit::BindingSet { button: GENERATED_EXTRA.into(), key: "Space".into(), modifiers: vec![] },
-        BuilderEdit::BindingClear { button: GENERATED_EXTRA.into() },
+        BuilderEdit::BindingSet {
+            button: GENERATED_EXTRA.into(),
+            key: "Space".into(),
+            modifiers: vec![],
+        },
+        BuilderEdit::BindingClear {
+            button: GENERATED_EXTRA.into(),
+        },
     ];
     for (index, edit) in invalid.into_iter().enumerate() {
         let mut session = session();
@@ -436,7 +454,10 @@ fn generation_is_deterministic_sanitized_and_replayable() {
     assert_eq!(first.profile_name, "Builder Game");
     for control in &first.assigned_controls {
         let id = thumble_protocol::KeypadElementID::parse(&control.element_id).unwrap();
-        assert_eq!(thumble_protocol::KeypadElementID::parse(&control.button), Some(id));
+        assert_eq!(
+            thumble_protocol::KeypadElementID::parse(&control.button),
+            Some(id)
+        );
     }
 
     let summary_json = serde_json::to_string(&first).unwrap();
@@ -603,7 +624,10 @@ fn persisted_session_rejects_literal_duplicate_declarations_before_digest_valida
         serde_json::from_str::<Value>(&ambiguous).unwrap(),
         serde_json::from_str::<Value>(&encoded).unwrap()
     );
-    assert_eq!(BuilderSession::decode_json(ambiguous.as_bytes()), Err(BuilderError::DecodingFailed));
+    assert_eq!(
+        BuilderSession::decode_json(ambiguous.as_bytes()),
+        Err(BuilderError::DecodingFailed)
+    );
     assert!(BuilderSession::decode_json(encoded.as_bytes()).is_ok());
 }
 
@@ -806,7 +830,11 @@ fn binding_edits_sync_all_variants_preview_and_preserve_gamepad_output() {
             1_002,
         )
         .unwrap();
-    let output = decoded.document().output_bindings.get_raw(DEFAULT_JUMP).unwrap();
+    let output = decoded
+        .document()
+        .output_bindings
+        .get_raw(DEFAULT_JUMP)
+        .unwrap();
     assert!(output.keyboard.is_none());
     assert!(output.gamepad_buttons.contains("south"));
     for key in [
@@ -832,36 +860,84 @@ fn keyboard_edits_preserve_each_canvas_output_without_profile_sidecars() {
         let initial = session();
         let mut persisted = serde_json::to_value(&initial).unwrap();
         let source = persisted["document"]["profiles"][0]["customization"].clone();
-        for (canvas, pad) in [("customization", "south"), ("landscapeCustomization", "east"), ("portraitCustomization", "west")] {
+        for (canvas, pad) in [
+            ("customization", "south"),
+            ("landscapeCustomization", "east"),
+            ("portraitCustomization", "west"),
+        ] {
             persisted["document"]["profiles"][0][canvas] = source.clone();
-            let elements = persisted["document"]["profiles"][0][canvas]["elements"].as_array_mut().unwrap();
-            let owner = elements.iter_mut().find(|element| element["id"] == DEFAULT_JUMP).unwrap();
+            let elements = persisted["document"]["profiles"][0][canvas]["elements"]
+                .as_array_mut()
+                .unwrap();
+            let owner = elements
+                .iter_mut()
+                .find(|element| element["id"] == DEFAULT_JUMP)
+                .unwrap();
             owner["output"]["gamepadButtons"] = json!([pad]);
             owner["output"]["futureOutput"] = json!({"source":canvas});
         }
         persisted["document"]["profileOutputBindings"] = json!({});
         refresh_document_digest(&mut persisted);
-        let mut decoded = BuilderSession::decode_json(&serde_json::to_vec(&persisted).unwrap()).unwrap();
-        let edit = if clear { BuilderEdit::BindingClear { button: DEFAULT_JUMP.into() } }
-            else { BuilderEdit::BindingSet { button: DEFAULT_JUMP.into(), key: "Space".into(), modifiers: vec!["shift".into()] } };
+        let mut decoded =
+            BuilderSession::decode_json(&serde_json::to_vec(&persisted).unwrap()).unwrap();
+        let edit = if clear {
+            BuilderEdit::BindingClear {
+                button: DEFAULT_JUMP.into(),
+            }
+        } else {
+            BuilderEdit::BindingSet {
+                button: DEFAULT_JUMP.into(),
+                key: "Space".into(),
+                modifiers: vec!["shift".into()],
+            }
+        };
         decoded.apply_edit(OP1, 1, edit, 1001).unwrap();
-        for (canvas, pad) in [("customization", "south"), ("landscapeCustomization", "east"), ("portraitCustomization", "west")] {
-            let elements = decoded.document().profiles[0][canvas]["elements"].as_array().unwrap();
-            let owner = elements.iter().find(|element| element["id"] == DEFAULT_JUMP).unwrap();
+        for (canvas, pad) in [
+            ("customization", "south"),
+            ("landscapeCustomization", "east"),
+            ("portraitCustomization", "west"),
+        ] {
+            let elements = decoded.document().profiles[0][canvas]["elements"]
+                .as_array()
+                .unwrap();
+            let owner = elements
+                .iter()
+                .find(|element| element["id"] == DEFAULT_JUMP)
+                .unwrap();
             if owner["output"]["gamepadButtons"] != json!([pad]) {
-                failures.push(format!("{canvas}, clear={clear}: owned gamepad channel changed"));
+                failures.push(format!(
+                    "{canvas}, clear={clear}: owned gamepad channel changed"
+                ));
             }
             if owner["output"]["futureOutput"] != json!({"source":canvas}) {
-                failures.push(format!("{canvas}, clear={clear}: future output metadata lost"));
+                failures.push(format!(
+                    "{canvas}, clear={clear}: future output metadata lost"
+                ));
             }
-            if clear { assert!(owner["output"].get("keyboard").is_none()); }
-            else { assert_eq!(owner["output"]["keyboard"], json!({"keyCode":49,"modifiersRawValue":2})); }
-            assert_eq!(owner["defaultOutput"], source["elements"][4]["defaultOutput"]);
+            if clear {
+                assert!(owner["output"].get("keyboard").is_none());
+            } else {
+                assert_eq!(
+                    owner["output"]["keyboard"],
+                    json!({"keyCode":49,"modifiersRawValue":2})
+                );
+            }
+            assert_eq!(
+                owner["defaultOutput"],
+                source["elements"][4]["defaultOutput"]
+            );
         }
         let active = &decoded.document().active_profile_id;
-        if decoded.document().profile_output_bindings.get(active).and_then(|outputs| outputs.get_raw(DEFAULT_JUMP))
-            != decoded.document().output_bindings.get_raw(DEFAULT_JUMP) {
-            failures.push(format!("clear={clear}: target sidecar does not match its owned result"));
+        if decoded
+            .document()
+            .profile_output_bindings
+            .get(active)
+            .and_then(|outputs| outputs.get_raw(DEFAULT_JUMP))
+            != decoded.document().output_bindings.get_raw(DEFAULT_JUMP)
+        {
+            failures.push(format!(
+                "clear={clear}: target sidecar does not match its owned result"
+            ));
         }
     }
     assert!(failures.is_empty(), "{}", failures.join("; "));
@@ -873,22 +949,42 @@ fn keyboard_only_clear_is_explicit_and_never_restores_an_owned_default() {
     let mut persisted = serde_json::to_value(&session).unwrap();
     for map in ["outputBindings", "profileOutputBindings"] {
         let active = session.document().active_profile_id.clone();
-        let value = if map == "outputBindings" { &mut persisted["document"][map][DEFAULT_JUMP] }
-            else { &mut persisted["document"][map][&active][DEFAULT_JUMP] };
+        let value = if map == "outputBindings" {
+            &mut persisted["document"][map][DEFAULT_JUMP]
+        } else {
+            &mut persisted["document"][map][&active][DEFAULT_JUMP]
+        };
         value["gamepadButtons"] = json!([]);
     }
-    persisted["document"]["profiles"][0]["customization"]["elements"][4]["output"]["gamepadButtons"] = json!([]);
+    persisted["document"]["profiles"][0]["customization"]["elements"][4]["output"]
+        ["gamepadButtons"] = json!([]);
     refresh_document_digest(&mut persisted);
     let mut decoded: BuilderSession = serde_json::from_value(persisted).unwrap();
-    decoded.apply_edit(OP1, 1, BuilderEdit::BindingClear { button: DEFAULT_JUMP.into() }, 1001).unwrap();
-    let output = decoded.document().output_bindings.get_raw(DEFAULT_JUMP).cloned();
+    decoded
+        .apply_edit(
+            OP1,
+            1,
+            BuilderEdit::BindingClear {
+                button: DEFAULT_JUMP.into(),
+            },
+            1001,
+        )
+        .unwrap();
+    let output = decoded
+        .document()
+        .output_bindings
+        .get_raw(DEFAULT_JUMP)
+        .cloned();
     assert_eq!(output, Some(thumble_core::OutputBinding::default()));
     let element = &decoded.document().profiles[0]["customization"]["elements"][4];
     assert_eq!(element["output"], json!({"gamepadButtons":[]}));
     assert!(element["defaultOutput"]["keyboard"].is_object());
     let mut state = thumble_core::PersistentState::minimal("test").unwrap();
     decoded.document().install_into(&mut state).unwrap();
-    assert_eq!(state.resolve_button_output(thumble_protocol::KeypadElementID::preset(5)), output);
+    assert_eq!(
+        state.resolve_button_output(thumble_protocol::KeypadElementID::preset(5)),
+        output
+    );
 }
 
 #[test]

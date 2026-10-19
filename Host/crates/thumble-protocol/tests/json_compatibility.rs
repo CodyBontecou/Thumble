@@ -1,9 +1,8 @@
 use serde_json::{json, Value};
 use thumble_protocol::{
     ButtonPressState, ControllerCapability, ControllerMessage, ControllerMessageType,
-    ControllerPointerButton, ControllerPointerEventKind, KeypadElementID,
-    GamepadProfileOrientationPreference, KeypadElementInputPart, VirtualGamepadStick,
-    VirtualGamepadTrigger,
+    ControllerPointerButton, ControllerPointerEventKind, GamepadProfileOrientationPreference,
+    KeypadElementID, KeypadElementInputPart, VirtualGamepadStick, VirtualGamepadTrigger,
 };
 
 #[test]
@@ -160,7 +159,8 @@ fn uuid_json_without_generation_metadata_decodes_but_named_inputs_do_not() {
     for name in ["jump", "attack", "up", "custom1", "custom8"] {
         assert!(serde_json::from_value::<ControllerMessage>(json!({
             "type":"button", "button":name, "state":"down", "timestamp":1
-        })).is_err());
+        }))
+        .is_err());
     }
     let message: ControllerMessage =
         serde_json::from_str(r#"{"type":"button","button":"00000000-0000-0000-0000-000000000105","state":"down","timestamp":1}"#)
@@ -210,7 +210,13 @@ fn supporting_enum_names_match_swift_raw_values() {
         let value = serde_json::to_value(element).unwrap();
         assert_eq!(value, element.to_string());
         assert_eq!(value.as_str().unwrap().len(), 36);
-        assert_eq!(KeypadElementID::parse(value.as_str().unwrap()), Some(element));
-        assert_eq!(serde_json::from_value::<KeypadElementID>(value).unwrap(), element);
+        assert_eq!(
+            KeypadElementID::parse(value.as_str().unwrap()),
+            Some(element)
+        );
+        assert_eq!(
+            serde_json::from_value::<KeypadElementID>(value).unwrap(),
+            element
+        );
     }
 }
