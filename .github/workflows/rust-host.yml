@@ -164,7 +164,8 @@ jobs:
 
   macos-host:
     runs-on: macos-26
-    timeout-minutes: 60
+    # Cold universal builds can take an hour; leave time for native tests and cache upload.
+    timeout-minutes: 90
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
     steps:
