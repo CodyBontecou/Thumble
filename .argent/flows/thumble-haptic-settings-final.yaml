@@ -1,0 +1,28 @@
+steps:
+  - echo: Requires the saved trusted Mac reachable on Wi-Fi. Restart, disconnect,
+      and exercise only local haptic settings; restore 100%.
+  - launch: com.thumble.android
+  - await: { visible: { text: Disconnect } }
+  - await: { idle: true }
+  - tap:
+      text: Disconnect
+  - await: { visible: { text: Scan Mac QR Code } }
+  - await: { idle: true }
+  - tap:
+      text: Settings
+  - await: { visible: { id: haptic-intensity-25 } }
+  - await: { idle: true }
+  - echo: Select 25% and verify the saved preference; preview is local to this phone.
+  - tap:
+      id: haptic-intensity-25
+  - await: { visible: { text: Test Haptic } }
+  - tap:
+      text: Test Haptic
+  - tap:
+      id: haptic-intensity-0
+  - tap:
+      id: haptic-intensity-100
+  - tap:
+      text: Done
+  - await: { visible: { text: Scan Mac QR Code } }
+  - await: { idle: true }

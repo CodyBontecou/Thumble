@@ -33,3 +33,12 @@ pub fn pointer_scroll(_delta_x: f64, _delta_y: f64) -> Result<(), String> {
 pub fn pointer_button(_button: ControllerPointerButton, _pressed: bool) -> Result<(), String> {
     Ok(())
 }
+
+pub fn resolve_application(
+    _: &crate::application_launch::ApplicationTarget,
+) -> Result<std::path::PathBuf, &'static str> {
+    Err("application_launch_unsupported")
+}
+pub fn open_application(_: &std::path::Path) -> Result<(), &'static str> {
+    Err("application_launch_unsupported")
+}

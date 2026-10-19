@@ -94,8 +94,8 @@ and receive-state behavior without injecting keyboard events into other apps.
 
 ## Deliberate slice boundaries
 
-Calibration, offline layout editing/reconciliation, haptics, installed-skin resolution,
-vector display lists, broader symbol coverage and complete typography remain unfinished. Apple continuous
+Calibration, offline layout editing/reconciliation, installed-skin resolution,
+broader symbol coverage and complete typography remain unfinished. Apple continuous
 corner curves still differ from Android rounded paths. Advanced controls have
 physical-device and Rust recording evidence; real Mac pointer/HID consumer acceptance
 and broader device geometry remain pending. Unsupported interactive control kinds are omitted and listed above
@@ -338,13 +338,37 @@ double execution of mirrored input. The loss relay drops UDP after the first two
 control downs while leaving WebSocket delivery active. Evidence is saved under
 `app/build/evidence/advanced-rust*-result.json`; credentials remain memory-only.
 This is transport/receiver output evidence, not proof that a Mac game consumes the
-virtual HID controller or that pointer input has reached an AppKit view.
+virtual HID controller. Real pointer delivery is checked separately below.
 
 The normal receiver was subsequently updated with the pointer ordering fix and
 passed the real keyboard UDP-loss regression again (six AppKit events; all three
 UDP releases dropped; no held inputs). Its five profiles and runtime options are
 unchanged. The current Lux portrait screenshot still has overlapping controls;
 renderer/layout fidelity remains open in PARITY.md.
+
+## Real Mac pointer delivery
+
+Use an Accessibility-trusted installed host binary to run against a private
+input-enabled receiver and focused AppKit test window:
+
+```sh
+python3 scripts/verify-advanced.py --host "$HOME/Library/Application Support/ThumbleHost/bin/thumble-host" --serial DEVICE_SERIAL --real-pointer
+python3 scripts/verify-advanced.py --host "$HOME/Library/Application Support/ThumbleHost/bin/thumble-host" --serial DEVICE_SERIAL --real-pointer --drop-udp
+```
+
+The window records only events from the private receiver process. Acceptance
+requires exactly one movement, one scroll, three click pairs and one held-button
+drag/release, in order, plus no held output after disconnect. Drag uses an explicit
+client button hold and native trackpad movement; cancellation sends release-all.
+This verifies receiver drag delivery, not a new user-facing trackpad drag gesture.
+The probe restores the cursor position when it exits. The test leaves the normal
+receiver and profiles unchanged and keeps pairing credentials in memory.
+
+Both paths pass on the API 26 emulator. Receipts are
+`app/build/evidence/advanced-real-pointer-result.json` and
+`app/build/evidence/advanced-real-pointer-drop-result.json`, with host/test/probe
+hashes and application events. Physical Android pointer UX and actual gamepad
+consumer support remain open.
 
 ## Renderer acceptance
 
@@ -373,7 +397,7 @@ unchanged. Pointing indicators now draw in their own control layer.
 `AssetStyleDeviceTest` covers image pixels, cache/downsampling, resizing modes,
 EXIF orientations, adjustment mapping, state inheritance, physical ownership and
 visible normal/pressed captures. Evidence is in `app/build/evidence/assets/`.
-Vector assets, installed skin asset hydration, full typography, cross-platform color-management and fractional-cap
+Installed skin asset hydration, full typography, cross-platform color-management and fractional-cap
 comparison remain open parity work. No full skin or release-performance parity
 is claimed.
 
@@ -396,7 +420,7 @@ and the broader device matrix remain pending.
 
 `IconArtworkDeviceTest` verifies pixels, icon modes, gesture ownership, legend
 policy, passive layering and blend compatibility. Captures and the acceptance
-receipt are under `app/build/evidence/icons-artwork/`. Full vector/skin rendering,
+receipt are under `app/build/evidence/icons-artwork/`. Full skin rendering,
 typography and release acceptance are still open in PARITY.md.
 
 ## Control visual effects
@@ -418,3 +442,305 @@ Existing fingers are retired until lift so an accessibility action cannot leave
 pointer movement active or cause a second tap on release. Independent button holds
 remain active. Local regression coverage passes; the added native-view regression
 still requires a device run (see PARITY.md).
+
+## Haptic feedback
+
+Button activation and trackpad clicks now resolve authored haptic feedback through
+the native style cascade. Single/double/pulse/buzz patterns map to bounded Android
+amplitude waveforms; controls still send input first. The output respects system
+haptic settings and retires pending effects on focus/lifecycle changes. On hardware
+without amplitude control it retains pattern timing using default strength.
+
+The three-box blur, portable symbols and haptic sharpness envelopes remain platform
+approximations. Native-view haptic tests pass on the Pixel with a fake actuator;
+the normal app preview also reaches Android’s vibration service. Physical feel and
+the broader device matrix remain pending. Persistent intensity settings are covered
+below; see `app/build/evidence/haptic-settings/settings-result.json` and PARITY.md.
+
+Runtime artwork uses the native package's compiled image bytes. Shared SVG source
+compilation produces PNGs; no separate vector display-list protocol was found in
+these native model/renderer paths. Installed skin resolution remains incomplete.
+Android references: [VibrationEffect](https://developer.android.com/reference/android/os/VibrationEffect),
+[VibrationAttributes](https://developer.android.com/reference/android/os/VibrationAttributes).
+
+## Local haptic intensity settings
+
+Open Settings from the connection screen or controller profile menu. Choose Off,
+25%, 50%, 75% or 100%; Test Haptic previews the selected strength locally and disables
+at Off. The preference survives restart and forgetting a Mac, independently of
+practice mode. A failed write leaves the previous value selected and reports an
+error. Opening Settings releases existing touches; changing strength does not
+change the Mac's profiles or input generation.
+
+The Pixel full suite now passes 40 exercised methods (four optional live skips),
+including native feedback ordering, gesture retirement, cancellation and preference
+persistence/failure coverage. The portrait light-mode UI and its motion were
+inspected; OS service history confirms completed TOUCH preview submissions. Tactile
+comparison and the remaining settings/device/theme matrix are still pending.
+
+Replay the recorded path with:
+`argent flow run thumble-haptic-settings-final --device 2C061FDH200CJN --platform android`.
+It requires the normal saved Mac reachable on Wi-Fi, disconnects before changing
+local settings and restores 100%. The first connected keypad's idle warning comes
+from changing transport counters; subsequent navigation targets remain stable.
+Evidence and the walkthrough video are in `app/build/evidence/haptic-settings/`.
+
+## Profile actions
+
+The profile menu now displays the host's default keypad and can request a new
+default. Portrait, landscape and automatic rotation requests require the Mac's
+advertised orientation-mutation capability. Default and orientation values update
+from authoritative host snapshots and persist for offline display. Offline menus
+allow local default selection and disable host-only orientation changes. Attached
+application targets use the native
+`launch_profile_target` message with only the selected profile ID; launch is
+suppressed offline, while ordinary connected practice permits an explicit launch,
+matching iOS. Host rejection text remains visible.
+
+At the initial Android profile-action rollout, the installed Rust receiver
+supported default changes but lacked orientation mutation and application launch.
+The source orientation path is now verified below; normal receiver deployment and
+application launch execution remain open. No normal Mac profiles were changed.
+
+`ProfileActionsTest` covers native payloads, capability guards and default metadata.
+`ProfileActionsDeviceTest` passes all four methods in an isolated API 26 emulator:
+actual client WebSocket requests/authoritative replies, private snapshot reload and
+an accessible offline menu. Broader UI/device acceptance remains pending.
+
+The full isolated API 26 suite passes 43 exercised methods, with four optional live
+skips and one API-29-only method not applicable. This found and fixed a real minimum-
+API JPEG orientation failure: asset metadata now uses AndroidX EXIF 1.4.2, and the
+fixture independently encodes all eight EXIF orientations. See
+[AndroidX EXIF](https://developer.android.com/jetpack/androidx/releases/exifinterface).
+Evidence and the inspected offline menu capture are under
+`app/build/evidence/profile-actions/`. The dedicated `thumble-parity-api26` AVD remains
+available, with its emulator shut down after verification.
+
+Rust source orientation support now passes Android interoperability on the API 26
+emulator. From the repository root, run:
+
+```sh
+python3 Android/scripts/verify-profile-actions.py --host Host/target/debug/thumble-host \
+  --serial emulator-5554 --adb "$ANDROID_SDK_ROOT/platform-tools/adb"
+```
+
+It starts a private input-disabled receiver,
+verifies the default and all three orientation preferences with exact metadata-only
+state changes, and stops it. Evidence is in
+`app/build/evidence/profile-actions/rust-profile-actions-result.json`.
+At that orientation source milestone, the normal installed receiver had not yet been upgraded.
+Rust source launch execution is covered below; the remaining parity inventory is open.
+
+
+## Attached Mac application launching
+
+Android's Launch action now executes in the Rust Mac runtime. It resolves only the
+Mac's stored target and releases held input before activation. Failures preserve
+the connection. The corresponding Rust CLI command is
+`thumble-host launch-profile [PROFILE_UUID] --json`; completion is exposed under
+`applicationLaunch` in host status. The command initially reports queueing.
+
+After building both Android APKs:
+
+```sh
+cargo build --locked --manifest-path Host/Cargo.toml -p thumble-host
+cargo build --locked --manifest-path Host/Cargo.toml -p thumble-host --example application_launch_fixture
+python3 Android/scripts/verify-application-launch.py --host Host/target/debug/thumble-host \
+  --serial emulator-5554 --adb "$ANDROID_SDK_ROOT/platform-tools/adb"
+```
+
+This creates a private input-disabled receiver and a disposable Mac application.
+The API 26 emulator passes actual launch/activation through stored path, scoped
+bookmark, foreign-bookmark path fallback and bundle ID. A missing target retains
+the connection and existing hold; successful launches release the recorded key
+while the client remains paired. All private receivers and fixture processes exit,
+and the app is unregistered and removed. The normal receiver/profiles are untouched.
+
+A scoped bookmark belongs to its creating code identity; the private harness
+creates one in its own receiver process and uses production runtime code. It does
+not imply that a bookmark can transfer scope across app identities. Source-hashed
+receipts live under `app/build/evidence/profile-actions/rust-application-launch-result.json`.
+Normal installation and Swift CLI launch routing were completed in the follow-up below.
+Application attachment editing and the remaining parity inventory are still open.
+
+
+## Normal receiver deployment and Swift CLI launch
+
+The tested Rust host, standalone Swift `thumble` CLI and sibling CLI bridge are now
+installed in the normal per-user setup. The existing private state and four old
+binaries are backed up; their location and all old/new hashes are recorded in
+`../build/AndroidReceiver/launch-install-receipt.json`. Profiles/trust, port 8765,
+Bonjour, real input, configuration writes and Accessibility access were preserved.
+
+```sh
+thumble profile launch [NAME|UUID|active|default] [--json]
+thumble status --json
+```
+
+The exact sibling bridge accepts only a bounded typed selector. The running host
+resolves it and queues the same launch operation used by Android; it never accepts
+remote application target metadata. The initial acknowledgement is not completion:
+inspect `response.status.applicationLaunch` in CLI status. Launch failure reports a
+coded status while preserving the paired client. Existing legacy routing still
+uses its authority checks; Rust failures never fall back to local profile opening.
+
+Final acceptance covers all four Swift selectors against actual private app
+activation, five Android launch cases, and post-install real keyboard input with
+UDP loss on the API 26 emulator. The latter produces exactly six AppKit key events,
+using 2 UDP + 9 WebSocket inputs, with every dropped release recovered and no stuck
+input. All five profiles and non-trust configuration remain unchanged.
+`app/build/evidence/profile-actions/rust-launch-routing-acceptance.json` records the
+checks; the reusable updater is `scripts/install-receiver-update.py` (read-only
+preflight by default, explicit `--install` for updates).
+
+
+## Skin package and private library foundation
+
+Android now has an internal bounded `.pocketpad` archive loader and atomic private
+package store. It checks native archive budgets, ZIP/ZIP64 headers and entry kinds,
+paths, CRCs, SHA-256 payload descriptors, duplicate JSON keys, core manifest and
+compatibility fields, and common asset/style references. The store keeps original
+archive bytes and supports version policies, reload, exact export and removal;
+physical filenames are hashes, so version text never becomes a filesystem path.
+
+`SkinPackageTest` adds twelve unit checks, including four unchanged native package
+fixtures and malformed/corrupt/compression-bomb inputs. The full JVM suite passes
+69 tests. `SkinPackageDeviceTest` passes two methods on API 26, including atomic
+storage/reload/export, corrupt replacement recovery and native package PNG decoding
+through the existing asset renderer. Website package files are test-only resources
+and are not bundled into the production APK by these source-set changes.
+
+Evidence: `app/build/evidence/skin-packages/acceptance.json`, `device-result.json`
+and retained logs. Full semantic normalization, skin compatibility/application,
+live asset hydration and package sync, and library/import/share screens remain
+open. These foundation classes are not yet wired into the controller UI/client.
+
+
+## Native skin appearance stages
+
+The pure Android resolver now matches native-generated orientation/theme/action-set
+selection, role/control cascades, local override baselines, style/asset library
+merging, image hydration and corner/silhouette rules. The oracle is generated by
+Swift tests and shared by JVM and API 26 instrumentation; see
+[fixture provenance and regeneration](../Host/fixtures/skin-resolution/v1/README.md).
+The current suite passes 73 JVM tests and three API 26 skin resolver methods, with
+build/lint and Swift stack safety passing. Evidence is retained under
+`app/build/evidence/skin-resolution`.
+
+The canonical whole-profile resolver below extends these appearance stages. Full
+model normalization, live skin hydration and skin-management/sync UI remain open.
+
+
+## Canonical whole-profile skin resolver
+
+Whole-profile resolution now includes backgrounds, artwork, declared buttons,
+custom controls, the system toggle and control-bar items. Compatibility checks
+match native template/revision and captured-geometry behavior, including hiding
+aligned artwork when incompatible while retaining semantic styling. Saved input
+identities, bindings and geometry stay intact.
+
+Swift-generated expectations cover 86 full results, 21 compatibility cases,
+geometry for 22 fixture layouts and all 68 canonical native canvases. The current
+JVM suite passes 76 tests and the combined API 26 profile/appearance suite passes
+six methods; builds, lint and Swift stack safety pass. Evidence is under
+`app/build/evidence/skin-profile-resolution`.
+
+The engine currently accepts canonical validated model JSON. Full decoding and
+normalization, live controller/library integration, apply/detach persistence, sync,
+import/share UI and device renderer acceptance remain unfinished.
+
+
+## Strict skin appearance models and portable text
+
+Imported skin appearances now pass strict native-compatible model decoding before
+validation/storage. Nested field types, defaults, empty/duplicate rules, fills,
+image caps/insets, shadows, icons, haptics and typography are normalized. Base-bank
+style validation uses the native cascade. Malformed replacement imports preserve
+the installed package.
+
+Portable native text tables fix API 26 joined-emoji truncation and match Swift
+across 1,859 grapheme inputs plus full-domain character-set checks. See
+[Unicode provenance](unicode/README.md) and the
+[native model oracle](../Host/fixtures/skin-resolution/v1/README.md).
+All 83 JVM tests and 13 API 26 skin methods pass, with builds, lint and Swift stack
+safety. Evidence is under `app/build/evidence/skin-model-normalization`.
+
+Full manifest/captured/profile normalization, live skin application, persistence,
+sync and skin-management UI remain unfinished. Full Android/iOS parity is still open.
+
+
+## Typed captured skin contracts
+
+Compatibility and complete captured metadata now pass strict typed decoding before
+package validation, including control presentation, native surface/chrome paint,
+layout matrices and requested/resolved appearance evidence. Normalization and
+validation phase order matches native archive reading. Canonical string identities
+and Core Graphics array behavior have native regression cases; malformed captured
+metadata cannot replace an installed package.
+
+The oracle compares 217 inputs and complete normalized outputs/package acceptance.
+All 87 JVM tests and 17 API 26 skin methods pass, along with builds, lint and Swift
+stack safety. Evidence is under `app/build/evidence/skin-contract-decoding`.
+Full manifest metadata, profile normalization, live skin integration, persistence,
+sync, library/import/share UI and release acceptance remain open.
+
+
+## Live installed-skin rendering
+
+The Android controller now resolves an exact installed skin reference on a worker
+and renders its hydrated projection. Saved profiles and host bindings stay intact.
+It respects orientation override baselines and the primary theme preference,
+caches one archive/projection, waits before enabling a new appearance, and falls
+back visibly when a package is missing or mismatched. Library invalidation handles
+removal/reinstallation; unchanged projections preserve held touches.
+
+All 90 JVM tests and 25 API 26 skin/asset methods pass, with build/lint and Swift
+stack safety. The real activity acceptance installs an unchanged existing package,
+checks displayed pixels, compatibility gating, touch retention/release, unchanged
+saved data and removal/reinstallation refresh. Evidence is under
+`app/build/evidence/skin-live`. This proves the installed-package rendering path;
+full native visual fidelity, dynamic action sets, import/share/library UI,
+apply/detach persistence, Mac skin sync and full Android/iOS parity remain open.
+
+
+## Skin lifecycle and pending choices
+
+The controller menu can import a `.pocketpad` document for metadata review, apply
+an installed skin, or detach its resolved appearance. Applying/reapplying saves
+override baselines and package asset references; detaching retains materialized
+appearance. Profile snapshots and pending choices share one atomic private file.
+Failed saves preserve the previous keypad, and ordinary snapshot updates retain
+pending intent until an authoritative matching profile reference acknowledges it.
+The capability-gated client replays archive-before-selection on reconnect and
+ignores scalar layout messages as acknowledgments.
+
+Native-generated coverage compares 44 complete profile transitions. API 26 native
+review/menu, persistence, restart/reconnect, malformed-journal and save-failure
+checks are retained under `app/build/evidence/skin-lifecycle`. The system document
+picker is wired but its navigation/selection is not yet exercised; the test feeds
+the selected bytes through the same import worker. Full visual/motion/theme
+acceptance and the complete library/preview/share/remove interface remain open.
+The normal Rust receiver does not yet implement skin sync; pending Android
+choices remain queued when the Mac lacks those capabilities. Full parity is open.
+
+This milestone passes 93 JVM tests, combined API 26 acceptance (36 reported
+methods, 34 exercised/two optional live skips), debug builds/lint and Swift stack
+safety. A separate normal-Mac keyboard UDP-loss regression confirms six real
+AppKit events and complete release through fallback.
+
+
+## Incoming skin synchronization
+
+Authenticated handshakes, profile snapshots and standalone skin messages now
+install packages on a bounded worker using native downgrade/replacement behavior.
+Malformed typed Data cannot commit profiles, invalid archives preserve prior
+files, and other valid packages in the batch still install. Initial skin-backed
+profiles wait for that batch; unrelated/exact resyncs preserve held touches.
+Active replacements release retired captures, and inactive package changes clear
+the decoded cache. Overload reconnects for replay rather than dropping a batch.
+
+The milestone passes 97 JVM tests and combined API 26 acceptance (40 reported
+methods, 38 exercised/two optional live skips), builds/lint and Swift stack safety.
+Evidence: `app/build/evidence/incoming-skin-sync`. The normal Rust receiver still
+needs skin-store/selection/removal support and CLI routing; controlled-host client
+acceptance does not establish real Mac skin synchronization or full parity.

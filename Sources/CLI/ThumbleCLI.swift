@@ -886,7 +886,6 @@ struct ThumbleCLI {
             try detachApplicationFromProfile(arguments: rest)
 
         case "launch", "open-app":
-            try requireExplicitUnmigratedProfileAccess(operation: "profile launch", artifactRequired: true)
             try launchAttachedApplication(arguments: rest)
 
         default:
@@ -1496,7 +1495,35 @@ struct ThumbleCLI {
     }
 
     private static func launchAttachedApplication(arguments: [String]) throws {
-        let profileTarget = optionValue("--profile", in: arguments) ?? firstPositional(in: arguments)
+        var profileTarget: String?
+        var json = false
+        var index = 0
+        while index < arguments.count {
+            let argument = arguments[index]
+            switch argument {
+            case "--json":
+                guard !json else { throw CLIError.message("Provide --json once.") }
+                json = true
+            case "--profile":
+                guard profileTarget == nil, index + 1 < arguments.count else { throw CLIError.message("Provide one profile selector.") }
+                index += 1
+                profileTarget = arguments[index]
+            case "--help", "-h": throw CLIError.helpRequested
+            default:
+                guard !argument.hasPrefix("-"), profileTarget == nil else { throw CLIError.message("Unexpected launch argument: \(argument)") }
+                profileTarget = argument
+            }
+            index += 1
+        }
+        switch try runtimeRoute(.launchProfile(.init(profileTarget))) {
+        case .rust(let response):
+            guard let launch = response.control?.applicationLaunch else { throw CLIError.message("Runtime returned no launch acknowledgement.") }
+            if json { try FileHandle.standardOutput.write(contentsOf: response.frame) }
+            else { print("Application launch queued for profile \(launch.profileID.uuidString). Launch ID: \(launch.launchID.uuidString). Inspect status for completion.") }
+            return
+        case .legacy:
+            try requireExplicitUnmigratedProfileAccess(operation: "profile launch", artifactRequired: true)
+        }
         let store = try loadStore()
         let profile = try resolveProfile(profileTarget, in: store)
         guard let launchTarget = profile.launchTarget else {
@@ -8901,7 +8928,7 @@ struct ThumbleCLI {
           thumble profile attach-app [NAME|UUID|--profile PROFILE] --path /Applications/App.app
           thumble profile attach-app [NAME|UUID|--profile PROFILE] --bundle-id com.example.App
           thumble profile detach-app [NAME|UUID|--profile PROFILE]
-          thumble profile launch [NAME|UUID|--profile PROFILE]
+          thumble profile launch [NAME|UUID|active|default|--profile PROFILE] [--json]
           thumble profile export [NAME|UUID|--all] [-o file.json] [--invocation-id UUID]
           thumble profile import file.json [--append] [--no-select] [--default] [--name NAME] [--invocation-id UUID]
           thumble wow import <export.txt|->|--clipboard [--name NAME] [--dry-run] [--json] [--no-select]

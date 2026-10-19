@@ -32,6 +32,7 @@ internal object ControlPresentation {
             .put("strokeWidth", if (engaged) 2 else 1).put("opacity", if (state == PresentationState.DISABLED) .45 else 1)
             .put("scale", if (engaged) .96 else 1).put("shadowColor", color(0.0, 0.0, 0.0, (if (engaged) .16 else .04) * shadowStrength))
             .put("shadowRadius", (if (engaged) 2 else 1) * maxOf(.25, shadowStrength)).put("shadowX", 0).put("shadowY", (if (engaged) 1 else 2) * shadowStrength)
+            .put("hapticFeedback",KeypadHaptic.parse(style.optJSONObject("hapticFeedback"),style.optString("hapticStyle")).json())
         val styles = canvas.optJSONObject("styleLibrary")?.optJSONArray("styles")
         val requested = normalizedStyleID(style.optString("styleID"))
         if (requested.isNotEmpty()) for (index in 0 until (styles?.length() ?: 0)) {
@@ -46,6 +47,9 @@ internal object ControlPresentation {
         style.optJSONObject("visualStyle")?.let { apply(result, it, state) }
         style.optJSONObject("icon")?.let { result.put("icon", it) }
         result.optJSONObject("content")?.optJSONObject("icon")?.let { result.put("icon", it) }
+        if (style.optJSONObject("hapticFeedback") != null || style.has("hapticStyle")) {
+            result.put("hapticFeedback",KeypadHaptic.parse(style.optJSONObject("hapticFeedback"),style.optString("hapticStyle")).json())
+        }
         normalize(result)
         return result
     }
@@ -69,6 +73,9 @@ internal object ControlPresentation {
         if ((stateStyle.has("bevelHighlightColor") || stateStyle.has("bevelShadowColor")) && result.finite("bevelWidth",0.0) <= 0) result.put("bevelWidth",1)
         merge(result, stateStyle)
         visual.optJSONObject("icon")?.let { result.put("icon", it) }
+        if (visual.optJSONObject("hapticFeedback") != null || visual.has("hapticStyle")) {
+            result.put("hapticFeedback",KeypadHaptic.parse(visual.optJSONObject("hapticFeedback"),visual.optString("hapticStyle")).json())
+        }
     }
     private fun merge(base: JSONObject, overlay: JSONObject): JSONObject {
         for (key in overlay.keys()) if (!overlay.isNull(key)) {

@@ -13,6 +13,7 @@ name = "thumble-host"
 path = "src/main.rs"
 
 [dependencies]
+base64 = "=0.22.1"
 clap = { version = "=4.5.47", features = ["derive"] }
 fs2 = "=0.4.3"
 futures-util = "=0.3.31"
@@ -35,7 +36,7 @@ core-foundation = "=0.10.1"
 dispatch2 = { version = "=0.3.1", default-features = false, features = ["std", "block2"] }
 objc2-io-kit = { version = "=0.3.2", default-features = false, features = ["std", "hid", "hidsystem", "block2", "dispatch2", "objc2"] }
 objc2-application-services = { version = "=0.3.2", default-features = false, features = ["std", "HIServices", "AXUIElement"] }
-objc2-core-foundation = { version = "=0.3.2", default-features = false, features = ["std", "CFDictionary", "CFNumber", "CFString"] }
+objc2-core-foundation = { version = "=0.3.2", default-features = false, features = ["std", "CFDictionary", "CFNumber", "CFString", "CFURL", "CFData", "CFArray", "CFError"] }
 objc2-core-graphics = { version = "=0.3.2", default-features = false, features = ["std", "CGDirectDisplay", "CGError", "CGEvent", "CGEventSource", "CGEventTypes", "CGRemoteOperation"] }
 
 [dev-dependencies]

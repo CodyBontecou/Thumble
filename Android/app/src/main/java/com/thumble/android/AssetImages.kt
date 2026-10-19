@@ -3,7 +3,7 @@ package com.thumble.android
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
-import android.media.ExifInterface
+import androidx.exifinterface.media.ExifInterface
 import android.util.Base64
 import android.util.LruCache
 import org.json.JSONObject
@@ -11,8 +11,8 @@ import java.security.MessageDigest
 import java.io.ByteArrayInputStream
 
 internal fun normalizedStyleID(value: String): String = buildString {
-    value.trim().codePoints().forEach { scalar ->
-        appendCodePoint(if (Character.isLetterOrDigit(scalar) || scalar in listOf(45, 95, 46)) scalar else 45)
+    SkinText.trim(value).codePoints().forEach { scalar ->
+        appendCodePoint(if (SkinText.isAlphanumeric(scalar) || scalar in listOf(45, 95, 46)) scalar else 45)
     }
 }.trim('-', '.')
 

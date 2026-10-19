@@ -35,14 +35,17 @@ internal data class ClientState(
     val webSocketFrames: Long = 0,
     val canReconnect: Boolean = false,
     val practiceMode: Boolean = false,
+    val hapticIntensity: Double = 1.0,
+    val preferencesError: String? = null,
     val viewingSaved: Boolean = false,
     val virtualGamepadStatus: JSONObject? = null,
     val capabilities: Set<String> = emptySet(),
+    val pendingSkinChanges: Int = 0,
     val surfaceRevision: Long = 0
 )
 
 /** All session state, socket writes, hold refreshes, and touch edges run on one queue. */
-internal class ControllerClient(private val store: SessionStore = MemorySessionStore(), private val discovery: MacDiscovery? = null, private val publish: (ClientState) -> Unit) {
+internal class ControllerClient(private val store: SessionStore = MemorySessionStore(), private val discovery: MacDiscovery? = null, private val skinArchive: (SkinReference) -> ByteArray? = { null }, private val incomingSkins: (IncomingSkinPackages) -> Boolean = { true }, private val publish: (ClientState) -> Unit) {
     private val queue = Executors.newSingleThreadScheduledExecutor { task -> Thread(task, "Thumble input") }
     private val main = Handler(Looper.getMainLooper())
     private val http = OkHttpClient.Builder().socketFactory(NoDelaySocketFactory()).connectTimeout(5, TimeUnit.SECONDS)
@@ -61,6 +64,8 @@ internal class ControllerClient(private val store: SessionStore = MemorySessionS
     private var wsFrames = 0L
     private var trusted: TrustedMac? = null
     private var preferences = ClientPreferences()
+    private var pendingSkins = emptyList<PendingSkinSelection>()
+    private var pendingSkinsLoaded = true
     private sealed class Analog(val key: String) {
         class Stick(val target: String, val x: Double, val y: Double) : Analog("stick.$target")
         class Trigger(val target: String, val amount: Double) : Analog("trigger.$target")
@@ -156,8 +161,13 @@ internal class ControllerClient(private val store: SessionStore = MemorySessionS
 
     init { enqueue {
         trusted = store.loadMac()
-        preferences = store.loadPreferences()
-        state = state.copy(snapshot = store.loadSnapshot(), canReconnect = trusted != null, practiceMode = preferences.practiceMode)
+        preferences = store.loadPreferences().normalized()
+        var skinError: String? = null
+        pendingSkins = runCatching { store.loadPendingSkinSelections() }.getOrElse {
+            pendingSkinsLoaded=false;skinError="Could not restore pending skin changes. Your saved data has been kept.";emptyList()
+        }
+        state = state.copy(error=skinError,pendingSkinChanges=pendingSkins.size,snapshot = store.loadSnapshot(), canReconnect = trusted != null, practiceMode = preferences.practiceMode,
+            hapticIntensity=preferences.hapticIntensity)
         publishState()
     } }
 
@@ -187,7 +197,9 @@ internal class ControllerClient(private val store: SessionStore = MemorySessionS
         store.forgetMac()
         trusted = null
         target = null
-        state = ClientState(status = "Mac forgotten", practiceMode = preferences.practiceMode, surfaceRevision = revision)
+        pendingSkins=emptyList();pendingSkinsLoaded=true
+        state = ClientState(status = "Mac forgotten", practiceMode = preferences.practiceMode,
+            hapticIntensity=preferences.hapticIntensity,surfaceRevision = revision)
         publishState()
     }
     private fun connectRemembered() {
@@ -198,7 +210,7 @@ internal class ControllerClient(private val store: SessionStore = MemorySessionS
         trustedAttempt = true
         addressIndex = 0
         state = state.copy(paired = false, connecting = true, needsCode = false, error = null,
-            status = "Reconnecting to Mac…", canReconnect = true, surfaceRevision = revision)
+            status = "Reconnecting to Mac…", canReconnect = true, capabilities=emptySet(), surfaceRevision = revision)
         publishState()
         startDiscovery()
         openNextAddress()
@@ -220,7 +232,7 @@ internal class ControllerClient(private val store: SessionStore = MemorySessionS
         closeSession()
         target = value
         addressIndex = 0
-        state = state.copy(connecting = true, paired = false, needsCode = false, error = null, status = "Connecting to Mac…", surfaceRevision = revision)
+        state = state.copy(connecting = true, paired = false, needsCode = false, error = null, status = "Connecting to Mac…", capabilities=emptySet(), surfaceRevision = revision)
         publishState()
         startDiscovery()
         openNextAddress()
@@ -256,6 +268,14 @@ internal class ControllerClient(private val store: SessionStore = MemorySessionS
         state = state.copy(udpEnabled = enabled)
         publishState()
     }
+    fun setHapticIntensity(value: Double) = enqueue {
+        val next=preferences.copy(hapticIntensity=HapticIntensity.normalized(value))
+        if (runCatching { store.savePreferences(next) }.isSuccess) {
+            preferences=next
+            state=state.copy(hapticIntensity=next.hapticIntensity,preferencesError=null)
+        } else state=state.copy(preferencesError="Could not save haptic intensity. Try again.")
+        publishState()
+    }
     fun setPracticeMode(enabled: Boolean) = enqueue {
         if (!state.paired && !enabled) return@enqueue
         if (state.practiceMode == enabled) return@enqueue
@@ -281,6 +301,76 @@ internal class ControllerClient(private val store: SessionStore = MemorySessionS
         publishState()
     }
     fun surfaceChanged() = enqueue { invalidateSurface(); publishState() }
+    fun commitSkinChange(expected: ControllerProfile, replacement: ControllerProfile, reference: SkinReference?, completed: (Boolean) -> Unit = {}) = enqueue {
+        fun finish(success: Boolean) { publishState();main.post { completed(success) } }
+        if (!pendingSkinsLoaded) { finish(false);return@enqueue }
+        val current=state.snapshot.selected
+        if (current?.id!=expected.id || current.source!==expected.source || replacement.id!=expected.id) {
+            state=state.copy(error="The keypad changed while preparing the skin. Try again.");finish(false);return@enqueue
+        }
+        val next=SkinSelectionJournal.replacing(pendingSkins,PendingSkinSelection(expected.id,reference,System.currentTimeMillis(),trusted?.serverID))
+        val snapshot=state.snapshot.copy(profiles=state.snapshot.profiles.map { if(it.id==expected.id) replacement else it })
+        if (runCatching { store.saveSkinState(snapshot,next) }.isFailure) {
+            state=state.copy(error="Could not save the skin change. Your keypad is unchanged.");finish(false);return@enqueue
+        }
+        pendingSkins=next
+        invalidateSurface()
+        state=state.copy(snapshot=snapshot,pendingSkinChanges=next.size,error=null)
+        flushSkinSelections()
+        finish(true)
+    }
+    private fun flushSkinSelections() {
+        if (!state.paired || "gamepad_profile_skin_selection" !in state.capabilities) return
+        for (pending in pendingSkins.sortedBy { it.updatedAt }) {
+            if(pending.serverID!=null && pending.serverID!=trusted?.serverID) continue
+            val reference=pending.reference
+            val bytes=if(reference!=null && "skin_packages" in state.capabilities) runCatching { skinArchive(reference) }.getOrNull() else null
+            if(bytes!=null && !sendSkinArchive(bytes)) continue
+            if(socket?.send(pending.request().toString())!=true) return
+        }
+    }
+    fun uploadSkinArchive(bytes: ByteArray) = enqueue {
+        if(state.paired && "skin_packages" in state.capabilities) { sendSkinArchive(bytes);publishState() }
+    }
+    private fun sendSkinArchive(bytes: ByteArray): Boolean {
+        if(bytes.size.toLong()*4/3+512>WireCodec.MAX_PAYLOAD) {
+            state=state.copy(error="Skin saved locally, but its package is too large to sync to this Mac.");return false
+        }
+        val upload=WireCodec.message("skin_packages").put("skinPackages",org.json.JSONArray().put(java.util.Base64.getEncoder().encodeToString(bytes))).toString()
+        if(upload.toByteArray().size>WireCodec.MAX_PAYLOAD) return false
+        return socket?.send(upload)==true
+    }
+    private fun saveIncomingSkinState(snapshot: ProfileSnapshot, authoritativeProfiles: Boolean): String? {
+        if(!pendingSkinsLoaded) return "Could not restore pending skin changes. Your saved data has been kept."
+        val remaining=if(authoritativeProfiles) SkinSelectionJournal.acknowledge(pendingSkins,snapshot,trusted?.serverID) else pendingSkins
+        return if(runCatching { store.saveSkinState(snapshot,remaining) }.isSuccess) {
+            pendingSkins=remaining;state=state.copy(pendingSkinChanges=remaining.size);null
+        } else "Connected, but could not save your keypad and pending skin changes."
+    }
+    fun setDefaultProfile(id: UUID) = enqueue {
+        val request=ProfileActions.defaultProfile(state.snapshot,id) ?: return@enqueue
+        if (state.paired) sendProfileAction(request)
+        else if (state.viewingSaved) {
+            val snapshot=state.snapshot.copy(defaultID=id)
+            if (runCatching { store.saveSnapshot(snapshot) }.isSuccess) state=state.copy(snapshot=snapshot,error=null)
+            else state=state.copy(error="Could not save your default keypad. Try again.")
+            publishState()
+        }
+    }
+    fun setOrientationPreference(preference: String) = enqueue {
+        if (!state.paired) return@enqueue
+        val request=ProfileActions.orientation(state.snapshot,state.capabilities,preference) ?: return@enqueue
+        invalidateSurface()
+        sendProfileAction(request)
+    }
+    fun launchProfileTarget() = enqueue {
+        if (!state.paired) return@enqueue
+        ProfileActions.launch(state.snapshot)?.let(::sendProfileAction)
+    }
+    private fun sendProfileAction(request: JSONObject) {
+        if (socket?.send(request.toString()) != true) fail("Connection lost. The profile request was not sent.")
+        else { state=state.copy(error=null);publishState() }
+    }
     fun selectProfile(id: UUID) = enqueue {
         if (state.snapshot.profiles.none { it.id == id }) return@enqueue
         invalidateSurface()
@@ -399,6 +489,7 @@ internal class ControllerClient(private val store: SessionStore = MemorySessionS
                     require(message.optInt("inputProtocolVersion") == 3) { "Update Thumble Mac: Android requires input protocol v3." }
                     val expectedID = target?.serverID
                     require(expectedID == null || message.optString("serverID") == expectedID) { "The responding Mac does not match this QR code." }
+                    val skinPackages=IncomingSkinPackages.validated(message,bytes.size)
                     val snapshot = state.snapshot.applying(message)
                     require(snapshot.selected != null) { "The Mac did not send a selected profile." }
                     deadline?.cancel(false)
@@ -419,9 +510,7 @@ internal class ControllerClient(private val store: SessionStore = MemorySessionS
                         store.forgetMac()
                         trusted = null
                     }
-                    runCatching { store.saveSnapshot(snapshot) }.onFailure {
-                        saveError = "Connected, but could not save your keypad for offline use."
-                    }
+                    saveIncomingSkinState(snapshot,message.optJSONArray("gamepadProfiles")!=null)?.let { saveError=it }
                     inputs = InputSession(::sendInput, SecureRandom().nextInt(Int.MAX_VALUE - 1).toLong() + 1)
                     val token = message.optString("realtimeToken").takeIf { it.isNotBlank() && it != "null" }
                     if (token != null) startUDP(url, token)
@@ -430,13 +519,21 @@ internal class ControllerClient(private val store: SessionStore = MemorySessionS
                     heartbeat = queue.scheduleWithFixedDelay({
                         if (state.paired) { inputs?.heartbeat(); publishState() }
                     }, 0, 250, TimeUnit.MILLISECONDS)
+                    flushSkinSelections()
+                    if(!offerSkinPackages(skinPackages)) return
                     publishState()
                 }
-                "gamepad_profiles", "gamepad_customization" -> if (state.paired) {
-                    val snapshot = state.snapshot.applying(message)
-                    runCatching { store.saveSnapshot(snapshot) }
-                    invalidateSurface()
-                    state = state.copy(snapshot = snapshot)
+                "gamepad_profiles", "gamepad_customization", "skin_packages" -> if (state.paired) {
+                    val skinPackages=IncomingSkinPackages.validated(message,bytes.size)
+                    val hasProfiles=message.optJSONArray("gamepadProfiles")!=null || message.optJSONObject("gamepadCustomization")!=null ||
+                        message.has("gamepadProfileID") || message.has("defaultGamepadProfileID")
+                    if(hasProfiles) {
+                        val snapshot = state.snapshot.applying(message)
+                        val saveError=saveIncomingSkinState(snapshot,message.optJSONArray("gamepadProfiles")!=null)
+                        invalidateSurface()
+                        state = state.copy(snapshot = snapshot,error=saveError)
+                    }
+                    if(!offerSkinPackages(skinPackages)) return
                     publishState()
                 }
                 "release_all" -> if (state.paired) {
@@ -450,12 +547,18 @@ internal class ControllerClient(private val store: SessionStore = MemorySessionS
                     val expired = trustedAttempt && message.optString("message").contains("Trusted pairing expired", ignoreCase = true)
                     if (expired) forgetExpiredTrust()
                     // Host rejections require a deliberate retry; do not retry invalid codes or a busy Mac indefinitely.
-                    fail(if (expired) "Pairing has expired. Scan your Mac’s QR code again." else "The Mac rejected the connection. Check its pairing status.", false)
+                    fail(if (expired) "Pairing has expired. Scan your Mac’s QR code again." else
+                        message.optString("message").takeIf { it.isNotBlank() }?.take(512) ?: "The Mac rejected the connection. Check its pairing status.", false)
                 }
             }
         } catch (error: Exception) {
             fail("The Mac sent an unsupported profile or message. Check that both apps are up to date.", false)
         }
+    }
+    private fun offerSkinPackages(packages: IncomingSkinPackages?): Boolean {
+        if(packages==null || packages.count==0 || incomingSkins(packages)) return true
+        fail("Skin sync is busy. Reconnecting to receive your skins.")
+        return false
     }
     private fun startUDP(url: String, token: String) {
         val uri = URI(url)
@@ -512,6 +615,8 @@ internal class ControllerClient(private val store: SessionStore = MemorySessionS
     }
     private fun forgetExpiredTrust() {
         store.forgetMac()
+        pendingSkins=emptyList();pendingSkinsLoaded=true
+        state=state.copy(pendingSkinChanges=0)
         trusted = null
         wantsConnection = false
     }

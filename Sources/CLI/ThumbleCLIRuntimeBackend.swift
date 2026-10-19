@@ -8,10 +8,11 @@ final class ThumbleCLIRuntimeBackend {
 
     enum Command: Encodable {
         case status, releaseAll, gamepadStatus, gamepadRetry
+        case launchProfile(ThumbleCLIProfileBackend.ProfileSelector)
         case tapControl(String)
         case testControl(String, ButtonPressState)
 
-        private enum CodingKeys: String, CodingKey { case type, controlID, state }
+        private enum CodingKeys: String, CodingKey { case type, controlID, state, profile }
         func encode(to encoder: Encoder) throws {
             var c = encoder.container(keyedBy: CodingKeys.self)
             let type: String
@@ -20,6 +21,9 @@ final class ThumbleCLIRuntimeBackend {
             case .releaseAll: type = "release-all"
             case .gamepadStatus: type = "gamepad-status"
             case .gamepadRetry: type = "gamepad-retry"
+            case .launchProfile(let profile):
+                type = "launch-profile"
+                try c.encode(profile, forKey: .profile)
             case .tapControl(let id):
                 type = "tap-control"
                 try c.encode(id, forKey: .controlID)
@@ -48,6 +52,14 @@ final class ThumbleCLIRuntimeBackend {
         let released: Bool?
         let pressedControlID: String?
         let virtualGamepadStatus: VirtualGamepadStatus?
+        let applicationLaunch: LaunchProjection?
+    }
+    struct LaunchProjection: Decodable {
+        enum Phase: String, Decodable { case resolving, releasingInput = "releasing-input", launched, failed }
+        let launchID: UUID
+        let profileID: UUID
+        let phase: Phase
+        let errorCode: String?
     }
     struct HostProjection: Decodable {
         let pid: UInt32
@@ -56,6 +68,7 @@ final class ThumbleCLIRuntimeBackend {
         let accessibilityTrusted: Bool
         let inputEnabled: Bool
         let output: OutputProjection
+        let applicationLaunch: LaunchProjection?
     }
     struct OutputProjection: Decodable {
         let mode: String
@@ -67,11 +80,12 @@ final class ThumbleCLIRuntimeBackend {
         case legacy(Data)
     }
     enum BackendError: LocalizedError {
-        case invalidControl, malformedResponse, requestTooLarge, responseTooLarge
+        case invalidControl, invalidProfile, malformedResponse, requestTooLarge, responseTooLarge
         case launchFailed, timeout, helperFailed, noVerifiedOwner
         case remote(RemoteFailure, UUID)
         var errorDescription: String? {
             switch self {
+            case .invalidProfile: return "Profile selector must be a UUID or bounded name."
             case .invalidControl: return "Control ID must be a bounded installed-control identifier."
             case .malformedResponse: return "Runtime bridge returned an invalid or uncorrelated response."
             case .requestTooLarge: return "Runtime request exceeds 64 KiB."
@@ -109,6 +123,12 @@ final class ThumbleCLIRuntimeBackend {
                   id.utf8.allSatisfy({ (48...57).contains($0) || (65...90).contains($0) || (97...122).contains($0)
                       || [45, 95, 58, 46, 35].contains($0) })
             else { throw BackendError.invalidControl }
+        }
+        if case .launchProfile(.name(let name)) = command {
+            guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                  name.unicodeScalars.count <= 256,
+                  !name.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) })
+            else { throw BackendError.invalidProfile }
         }
         struct Request: Encodable {
             let schemaVersion = ThumbleCLIRuntimeBackend.schemaVersion
@@ -160,6 +180,11 @@ final class ThumbleCLIRuntimeBackend {
             else { throw BackendError.malformedResponse }
             guard [decoded.virtualGamepadStatus, decoded.status?.output.virtualGamepadStatus]
                 .compactMap({ $0 }).allSatisfy(Self.validGamepadStatus) else { throw BackendError.malformedResponse }
+            for launch in [decoded.applicationLaunch, decoded.status?.applicationLaunch].compactMap({ $0 }) {
+                guard (launch.phase == .failed) == (launch.errorCode != nil),
+                      launch.errorCode.map({ !$0.isEmpty && $0.utf8.count <= 128 && $0.utf8.allSatisfy { (97...122).contains($0) || (48...57).contains($0) || $0 == 95 } }) ?? true
+                else { throw BackendError.malformedResponse }
+            }
             control = decoded
         }
         if let object = root["error"] {
@@ -239,6 +264,9 @@ final class ThumbleCLIRuntimeBackend {
             case .releaseAll: guard response.control?.released == true else { throw BackendError.helperFailed }
             case .tapControl(let id), .testControl(let id, _):
                 guard response.control?.pressedControlID?.lowercased() == id.lowercased() else { throw BackendError.helperFailed }
+            case .launchProfile(let selector):
+                guard let launch = response.control?.applicationLaunch, launch.phase != .failed else { throw BackendError.malformedResponse }
+                if case .id(let expected) = selector, expected != launch.profileID { throw BackendError.helperFailed }
             case .gamepadStatus, .gamepadRetry:
                 guard response.control?.virtualGamepadStatus != nil else { throw BackendError.malformedResponse }
             }

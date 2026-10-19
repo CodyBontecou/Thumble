@@ -318,3 +318,186 @@ async fn reordered_relative_udp_motion_cannot_suppress_reliable_pointer_release(
     assert_eq!(status.output.events_executed - baseline, 5);
     stop(&paths, task).await;
 }
+
+async fn receive_profile_state(ws: &mut Ws) -> ControllerMessage {
+    loop {
+        let frame = tokio::time::timeout(Duration::from_secs(3), ws.next())
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+        if let Message::Binary(bytes) = frame {
+            let message = ControllerWireCodec::decode(&bytes).unwrap();
+            if message.message_type == Kind::GamepadProfiles {
+                return message;
+            }
+        }
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn orientation_wire_mutation_persists_metadata_and_releases_holds_without_changing_layouts() {
+    use thumble_protocol::{
+        ControllerCapability, GamepadProfileOrientationPreference as Preference,
+    };
+    let (_dir, paths, task, initial) = start(0).await;
+    let (mut ws, accepted) = pair(&initial, None).await;
+    assert!(accepted
+        .capabilities
+        .as_ref()
+        .unwrap()
+        .contains(&ControllerCapability::GamepadProfileOrientationPreferenceMutation));
+    let id = accepted.gamepad_profile_id.as_ref().unwrap();
+    let original = thumble_host::storage::load(&paths.state_file).unwrap();
+    ws.send(Message::Binary(edge(5, true, 1, 10).into()))
+        .await
+        .unwrap();
+    wait(&paths, |status| status.output.held_key_count == 1).await;
+    let mut request = ControllerMessage::new(Kind::GamepadProfileOrientationPreferenceMutation, 0);
+    request.gamepad_profile_id = Some(id.to_uppercase());
+    request.gamepad_profile_orientation_preference_mutation = Some(Preference::Portrait);
+    send(&mut ws, &request).await;
+    let response = receive_profile_state(&mut ws).await;
+    let saved = thumble_host::storage::load(&paths.state_file).unwrap();
+    assert_eq!(saved.profiles[0]["orientationPreference"], "portrait");
+    assert_eq!(
+        saved.configuration_revision,
+        original.configuration_revision + 1
+    );
+    assert_eq!(response.gamepad_profiles.as_ref().unwrap(), &saved.profiles);
+    let mut expected = original.profiles.clone();
+    expected[0]["orientationPreference"] = serde_json::json!("portrait");
+    expected[0]["updatedAt"] = saved.profiles[0]["updatedAt"].clone();
+    assert_eq!(saved.profiles, expected);
+    wait(&paths, |status| {
+        status.output.held_key_count == 0 && status.core.pressed_buttons.is_empty()
+    })
+    .await;
+    send(&mut ws, &request).await;
+    receive_profile_state(&mut ws).await;
+    assert_eq!(
+        thumble_host::storage::load(&paths.state_file).unwrap(),
+        saved
+    );
+    let datagram = udp(initial.port).await;
+    hello(&datagram, accepted.realtime_token.as_ref().unwrap()).await;
+    wait(&paths, |status| status.realtime.authenticated).await;
+    let before = wait(&paths, |_| true).await.realtime.rejected_datagrams;
+    request.gamepad_profile_orientation_preference_mutation = Some(Preference::Landscape);
+    datagram
+        .send(&ControllerWireCodec::encode(&request).unwrap())
+        .await
+        .unwrap();
+    wait(&paths, |status| status.realtime.rejected_datagrams > before).await;
+    assert_eq!(
+        thumble_host::storage::load(&paths.state_file).unwrap(),
+        saved
+    );
+    send(&mut ws, &request).await;
+    receive_profile_state(&mut ws).await;
+    assert_eq!(
+        thumble_host::storage::load(&paths.state_file)
+            .unwrap()
+            .profiles[0]["orientationPreference"],
+        "landscape"
+    );
+    stop(&paths, task).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn failed_orientation_save_releases_input_and_keeps_authoritative_memory_and_disk_unchanged()
+{
+    use thumble_protocol::GamepadProfileOrientationPreference as Preference;
+    let (_dir, paths, task, initial) = start(0).await;
+    let (mut ws, accepted) = pair(&initial, None).await;
+    let original = thumble_host::storage::load(&paths.state_file).unwrap();
+    ws.send(Message::Binary(edge(5, true, 1, 10).into()))
+        .await
+        .unwrap();
+    wait(&paths, |status| status.output.held_key_count == 1).await;
+    let backup = paths
+        .state_file
+        .with_extension("orientation-save-test-backup");
+    std::fs::rename(&paths.state_file, &backup).unwrap();
+    std::fs::create_dir(&paths.state_file).unwrap();
+    let mut request = ControllerMessage::new(Kind::GamepadProfileOrientationPreferenceMutation, 0);
+    request.gamepad_profile_id = accepted.gamepad_profile_id;
+    request.gamepad_profile_orientation_preference_mutation = Some(Preference::Portrait);
+    send(&mut ws, &request).await;
+    wait(&paths, |status| {
+        !status.core.paired && status.output.held_key_count == 0
+    })
+    .await;
+    std::fs::remove_dir(&paths.state_file).unwrap();
+    std::fs::rename(&backup, &paths.state_file).unwrap();
+    assert_eq!(
+        thumble_host::storage::load(&paths.state_file).unwrap(),
+        original
+    );
+    let (mut ws, reconnected) = pair(&initial, accepted.auth_token).await;
+    assert_eq!(
+        reconnected.gamepad_profiles.as_ref().unwrap(),
+        &original.profiles
+    );
+    let mut refresh = ControllerMessage::new(Kind::GamepadProfiles, 0);
+    refresh.gamepad_profile_id = reconnected.gamepad_profile_id;
+    send(&mut ws, &refresh).await;
+    receive_profile_state(&mut ws).await;
+    assert_eq!(
+        thumble_host::storage::load(&paths.state_file)
+            .unwrap()
+            .profiles,
+        original.profiles
+    );
+    stop(&paths, task).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn launch_uses_installed_target_only_preserves_session_on_failure_and_rejects_udp() {
+    use thumble_host::application_launch::LaunchPhase;
+    let (_dir, paths, task, initial) = start(0).await;
+    let (mut ws, accepted) = pair(&initial, None).await;
+    ws.send(Message::Binary(edge(5, true, 1, 1).into()))
+        .await
+        .unwrap();
+    wait(&paths, |s| s.output.held_key_count == 1).await;
+    let datagram = udp(initial.port).await;
+    hello(&datagram, accepted.realtime_token.as_deref().unwrap()).await;
+    let mut launch = ControllerMessage::new(Kind::LaunchProfileTarget, 0);
+    launch.gamepad_profile_id = Some(thumble_core::DEFAULT_PROFILE_ID.into());
+    launch.realtime_token = accepted.realtime_token.clone();
+    datagram
+        .send(&ControllerWireCodec::encode(&launch).unwrap())
+        .await
+        .unwrap();
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    assert!(wait(&paths, |_| true).await.application_launch.is_none());
+    // A remote path must never replace the target persisted by the Mac.
+    let mut raw = serde_json::to_value(&launch).unwrap();
+    raw["launchTarget"] = serde_json::json!({"filePath":"/Applications/Calculator.app"});
+    ws.send(Message::Text(raw.to_string().into()))
+        .await
+        .unwrap();
+    let status = wait(&paths, |s| s.application_launch.is_some()).await;
+    let outcome = status.application_launch.unwrap();
+    assert_eq!(outcome.phase, LaunchPhase::Failed);
+    assert_eq!(outcome.error_code.as_deref(), Some("no_launch_target"));
+    assert_eq!(
+        status.output.held_key_count, 1,
+        "unresolvable target must not release active input"
+    );
+    assert!(status.core.paired);
+    let response = send_request(
+        &paths.control_socket,
+        &ControlRequest::LaunchProfile {
+            profile_id: Some("unknown".into()),
+        },
+    )
+    .await
+    .unwrap();
+    assert!(!response.ok);
+    assert_eq!(response.error_code.as_deref(), Some("profile_not_found"));
+    ws.close(None).await.unwrap();
+    wait(&paths, |s| !s.core.paired && s.output.held_key_count == 0).await;
+    stop(&paths, task).await;
+}

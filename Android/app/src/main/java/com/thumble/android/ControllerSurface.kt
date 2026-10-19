@@ -16,7 +16,14 @@ import java.util.UUID
 import kotlin.math.*
 
 /** Native children expose labels to accessibility; one router owns all simultaneous pointers. */
-internal class ControllerSurface(context: Context, private val legacyArtworkBlending: Boolean = android.os.Build.VERSION.SDK_INT < 29) : ViewGroup(context) {
+internal class ControllerSurface(context: Context, private val legacyArtworkBlending: Boolean = android.os.Build.VERSION.SDK_INT < 29,
+    hapticOutput: KeypadHapticOutput? = null) : ViewGroup(context) {
+    private val haptics = hapticOutput ?: AndroidKeypadHaptics(this)
+    var hapticIntensity = 1.0
+        set(value) {
+            field=if (value.isFinite()) value.coerceIn(0.0,1.0) else 1.0
+            if (field == 0.0) haptics.cancel()
+        }
     var onEdge: (UUID, Boolean, Long) -> Unit = { _, _, _ -> }
     var onReleaseAll: () -> Unit = {}
     var onPartEdge: (UUID, InputPart, Boolean, Long) -> Unit = { _, _, _, _ -> }
@@ -28,7 +35,7 @@ internal class ControllerSurface(context: Context, private val legacyArtworkBlen
         { id, part, down, press -> onPartEdge(id, part, down, press) },
         { target, x, y, final -> onStick(target, x, y, final) },
         { target, value, final -> onTrigger(target, value, final) },
-        { kind, x, y, button, down -> onPointer(kind, x, y, button, down) })
+        { kind, x, y, button, down -> onPointer(kind, x, y, button, down) }, ::playHaptic)
     private val indicatorPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private var controls = emptyList<Control>()
     private var currentProfile: ControllerProfile? = null
@@ -82,6 +89,7 @@ internal class ControllerSurface(context: Context, private val legacyArtworkBlen
                         "button" -> {
                             val token = ++accessibilityPress
                             onEdge(control.id, true, token); onEdge(control.id, false, token)
+                            playHaptic(control.id)
                         }
                         "joystick" -> router.accessibilityDirection(control, InputPart.JOYSTICK_UP)
                         "trackpad" -> router.accessibilityClick(control, "left")
@@ -101,6 +109,13 @@ internal class ControllerSurface(context: Context, private val legacyArtworkBlen
         requestLayout()
     }
     private val Int.dp: Int get() = (this * resources.displayMetrics.density).roundToInt()
+    private fun playHaptic(id: UUID) {
+        val index=controls.indexOfFirst { it.id == id }
+        if (index < 0 || hapticIntensity <= 0) return
+        val face=if (controls[index].kind == "trackpad") faces[index].engaged else faces[index].normal
+        val feedback=KeypadHaptic.parse(face.optJSONObject("hapticFeedback"))
+        if (feedback.style != "none" && feedback.intensity > 0) haptics.play(feedback,hapticIntensity)
+    }
     private fun renderColors() {
         val pressed = router.pressedIDs()
         controls.forEachIndexed { index, control ->
@@ -347,6 +362,7 @@ internal class ControllerSurface(context: Context, private val legacyArtworkBlen
     }
     fun cancelTouches() {
         router.cancel()
+        haptics.cancel()
         onReleaseAll()
         renderColors(); invalidate()
     }

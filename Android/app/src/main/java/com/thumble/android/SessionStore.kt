@@ -25,7 +25,14 @@ internal class TrustedMac(val serverID: String, val authToken: String, val urls:
     override fun toString() = "TrustedMac([redacted])"
 }
 
-internal data class ClientPreferences(val practiceMode: Boolean = false)
+internal data class ClientPreferences(val practiceMode: Boolean = false, val hapticIntensity: Double = 1.0) {
+    fun normalized() = copy(hapticIntensity=HapticIntensity.normalized(hapticIntensity))
+    fun json() = JSONObject().put("practiceMode",practiceMode).put("hapticIntensity",HapticIntensity.normalized(hapticIntensity))
+    companion object {
+        fun parse(json: JSONObject) = ClientPreferences(json.optBoolean("practiceMode"),
+            HapticIntensity.normalized(json.optDouble("hapticIntensity",1.0)))
+    }
+}
 
 internal interface SessionStore {
     fun loadMac(): TrustedMac?
@@ -33,6 +40,11 @@ internal interface SessionStore {
     fun forgetMac()
     fun loadSnapshot(): ProfileSnapshot
     fun saveSnapshot(snapshot: ProfileSnapshot)
+    fun loadPendingSkinSelections(): List<PendingSkinSelection> = emptyList()
+    fun saveSkinState(snapshot: ProfileSnapshot, pending: List<PendingSkinSelection>) {
+        check(pending.isEmpty()) { "This profile store cannot persist pending skin changes" }
+        saveSnapshot(snapshot)
+    }
     fun loadPreferences(): ClientPreferences = ClientPreferences()
     fun savePreferences(preferences: ClientPreferences) {}
 }
@@ -41,11 +53,16 @@ internal class MemorySessionStore : SessionStore {
     private var mac: TrustedMac? = null
     private var snapshot = ProfileSnapshot()
     private var preferences = ClientPreferences()
+    private var pendingSkins = emptyList<PendingSkinSelection>()
     override fun loadMac() = mac
     override fun saveMac(mac: TrustedMac) { this.mac = mac }
-    override fun forgetMac() { mac = null; snapshot = ProfileSnapshot() }
+    override fun forgetMac() { mac = null; snapshot = ProfileSnapshot(); pendingSkins = emptyList() }
     override fun loadSnapshot() = snapshot
     override fun saveSnapshot(snapshot: ProfileSnapshot) { this.snapshot = snapshot }
+    override fun loadPendingSkinSelections() = pendingSkins
+    override fun saveSkinState(snapshot: ProfileSnapshot, pending: List<PendingSkinSelection>) {
+        this.snapshot=snapshot;pendingSkins=pending.toList()
+    }
     override fun loadPreferences() = preferences
     override fun savePreferences(preferences: ClientPreferences) { this.preferences = preferences }
 }
@@ -94,12 +111,22 @@ internal class AndroidSessionStore(context: Context, namespace: String = "sessio
         val bytes = profiles.readFully()
         require(bytes.size <= WireCodec.MAX_PAYLOAD)
         ProfileSnapshot().applying(JSONObject(bytes.toString(Charsets.UTF_8)))
-    } catch (_: Exception) { profiles.delete(); ProfileSnapshot() }
+    } catch (_: Exception) { ProfileSnapshot() }
 
-    override fun saveSnapshot(snapshot: ProfileSnapshot) {
+    override fun loadPendingSkinSelections(): List<PendingSkinSelection> {
+        val bytes=try { profiles.readFully() } catch (_: java.io.FileNotFoundException) { return emptyList() }
+        require(bytes.size<=WireCodec.MAX_PAYLOAD)
+        val json=JSONObject(bytes.toString(Charsets.UTF_8))
+        return SkinSelectionJournal.decode(if(json.has("androidPendingSkinSelections")) json.getJSONArray("androidPendingSkinSelections") else null)
+    }
+    override fun saveSnapshot(snapshot: ProfileSnapshot) = saveSkinState(snapshot,loadPendingSkinSelections())
+    override fun saveSkinState(snapshot: ProfileSnapshot, pending: List<PendingSkinSelection>) {
+        require(pending.size<=256)
         val json = WireCodec.message("gamepad_profiles").put("gamepadProfiles", JSONArray().apply {
             snapshot.profiles.forEach { put(it.source) }
-        }).put("gamepadProfileID", snapshot.selectedID?.toString()).toString().toByteArray()
+        }).put("gamepadProfileID", snapshot.selectedID?.toString())
+            .put("defaultGamepadProfileID",snapshot.defaultID?.toString())
+            .put("androidPendingSkinSelections",SkinSelectionJournal.encode(pending)).toString().toByteArray()
         require(json.size <= WireCodec.MAX_PAYLOAD)
         write(profiles, json)
     }
@@ -107,11 +134,11 @@ internal class AndroidSessionStore(context: Context, namespace: String = "sessio
     override fun loadPreferences(): ClientPreferences = try {
         val bytes = settings.readFully()
         require(bytes.size <= 16_384)
-        ClientPreferences(JSONObject(bytes.toString(Charsets.UTF_8)).optBoolean("practiceMode"))
+        ClientPreferences.parse(JSONObject(bytes.toString(Charsets.UTF_8)))
     } catch (_: Exception) { ClientPreferences() }
 
     override fun savePreferences(preferences: ClientPreferences) {
-        write(settings, JSONObject().put("practiceMode", preferences.practiceMode).toString().toByteArray())
+        write(settings, preferences.json().toString().toByteArray())
     }
 
     private fun key(create: Boolean): SecretKey {

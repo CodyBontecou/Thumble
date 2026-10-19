@@ -257,3 +257,221 @@ mod tests {
         assert_eq!(wheel_delta(f64::NAN), 0);
     }
 }
+
+/// Resolve only the target persisted on the Mac; remote requests carry a profile UUID.
+pub fn resolve_application(
+    target: &crate::application_launch::ApplicationTarget,
+) -> Result<std::path::PathBuf, &'static str> {
+    if let Some(bookmark) = target
+        .bookmark
+        .as_deref()
+        .and_then(resolve_application_bookmark)
+    {
+        return checked_application_path(bookmark);
+    }
+    if let Some(raw) = &target.path {
+        let path = if raw == "~" || raw.starts_with("~/") {
+            std::path::PathBuf::from(std::env::var_os("HOME").ok_or("application_not_found")?)
+                .join(raw.strip_prefix("~/").unwrap_or(""))
+        } else {
+            std::path::PathBuf::from(raw)
+        };
+        if path.exists() {
+            return checked_application_path(path);
+        }
+    }
+    if let Some(bundle) = &target.bundle {
+        if let Some(path) = application_for_bundle(bundle) {
+            return checked_application_path(path);
+        }
+    }
+    Err("application_not_found")
+}
+
+fn checked_application_path(path: std::path::PathBuf) -> Result<std::path::PathBuf, &'static str> {
+    let path = path.canonicalize().map_err(|_| "application_not_found")?;
+    if !path.is_dir()
+        || !path
+            .extension()
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("app"))
+    {
+        return Err("invalid_application_bundle");
+    }
+    Ok(path)
+}
+
+fn resolve_application_bookmark(encoded: &str) -> Option<std::path::PathBuf> {
+    use base64::Engine;
+    use objc2_core_foundation::{
+        CFData, CFError, CFRetained, CFURLBookmarkResolutionOptions, CFURLPathStyle, CFURL,
+    };
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(encoded)
+        .ok()?;
+    let data = CFData::from_bytes(&bytes);
+    let mut stale = 0;
+    let mut error: *mut CFError = std::ptr::null_mut();
+    // SAFETY: CoreFoundation accepts the default allocator and no relative URL/
+    // requested properties. Data and both out-parameters live through the call.
+    let url = unsafe {
+        CFURL::new_by_resolving_bookmark_data(
+            None,
+            Some(&data),
+            CFURLBookmarkResolutionOptions::CFURLBookmarkResolutionWithSecurityScope,
+            None,
+            None,
+            &mut stale,
+            &mut error,
+        )
+    };
+    if let Some(error) = std::ptr::NonNull::new(error) {
+        // SAFETY: A returned error follows the Create rule; release exactly once.
+        drop(unsafe { CFRetained::from_raw(error) });
+    }
+    let url = url?;
+    if url.scheme()?.to_string() != "file" {
+        return None;
+    }
+    Some(std::path::PathBuf::from(
+        url.file_system_path(CFURLPathStyle::CFURLPOSIXPathStyle)?
+            .to_string(),
+    ))
+}
+
+fn application_for_bundle(bundle: &str) -> Option<std::path::PathBuf> {
+    use core_foundation::{
+        array::{CFArray, CFArrayRef},
+        base::TCFType,
+        string::{CFString, CFStringRef},
+        url::CFURL,
+    };
+    #[link(name = "CoreServices", kind = "framework")]
+    extern "C" {
+        fn LSCopyApplicationURLsForBundleIdentifier(
+            bundle: CFStringRef,
+            error: *mut *const std::ffi::c_void,
+        ) -> CFArrayRef;
+    }
+    let identifier = CFString::new(bundle);
+    // SAFETY: Identifier lives through the call, error output is optional. The
+    // returned retained array contains application CFURLs per LaunchServices.
+    let raw = unsafe {
+        LSCopyApplicationURLsForBundleIdentifier(
+            identifier.as_concrete_TypeRef(),
+            std::ptr::null_mut(),
+        )
+    };
+    if raw.is_null() {
+        return None;
+    }
+    let urls: CFArray<CFURL> = unsafe { TCFType::wrap_under_create_rule(raw) };
+    urls.iter().find_map(|url| url.to_path())
+}
+
+/// `open` acknowledges the OS launch request; never wait for the app to exit.
+pub fn open_application(path: &std::path::Path) -> Result<(), &'static str> {
+    let mut child = Command::new("/usr/bin/open")
+        .arg("-a")
+        .arg(path)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|_| "application_launch_failed")?;
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                return if status.success() {
+                    Ok(())
+                } else {
+                    Err("application_launch_failed")
+                }
+            }
+            Ok(None) if std::time::Instant::now() < deadline => {
+                std::thread::sleep(std::time::Duration::from_millis(20))
+            }
+            _ => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err("application_launch_timed_out");
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod application_tests {
+    use super::*;
+    use crate::application_launch::ApplicationTarget;
+    use serde_json::json;
+    #[test]
+    fn application_resolution_prefers_existing_path_and_rejects_non_applications() {
+        let dir = tempfile::tempdir().unwrap();
+        let app = dir.path().join("Space and $(literal).app");
+        std::fs::create_dir(&app).unwrap();
+        let target = ApplicationTarget::from_profile(&json!({"launchTarget":{
+            "bookmarkData":"invalid bookmark", "filePath":app,
+            "bundleIdentifier":"com.invalid.no.such.application"}}))
+        .unwrap();
+        assert_eq!(
+            resolve_application(&target).unwrap(),
+            app.canonicalize().unwrap()
+        );
+        let ordinary = dir.path().join("ordinary.txt");
+        std::fs::write(&ordinary, b"not executable").unwrap();
+        let target =
+            ApplicationTarget::from_profile(&json!({"launchTarget":{"filePath":ordinary}}))
+                .unwrap();
+        assert_eq!(
+            resolve_application(&target),
+            Err("invalid_application_bundle")
+        );
+        let target = ApplicationTarget::from_profile(
+            &json!({"launchTarget":{"filePath":"https://example.com/App.app"}}),
+        )
+        .unwrap();
+        assert_eq!(resolve_application(&target), Err("application_not_found"));
+    }
+    #[test]
+    fn bookmark_resolution_precedes_path_and_keeps_bookmark_data_private() {
+        use base64::Engine;
+        use objc2_core_foundation::{
+            CFString, CFURLBookmarkCreationOptions, CFURLPathStyle, CFURL,
+        };
+        let dir = tempfile::tempdir().unwrap();
+        let app = dir.path().join("Bookmark.app");
+        std::fs::create_dir(&app).unwrap();
+        let path = CFString::from_str(app.to_str().unwrap());
+        let url = CFURL::with_file_system_path(
+            None,
+            Some(&path),
+            CFURLPathStyle::CFURLPOSIXPathStyle,
+            true,
+        )
+        .unwrap();
+        let mut error = std::ptr::null_mut();
+        // SAFETY: Default allocator, no resource properties or relative URL, valid
+        // retained URL and writable error output follow the CoreFoundation contract.
+        let data = unsafe {
+            CFURL::new_bookmark_data(
+                None,
+                Some(&url),
+                CFURLBookmarkCreationOptions::WithSecurityScope,
+                None,
+                None,
+                &mut error,
+            )
+        }
+        .unwrap();
+        assert!(error.is_null());
+        let target = ApplicationTarget::from_profile(&json!({"launchTarget":{
+            "bookmarkData":base64::engine::general_purpose::STANDARD.encode(data.to_vec()),
+            "filePath":"/missing/fallback.app"}}))
+        .unwrap();
+        assert_eq!(
+            resolve_application(&target).unwrap(),
+            app.canonicalize().unwrap()
+        );
+    }
+}

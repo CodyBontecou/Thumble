@@ -16,9 +16,20 @@ internal class ControlGestures(
     private val element: (UUID, InputPart, Boolean, Long) -> Unit,
     private val stick: (String, Double, Double, Boolean) -> Unit,
     private val trigger: (String, Double, Boolean) -> Unit,
-    private val pointer: (String, Double, Double, String?, Boolean?) -> Unit
+    private val pointer: (String, Double, Double, String?, Boolean?) -> Unit,
+    private val feedback: (UUID) -> Unit = {}
 ) {
-    private val buttons = TouchRouter(button)
+    private val buttonCounts = mutableMapOf<UUID,Int>()
+    private val buttons = TouchRouter { id, down, press ->
+        // Transport edges always precede feedback, and additional fingers on an
+        // already engaged face do not repeat its activation feedback.
+        button(id,down,press)
+        val previous=buttonCounts[id] ?: 0
+        if (down) {
+            buttonCounts[id]=previous+1
+            if (previous == 0) feedback(id)
+        } else if (previous <= 1) buttonCounts.remove(id) else buttonCounts[id]=previous-1
+    }
     private val owners = linkedMapOf<Int, Control>()
     private val positions = mutableMapOf<Int, Vector>()
     private val retiredPointers = mutableSetOf<Int>()
@@ -170,6 +181,7 @@ internal class ControlGestures(
     fun accessibilityClick(control: Control, button: String) {
         retireCapture(control.id)
         click(button)
+        feedback(control.id)
     }
 
     private fun release(id: Int, time: Long, allowsTap: Boolean) {
@@ -188,7 +200,10 @@ internal class ControlGestures(
                 pad.starts.remove(id)
                 if (owners.values.none { it.id == control.id }) {
                     val settings = TrackpadSettings.parse(control.source.optJSONObject("trackpadSettings"))
-                    if (allowsTap && settings.tap && !pad.moved && time - pad.began <= 320) click(if (pad.maximum >= 2) "right" else "left")
+                    if (allowsTap && settings.tap && !pad.moved && time - pad.began <= 320) {
+                        click(if (pad.maximum >= 2) "right" else "left")
+                        feedback(control.id)
+                    }
                     pads.remove(control.id)
                 } else pad.previous = centroid(control.id)
             }

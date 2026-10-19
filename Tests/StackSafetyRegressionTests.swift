@@ -68,11 +68,31 @@ final class StackSafetyRegressionTests: XCTestCase {
         assertInlineSize(ThumbleBridgeStyleAppearance.self, atMost: 64)
         assertInlineSize(ThumbleConfigurationBridgeRequest.self, atMost: 512)
         assertInlineSize(ThumbleCLIProfileBackend.Response.self, atMost: 4 * 1024)
+        assertInlineSize(ThumbleCLIRuntimeBackend.LaunchProjection.self, atMost: 64)
+        assertInlineSize(ThumbleCLIRuntimeBackend.ControlProjection.self, atMost: 1024)
+        assertInlineSize(ThumbleCLIRuntimeBackend.Response.self, atMost: 2048)
         assertInlineSize(PortableProfileArtifact.self, atMost: 64)
         assertInlineSize(IOSBuilderArtifactPracticePreview.self, atMost: 64)
         assertInlineSize(IOSBuilderArtifactReview.self, atMost: 256)
         assertInlineSize(ThumbleLinkSnapshot.self, atMost: 512)
         assertInlineSize(ThumbleLinkImport.Plan.self, atMost: 1024)
+    }
+
+    func testRuntimeLaunchProjectionDecodesOn512KiBStack() throws {
+        let invocation = UUID()
+        let profile = UUID()
+        let frames = try ["resolving", "releasing-input", "launched", "failed"].map { phase in
+            var launch: [String: Any] = ["launchID": UUID().uuidString, "profileID": profile.uuidString, "phase": phase]
+            if phase == "failed" { launch["errorCode"] = String(repeating: "x", count: 128) }
+            return try JSONSerialization.data(withJSONObject: ["schemaVersion": 1, "ok": true,
+                "invocationID": invocation.uuidString, "owner": "rust", "response": ["ok": true, "applicationLaunch": launch]]) + Data([10])
+        }
+        try runOnThread(stackSize: 512 * 1024, timeout: 10) {
+            for frame in frames {
+                let response = try ThumbleCLIRuntimeBackend.decodeResponse(frame, invocationID: invocation)
+                guard response.control?.applicationLaunch?.profileID == profile else { throw StackTestError.unexpectedDecodedState }
+            }
+        }
     }
 
     func testThumbleLinkMaximumSnapshotImportAndRefreshOn512KiBStack() throws {

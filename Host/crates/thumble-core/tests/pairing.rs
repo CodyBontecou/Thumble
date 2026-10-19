@@ -49,7 +49,12 @@ fn pairing_request_rotates_code_and_pairing_acceptance_is_websocket_only() {
     assert_eq!(accepted.server_id.as_deref(), Some("server-1"));
     assert_eq!(accepted.realtime_token, None);
     assert_eq!(accepted.binding_presentations, Some(Vec::new()));
-    assert_eq!(accepted.capabilities, Some(Vec::new()));
+    assert_eq!(
+        accepted.capabilities,
+        Some(vec![
+            thumble_protocol::ControllerCapability::GamepadProfileOrientationPreferenceMutation
+        ])
+    );
     assert_eq!(accepted.input_protocol_version, Some(3));
     assert_eq!(accepted.gamepad_profiles.as_ref().unwrap().len(), 1);
     assert_eq!(

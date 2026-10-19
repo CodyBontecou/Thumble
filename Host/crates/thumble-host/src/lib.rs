@@ -1,3 +1,4 @@
+pub mod application_launch;
 pub(crate) mod authority;
 pub mod bonjour;
 pub mod bridge;

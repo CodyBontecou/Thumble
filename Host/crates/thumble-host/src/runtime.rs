@@ -129,6 +129,7 @@ struct RuntimeInner {
 
 struct SharedRuntime {
     inner: Mutex<RuntimeInner>,
+    application_launcher: crate::application_launch::ApplicationLauncher,
     paths: HostPaths,
     requested_port: u16,
     actual_port: u16,
@@ -159,6 +160,18 @@ impl SharedRuntime {
         if !inner.connections.contains_key(&connection_id) {
             return Err("input connection retired after receiver suspension or disconnect".into());
         }
+        if message.message_type == ControllerMessageType::LaunchProfileTarget
+            && inner.core.is_authenticated(connection_id)
+        {
+            // Like the native Mac, launch failure updates local status without
+            // disconnecting the paired client or accepting remote target metadata.
+            if let Err(code) =
+                self.queue_application_launch(&inner, message.gamepad_profile_id.as_deref())
+            {
+                self.log(code);
+            }
+            return Ok(());
+        }
         self.handle_input_locked(&mut inner, connection_id, message, false)
     }
 
@@ -169,12 +182,45 @@ impl SharedRuntime {
         message: ControllerMessage,
         udp: bool,
     ) -> Result<(), String> {
+        let previous_orientation_state = (message.message_type
+            == ControllerMessageType::GamepadProfileOrientationPreferenceMutation
+            && inner.core.is_authenticated(connection_id))
+        .then(|| inner.core.persistent_state().clone());
         let before = inner.core.counters().accepted_inputs;
         let time = CoreTime::new(unix_millis(), self.monotonic_millis());
         let RuntimeInner { core, tokens, .. } = inner;
-        let effects = core
+        let mut effects = core
             .handle_message_at(connection_id, message, time, tokens)
             .map_err(|error| format!("core rejected controller turn: {error}"))?;
+        if let Some(previous) = previous_orientation_state {
+            if effects
+                .iter()
+                .any(|effect| matches!(effect, Effect::PersistState))
+            {
+                // Commit before publishing the new preference. A failed save may
+                // release input, but must never install or acknowledge unsaved state.
+                if let Err(error) =
+                    storage::save_atomic(&self.paths.state_file, inner.core.persistent_state())
+                {
+                    inner
+                        .core
+                        .restore_state_after_failed_local_selection(previous);
+                    let releases = effects
+                        .into_iter()
+                        .filter(|effect| match effect {
+                            Effect::PersistState | Effect::StatusChanged(_) => false,
+                            Effect::SendMessage { message, .. } => {
+                                message.message_type == ControllerMessageType::ReleaseAll
+                            }
+                            _ => true,
+                        })
+                        .collect();
+                    self.execute_effects(inner, releases)?;
+                    return Err(error);
+                }
+                effects.retain(|effect| !matches!(effect, Effect::PersistState));
+            }
+        }
         let accepted = inner.core.counters().accepted_inputs.saturating_sub(before);
         if udp {
             inner.realtime.status.udp_accepted_inputs += accepted;
@@ -228,6 +274,14 @@ impl SharedRuntime {
     fn expire_holds(&self) {
         let mut inner = self.inner.lock().expect("runtime mutex poisoned");
         self.guard_input_liveness(&mut inner);
+        if let Some(permit) = self.application_launcher.take_ready() {
+            let effects = inner.core.release_all_locally();
+            let released = self
+                .execute_effects_with_output_errors(&mut inner, effects, true)
+                .and_then(|()| inner.output.release_tracked())
+                .is_ok();
+            let _ = permit.send(released);
+        }
         let effects = inner
             .core
             .expire_holds(self.monotonic_millis(), HOLD_EXPIRY_AGE_MILLIS);
@@ -541,6 +595,24 @@ impl SharedRuntime {
         Ok(inner.output.gamepad_status())
     }
 
+    fn queue_application_launch(
+        &self,
+        inner: &RuntimeInner,
+        requested: Option<&str>,
+    ) -> Result<crate::application_launch::LaunchStatus, &'static str> {
+        let state = inner.core.persistent_state();
+        let id = requested.unwrap_or(&state.active_profile_id);
+        let canonical = state.canonical_profile_id(id).ok_or("profile_not_found")?;
+        let profile = state.profile(canonical).ok_or("profile_not_found")?;
+        let target = crate::application_launch::ApplicationTarget::from_profile(profile)
+            .inspect_err(|code| {
+                self.application_launcher
+                    .record_failure(canonical.to_owned(), code);
+            })?;
+        self.application_launcher
+            .request(canonical.to_owned(), target)
+    }
+
     fn status(&self) -> HostStatus {
         let inner = self.inner.lock().expect("runtime mutex poisoned");
         let auth_tokens = inner
@@ -574,6 +646,7 @@ impl SharedRuntime {
             core: inner.core.status(),
             output: inner.output.snapshot(),
             realtime: inner.realtime.status.clone(),
+            application_launch: self.application_launcher.status(),
         }
     }
 
@@ -1542,6 +1615,40 @@ impl ControlHandler for SharedRuntime {
                     Err(error) => ControlResponse::error(error),
                 }
             }
+            ControlRequest::LaunchProfileSelection { profile } => {
+                let inner = self.inner.lock().expect("runtime mutex poisoned");
+                match crate::cli_profile::resolve_runtime_profile(
+                    inner.core.persistent_state(),
+                    &profile,
+                ) {
+                    Ok(id) => match self.queue_application_launch(&inner, Some(&id)) {
+                        Ok(status) => {
+                            let mut response = ControlResponse::success();
+                            response.application_launch = Some(status);
+                            response
+                        }
+                        Err(code) => ControlResponse::coded_error(
+                            code,
+                            "Could not queue attached application launch",
+                        ),
+                    },
+                    Err(error) => ControlResponse::coded_error(error.code, error.message),
+                }
+            }
+            ControlRequest::LaunchProfile { profile_id } => {
+                let inner = self.inner.lock().expect("runtime mutex poisoned");
+                match self.queue_application_launch(&inner, profile_id.as_deref()) {
+                    Ok(status) => {
+                        let mut response = ControlResponse::success();
+                        response.application_launch = Some(status);
+                        response
+                    }
+                    Err(code) => ControlResponse::coded_error(
+                        code,
+                        "Could not queue attached application launch",
+                    ),
+                }
+            }
             ControlRequest::PressControl { control_id } => match self.press_control(&control_id) {
                 Ok(pressed) => {
                     let mut response = ControlResponse::success();
@@ -1632,6 +1739,7 @@ pub async fn run_runtime(paths: HostPaths, options: RuntimeOptions) -> Result<()
         configuration_write_enabled: options.configuration_write,
         bonjour: Arc::new(bonjour),
         shutdown: shutdown_tx.clone(),
+        application_launcher: Default::default(),
         started_at: crate::input_liveness::InputClock::now(),
     });
 
@@ -2383,6 +2491,7 @@ mod tests {
             configuration_write_enabled: false,
             bonjour: Arc::new(BonjourRegistration::disabled("Test".into())),
             shutdown,
+            application_launcher: Default::default(),
             started_at: crate::input_liveness::InputClock::now(),
         }
     }
@@ -2699,6 +2808,7 @@ mod tests {
             configuration_write_enabled: true,
             bonjour: Arc::new(BonjourRegistration::disabled("Test".to_owned())),
             shutdown,
+            application_launcher: Default::default(),
             started_at: crate::input_liveness::InputClock::now(),
         };
         for version in [1, 2, 3] {
@@ -2795,6 +2905,7 @@ mod tests {
             configuration_write_enabled: false,
             bonjour: Arc::new(BonjourRegistration::disabled("Test".to_owned())),
             shutdown,
+            application_launcher: Default::default(),
             started_at: crate::input_liveness::InputClock::now(),
         };
 
@@ -2878,6 +2989,7 @@ mod tests {
             configuration_write_enabled: true,
             bonjour: Arc::new(BonjourRegistration::disabled("Test".to_owned())),
             shutdown,
+            application_launcher: Default::default(),
             started_at: crate::input_liveness::InputClock::now(),
         };
         let draft = shared.begin_configuration_draft(1).unwrap();

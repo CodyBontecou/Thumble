@@ -227,7 +227,7 @@ class AdvancedControlsDeviceTest {
         }
     }
 
-    /** Only invoked by verify-advanced.py against its private recording-only receiver. */
+    /** Invoked by verify-advanced.py against its private recorder or focused real-output probe. */
     @Test fun optionalRustAdvancedInterop() {
         val arguments = InstrumentationRegistry.getArguments()
         val qr = arguments.getString("advancedPairingQR")
@@ -293,6 +293,20 @@ class AdvancedControlsDeviceTest {
             touch(MotionEvent.ACTION_DOWN, pad)
             touch(MotionEvent.ACTION_UP, pad)
             SystemClock.sleep(250)
+            if (arguments.getString("pointerDrag") == "true") {
+                // Receiver-level held-button coverage: iOS has no standalone
+                // pointer-button profile binding. The movement itself is native
+                // trackpad input; cancellation must neutralize the explicit hold.
+                val revision = current.get().surfaceRevision
+                instrumentation.runOnMainSync { surface.onReleaseAll = { client.releaseAll() } }
+                client.pointer("button", 0.0, 0.0, "left", true, revision)
+                SystemClock.sleep(150)
+                touch(MotionEvent.ACTION_DOWN, pad)
+                touch(MotionEvent.ACTION_MOVE, Triple(3, 2, .5f to .45f))
+                SystemClock.sleep(150)
+                touch(MotionEvent.ACTION_CANCEL, pad)
+                SystemClock.sleep(250)
+            }
         } finally { client.disconnect(); client.dispose() }
     }
 }

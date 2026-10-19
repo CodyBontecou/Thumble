@@ -1,0 +1,48 @@
+{
+  "fixtureVersion": 1,
+  "sources": {
+    "16.0.0/GraphemeBreakTest.txt": {
+      "url": "https://www.unicode.org/Public/16.0.0/ucd/auxiliary/GraphemeBreakTest.txt",
+      "sha256": "ee2b9354d270ac061b29f09662cafea06341d77e704b8cc6bd72aaeeda363cb5"
+    },
+    "17.0.0/GraphemeBreakTest.txt": {
+      "url": "https://www.unicode.org/Public/17.0.0/ucd/auxiliary/GraphemeBreakTest.txt",
+      "sha256": "e2d134d2c52919bace503ebb6a551c1855fe1a1faec18478c78fff254a1793ec"
+    }
+  },
+  "nativeRuntimeSource": {
+    "path": "Host/fixtures/unicode/native-text-oracle.json",
+    "sha256": "d70554513af343219682550b05d3158e78fb74d5680a662b9878ef859804dd56"
+  },
+  "graphemeCodes": [
+    "Other",
+    "CR",
+    "LF",
+    "Control",
+    "Extend",
+    "ZWJ",
+    "RI",
+    "Prepend",
+    "SpacingMark",
+    "L",
+    "V",
+    "T",
+    "LV",
+    "LVT"
+  ],
+  "indicCodes": [
+    "None",
+    "Consonant",
+    "Extend",
+    "Linker"
+  ],
+  "generatedSHA256": "e2d8a755d19afb4fa7f144271d92ed64158825f5284b402391e09e08db05a541",
+  "tableRanges": {
+    "grapheme": 586,
+    "indic": 461,
+    "pictographic": 156,
+    "alphanumeric": 824,
+    "control": 533,
+    "whitespace": 10
+  }
+}

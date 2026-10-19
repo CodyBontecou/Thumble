@@ -100,14 +100,20 @@ class AssetStyleDeviceTest {
         val bitmap = Bitmap.createBitmap(20, 10, Bitmap.Config.ARGB_8888)
         val colors = intArrayOf(Color.RED, Color.GREEN, Color.BLUE, Color.WHITE)
         for (y in 0 until 10) for (x in 0 until 20) bitmap.setPixel(x, y, colors[(if (y < 5) 0 else 2) + if (x < 10) 0 else 1])
-        val file = File.createTempFile("asset-orientation-", ".jpg", instrumentation.targetContext.cacheDir)
-        try {
-            file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, 100, it) }; bitmap.recycle()
+        val jpeg = java.io.ByteArrayOutputStream().apply { assertTrue(bitmap.compress(Bitmap.CompressFormat.JPEG,100,this)) }.toByteArray()
+        bitmap.recycle()
+        assertTrue(jpeg[0] == 0xff.toByte() && jpeg[1] == 0xd8.toByte())
+        run {
             val corners = listOf(listOf(0,1,2,3), listOf(1,0,3,2), listOf(3,2,1,0), listOf(2,3,0,1),
                 listOf(0,2,1,3), listOf(2,0,3,1), listOf(3,1,2,0), listOf(1,3,0,2))
             for (orientation in 1..8) {
-                android.media.ExifInterface(file.path).apply { setAttribute(android.media.ExifInterface.TAG_ORIENTATION, orientation.toString()); saveAttributes() }
-                val fill = image(Base64.encodeToString(file.readBytes(), Base64.NO_WRAP)).getJSONObject("image")
+                // A standard APP1/Exif TIFF directory keeps the decoder test
+                // independent of platform ExifInterface's version-specific writer.
+                val tiff=java.nio.ByteBuffer.allocate(26).putShort(0x4d4d).putShort(42).putInt(8).putShort(1)
+                    .putShort(0x0112).putShort(3).putInt(1).putShort(orientation.toShort()).putShort(0).putInt(0).array()
+                val oriented=jpeg.copyOfRange(0,2)+byteArrayOf(0xff.toByte(),0xe1.toByte(),0,34)+
+                    byteArrayOf(69,120,105,102,0,0)+tiff+jpeg.copyOfRange(2,jpeg.size)
+                val fill = image(Base64.encodeToString(oriented, Base64.NO_WRAP)).getJSONObject("image")
                 val asset = AssetImages().image(fill)!!
                 val w = if (orientation >= 5) 10 else 20; val h = if (orientation >= 5) 20 else 10
                 assertEquals(w, asset.intrinsicWidth); assertEquals(h, asset.intrinsicHeight)
@@ -119,7 +125,7 @@ class AssetStyleDeviceTest {
                     assertEquals("EXIF $orientation corner $index blue", Color.blue(expected).toDouble(), Color.blue(actual).toDouble(), 35.0)
                 }
             }
-        } finally { file.delete() }
+        }
     }
     @Test fun imageAdjustmentAndAlphaFollowTheNativeParameterRanges() {
         val fill = image(png(2, 2) { _, _ -> Color.rgb(50, 50, 50) })

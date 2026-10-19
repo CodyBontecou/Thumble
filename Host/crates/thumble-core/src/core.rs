@@ -10,9 +10,9 @@ use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::error::Error;
 use std::fmt;
 use thumble_protocol::{
-    ButtonPressState, ControllerMessage, ControllerMessageType, ControllerPointerButton,
-    ControllerPointerEventKind, ControllerWireCodec, KeypadElementID, KeypadElementInputPart,
-    VirtualGamepadStick, VirtualGamepadTrigger,
+    ButtonPressState, ControllerCapability, ControllerMessage, ControllerMessageType,
+    ControllerPointerButton, ControllerPointerEventKind, ControllerWireCodec, KeypadElementID,
+    KeypadElementInputPart, VirtualGamepadStick, VirtualGamepadTrigger,
 };
 
 pub type ConnectionId = u64;
@@ -685,16 +685,21 @@ impl HostCore {
             }
             ControllerMessageType::GamepadProfileSelection
             | ControllerMessageType::GamepadDefaultProfile
+            | ControllerMessageType::GamepadProfileOrientationPreferenceMutation
             | ControllerMessageType::GamepadProfiles
             | ControllerMessageType::GamepadCustomization => {
-                self.handle_profile_message(connection_id, &message, &mut effects);
+                self.handle_profile_message(
+                    connection_id,
+                    &message,
+                    time.unix_millis,
+                    &mut effects,
+                );
             }
             ControllerMessageType::PairingChallenge
             | ControllerMessageType::PairingAccepted
             | ControllerMessageType::SkinPackages
             | ControllerMessageType::SkinPackageRemoval
             | ControllerMessageType::GamepadProfileSkinSelection
-            | ControllerMessageType::GamepadProfileOrientationPreferenceMutation
             | ControllerMessageType::LaunchProfileTarget => {
                 self.send_diagnostic(
                     connection_id,
@@ -1172,7 +1177,9 @@ impl HostCore {
         accepted.binding_presentations = Some(Vec::new());
         accepted.gamepad_profile_id = Some(self.state.active_profile_id.clone());
         accepted.default_gamepad_profile_id = Some(self.state.default_profile_id.clone());
-        accepted.capabilities = Some(Vec::new());
+        accepted.capabilities = Some(vec![
+            ControllerCapability::GamepadProfileOrientationPreferenceMutation,
+        ]);
         accepted.input_protocol_version = Some(ControllerWireCodec::CURRENT_INPUT_PROTOCOL_VERSION);
         // Transport adapters may attach a session-scoped realtime token when UDP
         // is available. The core owns input ordering across both transports.
@@ -1451,9 +1458,78 @@ impl HostCore {
         &mut self,
         connection_id: ConnectionId,
         message: &ControllerMessage,
+        unix_millis: i64,
         effects: &mut Vec<Effect>,
     ) {
         match message.message_type {
+            ControllerMessageType::GamepadProfileOrientationPreferenceMutation => {
+                let (Some(profile_id), Some(preference)) = (
+                    message.gamepad_profile_id.as_deref(),
+                    message.gamepad_profile_orientation_preference_mutation,
+                ) else {
+                    self.send_error(
+                        connection_id,
+                        "Invalid profile orientation preference mutation",
+                        effects,
+                    );
+                    return;
+                };
+                let Some(profile_id) = self
+                    .state
+                    .canonical_profile_id(profile_id)
+                    .map(str::to_owned)
+                else {
+                    // Native Mac sends its authoritative state for a stale profile ID.
+                    effects.push(Effect::SendMessage {
+                        connection_id,
+                        message: Box::new(
+                            self.profile_state_message(ControllerMessageType::GamepadProfiles),
+                        ),
+                    });
+                    return;
+                };
+                let preference = match preference {
+                    thumble_protocol::GamepadProfileOrientationPreference::Automatic => "automatic",
+                    thumble_protocol::GamepadProfileOrientationPreference::Portrait => "portrait",
+                    thumble_protocol::GamepadProfileOrientationPreference::Landscape => "landscape",
+                };
+                let current = self
+                    .state
+                    .profile(&profile_id)
+                    .and_then(|profile| profile.get("orientationPreference"))
+                    .and_then(Value::as_str)
+                    .unwrap_or("automatic");
+                if current != preference {
+                    if self.state.bump_configuration_revision().is_err() {
+                        self.send_error(
+                            connection_id,
+                            "Configuration revision is exhausted",
+                            effects,
+                        );
+                        return;
+                    }
+                    if profile_id == self.state.active_profile_id {
+                        self.release_all_and_notify_client(effects);
+                    }
+                    let profile = self
+                        .state
+                        .profile_mut(&profile_id)
+                        .and_then(Value::as_object_mut)
+                        .expect("installed profile is an object");
+                    profile.insert(
+                        "orientationPreference".into(),
+                        Value::String(preference.into()),
+                    );
+                    profile.insert("updatedAt".into(), Value::from(unix_millis));
+                    effects.push(Effect::PersistState);
+                }
+                effects.push(Effect::SendMessage {
+                    connection_id,
+                    message: Box::new(
+                        self.profile_state_message(ControllerMessageType::GamepadProfiles),
+                    ),
+                });
+            }
             ControllerMessageType::GamepadProfileSelection => {
                 let Some(profile_id) = message.gamepad_profile_id.as_deref() else {
                     self.send_diagnostic(connection_id, "Profile ID is required", effects);
@@ -1640,7 +1716,9 @@ impl HostCore {
         response.binding_presentations = Some(Vec::new());
         response.gamepad_profile_id = Some(self.state.active_profile_id.clone());
         response.default_gamepad_profile_id = Some(self.state.default_profile_id.clone());
-        response.capabilities = Some(Vec::new());
+        response.capabilities = Some(vec![
+            ControllerCapability::GamepadProfileOrientationPreferenceMutation,
+        ]);
         response
     }
 
@@ -2006,7 +2084,8 @@ impl HostCore {
         }
     }
 
-    fn is_authenticated(&self, connection_id: ConnectionId) -> bool {
+    /// Whether this connection owns the currently authenticated controller session.
+    pub fn is_authenticated(&self, connection_id: ConnectionId) -> bool {
         self.active_client
             .as_ref()
             .is_some_and(|active| active.connection_id == connection_id)

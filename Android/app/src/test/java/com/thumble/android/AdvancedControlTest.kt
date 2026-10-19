@@ -17,6 +17,7 @@ class AdvancedControlTest {
         val sticks = mutableListOf<Analog>()
         val triggers = mutableListOf<Analog>()
         val pointers = mutableListOf<Pointer>()
+        val feedback = mutableListOf<UUID>()
         val router = ControlGestures(
             { point, previous -> elements.firstOrNull { it.id == previous && inside(it, point, 18.0) }
                 ?: elements.firstOrNull { inside(it, point) } },
@@ -25,7 +26,8 @@ class AdvancedControlTest {
             { id, part, down, press -> edges.add(Edge(id, part, down, press)) },
             { target, x, y, final -> sticks.add(Analog(target, Vector(x, y), final)) },
             { target, value, final -> triggers.add(Analog(target, Vector(value, 0.0), final)) },
-            { kind, x, y, button, down -> pointers.add(Pointer(kind, Vector(x, y), button, down)) })
+            { kind, x, y, button, down -> pointers.add(Pointer(kind, Vector(x, y), button, down)) },
+            { id -> feedback.add(id) })
         private fun inside(control: Control, point: Vector, outset: Double = 0.0): Boolean {
             val x = point.x - elements.indexOf(control) * 200
             return x in -outset..(100 + outset) && point.y in -outset..(100 + outset)
@@ -45,6 +47,32 @@ class AdvancedControlTest {
         assertEquals(0.0, TriggerSettings().transform(.02), 0.0)
         assertEquals(1.0, TriggerSettings(sensitivity = 3.0).transform(1.0), 0.0)
         assertEquals(4.0, TrackpadSettings.parse(JSONObject().put("sensitivity", 99)).sensitivity, 0.0)
+    }
+
+    @Test fun `feedback follows first button activation and completed trackpad click rather than motion or release`() {
+        val button=control("button");val pad=control("trackpad")
+        val h=Harness(listOf(button,pad))
+        h.event(TouchPhase.DOWN,1,0,Triple(1,20.0,20.0))
+        h.event(TouchPhase.DOWN,2,10,Triple(1,20.0,20.0),Triple(2,60.0,60.0))
+        assertEquals(listOf(button.id),h.feedback)
+        h.event(TouchPhase.UP,1,20,Triple(1,20.0,20.0),Triple(2,60.0,60.0))
+        h.event(TouchPhase.DOWN,3,30,Triple(2,60.0,60.0),Triple(3,40.0,40.0))
+        assertEquals(listOf(button.id),h.feedback)
+        h.router.cancel()
+        assertEquals(listOf(button.id),h.feedback)
+        h.event(TouchPhase.DOWN,1,50,Triple(1,20.0,20.0))
+        h.event(TouchPhase.UP,1,60,Triple(1,20.0,20.0))
+        assertEquals(listOf(button.id,button.id),h.feedback)
+        h.event(TouchPhase.DOWN,4,70,Triple(4,220.0,20.0))
+        h.event(TouchPhase.UP,4,80,Triple(4,220.0,20.0))
+        assertEquals(listOf(button.id,button.id,pad.id),h.feedback)
+        assertEquals(listOf(true,false),h.pointers.map { it.down })
+        h.event(TouchPhase.DOWN,5,100,Triple(5,220.0,20.0))
+        h.event(TouchPhase.MOVE,5,110,Triple(5,260.0,25.0))
+        h.event(TouchPhase.UP,5,120,Triple(5,260.0,25.0))
+        assertEquals(3,h.feedback.size)
+        h.router.accessibilityClick(pad,"right")
+        assertEquals(listOf(button.id,button.id,pad.id,pad.id),h.feedback)
     }
 
     @Test fun `joystick directions retain physical IDs and capture outside while buttons remain independent`() {

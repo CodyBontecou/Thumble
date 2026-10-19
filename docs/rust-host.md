@@ -7,7 +7,7 @@ For native Windows/Linux keyboard and mouse control, use the separate [`thumble-
 ## Architecture
 
 ```text
-iPhone
+iOS / Android
   |  WebSocket control + reliable input
   |  _pocketpad._tcp mDNS discovery
   v
@@ -42,7 +42,8 @@ The macOS MVP includes:
 - the existing unencrypted local WebSocket protocol and 8 MiB payload limit;
 - `_pocketpad._tcp` Bonjour publication with server identity TXT data;
 - six-digit pairing, persisted trusted reconnect tokens, and one active iPhone;
-- profile/customization delivery compatible with the current iOS app;
+- profile/customization delivery compatible with the current iOS and Android apps;
+- authenticated profile orientation preference mutation with advertised capability, durable acknowledgement and input neutralization;
 - protocol-v3 UUID/part input over authenticated UDP with reliable WebSocket mirroring/fallback; old slot-index input frames reject;
 - keyboard shortcuts, sequences, pointer movement, scrolling, and pointer buttons through CGEvent;
 - optional virtual gamepad buttons/D-pad/two sticks/independent triggers, with recording, honest HID readiness and managed signing gates;
@@ -50,7 +51,7 @@ The macOS MVP includes:
 - a local CLI for foreground/background lifecycle, status, pairing, and Accessibility setup;
 - a local stdio MCP adapter for Claude, OpenAI Codex, and other MCP clients.
 
-Authenticated protocol-v3 UDP input is available on the same port as WebSocket. Pairing over WebSocket issues an ephemeral realtime token; a UDP hello binds that token to a datagram endpoint for the active connection. Disconnect, replacement, suspension, and shutdown retire UDP authentication. Both transports share generation checks and a bounded per-press sequence history, so reordered independent touches and reliable mirrored releases work without duplicate output. `thumble-host status --json` exposes token-free transport counters under `realtime`; if UDP cannot bind, the host omits the token and keeps WebSocket input available. Skin mutation and launch targets remain subsequent milestones for this Mac host. Windows/Linux keyboard and mouse adapters are provided by the separate `thumble-receiver`; virtual gamepad output there remains unsupported. Virtual HID is implemented but signed-device and GameController/SDL/Steam/game compatibility remain unverified; see [controller acceptance gates](virtual-controller-support.md). The iOS client already falls back to reliable WebSocket input when a pairing response does not advertise a realtime UDP token.
+Authenticated protocol-v3 UDP input is available on the same port as WebSocket. Pairing over WebSocket issues an ephemeral realtime token; a UDP hello binds that token to a datagram endpoint for the active connection. Disconnect, replacement, suspension, and shutdown retire UDP authentication. Both transports share generation checks and a bounded per-press sequence history, so reordered independent touches and reliable mirrored releases work without duplicate output. `thumble-host status --json` exposes token-free transport counters under `realtime`; if UDP cannot bind, the host omits the token and keeps WebSocket input available. Skin mutation and application attachment editing remain subsequent milestones for this Mac host. Attached-application launch is implemented in the Mac runtime (see application launching below). Windows/Linux keyboard and mouse adapters are provided by the separate `thumble-receiver`; virtual gamepad output there remains unsupported. Virtual HID is implemented but signed-device and GameController/SDL/Steam/game compatibility remain unverified; see [controller acceptance gates](virtual-controller-support.md). The iOS client already falls back to reliable WebSocket input when a pairing response does not advertise a realtime UDP token.
 
 ## Developer workflow
 
@@ -416,3 +417,100 @@ Thumble is the product and source/API brand. The old name remains only inside st
 - Keep the core free of AppKit/CoreGraphics dependencies. Platform code implements output and permission traits.
 
 Before merging shared-model or startup changes, continue running `./scripts/verify-stack-safety.sh`; the Rust host does not replace the Swift stack-safety gate.
+
+## Profile orientation preferences
+
+The receiver advertises `gamepad_profile_orientation_preference_mutation` in pairing
+and full profile snapshots. Authenticated WebSocket requests must name an installed
+profile and an automatic/portrait/landscape preference. A stale profile ID receives
+authoritative state; malformed envelopes are rejected. Changes preserve the saved
+layouts, bindings, selection, default and unknown profile fields while stamping
+`updatedAt` and advancing the configuration revision once. Repeating the same
+preference acknowledges without another write.
+
+An active-profile change retires input generation and releases held output. A change
+to an inactive profile preserves the active holds. Remote orientation changes commit
+atomically before the new state is acknowledged. Failed persistence restores the old
+profile configuration and releases input without advertising an unsaved preference.
+Configuration mutations remain unavailable over UDP.
+
+The CLI's existing `orientation.set` typed authoring command supports all three
+preferences through its revision-checked configuration path. Its existing write
+policy remains intact; no duplicate CLI command is needed.
+
+Android/Rust acceptance can run against a private input-disabled receiver:
+
+```sh
+python3 Android/scripts/verify-profile-actions.py \
+  --host Host/target/debug/thumble-host \
+  --serial emulator-5554 \
+  --adb "$ANDROID_SDK_ROOT/platform-tools/adb"
+```
+
+The verifier uses separate temporary state/socket paths, checks all three
+orientations plus default selection and opaque layout/binding preservation, then
+stops its receiver. Pairing data is not saved in evidence. The current source build
+has passed this acceptance; this milestone does not replace the normal installed
+receiver. Application launch execution remains open work.
+
+
+## Attached-application launching
+
+The macOS Rust runtime now handles authenticated reliable `launch_profile_target`
+requests using only the installed profile UUID (or active profile when omitted).
+It ignores remote target metadata. The standalone core/portable receiver still
+reports this platform-specific operation as unsupported; UDP cannot invoke it.
+
+A single in-flight worker resolves the stored bookmark, existing file path, then
+LaunchServices bundle identifier in native Mac order. It validates a local app
+bundle and waits for the input runtime to release keyboard, pointer and gamepad
+holds before activation. It invokes `/usr/bin/open` with separate arguments and a
+five-second process deadline. Resolution runs off the input thread. Failures retain
+the paired connection. Unresolvable targets leave active input unchanged, matching
+the native Mac. No configuration revision or profile content changes.
+
+The local Rust CLI exposes the same operation:
+
+```sh
+thumble-host launch-profile [PROFILE_UUID] --json
+thumble-host status --json
+```
+
+The command acknowledges queueing, not application readiness. `applicationLaunch`
+in status contains a launch UUID, installed profile UUID, phase (`resolving`,
+`releasing-input`, `launched`, or `failed`) and optional coded failure. It contains
+no path, bookmark, app name or platform diagnostic text. `launched` means the OS
+accepted the activation request; consumer readiness is application-specific.
+The standalone Swift `thumble profile launch [NAME|UUID|active|default] [--json]`
+now routes through its exact sibling Rust CLI bridge. It accepts only a bounded
+typed profile selector, resolves it inside the runtime lock via the safe catalog,
+and returns the same launch acknowledgement. Unknown/ambiguous profiles and Rust
+runtime failures fail closed without legacy fallback. Existing legacy routing
+retains its authority gate. Application attachment editing is still open.
+
+Security-scoped bookmarks require the creating code-signing identity, as described
+in [Apple's bookmark documentation](https://developer.apple.com/documentation/Foundation/NSURL/bookmarkData%28options%3AincludingResourceValuesForKeys%3ArelativeTo%3A%29?language=obj_7).
+A bookmark from another identity falls back to the saved path or bundle identifier,
+as native resolution does. Tests cover both a same-process scoped bookmark and a
+foreign-bookmark path fallback; they do not imply cross-identity scope transfer.
+
+Build and run isolated Android acceptance (no normal receiver installation changes):
+
+```sh
+cargo build --locked --manifest-path Host/Cargo.toml -p thumble-host
+cargo build --locked --manifest-path Host/Cargo.toml -p thumble-host --example application_launch_fixture
+python3 Android/scripts/verify-application-launch.py --host Host/target/debug/thumble-host \
+  --serial emulator-5554 --adb "$ANDROID_SDK_ROOT/platform-tools/adb"
+```
+
+The private harness creates its scoped bookmark in the receiver process and calls
+the production runtime. A disposable signed Mac app records actual launch and
+activation, then exits. Its bundle lives in the repository build directory because
+native LaunchServices lookup did not resolve the system-temporary-directory
+fixture. The verifier unregisters the fixture and stops each private receiver.
+The normal installed receiver and standalone Swift CLI have now been updated with
+this support and orientation mutation. All five profiles, trust, input/Bonjour/
+configuration-write settings and Accessibility access were preserved, with private
+state and binary backups. The post-install real keyboard UDP-loss regression passes
+on the API 26 emulator: exactly six AppKit key events, all releases recovered, and
+no held input. See `Android/PARITY.md` for the broader incomplete Android inventory.

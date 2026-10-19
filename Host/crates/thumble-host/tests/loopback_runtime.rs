@@ -386,7 +386,12 @@ async fn current_ios_loopback_pairs_reconnects_records_input_and_releases_on_shu
     let accepted = receive_type(&mut first, ControllerMessageType::PairingAccepted).await;
     assert_eq!(accepted.input_protocol_version, Some(3));
     assert!(accepted.realtime_token.is_some());
-    assert_eq!(accepted.capabilities, Some(Vec::new()));
+    assert_eq!(
+        accepted.capabilities,
+        Some(vec![
+            thumble_protocol::ControllerCapability::GamepadProfileOrientationPreferenceMutation
+        ])
+    );
     assert_eq!(
         accepted.gamepad_profiles.as_ref().unwrap()[0]["name"],
         "Loopback Edited"

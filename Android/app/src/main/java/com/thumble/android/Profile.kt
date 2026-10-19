@@ -6,6 +6,9 @@ import java.util.UUID
 
 /** Read-only subset of the canonical profile. Bindings stay authoritative on the host. */
 data class ControllerProfile(val id: UUID, val name: String, val source: JSONObject) {
+    val launchTargetName: String? get() = source.optJSONObject("launchTarget")?.takeIf {
+        it.optString("kind","application") == "application"
+    }?.optString("displayName")?.trim()?.ifBlank { "Application" }?.take(160)
     val orientationPreference: String get() = source.optString("orientationPreference", "automatic")
         .takeIf { it in setOf("automatic", "portrait", "landscape") } ?: "automatic"
     fun layout(landscape: Boolean): JSONObject = source.optJSONObject(
@@ -72,6 +75,12 @@ data class ControllerProfile(val id: UUID, val name: String, val source: JSONObj
     }
 }
 
+/** The primary preference governs all orientation variants, as in the native model. */
+internal fun ControllerProfile.skinColorScheme(systemDark: Boolean): String =
+    when(source.getJSONObject("customization").optString("colorSchemePreference", "system")) {
+        "dark" -> "dark"; "light" -> "light"; else -> if(systemDark) "dark" else "light"
+    }
+
 internal val SUPPORTED_CONTROL_KINDS = setOf("button", "joystick", "trigger", "trackpad", "text", "decoration")
 data class Control(val id: UUID, val label: String, val kind: String, val style: JSONObject, val scale: String, val source: JSONObject = JSONObject()) {
     val legend: String get() = source.optJSONObject("presentation")?.let {
@@ -92,7 +101,8 @@ internal fun JSONObject.swiftMap(key: String): Map<String, Any> {
     }
 }
 
-data class ProfileSnapshot(val profiles: List<ControllerProfile> = emptyList(), val selectedID: UUID? = null) {
+data class ProfileSnapshot(val profiles: List<ControllerProfile> = emptyList(), val selectedID: UUID? = null,
+    val defaultID: UUID? = null) {
     val selected: ControllerProfile? get() = profiles.firstOrNull { it.id == selectedID }
     fun applying(message: JSONObject): ProfileSnapshot {
         val array = message.optJSONArray("gamepadProfiles")
@@ -106,6 +116,8 @@ data class ProfileSnapshot(val profiles: List<ControllerProfile> = emptyList(), 
         val next = if (array == null && scalar != null && selected != null) incoming.map {
             if (it.id == selected) ControllerProfile.parse(JSONObject(it.source.toString()).put("customization", scalar)) else it
         } else incoming
-        return ProfileSnapshot(next, selected)
+        val default = if (message.has("defaultGamepadProfileID")) message.optString("defaultGamepadProfileID")
+            .takeIf { it.isNotBlank() && it != "null" }?.let(UUID::fromString) else defaultID
+        return ProfileSnapshot(next, selected, default?.takeIf { id -> next.any { it.id == id } })
     }
 }

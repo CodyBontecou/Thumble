@@ -25,8 +25,16 @@ enum Command {
     ReleaseAll,
     GamepadStatus,
     GamepadRetry,
-    TapControl { control_id: String },
-    TestControl { control_id: String, pressed: bool },
+    LaunchProfile {
+        profile: thumble_host::cli_profile::ProfileSelector,
+    },
+    TapControl {
+        control_id: String,
+    },
+    TestControl {
+        control_id: String,
+        pressed: bool,
+    },
 }
 
 struct Response {
@@ -89,7 +97,35 @@ fn decode_request(data: &[u8]) -> Result<Request, ()> {
         .and_then(Value::as_object)
         .ok_or(())?;
     let action = tagged.get("type").and_then(Value::as_str).ok_or(())?;
-    let command = if matches!(action, "tap-control" | "test-control") {
+    let command = if action == "launch-profile" {
+        if tagged.len() != 2 {
+            return Err(());
+        }
+        // Serde unit variants may ignore extra fields even with deny_unknown_fields.
+        let selector = tagged.get("profile").and_then(Value::as_object).ok_or(())?;
+        let fields: &[&str] = match selector.get("kind").and_then(Value::as_str) {
+            Some("active" | "default") => &["kind"],
+            Some("id") => &["kind", "profileID"],
+            Some("name") => &["kind", "name"],
+            _ => return Err(()),
+        };
+        if selector.len() != fields.len()
+            || !selector.keys().all(|key| fields.contains(&key.as_str()))
+        {
+            return Err(());
+        }
+        let profile: thumble_host::cli_profile::ProfileSelector =
+            serde_json::from_value(tagged.get("profile").ok_or(())?.clone()).map_err(|_| ())?;
+        if let thumble_host::cli_profile::ProfileSelector::Name { name } = &profile {
+            if name.trim().is_empty()
+                || name.chars().count() > 256
+                || name.chars().any(char::is_control)
+            {
+                return Err(());
+            }
+        }
+        Command::LaunchProfile { profile }
+    } else if matches!(action, "tap-control" | "test-control") {
         let expected_fields = if action == "test-control" { 3 } else { 2 };
         if tagged.len() != expected_fields || !tagged.contains_key("controlID") {
             return Err(());
@@ -207,6 +243,7 @@ pub fn run(data: &[u8]) -> bool {
         Command::ReleaseAll => ControlRequest::ReleaseAll,
         Command::GamepadStatus => ControlRequest::GamepadStatus,
         Command::GamepadRetry => ControlRequest::GamepadRetry,
+        Command::LaunchProfile { profile } => ControlRequest::LaunchProfileSelection { profile },
         Command::TapControl { control_id } => ControlRequest::PressControl { control_id },
         Command::TestControl {
             control_id,
@@ -398,6 +435,36 @@ mod tests {
             "runtimeCommand": command
         }))
         .unwrap()
+    }
+
+    #[test]
+    fn launch_profile_uses_only_a_strict_typed_selector() {
+        for selector in [
+            serde_json::json!({"kind":"active"}),
+            serde_json::json!({"kind":"default"}),
+            serde_json::json!({"kind":"id","profileID":"aaaaaaaa-bbbb-5ccc-8ddd-eeeeeeeeeeee"}),
+            serde_json::json!({"kind":"name","name":"Work shortcuts"}),
+        ] {
+            assert!(matches!(
+                decode_request(&request(
+                    serde_json::json!({"type":"launch-profile","profile":selector})
+                ))
+                .unwrap()
+                .command,
+                Command::LaunchProfile { .. }
+            ));
+        }
+        for command in [
+            serde_json::json!({"type":"launch-profile"}),
+            serde_json::json!({"type":"launch-profile","profile":{"kind":"id","profileID":"invalid"}}),
+            serde_json::json!({"type":"launch-profile","profile":{"kind":"name","name":""}}),
+            serde_json::json!({"type":"launch-profile","profile":{"kind":"name","name":"x".repeat(257)}}),
+            serde_json::json!({"type":"launch-profile","profile":{"kind":"name","name":"line\nbreak"}}),
+            serde_json::json!({"type":"launch-profile","profile":{"kind":"active","filePath":"/Applications/Other.app"}}),
+            serde_json::json!({"type":"launch-profile","profile":{"kind":"active"},"bundleIdentifier":"com.other.app"}),
+        ] {
+            assert!(decode_request(&request(command)).is_err());
+        }
     }
 
     #[test]

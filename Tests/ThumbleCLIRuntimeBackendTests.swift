@@ -1,5 +1,6 @@
 import Foundation
 import XCTest
+import Testing
 
 final class ThumbleCLIRuntimeBackendTests: XCTestCase {
     private let id = UUID(uuidString: "AAAAAAAA-BBBB-5CCC-8DDD-EEEEEEEEEEEE")!
@@ -138,5 +139,68 @@ final class ThumbleCLIRuntimeBackendTests: XCTestCase {
         if let response { text += ",\"response\":\(response)" }
         if let error { text += ",\"error\":{\"code\":\"\(error)\",\"message\":\"Unavailable\"}" }
         return Data((text + "}\n").utf8)
+    }
+}
+
+
+struct RuntimeProfileLaunchTests {
+    private let invocation = UUID(uuidString: "AAAAAAAA-BBBB-5CCC-8DDD-EEEEEEEEEEEE")!
+    private let profile = UUID(uuidString: "11111111-2222-4333-8444-555555555555")!
+
+    @Test func launchCarriesOnlyTheTypedProfileSelector() throws {
+        for selector in [ThumbleCLIProfileBackend.ProfileSelector.active, .default, .id(profile), .name("Work shortcuts")] {
+            let data = try ThumbleCLIRuntimeBackend.requestFrame(.launchProfile(selector), invocationID: invocation)
+            let root = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+            let command = try #require(root["runtimeCommand"] as? [String: Any])
+            #expect(Set(command.keys) == ["type", "profile"])
+            #expect(command["type"] as? String == "launch-profile")
+        }
+        for name in ["", "line\nbreak", String(repeating: "x", count: 257)] {
+            #expect(throws: (any Error).self) {
+                try ThumbleCLIRuntimeBackend.requestFrame(.launchProfile(.name(name)), invocationID: invocation)
+            }
+        }
+    }
+
+    @Test func launchAcknowledgementMustMatchTheRequestedProfile() throws {
+        let other = UUID()
+        for acknowledged in [profile, other] {
+            let backend = ThumbleCLIRuntimeBackend(transport: { _ in
+                (0, self.frame(profile: acknowledged, phase: "resolving"))
+            })
+            if acknowledged == profile {
+                let route = try backend.route(.launchProfile(.id(profile)), invocationID: invocation, legacyStatus: { _ in
+                    Issue.record("Rust launch must not consult legacy state")
+                    return Data()
+                })
+                guard case .rust(let response) = route else { Issue.record("Expected Rust owner"); return }
+                #expect(response.control?.applicationLaunch?.profileID == profile)
+            } else {
+                #expect(throws: (any Error).self) {
+                    try backend.route(.launchProfile(.id(profile)), invocationID: invocation, legacyStatus: { _ in
+                        Issue.record("Mismatched acknowledgement must not fall back")
+                        return Data()
+                    })
+                }
+            }
+        }
+    }
+
+    @Test func launchProjectionRejectsInvalidPhaseAndFailureMetadata() throws {
+        for (phase, code) in [("unknown", nil), ("failed", nil), ("resolving", "unexpected"), ("failed", "path/unsafe")] as [(String, String?)] {
+            #expect(throws: (any Error).self) {
+                try ThumbleCLIRuntimeBackend.decodeResponse(frame(profile: profile, phase: phase, code: code), invocationID: invocation)
+            }
+        }
+        let failed = try ThumbleCLIRuntimeBackend.decodeResponse(frame(profile: profile, phase: "failed", code: "application_not_found"), invocationID: invocation)
+        #expect(failed.control?.applicationLaunch?.errorCode == "application_not_found")
+    }
+
+    private func frame(profile: UUID, phase: String, code: String? = nil) -> Data {
+        var launch: [String: Any] = ["launchID": UUID().uuidString, "profileID": profile.uuidString, "phase": phase]
+        if let code { launch["errorCode"] = code }
+        let root: [String: Any] = ["schemaVersion": 1, "ok": true, "invocationID": invocation.uuidString,
+            "owner": "rust", "response": ["ok": true, "applicationLaunch": launch]]
+        return (try! JSONSerialization.data(withJSONObject: root)) + Data([10])
     }
 }

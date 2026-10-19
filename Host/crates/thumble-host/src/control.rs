@@ -106,6 +106,13 @@ pub enum ControlRequest {
         #[serde(rename = "profileID")]
         profile_id: String,
     },
+    LaunchProfileSelection {
+        profile: crate::cli_profile::ProfileSelector,
+    },
+    LaunchProfile {
+        #[serde(rename = "profileID")]
+        profile_id: Option<String>,
+    },
     PressControl {
         #[serde(rename = "controlID")]
         control_id: String,
@@ -151,6 +158,8 @@ pub struct HostStatus {
     pub output: OutputSnapshot,
     #[serde(default)]
     pub realtime: crate::realtime::RealtimeStatus,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub application_launch: Option<crate::application_launch::LaunchStatus>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -294,6 +303,8 @@ pub struct ControlResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub stopping: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub application_launch: Option<crate::application_launch::LaunchStatus>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub released: Option<bool>,
 }
 
@@ -329,6 +340,7 @@ impl ControlResponse {
             pressed_control_id: None,
             profile_changed: None,
             stopping: None,
+            application_launch: None,
             released: None,
         }
     }

@@ -82,7 +82,12 @@ fn profile_selection_default_and_request_emit_complete_raw_state() {
         Some(PROFILE_A)
     );
     assert_eq!(response.binding_presentations, Some(Vec::new()));
-    assert_eq!(response.capabilities, Some(Vec::new()));
+    assert_eq!(
+        response.capabilities,
+        Some(vec![
+            thumble_protocol::ControllerCapability::GamepadProfileOrientationPreferenceMutation
+        ])
+    );
     assert_eq!(
         response.gamepad_profiles.as_ref().unwrap()[1]["unknownB"],
         true
@@ -375,4 +380,171 @@ fn invalid_profile_ids_are_rejected_without_state_changes() {
     let effects = core.handle_message(1, select, 0, &mut no_tokens()).unwrap();
     assert_eq!(diagnostic_text(&effects), "Selected profile does not exist");
     assert_eq!(core.status().active_profile_id, PROFILE_A);
+}
+
+fn orientation_mutation(
+    id: Option<&str>,
+    preference: Option<thumble_protocol::GamepadProfileOrientationPreference>,
+) -> ControllerMessage {
+    let mut request = ControllerMessage::new(
+        ControllerMessageType::GamepadProfileOrientationPreferenceMutation,
+        0,
+    );
+    request.gamepad_profile_id = id.map(str::to_owned);
+    request.gamepad_profile_orientation_preference_mutation = preference;
+    request
+}
+
+#[test]
+fn orientation_mutation_updates_only_metadata_persists_then_acknowledges_and_is_idempotent() {
+    use thumble_protocol::GamepadProfileOrientationPreference as Preference;
+    let mut core = paired_core();
+    let original = core.persistent_state().clone();
+    let effects = core
+        .handle_message(
+            1,
+            orientation_mutation(Some(&PROFILE_A.to_uppercase()), Some(Preference::Portrait)),
+            42_000,
+            &mut no_tokens(),
+        )
+        .unwrap();
+    let persist = effects
+        .iter()
+        .position(|effect| matches!(effect, Effect::PersistState))
+        .unwrap();
+    let acknowledgement = effects.iter().position(|effect| matches!(effect, Effect::SendMessage { message, .. } if message.message_type == ControllerMessageType::GamepadProfiles)).unwrap();
+    assert!(persist < acknowledgement);
+    let mut expected = original.clone();
+    expected.configuration_revision += 1;
+    expected.profiles[0]["orientationPreference"] = json!("portrait");
+    expected.profiles[0]["updatedAt"] = json!(42_000);
+    assert_eq!(core.persistent_state(), &expected);
+    let response = sent_message(&effects, ControllerMessageType::GamepadProfiles);
+    assert_eq!(
+        response.gamepad_profiles.as_ref().unwrap(),
+        &expected.profiles
+    );
+    let repeated = core
+        .handle_message(
+            1,
+            orientation_mutation(Some(PROFILE_A), Some(Preference::Portrait)),
+            99_000,
+            &mut no_tokens(),
+        )
+        .unwrap();
+    assert_eq!(core.persistent_state(), &expected);
+    assert!(!repeated
+        .iter()
+        .any(|effect| matches!(effect, Effect::PersistState | Effect::KeyUp(_))));
+    sent_message(&repeated, ControllerMessageType::GamepadProfiles);
+    for preference in [Preference::Landscape, Preference::Automatic] {
+        let effects = core
+            .handle_message(
+                1,
+                orientation_mutation(Some(PROFILE_A), Some(preference)),
+                100_000,
+                &mut no_tokens(),
+            )
+            .unwrap();
+        sent_message(&effects, ControllerMessageType::GamepadProfiles);
+    }
+    assert_eq!(
+        core.persistent_state().profiles[0]["orientationPreference"],
+        "automatic"
+    );
+}
+
+#[test]
+fn active_orientation_change_releases_keys_and_retires_old_generation_but_inactive_change_preserves_holds(
+) {
+    use thumble_protocol::GamepadProfileOrientationPreference as Preference;
+    let mut core = paired_core();
+    let held = down(&core, BUTTON_A, 1);
+    core.handle_message(1, held.clone(), 0, &mut no_tokens())
+        .unwrap();
+    let effects = core
+        .handle_message(
+            1,
+            orientation_mutation(Some(PROFILE_B), Some(Preference::Portrait)),
+            1,
+            &mut no_tokens(),
+        )
+        .unwrap();
+    assert!(!effects
+        .iter()
+        .any(|effect| matches!(effect, Effect::KeyUp(_))));
+    let effects = core
+        .handle_message(
+            1,
+            orientation_mutation(Some(PROFILE_A), Some(Preference::Landscape)),
+            2,
+            &mut no_tokens(),
+        )
+        .unwrap();
+    assert!(effects
+        .iter()
+        .any(|effect| matches!(effect, Effect::KeyUp(_))));
+    sent_message(&effects, ControllerMessageType::ReleaseAll);
+    let effects = core.handle_message(1, held, 3, &mut no_tokens()).unwrap();
+    assert!(!effects
+        .iter()
+        .any(|effect| matches!(effect, Effect::KeyDown(_))));
+    assert!(core.counters().stale_generations > 0);
+}
+
+#[test]
+fn malformed_stale_and_unauthenticated_orientation_requests_do_not_mutate_profiles() {
+    use thumble_protocol::GamepadProfileOrientationPreference as Preference;
+    let mut core = paired_core();
+    let original = core.persistent_state().clone();
+    for request in [
+        orientation_mutation(None, Some(Preference::Portrait)),
+        orientation_mutation(Some(PROFILE_A), None),
+    ] {
+        let effects = core
+            .handle_message(1, request, 0, &mut no_tokens())
+            .unwrap();
+        sent_message(&effects, ControllerMessageType::Error);
+        assert_eq!(core.persistent_state(), &original);
+    }
+    let effects = core
+        .handle_message(
+            1,
+            orientation_mutation(Some("missing-profile"), Some(Preference::Portrait)),
+            0,
+            &mut no_tokens(),
+        )
+        .unwrap();
+    sent_message(&effects, ControllerMessageType::GamepadProfiles);
+    assert_eq!(core.persistent_state(), &original);
+    let effects = core
+        .handle_message(
+            2,
+            orientation_mutation(Some(PROFILE_A), Some(Preference::Portrait)),
+            0,
+            &mut no_tokens(),
+        )
+        .unwrap();
+    sent_message(&effects, ControllerMessageType::Error);
+    assert_eq!(core.persistent_state(), &original);
+}
+
+#[test]
+fn orientation_mutation_rejects_revision_exhaustion_without_partial_metadata_change() {
+    use thumble_protocol::GamepadProfileOrientationPreference as Preference;
+    let mut state = profile_state();
+    state.configuration_revision = u64::MAX;
+    let mut core = HostCore::new(state, "111111").unwrap();
+    pair(&mut core, 1, "token");
+    let original = core.persistent_state().clone();
+    let effects = core
+        .handle_message(
+            1,
+            orientation_mutation(Some(PROFILE_A), Some(Preference::Portrait)),
+            0,
+            &mut no_tokens(),
+        )
+        .unwrap();
+    sent_message(&effects, ControllerMessageType::Error);
+    assert_eq!(core.persistent_state(), &original);
 }

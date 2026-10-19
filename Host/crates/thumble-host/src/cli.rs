@@ -64,6 +64,12 @@ pub enum HostCommand {
         #[arg(long)]
         json: bool,
     },
+    /// Launch the attached application of a profile (active by default).
+    LaunchProfile {
+        profile_id: Option<String>,
+        #[arg(long)]
+        json: bool,
+    },
     /// Tap an exact opaque ID returned by `controls`.
     PressControl {
         control_id: String,
@@ -172,6 +178,27 @@ pub async fn execute(cli: Cli, paths: HostPaths) -> Result<(), String> {
         HostCommand::Controls { json } => controls(&paths, json).await,
         HostCommand::SelectProfile { profile_id, json } => {
             select_profile(&paths, profile_id, json).await
+        }
+        HostCommand::LaunchProfile {
+            profile_id,
+            json: json_output,
+        } => {
+            let response = require_ok(
+                send_request(
+                    &paths.control_socket,
+                    &ControlRequest::LaunchProfile { profile_id },
+                )
+                .await?,
+            )?;
+            if json_output {
+                println!(
+                    "{}",
+                    serde_json::to_string(&response).map_err(|e| e.to_string())?
+                );
+            } else {
+                println!("Application launch queued; inspect status for completion");
+            }
+            Ok(())
         }
         HostCommand::PressControl { control_id, json } => {
             press_control(&paths, control_id, json).await

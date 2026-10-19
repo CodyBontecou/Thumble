@@ -181,6 +181,7 @@ fn host_status_snapshot() -> thumble_host::control::HostStatus {
         server_id: "e2e-server".to_owned(),
         pairing_code: String::new(),
         realtime: Default::default(),
+        application_launch: None,
         core: thumble_core::StatusSnapshot {
             running: true,
             paired: true,

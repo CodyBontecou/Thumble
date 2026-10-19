@@ -3905,6 +3905,16 @@ fn resolve_name<'a>(
     }
 }
 
+pub(crate) fn resolve_runtime_profile(
+    state: &PersistentState,
+    selector: &ProfileSelector,
+) -> Result<String, Box<CliProfileError>> {
+    let catalog = catalog_from_state(state).map_err(|failure| failure.error)?;
+    resolve_selector(selector, &catalog)
+        .map(|profile| profile.profile_id.hyphenated().to_string())
+        .map_err(|failure| failure.error)
+}
+
 fn catalog_from_state(state: &PersistentState) -> Result<CliProfileCatalog, TransactionFailure> {
     catalog_from_parts(
         &state.profiles,
@@ -7463,6 +7473,31 @@ mod tests {
         assert!(!json.contains("secret-token"));
         assert!(!json.contains("customization"));
         assert!(!json.contains("server"));
+    }
+
+    #[test]
+    fn orientation_set_cli_plans_all_native_preferences_for_the_installed_profile() {
+        let state = PersistentState::minimal("server").unwrap();
+        let catalog = catalog_from_state(&state).unwrap();
+        for preference in [
+            ConfigurationOrientationPreference::Automatic,
+            ConfigurationOrientationPreference::Portrait,
+            ConfigurationOrientationPreference::Landscape,
+        ] {
+            let plan = plan_transaction(
+                &CliProfileCommand::OrientationSet {
+                    target: ProfileSelector::Active,
+                    preference,
+                },
+                &catalog,
+                &state.profiles,
+                Uuid::parse_str("aaaaaaaa-bbbb-5ccc-8ddd-eeeeeeeeeeee").unwrap(),
+            )
+            .unwrap();
+            assert!(matches!(plan.operations.as_slice(),
+                [ConfigurationOperation::OrientationSet { profile_id, preference: planned }]
+                if profile_id == &state.active_profile_id && planned == &preference));
+        }
     }
 
     #[test]

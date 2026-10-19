@@ -2,5 +2,8 @@
 Host/fixtures/**/*.json text eol=lf
 Host/crates/thumble-receiver/fixtures/*.json text eol=lf
 
+# Preserve the exact upstream Unicode conformance inputs and their pinned hashes.
+Host/fixtures/unicode/**/GraphemeBreakTest.txt -whitespace
+
 # Store Windows launchers canonically and check them out with CRLF.
 *.bat text eol=crlf
