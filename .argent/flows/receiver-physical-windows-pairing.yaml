@@ -1,0 +1,128 @@
+steps:
+  - tap:
+      id: chevron.down
+  - tool: gesture-swipe
+    args:
+      fromX: 0.5
+      fromY: 0.08
+      toX: 0.5
+      toY: 0.22
+      durationMs: 300
+      momentum: false
+  - tool: await-ui-element
+    args:
+      selector:
+        text: Home
+      condition: visible
+      timeoutMs: 7000
+  - tap:
+      id: house.fill
+  - tool: await-ui-element
+    args:
+      selector:
+        text: Manual Connection
+      condition: visible
+      timeoutMs: 6000
+  - run: receiver-physical-scroll-inputs.yaml
+  - tap:
+      text: 192.168.1.149
+  - tool: run-sequence
+    args:
+      steps:
+        - tool: keyboard
+          args:
+            key: backspace
+          delayMs: 0
+        - tool: keyboard
+          args:
+            key: backspace
+          delayMs: 0
+        - tool: keyboard
+          args:
+            key: backspace
+          delayMs: 0
+        - tool: keyboard
+          args:
+            key: backspace
+          delayMs: 0
+        - tool: keyboard
+          args:
+            key: backspace
+          delayMs: 0
+        - tool: keyboard
+          args:
+            key: backspace
+          delayMs: 0
+        - tool: keyboard
+          args:
+            key: backspace
+          delayMs: 0
+        - tool: keyboard
+          args:
+            key: backspace
+          delayMs: 0
+        - tool: keyboard
+          args:
+            key: backspace
+          delayMs: 0
+        - tool: keyboard
+          args:
+            key: backspace
+          delayMs: 0
+        - tool: keyboard
+          args:
+            key: backspace
+          delayMs: 0
+        - tool: keyboard
+          args:
+            key: backspace
+          delayMs: 0
+        - tool: keyboard
+          args:
+            key: backspace
+          delayMs: 0
+        - tool: keyboard
+          args:
+            key: backspace
+          delayMs: 0
+        - tool: keyboard
+          args:
+            key: backspace
+          delayMs: 0
+        - tool: keyboard
+          args:
+            key: backspace
+          delayMs: 0
+        - tool: keyboard
+          args:
+            text: "{{secret:RECEIVER_PHYSICAL_WINDOWS_URL}}"
+        - tool: keyboard
+          args:
+            key: enter
+  - tap:
+      text: Requesting…
+  - tool: await-ui-element
+    args:
+      selector:
+        text: Pairing request accepted
+      condition: visible
+      timeoutMs: 10000
+  - tool: run-sequence
+    args:
+      steps:
+        - tool: keyboard
+          args:
+            text: "{{secret:RECEIVER_PHYSICAL_WINDOWS_CODE}}"
+        - tool: keyboard
+          args:
+            key: enter
+  - tap:
+      text: Pair
+  - tool: await-ui-element
+    args:
+      selector:
+        identifier: keypad.button.00000000-0000-0000-0000-000000000105
+      condition: visible
+      timeoutMs: 10000
+executionPrerequisite: Physical iPhone 13 Pro Max currently connected to the
+  Linux acceptance keypad; temporary Windows session ready.

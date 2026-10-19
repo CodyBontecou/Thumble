@@ -12,6 +12,7 @@ pub mod native_configuration;
 pub mod output;
 pub mod paths;
 pub mod platform;
+pub mod realtime;
 pub mod runtime;
 pub mod storage;
 pub mod three_way_merge;

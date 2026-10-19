@@ -1,0 +1,5 @@
+executionPrerequisite: Thumble physical iPhone connection screen open
+steps:
+  - scroll-to:
+      target: { text: iPhone Settings }
+      direction: down

@@ -1,0 +1,3 @@
+# Grant the active local desktop user access through systemd-logind ACLs.
+# Install before 73-seat-late.rules so the uaccess builtin sees this tag.
+KERNEL=="uinput", SUBSYSTEM=="misc", TAG+="uaccess", OPTIONS+="static_node=uinput"

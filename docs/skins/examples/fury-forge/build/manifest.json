@@ -1,0 +1,113 @@
+{
+  "assets" : [
+    {
+      "byteCount" : 104754,
+      "contentType" : "image/png",
+      "id" : "forge-landscape-light",
+      "path" : "assets/forge-landscape-light.png",
+      "role" : "texture",
+      "sha256" : "c1ad1ba20448089842eb1e478dbff41a1b7b302690a0e53120e4b4f6db51baf2"
+    },
+    {
+      "byteCount" : 105529,
+      "contentType" : "image/png",
+      "id" : "forge-landscape-dark",
+      "path" : "assets/forge-landscape-dark.png",
+      "role" : "texture",
+      "sha256" : "903041d7d484c023fa2bd1477c4ddb62c7abfbe78b91d57cadd9e5a879839b37"
+    },
+    {
+      "byteCount" : 75233,
+      "contentType" : "image/png",
+      "id" : "forge-portrait-light",
+      "path" : "assets/forge-portrait-light.png",
+      "role" : "texture",
+      "sha256" : "6f7c8e2d3ec48b535f3bbf56fc1f59ff90b2efa885ae2744a926ca6be81974b0"
+    },
+    {
+      "byteCount" : 74377,
+      "contentType" : "image/png",
+      "id" : "forge-portrait-dark",
+      "path" : "assets/forge-portrait-dark.png",
+      "role" : "texture",
+      "sha256" : "c1f4c6c6ce8a715373c63118ca7644263bb3929292b160af865be0be2ecde0c5"
+    },
+    {
+      "byteCount" : 7688,
+      "contentType" : "image/png",
+      "id" : "bloodthirst",
+      "path" : "assets/bloodthirst.png",
+      "role" : "icon",
+      "sha256" : "1b5e2e478760678f3889a5d104ecc8a0dbade0975e09cf8c20c87e80b95c92e8"
+    },
+    {
+      "byteCount" : 7347,
+      "contentType" : "image/png",
+      "id" : "cleave",
+      "path" : "assets/cleave.png",
+      "role" : "icon",
+      "sha256" : "812930b564dbd7f52bc152556a53a448757dac27c4a856f152aa33646e4e3efc"
+    },
+    {
+      "byteCount" : 8146,
+      "contentType" : "image/png",
+      "id" : "execute",
+      "path" : "assets/execute.png",
+      "role" : "icon",
+      "sha256" : "7a89efebd73e1ba13869d0c3be4472e3ba1e310d7c1e3b4e29ae05b863954f46"
+    },
+    {
+      "byteCount" : 8249,
+      "contentType" : "image/png",
+      "id" : "whirlwind",
+      "path" : "assets/whirlwind.png",
+      "role" : "icon",
+      "sha256" : "77146dd1f180bcdf493ccb38cfb2086bc9833a4a5cc0ae158fa1c2bf8ae209df"
+    }
+  ],
+  "author" : {
+    "name" : "Thumble Studio"
+  },
+  "compatibility" : {
+    "maximumAspectRatio" : 2.5,
+    "minimumAspectRatio" : 0.4,
+    "mode" : "template_aligned",
+    "orientations" : [
+      "landscape",
+      "portrait"
+    ],
+    "requiredFeatures" : [
+      "artwork_layers"
+    ],
+    "requiredRoles" : [
+      "joystick"
+    ],
+    "templates" : [
+      {
+        "maximumRevision" : 1,
+        "minimumRevision" : 1,
+        "templateID" : "wowforever"
+      }
+    ]
+  },
+  "identifier" : "com.thumble.fury-forge",
+  "kind" : "skin",
+  "license" : "Original framing MIT; Blizzard icons © Blizzard Entertainment (all rights reserved)",
+  "minimumAppVersion" : "1.0.0",
+  "name" : "Fury Forge",
+  "previews" : [
+
+  ],
+  "schema" : "com.codybontecou.pocketpad.skin-package",
+  "schemaVersion" : 2,
+  "skinPath" : "skin.json",
+  "skinSHA256" : "352763f9c2259f519dbdeec40dfad92e236f5891b7b25c44252877d66606a15d",
+  "summary" : "Original machined steel framing and crimson heat seams around authentic Blizzard WoW ability icons.",
+  "tags" : [
+    "css",
+    "handcrafted",
+    "thumble-css-core-1",
+    "wow-forever-v1"
+  ],
+  "version" : "1.0.0"
+}

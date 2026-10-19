@@ -167,6 +167,7 @@ struct ThumbleCLI {
         var orientation: String
         var colorScheme: String
         var state: String
+        var actionSet: String
         var contactSheet: Bool
         var output: String
         var frameCount: Int
@@ -261,6 +262,8 @@ struct ThumbleCLI {
             try generate(arguments: ["--spec", path] + Array(rest.dropFirst()))
         case "profile", "profiles":
             try profile(arguments: rest)
+        case "wow":
+            try importThumbleLink(arguments: rest)
         case "template", "templates":
             try template(arguments: rest)
         case "theme", "themes":
@@ -1172,6 +1175,80 @@ struct ThumbleCLI {
         try writeRawProfileArtifact(artifact.artifactJSON, to: parsed.outputPath)
     }
 
+    private static func importThumbleLink(arguments: [String]) throws {
+        let usage = "Usage: thumble wow import <export.txt|->|--clipboard [--name NAME] [--dry-run] [--json] [--no-select]"
+        guard arguments.first == "import" else { throw CLIError.message(usage) }
+        var path: String?
+        var name: String?
+        var clipboard = false
+        var dryRun = false
+        var json = false
+        var select = true
+        var index = 1
+        while index < arguments.count {
+            let argument = arguments[index]
+            switch argument {
+            case "--clipboard": clipboard = true
+            case "--dry-run": dryRun = true
+            case "--json": json = true
+            case "--no-select": select = false
+            case "--name":
+                index += 1
+                guard index < arguments.count, name == nil else { throw CLIError.message(usage) }
+                name = arguments[index]
+            default:
+                guard path == nil, argument == "-" || !argument.hasPrefix("-") else { throw CLIError.message(usage) }
+                path = argument
+            }
+            index += 1
+        }
+        guard (clipboard && path == nil) || (!clipboard && path != nil) else { throw CLIError.message(usage) }
+        let text: String
+        if clipboard {
+            guard let value = NSPasteboard.general.string(forType: .string) else { throw CLIError.message("The clipboard contains no text.") }
+            text = value
+        } else if path == "-" {
+            var data = Data()
+            while let chunk = try FileHandle.standardInput.read(upToCount: min(64 * 1024, ThumbleLinkSnapshot.maximumBytes + 1 - data.count)), !chunk.isEmpty {
+                data.append(chunk)
+                guard data.count <= ThumbleLinkSnapshot.maximumBytes else { throw ThumbleLinkError("The export exceeds the 256 KiB limit.") }
+            }
+            guard let value = String(data: data, encoding: .utf8) else { throw ThumbleLinkError("The export must be UTF-8 text.") }
+            text = value
+        } else {
+            text = try readBoundedProfileArtifact(at: URL(fileURLWithPath: path!))
+        }
+        // Validate the untrusted export before contacting the profile authority.
+        _ = try ThumbleLinkSnapshot.parse(text)
+        let backend = try profileBackend()
+        let response = try backend.perform(.export(nil))
+        guard let artifact = response.artifact else { throw CLIError.message("Profile authority returned no current configuration.") }
+        let plan = try ThumbleLinkImport.prepare(text: text, currentConfiguration: Data(artifact.artifactJSON.utf8), name: name)
+        var imported = false
+        if !dryRun {
+            _ = try backend.perform(.import(artifactJSON: String(decoding: plan.configurationData, as: UTF8.self),
+                appendAsCopies: false, select: select, makeDefault: false),
+                expectedConfigurationRevision: artifact.configurationRevision)
+            imported = true
+        }
+        if json {
+            let rows: [[String: Any]] = plan.rows.map { row in
+                ["command": row.command, "label": row.label, "key": row.key as Any? ?? NSNull(),
+                 "issue": row.issue as Any? ?? NSNull(), "note": row.note as Any? ?? NSNull()]
+            }
+            let data = try JSONSerialization.data(withJSONObject: ["profileName": plan.profileName,
+                "profileID": plan.snapshot.profileID.uuidString, "isRefresh": plan.isRefresh,
+                "imported": imported, "rows": rows, "warnings": plan.warnings], options: [.prettyPrinted, .sortedKeys])
+            print(String(decoding: data, as: UTF8.self))
+        } else {
+            print("\(dryRun ? "Review" : "Imported"): \(plan.profileName)\(plan.isRefresh ? " (refresh)" : " (new setup)")")
+            for row in plan.rows {
+                print("  \(row.label): \(row.key ?? row.issue ?? "Skipped")\(row.note.map { " (\($0))" } ?? "")")
+            }
+            for warning in plan.warnings { print("Note: \(warning)") }
+        }
+    }
+
     private static func importProfiles(arguments: [String]) throws {
         let parsed = try parseProfileImportArguments(arguments)
         let path = parsed.path
@@ -2069,7 +2146,7 @@ struct ThumbleCLI {
 
     private static func renderSkinPreview(command: String, arguments: [String]) throws {
         guard let target = firstPositional(in: arguments) else {
-            throw CLIError.message("Usage: thumble skin preview SOURCE|PACKAGE -o OUTPUT [--all-variants] [--all-states] [--contact-sheet] [--json]")
+            throw CLIError.message("Usage: thumble skin preview SOURCE|PACKAGE -o OUTPUT [--all-variants] [--all-states] [--action-set SET|--all-action-sets] [--contact-sheet] [--json]")
         }
         guard let output = optionValue("--output", in: arguments) ?? optionValue("-o", in: arguments) else {
             throw CLIError.message("skin \(command) requires -o <preview.png|frames-directory>")
@@ -2099,10 +2176,9 @@ struct ThumbleCLI {
             package = try resolveSkinPackage(target).package
         }
 
-        let profileStore = try loadStore()
         let profile: GamepadConfigurationProfile
         if let requested = optionValue("--profile", in: arguments) {
-            profile = try resolveProfile(requested, in: profileStore)
+            profile = try resolveProfile(requested, in: loadStore())
         } else if let requestedArtboard = optionValue("--artboard", in: arguments),
                   let canonical = ThumbleSkinArtboardCatalog.profile(for: requestedArtboard) {
             profile = canonical
@@ -2115,7 +2191,7 @@ struct ThumbleCLI {
         } else if let canonical = ThumbleSkinArtboardCatalog.profile(for: ThumbleSkinArtboardCatalog.defaultID) {
             profile = canonical
         } else {
-            profile = try resolveProfile(nil, in: profileStore)
+            profile = try resolveProfile(nil, in: loadStore())
         }
 
         let requestsAllVariants = arguments.contains("--all-variants")
@@ -2160,26 +2236,34 @@ struct ThumbleCLI {
             throw CLIError.message("Preview scale must be a number between 0.5 and 4.")
         }
 
+        let actionSetValue = optionValue("--action-set", in: arguments)
+        let allActionSets = arguments.contains("--all-action-sets") || actionSetValue == "all"
+        let actionSets = allActionSets ? ThumbleActionSet.allCases
+            : [try parseActionSet(actionSetValue ?? "base")]
+        let includesActionSetTitle = allActionSets || actionSetValue != nil
         let preserveOverrides = arguments.contains("--preserve-overrides")
         var items: [ThumbleNativeSkinPreviewItem] = []
         for orientation in orientations {
             let deviceOrientation: GamepadEditorDeviceOrientation = orientation == .portrait ? .portrait : .landscape
             let source = profile.customization(for: deviceOrientation)
             for scheme in schemes {
-                let rendered = source.applying(
-                    skinPackage: package,
-                    orientation: orientation,
-                    colorScheme: scheme,
-                    options: preserveOverrides ? .preservingUserOverrides : .replacingAppearance,
-                    overrideBaseline: preserveOverrides ? profile.skinBaseline(for: deviceOrientation) : nil
-                )
-                for state in states {
-                    items.append(ThumbleNativeSkinPreviewItem(
-                        title: "\(orientation.rawValue) · \(scheme.rawValue) · \(state.rawValue)",
-                        customization: rendered,
+                for actionSet in actionSets {
+                    let rendered = source.applying(
+                        skinPackage: package,
+                        orientation: orientation,
                         colorScheme: scheme,
-                        state: state
-                    ))
+                        options: preserveOverrides ? .preservingUserOverrides : .replacingAppearance,
+                        overrideBaseline: preserveOverrides ? profile.skinBaseline(for: deviceOrientation) : nil,
+                        actionSet: actionSet
+                    )
+                    for state in states {
+                        items.append(ThumbleNativeSkinPreviewItem(
+                            title: "\(orientation.rawValue) · \(scheme.rawValue) · \(state.rawValue)" + (includesActionSetTitle ? " · " + actionSet.rawValue : ""),
+                            customization: rendered,
+                            colorScheme: scheme,
+                            state: state
+                        ))
+                    }
                 }
             }
         }
@@ -2266,6 +2350,7 @@ struct ThumbleCLI {
                 orientation: orientationLabel,
                 colorScheme: schemeLabel,
                 state: stateLabel,
+                actionSet: actionSets.count > 1 ? "all" : actionSets[0].rawValue,
                 contactSheet: contactSheet,
                 output: reportedOutput,
                 frameCount: items.count,
@@ -2383,14 +2468,15 @@ struct ThumbleCLI {
             }
         case "computed":
             guard let target = firstPositional(in: rest) else {
-                throw CLIError.message("Usage: thumble skin css computed <workspace> [--control ID] [--orientation portrait|landscape] [--scheme light|dark] [--state normal|pressed|active|disabled] [--json]")
+                throw CLIError.message("Usage: thumble skin css computed <workspace> [--control ID] [--orientation portrait|landscape] [--scheme light|dark] [--state normal|pressed|active|disabled] [--action-set base|left-trigger|right-trigger|both-triggers] [--json]")
             }
             let loaded = try loadCSSLintTarget(target)
             defer { loaded.cleanup?() }
             let documents = try ThumbleCSSCompiler.computed(
                 workspace: loaded.workspace,
                 sourceRoot: loaded.root,
-                fileManager: .default
+                fileManager: .default,
+                actionSet: try parseActionSet(optionValue("--action-set", in: rest) ?? "base")
             )
             let controlID = optionValue("--control", in: rest)?.lowercased()
             let orientation = try optionValue("--orientation", in: rest).map { value in
@@ -2643,6 +2729,13 @@ struct ThumbleCLI {
         let url = try safePackageFileURL(path, root: root)
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         try data.write(to: url, options: [.atomic])
+    }
+
+    private static func parseActionSet(_ value: String) throws -> ThumbleActionSet {
+        guard let actionSet = ThumbleActionSet(rawValue: value.lowercased()) else {
+            throw CLIError.message("Invalid action set. Use base, left-trigger, right-trigger, or both-triggers.")
+        }
+        return actionSet
     }
 
     private static func parseSkinColorScheme(_ value: String) throws -> ThumbleSkinColorScheme {
@@ -8811,11 +8904,13 @@ struct ThumbleCLI {
           thumble profile launch [NAME|UUID|--profile PROFILE]
           thumble profile export [NAME|UUID|--all] [-o file.json] [--invocation-id UUID]
           thumble profile import file.json [--append] [--no-select] [--default] [--name NAME] [--invocation-id UUID]
+          thumble wow import <export.txt|->|--clipboard [--name NAME] [--dry-run] [--json] [--no-select]
 
         Templates:
           thumble template list
           thumble template install nes [--name "My NES"] [--default]
           thumble template install softWhite [--name "Soft Pad"]
+          thumble template install wowForever [--name "WoW Mage Frost"]
 
         Themes:
           thumble theme list
@@ -8830,9 +8925,9 @@ struct ThumbleCLI {
           thumble skin scaffold NAME --identifier REVERSE.DNS.ID [--artboard ARTBOARD] [-o DIRECTORY] [--css] [--force]
           thumble skin css capabilities [--json]
           thumble skin css lint WORKSPACE|STYLESHEET.css [--json]
-          thumble skin css computed WORKSPACE [--control ID] [--orientation portrait|landscape] [--scheme light|dark] [--state normal|pressed|active|disabled] [--json]
+          thumble skin css computed WORKSPACE [--control ID] [--orientation portrait|landscape] [--scheme light|dark] [--state normal|pressed|active|disabled] [--action-set base|left-trigger|right-trigger|both-triggers] [--json]
           thumble skin compile SOURCE [-o skin.pocketpad] [--build-directory DIRECTORY] [--clean] [--strict] [--json]
-          thumble skin preview SOURCE|PACKAGE -o OUTPUT [--artboard ARTBOARD] [--all-variants] [--all-states] [--orientation all|portrait|landscape] [--appearance all|light|dark] [--state all|normal|pressed|active|disabled] [--native-renderer] [--contact-sheet] [--columns N] [--render-scale 0.5...4]
+          thumble skin preview SOURCE|PACKAGE -o OUTPUT [--artboard ARTBOARD] [--all-variants] [--all-states] [--orientation all|portrait|landscape] [--appearance all|light|dark] [--state all|normal|pressed|active|disabled] [--action-set base|left-trigger|right-trigger|both-triggers] [--all-action-sets] [--native-renderer] [--contact-sheet] [--columns N] [--render-scale 0.5...4]
           thumble skin quality SOURCE|PACKAGE [--artboard ARTBOARD] [--strict] [--json]
           thumble skin list [--json]
           thumble skin inspect PACKAGE|IDENTIFIER[@VERSION] [--json]

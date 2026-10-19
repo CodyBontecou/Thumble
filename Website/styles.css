@@ -2356,3 +2356,57 @@ h3 {
     grid-template-columns: 1fr;
   }
 }
+
+/* Native controller screenshots preserve their complete app viewport. */
+.gaming {
+  padding-top: 88px;
+  scroll-margin-top: 100px;
+}
+
+.gaming-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  gap: 48px;
+  margin-bottom: 32px;
+}
+
+.gaming-heading .eyebrow { margin-bottom: 18px; }
+.gaming-heading h2 { margin: 0; font-size: clamp(2.4rem, 4.5vw, 3.8rem); line-height: 1.02; letter-spacing: -0.055em; }
+.gaming-heading > p { max-width: 340px; margin: 0 0 3px; font-size: 0.9rem; line-height: 1.65; color: var(--muted); }
+.game-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+.game-card { min-width: 0; border: 1px solid var(--line); background: var(--paper); }
+.game-capture { margin: 0; background: #000; color: #b4b4b4; border-bottom: 1px solid var(--line); }
+.game-capture > a { display: block; padding: 12px 8px; }
+.game-capture img { display: block; width: 100%; height: auto; aspect-ratio: 2622 / 1206; object-fit: contain; }
+.game-capture > a:focus-visible { outline: 2px solid var(--orange); outline-offset: -3px; }
+.game-capture figcaption { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; padding: 12px 16px; border-top: 1px solid #272727; font-size: 0.56rem; text-transform: uppercase; letter-spacing: 0.02em; }
+.game-copy { padding: 26px 28px 24px; }
+.game-copy h3 { font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; text-transform: none; font-size: 1.6rem; font-weight: 600; letter-spacing: -0.045em; margin-bottom: 12px; }
+.game-copy p { color: var(--muted); font-size: 0.86rem; line-height: 1.65; margin: 0 0 24px; max-width: 50ch; }
+.game-copy a, .controller-summary a { display: flex; align-items: center; justify-content: space-between; gap: 14px; font-size: 0.78rem; font-weight: 700; text-decoration: none; }
+.game-copy a { padding-top: 16px; border-top: 1px solid #d4cdbf; }
+.game-copy a:hover, .controller-summary a:hover { color: #ae4600; }
+.game-copy a:focus-visible, .controller-summary a:focus-visible { outline: 2px solid var(--orange); outline-offset: 5px; }
+.controller-summary { display: grid; grid-template-columns: 1.1fr 1fr auto; align-items: center; gap: 32px; padding: 28px 0; margin-top: 8px; border-bottom: 1px solid #c9c1b3; }
+.controller-summary .eyebrow { font-size: 0.6rem; }
+.controller-summary h3 { margin: 8px 0 0; text-transform: none; font-size: 0.95rem; letter-spacing: -0.035em; }
+.controller-summary p { margin: 0; max-width: 36ch; color: var(--muted); font-size: 0.78rem; line-height: 1.6; }
+.gaming-release-note { max-width: 100ch; margin: 18px 0 0; color: var(--muted); font-size: 0.67rem; line-height: 1.7; }
+.gaming-release-note a { text-underline-offset: 3px; }
+
+@media (max-width: 900px) {
+  .gaming-heading { gap: 24px; }
+  .gaming-heading > p { max-width: 280px; }
+  .game-grid { gap: 16px; }
+  .game-copy { padding: 22px; }
+}
+
+@media (max-width: 680px) {
+  .gaming { padding-top: 56px; scroll-margin-top: 125px; }
+  .gaming-heading { display: block; margin-bottom: 24px; }
+  .gaming-heading > p { max-width: 38ch; margin-top: 18px; font-size: 0.85rem; }
+  .game-grid { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  .controller-summary { grid-template-columns: 1fr; gap: 14px; padding: 24px 0; }
+  .controller-summary a { justify-content: start; }
+}

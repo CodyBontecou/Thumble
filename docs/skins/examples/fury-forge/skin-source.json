@@ -1,0 +1,357 @@
+{
+  "artboardID": "wow-forever-v1",
+  "assignments": [],
+  "author": {
+    "name": "Thumble Studio"
+  },
+  "colorSchemes": [
+    "light",
+    "dark"
+  ],
+  "components": [],
+  "identifier": "com.thumble.fury-forge",
+  "license": "Original framing MIT; Blizzard icons \u00a9 Blizzard Entertainment (all rights reserved)",
+  "materials": [],
+  "name": "Fury Forge",
+  "orientations": [
+    "landscape",
+    "portrait"
+  ],
+  "palette": [
+    {
+      "id": "steel",
+      "light": "#C4C7C9",
+      "dark": "#252A30"
+    },
+    {
+      "id": "rage",
+      "light": "#A72532",
+      "dark": "#DC4349"
+    },
+    {
+      "id": "ground",
+      "light": "#E3DFD8",
+      "dark": "#111316"
+    }
+  ],
+  "previews": [
+    {
+      "artboardID": "wow-forever-v1",
+      "colorScheme": "light",
+      "id": "landscape-light-normal",
+      "orientation": "landscape",
+      "scale": 2,
+      "state": "normal"
+    },
+    {
+      "artboardID": "wow-forever-v1",
+      "colorScheme": "dark",
+      "id": "landscape-dark-normal",
+      "orientation": "landscape",
+      "scale": 2,
+      "state": "normal"
+    },
+    {
+      "artboardID": "wow-forever-v1",
+      "colorScheme": "light",
+      "id": "portrait-light-normal",
+      "orientation": "portrait",
+      "scale": 2,
+      "state": "normal"
+    },
+    {
+      "artboardID": "wow-forever-v1",
+      "colorScheme": "dark",
+      "id": "portrait-dark-normal",
+      "orientation": "portrait",
+      "scale": 2,
+      "state": "normal"
+    }
+  ],
+  "schema": "com.codybontecou.pocketpad.skin-source",
+  "schemaVersion": 3,
+  "sourceAssets": [
+    {
+      "id": "forge-landscape-light",
+      "path": "sources/artwork/forge-landscape-light.svg",
+      "purpose": "canvas_artwork",
+      "format": "png",
+      "outputWidth": 1748,
+      "outputHeight": 804,
+      "orientation": "landscape",
+      "colorScheme": "light",
+      "anchor": {
+        "group": "forge",
+        "scaleX": 1.200918964076859,
+        "scaleY": 1.1424024553127399,
+        "offsetX": -0.004770698676515774,
+        "offsetY": 0.0023444826508284005,
+        "plane": "underlay"
+      }
+    },
+    {
+      "id": "forge-landscape-dark",
+      "path": "sources/artwork/forge-landscape-dark.svg",
+      "purpose": "canvas_artwork",
+      "format": "png",
+      "outputWidth": 1748,
+      "outputHeight": 804,
+      "orientation": "landscape",
+      "colorScheme": "dark",
+      "anchor": {
+        "group": "forge",
+        "scaleX": 1.200918964076859,
+        "scaleY": 1.1424024553127399,
+        "offsetX": -0.004770698676515774,
+        "offsetY": 0.0023444826508284005,
+        "plane": "underlay"
+      }
+    },
+    {
+      "id": "forge-portrait-light",
+      "path": "sources/artwork/forge-portrait-light.svg",
+      "purpose": "canvas_artwork",
+      "format": "png",
+      "outputWidth": 804,
+      "outputHeight": 1748,
+      "orientation": "portrait",
+      "colorScheme": "light",
+      "anchor": {
+        "group": "forge",
+        "scaleX": 1.1298228257936864,
+        "scaleY": 1.1741094098017986,
+        "offsetX": 0.0028105045417753894,
+        "offsetY": -0.01841363578964899,
+        "plane": "underlay"
+      }
+    },
+    {
+      "id": "forge-portrait-dark",
+      "path": "sources/artwork/forge-portrait-dark.svg",
+      "purpose": "canvas_artwork",
+      "format": "png",
+      "outputWidth": 804,
+      "outputHeight": 1748,
+      "orientation": "portrait",
+      "colorScheme": "dark",
+      "anchor": {
+        "group": "forge",
+        "scaleX": 1.1298228257936864,
+        "scaleY": 1.1741094098017986,
+        "offsetX": 0.0028105045417753894,
+        "offsetY": -0.01841363578964899,
+        "plane": "underlay"
+      }
+    },
+    {
+      "id": "bloodthirst",
+      "path": "sources/abilities/bloodthirst.png",
+      "purpose": "icon",
+      "format": "png",
+      "outputWidth": 56,
+      "outputHeight": 56
+    },
+    {
+      "id": "cleave",
+      "path": "sources/abilities/cleave.png",
+      "purpose": "icon",
+      "format": "png",
+      "outputWidth": 56,
+      "outputHeight": 56
+    },
+    {
+      "id": "execute",
+      "path": "sources/abilities/execute.png",
+      "purpose": "icon",
+      "format": "png",
+      "outputWidth": 56,
+      "outputHeight": 56
+    },
+    {
+      "id": "whirlwind",
+      "path": "sources/abilities/whirlwind.png",
+      "purpose": "icon",
+      "format": "png",
+      "outputWidth": 56,
+      "outputHeight": 56
+    }
+  ],
+  "stylesheets": [
+    "styles/controller.css"
+  ],
+  "summary": "Original machined steel framing and crimson heat seams around authentic Blizzard WoW ability icons.",
+  "version": "1.0.0",
+  "controlSemantics": [
+    {
+      "controlID": "builtin.00000000-0000-0000-0000-000000000101",
+      "action": "fury.up",
+      "purpose": "utility.up",
+      "groups": [
+        "utility",
+        "forge"
+      ]
+    },
+    {
+      "controlID": "builtin.00000000-0000-0000-0000-000000000102",
+      "action": "fury.down",
+      "purpose": "utility.down",
+      "groups": [
+        "utility",
+        "forge"
+      ]
+    },
+    {
+      "controlID": "builtin.00000000-0000-0000-0000-000000000103",
+      "action": "fury.left",
+      "purpose": "utility.left",
+      "groups": [
+        "utility",
+        "forge"
+      ]
+    },
+    {
+      "controlID": "builtin.00000000-0000-0000-0000-000000000104",
+      "action": "fury.right",
+      "purpose": "utility.right",
+      "groups": [
+        "utility",
+        "forge"
+      ]
+    },
+    {
+      "controlID": "builtin.00000000-0000-0000-0000-000000000105",
+      "action": "fury.cleave",
+      "purpose": "abilities.cleave",
+      "groups": [
+        "abilities",
+        "forge"
+      ]
+    },
+    {
+      "controlID": "builtin.00000000-0000-0000-0000-000000000106",
+      "action": "fury.bloodthirst",
+      "purpose": "abilities.bloodthirst",
+      "groups": [
+        "abilities",
+        "forge"
+      ]
+    },
+    {
+      "controlID": "builtin.00000000-0000-0000-0000-000000000107",
+      "action": "fury.execute",
+      "purpose": "abilities.execute",
+      "groups": [
+        "abilities",
+        "forge"
+      ]
+    },
+    {
+      "controlID": "builtin.00000000-0000-0000-0000-000000000108",
+      "action": "fury.whirlwind",
+      "purpose": "abilities.whirlwind",
+      "groups": [
+        "abilities",
+        "forge"
+      ]
+    },
+    {
+      "controlID": "builtin.00000000-0000-0000-0000-000000000109",
+      "action": "fury.view",
+      "purpose": "utility.view",
+      "groups": [
+        "utility",
+        "forge"
+      ]
+    },
+    {
+      "controlID": "builtin.00000000-0000-0000-0000-00000000010A",
+      "action": "fury.menu",
+      "purpose": "utility.menu",
+      "groups": [
+        "utility",
+        "forge"
+      ]
+    },
+    {
+      "controlID": "custom.joystick.10",
+      "action": "fury.move",
+      "purpose": "sticks.move",
+      "groups": [
+        "sticks",
+        "forge"
+      ]
+    },
+    {
+      "controlID": "custom.joystick.11",
+      "action": "fury.look",
+      "purpose": "sticks.look",
+      "groups": [
+        "sticks",
+        "forge"
+      ]
+    },
+    {
+      "controlID": "custom.button.12",
+      "action": "fury.lt",
+      "purpose": "utility.lt",
+      "groups": [
+        "utility",
+        "forge"
+      ]
+    },
+    {
+      "controlID": "custom.button.13",
+      "action": "fury.rt",
+      "purpose": "utility.rt",
+      "groups": [
+        "utility",
+        "forge"
+      ]
+    },
+    {
+      "controlID": "custom.button.14",
+      "action": "fury.lb",
+      "purpose": "utility.lb",
+      "groups": [
+        "utility",
+        "forge"
+      ]
+    },
+    {
+      "controlID": "custom.button.15",
+      "action": "fury.rb",
+      "purpose": "utility.rb",
+      "groups": [
+        "utility",
+        "forge"
+      ]
+    },
+    {
+      "controlID": "custom.button.16",
+      "action": "fury.l3",
+      "purpose": "utility.l3",
+      "groups": [
+        "utility",
+        "forge"
+      ]
+    },
+    {
+      "controlID": "custom.button.17",
+      "action": "fury.r3",
+      "purpose": "utility.r3",
+      "groups": [
+        "utility",
+        "forge"
+      ]
+    },
+    {
+      "controlID": "system.top_bar_activation",
+      "action": "fury.control-bar-toggle",
+      "purpose": "utility.control-bar-toggle",
+      "groups": [
+        "utility",
+        "forge"
+      ]
+    }
+  ]
+}

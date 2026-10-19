@@ -103,6 +103,7 @@ fn catalog_is_exact_strict_and_matches_all_seventeen_revisions_and_counts() {
         ("playStation", 1, "PlayStation", "Dual-stick layout with PlayStation face symbols and shoulders", 6),
         ("xbox", 1, "Xbox", "Dual-stick Xbox-style layout with ABXY and triggers", 6),
         ("softWhite", 1, "Soft White Pro", "Premium soft-white neumorphic controller with layered shell, rings, plates, dual sticks, D-pad, ABXY, and shoulder controls", 15),
+        ("wowForever", 1, "WoW Forever", "Native gamepad inputs for WoW Forever with analog movement and camera, held modifiers, and editable class/build profiles", 8),
     ];
     assert_eq!(BuilderTemplate::ALL.len(), expected.len());
     for (template, (id, revision, display_name, description, count)) in
@@ -158,7 +159,12 @@ fn every_template_materializes_portably_and_rewrites_all_canonical_references() 
             builder.document().profile_output_bindings[&summary.profile_id],
             builder.document().output_bindings
         );
-        assert!(!builder.document().key_bindings.is_empty());
+        if template == BuilderTemplate::WowForever {
+            assert!(builder.document().key_bindings.is_empty());
+            assert_eq!(builder.document().profiles[0]["outputMode"], "controller");
+        } else {
+            assert!(!builder.document().key_bindings.is_empty());
+        }
         assert!(!builder.document().output_bindings.is_empty());
         assert_updated_at_zero(&builder.document().profiles[0]);
 

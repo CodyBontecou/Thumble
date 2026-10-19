@@ -1,0 +1,5 @@
+name: Temporary iOS to Windows acceptance session
+description: Keep the desktop and protected tunnel alive while publishing encrypted connection information
+runs:
+  using: node24
+  main: index.cjs

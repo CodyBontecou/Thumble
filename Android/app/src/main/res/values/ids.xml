@@ -1,0 +1,7 @@
+<resources>
+    <item name="control_up" type="id" />
+    <item name="control_down" type="id" />
+    <item name="control_left" type="id" />
+    <item name="control_right" type="id" />
+    <item name="control_right_click" type="id" />
+</resources>

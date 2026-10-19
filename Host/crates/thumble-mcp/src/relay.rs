@@ -1786,6 +1786,7 @@ mod tests {
                         control_socket: String::new(),
                         server_id: "test-server".to_owned(),
                         pairing_code: String::new(),
+                        realtime: Default::default(),
                         core: thumble_core::StatusSnapshot {
                             running: true,
                             paired: true,

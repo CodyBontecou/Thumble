@@ -2310,7 +2310,8 @@ private final class ControllerPadCustomizationSnapshot {
             value = selectedProfile.resolvedCustomization(
                 for: orientation,
                 colorScheme: resolvedScheme == .dark ? .dark : .light,
-                skinPackage: client.skinPackage(for: selectedProfile.skinReference)
+                skinPackage: client.skinPackage(for: selectedProfile.skinReference),
+                actionSet: client.actionSet
             )
         } else {
             value = client.gamepadCustomization
@@ -5212,7 +5213,8 @@ private struct GamepadJoystick: View {
             client.setElementInput(
                 KeypadElementInputID(elementID: elementID, part: KeypadElementInputPart(direction: direction)),
                 pressed: pressed,
-                pressIdentifier: pressIdentifier
+                pressIdentifier: pressIdentifier,
+                orientation: customization.deviceCanvas.editorDeviceFrame.orientation
             )
         }
     }
@@ -5384,10 +5386,11 @@ private struct GamepadTrigger: View {
         if let elementID {
             client.setElementInput(
                 KeypadElementInputID(elementID: elementID, part: .triggerDigital),
-                pressed: pressed
+                pressed: pressed,
+                orientation: customization.deviceCanvas.editorDeviceFrame.orientation
             )
         } else {
-            client.setButton(inputID, pressed: pressed)
+            client.setButton(inputID, pressed: pressed, orientation: customization.deviceCanvas.editorDeviceFrame.orientation)
         }
     }
 }
@@ -6014,10 +6017,11 @@ private struct GamepadButton: View {
             client.setElementInput(
                 KeypadElementInputID(elementID: elementID, part: .primary),
                 pressed: pressed,
-                pressIdentifier: pressIdentifier
+                pressIdentifier: pressIdentifier,
+                orientation: customization.deviceCanvas.editorDeviceFrame.orientation
             )
         } else {
-            client.setButton(button, pressed: pressed, pressIdentifier: pressIdentifier)
+            client.setButton(button, pressed: pressed, pressIdentifier: pressIdentifier, orientation: customization.deviceCanvas.editorDeviceFrame.orientation)
         }
 
         guard isActive != isPressed else { return }

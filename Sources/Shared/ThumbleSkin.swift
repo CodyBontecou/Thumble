@@ -580,34 +580,107 @@ public struct ThumbleSkinAppearance: Codable, Equatable, Sendable {
     }
 }
 
+/// Exact held-trigger state used by appearance layers. It never changes output bindings.
+public enum ThumbleActionSet: String, Codable, CaseIterable, Identifiable, Sendable {
+    case base
+    case leftTrigger = "left-trigger"
+    case rightTrigger = "right-trigger"
+    case bothTriggers = "both-triggers"
+
+    public var id: String { rawValue }
+    public var displayName: String {
+        switch self {
+        case .base: "Base"
+        case .leftTrigger: "LT"
+        case .rightTrigger: "RT"
+        case .bothTriggers: "LT + RT"
+        }
+    }
+
+    public init(leftHeld: Bool, rightHeld: Bool) {
+        self = leftHeld ? (rightHeld ? .bothTriggers : .leftTrigger) : (rightHeld ? .rightTrigger : .base)
+    }
+}
+
+/// Ephemeral local input mirror. Touch owners retain the trigger selected on down,
+/// so rebinding during a hold cannot strand the display on the wrong layer.
+public struct ThumbleActionSetInputState: Sendable {
+    private struct Owner: Hashable, Sendable {
+        let input: String
+        let pressIdentifier: UInt64?
+    }
+    private var digital: [Owner: Set<VirtualGamepadButton>] = [:]
+    private var analog: Set<VirtualGamepadTrigger> = []
+
+    public init() {}
+
+    public var actionSet: ThumbleActionSet {
+        let buttons = digital.values.reduce(into: Set<VirtualGamepadButton>()) { $0.formUnion($1) }
+        return ThumbleActionSet(
+            leftHeld: analog.contains(.left) || buttons.contains(.leftTriggerButton),
+            rightHeld: analog.contains(.right) || buttons.contains(.rightTriggerButton)
+        )
+    }
+
+    public mutating func record(input: String, pressed: Bool, pressIdentifier: UInt64? = nil,
+                                buttons: Set<VirtualGamepadButton>) {
+        let owner = Owner(input: input, pressIdentifier: pressIdentifier)
+        if pressed {
+            // Repeated refresh/down edges are idempotent, even if a non-trigger is rebound during a hold.
+            guard digital[owner] == nil else { return }
+            let triggers = buttons.intersection([.leftTriggerButton, .rightTriggerButton])
+            digital[owner] = triggers
+        } else {
+            digital.removeValue(forKey: owner)
+        }
+    }
+
+    public mutating func record(trigger: VirtualGamepadTrigger, value: Double) {
+        // Display activation threshold for analog inputs; digital held buttons have no threshold.
+        if value.isFinite && value > 0.5 { analog.insert(trigger) }
+        else { analog.remove(trigger) }
+    }
+
+    public mutating func reset() {
+        digital.removeAll()
+        analog.removeAll()
+    }
+}
+
 public struct ThumbleSkinVariant: Codable, Equatable, Identifiable, Sendable {
     public var id: String
     public var orientation: ThumbleSkinOrientation?
     public var colorScheme: ThumbleSkinColorScheme?
     public var appearance: ThumbleSkinAppearance
+    public var actionSet: ThumbleActionSet?
 
     public init(
         id: String,
         orientation: ThumbleSkinOrientation? = nil,
         colorScheme: ThumbleSkinColorScheme? = nil,
-        appearance: ThumbleSkinAppearance
+        appearance: ThumbleSkinAppearance,
+        actionSet: ThumbleActionSet? = nil
     ) {
+        self.actionSet = actionSet
         self.id = id
         self.orientation = orientation
         self.colorScheme = colorScheme
         self.appearance = appearance
     }
 
+    // Conditional banks overlay ordinary orientation/scheme variants (whose maximum weight is 2).
     public var specificity: Int {
-        (orientation == nil ? 0 : 1) + (colorScheme == nil ? 0 : 1)
+        (orientation == nil ? 0 : 1) + (colorScheme == nil ? 0 : 1) + (actionSet == nil ? 0 : 4)
     }
 
     public func matches(
         orientation requestedOrientation: ThumbleSkinOrientation,
-        colorScheme requestedColorScheme: ThumbleSkinColorScheme
+        colorScheme requestedColorScheme: ThumbleSkinColorScheme,
+        actionSet requestedActionSet: ThumbleActionSet = .base
     ) -> Bool {
         (orientation == nil || orientation == requestedOrientation)
             && (colorScheme == nil || colorScheme == requestedColorScheme)
+            && (actionSet == nil || actionSet == requestedActionSet)
     }
 
     public var normalized: ThumbleSkinVariant? {
@@ -617,7 +690,8 @@ public struct ThumbleSkinVariant: Codable, Equatable, Identifiable, Sendable {
             id: normalizedID,
             orientation: orientation,
             colorScheme: colorScheme,
-            appearance: appearance.normalized
+            appearance: appearance.normalized,
+            actionSet: actionSet
         )
     }
 }
@@ -640,8 +714,8 @@ public struct ThumbleSkin: Codable, Equatable, Sendable {
         return ThumbleSkin(base: base.normalized, variants: variants)
     }
 
-    private func matchingVariants(orientation: ThumbleSkinOrientation, colorScheme: ThumbleSkinColorScheme) -> [ThumbleSkinVariant] {
-        variants.filter { $0.matches(orientation: orientation, colorScheme: colorScheme) }
+    private func matchingVariants(orientation: ThumbleSkinOrientation, colorScheme: ThumbleSkinColorScheme, actionSet: ThumbleActionSet = .base) -> [ThumbleSkinVariant] {
+        variants.filter { $0.matches(orientation: orientation, colorScheme: colorScheme, actionSet: actionSet) }
             .sorted { lhs, rhs in
                 if lhs.specificity == rhs.specificity { return lhs.id < rhs.id }
                 return lhs.specificity < rhs.specificity
@@ -649,10 +723,10 @@ public struct ThumbleSkin: Codable, Equatable, Sendable {
     }
 
     /// Exact definition provenance for the same style-token cascade used by native paint.
-    public func styleSources(orientation: ThumbleSkinOrientation, colorScheme: ThumbleSkinColorScheme) -> [String: String] {
+    public func styleSources(orientation: ThumbleSkinOrientation, colorScheme: ThumbleSkinColorScheme, actionSet: ThumbleActionSet = .base) -> [String: String] {
         let value = normalized
         var sources = Dictionary(uniqueKeysWithValues: value.base.styleLibrary.styles.map { ($0.id, "base") })
-        for variant in value.matchingVariants(orientation: orientation, colorScheme: colorScheme) {
+        for variant in value.matchingVariants(orientation: orientation, colorScheme: colorScheme, actionSet: actionSet) {
             for style in variant.appearance.styleLibrary.styles { sources[style.id] = "variant." + variant.id }
         }
         return sources
@@ -660,10 +734,11 @@ public struct ThumbleSkin: Codable, Equatable, Sendable {
 
     public func appearance(
         orientation: ThumbleSkinOrientation,
-        colorScheme: ThumbleSkinColorScheme
+        colorScheme: ThumbleSkinColorScheme,
+        actionSet: ThumbleActionSet = .base
     ) -> ThumbleSkinAppearance {
         let value = normalized
-        return value.matchingVariants(orientation: orientation, colorScheme: colorScheme)
+        return value.matchingVariants(orientation: orientation, colorScheme: colorScheme, actionSet: actionSet)
             .reduce(value.base) { appearance, variant in variant.appearance.merged(over: appearance) }
             .normalized
     }

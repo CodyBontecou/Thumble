@@ -45,7 +45,8 @@ public enum ThumbleSkinResolver {
         orientation: ThumbleSkinOrientation,
         colorScheme: ThumbleSkinColorScheme,
         options: ThumbleSkinApplicationOptions = .preservingUserOverrides,
-        overrideBaseline: GamepadCustomization? = nil
+        overrideBaseline: GamepadCustomization? = nil,
+        actionSet: ThumbleActionSet = .base
     ) -> GamepadCustomization {
         guard let skin = package.skin else { return customization.normalized }
         return SkinApplicationWorkspace(
@@ -55,7 +56,8 @@ public enum ThumbleSkinResolver {
             orientation: orientation,
             colorScheme: colorScheme,
             options: options,
-            overrideBaseline: overrideBaseline
+            overrideBaseline: overrideBaseline,
+            actionSet: actionSet
         ).resolve()
     }
 
@@ -64,6 +66,7 @@ public enum ThumbleSkinResolver {
         private let skin: ThumbleSkin
         private let orientation: ThumbleSkinOrientation
         private let colorScheme: ThumbleSkinColorScheme
+        private let actionSet: ThumbleActionSet
         private let options: ThumbleSkinApplicationOptions
         private var original: GamepadCustomization
         private var baseline: GamepadCustomization?
@@ -78,8 +81,10 @@ public enum ThumbleSkinResolver {
             orientation: ThumbleSkinOrientation,
             colorScheme: ThumbleSkinColorScheme,
             options: ThumbleSkinApplicationOptions,
-            overrideBaseline: GamepadCustomization?
+            overrideBaseline: GamepadCustomization?,
+            actionSet: ThumbleActionSet
         ) {
+            self.actionSet = actionSet
             self.package = package
             self.skin = skin
             self.orientation = orientation
@@ -113,7 +118,7 @@ public enum ThumbleSkinResolver {
         }
 
         private func prepareAppearance() {
-            appearance = skin.appearance(orientation: orientation, colorScheme: colorScheme)
+            appearance = skin.appearance(orientation: orientation, colorScheme: colorScheme, actionSet: actionSet)
             compatibility = ThumbleSkinCompatibilityEvaluator.evaluate(
                 package.manifest.compatibility,
                 customization: original,
@@ -208,6 +213,7 @@ public enum ThumbleSkinResolver {
                 ThumbleSkinResolver.applying(
                     skinControl,
                     to: local,
+                    styleIcon: result.styleLibrary.style(id: skinControl.styleID)?.visualStyle.icon,
                     preserveLocal: options.preservesLocalControlAppearance,
                     baseline: baseline?.buttonCustomization(for: button)
                 ),
@@ -241,6 +247,7 @@ public enum ThumbleSkinResolver {
             result.customButtons[index].layout = ThumbleSkinResolver.applying(
                 skinControl,
                 to: local,
+                styleIcon: result.styleLibrary.style(id: skinControl.styleID)?.visualStyle.icon,
                 preserveLocal: options.preservesLocalControlAppearance,
                 baseline: baselineLayout
             )
@@ -251,6 +258,7 @@ public enum ThumbleSkinResolver {
             result.topBarActivationRegion = ThumbleSkinResolver.applying(
                 appearance.controlAppearance(for: .system),
                 to: original.topBarActivationRegion,
+                styleIcon: result.styleLibrary.style(id: appearance.controlAppearance(for: .system).styleID)?.visualStyle.icon,
                 preserveLocal: options.preservesLocalControlAppearance,
                 baseline: baseline?.topBarActivationRegion
             )
@@ -275,6 +283,7 @@ public enum ThumbleSkinResolver {
                 ThumbleSkinResolver.applying(
                     skinControl,
                     to: local,
+                    styleIcon: result.styleLibrary.style(id: skinControl.styleID)?.visualStyle.icon,
                     preserveLocal: options.preservesLocalControlAppearance,
                     baseline: baseline?.controlBarItemCustomization(for: item)
                 ),
@@ -291,12 +300,14 @@ public enum ThumbleSkinResolver {
     private static func applying(
         _ appearance: ThumbleSkinControlAppearance,
         to local: GamepadButtonCustomization,
+        styleIcon: GamepadControlIcon? = nil,
         preserveLocal: Bool,
         baseline: GamepadButtonCustomization?
     ) -> GamepadButtonCustomization {
         ControlApplicationWorkspace(
             appearance: appearance,
             local: local,
+            styleIcon: styleIcon,
             preserveLocal: preserveLocal,
             baseline: baseline
         ).resolve()
@@ -305,6 +316,7 @@ public enum ThumbleSkinResolver {
     private final class ControlApplicationWorkspace {
         private var appearance: ThumbleSkinControlAppearance
         private let local: GamepadButtonCustomization
+        private let styleIcon: GamepadControlIcon?
         private let preserveLocal: Bool
         private let baseline: GamepadButtonCustomization?
         private var result: GamepadButtonCustomization
@@ -312,11 +324,13 @@ public enum ThumbleSkinResolver {
         init(
             appearance: ThumbleSkinControlAppearance,
             local: GamepadButtonCustomization,
+            styleIcon: GamepadControlIcon?,
             preserveLocal: Bool,
             baseline: GamepadButtonCustomization?
         ) {
             self.appearance = appearance
             self.local = local
+            self.styleIcon = styleIcon
             self.preserveLocal = preserveLocal
             self.baseline = baseline
             self.result = local
@@ -350,7 +364,10 @@ public enum ThumbleSkinResolver {
             if let value = appearance.shape { result.shape = value }
             if let value = appearance.accentStyle { result.accentStyle = value }
             if let value = appearance.visualStyle { result.visualStyle = value }
-            if let value = appearance.icon { result.icon = value }
+            // Material-only skins retain native image labels. An explicitly
+            // authored skin icon still replaces them; state content icons are
+            // resolved afterward by the native presentation resolver.
+            result.icon = appearance.icon ?? appearance.visualStyle?.icon ?? styleIcon ?? local.icon
             if let value = appearance.hapticFeedback {
                 result.hapticFeedback = value
                 result.hapticStyle = nil
@@ -491,7 +508,8 @@ public extension GamepadCustomization {
         orientation: ThumbleSkinOrientation,
         colorScheme: ThumbleSkinColorScheme,
         options: ThumbleSkinApplicationOptions = .preservingUserOverrides,
-        overrideBaseline: GamepadCustomization? = nil
+        overrideBaseline: GamepadCustomization? = nil,
+        actionSet: ThumbleActionSet = .base
     ) -> GamepadCustomization {
         ThumbleSkinResolver.applying(
             package: skinPackage,
@@ -499,7 +517,8 @@ public extension GamepadCustomization {
             orientation: orientation,
             colorScheme: colorScheme,
             options: options,
-            overrideBaseline: overrideBaseline
+            overrideBaseline: overrideBaseline,
+            actionSet: actionSet
         )
     }
 

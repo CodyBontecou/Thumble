@@ -1,6 +1,8 @@
 # Thumble Rust host
 
-The Rust host is a standalone macOS receiver for Thumble. It is designed so the transport, pairing, profile, and input state machine can later be reused by Windows and Linux hosts while output injection and service management remain platform adapters.
+The Rust host is a standalone macOS receiver for Thumble. Its transport, pairing, profile, and input state machine are shared with the Windows/Linux receiver, while output injection and service management remain platform adapters.
+
+For native Windows/Linux keyboard and mouse control, use the separate [`thumble-receiver`](cross-platform-receiver.md) binary. It shares this host's protocol/core and has its own platform input and per-user CLI adapters.
 
 ## Architecture
 
@@ -41,14 +43,14 @@ The macOS MVP includes:
 - `_pocketpad._tcp` Bonjour publication with server identity TXT data;
 - six-digit pairing, persisted trusted reconnect tokens, and one active iPhone;
 - profile/customization delivery compatible with the current iOS app;
-- protocol-v3 UUID/part input over the reliable WebSocket path; old slot-index input frames reject;
+- protocol-v3 UUID/part input over authenticated UDP with reliable WebSocket mirroring/fallback; old slot-index input frames reject;
 - keyboard shortcuts, sequences, pointer movement, scrolling, and pointer buttons through CGEvent;
 - optional virtual gamepad buttons/D-pad/two sticks/independent triggers, with recording, honest HID readiness and managed signing gates;
 - reference-counted held outputs, visible rapid/overlapping key pulses, and release-on-disconnect/shutdown safety;
 - a local CLI for foreground/background lifecycle, status, pairing, and Accessibility setup;
 - a local stdio MCP adapter for Claude, OpenAI Codex, and other MCP clients.
 
-Authenticated UDP, skin mutation, launch targets, and Windows/Linux platform backends remain subsequent milestones. Virtual HID is implemented but signed-device and GameController/SDL/Steam/game compatibility remain unverified; see [controller acceptance gates](virtual-controller-support.md). The iOS client already falls back to reliable WebSocket input when a pairing response does not advertise a realtime UDP token.
+Authenticated protocol-v3 UDP input is available on the same port as WebSocket. Pairing over WebSocket issues an ephemeral realtime token; a UDP hello binds that token to a datagram endpoint for the active connection. Disconnect, replacement, suspension, and shutdown retire UDP authentication. Both transports share generation checks and a bounded per-press sequence history, so reordered independent touches and reliable mirrored releases work without duplicate output. `thumble-host status --json` exposes token-free transport counters under `realtime`; if UDP cannot bind, the host omits the token and keeps WebSocket input available. Skin mutation and launch targets remain subsequent milestones for this Mac host. Windows/Linux keyboard and mouse adapters are provided by the separate `thumble-receiver`; virtual gamepad output there remains unsupported. Virtual HID is implemented but signed-device and GameController/SDL/Steam/game compatibility remain unverified; see [controller acceptance gates](virtual-controller-support.md). The iOS client already falls back to reliable WebSocket input when a pairing response does not advertise a realtime UDP token.
 
 ## Developer workflow
 
@@ -120,7 +122,7 @@ Start `thumble-host` before the MCP client launches the adapter. The server curr
 | `list_profiles` | Curated installed profile IDs and names plus configuration revision |
 | `list_controls` | Active-profile opaque control IDs; no key codes |
 | `render_controller` | Read-only active-controller geometry plus an interactive SVG MCP App |
-| `preview_skin_workspace` | Read-only native controller-view render of an arbitrary `.pocketpad` review package or skin workspace as an inline image; never imports, applies, or changes configuration |
+| `preview_skin_workspace` | Read-only native controller-view render of an arbitrary `.pocketpad` review package or skin workspace as an inline image; optional `actionSet` selects base/left-trigger/right-trigger/both-triggers; never imports, applies, or changes configuration |
 | `select_profile` | Select an exact ID returned by `list_profiles` |
 | `press_control` | Automatically released tap of an exact ID returned by `list_controls` |
 | `release_all` | Unrestricted emergency release of tracked keyboard/pointer/controller state |

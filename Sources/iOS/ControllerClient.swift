@@ -866,6 +866,9 @@ final class ControllerClient: ObservableObject {
         }
     }
 
+    @Published private(set) var actionSet: ThumbleActionSet = .base
+    private var actionSetInputs = ThumbleActionSetInputState()
+
     @Published private(set) var state: ConnectionState = .disconnected
     @Published private(set) var lastSentEvent = "None"
     @Published private(set) var lastError: String?
@@ -1389,6 +1392,7 @@ final class ControllerClient: ObservableObject {
         if sendReleaseAll {
             releaseAll()
         }
+        resetActionSet()
         inputTransport.disconnect()
         stopRealtimeDatagram()
         lastSentEventUpdateTask?.cancel()
@@ -1420,23 +1424,30 @@ final class ControllerClient: ObservableObject {
         send(.init(type: .hello, timestamp: 0, pairingCode: normalizedCode, clientName: UIDevice.current.name, clientDeviceInfo: Self.currentDeviceInfo()))
     }
 
-    func setButton(_ button: KeypadElementID, pressed: Bool, pressIdentifier: UInt64? = nil) {
+    func setButton(_ button: KeypadElementID, pressed: Bool, pressIdentifier: UInt64? = nil, orientation: GamepadEditorDeviceOrientation? = nil) {
         // Send raw per-touch edges immediately. The Mac helper keeps physical
         // touch identity so the injected key state can change without timer delays.
         let state: ButtonPressState = pressed ? .down : .up
-        guard permitsOutgoingInput(.defaultControlID),
-              inputTransport.sendButton(button, state: state, pressIdentifier: pressIdentifier)
-        else { return }
+        let accepted = permitsOutgoingInput(.defaultControlID)
+            && inputTransport.sendButton(button, state: state, pressIdentifier: pressIdentifier)
+        if accepted || isPracticeModeEnabled {
+            recordActionSetInput(KeypadElementInputID(elementID: button.uuid, part: .primary),
+                pressed: pressed, pressIdentifier: pressIdentifier, orientation: orientation)
+        }
+        guard accepted else { return }
         if Self.liveInputStatusUpdatesEnabled {
             updateLastSentEvent("\(button.rawValue) \(state.rawValue)")
         }
     }
 
-    func setElementInput(_ input: KeypadElementInputID, pressed: Bool, pressIdentifier: UInt64? = nil) {
+    func setElementInput(_ input: KeypadElementInputID, pressed: Bool, pressIdentifier: UInt64? = nil, orientation: GamepadEditorDeviceOrientation? = nil) {
         let state: ButtonPressState = pressed ? .down : .up
-        guard permitsOutgoingInput(.elementButton),
-              inputTransport.sendElementInput(input, state: state, pressIdentifier: pressIdentifier)
-        else { return }
+        let accepted = permitsOutgoingInput(.elementButton)
+            && inputTransport.sendElementInput(input, state: state, pressIdentifier: pressIdentifier)
+        if accepted || isPracticeModeEnabled {
+            recordActionSetInput(input, pressed: pressed, pressIdentifier: pressIdentifier, orientation: orientation)
+        }
+        guard accepted else { return }
         if Self.liveInputStatusUpdatesEnabled {
             updateLastSentEvent("\(input.storageKey) \(state.rawValue)")
         }
@@ -1456,13 +1467,44 @@ final class ControllerClient: ObservableObject {
     }
 
     func setGamepadTrigger(_ trigger: VirtualGamepadTrigger, value: Double, isFinal: Bool = false) {
-        guard permitsOutgoingInput(.analogTrigger) else { return }
-        let clampedValue = Self.clamp(value, lower: 0, upper: 1)
-        _ = inputTransport.sendGamepadTrigger(
+        guard permitsOutgoingInput(.analogTrigger) || isPracticeModeEnabled else { return }
+        let clampedValue = value.isFinite ? Self.clamp(value, lower: 0, upper: 1) : 0
+        if isPracticeModeEnabled {
+            actionSetInputs.record(trigger: trigger, value: clampedValue)
+            publishActionSet()
+            return
+        }
+        let accepted = inputTransport.sendGamepadTrigger(
             trigger,
             value: clampedValue,
             isFinal: isFinal || clampedValue < 0.001
         )
+        if accepted {
+            actionSetInputs.record(trigger: trigger, value: clampedValue)
+            publishActionSet()
+        }
+    }
+
+    private func recordActionSetInput(_ input: KeypadElementInputID, pressed: Bool,
+                                      pressIdentifier: UInt64?, orientation: GamepadEditorDeviceOrientation?) {
+        let profile = renderedGamepadProfile
+        let customization = orientation.flatMap { profile?.customization(for: $0) }
+            ?? profile?.customization ?? gamepadCustomization
+        let buttons = profile?.outputMode == .keyboard ? []
+            : customization.element(for: input.elementID)?.outputBinding(for: input.part)?.gamepadButtons ?? []
+        actionSetInputs.record(input: input.storageKey, pressed: pressed,
+            pressIdentifier: pressIdentifier, buttons: buttons)
+        publishActionSet()
+    }
+
+    private func publishActionSet() {
+        let next = actionSetInputs.actionSet
+        if next != actionSet { actionSet = next }
+    }
+
+    private func resetActionSet() {
+        actionSetInputs.reset()
+        publishActionSet()
     }
 
     func sendPointerMove(deltaX: Double, deltaY: Double) {
@@ -1522,6 +1564,7 @@ final class ControllerClient: ObservableObject {
     }
 
     func releaseAll() {
+        resetActionSet()
         guard inputTransport.releaseAll() else { return }
         updateLastSentEvent("release_all", immediately: true)
     }
@@ -2102,6 +2145,7 @@ final class ControllerClient: ObservableObject {
 
         case .cancelled:
             guard connection === stateConnection else { return }
+            resetActionSet()
             inputTransport.disconnect()
             stopRealtimeDatagram()
             lastSentEventUpdateTask?.cancel()
@@ -2370,6 +2414,7 @@ final class ControllerClient: ObservableObject {
     private func handleRuntimeMessage(_ message: ControllerMessage) -> Bool {
         switch message.type {
         case .releaseAll:
+            resetActionSet()
             _ = inputTransport.releaseAll(adoptingGeneration: message.inputGeneration)
             updateLastSentEvent("release_all from Mac", immediately: true)
         case .ping:
@@ -2524,6 +2569,7 @@ final class ControllerClient: ObservableObject {
 
     private func handleSocketError(_ error: Error, for failedConnection: NWConnection) {
         guard connection === failedConnection else { return }
+        resetActionSet()
         inputTransport.disconnect()
         lastError = error.localizedDescription
         stopRealtimeDatagram()

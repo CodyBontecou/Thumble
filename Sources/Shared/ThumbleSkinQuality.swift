@@ -184,7 +184,7 @@ public enum ThumbleSkinQualityEvaluator {
         guard let skin = package.skin else { return }
         var scopes: [(id: String?, label: String, appearance: ThumbleSkinAppearance)] = [(nil, "base", skin.base)]
         for variant in skin.variants {
-            let label = [variant.orientation?.rawValue, variant.colorScheme?.rawValue]
+            let label = [variant.orientation?.rawValue, variant.colorScheme?.rawValue, variant.actionSet?.rawValue]
                 .compactMap { $0 }.joined(separator: "-")
             scopes.append((variant.id, label.isEmpty ? variant.id : label, variant.appearance))
         }

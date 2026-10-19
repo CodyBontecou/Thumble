@@ -1,0 +1,15 @@
+{
+  "phase": "creation-failed",
+  "entitlementGranted": null,
+  "lastError": "Virtual gamepad output is not supported by this receiver; use keyboard/mouse bindings",
+  "lastReportResult": null,
+  "lastReportUptimeNanoseconds": null,
+  "reportCount": 0,
+  "pressedButtons": [],
+  "leftStickX": 0.0,
+  "leftStickY": 0.0,
+  "rightStickX": 0.0,
+  "rightStickY": 0.0,
+  "leftTrigger": 0.0,
+  "rightTrigger": 0.0
+}

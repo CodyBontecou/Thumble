@@ -3,16 +3,16 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Thumble — iPhone shortcut keypad for Mac</title>
-  <meta name="description" content="Thumble turns your iPhone into a programmable, low-latency shortcut keypad, controller, and trackpad for Mac.">
+  <title>Thumble — your iPhone, your controller</title>
+  <meta name="description" content="Build an iPhone control surface for your Mac: custom game layouts, keyboard shortcuts, trackpads, and configurable controller output.">
   <meta name="theme-color" content="#f4efe5">
-  <meta property="og:title" content="Thumble — iPhone shortcut keypad for Mac">
+  <meta property="og:title" content="Thumble — your iPhone, your controller">
   <meta property="og:description" content="Pair an iPhone with your Mac, customize touch controls, and send keyboard shortcuts, pointer gestures, or gamepad output.">
   <meta property="og:type" content="website">
   <meta property="og:image" content="/assets/app-icon.png">
   <link rel="icon" href="/assets/favicon.png" type="image/png">
   <link rel="apple-touch-icon" href="/assets/app-icon.png">
-  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/styles.css?v=c61718e97179">
 </head>
 <body class="landing-page">
   <header class="site-header">
@@ -21,7 +21,7 @@
       <span>Thumble</span>
     </a>
     <nav aria-label="Primary navigation">
-      <a href="#screens">Screens</a>
+      <a href="#games">Gaming</a>
       <a href="/skins.html">Skins</a>
       <a href="#details">Details</a>
       <a href="#download">Download</a>
@@ -34,14 +34,14 @@
   <main id="top">
     <section class="hero section-shell">
       <div class="hero-copy">
-        <p class="eyebrow">coming soon / macOS + iOS</p>
-        <h1>turn your iPhone into a programmable Mac keypad.</h1>
-        <p class="lede">Thumble pairs your iPhone with a macOS helper so every tap can become a shortcut, controller press, pointer gesture, or custom workflow control.</p>
+        <p class="eyebrow">in development / macOS + iOS</p>
+        <h1>your game. your layout. your iPhone.</h1>
+        <p class="lede">Build a control surface around the way you play and work. Mix shortcuts, touch sticks, triggers, and trackpads, then switch layouts from your iPhone.</p>
 
         <div class="hero-actions">
           <a class="pixel-button" href="#download">download mac</a>
           <a class="pixel-button pixel-button-secondary" href="/skins.html">browse skins</a>
-          <a class="pixel-button pixel-button-secondary" href="/docs.html">read the docs</a>
+          <a class="pixel-button pixel-button-secondary" href="#games">explore game layouts</a>
           <a class="pixel-button pixel-button-secondary" href="#screens">see screenshots</a>
         </div>
 
@@ -84,6 +84,53 @@
       <div><span>outputs</span><strong>keys + pointer + gamepad</strong></div>
     </section>
 
+    <section id="games" class="gaming section-shell" aria-labelledby="gaming-title">
+      <div class="gaming-heading">
+        <div>
+          <p class="eyebrow">a setup for every session</p>
+          <h2 id="gaming-title">Make room for<br>your kind of play.</h2>
+        </div>
+        <p>From a few essential hotkeys to a full controller. Build around your game, your hands, and your iPhone.</p>
+      </div>
+
+      <div class="game-grid">
+        <article class="game-card game-card-league">
+          <figure class="game-capture">
+            <a href="/assets/screenshots/league-lux-01500e4a8f77.png" target="_blank" rel="noopener" aria-label="Open full-size Lux controller screenshot">
+              <img src="/assets/screenshots/league-lux-01500e4a8f77.png" width="2622" height="1206" alt="Thumble’s Lux Prism controller running on iPhone: analog stick, Aim trackpad, Lux ability icons, D and F buttons, and utility controls" loading="lazy">
+            </a>
+            <figcaption><span>Lux Prism / custom layout</span><span>Practice Mode · iPhone capture</span></figcaption>
+          </figure>
+          <div class="game-copy">
+            <h3>League of Legends</h3>
+            <p>Keep abilities, items, and pings within reach. Build a custom shortcut pad around your bindings, with a trackpad alongside.</p>
+            <a href="/docs.html#game-layouts">Build your layout <span aria-hidden="true">↗</span></a>
+          </div>
+        </article>
+
+        <article class="game-card game-card-wow">
+          <figure class="game-capture">
+            <a href="/assets/screenshots/wow-forever-1881a2863e6c.png" target="_blank" rel="noopener" aria-label="Open full-size WoW Forever controller screenshot">
+              <img src="/assets/screenshots/wow-forever-1881a2863e6c.png" width="2622" height="1206" alt="Thumble’s WoW Forever controller running on iPhone: Move and Look sticks, D-pad, ABXY buttons, shoulders, triggers, and utility controls" loading="lazy">
+            </a>
+            <figcaption><span>WoW Forever / template</span><span>Practice Mode · iPhone capture</span></figcaption>
+          </figure>
+          <div class="game-copy">
+            <h3>World of Warcraft</h3>
+            <p>Start with the WoW Forever controller template. Save setups per character, or import keyboard bindings with the experimental Thumble Link addon.</p>
+            <a href="/docs.html#wow">Explore WoW setups <span aria-hidden="true">↗</span></a>
+          </div>
+        </article>
+      </div>
+
+      <div class="controller-summary">
+        <div><span class="eyebrow">your controls, all together</span><h3>Keys. Sticks. Triggers. Trackpads.</h3></div>
+        <p>Mix input types, tune analog feel, and save portrait and landscape layouts.</p>
+        <a href="/docs.html#outputs" aria-label="Read about controller output">Output guide <span aria-hidden="true">↗</span></a>
+      </div>
+      <p class="gaming-release-note">Development preview · Actual iPhone app captures in Practice Mode. League shows a custom Lux layout. Mac gamepad output requires an authorized signed receiver; game compatibility is being validated. <a href="/blog/development-update-october-2026.html">What’s new since the July beta ↗</a></p>
+    </section>
+
     <section id="screens" class="screens section-shell">
       <div class="section-heading">
         <p class="eyebrow">screens</p>
@@ -113,8 +160,8 @@
 
     <section class="skin-directory-promo section-shell" aria-labelledby="skin-promo-title">
       <div class="skin-directory-promo-preview">
-        <img src="/skins/previews/cavern-glow-1.0.0.png" alt="Cavern Glow appearance-only skin on a Thumble keypad" width="1748" height="804" loading="lazy">
-        <span>featured / cavern glow</span>
+        <img src="/skins/previews/indigo-pocket-1.0.0.png" alt="Indigo Pocket appearance-only skin on a Thumble keypad" width="1748" height="804" loading="lazy">
+        <span>featured / indigo pocket</span>
       </div>
       <div class="skin-directory-promo-copy">
         <p class="eyebrow">new / skin directory</p>
@@ -136,13 +183,13 @@
       <div class="feature-list">
         <article>
           <span>01</span>
-          <h3>macOS helper</h3>
-          <p>Runs the pairing server, advertises Smart Connect over Bonjour, edits keypad setups, and injects keyboard and pointer events with Accessibility permission.</p>
+          <h3>layouts that fit</h3>
+          <p>Save portrait and landscape designs, arrange controls in layers and groups, and calibrate thumb reach on iPhone. Practice Mode lets you try a layout without sending input.</p>
         </article>
         <article>
           <span>02</span>
-          <h3>iOS controller</h3>
-          <p>Shows your synced keypad, supports multitouch controls, haptics, profile switching, offline saved layouts, and quick layout edits for freeform designs.</p>
+          <h3>edit with an assistant</h3>
+          <p>Describe a controller to ChatGPT, Claude, or a terminal agent. Draft, preview, and refine the layout with Thumble’s MCP and CLI tools, then sync it to your iPhone.</p>
         </article>
         <article>
           <span>03</span>
@@ -208,6 +255,8 @@
         <span>Cursor shortcuts</span>
         <span>tmux prefixes</span>
         <span>window management</span>
+        <span>League of Legends layouts</span>
+        <span>WoW Forever</span>
         <span>Hollow Knight</span>
         <span>Celeste</span>
         <span>emulators</span>
@@ -238,7 +287,7 @@
         <article class="download-card">
           <span>iOS controller</span>
           <h3>TestFlight beta</h3>
-          <p>The iPhone controller is shipped through App Store Connect TestFlight. Join the launch list and we’ll send an invite when the current build is approved for testing.</p>
+          <p>The latest uploaded beta is 1.0.0 (6), from July 30, 2026. Newer controller and game-layout work is in development. Join the launch list for future beta invitations and release updates.</p>
           <a class="pixel-button pixel-button-secondary" href="#waitlist">join launch list</a>
           <dl class="release-meta">
             <div><dt>channel</dt><dd>TestFlight</dd></div>
@@ -252,7 +301,7 @@
     <section class="final-cta section-shell">
       <div>
         <p class="eyebrow">launch list</p>
-        <h2>get the first build.</h2>
+        <h2>follow the next build.</h2>
       </div>
       <form class="waitlist-form signup compact" action="/api/subscribe" method="post" data-source="footer">
         <input type="hidden" name="source" value="footer">

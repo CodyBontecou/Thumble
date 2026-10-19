@@ -1,0 +1,39 @@
+{
+  "status": "review-draft",
+  "direction": "Portrait iPhone gaming controller for WoW Forever fans using existing Fury Forge",
+  "width": 1206,
+  "height": 2622,
+  "locale": "en-US",
+  "createdAt": "2026-10-19T11:13:23.766Z",
+  "skin": {
+    "identifier": "com.thumble.fury-forge",
+    "version": "1.0.0",
+    "packageSHA256": "31c400f4bd0468019100e2e7450e9a375ae05c9e51d05353e058f287c1a6850a",
+    "humanApproval": "pending and unchanged"
+  },
+  "captureMode": "Real native portrait iPhone captures in Practice Mode. Unchanged Fury Forge package; manually named Fury profiles. Ability pictures are suggested action-bar placements, not automatic spell synchronization. Live gameplay acceptance pending.",
+  "captures": [
+    {
+      "file": "source/captures/fury-forge-portrait.png",
+      "sha256": "b533e4ab2f370d492459bb84f386a368b312bded0cea5a6077f16459d9b253df"
+    },
+    {
+      "file": "source/captures/fury-forge-profile-picker-portrait.png",
+      "sha256": "1bed4e4197ef56eb538897c2155f2609ee63450683cdaee9b082ec0c6943b5ba"
+    }
+  ],
+  "pages": [
+    {
+      "file": "exports/en-US/screenshots/01-iphone-gamepad.png",
+      "sha256": "895ca1faef2cb924f8044eb3dfd1e97f5ea13bb490cf57da5098246953d4fb32"
+    },
+    {
+      "file": "exports/en-US/screenshots/02-move-look-control.png",
+      "sha256": "d452a83865918c96b3561f7a3aa567e705b1b39c236c8a39f2a54bbe83fe081a"
+    },
+    {
+      "file": "exports/en-US/screenshots/03-character-setups.png",
+      "sha256": "d02824ba3c54034b6aac00cd2bff64c5559c2e6be92fa8cb701dab97eeb0e959"
+    }
+  ]
+}

@@ -3,6 +3,13 @@ import Foundation
 import XCTest
 
 final class ThumbleCLIBackendTests: XCTestCase {
+    func testCLITemplateCatalogMatchesSharedAuthority() {
+        XCTAssertEqual(
+            ThumbleCLIProfileBackend.ControllerTemplate.allCases.map(\.rawValue),
+            ThumbleBridgeControllerTemplate.allCases.map(\.rawValue)
+        )
+    }
+
     private let invocationID = UUID(uuidString: "AAAAAAAA-BBBB-5CCC-8DDD-EEEEEEEEEEEE")!
     private let generatedControlID = "954361D0-559A-4F70-BF56-9CA387E45DFA";
 

@@ -593,10 +593,11 @@ pub enum ControllerTemplate {
     PlayStation,
     Xbox,
     SoftWhite,
+    WowForever,
 }
 
 impl ControllerTemplate {
-    pub const ALL: [Self; 17] = [
+    pub const ALL: [Self; 18] = [
         Self::ProductivityStarter,
         Self::ProductivityOneHandedLeft,
         Self::ProductivityOneHandedRight,
@@ -614,6 +615,7 @@ impl ControllerTemplate {
         Self::PlayStation,
         Self::Xbox,
         Self::SoftWhite,
+        Self::WowForever,
     ];
 
     pub const fn revision(self) -> u32 {
@@ -635,7 +637,7 @@ impl ControllerTemplate {
             Self::Saturn => 4,
             Self::GameCube | Self::ArcadeStick => 5,
             Self::PlayStation | Self::Xbox => 6,
-            Self::Nintendo64 => 8,
+            Self::Nintendo64 | Self::WowForever => 8,
             Self::SoftWhite => 15,
         }
     }
@@ -667,6 +669,7 @@ impl ControllerTemplate {
             Self::Psp => "psp",
             Self::PlayStation => "playStation",
             Self::Xbox => "xbox",
+            Self::WowForever => "wowForever",
             Self::SoftWhite => "softWhite",
         }
     }
@@ -689,6 +692,7 @@ impl ControllerTemplate {
             Self::Psp => "PSP",
             Self::PlayStation => "PlayStation",
             Self::Xbox => "Xbox",
+            Self::WowForever => "WoW Forever",
             Self::SoftWhite => "Soft White Pro",
         }
     }

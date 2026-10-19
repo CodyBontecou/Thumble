@@ -37,6 +37,7 @@ public struct ThumbleSkinTemplateRequirement: Codable, Equatable, Sendable {
 }
 
 public enum ThumbleSkinRenderingFeature: String, Codable, CaseIterable, Identifiable, Sendable {
+    case actionSetLayers = "action_set_layers"
     case artworkLayers = "artwork_layers"
     case nineSliceImages = "nine_slice_images"
     case bitmapControlStates = "bitmap_control_states"

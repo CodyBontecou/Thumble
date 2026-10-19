@@ -62,6 +62,59 @@ final class ThumbleCSSCompilerTests: XCTestCase {
         )
     }
 
+    func testActionSetCSSCompilesEveryBankAndDoesNotLeakBetweenBanks() throws {
+        let source = try makeCSSWorkspace(css: """
+            :root { --ink: #111111; }
+            control { background: #EEEEEE; color: var(--ink); }
+            :root[action-set="base"] #builtin-00000000-0000-0000-0000-000000000105 { -thumble-legend: "Jump"; }
+            :root[action-set="left-trigger"] { --ink: #222222; }
+            :root[action-set="left-trigger"] #builtin-00000000-0000-0000-0000-000000000105 { -thumble-icon-symbol: "flame.fill"; -thumble-legend: "Attack"; }
+            :root[action-set="right-trigger"] #builtin-00000000-0000-0000-0000-000000000105 { -thumble-icon-symbol: "shield.fill"; -thumble-legend: "Defend"; }
+            :root[action-set="both-triggers"] #builtin-00000000-0000-0000-0000-000000000105:pressed { -thumble-legend: "Utility"; }
+            """)
+        let first = try ThumbleSkinCompiler.compile(source: source, strict: true)
+        let second = try ThumbleSkinCompiler.compile(source: source, strict: true)
+        XCTAssertEqual(first.packageData, second.packageData)
+        XCTAssertTrue(first.package.manifest.compatibility!.requiredFeatures.contains(.actionSetLayers))
+        let skin = try XCTUnwrap(first.package.skin)
+        XCTAssertEqual(skin.variants.count, 16)
+        for orientation in ThumbleSkinOrientation.allCases {
+            for scheme in ThumbleSkinColorScheme.allCases {
+                let base = skin.appearance(orientation: orientation, colorScheme: scheme)
+                let left = skin.appearance(orientation: orientation, colorScheme: scheme, actionSet: .leftTrigger)
+                let right = skin.appearance(orientation: orientation, colorScheme: scheme, actionSet: .rightTrigger)
+                let both = skin.appearance(orientation: orientation, colorScheme: scheme, actionSet: .bothTriggers)
+                func style(_ appearance: ThumbleSkinAppearance) throws -> GamepadControlVisualStyle {
+                    let control = appearance.controlAppearance(for: .preset(5), controlKind: .button)
+                    return try XCTUnwrap(appearance.styleLibrary.style(id: control.styleID!)?.visualStyle)
+                }
+                XCTAssertEqual(try style(base).normal.content?.legend, "Jump")
+                XCTAssertNil(try style(base).normal.content?.icon)
+                XCTAssertEqual(try style(left).normal.content?.legend, "Attack")
+                XCTAssertEqual(try style(left).normal.content?.icon?.value, "flame.fill")
+                XCTAssertEqual(try style(right).normal.content?.legend, "Defend")
+                XCTAssertEqual(try style(right).normal.content?.icon?.value, "shield.fill")
+                XCTAssertEqual(try style(both).pressed?.content?.legend, "Utility")
+                XCTAssertNil(try style(both).normal.content?.icon)
+            }
+        }
+        let workspace = try loadWorkspace(source)
+        let computed = try ThumbleCSSCompiler.computed(workspace: workspace, sourceRoot: source, actionSet: .leftTrigger)
+        let button = try XCTUnwrap(computed.first?.elements.first { $0.id.hasSuffix("105") })
+        XCTAssertEqual(button.states.first?.declarations["color"], "#222222")
+        var invalidPackage = first.package
+        invalidPackage.manifest.compatibility?.requiredFeatures.removeAll { $0 == .actionSetLayers }
+        XCTAssertTrue(ThumbleSkinPackageValidator.validate(invalidPackage).errors.contains { $0.code == "missing-action-set-feature" })
+    }
+
+    func testInvalidActionSetSelectorIsAnError() throws {
+        for selector in [":root[action-set=\"typo\"]", ":root[action-set~=\"left-trigger\"]"] {
+            let source = try makeCSSWorkspace(css: selector + " { color: #FFFFFF; }")
+            let report = ThumbleCSSCompiler.lint(workspace: try loadWorkspace(source), sourceRoot: source)
+            XCTAssertTrue(report.errors.contains { $0.code == "invalid-action-set" })
+        }
+    }
+
     // MARK: - Parser
 
     func testParserAcceptsSelectorsMediaCustomPropertiesAndStates() throws {

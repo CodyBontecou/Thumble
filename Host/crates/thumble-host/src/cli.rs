@@ -589,6 +589,16 @@ fn print_human_status(status: &HostStatus) {
         status.pid
     );
     println!("Port: {}", status.port);
+    println!(
+        "UDP: {} (accepted UDP: {}, WebSocket: {})",
+        if status.realtime.enabled {
+            "listening"
+        } else {
+            "unavailable; WebSocket only"
+        },
+        status.realtime.udp_accepted_inputs,
+        status.realtime.websocket_accepted_inputs
+    );
     println!("Pairing code: {}", status.pairing_code);
     println!(
         "Service: {} ({})",

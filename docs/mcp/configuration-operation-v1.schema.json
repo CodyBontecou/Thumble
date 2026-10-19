@@ -428,7 +428,8 @@
         "psp",
         "playStation",
         "xbox",
-        "softWhite"
+        "softWhite",
+        "wowForever"
       ],
       "type": "string"
     },

@@ -17,6 +17,7 @@ use crate::drafts::{
 };
 use crate::output::OutputExecutor;
 use crate::paths::HostPaths;
+use crate::realtime::{Realtime, MAXIMUM_DATAGRAM_BYTES};
 use crate::{platform, storage};
 use fs2::FileExt;
 use futures_util::{SinkExt, StreamExt};
@@ -27,7 +28,7 @@ use socket2::{Domain, Protocol, SockAddr, Socket, Type};
 use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 use std::fs::{self, File, OpenOptions};
 use std::io::Write;
-use std::net::{Ipv4Addr, Ipv6Addr, SocketAddrV4, SocketAddrV6};
+use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6};
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -41,7 +42,7 @@ use thumble_protocol::{
     ControllerMessage, ControllerMessageType, ControllerWireCodec, KeypadElementID,
     KeypadElementInputPart,
 };
-use tokio::net::{TcpListener, TcpStream};
+use tokio::net::{TcpListener, TcpStream, UdpSocket};
 use tokio::sync::{mpsc, watch, Semaphore};
 use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
 use tokio_tungstenite::tungstenite::protocol::{CloseFrame, WebSocketConfig};
@@ -122,6 +123,7 @@ struct RuntimeInner {
     output: OutputExecutor,
     control_press_times: VecDeque<Instant>,
     input_liveness: crate::input_liveness::InputLiveness,
+    realtime: Realtime,
 }
 
 struct SharedRuntime {
@@ -156,17 +158,58 @@ impl SharedRuntime {
         if !inner.connections.contains_key(&connection_id) {
             return Err("input connection retired after receiver suspension or disconnect".into());
         }
+        self.handle_input_locked(&mut inner, connection_id, message, false)
+    }
+
+    fn handle_input_locked(
+        &self,
+        inner: &mut RuntimeInner,
+        connection_id: ConnectionId,
+        message: ControllerMessage,
+        udp: bool,
+    ) -> Result<(), String> {
+        let before = inner.core.counters().accepted_inputs;
         let time = CoreTime::new(unix_millis(), self.monotonic_millis());
-        let RuntimeInner { core, tokens, .. } = &mut *inner;
+        let RuntimeInner { core, tokens, .. } = inner;
         let effects = core
             .handle_message_at(connection_id, message, time, tokens)
             .map_err(|error| format!("core rejected controller turn: {error}"))?;
-        self.execute_effects(&mut inner, effects)
+        let accepted = inner.core.counters().accepted_inputs.saturating_sub(before);
+        if udp {
+            inner.realtime.status.udp_accepted_inputs += accepted;
+        } else {
+            inner.realtime.status.websocket_accepted_inputs += accepted;
+        }
+        self.execute_effects(inner, effects)
+    }
+
+    fn handle_datagram(&self, peer: SocketAddr, data: &[u8]) {
+        // Bound before decoding; never reflect errors or controller state to UDP peers.
+        let message = (data.len() <= MAXIMUM_DATAGRAM_BYTES)
+            .then(|| ControllerWireCodec::decode(data).ok())
+            .flatten();
+        let mut inner = self.inner.lock().expect("runtime mutex poisoned");
+        self.guard_input_liveness(&mut inner);
+        let Some(message) = message else {
+            inner.realtime.status.rejected_datagrams += 1;
+            return;
+        };
+        let Some(connection) = inner.realtime.route(peer, &message) else {
+            return;
+        };
+        if !inner.connections.contains_key(&connection) {
+            inner.realtime.retire(connection);
+            return;
+        }
+        if let Err(error) = self.handle_input_locked(&mut inner, connection, message, true) {
+            self.log(&format!("UDP controller turn failed: {error}"));
+        }
     }
 
     fn disconnect(&self, connection_id: ConnectionId) {
         let mut inner = self.inner.lock().expect("runtime mutex poisoned");
         inner.connections.remove(&connection_id);
+        inner.realtime.retire(connection_id);
         let was_paired = inner.core.status().paired;
         let effects = inner.core.disconnect(connection_id);
         if let Err(error) = self.execute_effects(&mut inner, effects) {
@@ -205,6 +248,7 @@ impl SharedRuntime {
         self.log("receiver resumed after scheduling gap; retiring input sessions and neutralizing output");
         // Close legacy as well as v2 sessions: queued pre-suspend frames must
         // reauthenticate, not restore a hold just released by the safety clock.
+        inner.realtime.clear();
         let connections = inner.connections.drain().collect::<Vec<_>>();
         for (id, sender) in connections {
             let _ = sender.try_send(Outbound::Close(
@@ -237,6 +281,7 @@ impl SharedRuntime {
             let _ = sender.try_send(Outbound::Close("Host shutting down".to_owned()));
         }
         inner.connections.clear();
+        inner.realtime.clear();
         if let Err(error) = inner.output.release_tracked() {
             self.log(&format!("shutdown output release failed: {error}"));
         }
@@ -525,6 +570,7 @@ impl SharedRuntime {
             pairing_code: inner.core.pairing_code().to_owned(),
             core: inner.core.status(),
             output: inner.output.snapshot(),
+            realtime: inner.realtime.status.clone(),
         }
     }
 
@@ -561,6 +607,13 @@ impl SharedRuntime {
                     message,
                 } => {
                     let mut outgoing = message.as_ref().clone();
+                    if outgoing.message_type == ControllerMessageType::PairingAccepted
+                        && inner.realtime.status.enabled
+                    {
+                        let token = inner.tokens.next_auth_token();
+                        inner.realtime.accept(*connection_id, token.clone());
+                        outgoing.realtime_token = Some(token);
+                    }
                     if matches!(
                         outgoing.message_type,
                         ControllerMessageType::Hello
@@ -580,6 +633,7 @@ impl SharedRuntime {
                     if let Some(sender) = inner.connections.get(connection_id) {
                         if sender.try_send(Outbound::Binary(encoded)).is_err() {
                             inner.connections.remove(connection_id);
+                            inner.realtime.retire(*connection_id);
                         }
                     }
                 }
@@ -587,9 +641,11 @@ impl SharedRuntime {
                     connection_id,
                     reason,
                 } => {
+                    inner.realtime.retire(*connection_id);
                     if let Some(sender) = inner.connections.get(connection_id) {
                         if sender.try_send(Outbound::Close(reason.clone())).is_err() {
                             inner.connections.remove(connection_id);
+                            inner.realtime.retire(*connection_id);
                         }
                     }
                 }
@@ -1542,6 +1598,8 @@ pub async fn run_runtime(paths: HostPaths, options: RuntimeOptions) -> Result<()
         .local_addr()
         .map_err(|error| format!("read listener address: {error}"))?
         .port();
+    // UDP failure leaves the reliable WebSocket path available and suppresses token advertisement.
+    let datagram_listeners = bind_datagram_listeners(actual_port).unwrap_or_default();
     let control_listener = control::bind_control_socket(&paths.control_socket).await?;
     let service_name = default_service_name();
     let bonjour = if options.bonjour {
@@ -1561,6 +1619,7 @@ pub async fn run_runtime(paths: HostPaths, options: RuntimeOptions) -> Result<()
             output: OutputExecutor::new(options.input, Some(paths.output_recording_file.clone())),
             control_press_times: VecDeque::new(),
             input_liveness: Default::default(),
+            realtime: Realtime::default(),
         }),
         paths: paths.clone(),
         requested_port: options.port,
@@ -1575,6 +1634,7 @@ pub async fn run_runtime(paths: HostPaths, options: RuntimeOptions) -> Result<()
 
     {
         let mut inner = shared.inner.lock().expect("runtime mutex poisoned");
+        inner.realtime.status.enabled = !datagram_listeners.is_empty();
         shared.execute_effects(&mut inner, Vec::new())?;
     }
     let metadata = RuntimeMetadata {
@@ -1606,6 +1666,19 @@ pub async fn run_runtime(paths: HostPaths, options: RuntimeOptions) -> Result<()
         Arc::clone(&shared),
         shutdown_rx.clone(),
     ));
+    if datagram_listeners.is_empty() {
+        shared.log("UDP unavailable on receiver port; using WebSocket input only");
+    }
+    let datagram_tasks = datagram_listeners
+        .into_iter()
+        .map(|listener| {
+            tokio::spawn(datagram_loop(
+                listener,
+                Arc::clone(&shared),
+                shutdown_rx.clone(),
+            ))
+        })
+        .collect::<Vec<_>>();
     let expiry_task = tokio::spawn(expiry_loop(Arc::clone(&shared), shutdown_rx.clone()));
     let signal_shutdown = shutdown_tx.clone();
     let signal_task = tokio::spawn(async move {
@@ -1624,11 +1697,72 @@ pub async fn run_runtime(paths: HostPaths, options: RuntimeOptions) -> Result<()
     let _ = tokio::time::timeout(Duration::from_secs(1), accept_task).await;
     let _ = tokio::time::timeout(Duration::from_secs(1), control_task).await;
     let _ = tokio::time::timeout(Duration::from_secs(1), expiry_task).await;
+    for task in datagram_tasks {
+        let _ = tokio::time::timeout(Duration::from_secs(1), task).await;
+    }
     signal_task.abort();
     control::remove_control_socket(&paths.control_socket);
     instance.cleanup_runtime_files();
     shared.log("Thumble Host stopped");
     Ok(())
+}
+
+async fn datagram_loop(
+    listener: UdpSocket,
+    shared: Arc<SharedRuntime>,
+    mut shutdown: watch::Receiver<bool>,
+) {
+    // One extra byte detects truncation at the configured limit.
+    let mut buffer = vec![0; MAXIMUM_DATAGRAM_BYTES + 1];
+    loop {
+        tokio::select! {
+            biased;
+            changed = shutdown.changed() => {
+                if changed.is_err() || *shutdown.borrow() { break; }
+            }
+            result = listener.recv_from(&mut buffer) => {
+                match result {
+                    Ok((size, peer)) => shared.handle_datagram(peer, &buffer[..size]),
+                    Err(error) => {
+                        shared.log(&format!("UDP receive failed; using WebSocket input: {error}"));
+                        let mut inner = shared.inner.lock().expect("runtime mutex poisoned");
+                        inner.realtime.clear();
+                        inner.realtime.status.enabled = false;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn bind_datagram_listeners(port: u16) -> Result<Vec<UdpSocket>, String> {
+    fn bind(domain: Domain, address: SocketAddr) -> Result<UdpSocket, String> {
+        let socket =
+            Socket::new(domain, Type::DGRAM, Some(Protocol::UDP)).map_err(|e| e.to_string())?;
+        if domain == Domain::IPV6 {
+            socket.set_only_v6(true).map_err(|e| e.to_string())?;
+        }
+        socket
+            .bind(&SockAddr::from(address))
+            .map_err(|e| e.to_string())?;
+        socket.set_nonblocking(true).map_err(|e| e.to_string())?;
+        UdpSocket::from_std(socket.into()).map_err(|e| e.to_string())
+    }
+    // Separate sockets avoid macOS allowing a dual-stack bind alongside an
+    // existing IPv4 socket, which would advertise UDP without receiving IPv4.
+    let ipv4 = bind(
+        Domain::IPV4,
+        SocketAddr::from((Ipv4Addr::UNSPECIFIED, port)),
+    )?;
+    let mut listeners = vec![ipv4];
+    if let Ok(ipv6) = bind(
+        Domain::IPV6,
+        SocketAddr::from((Ipv6Addr::UNSPECIFIED, port)),
+    ) {
+        listeners.push(ipv6);
+    }
+    Ok(listeners)
 }
 
 async fn accept_loop(
@@ -1760,7 +1894,7 @@ fn decode_and_handle(
 
 async fn wait_for_shutdown_signal() {
     use std::future::pending;
-    use tokio::signal::unix::{signal, SignalKind};
+    use tokio::signal::unix::{SignalKind, signal};
 
     let mut terminate = signal(SignalKind::terminate()).ok();
     let mut hangup = signal(SignalKind::hangup()).ok();
@@ -2233,6 +2367,7 @@ mod tests {
                 connections: HashMap::new(),
                 control_press_times: VecDeque::new(),
                 input_liveness: Default::default(),
+                realtime: Realtime::default(),
                 output: OutputExecutor::with_test_gamepad(
                     crate::gamepad::GamepadOutput::with_backend(Box::new(FailingHid)),
                 ),
@@ -2301,6 +2436,12 @@ mod tests {
         {
             let mut inner = shared.inner.lock().unwrap();
             inner.output = OutputExecutor::new(false, None);
+            inner.realtime.status.enabled = true;
+            inner.realtime.accept(1, "test-realtime-token".into());
+            let mut hello = ControllerMessage::new(ControllerMessageType::Hello, 0);
+            hello.realtime_token = Some("test-realtime-token".into());
+            inner.realtime.route("127.0.0.1:3456".parse().unwrap(), &hello);
+            assert!(inner.realtime.status.authenticated);
             let effects = inner
                 .core
                 .set_local_output_binding(
@@ -2329,6 +2470,11 @@ mod tests {
         assert!(matches!(receiver.try_recv().unwrap(), Outbound::Close(_)));
         let mut inner = shared.inner.lock().unwrap();
         assert!(inner.connections.is_empty());
+        assert!(!inner.realtime.status.authenticated);
+        let mut hello = ControllerMessage::new(ControllerMessageType::Hello, 0);
+        hello.realtime_token = Some("test-realtime-token".into());
+        inner.realtime.route("127.0.0.1:3456".parse().unwrap(), &hello);
+        assert!(!inner.realtime.status.authenticated);
         assert_eq!(inner.output.snapshot().held_key_count, 0);
         assert!(inner.output.gamepad_status().pressed_buttons.is_empty());
         assert!(inner
@@ -2517,7 +2663,10 @@ mod tests {
         object.remove("artifactVersion");
         object.remove("catalogRevision");
         object.remove("contentHash");
-        object.insert("version".to_owned(), Value::from(thumble_core::PROFILE_ARTIFACT_SCHEMA_VERSION));
+        object.insert(
+            "version".to_owned(),
+            Value::from(thumble_core::PROFILE_ARTIFACT_SCHEMA_VERSION),
+        );
         let artifact_json = serde_json::to_string(&legacy).unwrap();
         let core = HostCore::new(state, "123456").unwrap();
         let (shutdown, _) = watch::channel(false);
@@ -2529,6 +2678,7 @@ mod tests {
                 output: OutputExecutor::new(false, None),
                 control_press_times: VecDeque::new(),
                 input_liveness: Default::default(),
+                realtime: Realtime::default(),
             }),
             paths: paths.clone(),
             requested_port: 0,
@@ -2545,7 +2695,9 @@ mod tests {
             obsolete["version"] = Value::from(version);
             let rejected = shared.cli_profile_transaction(&CliProfileRequest {
                 schema_version: cli_profile::CLI_PROFILE_SCHEMA_VERSION,
-                invocation_id: Some(Uuid::parse_str("abcdefab-cdef-5abc-8def-abcdefabcdef").unwrap()),
+                invocation_id: Some(
+                    Uuid::parse_str("abcdefab-cdef-5abc-8def-abcdefabcdef").unwrap(),
+                ),
                 expected_configuration_revision: Some(1),
                 command: cli_profile::CliProfileCommand::Import {
                     artifact_json: serde_json::to_string(&obsolete).unwrap(),
@@ -2608,6 +2760,7 @@ mod tests {
                 output: OutputExecutor::new(false, None),
                 control_press_times: VecDeque::new(),
                 input_liveness: Default::default(),
+                realtime: Realtime::default(),
             }),
             paths,
             requested_port: 0,
@@ -2690,6 +2843,7 @@ mod tests {
                 output: OutputExecutor::new(false, None),
                 control_press_times: VecDeque::new(),
                 input_liveness: Default::default(),
+                realtime: Realtime::default(),
             }),
             paths,
             requested_port: 0,

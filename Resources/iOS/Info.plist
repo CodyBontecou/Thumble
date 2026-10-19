@@ -87,5 +87,19 @@
     <string>UIInterfaceOrientationLandscapeLeft</string>
     <string>UIInterfaceOrientationLandscapeRight</string>
   </array>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>Record narration when you start a Scrawl development capture.</string>
+  <key>NSAppTransportSecurity</key>
+  <dict>
+    <key>NSAllowsLocalNetworking</key>
+    <true/>
+  </dict>
+  <key>CFBundleURLTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleURLSchemes</key>
+      <array><string>thumble</string></array>
+    </dict>
+  </array>
 </dict>
 </plist>

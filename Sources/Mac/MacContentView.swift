@@ -22,6 +22,7 @@ struct MacContentView: View {
     @State private var keypadExportError: String?
     @StateObject private var sharedKeypadImportModel = MacSharedKeypadImportModel()
     @State private var isShowingSharedKeypadImport = false
+    @State private var isShowingThumbleLinkImport = false
     @State private var isSharedKeypadFileImporterPresented = false
 
     private var shouldPresentOnboarding: Bool {
@@ -77,6 +78,9 @@ struct MacContentView: View {
         } message: {
             Text(keypadExportError ?? "The keypad could not be exported.")
         }
+        .sheet(isPresented: $isShowingThumbleLinkImport) {
+            ThumbleLinkImportView(currentConfiguration: thumbleLinkCurrentConfiguration, onImport: adoptThumbleLink)
+        }
         .sheet(isPresented: $isShowingSharedKeypadImport) {
             MacSharedKeypadImportSheet(
                 model: sharedKeypadImportModel,
@@ -121,6 +125,22 @@ struct MacContentView: View {
         return summary.message
     }
 
+    private func thumbleLinkCurrentConfiguration() throws -> Data {
+        try server.keypadConfigurationExportData(profiles: server.gamepadProfiles,
+            activeProfileID: server.activeGamepadProfileID, defaultProfileID: server.defaultGamepadProfileID,
+            exportingProfileID: nil)
+    }
+
+    private func adoptThumbleLink(_ plan: ThumbleLinkImport.Plan) throws -> String {
+        try plan.requireUnchangedConfiguration(thumbleLinkCurrentConfiguration())
+        let snapshot = server.editorUndoSnapshot()
+        let summary = try server.importKeypadConfiguration(data: plan.configurationData,
+            sourceName: plan.profileName, mode: .replaceMatching)
+        registerMacGamepadUndoSnapshot(snapshot, undoManager: undoManager,
+            undoTarget: gamepadEditorUndoTarget, server: server, actionName: "Import Thumble Link")
+        return summary.message
+    }
+
     private var applicationContent: some View {
         NavigationSplitView {
             List(selection: $selectedSection) {
@@ -138,6 +158,12 @@ struct MacContentView: View {
         }
         .geistScreenBackground()
         .toolbar {
+            ToolbarItem {
+                Button { isShowingThumbleLinkImport = true } label: {
+                    Label("Thumble Link…", systemImage: "link")
+                }
+                .help("Import WoW Forever keybindings from /thumble")
+            }
             ToolbarItem {
                 Button {
                     sharedKeypadImportModel.reset()

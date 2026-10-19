@@ -1,0 +1,23 @@
+{
+  "status": "review-draft",
+  "direction": "iPhone gaming controller for WoW Forever fans",
+  "width": 2622,
+  "height": 1206,
+  "locale": "en-US",
+  "createdAt": "2026-10-19T11:00:40.159Z",
+  "captureMode": "Native iPhone simulator screenshots in Practice Mode. Actual canonical wowForever controls. Manually named class profiles; no automatic class or talent detection. Live gamepad acceptance pending.",
+  "pages": [
+    {
+      "file": "exports/en-US/screenshots/01-iphone-gamepad.png",
+      "sha256": "dc53037b5fc09c52f5f90090ac12a5ab38af2b20072e1f2417f28e87e7fe0079"
+    },
+    {
+      "file": "exports/en-US/screenshots/02-move-look-control.png",
+      "sha256": "7d748bcbb32265ccc07f6c4b9651308b1aff15c797562f6f977f76e8c945175b"
+    },
+    {
+      "file": "exports/en-US/screenshots/03-character-setups.png",
+      "sha256": "d9058d273694cbb8aa878516cbb292f719e8f3886c5adc21bf000266357a962c"
+    }
+  ]
+}

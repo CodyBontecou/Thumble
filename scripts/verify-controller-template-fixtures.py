@@ -55,6 +55,7 @@ EXPECTED_TEMPLATE_IDS = (
     "playStation",
     "xbox",
     "softWhite",
+    "wowForever",
 )
 SAFE_TEMPLATE_ID = re.compile(r"[a-z][A-Za-z0-9]*\Z")
 
@@ -107,7 +108,7 @@ def validate_catalog(catalog: object) -> list[dict[str, object]]:
         raise RuntimeError("controller template catalog schema/version is unsupported")
     entries = catalog["templates"]
     if not isinstance(entries, list) or len(entries) != len(EXPECTED_TEMPLATE_IDS):
-        raise RuntimeError("controller template catalog must contain exactly 17 entries")
+        raise RuntimeError("controller template catalog must contain exactly 18 entries")
 
     validated: list[dict[str, object]] = []
     for expected_id, raw_entry in zip(EXPECTED_TEMPLATE_IDS, entries):

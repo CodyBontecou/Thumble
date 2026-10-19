@@ -1,7 +1,7 @@
 use crate::channel::SharedHostChannel;
 use crate::rate_limit::PressRateLimiter;
 use crate::skin_preview::{
-    render_skin_preview, SkinPreviewOrientation, SkinPreviewRequest, SkinPreviewScheme,
+    render_skin_preview, SkinPreviewActionSet, SkinPreviewOrientation, SkinPreviewRequest, SkinPreviewScheme,
     SkinPreviewState,
 };
 use rmcp::{
@@ -2378,6 +2378,7 @@ pub enum ControllerTemplateInput {
     PlayStation,
     Xbox,
     SoftWhite,
+    WowForever,
 }
 
 impl From<ControllerTemplateInput> for ControllerTemplate {
@@ -2400,6 +2401,7 @@ impl From<ControllerTemplateInput> for ControllerTemplate {
             ControllerTemplateInput::PlayStation => Self::PlayStation,
             ControllerTemplateInput::Xbox => Self::Xbox,
             ControllerTemplateInput::SoftWhite => Self::SoftWhite,
+            ControllerTemplateInput::WowForever => Self::WowForever,
         }
     }
 }
@@ -4090,6 +4092,8 @@ pub struct PreviewSkinWorkspaceParams {
     pub scheme: Option<String>,
     /// Optional `normal`, `pressed`, `active`, or `disabled` control state. Omit for `normal`.
     pub state: Option<String>,
+    /// Held-trigger display layer: base, left-trigger, right-trigger, or both-triggers.
+    pub action_set: Option<String>,
     /// Optional pixel scale between 0.5 and 4. Omit for 2.
     pub scale: Option<f64>,
 }
@@ -4104,6 +4108,7 @@ pub struct PreviewSkinWorkspaceResult {
     pub orientation: String,
     pub color_scheme: String,
     pub state: String,
+    pub action_set: String,
     pub width: u32,
     pub height: u32,
     pub byte_length: u64,
@@ -4605,11 +4610,25 @@ impl ThumbleMcp {
                 ));
             }
         };
+        let action_set = match params.action_set.as_deref() {
+            None => None,
+            Some("base") => Some(SkinPreviewActionSet::Base),
+            Some("left-trigger") => Some(SkinPreviewActionSet::LeftTrigger),
+            Some("right-trigger") => Some(SkinPreviewActionSet::RightTrigger),
+            Some("both-triggers") => Some(SkinPreviewActionSet::BothTriggers),
+            Some(other) => {
+                audit("preview_skin_workspace", "rejected");
+                return Err(format!(
+                    "actionSet must be base, left-trigger, right-trigger, or both-triggers, not {other}"
+                ));
+            }
+        };
         let request = SkinPreviewRequest {
             source_path: PathBuf::from(&params.source_path),
             orientation,
             scheme,
             state,
+            action_set,
             scale: params.scale,
         };
         let image = render_skin_preview(&request).await.inspect_err(|_| {
@@ -4625,6 +4644,7 @@ impl ThumbleMcp {
             orientation: image.orientation,
             color_scheme: image.color_scheme,
             state: image.state,
+            action_set: image.action_set,
             width: image.pixel_width,
             height: image.pixel_height,
             byte_length: image.byte_length,
@@ -5909,6 +5929,7 @@ mod tests {
                 orientation: Some("diagonal".to_owned()),
                 scheme: None,
                 state: None,
+                action_set: None,
                 scale: None,
             }))
             .await
@@ -5923,6 +5944,7 @@ mod tests {
                 orientation: None,
                 scheme: Some("sepia".to_owned()),
                 state: None,
+                action_set: None,
                 scale: None,
             }))
             .await
@@ -5937,6 +5959,7 @@ mod tests {
                 orientation: None,
                 scheme: None,
                 state: None,
+                action_set: None,
                 scale: None,
             }))
             .await
@@ -5945,6 +5968,25 @@ mod tests {
             Err(error) => error,
         };
         assert!(error.contains("absolute"));
+    }
+
+    #[tokio::test]
+    async fn preview_skin_workspace_rejects_unknown_action_set_before_cli() {
+        let server = ThumbleMcp::new(
+            PathBuf::from("/definitely/missing/control.sock"), false, false,
+        );
+        let error = server
+            .preview_skin_workspace(Parameters(PreviewSkinWorkspaceParams {
+                source_path: "/absolute/review.pocketpad".to_owned(),
+                orientation: None,
+                scheme: None,
+                state: None,
+                action_set: Some("typo".to_owned()),
+                scale: None,
+            }))
+            .await
+            .unwrap_err();
+        assert!(error.contains("actionSet"));
     }
 
     /// Full transport round trip with a real CLI render. Enabled by

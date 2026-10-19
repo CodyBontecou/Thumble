@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="874" height="402" viewBox="0 0 874 402">
+<rect width="874" height="402" fill="#E3DFD8"/>
+<path d="M46 161 L64 145 H367 L392 171 H455 L478 142 H807 L829 164 V341 L805 374 H465 L438 348 H394 L368 374 H68 L46 349Z" fill="#C4C7C9" stroke="#59636E" stroke-width="1"/>
+<path d="M391 177 H453 V340 H391Z" fill="#9CA2A8" stroke="#93999F" stroke-width="1"/>
+<path d="M65 173 H358 L376 191 V343 L357 355 H76 L65 343Z" fill="#9CA2A8" stroke="#59636E" stroke-width="1"/>
+<path d="M476 154 H797 L812 180 V334 L793 355 H478 L459 337 V186Z" fill="#9CA2A8" stroke="#59636E" stroke-width="1"/>
+<rect x="146" y="35" width="110" height="116" rx="14" fill="#C4C7C9" stroke="#59636E"/>
+<path d="M158 40H242" stroke="#F4F5F5" stroke-width="1" opacity="0.4"/>
+<path d="M160 97H242" stroke="#93999F" stroke-width="1" opacity="0.6"/>
+<rect x="618" y="35" width="110" height="116" rx="14" fill="#C4C7C9" stroke="#59636E"/>
+<path d="M630 40H714" stroke="#F4F5F5" stroke-width="1" opacity="0.4"/>
+<path d="M632 97H714" stroke="#93999F" stroke-width="1" opacity="0.6"/>
+<circle cx="120" cy="225" r="59" fill="#9CA2A8" stroke="#59636E"/>
+<circle cx="490" cy="280" r="59" fill="#9CA2A8" stroke="#59636E"/>
+<circle cx="285" cy="275" r="87" fill="#9CA2A8" stroke="#59636E"/>
+<circle cx="730" cy="255" r="91" fill="#9CA2A8" stroke="#59636E"/>
+<circle cx="120" cy="225" r="53" fill="none" stroke="#59636E"/>
+<circle cx="490" cy="280" r="53" fill="none" stroke="#59636E"/>
+<path d="M730 160 L747 167 M825 255 L817 271 M730 350 L713 343 M635 255 L643 239" fill="none" stroke="#A72532" stroke-width="2"/>
+<path d="M72 159H351" stroke="#F4F5F5" stroke-width="1" opacity="0.4"/>
+<path d="M486 155H787" stroke="#F4F5F5" stroke-width="1" opacity="0.4"/>
+<path d="M396 195H448" stroke="#A72532" stroke-width="1" opacity="0.75"/>
+<path d="M396 330H448" stroke="#A72532" stroke-width="1" opacity="0.75"/>
+<path d="M399 181H442" stroke="#59636E" stroke-width="1" opacity="0.18"/>
+<path d="M399 193H442" stroke="#59636E" stroke-width="1" opacity="0.18"/>
+<path d="M399 205H442" stroke="#59636E" stroke-width="1" opacity="0.18"/>
+<path d="M170 340H202" stroke="#F4F5F5" stroke-width="1" opacity="0.18"/>
+<path d="M170 353H202" stroke="#F4F5F5" stroke-width="1" opacity="0.18"/>
+<rect x="337" y="89" width="205" height="48" rx="11" fill="#C4C7C9" stroke="#59636E"/>
+<path d="M346 93H532" stroke="#F4F5F5" stroke-width="1" opacity="0.4"/>
+</svg>

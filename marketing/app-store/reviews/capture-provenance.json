@@ -1,0 +1,33 @@
+{
+  "capturedAt": "2026-10-19",
+  "iOS": {
+    "bundleIdentifier": "com.codybontecou.PocketPad.iOS",
+    "version": "1.0.0",
+    "build": "3",
+    "device": "iPhone 17 Pro simulator",
+    "runtime": "iOS 26.5",
+    "mode": "Saved keypad in Practice Mode",
+    "liveInputVerified": false
+  },
+  "macOS": {
+    "bundleIdentifier": "com.thumble.MarketingCapture",
+    "fixture": "Everyday",
+    "isolated": true,
+    "configurationSource": "NSArgumentDomain demo fixture",
+    "liveSyncVerified": false
+  },
+  "captures": [
+    {
+      "file": "source/captures/ios-everyday.png",
+      "sha256": "1b562b5785ffcd5e1dc2c0f6e1cb1ea6f5b6475b023ed240f0e1c4981b7137db"
+    },
+    {
+      "file": "source/captures/mac-everyday.png",
+      "sha256": "41f04965e5e95ad1555462c7a3daa095d5ee7f5a5d832a3828e14479c22c0424"
+    },
+    {
+      "file": "source/captures/ios-developer.png",
+      "sha256": "226424b0e962499680bb276f58439713df8a273ebc883201b3c9cf3c475fcff7"
+    }
+  ]
+}

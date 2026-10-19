@@ -1,0 +1,77 @@
+steps:
+  - launch: com.codybontecou.PocketPad.iOS
+  - run: receiver-physical-scroll-inputs.yaml
+  - tap:
+      text: "8765"
+  - tool: run-sequence
+    args:
+      steps:
+        - tool: keyboard
+          args:
+            key: backspace
+          delayMs: 0
+        - tool: keyboard
+          args:
+            key: backspace
+          delayMs: 0
+        - tool: keyboard
+          args:
+            key: backspace
+          delayMs: 0
+        - tool: keyboard
+          args:
+            key: backspace
+          delayMs: 0
+        - tool: keyboard
+          args:
+            key: backspace
+          delayMs: 0
+        - tool: keyboard
+          args:
+            key: backspace
+          delayMs: 0
+        - tool: keyboard
+          args:
+            text: "18866"
+        - tool: keyboard
+          args:
+            key: enter
+  - tap:
+      text: Request Pairing
+  - tool: await-ui-element
+    args:
+      selector:
+        text: Pairing request accepted
+      condition: visible
+      timeoutMs: 12000
+  - tool: launch-app
+    args:
+      bundleId: com.apple.springboard
+  - tap:
+      text: Allow
+  - tool: launch-app
+    args:
+      bundleId: com.codybontecou.PocketPad.iOS
+  - tool: await-ui-element
+    args:
+      selector:
+        text: Pairing request accepted
+      condition: visible
+      timeoutMs: 10000
+  - tool: run-sequence
+    args:
+      steps:
+        - tool: keyboard
+          args:
+            text: "{{secret:RECEIVER_PHYSICAL_LINUX_CODE}}"
+        - tool: keyboard
+          args:
+            key: enter
+  - tap:
+      text: Pair
+  - tool: await-ui-element
+    args:
+      selector:
+        identifier: keypad.button.00000000-0000-0000-0000-000000000105
+      condition: visible
+      timeoutMs: 10000

@@ -1,0 +1,3509 @@
+{
+  "customization": {
+    "accentStyle": "blue",
+    "buttonCustomizations": [
+      "00000000-0000-0000-0000-000000000101",
+      {
+        "centerX": 0.32608695652173914,
+        "centerY": 0.554726368159204,
+        "cornerRadius": 12,
+        "fillColor": {
+          "alpha": 1,
+          "blue": 0.27450980392156865,
+          "green": 0.2,
+          "red": 0.14901960784313725
+        },
+        "heightScale": 0.52,
+        "isHidden": false,
+        "isLocationLocked": false,
+        "rotationDegrees": 0,
+        "shadowStrength": 1,
+        "shape": "rounded_rectangle",
+        "widthScale": 0.52,
+        "zIndex": 0
+      },
+      "00000000-0000-0000-0000-000000000102",
+      {
+        "centerX": 0.32608695652173914,
+        "centerY": 0.8134328358208955,
+        "cornerRadius": 12,
+        "fillColor": {
+          "alpha": 1,
+          "blue": 0.27450980392156865,
+          "green": 0.2,
+          "red": 0.14901960784313725
+        },
+        "heightScale": 0.52,
+        "isHidden": false,
+        "isLocationLocked": false,
+        "rotationDegrees": 0,
+        "shadowStrength": 1,
+        "shape": "rounded_rectangle",
+        "widthScale": 0.52,
+        "zIndex": 0
+      },
+      "00000000-0000-0000-0000-000000000103",
+      {
+        "centerX": 0.2665903890160183,
+        "centerY": 0.6840796019900498,
+        "cornerRadius": 12,
+        "fillColor": {
+          "alpha": 1,
+          "blue": 0.27450980392156865,
+          "green": 0.2,
+          "red": 0.14901960784313725
+        },
+        "heightScale": 0.52,
+        "isHidden": false,
+        "isLocationLocked": false,
+        "rotationDegrees": 0,
+        "shadowStrength": 1,
+        "shape": "rounded_rectangle",
+        "widthScale": 0.52,
+        "zIndex": 0
+      },
+      "00000000-0000-0000-0000-000000000104",
+      {
+        "centerX": 0.38558352402745993,
+        "centerY": 0.6840796019900498,
+        "cornerRadius": 12,
+        "fillColor": {
+          "alpha": 1,
+          "blue": 0.27450980392156865,
+          "green": 0.2,
+          "red": 0.14901960784313725
+        },
+        "heightScale": 0.52,
+        "isHidden": false,
+        "isLocationLocked": false,
+        "rotationDegrees": 0,
+        "shadowStrength": 1,
+        "shape": "rounded_rectangle",
+        "widthScale": 0.52,
+        "zIndex": 0
+      },
+      "00000000-0000-0000-0000-000000000105",
+      {
+        "centerX": 0.8352402745995423,
+        "centerY": 0.763681592039801,
+        "cornerRadius": 12,
+        "fillColor": {
+          "alpha": 1,
+          "blue": 0.27450980392156865,
+          "green": 0.2,
+          "red": 0.14901960784313725
+        },
+        "heightScale": 0.52,
+        "isHidden": false,
+        "isLocationLocked": false,
+        "rotationDegrees": 0,
+        "shadowStrength": 1,
+        "shape": "rounded_rectangle",
+        "widthScale": 0.52,
+        "zIndex": 0
+      },
+      "00000000-0000-0000-0000-000000000106",
+      {
+        "centerX": 0.7757437070938215,
+        "centerY": 0.6343283582089553,
+        "cornerRadius": 12,
+        "fillColor": {
+          "alpha": 1,
+          "blue": 0.27450980392156865,
+          "green": 0.2,
+          "red": 0.14901960784313725
+        },
+        "heightScale": 0.52,
+        "isHidden": false,
+        "isLocationLocked": false,
+        "rotationDegrees": 0,
+        "shadowStrength": 1,
+        "shape": "rounded_rectangle",
+        "widthScale": 0.52,
+        "zIndex": 0
+      },
+      "00000000-0000-0000-0000-000000000107",
+      {
+        "centerX": 0.8947368421052632,
+        "centerY": 0.6343283582089553,
+        "cornerRadius": 12,
+        "fillColor": {
+          "alpha": 1,
+          "blue": 0.27450980392156865,
+          "green": 0.2,
+          "red": 0.14901960784313725
+        },
+        "heightScale": 0.52,
+        "isHidden": false,
+        "isLocationLocked": false,
+        "rotationDegrees": 0,
+        "shadowStrength": 1,
+        "shape": "rounded_rectangle",
+        "widthScale": 0.52,
+        "zIndex": 0
+      },
+      "00000000-0000-0000-0000-000000000108",
+      {
+        "centerX": 0.8352402745995423,
+        "centerY": 0.5049751243781094,
+        "cornerRadius": 12,
+        "fillColor": {
+          "alpha": 1,
+          "blue": 0.27450980392156865,
+          "green": 0.2,
+          "red": 0.14901960784313725
+        },
+        "heightScale": 0.52,
+        "isHidden": false,
+        "isLocationLocked": false,
+        "rotationDegrees": 0,
+        "shadowStrength": 1,
+        "shape": "rounded_rectangle",
+        "widthScale": 0.52,
+        "zIndex": 0
+      },
+      "00000000-0000-0000-0000-000000000109",
+      {
+        "centerX": 0.44,
+        "centerY": 0.28,
+        "fillColor": {
+          "alpha": 1,
+          "blue": 0.27450980392156865,
+          "green": 0.2,
+          "red": 0.14901960784313725
+        },
+        "heightScale": 0.52,
+        "isHidden": false,
+        "isLocationLocked": false,
+        "rotationDegrees": 0,
+        "shadowStrength": 1,
+        "shape": "capsule",
+        "widthScale": 0.65,
+        "zIndex": 0
+      },
+      "00000000-0000-0000-0000-00000000010A",
+      {
+        "centerX": 0.56,
+        "centerY": 0.28,
+        "fillColor": {
+          "alpha": 1,
+          "blue": 0.27450980392156865,
+          "green": 0.2,
+          "red": 0.14901960784313725
+        },
+        "heightScale": 0.52,
+        "isHidden": false,
+        "isLocationLocked": false,
+        "rotationDegrees": 0,
+        "shadowStrength": 1,
+        "shape": "capsule",
+        "widthScale": 0.65,
+        "zIndex": 0
+      }
+    ],
+    "colorSchemePreference": "dark",
+    "controlScale": "standard",
+    "customButtons": [
+      {
+        "controlKind": "joystick",
+        "id": "C5EC51F7-C610-572F-9171-A8699D614ED6",
+        "joystickOutputSettings": {
+          "analogTarget": "left_stick",
+          "deadZone": 0.12,
+          "invertX": false,
+          "invertY": false,
+          "sendsDigitalDirections": false,
+          "sensitivity": 1,
+          "snapToCardinal": false
+        },
+        "label": "Move",
+        "layout": {
+          "centerX": 0.13729977116704806,
+          "centerY": 0.5597014925373134,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.72,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1.25,
+          "shape": "circle",
+          "widthScale": 0.72,
+          "zIndex": 0
+        }
+      },
+      {
+        "controlKind": "joystick",
+        "id": "0371280B-F6EE-5EB4-BA12-89D240745D3C",
+        "joystickOutputSettings": {
+          "analogTarget": "right_stick",
+          "deadZone": 0.12,
+          "invertX": false,
+          "invertY": false,
+          "sendsDigitalDirections": false,
+          "sensitivity": 1,
+          "snapToCardinal": false
+        },
+        "label": "Look",
+        "layout": {
+          "centerX": 0.5606407322654462,
+          "centerY": 0.6965174129353234,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.72,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1.25,
+          "shape": "circle",
+          "widthScale": 0.72,
+          "zIndex": 0
+        }
+      },
+      {
+        "controlKind": "button",
+        "id": "D0DE67B0-4F62-5ED1-B421-2B5AAF3CD2A1",
+        "label": "LT",
+        "layout": {
+          "centerX": 0.23,
+          "centerY": 0.17,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "capsule",
+          "widthScale": 1.05,
+          "zIndex": 0
+        }
+      },
+      {
+        "controlKind": "button",
+        "id": "A91AA704-1EDD-5E98-925A-40708B689194",
+        "label": "RT",
+        "layout": {
+          "centerX": 0.77,
+          "centerY": 0.17,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "capsule",
+          "widthScale": 1.05,
+          "zIndex": 0
+        }
+      },
+      {
+        "controlKind": "button",
+        "id": "BAC5A253-EE3E-56CA-9D16-8C04ED39DAA1",
+        "label": "LB",
+        "layout": {
+          "centerX": 0.23,
+          "centerY": 0.31,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "capsule",
+          "widthScale": 1.05,
+          "zIndex": 0
+        }
+      },
+      {
+        "controlKind": "button",
+        "id": "B3DB7E55-B514-522B-BBFD-AB2754BF0522",
+        "label": "RB",
+        "layout": {
+          "centerX": 0.77,
+          "centerY": 0.31,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "capsule",
+          "widthScale": 1.05,
+          "zIndex": 0
+        }
+      },
+      {
+        "controlKind": "button",
+        "id": "EFD4CC6A-AD8A-51FE-B17E-0A2C672989D2",
+        "label": "L3",
+        "layout": {
+          "centerX": 0.137,
+          "centerY": 0.88,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "capsule",
+          "widthScale": 0.65,
+          "zIndex": 0
+        }
+      },
+      {
+        "controlKind": "button",
+        "id": "DE252A56-0FF1-5086-AA0E-798E72E3032A",
+        "label": "R3",
+        "layout": {
+          "centerX": 0.56,
+          "centerY": 0.88,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "capsule",
+          "widthScale": 0.65,
+          "zIndex": 0
+        }
+      }
+    ],
+    "designMetadata": {
+      "grid": {
+        "gridSize": 16,
+        "showsGrid": false,
+        "snapToGrid": false,
+        "snapToObjects": true,
+        "snapTolerance": 6
+      },
+      "groups": [],
+      "guides": [],
+      "layerOrder": [
+        {
+          "kind": "system",
+          "system": "top_bar_activation"
+        },
+        {
+          "button": "00000000-0000-0000-0000-000000000101",
+          "kind": "builtin"
+        },
+        {
+          "button": "00000000-0000-0000-0000-000000000102",
+          "kind": "builtin"
+        },
+        {
+          "button": "00000000-0000-0000-0000-000000000103",
+          "kind": "builtin"
+        },
+        {
+          "button": "00000000-0000-0000-0000-000000000104",
+          "kind": "builtin"
+        },
+        {
+          "button": "00000000-0000-0000-0000-000000000105",
+          "kind": "builtin"
+        },
+        {
+          "button": "00000000-0000-0000-0000-000000000106",
+          "kind": "builtin"
+        },
+        {
+          "button": "00000000-0000-0000-0000-000000000107",
+          "kind": "builtin"
+        },
+        {
+          "button": "00000000-0000-0000-0000-000000000108",
+          "kind": "builtin"
+        },
+        {
+          "button": "00000000-0000-0000-0000-000000000109",
+          "kind": "builtin"
+        },
+        {
+          "button": "00000000-0000-0000-0000-00000000010A",
+          "kind": "builtin"
+        },
+        {
+          "id": "C5EC51F7-C610-572F-9171-A8699D614ED6",
+          "kind": "custom"
+        },
+        {
+          "id": "0371280B-F6EE-5EB4-BA12-89D240745D3C",
+          "kind": "custom"
+        },
+        {
+          "id": "D0DE67B0-4F62-5ED1-B421-2B5AAF3CD2A1",
+          "kind": "custom"
+        },
+        {
+          "id": "A91AA704-1EDD-5E98-925A-40708B689194",
+          "kind": "custom"
+        },
+        {
+          "id": "BAC5A253-EE3E-56CA-9D16-8C04ED39DAA1",
+          "kind": "custom"
+        },
+        {
+          "id": "B3DB7E55-B514-522B-BBFD-AB2754BF0522",
+          "kind": "custom"
+        },
+        {
+          "id": "EFD4CC6A-AD8A-51FE-B17E-0A2C672989D2",
+          "kind": "custom"
+        },
+        {
+          "id": "DE252A56-0FF1-5086-AA0E-798E72E3032A",
+          "kind": "custom"
+        }
+      ],
+      "schemaVersion": 1,
+      "sourceTemplateID": "wowforever",
+      "sourceTemplateRevision": 1,
+      "tags": []
+    },
+    "deviceCanvas": {
+      "frameID": "iphone-17-pro-landscape"
+    },
+    "elements": [
+      {
+        "defaultOutput": {
+          "gamepadButtons": [
+            "dpadUp"
+          ]
+        },
+        "id": "00000000-0000-0000-0000-000000000101",
+        "kind": "button",
+        "label": "↑",
+        "layout": {
+          "centerX": 0.32608695652173914,
+          "centerY": 0.554726368159204,
+          "cornerRadius": 12,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "rounded_rectangle",
+          "widthScale": 0.52,
+          "zIndex": 0
+        },
+        "output": {
+          "gamepadButtons": [
+            "dpadUp"
+          ]
+        },
+        "partOutputs": [],
+        "visualRole": "custom"
+      },
+      {
+        "defaultOutput": {
+          "gamepadButtons": [
+            "dpadDown"
+          ]
+        },
+        "id": "00000000-0000-0000-0000-000000000102",
+        "kind": "button",
+        "label": "↓",
+        "layout": {
+          "centerX": 0.32608695652173914,
+          "centerY": 0.8134328358208955,
+          "cornerRadius": 12,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "rounded_rectangle",
+          "widthScale": 0.52,
+          "zIndex": 0
+        },
+        "output": {
+          "gamepadButtons": [
+            "dpadDown"
+          ]
+        },
+        "partOutputs": [],
+        "visualRole": "custom"
+      },
+      {
+        "defaultOutput": {
+          "gamepadButtons": [
+            "dpadLeft"
+          ]
+        },
+        "id": "00000000-0000-0000-0000-000000000103",
+        "kind": "button",
+        "label": "←",
+        "layout": {
+          "centerX": 0.2665903890160183,
+          "centerY": 0.6840796019900498,
+          "cornerRadius": 12,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "rounded_rectangle",
+          "widthScale": 0.52,
+          "zIndex": 0
+        },
+        "output": {
+          "gamepadButtons": [
+            "dpadLeft"
+          ]
+        },
+        "partOutputs": [],
+        "visualRole": "custom"
+      },
+      {
+        "defaultOutput": {
+          "gamepadButtons": [
+            "dpadRight"
+          ]
+        },
+        "id": "00000000-0000-0000-0000-000000000104",
+        "kind": "button",
+        "label": "→",
+        "layout": {
+          "centerX": 0.38558352402745993,
+          "centerY": 0.6840796019900498,
+          "cornerRadius": 12,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "rounded_rectangle",
+          "widthScale": 0.52,
+          "zIndex": 0
+        },
+        "output": {
+          "gamepadButtons": [
+            "dpadRight"
+          ]
+        },
+        "partOutputs": [],
+        "visualRole": "custom"
+      },
+      {
+        "defaultOutput": {
+          "gamepadButtons": [
+            "south"
+          ]
+        },
+        "id": "00000000-0000-0000-0000-000000000105",
+        "kind": "button",
+        "label": "A",
+        "layout": {
+          "centerX": 0.8352402745995423,
+          "centerY": 0.763681592039801,
+          "cornerRadius": 12,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "rounded_rectangle",
+          "widthScale": 0.52,
+          "zIndex": 0
+        },
+        "output": {
+          "gamepadButtons": [
+            "south"
+          ]
+        },
+        "partOutputs": [],
+        "visualRole": "custom"
+      },
+      {
+        "defaultOutput": {
+          "gamepadButtons": [
+            "west"
+          ]
+        },
+        "id": "00000000-0000-0000-0000-000000000106",
+        "kind": "button",
+        "label": "X",
+        "layout": {
+          "centerX": 0.7757437070938215,
+          "centerY": 0.6343283582089553,
+          "cornerRadius": 12,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "rounded_rectangle",
+          "widthScale": 0.52,
+          "zIndex": 0
+        },
+        "output": {
+          "gamepadButtons": [
+            "west"
+          ]
+        },
+        "partOutputs": [],
+        "visualRole": "custom"
+      },
+      {
+        "defaultOutput": {
+          "gamepadButtons": [
+            "east"
+          ]
+        },
+        "id": "00000000-0000-0000-0000-000000000107",
+        "kind": "button",
+        "label": "B",
+        "layout": {
+          "centerX": 0.8947368421052632,
+          "centerY": 0.6343283582089553,
+          "cornerRadius": 12,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "rounded_rectangle",
+          "widthScale": 0.52,
+          "zIndex": 0
+        },
+        "output": {
+          "gamepadButtons": [
+            "east"
+          ]
+        },
+        "partOutputs": [],
+        "visualRole": "custom"
+      },
+      {
+        "defaultOutput": {
+          "gamepadButtons": [
+            "north"
+          ]
+        },
+        "id": "00000000-0000-0000-0000-000000000108",
+        "kind": "button",
+        "label": "Y",
+        "layout": {
+          "centerX": 0.8352402745995423,
+          "centerY": 0.5049751243781094,
+          "cornerRadius": 12,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "rounded_rectangle",
+          "widthScale": 0.52,
+          "zIndex": 0
+        },
+        "output": {
+          "gamepadButtons": [
+            "north"
+          ]
+        },
+        "partOutputs": [],
+        "visualRole": "custom"
+      },
+      {
+        "defaultOutput": {
+          "gamepadButtons": [
+            "select"
+          ]
+        },
+        "id": "00000000-0000-0000-0000-000000000109",
+        "kind": "button",
+        "label": "View",
+        "layout": {
+          "centerX": 0.44,
+          "centerY": 0.28,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "capsule",
+          "widthScale": 0.65,
+          "zIndex": 0
+        },
+        "output": {
+          "gamepadButtons": [
+            "select"
+          ]
+        },
+        "partOutputs": [],
+        "visualRole": "custom"
+      },
+      {
+        "defaultOutput": {
+          "gamepadButtons": [
+            "start"
+          ]
+        },
+        "id": "00000000-0000-0000-0000-00000000010A",
+        "kind": "button",
+        "label": "Menu",
+        "layout": {
+          "centerX": 0.56,
+          "centerY": 0.28,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "capsule",
+          "widthScale": 0.65,
+          "zIndex": 0
+        },
+        "output": {
+          "gamepadButtons": [
+            "start"
+          ]
+        },
+        "partOutputs": [],
+        "visualRole": "custom"
+      },
+      {
+        "id": "C5EC51F7-C610-572F-9171-A8699D614ED6",
+        "joystickOutputSettings": {
+          "analogTarget": "left_stick",
+          "deadZone": 0.12,
+          "invertX": false,
+          "invertY": false,
+          "sendsDigitalDirections": false,
+          "sensitivity": 1,
+          "snapToCardinal": false
+        },
+        "kind": "joystick",
+        "label": "Move",
+        "layout": {
+          "centerX": 0.13729977116704806,
+          "centerY": 0.5597014925373134,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.72,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1.25,
+          "shape": "circle",
+          "widthScale": 0.72,
+          "zIndex": 0
+        },
+        "output": {
+          "gamepadButtons": []
+        },
+        "partOutputs": []
+      },
+      {
+        "id": "0371280B-F6EE-5EB4-BA12-89D240745D3C",
+        "joystickOutputSettings": {
+          "analogTarget": "right_stick",
+          "deadZone": 0.12,
+          "invertX": false,
+          "invertY": false,
+          "sendsDigitalDirections": false,
+          "sensitivity": 1,
+          "snapToCardinal": false
+        },
+        "kind": "joystick",
+        "label": "Look",
+        "layout": {
+          "centerX": 0.5606407322654462,
+          "centerY": 0.6965174129353234,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.72,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1.25,
+          "shape": "circle",
+          "widthScale": 0.72,
+          "zIndex": 0
+        },
+        "output": {
+          "gamepadButtons": []
+        },
+        "partOutputs": []
+      },
+      {
+        "defaultOutput": {
+          "gamepadButtons": [
+            "leftTriggerButton"
+          ]
+        },
+        "id": "D0DE67B0-4F62-5ED1-B421-2B5AAF3CD2A1",
+        "kind": "button",
+        "label": "LT",
+        "layout": {
+          "centerX": 0.23,
+          "centerY": 0.17,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "capsule",
+          "widthScale": 1.05,
+          "zIndex": 0
+        },
+        "output": {
+          "gamepadButtons": [
+            "leftTriggerButton"
+          ]
+        },
+        "partOutputs": []
+      },
+      {
+        "defaultOutput": {
+          "gamepadButtons": [
+            "rightTriggerButton"
+          ]
+        },
+        "id": "A91AA704-1EDD-5E98-925A-40708B689194",
+        "kind": "button",
+        "label": "RT",
+        "layout": {
+          "centerX": 0.77,
+          "centerY": 0.17,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "capsule",
+          "widthScale": 1.05,
+          "zIndex": 0
+        },
+        "output": {
+          "gamepadButtons": [
+            "rightTriggerButton"
+          ]
+        },
+        "partOutputs": []
+      },
+      {
+        "defaultOutput": {
+          "gamepadButtons": [
+            "leftShoulder"
+          ]
+        },
+        "id": "BAC5A253-EE3E-56CA-9D16-8C04ED39DAA1",
+        "kind": "button",
+        "label": "LB",
+        "layout": {
+          "centerX": 0.23,
+          "centerY": 0.31,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "capsule",
+          "widthScale": 1.05,
+          "zIndex": 0
+        },
+        "output": {
+          "gamepadButtons": [
+            "leftShoulder"
+          ]
+        },
+        "partOutputs": []
+      },
+      {
+        "defaultOutput": {
+          "gamepadButtons": [
+            "rightShoulder"
+          ]
+        },
+        "id": "B3DB7E55-B514-522B-BBFD-AB2754BF0522",
+        "kind": "button",
+        "label": "RB",
+        "layout": {
+          "centerX": 0.77,
+          "centerY": 0.31,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "capsule",
+          "widthScale": 1.05,
+          "zIndex": 0
+        },
+        "output": {
+          "gamepadButtons": [
+            "rightShoulder"
+          ]
+        },
+        "partOutputs": []
+      },
+      {
+        "defaultOutput": {
+          "gamepadButtons": [
+            "leftStickPress"
+          ]
+        },
+        "id": "EFD4CC6A-AD8A-51FE-B17E-0A2C672989D2",
+        "kind": "button",
+        "label": "L3",
+        "layout": {
+          "centerX": 0.137,
+          "centerY": 0.88,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "capsule",
+          "widthScale": 0.65,
+          "zIndex": 0
+        },
+        "output": {
+          "gamepadButtons": [
+            "leftStickPress"
+          ]
+        },
+        "partOutputs": []
+      },
+      {
+        "defaultOutput": {
+          "gamepadButtons": [
+            "rightStickPress"
+          ]
+        },
+        "id": "DE252A56-0FF1-5086-AA0E-798E72E3032A",
+        "kind": "button",
+        "label": "R3",
+        "layout": {
+          "centerX": 0.56,
+          "centerY": 0.88,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "capsule",
+          "widthScale": 0.65,
+          "zIndex": 0
+        },
+        "output": {
+          "gamepadButtons": [
+            "rightStickPress"
+          ]
+        },
+        "partOutputs": []
+      }
+    ],
+    "labelOverrides": [
+      "00000000-0000-0000-0000-000000000101",
+      "↑",
+      "00000000-0000-0000-0000-000000000102",
+      "↓",
+      "00000000-0000-0000-0000-000000000103",
+      "←",
+      "00000000-0000-0000-0000-000000000104",
+      "→",
+      "00000000-0000-0000-0000-000000000105",
+      "A",
+      "00000000-0000-0000-0000-000000000106",
+      "X",
+      "00000000-0000-0000-0000-000000000107",
+      "B",
+      "00000000-0000-0000-0000-000000000108",
+      "Y",
+      "00000000-0000-0000-0000-000000000109",
+      "View",
+      "00000000-0000-0000-0000-00000000010A",
+      "Menu"
+    ],
+    "layoutMode": "standard",
+    "showsButtonLabels": true,
+    "updatedAt": 0
+  },
+  "id": "6B8007CC-1A91-5F35-8218-19B9D3FE8C28",
+  "landscapeCustomization": {
+    "accentStyle": "blue",
+    "buttonCustomizations": [
+      "00000000-0000-0000-0000-000000000101",
+      {
+        "centerX": 0.32608695652173914,
+        "centerY": 0.554726368159204,
+        "cornerRadius": 12,
+        "fillColor": {
+          "alpha": 1,
+          "blue": 0.27450980392156865,
+          "green": 0.2,
+          "red": 0.14901960784313725
+        },
+        "heightScale": 0.52,
+        "isHidden": false,
+        "isLocationLocked": false,
+        "rotationDegrees": 0,
+        "shadowStrength": 1,
+        "shape": "rounded_rectangle",
+        "widthScale": 0.52,
+        "zIndex": 0
+      },
+      "00000000-0000-0000-0000-000000000102",
+      {
+        "centerX": 0.32608695652173914,
+        "centerY": 0.8134328358208955,
+        "cornerRadius": 12,
+        "fillColor": {
+          "alpha": 1,
+          "blue": 0.27450980392156865,
+          "green": 0.2,
+          "red": 0.14901960784313725
+        },
+        "heightScale": 0.52,
+        "isHidden": false,
+        "isLocationLocked": false,
+        "rotationDegrees": 0,
+        "shadowStrength": 1,
+        "shape": "rounded_rectangle",
+        "widthScale": 0.52,
+        "zIndex": 0
+      },
+      "00000000-0000-0000-0000-000000000103",
+      {
+        "centerX": 0.2665903890160183,
+        "centerY": 0.6840796019900498,
+        "cornerRadius": 12,
+        "fillColor": {
+          "alpha": 1,
+          "blue": 0.27450980392156865,
+          "green": 0.2,
+          "red": 0.14901960784313725
+        },
+        "heightScale": 0.52,
+        "isHidden": false,
+        "isLocationLocked": false,
+        "rotationDegrees": 0,
+        "shadowStrength": 1,
+        "shape": "rounded_rectangle",
+        "widthScale": 0.52,
+        "zIndex": 0
+      },
+      "00000000-0000-0000-0000-000000000104",
+      {
+        "centerX": 0.38558352402745993,
+        "centerY": 0.6840796019900498,
+        "cornerRadius": 12,
+        "fillColor": {
+          "alpha": 1,
+          "blue": 0.27450980392156865,
+          "green": 0.2,
+          "red": 0.14901960784313725
+        },
+        "heightScale": 0.52,
+        "isHidden": false,
+        "isLocationLocked": false,
+        "rotationDegrees": 0,
+        "shadowStrength": 1,
+        "shape": "rounded_rectangle",
+        "widthScale": 0.52,
+        "zIndex": 0
+      },
+      "00000000-0000-0000-0000-000000000105",
+      {
+        "centerX": 0.8352402745995423,
+        "centerY": 0.763681592039801,
+        "cornerRadius": 12,
+        "fillColor": {
+          "alpha": 1,
+          "blue": 0.27450980392156865,
+          "green": 0.2,
+          "red": 0.14901960784313725
+        },
+        "heightScale": 0.52,
+        "isHidden": false,
+        "isLocationLocked": false,
+        "rotationDegrees": 0,
+        "shadowStrength": 1,
+        "shape": "rounded_rectangle",
+        "widthScale": 0.52,
+        "zIndex": 0
+      },
+      "00000000-0000-0000-0000-000000000106",
+      {
+        "centerX": 0.7757437070938215,
+        "centerY": 0.6343283582089553,
+        "cornerRadius": 12,
+        "fillColor": {
+          "alpha": 1,
+          "blue": 0.27450980392156865,
+          "green": 0.2,
+          "red": 0.14901960784313725
+        },
+        "heightScale": 0.52,
+        "isHidden": false,
+        "isLocationLocked": false,
+        "rotationDegrees": 0,
+        "shadowStrength": 1,
+        "shape": "rounded_rectangle",
+        "widthScale": 0.52,
+        "zIndex": 0
+      },
+      "00000000-0000-0000-0000-000000000107",
+      {
+        "centerX": 0.8947368421052632,
+        "centerY": 0.6343283582089553,
+        "cornerRadius": 12,
+        "fillColor": {
+          "alpha": 1,
+          "blue": 0.27450980392156865,
+          "green": 0.2,
+          "red": 0.14901960784313725
+        },
+        "heightScale": 0.52,
+        "isHidden": false,
+        "isLocationLocked": false,
+        "rotationDegrees": 0,
+        "shadowStrength": 1,
+        "shape": "rounded_rectangle",
+        "widthScale": 0.52,
+        "zIndex": 0
+      },
+      "00000000-0000-0000-0000-000000000108",
+      {
+        "centerX": 0.8352402745995423,
+        "centerY": 0.5049751243781094,
+        "cornerRadius": 12,
+        "fillColor": {
+          "alpha": 1,
+          "blue": 0.27450980392156865,
+          "green": 0.2,
+          "red": 0.14901960784313725
+        },
+        "heightScale": 0.52,
+        "isHidden": false,
+        "isLocationLocked": false,
+        "rotationDegrees": 0,
+        "shadowStrength": 1,
+        "shape": "rounded_rectangle",
+        "widthScale": 0.52,
+        "zIndex": 0
+      },
+      "00000000-0000-0000-0000-000000000109",
+      {
+        "centerX": 0.44,
+        "centerY": 0.28,
+        "fillColor": {
+          "alpha": 1,
+          "blue": 0.27450980392156865,
+          "green": 0.2,
+          "red": 0.14901960784313725
+        },
+        "heightScale": 0.52,
+        "isHidden": false,
+        "isLocationLocked": false,
+        "rotationDegrees": 0,
+        "shadowStrength": 1,
+        "shape": "capsule",
+        "widthScale": 0.65,
+        "zIndex": 0
+      },
+      "00000000-0000-0000-0000-00000000010A",
+      {
+        "centerX": 0.56,
+        "centerY": 0.28,
+        "fillColor": {
+          "alpha": 1,
+          "blue": 0.27450980392156865,
+          "green": 0.2,
+          "red": 0.14901960784313725
+        },
+        "heightScale": 0.52,
+        "isHidden": false,
+        "isLocationLocked": false,
+        "rotationDegrees": 0,
+        "shadowStrength": 1,
+        "shape": "capsule",
+        "widthScale": 0.65,
+        "zIndex": 0
+      }
+    ],
+    "colorSchemePreference": "dark",
+    "controlScale": "standard",
+    "customButtons": [
+      {
+        "controlKind": "joystick",
+        "id": "C5EC51F7-C610-572F-9171-A8699D614ED6",
+        "joystickOutputSettings": {
+          "analogTarget": "left_stick",
+          "deadZone": 0.12,
+          "invertX": false,
+          "invertY": false,
+          "sendsDigitalDirections": false,
+          "sensitivity": 1,
+          "snapToCardinal": false
+        },
+        "label": "Move",
+        "layout": {
+          "centerX": 0.13729977116704806,
+          "centerY": 0.5597014925373134,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.72,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1.25,
+          "shape": "circle",
+          "widthScale": 0.72,
+          "zIndex": 0
+        }
+      },
+      {
+        "controlKind": "joystick",
+        "id": "0371280B-F6EE-5EB4-BA12-89D240745D3C",
+        "joystickOutputSettings": {
+          "analogTarget": "right_stick",
+          "deadZone": 0.12,
+          "invertX": false,
+          "invertY": false,
+          "sendsDigitalDirections": false,
+          "sensitivity": 1,
+          "snapToCardinal": false
+        },
+        "label": "Look",
+        "layout": {
+          "centerX": 0.5606407322654462,
+          "centerY": 0.6965174129353234,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.72,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1.25,
+          "shape": "circle",
+          "widthScale": 0.72,
+          "zIndex": 0
+        }
+      },
+      {
+        "controlKind": "button",
+        "id": "D0DE67B0-4F62-5ED1-B421-2B5AAF3CD2A1",
+        "label": "LT",
+        "layout": {
+          "centerX": 0.23,
+          "centerY": 0.17,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "capsule",
+          "widthScale": 1.05,
+          "zIndex": 0
+        }
+      },
+      {
+        "controlKind": "button",
+        "id": "A91AA704-1EDD-5E98-925A-40708B689194",
+        "label": "RT",
+        "layout": {
+          "centerX": 0.77,
+          "centerY": 0.17,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "capsule",
+          "widthScale": 1.05,
+          "zIndex": 0
+        }
+      },
+      {
+        "controlKind": "button",
+        "id": "BAC5A253-EE3E-56CA-9D16-8C04ED39DAA1",
+        "label": "LB",
+        "layout": {
+          "centerX": 0.23,
+          "centerY": 0.31,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "capsule",
+          "widthScale": 1.05,
+          "zIndex": 0
+        }
+      },
+      {
+        "controlKind": "button",
+        "id": "B3DB7E55-B514-522B-BBFD-AB2754BF0522",
+        "label": "RB",
+        "layout": {
+          "centerX": 0.77,
+          "centerY": 0.31,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "capsule",
+          "widthScale": 1.05,
+          "zIndex": 0
+        }
+      },
+      {
+        "controlKind": "button",
+        "id": "EFD4CC6A-AD8A-51FE-B17E-0A2C672989D2",
+        "label": "L3",
+        "layout": {
+          "centerX": 0.137,
+          "centerY": 0.88,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "capsule",
+          "widthScale": 0.65,
+          "zIndex": 0
+        }
+      },
+      {
+        "controlKind": "button",
+        "id": "DE252A56-0FF1-5086-AA0E-798E72E3032A",
+        "label": "R3",
+        "layout": {
+          "centerX": 0.56,
+          "centerY": 0.88,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "capsule",
+          "widthScale": 0.65,
+          "zIndex": 0
+        }
+      }
+    ],
+    "designMetadata": {
+      "grid": {
+        "gridSize": 16,
+        "showsGrid": false,
+        "snapToGrid": false,
+        "snapToObjects": true,
+        "snapTolerance": 6
+      },
+      "groups": [],
+      "guides": [],
+      "layerOrder": [
+        {
+          "kind": "system",
+          "system": "top_bar_activation"
+        },
+        {
+          "button": "00000000-0000-0000-0000-000000000101",
+          "kind": "builtin"
+        },
+        {
+          "button": "00000000-0000-0000-0000-000000000102",
+          "kind": "builtin"
+        },
+        {
+          "button": "00000000-0000-0000-0000-000000000103",
+          "kind": "builtin"
+        },
+        {
+          "button": "00000000-0000-0000-0000-000000000104",
+          "kind": "builtin"
+        },
+        {
+          "button": "00000000-0000-0000-0000-000000000105",
+          "kind": "builtin"
+        },
+        {
+          "button": "00000000-0000-0000-0000-000000000106",
+          "kind": "builtin"
+        },
+        {
+          "button": "00000000-0000-0000-0000-000000000107",
+          "kind": "builtin"
+        },
+        {
+          "button": "00000000-0000-0000-0000-000000000108",
+          "kind": "builtin"
+        },
+        {
+          "button": "00000000-0000-0000-0000-000000000109",
+          "kind": "builtin"
+        },
+        {
+          "button": "00000000-0000-0000-0000-00000000010A",
+          "kind": "builtin"
+        },
+        {
+          "id": "C5EC51F7-C610-572F-9171-A8699D614ED6",
+          "kind": "custom"
+        },
+        {
+          "id": "0371280B-F6EE-5EB4-BA12-89D240745D3C",
+          "kind": "custom"
+        },
+        {
+          "id": "D0DE67B0-4F62-5ED1-B421-2B5AAF3CD2A1",
+          "kind": "custom"
+        },
+        {
+          "id": "A91AA704-1EDD-5E98-925A-40708B689194",
+          "kind": "custom"
+        },
+        {
+          "id": "BAC5A253-EE3E-56CA-9D16-8C04ED39DAA1",
+          "kind": "custom"
+        },
+        {
+          "id": "B3DB7E55-B514-522B-BBFD-AB2754BF0522",
+          "kind": "custom"
+        },
+        {
+          "id": "EFD4CC6A-AD8A-51FE-B17E-0A2C672989D2",
+          "kind": "custom"
+        },
+        {
+          "id": "DE252A56-0FF1-5086-AA0E-798E72E3032A",
+          "kind": "custom"
+        }
+      ],
+      "schemaVersion": 1,
+      "sourceTemplateID": "wowforever",
+      "sourceTemplateRevision": 1,
+      "tags": []
+    },
+    "deviceCanvas": {
+      "frameID": "iphone-17-pro-landscape"
+    },
+    "elements": [
+      {
+        "defaultOutput": {
+          "gamepadButtons": [
+            "dpadUp"
+          ]
+        },
+        "id": "00000000-0000-0000-0000-000000000101",
+        "kind": "button",
+        "label": "↑",
+        "layout": {
+          "centerX": 0.32608695652173914,
+          "centerY": 0.554726368159204,
+          "cornerRadius": 12,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "rounded_rectangle",
+          "widthScale": 0.52,
+          "zIndex": 0
+        },
+        "output": {
+          "gamepadButtons": [
+            "dpadUp"
+          ]
+        },
+        "partOutputs": [],
+        "visualRole": "custom"
+      },
+      {
+        "defaultOutput": {
+          "gamepadButtons": [
+            "dpadDown"
+          ]
+        },
+        "id": "00000000-0000-0000-0000-000000000102",
+        "kind": "button",
+        "label": "↓",
+        "layout": {
+          "centerX": 0.32608695652173914,
+          "centerY": 0.8134328358208955,
+          "cornerRadius": 12,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "rounded_rectangle",
+          "widthScale": 0.52,
+          "zIndex": 0
+        },
+        "output": {
+          "gamepadButtons": [
+            "dpadDown"
+          ]
+        },
+        "partOutputs": [],
+        "visualRole": "custom"
+      },
+      {
+        "defaultOutput": {
+          "gamepadButtons": [
+            "dpadLeft"
+          ]
+        },
+        "id": "00000000-0000-0000-0000-000000000103",
+        "kind": "button",
+        "label": "←",
+        "layout": {
+          "centerX": 0.2665903890160183,
+          "centerY": 0.6840796019900498,
+          "cornerRadius": 12,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "rounded_rectangle",
+          "widthScale": 0.52,
+          "zIndex": 0
+        },
+        "output": {
+          "gamepadButtons": [
+            "dpadLeft"
+          ]
+        },
+        "partOutputs": [],
+        "visualRole": "custom"
+      },
+      {
+        "defaultOutput": {
+          "gamepadButtons": [
+            "dpadRight"
+          ]
+        },
+        "id": "00000000-0000-0000-0000-000000000104",
+        "kind": "button",
+        "label": "→",
+        "layout": {
+          "centerX": 0.38558352402745993,
+          "centerY": 0.6840796019900498,
+          "cornerRadius": 12,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "rounded_rectangle",
+          "widthScale": 0.52,
+          "zIndex": 0
+        },
+        "output": {
+          "gamepadButtons": [
+            "dpadRight"
+          ]
+        },
+        "partOutputs": [],
+        "visualRole": "custom"
+      },
+      {
+        "defaultOutput": {
+          "gamepadButtons": [
+            "south"
+          ]
+        },
+        "id": "00000000-0000-0000-0000-000000000105",
+        "kind": "button",
+        "label": "A",
+        "layout": {
+          "centerX": 0.8352402745995423,
+          "centerY": 0.763681592039801,
+          "cornerRadius": 12,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "rounded_rectangle",
+          "widthScale": 0.52,
+          "zIndex": 0
+        },
+        "output": {
+          "gamepadButtons": [
+            "south"
+          ]
+        },
+        "partOutputs": [],
+        "visualRole": "custom"
+      },
+      {
+        "defaultOutput": {
+          "gamepadButtons": [
+            "west"
+          ]
+        },
+        "id": "00000000-0000-0000-0000-000000000106",
+        "kind": "button",
+        "label": "X",
+        "layout": {
+          "centerX": 0.7757437070938215,
+          "centerY": 0.6343283582089553,
+          "cornerRadius": 12,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "rounded_rectangle",
+          "widthScale": 0.52,
+          "zIndex": 0
+        },
+        "output": {
+          "gamepadButtons": [
+            "west"
+          ]
+        },
+        "partOutputs": [],
+        "visualRole": "custom"
+      },
+      {
+        "defaultOutput": {
+          "gamepadButtons": [
+            "east"
+          ]
+        },
+        "id": "00000000-0000-0000-0000-000000000107",
+        "kind": "button",
+        "label": "B",
+        "layout": {
+          "centerX": 0.8947368421052632,
+          "centerY": 0.6343283582089553,
+          "cornerRadius": 12,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "rounded_rectangle",
+          "widthScale": 0.52,
+          "zIndex": 0
+        },
+        "output": {
+          "gamepadButtons": [
+            "east"
+          ]
+        },
+        "partOutputs": [],
+        "visualRole": "custom"
+      },
+      {
+        "defaultOutput": {
+          "gamepadButtons": [
+            "north"
+          ]
+        },
+        "id": "00000000-0000-0000-0000-000000000108",
+        "kind": "button",
+        "label": "Y",
+        "layout": {
+          "centerX": 0.8352402745995423,
+          "centerY": 0.5049751243781094,
+          "cornerRadius": 12,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "rounded_rectangle",
+          "widthScale": 0.52,
+          "zIndex": 0
+        },
+        "output": {
+          "gamepadButtons": [
+            "north"
+          ]
+        },
+        "partOutputs": [],
+        "visualRole": "custom"
+      },
+      {
+        "defaultOutput": {
+          "gamepadButtons": [
+            "select"
+          ]
+        },
+        "id": "00000000-0000-0000-0000-000000000109",
+        "kind": "button",
+        "label": "View",
+        "layout": {
+          "centerX": 0.44,
+          "centerY": 0.28,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "capsule",
+          "widthScale": 0.65,
+          "zIndex": 0
+        },
+        "output": {
+          "gamepadButtons": [
+            "select"
+          ]
+        },
+        "partOutputs": [],
+        "visualRole": "custom"
+      },
+      {
+        "defaultOutput": {
+          "gamepadButtons": [
+            "start"
+          ]
+        },
+        "id": "00000000-0000-0000-0000-00000000010A",
+        "kind": "button",
+        "label": "Menu",
+        "layout": {
+          "centerX": 0.56,
+          "centerY": 0.28,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "capsule",
+          "widthScale": 0.65,
+          "zIndex": 0
+        },
+        "output": {
+          "gamepadButtons": [
+            "start"
+          ]
+        },
+        "partOutputs": [],
+        "visualRole": "custom"
+      },
+      {
+        "id": "C5EC51F7-C610-572F-9171-A8699D614ED6",
+        "joystickOutputSettings": {
+          "analogTarget": "left_stick",
+          "deadZone": 0.12,
+          "invertX": false,
+          "invertY": false,
+          "sendsDigitalDirections": false,
+          "sensitivity": 1,
+          "snapToCardinal": false
+        },
+        "kind": "joystick",
+        "label": "Move",
+        "layout": {
+          "centerX": 0.13729977116704806,
+          "centerY": 0.5597014925373134,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.72,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1.25,
+          "shape": "circle",
+          "widthScale": 0.72,
+          "zIndex": 0
+        },
+        "output": {
+          "gamepadButtons": []
+        },
+        "partOutputs": []
+      },
+      {
+        "id": "0371280B-F6EE-5EB4-BA12-89D240745D3C",
+        "joystickOutputSettings": {
+          "analogTarget": "right_stick",
+          "deadZone": 0.12,
+          "invertX": false,
+          "invertY": false,
+          "sendsDigitalDirections": false,
+          "sensitivity": 1,
+          "snapToCardinal": false
+        },
+        "kind": "joystick",
+        "label": "Look",
+        "layout": {
+          "centerX": 0.5606407322654462,
+          "centerY": 0.6965174129353234,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.72,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1.25,
+          "shape": "circle",
+          "widthScale": 0.72,
+          "zIndex": 0
+        },
+        "output": {
+          "gamepadButtons": []
+        },
+        "partOutputs": []
+      },
+      {
+        "defaultOutput": {
+          "gamepadButtons": [
+            "leftTriggerButton"
+          ]
+        },
+        "id": "D0DE67B0-4F62-5ED1-B421-2B5AAF3CD2A1",
+        "kind": "button",
+        "label": "LT",
+        "layout": {
+          "centerX": 0.23,
+          "centerY": 0.17,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "capsule",
+          "widthScale": 1.05,
+          "zIndex": 0
+        },
+        "output": {
+          "gamepadButtons": [
+            "leftTriggerButton"
+          ]
+        },
+        "partOutputs": []
+      },
+      {
+        "defaultOutput": {
+          "gamepadButtons": [
+            "rightTriggerButton"
+          ]
+        },
+        "id": "A91AA704-1EDD-5E98-925A-40708B689194",
+        "kind": "button",
+        "label": "RT",
+        "layout": {
+          "centerX": 0.77,
+          "centerY": 0.17,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "capsule",
+          "widthScale": 1.05,
+          "zIndex": 0
+        },
+        "output": {
+          "gamepadButtons": [
+            "rightTriggerButton"
+          ]
+        },
+        "partOutputs": []
+      },
+      {
+        "defaultOutput": {
+          "gamepadButtons": [
+            "leftShoulder"
+          ]
+        },
+        "id": "BAC5A253-EE3E-56CA-9D16-8C04ED39DAA1",
+        "kind": "button",
+        "label": "LB",
+        "layout": {
+          "centerX": 0.23,
+          "centerY": 0.31,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "capsule",
+          "widthScale": 1.05,
+          "zIndex": 0
+        },
+        "output": {
+          "gamepadButtons": [
+            "leftShoulder"
+          ]
+        },
+        "partOutputs": []
+      },
+      {
+        "defaultOutput": {
+          "gamepadButtons": [
+            "rightShoulder"
+          ]
+        },
+        "id": "B3DB7E55-B514-522B-BBFD-AB2754BF0522",
+        "kind": "button",
+        "label": "RB",
+        "layout": {
+          "centerX": 0.77,
+          "centerY": 0.31,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "capsule",
+          "widthScale": 1.05,
+          "zIndex": 0
+        },
+        "output": {
+          "gamepadButtons": [
+            "rightShoulder"
+          ]
+        },
+        "partOutputs": []
+      },
+      {
+        "defaultOutput": {
+          "gamepadButtons": [
+            "leftStickPress"
+          ]
+        },
+        "id": "EFD4CC6A-AD8A-51FE-B17E-0A2C672989D2",
+        "kind": "button",
+        "label": "L3",
+        "layout": {
+          "centerX": 0.137,
+          "centerY": 0.88,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "capsule",
+          "widthScale": 0.65,
+          "zIndex": 0
+        },
+        "output": {
+          "gamepadButtons": [
+            "leftStickPress"
+          ]
+        },
+        "partOutputs": []
+      },
+      {
+        "defaultOutput": {
+          "gamepadButtons": [
+            "rightStickPress"
+          ]
+        },
+        "id": "DE252A56-0FF1-5086-AA0E-798E72E3032A",
+        "kind": "button",
+        "label": "R3",
+        "layout": {
+          "centerX": 0.56,
+          "centerY": 0.88,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "capsule",
+          "widthScale": 0.65,
+          "zIndex": 0
+        },
+        "output": {
+          "gamepadButtons": [
+            "rightStickPress"
+          ]
+        },
+        "partOutputs": []
+      }
+    ],
+    "labelOverrides": [
+      "00000000-0000-0000-0000-000000000101",
+      "↑",
+      "00000000-0000-0000-0000-000000000102",
+      "↓",
+      "00000000-0000-0000-0000-000000000103",
+      "←",
+      "00000000-0000-0000-0000-000000000104",
+      "→",
+      "00000000-0000-0000-0000-000000000105",
+      "A",
+      "00000000-0000-0000-0000-000000000106",
+      "X",
+      "00000000-0000-0000-0000-000000000107",
+      "B",
+      "00000000-0000-0000-0000-000000000108",
+      "Y",
+      "00000000-0000-0000-0000-000000000109",
+      "View",
+      "00000000-0000-0000-0000-00000000010A",
+      "Menu"
+    ],
+    "layoutMode": "standard",
+    "showsButtonLabels": true,
+    "updatedAt": 0
+  },
+  "name": "Fury — Solo",
+  "orientationPreference": "portrait",
+  "outputMode": "controller",
+  "portraitCustomization": {
+    "accentStyle": "blue",
+    "buttonCustomizations": [
+      "00000000-0000-0000-0000-000000000101",
+      {
+        "centerX": 0.236318407960199,
+        "centerY": 0.7986270022883295,
+        "cornerRadius": 12,
+        "fillColor": {
+          "alpha": 1,
+          "blue": 0.27450980392156865,
+          "green": 0.2,
+          "red": 0.14901960784313725
+        },
+        "heightScale": 0.52,
+        "isHidden": false,
+        "isLocationLocked": false,
+        "rotationDegrees": 0,
+        "shadowStrength": 1,
+        "shape": "rounded_rectangle",
+        "widthScale": 0.52,
+        "zIndex": 0
+      },
+      "00000000-0000-0000-0000-000000000102",
+      {
+        "centerX": 0.236318407960199,
+        "centerY": 0.9176201372997712,
+        "cornerRadius": 12,
+        "fillColor": {
+          "alpha": 1,
+          "blue": 0.27450980392156865,
+          "green": 0.2,
+          "red": 0.14901960784313725
+        },
+        "heightScale": 0.52,
+        "isHidden": false,
+        "isLocationLocked": false,
+        "rotationDegrees": 0,
+        "shadowStrength": 1,
+        "shape": "rounded_rectangle",
+        "widthScale": 0.52,
+        "zIndex": 0
+      },
+      "00000000-0000-0000-0000-000000000103",
+      {
+        "centerX": 0.10696517412935323,
+        "centerY": 0.8581235697940504,
+        "cornerRadius": 12,
+        "fillColor": {
+          "alpha": 1,
+          "blue": 0.27450980392156865,
+          "green": 0.2,
+          "red": 0.14901960784313725
+        },
+        "heightScale": 0.52,
+        "isHidden": false,
+        "isLocationLocked": false,
+        "rotationDegrees": 0,
+        "shadowStrength": 1,
+        "shape": "rounded_rectangle",
+        "widthScale": 0.52,
+        "zIndex": 0
+      },
+      "00000000-0000-0000-0000-000000000104",
+      {
+        "centerX": 0.3656716417910448,
+        "centerY": 0.8581235697940504,
+        "cornerRadius": 12,
+        "fillColor": {
+          "alpha": 1,
+          "blue": 0.27450980392156865,
+          "green": 0.2,
+          "red": 0.14901960784313725
+        },
+        "heightScale": 0.52,
+        "isHidden": false,
+        "isLocationLocked": false,
+        "rotationDegrees": 0,
+        "shadowStrength": 1,
+        "shape": "rounded_rectangle",
+        "widthScale": 0.52,
+        "zIndex": 0
+      },
+      "00000000-0000-0000-0000-000000000105",
+      {
+        "centerX": 0.7587064676616916,
+        "centerY": 0.9176201372997712,
+        "cornerRadius": 12,
+        "fillColor": {
+          "alpha": 1,
+          "blue": 0.27450980392156865,
+          "green": 0.2,
+          "red": 0.14901960784313725
+        },
+        "heightScale": 0.52,
+        "isHidden": false,
+        "isLocationLocked": false,
+        "rotationDegrees": 0,
+        "shadowStrength": 1,
+        "shape": "rounded_rectangle",
+        "widthScale": 0.52,
+        "zIndex": 0
+      },
+      "00000000-0000-0000-0000-000000000106",
+      {
+        "centerX": 0.6293532338308457,
+        "centerY": 0.8581235697940504,
+        "cornerRadius": 12,
+        "fillColor": {
+          "alpha": 1,
+          "blue": 0.27450980392156865,
+          "green": 0.2,
+          "red": 0.14901960784313725
+        },
+        "heightScale": 0.52,
+        "isHidden": false,
+        "isLocationLocked": false,
+        "rotationDegrees": 0,
+        "shadowStrength": 1,
+        "shape": "rounded_rectangle",
+        "widthScale": 0.52,
+        "zIndex": 0
+      },
+      "00000000-0000-0000-0000-000000000107",
+      {
+        "centerX": 0.8880597014925373,
+        "centerY": 0.8581235697940504,
+        "cornerRadius": 12,
+        "fillColor": {
+          "alpha": 1,
+          "blue": 0.27450980392156865,
+          "green": 0.2,
+          "red": 0.14901960784313725
+        },
+        "heightScale": 0.52,
+        "isHidden": false,
+        "isLocationLocked": false,
+        "rotationDegrees": 0,
+        "shadowStrength": 1,
+        "shape": "rounded_rectangle",
+        "widthScale": 0.52,
+        "zIndex": 0
+      },
+      "00000000-0000-0000-0000-000000000108",
+      {
+        "centerX": 0.7587064676616916,
+        "centerY": 0.7986270022883295,
+        "cornerRadius": 12,
+        "fillColor": {
+          "alpha": 1,
+          "blue": 0.27450980392156865,
+          "green": 0.2,
+          "red": 0.14901960784313725
+        },
+        "heightScale": 0.52,
+        "isHidden": false,
+        "isLocationLocked": false,
+        "rotationDegrees": 0,
+        "shadowStrength": 1,
+        "shape": "rounded_rectangle",
+        "widthScale": 0.52,
+        "zIndex": 0
+      },
+      "00000000-0000-0000-0000-000000000109",
+      {
+        "centerX": 0.35,
+        "centerY": 0.38,
+        "fillColor": {
+          "alpha": 1,
+          "blue": 0.27450980392156865,
+          "green": 0.2,
+          "red": 0.14901960784313725
+        },
+        "heightScale": 0.52,
+        "isHidden": false,
+        "isLocationLocked": false,
+        "rotationDegrees": 0,
+        "shadowStrength": 1,
+        "shape": "capsule",
+        "widthScale": 0.65,
+        "zIndex": 0
+      },
+      "00000000-0000-0000-0000-00000000010A",
+      {
+        "centerX": 0.65,
+        "centerY": 0.38,
+        "fillColor": {
+          "alpha": 1,
+          "blue": 0.27450980392156865,
+          "green": 0.2,
+          "red": 0.14901960784313725
+        },
+        "heightScale": 0.52,
+        "isHidden": false,
+        "isLocationLocked": false,
+        "rotationDegrees": 0,
+        "shadowStrength": 1,
+        "shape": "capsule",
+        "widthScale": 0.65,
+        "zIndex": 0
+      }
+    ],
+    "colorSchemePreference": "dark",
+    "controlScale": "standard",
+    "customButtons": [
+      {
+        "controlKind": "joystick",
+        "id": "C5EC51F7-C610-572F-9171-A8699D614ED6",
+        "joystickOutputSettings": {
+          "analogTarget": "left_stick",
+          "deadZone": 0.12,
+          "invertX": false,
+          "invertY": false,
+          "sendsDigitalDirections": false,
+          "sensitivity": 1,
+          "snapToCardinal": false
+        },
+        "label": "Move",
+        "layout": {
+          "centerX": 0.236318407960199,
+          "centerY": 0.6521739130434783,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.72,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1.25,
+          "shape": "circle",
+          "widthScale": 0.72,
+          "zIndex": 0
+        }
+      },
+      {
+        "controlKind": "joystick",
+        "id": "0371280B-F6EE-5EB4-BA12-89D240745D3C",
+        "joystickOutputSettings": {
+          "analogTarget": "right_stick",
+          "deadZone": 0.12,
+          "invertX": false,
+          "invertY": false,
+          "sendsDigitalDirections": false,
+          "sensitivity": 1,
+          "snapToCardinal": false
+        },
+        "label": "Look",
+        "layout": {
+          "centerX": 0.7587064676616916,
+          "centerY": 0.6521739130434783,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.72,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1.25,
+          "shape": "circle",
+          "widthScale": 0.72,
+          "zIndex": 0
+        }
+      },
+      {
+        "controlKind": "button",
+        "id": "D0DE67B0-4F62-5ED1-B421-2B5AAF3CD2A1",
+        "label": "LT",
+        "layout": {
+          "centerX": 0.23,
+          "centerY": 0.17,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "capsule",
+          "widthScale": 1.05,
+          "zIndex": 0
+        }
+      },
+      {
+        "controlKind": "button",
+        "id": "A91AA704-1EDD-5E98-925A-40708B689194",
+        "label": "RT",
+        "layout": {
+          "centerX": 0.77,
+          "centerY": 0.17,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "capsule",
+          "widthScale": 1.05,
+          "zIndex": 0
+        }
+      },
+      {
+        "controlKind": "button",
+        "id": "BAC5A253-EE3E-56CA-9D16-8C04ED39DAA1",
+        "label": "LB",
+        "layout": {
+          "centerX": 0.23,
+          "centerY": 0.25,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "capsule",
+          "widthScale": 1.05,
+          "zIndex": 0
+        }
+      },
+      {
+        "controlKind": "button",
+        "id": "B3DB7E55-B514-522B-BBFD-AB2754BF0522",
+        "label": "RB",
+        "layout": {
+          "centerX": 0.77,
+          "centerY": 0.25,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "capsule",
+          "widthScale": 1.05,
+          "zIndex": 0
+        }
+      },
+      {
+        "controlKind": "button",
+        "id": "EFD4CC6A-AD8A-51FE-B17E-0A2C672989D2",
+        "label": "L3",
+        "layout": {
+          "centerX": 0.23,
+          "centerY": 0.48,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "capsule",
+          "widthScale": 0.65,
+          "zIndex": 0
+        }
+      },
+      {
+        "controlKind": "button",
+        "id": "DE252A56-0FF1-5086-AA0E-798E72E3032A",
+        "label": "R3",
+        "layout": {
+          "centerX": 0.77,
+          "centerY": 0.48,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "capsule",
+          "widthScale": 0.65,
+          "zIndex": 0
+        }
+      }
+    ],
+    "designMetadata": {
+      "grid": {
+        "gridSize": 16,
+        "showsGrid": false,
+        "snapToGrid": false,
+        "snapToObjects": true,
+        "snapTolerance": 6
+      },
+      "groups": [],
+      "guides": [],
+      "layerOrder": [
+        {
+          "kind": "system",
+          "system": "top_bar_activation"
+        },
+        {
+          "button": "00000000-0000-0000-0000-000000000101",
+          "kind": "builtin"
+        },
+        {
+          "button": "00000000-0000-0000-0000-000000000102",
+          "kind": "builtin"
+        },
+        {
+          "button": "00000000-0000-0000-0000-000000000103",
+          "kind": "builtin"
+        },
+        {
+          "button": "00000000-0000-0000-0000-000000000104",
+          "kind": "builtin"
+        },
+        {
+          "button": "00000000-0000-0000-0000-000000000105",
+          "kind": "builtin"
+        },
+        {
+          "button": "00000000-0000-0000-0000-000000000106",
+          "kind": "builtin"
+        },
+        {
+          "button": "00000000-0000-0000-0000-000000000107",
+          "kind": "builtin"
+        },
+        {
+          "button": "00000000-0000-0000-0000-000000000108",
+          "kind": "builtin"
+        },
+        {
+          "button": "00000000-0000-0000-0000-000000000109",
+          "kind": "builtin"
+        },
+        {
+          "button": "00000000-0000-0000-0000-00000000010A",
+          "kind": "builtin"
+        },
+        {
+          "id": "C5EC51F7-C610-572F-9171-A8699D614ED6",
+          "kind": "custom"
+        },
+        {
+          "id": "0371280B-F6EE-5EB4-BA12-89D240745D3C",
+          "kind": "custom"
+        },
+        {
+          "id": "D0DE67B0-4F62-5ED1-B421-2B5AAF3CD2A1",
+          "kind": "custom"
+        },
+        {
+          "id": "A91AA704-1EDD-5E98-925A-40708B689194",
+          "kind": "custom"
+        },
+        {
+          "id": "BAC5A253-EE3E-56CA-9D16-8C04ED39DAA1",
+          "kind": "custom"
+        },
+        {
+          "id": "B3DB7E55-B514-522B-BBFD-AB2754BF0522",
+          "kind": "custom"
+        },
+        {
+          "id": "EFD4CC6A-AD8A-51FE-B17E-0A2C672989D2",
+          "kind": "custom"
+        },
+        {
+          "id": "DE252A56-0FF1-5086-AA0E-798E72E3032A",
+          "kind": "custom"
+        }
+      ],
+      "schemaVersion": 1,
+      "sourceTemplateID": "wowforever",
+      "sourceTemplateRevision": 1,
+      "tags": []
+    },
+    "deviceCanvas": {
+      "frameID": "iphone-17-pro-portrait"
+    },
+    "elements": [
+      {
+        "defaultOutput": {
+          "gamepadButtons": [
+            "dpadUp"
+          ]
+        },
+        "id": "00000000-0000-0000-0000-000000000101",
+        "kind": "button",
+        "label": "↑",
+        "layout": {
+          "centerX": 0.236318407960199,
+          "centerY": 0.7986270022883295,
+          "cornerRadius": 12,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "rounded_rectangle",
+          "widthScale": 0.52,
+          "zIndex": 0
+        },
+        "output": {
+          "gamepadButtons": [
+            "dpadUp"
+          ]
+        },
+        "partOutputs": [],
+        "visualRole": "custom"
+      },
+      {
+        "defaultOutput": {
+          "gamepadButtons": [
+            "dpadDown"
+          ]
+        },
+        "id": "00000000-0000-0000-0000-000000000102",
+        "kind": "button",
+        "label": "↓",
+        "layout": {
+          "centerX": 0.236318407960199,
+          "centerY": 0.9176201372997712,
+          "cornerRadius": 12,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "rounded_rectangle",
+          "widthScale": 0.52,
+          "zIndex": 0
+        },
+        "output": {
+          "gamepadButtons": [
+            "dpadDown"
+          ]
+        },
+        "partOutputs": [],
+        "visualRole": "custom"
+      },
+      {
+        "defaultOutput": {
+          "gamepadButtons": [
+            "dpadLeft"
+          ]
+        },
+        "id": "00000000-0000-0000-0000-000000000103",
+        "kind": "button",
+        "label": "←",
+        "layout": {
+          "centerX": 0.10696517412935323,
+          "centerY": 0.8581235697940504,
+          "cornerRadius": 12,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "rounded_rectangle",
+          "widthScale": 0.52,
+          "zIndex": 0
+        },
+        "output": {
+          "gamepadButtons": [
+            "dpadLeft"
+          ]
+        },
+        "partOutputs": [],
+        "visualRole": "custom"
+      },
+      {
+        "defaultOutput": {
+          "gamepadButtons": [
+            "dpadRight"
+          ]
+        },
+        "id": "00000000-0000-0000-0000-000000000104",
+        "kind": "button",
+        "label": "→",
+        "layout": {
+          "centerX": 0.3656716417910448,
+          "centerY": 0.8581235697940504,
+          "cornerRadius": 12,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "rounded_rectangle",
+          "widthScale": 0.52,
+          "zIndex": 0
+        },
+        "output": {
+          "gamepadButtons": [
+            "dpadRight"
+          ]
+        },
+        "partOutputs": [],
+        "visualRole": "custom"
+      },
+      {
+        "defaultOutput": {
+          "gamepadButtons": [
+            "south"
+          ]
+        },
+        "id": "00000000-0000-0000-0000-000000000105",
+        "kind": "button",
+        "label": "A",
+        "layout": {
+          "centerX": 0.7587064676616916,
+          "centerY": 0.9176201372997712,
+          "cornerRadius": 12,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "rounded_rectangle",
+          "widthScale": 0.52,
+          "zIndex": 0
+        },
+        "output": {
+          "gamepadButtons": [
+            "south"
+          ]
+        },
+        "partOutputs": [],
+        "visualRole": "custom"
+      },
+      {
+        "defaultOutput": {
+          "gamepadButtons": [
+            "west"
+          ]
+        },
+        "id": "00000000-0000-0000-0000-000000000106",
+        "kind": "button",
+        "label": "X",
+        "layout": {
+          "centerX": 0.6293532338308457,
+          "centerY": 0.8581235697940504,
+          "cornerRadius": 12,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "rounded_rectangle",
+          "widthScale": 0.52,
+          "zIndex": 0
+        },
+        "output": {
+          "gamepadButtons": [
+            "west"
+          ]
+        },
+        "partOutputs": [],
+        "visualRole": "custom"
+      },
+      {
+        "defaultOutput": {
+          "gamepadButtons": [
+            "east"
+          ]
+        },
+        "id": "00000000-0000-0000-0000-000000000107",
+        "kind": "button",
+        "label": "B",
+        "layout": {
+          "centerX": 0.8880597014925373,
+          "centerY": 0.8581235697940504,
+          "cornerRadius": 12,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "rounded_rectangle",
+          "widthScale": 0.52,
+          "zIndex": 0
+        },
+        "output": {
+          "gamepadButtons": [
+            "east"
+          ]
+        },
+        "partOutputs": [],
+        "visualRole": "custom"
+      },
+      {
+        "defaultOutput": {
+          "gamepadButtons": [
+            "north"
+          ]
+        },
+        "id": "00000000-0000-0000-0000-000000000108",
+        "kind": "button",
+        "label": "Y",
+        "layout": {
+          "centerX": 0.7587064676616916,
+          "centerY": 0.7986270022883295,
+          "cornerRadius": 12,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "rounded_rectangle",
+          "widthScale": 0.52,
+          "zIndex": 0
+        },
+        "output": {
+          "gamepadButtons": [
+            "north"
+          ]
+        },
+        "partOutputs": [],
+        "visualRole": "custom"
+      },
+      {
+        "defaultOutput": {
+          "gamepadButtons": [
+            "select"
+          ]
+        },
+        "id": "00000000-0000-0000-0000-000000000109",
+        "kind": "button",
+        "label": "View",
+        "layout": {
+          "centerX": 0.35,
+          "centerY": 0.38,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "capsule",
+          "widthScale": 0.65,
+          "zIndex": 0
+        },
+        "output": {
+          "gamepadButtons": [
+            "select"
+          ]
+        },
+        "partOutputs": [],
+        "visualRole": "custom"
+      },
+      {
+        "defaultOutput": {
+          "gamepadButtons": [
+            "start"
+          ]
+        },
+        "id": "00000000-0000-0000-0000-00000000010A",
+        "kind": "button",
+        "label": "Menu",
+        "layout": {
+          "centerX": 0.65,
+          "centerY": 0.38,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "capsule",
+          "widthScale": 0.65,
+          "zIndex": 0
+        },
+        "output": {
+          "gamepadButtons": [
+            "start"
+          ]
+        },
+        "partOutputs": [],
+        "visualRole": "custom"
+      },
+      {
+        "id": "C5EC51F7-C610-572F-9171-A8699D614ED6",
+        "joystickOutputSettings": {
+          "analogTarget": "left_stick",
+          "deadZone": 0.12,
+          "invertX": false,
+          "invertY": false,
+          "sendsDigitalDirections": false,
+          "sensitivity": 1,
+          "snapToCardinal": false
+        },
+        "kind": "joystick",
+        "label": "Move",
+        "layout": {
+          "centerX": 0.236318407960199,
+          "centerY": 0.6521739130434783,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.72,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1.25,
+          "shape": "circle",
+          "widthScale": 0.72,
+          "zIndex": 0
+        },
+        "output": {
+          "gamepadButtons": []
+        },
+        "partOutputs": []
+      },
+      {
+        "id": "0371280B-F6EE-5EB4-BA12-89D240745D3C",
+        "joystickOutputSettings": {
+          "analogTarget": "right_stick",
+          "deadZone": 0.12,
+          "invertX": false,
+          "invertY": false,
+          "sendsDigitalDirections": false,
+          "sensitivity": 1,
+          "snapToCardinal": false
+        },
+        "kind": "joystick",
+        "label": "Look",
+        "layout": {
+          "centerX": 0.7587064676616916,
+          "centerY": 0.6521739130434783,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.72,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1.25,
+          "shape": "circle",
+          "widthScale": 0.72,
+          "zIndex": 0
+        },
+        "output": {
+          "gamepadButtons": []
+        },
+        "partOutputs": []
+      },
+      {
+        "defaultOutput": {
+          "gamepadButtons": [
+            "leftTriggerButton"
+          ]
+        },
+        "id": "D0DE67B0-4F62-5ED1-B421-2B5AAF3CD2A1",
+        "kind": "button",
+        "label": "LT",
+        "layout": {
+          "centerX": 0.23,
+          "centerY": 0.17,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "capsule",
+          "widthScale": 1.05,
+          "zIndex": 0
+        },
+        "output": {
+          "gamepadButtons": [
+            "leftTriggerButton"
+          ]
+        },
+        "partOutputs": []
+      },
+      {
+        "defaultOutput": {
+          "gamepadButtons": [
+            "rightTriggerButton"
+          ]
+        },
+        "id": "A91AA704-1EDD-5E98-925A-40708B689194",
+        "kind": "button",
+        "label": "RT",
+        "layout": {
+          "centerX": 0.77,
+          "centerY": 0.17,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "capsule",
+          "widthScale": 1.05,
+          "zIndex": 0
+        },
+        "output": {
+          "gamepadButtons": [
+            "rightTriggerButton"
+          ]
+        },
+        "partOutputs": []
+      },
+      {
+        "defaultOutput": {
+          "gamepadButtons": [
+            "leftShoulder"
+          ]
+        },
+        "id": "BAC5A253-EE3E-56CA-9D16-8C04ED39DAA1",
+        "kind": "button",
+        "label": "LB",
+        "layout": {
+          "centerX": 0.23,
+          "centerY": 0.25,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "capsule",
+          "widthScale": 1.05,
+          "zIndex": 0
+        },
+        "output": {
+          "gamepadButtons": [
+            "leftShoulder"
+          ]
+        },
+        "partOutputs": []
+      },
+      {
+        "defaultOutput": {
+          "gamepadButtons": [
+            "rightShoulder"
+          ]
+        },
+        "id": "B3DB7E55-B514-522B-BBFD-AB2754BF0522",
+        "kind": "button",
+        "label": "RB",
+        "layout": {
+          "centerX": 0.77,
+          "centerY": 0.25,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "capsule",
+          "widthScale": 1.05,
+          "zIndex": 0
+        },
+        "output": {
+          "gamepadButtons": [
+            "rightShoulder"
+          ]
+        },
+        "partOutputs": []
+      },
+      {
+        "defaultOutput": {
+          "gamepadButtons": [
+            "leftStickPress"
+          ]
+        },
+        "id": "EFD4CC6A-AD8A-51FE-B17E-0A2C672989D2",
+        "kind": "button",
+        "label": "L3",
+        "layout": {
+          "centerX": 0.23,
+          "centerY": 0.48,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "capsule",
+          "widthScale": 0.65,
+          "zIndex": 0
+        },
+        "output": {
+          "gamepadButtons": [
+            "leftStickPress"
+          ]
+        },
+        "partOutputs": []
+      },
+      {
+        "defaultOutput": {
+          "gamepadButtons": [
+            "rightStickPress"
+          ]
+        },
+        "id": "DE252A56-0FF1-5086-AA0E-798E72E3032A",
+        "kind": "button",
+        "label": "R3",
+        "layout": {
+          "centerX": 0.77,
+          "centerY": 0.48,
+          "fillColor": {
+            "alpha": 1,
+            "blue": 0.27450980392156865,
+            "green": 0.2,
+            "red": 0.14901960784313725
+          },
+          "heightScale": 0.52,
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 1,
+          "shape": "capsule",
+          "widthScale": 0.65,
+          "zIndex": 0
+        },
+        "output": {
+          "gamepadButtons": [
+            "rightStickPress"
+          ]
+        },
+        "partOutputs": []
+      }
+    ],
+    "labelOverrides": [
+      "00000000-0000-0000-0000-000000000101",
+      "↑",
+      "00000000-0000-0000-0000-000000000102",
+      "↓",
+      "00000000-0000-0000-0000-000000000103",
+      "←",
+      "00000000-0000-0000-0000-000000000104",
+      "→",
+      "00000000-0000-0000-0000-000000000105",
+      "A",
+      "00000000-0000-0000-0000-000000000106",
+      "X",
+      "00000000-0000-0000-0000-000000000107",
+      "B",
+      "00000000-0000-0000-0000-000000000108",
+      "Y",
+      "00000000-0000-0000-0000-000000000109",
+      "View",
+      "00000000-0000-0000-0000-00000000010A",
+      "Menu"
+    ],
+    "layoutMode": "standard",
+    "showsButtonLabels": true,
+    "updatedAt": 0
+  },
+  "updatedAt": 0,
+  "skinReference": {
+    "identifier": "com.thumble.fury-forge",
+    "version": "1.0.0"
+  }
+}

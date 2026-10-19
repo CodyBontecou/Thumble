@@ -5727,7 +5727,8 @@ public struct GamepadConfigurationProfile: Identifiable, Codable, Equatable, Sen
     func resolvedCustomization(
         for orientation: GamepadEditorDeviceOrientation,
         colorScheme: ThumbleSkinColorScheme,
-        skinPackage: ThumbleSkinPackage?
+        skinPackage: ThumbleSkinPackage?,
+        actionSet: ThumbleActionSet = .base
     ) -> GamepadCustomization {
         let local = customization(for: orientation)
         guard let skinReference,
@@ -5740,7 +5741,8 @@ public struct GamepadConfigurationProfile: Identifiable, Codable, Equatable, Sen
             orientation: orientation == .portrait ? .portrait : .landscape,
             colorScheme: colorScheme,
             options: .preservingUserOverrides,
-            overrideBaseline: skinBaseline(for: orientation)
+            overrideBaseline: skinBaseline(for: orientation),
+            actionSet: actionSet
         )
     }
 
@@ -6178,6 +6180,7 @@ enum GamepadControllerTemplate: String, CaseIterable, Identifiable {
     case playStation
     case xbox
     case softWhite
+    case wowForever
 
     var id: String { rawValue }
 
@@ -6207,6 +6210,7 @@ enum GamepadControllerTemplate: String, CaseIterable, Identifiable {
         case .psp: "PSP"
         case .playStation: "PlayStation"
         case .xbox: "Xbox"
+        case .wowForever: "WoW Forever"
         case .softWhite: "Soft White Pro"
         }
     }
@@ -6229,6 +6233,7 @@ enum GamepadControllerTemplate: String, CaseIterable, Identifiable {
         case .psp: "Portable emulator pad with D-pad, nub, shoulders, and face buttons"
         case .playStation: "Dual-stick layout with PlayStation face symbols and shoulders"
         case .xbox: "Dual-stick Xbox-style layout with ABXY and triggers"
+        case .wowForever: "Native gamepad inputs for WoW Forever with analog movement and camera, held modifiers, and editable class/build profiles"
         case .softWhite: "Premium soft-white neumorphic controller with layered shell, rings, plates, dual sticks, D-pad, ABXY, and shoulder controls"
         }
     }
@@ -6247,6 +6252,7 @@ enum GamepadControllerTemplate: String, CaseIterable, Identifiable {
         case .arcadeStick: "circle.grid.3x3.fill"
         case .playStation: "gamecontroller.fill"
         case .xbox: "circle.grid.cross"
+        case .wowForever: "gamecontroller.fill"
         case .softWhite: "sparkles"
         }
     }
@@ -6291,6 +6297,8 @@ enum GamepadControllerTemplate: String, CaseIterable, Identifiable {
             return makePlayStationProfile()
         case .xbox:
             return makeXboxProfile()
+        case .wowForever:
+            return makeWoWForeverProfile()
         case .softWhite:
             return makeSoftWhiteProfile()
         }
@@ -6411,6 +6419,98 @@ enum GamepadControllerTemplate: String, CaseIterable, Identifiable {
 
     private func makeXboxProfile() -> GamepadConfigurationProfile {
         makePrimaryProfile(Self.xboxCustomization())
+    }
+
+    private func makeWoWForeverProfile() -> GamepadConfigurationProfile {
+        let landscape = wowForeverCustomization(isPortrait: false)
+        var profile = GamepadConfigurationProfile(
+            name: displayName, primaryCustomization: landscape, outputMode: .controller
+        )
+        profile.setCustomizationVariant(landscape, for: .landscape)
+        var portrait = wowForeverCustomization(isPortrait: true)
+        let identities = Dictionary(uniqueKeysWithValues: landscape.elements.map { ($0.label, $0.id) })
+        for index in portrait.customButtons.indices {
+            portrait.customButtons[index].id = identities[portrait.customButtons[index].label]!
+        }
+        for index in portrait.elements.indices {
+            portrait.elements[index].id = identities[portrait.elements[index].label]!
+        }
+        profile.setCustomizationVariant(portrait, for: .portrait)
+        return profile
+    }
+
+    /// Emit physical gamepad inputs. WoW owns their action/target/page semantics;
+    /// spell names must never become an input-routing table.
+    private func wowForeverCustomization(isPortrait: Bool) -> GamepadCustomization {
+        var customization = Self.baseCustomization(accentStyle: .blue, controlScale: .standard)
+        customization.deviceCanvas = GamepadDeviceCanvas(
+            frameID: isPortrait ? "iphone-17-pro-portrait" : "iphone-17-pro-landscape"
+        )
+        let fill = "#263346"
+        let canvasWidth: CGFloat = isPortrait ? 402 : 874
+        let canvasHeight: CGFloat = isPortrait ? 874 : 402
+        // Sizes are native scale units (86 pt for buttons, 150 pt for sticks).
+        let movement = isPortrait ? CGPoint(x: 95, y: 570) : CGPoint(x: 120, y: 225)
+        let camera = isPortrait ? CGPoint(x: 305, y: 570) : CGPoint(x: 490, y: 280)
+        Self.addJoystick(label: "Move", mapping: .movement, in: &customization,
+                         x: movement.x / canvasWidth, y: movement.y / canvasHeight, scale: 0.72, fill: fill)
+        Self.addJoystick(label: "Look", mapping: .secondary, in: &customization,
+                         x: camera.x / canvasWidth, y: camera.y / canvasHeight, scale: 0.72, fill: fill)
+        let dpad = isPortrait ? CGPoint(x: 95, y: 750) : CGPoint(x: 285, y: 275)
+        let face = isPortrait ? CGPoint(x: 305, y: 750) : CGPoint(x: 730, y: 255)
+        let radius: CGFloat = 52
+        let positions = [
+            CGPoint(x: dpad.x, y: dpad.y - radius), CGPoint(x: dpad.x, y: dpad.y + radius),
+            CGPoint(x: dpad.x - radius, y: dpad.y), CGPoint(x: dpad.x + radius, y: dpad.y),
+            CGPoint(x: face.x, y: face.y + radius), CGPoint(x: face.x - radius, y: face.y),
+            CGPoint(x: face.x + radius, y: face.y), CGPoint(x: face.x, y: face.y - radius)
+        ]
+        let labels = ["↑", "↓", "←", "→", "A", "X", "B", "Y"]
+        for index in positions.indices {
+            Self.setButton(.preset(index + 1), label: labels[index], in: &customization,
+                           x: positions[index].x / canvasWidth, y: positions[index].y / canvasHeight,
+                           width: 0.52, height: 0.52, shape: .roundedRectangle, fill: fill)
+        }
+        Self.setButton(.preset(9), label: "View", in: &customization,
+                       x: isPortrait ? 0.35 : 0.44, y: isPortrait ? 0.38 : 0.28,
+                       width: 0.65, height: 0.52, shape: .capsule, fill: fill)
+        Self.setButton(.preset(10), label: "Menu", in: &customization,
+                       x: isPortrait ? 0.65 : 0.56, y: isPortrait ? 0.38 : 0.28,
+                       width: 0.65, height: 0.52, shape: .capsule, fill: fill)
+        for (label, x, y) in [("LT", 0.23, 0.17), ("RT", 0.77, 0.17),
+                              ("LB", 0.23, isPortrait ? 0.25 : 0.31),
+                              ("RB", 0.77, isPortrait ? 0.25 : 0.31),
+                              ("L3", isPortrait ? 0.23 : 0.137, isPortrait ? 0.48 : 0.88),
+                              ("R3", isPortrait ? 0.77 : 0.69, isPortrait ? 0.48 : 0.88)] {
+            Self.addButton(label: label, in: &customization, x: x, y: y,
+                           width: label.hasSuffix("3") ? 0.65 : 1.05, height: 0.52,
+                           shape: .capsule, fill: fill)
+        }
+        for index in customization.customButtons.indices where customization.customButtons[index].controlKind == .joystick {
+            customization.customButtons[index].joystickMapping = nil
+            customization.customButtons[index].joystickOutputSettings = customization.customButtons[index].label == "Move"
+                ? .analogLeftStick : .analogRightStick
+        }
+        customization = customization.normalized
+        installTemplateBindings(in: &customization)
+        for index in customization.elements.indices {
+            if customization.elements[index].kind == .joystick {
+                customization.elements[index].joystickOutputSettings = customization.elements[index].label == "Move"
+                    ? .analogLeftStick : .analogRightStick
+                customization.elements[index].joystickMapping = nil
+                customization.elements[index].partOutputs = [:]
+                customization.elements[index].output = nil
+                customization.elements[index].defaultOutput = nil
+            } else {
+                var binding = customization.elements[index].output ?? KeypadElementOutputBinding()
+                binding.keyboard = nil
+                if customization.elements[index].label == "L3" { binding.gamepadButtons = [.leftStickPress] }
+                if customization.elements[index].label == "R3" { binding.gamepadButtons = [.rightStickPress] }
+                customization.elements[index].output = binding
+                customization.elements[index].defaultOutput = binding
+            }
+        }
+        return customization.normalized
     }
 
     private func makeSoftWhiteProfile() -> GamepadConfigurationProfile {
@@ -21697,7 +21797,7 @@ private struct GamepadEditorBlankSetupCard: View {
     }
 
     private var starterTemplates: [GamepadControllerTemplate] {
-        [.productivityStarter, .productivityOneHandedLeft, .productivityOneHandedRight, .nes, .xbox, .softWhite]
+        [.productivityStarter, .productivityOneHandedLeft, .productivityOneHandedRight, .nes, .xbox, .wowForever, .softWhite]
     }
 
     @ViewBuilder

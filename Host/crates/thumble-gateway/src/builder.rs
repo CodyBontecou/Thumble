@@ -866,7 +866,7 @@ pub fn builder_tools() -> Vec<Tool> {
             "Install one canonical controller template",
             object_schema(
                 &["sessionID", "expectedRevision", "operationID", "template"],
-                serde_json::json!({"sessionID":sid.clone(),"expectedRevision":revision.clone(),"operationID":operation_id.clone(),"template":{"type":"string","enum":["productivityStarter","productivityOneHandedLeft","productivityOneHandedRight","nes","snes","nintendo64","gameCube","gameBoy","gameBoyAdvance","genesisSixButton","saturn","dreamcast","arcadeStick","psp","playStation","xbox","softWhite"]},"name":{"type":"string","minLength":1,"maxLength":256}}),
+                serde_json::json!({"sessionID":sid.clone(),"expectedRevision":revision.clone(),"operationID":operation_id.clone(),"template":{"type":"string","enum":["productivityStarter","productivityOneHandedLeft","productivityOneHandedRight","nes","snes","nintendo64","gameCube","gameBoy","gameBoyAdvance","genesisSixButton","saturn","dreamcast","arcadeStick","psp","playStation","xbox","softWhite","wowForever"]},"name":{"type":"string","minLength":1,"maxLength":256}}),
             ),
             false,
             true,

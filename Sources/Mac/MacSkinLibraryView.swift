@@ -9,6 +9,7 @@ struct MacSkinLibraryView: View {
     let onCustomizeProfile: (UUID) -> Void
     let onShareProfile: (UUID) -> Void
 
+    @State private var previewActionSet: ThumbleActionSet = .base
     @State private var isImporting = false
     @State private var pendingImport: MacPendingSkinImport?
     @State private var libraryError: String?
@@ -22,6 +23,14 @@ struct MacSkinLibraryView: View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: Geist.Spacing.s8) {
                 header
+                Picker("Preview action set", selection: $previewActionSet) {
+                    ForEach(ThumbleActionSet.allCases) { actionSet in
+                        Text(actionSet.displayName).tag(actionSet)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .frame(maxWidth: 400)
+                .accessibilityHint("Preview the appearance shown while holding controller triggers.")
                 myKeypadsSection
                 installedSkinsSection
             }
@@ -344,7 +353,8 @@ struct MacSkinLibraryView: View {
         return profile.resolvedCustomization(
             for: .landscape,
             colorScheme: scheme == .dark ? .dark : .light,
-            skinPackage: profile.skinReference.flatMap { try? server.skinPackage(for: $0) }
+            skinPackage: profile.skinReference.flatMap { try? server.skinPackage(for: $0) },
+            actionSet: previewActionSet
         )
     }
 
@@ -356,7 +366,8 @@ struct MacSkinLibraryView: View {
             skinPackage: package,
             orientation: .landscape,
             colorScheme: colorScheme == .dark ? .dark : .light,
-            options: .replacingAppearance
+            options: .replacingAppearance,
+            actionSet: previewActionSet
         )
     }
 

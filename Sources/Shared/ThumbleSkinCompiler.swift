@@ -627,8 +627,8 @@ public enum ThumbleSkinCompiler {
                 throw ThumbleSkinAnchorError.invalid("Anchored artwork requires an exact orientation and color scheme variant.")
             }
             return ThumbleSkinVariant(
-                id: "css-\(lowered.orientation?.rawValue ?? "any")-\(lowered.colorScheme?.rawValue ?? "any")",
-                orientation: lowered.orientation, colorScheme: lowered.colorScheme, appearance: appearance)
+                id: "css-\(lowered.orientation?.rawValue ?? "any")-\(lowered.colorScheme?.rawValue ?? "any")" + (lowered.actionSet.map { "-" + $0.rawValue } ?? ""),
+                orientation: lowered.orientation, colorScheme: lowered.colorScheme, appearance: appearance, actionSet: lowered.actionSet)
         }
         let skin = ThumbleSkin(base: css.base, variants: variants)
         let compatibleRoles = (artboard?.expectedRoles ?? [])
@@ -674,7 +674,8 @@ public enum ThumbleSkinCompiler {
                     minimumAspectRatio: captured == nil ? 0.4 : nil,
                     maximumAspectRatio: captured == nil ? 2.5 : nil,
                     requiredRoles: compatibleRoles,
-                    requiredFeatures: workspace.sourceAssets.contains(where: { $0.anchor != nil }) ? [.artworkLayers] : [],
+                    requiredFeatures: (workspace.sourceAssets.contains(where: { $0.anchor != nil }) ? [.artworkLayers] : [])
+                        + (css.variants.contains(where: { $0.actionSet != nil }) ? [.actionSetLayers] : []),
                     capturedGeometry: captured
                 )
             ),

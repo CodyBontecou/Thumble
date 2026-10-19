@@ -94,6 +94,7 @@ final class ThumbleCLIProfileBackend {
         case playStation
         case xbox
         case softWhite
+        case wowForever
     }
 
     enum CustomizationLayoutMode: String, Codable, Equatable {

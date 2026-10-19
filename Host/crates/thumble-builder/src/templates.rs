@@ -34,6 +34,7 @@ pub enum BuilderTemplate {
     PlayStation,
     Xbox,
     SoftWhite,
+    WowForever,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -49,7 +50,7 @@ pub struct BuilderTemplateMetadata {
 }
 
 impl BuilderTemplate {
-    pub const ALL: [Self; 17] = [
+    pub const ALL: [Self; 18] = [
         Self::ProductivityStarter,
         Self::ProductivityOneHandedLeft,
         Self::ProductivityOneHandedRight,
@@ -67,6 +68,7 @@ impl BuilderTemplate {
         Self::PlayStation,
         Self::Xbox,
         Self::SoftWhite,
+        Self::WowForever,
     ];
 
     pub const fn metadata(self) -> BuilderTemplateMetadata {
@@ -87,6 +89,7 @@ impl BuilderTemplate {
             Self::Psp => metadata(self, "psp", 1, "PSP", "Portable emulator pad with D-pad, nub, shoulders, and face buttons", 3),
             Self::PlayStation => metadata(self, "playStation", 1, "PlayStation", "Dual-stick layout with PlayStation face symbols and shoulders", 6),
             Self::Xbox => metadata(self, "xbox", 1, "Xbox", "Dual-stick Xbox-style layout with ABXY and triggers", 6),
+            Self::WowForever => metadata(self, "wowForever", 1, "WoW Forever", "Native gamepad inputs for WoW Forever with analog movement and camera, held modifiers, and editable class/build profiles", 8),
             Self::SoftWhite => metadata(self, "softWhite", 1, "Soft White Pro", "Premium soft-white neumorphic controller with layered shell, rings, plates, dual sticks, D-pad, ABXY, and shoulder controls", 15),
         }
     }
@@ -181,6 +184,7 @@ macro_rules! fixture_sources {
             (PlayStation, "playStation.json", include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../fixtures/controller-templates/v1/playStation.json"))),
             (Xbox, "xbox.json", include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../fixtures/controller-templates/v1/xbox.json"))),
             (SoftWhite, "softWhite.json", include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../fixtures/controller-templates/v1/softWhite.json"))),
+            (WowForever, "wowForever.json", include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../fixtures/controller-templates/v1/wowForever.json"))),
         }
     };
 }
@@ -191,7 +195,7 @@ macro_rules! source_array {
     };
 }
 
-const FIXTURE_SOURCES: [(BuilderTemplate, &str, &[u8]); 17] = fixture_sources!(source_array);
+const FIXTURE_SOURCES: [(BuilderTemplate, &str, &[u8]); 18] = fixture_sources!(source_array);
 const MANIFEST_BYTES: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../fixtures/controller-templates/v1/manifest.json"
@@ -542,7 +546,7 @@ mod tests {
     #[test]
     fn embedded_fixture_catalog_is_strict_and_safe() {
         let fixtures = validate_fixture_set(MANIFEST_BYTES, &FIXTURE_SOURCES).unwrap();
-        assert_eq!(fixtures.len(), 17);
+        assert_eq!(fixtures.len(), BuilderTemplate::ALL.len());
         for template in BuilderTemplate::ALL {
             let fixture = &fixtures[template.template_id()];
             assert_eq!(fixture.revision, template.revision());

@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Controller support and game layouts: the October development update</title>
+  <meta name="description" content="A look at Thumble development since TestFlight build 6: controller output, WoW Forever layouts, AI-assisted editing, and Windows/Linux receivers.">
+  <meta name="theme-color" content="#f4efe5">
+  <meta property="og:title" content="Controller support and game layouts: the October development update">
+  <meta property="og:description" content="What is being built after the July beta, and what still needs validation.">
+  <meta property="og:type" content="article">
+  <meta property="og:image" content="/assets/app-icon.png">
+  <link rel="icon" href="/assets/favicon.png" type="image/png">
+  <link rel="apple-touch-icon" href="/assets/app-icon.png">
+  <link rel="stylesheet" href="/styles.css?v=c61718e97179">
+</head>
+<body class="docs-page blog-post">
+  <header class="site-header">
+    <a class="brand" href="/" aria-label="Thumble home">
+      <span class="brand-mark">TC</span>
+      <span>Thumble</span>
+    </a>
+    <nav aria-label="Primary navigation">
+      <a href="/">Home</a>
+      <a href="/#screens">Screens</a>
+      <a href="/skins.html">Skins</a>
+      <a href="/docs.html">Docs</a>
+      <a href="/blog.html" aria-current="page">Blog</a>
+      <a class="nav-cta" href="/#waitlist">Waitlist</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="docs-hero section-shell blog-hero">
+      <div>
+        <p class="eyebrow">development update · october 19, 2026</p>
+        <h1>More ways to play. More room to build.</h1>
+        <p class="lede">Controller output, deeper game layouts, and assistants that help shape your keypad. Here’s what we’ve been working on since the July TestFlight build.</p>
+      </div>
+    </section>
+    <section class="docs-layout section-shell">
+      <aside class="docs-toc" aria-label="Post sections">
+        <strong>In this update</strong>
+        <a href="#baseline">The beta baseline</a>
+        <a href="#controllers">Controller output</a>
+        <a href="#games">Game layouts</a>
+        <a href="#assistants">AI-assisted editing</a>
+        <a href="#receivers">Windows and Linux</a>
+        <a href="#next">What comes next</a>
+      </aside>
+      <article class="docs-copy">
+        <section id="baseline" class="doc-section">
+          <p class="eyebrow">release context</p>
+          <h2>Since TestFlight 1.0.0 (6)</h2>
+          <p>The latest uploaded iOS build is 1.0.0 (6), uploaded July 30, 2026. Its test notes cover controller editing, pairing and reconnects, orientation changes, saved profiles, and standalone Thumble Host compatibility.</p>
+          <p>This is a development update, not release notes for a new beta. The work below includes changes in the repository and experimental integrations; it is not all available in the July build or the current Mac download.</p>
+        </section>
+        <section id="controllers" class="doc-section">
+          <p class="eyebrow">controller support</p>
+          <h2>Sticks, triggers, and outputs you control</h2>
+          <p>We’ve expanded the virtual gamepad implementation in both Mac receivers. Layouts can send two analog sticks, independent triggers, a D-pad, and gamepad buttons alongside keyboard and pointer controls. Each setup chooses keyboard, controller, or mixed output while retaining its own saved bindings.</p>
+          <p>Recent work strengthens held-input ownership, neutralizes old input when setups change, and adds diagnostics and explicit recovery when controller output fails. Stick dead zones, sensitivity, and inversion let you tune the feel.</p>
+          <p>Mac virtual gamepad output requires an Apple-authorized signed receiver. Live recognition by games, Steam, SDL, and Apple’s GameController framework remains a validation step. Implemented output is not a guarantee that every game will recognize a controller.</p>
+          <p><a href="/docs.html#outputs">Read the output guide →</a></p>
+        </section>
+        <section id="games" class="doc-section">
+          <p class="eyebrow">advanced layouts</p>
+          <h2>A setup for the game in front of you</h2>
+          <h3>World of Warcraft</h3>
+          <p>The new WoW Forever template combines two sticks, held triggers, face buttons, and utility controls in portrait and landscape. Keep a separate setup for each character or talent build. The game continues to own ability assignments, targeting, and action-bar pages.</p>
+          <p>For keyboard play, the experimental Thumble Link addon exports existing bindings from supported Blizzard bars. Paste the snapshot into the Mac app or CLI, review it, and create a character setup. Later imports preserve your layout and manual edits. The first adapter targets Forever interface 16001 and still needs live-client acceptance; it is not a live spell, cooldown, or class detector.</p>
+          <p>Held-trigger skin action sets can show different pictures for Base, LT, RT, and LT+RT. They change presentation while the game owns the actual actions.</p>
+          <h3>League of Legends</h3>
+          <p>Thumble’s custom layout tools can also make a companion pad for League: group ability keys, summoner spells, items, and ping shortcuts around your thumbs, and add a trackpad for pointer input. Match the outputs to your actual in-game bindings. This is a layout you build, rather than a new built-in preset or game integration.</p>
+          <p>Both approaches build on existing tools: separate orientation variants, groups and layers, on-device editing, thumb calibration, and Practice Mode. Those tools already existed at the July baseline; they make more involved layouts easier to refine.</p>
+          <p><a href="/docs.html#game-layouts">Build a game layout →</a></p>
+        </section>
+        <section id="assistants" class="doc-section">
+          <p class="eyebrow">AI + editing</p>
+          <h2>Describe a layout, then refine it</h2>
+          <p>Since July, Thumble has gained a hosted MCP gateway and builder workflow for ChatGPT and Claude, plus richer controller design tools. Assistants can work from templates, prepare private drafts, preview geometry, inspect layout quality, and save changes through the Mac’s configuration authority.</p>
+          <p>CSS authoring compiles visual styles into native skin packages. The Mac editor and CLI also support template-based setup editing and Quick Bind, with explicit input ownership for each control. You can keep iterating in the editor after an assistant creates the starting point.</p>
+          <p><a href="/blog/connect-chatgpt-claude.html">Connect an assistant →</a></p>
+        </section>
+        <section id="receivers" class="doc-section">
+          <p class="eyebrow">experimental / beyond Mac</p>
+          <h2>Windows and Linux receivers</h2>
+          <p>A new native Rust receiver lets the iPhone send keyboard and mouse input to Windows and Linux over a local network. Verification includes native desktop input with an actual iPhone on both platforms.</p>
+          <p>This is a developer setup with a separate command-line receiver. It supports keyboard and mouse output over WebSocket; virtual gamepad output, rumble, and the Mac editor/MCP tooling are not implemented in this receiver. The main download on this site remains the Mac helper.</p>
+          <p><a href="/docs.html#receivers">Read the receiver setup and limits →</a></p>
+        </section>
+        <section id="next" class="doc-section">
+          <p class="eyebrow">next steps</p>
+          <h2>From development to the next beta</h2>
+          <p>Controller signing and game compatibility, live WoW integration checks, and packaging matching Mac and iPhone builds remain release work. We’ll identify what is included when the next beta is ready.</p>
+          <p><a href="/#waitlist">Join the launch list for build updates →</a></p>
+        </section>
+      </article>
+    </section>
+  </main>
+  <footer class="site-footer section-shell">
+    <span>© <span id="year">2026</span> Thumble</span>
+    <span class="footer-links"><a href="/">home</a><a href="/blog.html">blog</a><a href="/docs.html">docs</a><a href="/privacy.html">privacy</a></span>
+  </footer>
+
+  <script src="/script.js" defer></script>
+</body>
+</html>

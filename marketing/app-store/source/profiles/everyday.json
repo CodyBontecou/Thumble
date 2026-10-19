@@ -1,0 +1,2104 @@
+{
+  "customization": {
+    "accentStyle": "blue",
+    "backgroundDarkFillStyle": {
+      "kind": "solid",
+      "color": {
+        "red": 0.9568627450980393,
+        "green": 0.9372549019607843,
+        "blue": 0.8980392156862745,
+        "alpha": 1
+      }
+    },
+    "backgroundLightFillStyle": {
+      "kind": "solid",
+      "color": {
+        "red": 0.9568627450980393,
+        "green": 0.9372549019607843,
+        "blue": 0.8980392156862745,
+        "alpha": 1
+      }
+    },
+    "buttonCustomizations": [
+      "00000000-0000-0000-0000-000000000101",
+      {
+        "centerX": 0.27,
+        "centerY": 0.32,
+        "cornerRadius": 22,
+        "fillColor": {
+          "red": 1.0,
+          "green": 0.41568627450980394,
+          "blue": 0.0,
+          "alpha": 1
+        },
+        "hapticFeedback": {
+          "duration": 0.06,
+          "intensity": 0.58,
+          "pattern": "single",
+          "sharpness": 0.9,
+          "style": "rigid"
+        },
+        "heightScale": 1.12,
+        "icon": {
+          "source": "sf_symbol",
+          "value": "magnifyingglass",
+          "placement": "top",
+          "scale": 0.64,
+          "renderingMode": "template"
+        },
+        "isHidden": false,
+        "isLocationLocked": false,
+        "rotationDegrees": 0,
+        "shadowStrength": 0.2,
+        "shape": "rounded_rectangle",
+        "widthScale": 1.28,
+        "zIndex": 0,
+        "foregroundColor": {
+          "red": 1.0,
+          "green": 1.0,
+          "blue": 1.0,
+          "alpha": 1
+        }
+      },
+      "00000000-0000-0000-0000-000000000102",
+      {
+        "centerX": 0.73,
+        "centerY": 0.32,
+        "cornerRadius": 22,
+        "fillColor": {
+          "red": 0.15294117647058825,
+          "green": 0.15294117647058825,
+          "blue": 0.13333333333333333,
+          "alpha": 1
+        },
+        "hapticFeedback": {
+          "duration": 0.06,
+          "intensity": 0.58,
+          "pattern": "single",
+          "sharpness": 0.9,
+          "style": "rigid"
+        },
+        "heightScale": 1.12,
+        "icon": {
+          "source": "sf_symbol",
+          "value": "rectangle.on.rectangle",
+          "placement": "top",
+          "scale": 0.64,
+          "renderingMode": "template"
+        },
+        "isHidden": false,
+        "isLocationLocked": false,
+        "rotationDegrees": 0,
+        "shadowStrength": 0.2,
+        "shape": "rounded_rectangle",
+        "widthScale": 1.28,
+        "zIndex": 0,
+        "foregroundColor": {
+          "red": 1.0,
+          "green": 1.0,
+          "blue": 1.0,
+          "alpha": 1
+        }
+      },
+      "00000000-0000-0000-0000-000000000103",
+      {
+        "centerX": 0.27,
+        "centerY": 0.53,
+        "cornerRadius": 22,
+        "fillColor": {
+          "red": 0.15294117647058825,
+          "green": 0.15294117647058825,
+          "blue": 0.13333333333333333,
+          "alpha": 1
+        },
+        "hapticFeedback": {
+          "duration": 0.06,
+          "intensity": 0.58,
+          "pattern": "single",
+          "sharpness": 0.9,
+          "style": "rigid"
+        },
+        "heightScale": 1.12,
+        "icon": {
+          "source": "sf_symbol",
+          "value": "doc.on.doc",
+          "placement": "top",
+          "scale": 0.64,
+          "renderingMode": "template"
+        },
+        "isHidden": false,
+        "isLocationLocked": false,
+        "rotationDegrees": 0,
+        "shadowStrength": 0.2,
+        "shape": "rounded_rectangle",
+        "widthScale": 1.28,
+        "zIndex": 0,
+        "foregroundColor": {
+          "red": 1.0,
+          "green": 1.0,
+          "blue": 1.0,
+          "alpha": 1
+        }
+      },
+      "00000000-0000-0000-0000-000000000104",
+      {
+        "centerX": 0.73,
+        "centerY": 0.53,
+        "cornerRadius": 22,
+        "fillColor": {
+          "red": 0.15294117647058825,
+          "green": 0.15294117647058825,
+          "blue": 0.13333333333333333,
+          "alpha": 1
+        },
+        "hapticFeedback": {
+          "duration": 0.06,
+          "intensity": 0.58,
+          "pattern": "single",
+          "sharpness": 0.9,
+          "style": "rigid"
+        },
+        "heightScale": 1.12,
+        "icon": {
+          "source": "sf_symbol",
+          "value": "clipboard",
+          "placement": "top",
+          "scale": 0.64,
+          "renderingMode": "template"
+        },
+        "isHidden": false,
+        "isLocationLocked": false,
+        "rotationDegrees": 0,
+        "shadowStrength": 0.2,
+        "shape": "rounded_rectangle",
+        "widthScale": 1.28,
+        "zIndex": 0,
+        "foregroundColor": {
+          "red": 1.0,
+          "green": 1.0,
+          "blue": 1.0,
+          "alpha": 1
+        }
+      },
+      "00000000-0000-0000-0000-000000000107",
+      {
+        "centerX": 0.27,
+        "centerY": 0.74,
+        "fillColor": {
+          "red": 0.15294117647058825,
+          "green": 0.15294117647058825,
+          "blue": 0.13333333333333333,
+          "alpha": 1
+        },
+        "hapticFeedback": {
+          "duration": 0.06,
+          "intensity": 0.64,
+          "pattern": "pulse",
+          "sharpness": 0.58,
+          "style": "medium"
+        },
+        "heightScale": 1.12,
+        "icon": {
+          "source": "sf_symbol",
+          "value": "arrow.uturn.backward",
+          "placement": "top",
+          "scale": 0.64,
+          "renderingMode": "template"
+        },
+        "isHidden": false,
+        "isLocationLocked": false,
+        "rotationDegrees": 0,
+        "shadowStrength": 0.2,
+        "shape": "rectangle",
+        "widthScale": 1.28,
+        "zIndex": 0,
+        "cornerRadius": 22,
+        "foregroundColor": {
+          "red": 1.0,
+          "green": 1.0,
+          "blue": 1.0,
+          "alpha": 1
+        }
+      },
+      "00000000-0000-0000-0000-000000000108",
+      {
+        "centerX": 0.73,
+        "centerY": 0.74,
+        "fillColor": {
+          "red": 0.15294117647058825,
+          "green": 0.15294117647058825,
+          "blue": 0.13333333333333333,
+          "alpha": 1
+        },
+        "hapticFeedback": {
+          "duration": 0.06,
+          "intensity": 0.64,
+          "pattern": "pulse",
+          "sharpness": 0.58,
+          "style": "medium"
+        },
+        "heightScale": 1.12,
+        "icon": {
+          "source": "sf_symbol",
+          "value": "escape",
+          "placement": "top",
+          "scale": 0.64,
+          "renderingMode": "template"
+        },
+        "isHidden": false,
+        "isLocationLocked": false,
+        "rotationDegrees": 0,
+        "shadowStrength": 0.2,
+        "shape": "rectangle",
+        "widthScale": 1.28,
+        "zIndex": 0,
+        "cornerRadius": 22,
+        "foregroundColor": {
+          "red": 1.0,
+          "green": 1.0,
+          "blue": 1.0,
+          "alpha": 1
+        }
+      }
+    ],
+    "colorSchemePreference": "light",
+    "controlScale": "standard",
+    "customButtons": [],
+    "designMetadata": {
+      "grid": {
+        "gridSize": 16,
+        "showsGrid": false,
+        "snapToGrid": false,
+        "snapToObjects": true,
+        "snapTolerance": 6
+      },
+      "groups": [],
+      "guides": [],
+      "layerOrder": [
+        {
+          "kind": "system",
+          "system": "top_bar_activation"
+        },
+        {
+          "kind": "builtin",
+          "button": "00000000-0000-0000-0000-000000000101"
+        },
+        {
+          "kind": "builtin",
+          "button": "00000000-0000-0000-0000-000000000102"
+        },
+        {
+          "kind": "builtin",
+          "button": "00000000-0000-0000-0000-000000000103"
+        },
+        {
+          "kind": "builtin",
+          "button": "00000000-0000-0000-0000-000000000104"
+        },
+        {
+          "kind": "builtin",
+          "button": "00000000-0000-0000-0000-000000000107"
+        },
+        {
+          "kind": "builtin",
+          "button": "00000000-0000-0000-0000-000000000108"
+        }
+      ],
+      "notes": "Marketing demonstration profile with real keyboard outputs.",
+      "schemaVersion": 1,
+      "sourceTemplateID": "productivitystarter",
+      "sourceTemplateRevision": 1,
+      "tags": [
+        "accessible",
+        "landscape",
+        "mac-defaults",
+        "productivity"
+      ]
+    },
+    "deviceCanvas": {
+      "frameID": "iphone-17-pro-portrait"
+    },
+    "elements": [
+      {
+        "defaultOutput": {
+          "keyboard": {
+            "keyCode": 49,
+            "modifiersRawValue": 1
+          },
+          "gamepadButtons": []
+        },
+        "id": "00000000-0000-0000-0000-000000000101",
+        "kind": "button",
+        "label": "Search",
+        "layout": {
+          "centerX": 0.27,
+          "centerY": 0.32,
+          "cornerRadius": 22,
+          "fillColor": {
+            "red": 1.0,
+            "green": 0.41568627450980394,
+            "blue": 0.0,
+            "alpha": 1
+          },
+          "hapticFeedback": {
+            "duration": 0.06,
+            "intensity": 0.58,
+            "pattern": "single",
+            "sharpness": 0.9,
+            "style": "rigid"
+          },
+          "heightScale": 1.12,
+          "icon": {
+            "source": "sf_symbol",
+            "value": "magnifyingglass",
+            "placement": "top",
+            "scale": 0.64,
+            "renderingMode": "template"
+          },
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 0.2,
+          "shape": "rounded_rectangle",
+          "widthScale": 1.28,
+          "zIndex": 0,
+          "foregroundColor": {
+            "red": 1.0,
+            "green": 1.0,
+            "blue": 1.0,
+            "alpha": 1
+          }
+        },
+        "output": {
+          "keyboard": {
+            "keyCode": 49,
+            "modifiersRawValue": 1
+          },
+          "gamepadButtons": []
+        },
+        "partOutputs": [],
+        "visualRole": "custom"
+      },
+      {
+        "defaultOutput": {
+          "keyboard": {
+            "keyCode": 48,
+            "modifiersRawValue": 1
+          },
+          "gamepadButtons": []
+        },
+        "id": "00000000-0000-0000-0000-000000000102",
+        "kind": "button",
+        "label": "Switch app",
+        "layout": {
+          "centerX": 0.73,
+          "centerY": 0.32,
+          "cornerRadius": 22,
+          "fillColor": {
+            "red": 0.15294117647058825,
+            "green": 0.15294117647058825,
+            "blue": 0.13333333333333333,
+            "alpha": 1
+          },
+          "hapticFeedback": {
+            "duration": 0.06,
+            "intensity": 0.58,
+            "pattern": "single",
+            "sharpness": 0.9,
+            "style": "rigid"
+          },
+          "heightScale": 1.12,
+          "icon": {
+            "source": "sf_symbol",
+            "value": "rectangle.on.rectangle",
+            "placement": "top",
+            "scale": 0.64,
+            "renderingMode": "template"
+          },
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 0.2,
+          "shape": "rounded_rectangle",
+          "widthScale": 1.28,
+          "zIndex": 0,
+          "foregroundColor": {
+            "red": 1.0,
+            "green": 1.0,
+            "blue": 1.0,
+            "alpha": 1
+          }
+        },
+        "output": {
+          "keyboard": {
+            "keyCode": 48,
+            "modifiersRawValue": 1
+          },
+          "gamepadButtons": []
+        },
+        "partOutputs": [],
+        "visualRole": "custom"
+      },
+      {
+        "defaultOutput": {
+          "keyboard": {
+            "keyCode": 8,
+            "modifiersRawValue": 1
+          },
+          "gamepadButtons": []
+        },
+        "id": "00000000-0000-0000-0000-000000000103",
+        "kind": "button",
+        "label": "Copy",
+        "layout": {
+          "centerX": 0.27,
+          "centerY": 0.53,
+          "cornerRadius": 22,
+          "fillColor": {
+            "red": 0.15294117647058825,
+            "green": 0.15294117647058825,
+            "blue": 0.13333333333333333,
+            "alpha": 1
+          },
+          "hapticFeedback": {
+            "duration": 0.06,
+            "intensity": 0.58,
+            "pattern": "single",
+            "sharpness": 0.9,
+            "style": "rigid"
+          },
+          "heightScale": 1.12,
+          "icon": {
+            "source": "sf_symbol",
+            "value": "doc.on.doc",
+            "placement": "top",
+            "scale": 0.64,
+            "renderingMode": "template"
+          },
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 0.2,
+          "shape": "rounded_rectangle",
+          "widthScale": 1.28,
+          "zIndex": 0,
+          "foregroundColor": {
+            "red": 1.0,
+            "green": 1.0,
+            "blue": 1.0,
+            "alpha": 1
+          }
+        },
+        "output": {
+          "keyboard": {
+            "keyCode": 8,
+            "modifiersRawValue": 1
+          },
+          "gamepadButtons": []
+        },
+        "partOutputs": [],
+        "visualRole": "custom"
+      },
+      {
+        "defaultOutput": {
+          "keyboard": {
+            "keyCode": 9,
+            "modifiersRawValue": 1
+          },
+          "gamepadButtons": []
+        },
+        "id": "00000000-0000-0000-0000-000000000104",
+        "kind": "button",
+        "label": "Paste",
+        "layout": {
+          "centerX": 0.73,
+          "centerY": 0.53,
+          "cornerRadius": 22,
+          "fillColor": {
+            "red": 0.15294117647058825,
+            "green": 0.15294117647058825,
+            "blue": 0.13333333333333333,
+            "alpha": 1
+          },
+          "hapticFeedback": {
+            "duration": 0.06,
+            "intensity": 0.58,
+            "pattern": "single",
+            "sharpness": 0.9,
+            "style": "rigid"
+          },
+          "heightScale": 1.12,
+          "icon": {
+            "source": "sf_symbol",
+            "value": "clipboard",
+            "placement": "top",
+            "scale": 0.64,
+            "renderingMode": "template"
+          },
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 0.2,
+          "shape": "rounded_rectangle",
+          "widthScale": 1.28,
+          "zIndex": 0,
+          "foregroundColor": {
+            "red": 1.0,
+            "green": 1.0,
+            "blue": 1.0,
+            "alpha": 1
+          }
+        },
+        "output": {
+          "keyboard": {
+            "keyCode": 9,
+            "modifiersRawValue": 1
+          },
+          "gamepadButtons": []
+        },
+        "partOutputs": [],
+        "visualRole": "custom"
+      },
+      {
+        "defaultOutput": {
+          "keyboard": {
+            "keyCode": 6,
+            "modifiersRawValue": 1
+          },
+          "gamepadButtons": []
+        },
+        "id": "00000000-0000-0000-0000-000000000107",
+        "kind": "button",
+        "label": "Undo",
+        "layout": {
+          "centerX": 0.27,
+          "centerY": 0.74,
+          "fillColor": {
+            "red": 0.15294117647058825,
+            "green": 0.15294117647058825,
+            "blue": 0.13333333333333333,
+            "alpha": 1
+          },
+          "hapticFeedback": {
+            "duration": 0.06,
+            "intensity": 0.64,
+            "pattern": "pulse",
+            "sharpness": 0.58,
+            "style": "medium"
+          },
+          "heightScale": 1.12,
+          "icon": {
+            "source": "sf_symbol",
+            "value": "arrow.uturn.backward",
+            "placement": "top",
+            "scale": 0.64,
+            "renderingMode": "template"
+          },
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 0.2,
+          "shape": "rectangle",
+          "widthScale": 1.28,
+          "zIndex": 0,
+          "cornerRadius": 22,
+          "foregroundColor": {
+            "red": 1.0,
+            "green": 1.0,
+            "blue": 1.0,
+            "alpha": 1
+          }
+        },
+        "output": {
+          "keyboard": {
+            "keyCode": 6,
+            "modifiersRawValue": 1
+          },
+          "gamepadButtons": []
+        },
+        "partOutputs": [],
+        "visualRole": "custom"
+      },
+      {
+        "defaultOutput": {
+          "keyboard": {
+            "keyCode": 53,
+            "modifiersRawValue": 0
+          },
+          "gamepadButtons": []
+        },
+        "id": "00000000-0000-0000-0000-000000000108",
+        "kind": "button",
+        "label": "Escape",
+        "layout": {
+          "centerX": 0.73,
+          "centerY": 0.74,
+          "fillColor": {
+            "red": 0.15294117647058825,
+            "green": 0.15294117647058825,
+            "blue": 0.13333333333333333,
+            "alpha": 1
+          },
+          "hapticFeedback": {
+            "duration": 0.06,
+            "intensity": 0.64,
+            "pattern": "pulse",
+            "sharpness": 0.58,
+            "style": "medium"
+          },
+          "heightScale": 1.12,
+          "icon": {
+            "source": "sf_symbol",
+            "value": "escape",
+            "placement": "top",
+            "scale": 0.64,
+            "renderingMode": "template"
+          },
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 0.2,
+          "shape": "rectangle",
+          "widthScale": 1.28,
+          "zIndex": 0,
+          "cornerRadius": 22,
+          "foregroundColor": {
+            "red": 1.0,
+            "green": 1.0,
+            "blue": 1.0,
+            "alpha": 1
+          }
+        },
+        "output": {
+          "keyboard": {
+            "keyCode": 53,
+            "modifiersRawValue": 0
+          },
+          "gamepadButtons": []
+        },
+        "partOutputs": [],
+        "visualRole": "custom"
+      }
+    ],
+    "labelOverrides": [
+      "00000000-0000-0000-0000-000000000101",
+      "Search",
+      "00000000-0000-0000-0000-000000000102",
+      "Switch app",
+      "00000000-0000-0000-0000-000000000103",
+      "Copy",
+      "00000000-0000-0000-0000-000000000104",
+      "Paste",
+      "00000000-0000-0000-0000-000000000107",
+      "Undo",
+      "00000000-0000-0000-0000-000000000108",
+      "Escape"
+    ],
+    "layoutMode": "standard",
+    "showsButtonLabels": true,
+    "updatedAt": 0
+  },
+  "id": "B234254A-B7BD-5D84-8B4C-9CF9DF91F76D",
+  "landscapeCustomization": {
+    "accentStyle": "blue",
+    "backgroundDarkFillStyle": {
+      "kind": "solid",
+      "color": {
+        "red": 0.9568627450980393,
+        "green": 0.9372549019607843,
+        "blue": 0.8980392156862745,
+        "alpha": 1
+      }
+    },
+    "backgroundLightFillStyle": {
+      "kind": "solid",
+      "color": {
+        "red": 0.9568627450980393,
+        "green": 0.9372549019607843,
+        "blue": 0.8980392156862745,
+        "alpha": 1
+      }
+    },
+    "buttonCustomizations": [
+      "00000000-0000-0000-0000-000000000101",
+      {
+        "centerX": 0.27,
+        "centerY": 0.32,
+        "cornerRadius": 22,
+        "fillColor": {
+          "red": 1.0,
+          "green": 0.41568627450980394,
+          "blue": 0.0,
+          "alpha": 1
+        },
+        "hapticFeedback": {
+          "duration": 0.06,
+          "intensity": 0.58,
+          "pattern": "single",
+          "sharpness": 0.9,
+          "style": "rigid"
+        },
+        "heightScale": 1.12,
+        "icon": {
+          "source": "sf_symbol",
+          "value": "magnifyingglass",
+          "placement": "top",
+          "scale": 0.64,
+          "renderingMode": "template"
+        },
+        "isHidden": false,
+        "isLocationLocked": false,
+        "rotationDegrees": 0,
+        "shadowStrength": 0.2,
+        "shape": "rounded_rectangle",
+        "widthScale": 1.28,
+        "zIndex": 0,
+        "foregroundColor": {
+          "red": 1.0,
+          "green": 1.0,
+          "blue": 1.0,
+          "alpha": 1
+        }
+      },
+      "00000000-0000-0000-0000-000000000102",
+      {
+        "centerX": 0.73,
+        "centerY": 0.32,
+        "cornerRadius": 22,
+        "fillColor": {
+          "red": 0.15294117647058825,
+          "green": 0.15294117647058825,
+          "blue": 0.13333333333333333,
+          "alpha": 1
+        },
+        "hapticFeedback": {
+          "duration": 0.06,
+          "intensity": 0.58,
+          "pattern": "single",
+          "sharpness": 0.9,
+          "style": "rigid"
+        },
+        "heightScale": 1.12,
+        "icon": {
+          "source": "sf_symbol",
+          "value": "rectangle.on.rectangle",
+          "placement": "top",
+          "scale": 0.64,
+          "renderingMode": "template"
+        },
+        "isHidden": false,
+        "isLocationLocked": false,
+        "rotationDegrees": 0,
+        "shadowStrength": 0.2,
+        "shape": "rounded_rectangle",
+        "widthScale": 1.28,
+        "zIndex": 0,
+        "foregroundColor": {
+          "red": 1.0,
+          "green": 1.0,
+          "blue": 1.0,
+          "alpha": 1
+        }
+      },
+      "00000000-0000-0000-0000-000000000103",
+      {
+        "centerX": 0.27,
+        "centerY": 0.53,
+        "cornerRadius": 22,
+        "fillColor": {
+          "red": 0.15294117647058825,
+          "green": 0.15294117647058825,
+          "blue": 0.13333333333333333,
+          "alpha": 1
+        },
+        "hapticFeedback": {
+          "duration": 0.06,
+          "intensity": 0.58,
+          "pattern": "single",
+          "sharpness": 0.9,
+          "style": "rigid"
+        },
+        "heightScale": 1.12,
+        "icon": {
+          "source": "sf_symbol",
+          "value": "doc.on.doc",
+          "placement": "top",
+          "scale": 0.64,
+          "renderingMode": "template"
+        },
+        "isHidden": false,
+        "isLocationLocked": false,
+        "rotationDegrees": 0,
+        "shadowStrength": 0.2,
+        "shape": "rounded_rectangle",
+        "widthScale": 1.28,
+        "zIndex": 0,
+        "foregroundColor": {
+          "red": 1.0,
+          "green": 1.0,
+          "blue": 1.0,
+          "alpha": 1
+        }
+      },
+      "00000000-0000-0000-0000-000000000104",
+      {
+        "centerX": 0.73,
+        "centerY": 0.53,
+        "cornerRadius": 22,
+        "fillColor": {
+          "red": 0.15294117647058825,
+          "green": 0.15294117647058825,
+          "blue": 0.13333333333333333,
+          "alpha": 1
+        },
+        "hapticFeedback": {
+          "duration": 0.06,
+          "intensity": 0.58,
+          "pattern": "single",
+          "sharpness": 0.9,
+          "style": "rigid"
+        },
+        "heightScale": 1.12,
+        "icon": {
+          "source": "sf_symbol",
+          "value": "clipboard",
+          "placement": "top",
+          "scale": 0.64,
+          "renderingMode": "template"
+        },
+        "isHidden": false,
+        "isLocationLocked": false,
+        "rotationDegrees": 0,
+        "shadowStrength": 0.2,
+        "shape": "rounded_rectangle",
+        "widthScale": 1.28,
+        "zIndex": 0,
+        "foregroundColor": {
+          "red": 1.0,
+          "green": 1.0,
+          "blue": 1.0,
+          "alpha": 1
+        }
+      },
+      "00000000-0000-0000-0000-000000000107",
+      {
+        "centerX": 0.27,
+        "centerY": 0.74,
+        "fillColor": {
+          "red": 0.15294117647058825,
+          "green": 0.15294117647058825,
+          "blue": 0.13333333333333333,
+          "alpha": 1
+        },
+        "hapticFeedback": {
+          "duration": 0.06,
+          "intensity": 0.64,
+          "pattern": "pulse",
+          "sharpness": 0.58,
+          "style": "medium"
+        },
+        "heightScale": 1.12,
+        "icon": {
+          "source": "sf_symbol",
+          "value": "arrow.uturn.backward",
+          "placement": "top",
+          "scale": 0.64,
+          "renderingMode": "template"
+        },
+        "isHidden": false,
+        "isLocationLocked": false,
+        "rotationDegrees": 0,
+        "shadowStrength": 0.2,
+        "shape": "rectangle",
+        "widthScale": 1.28,
+        "zIndex": 0,
+        "cornerRadius": 22,
+        "foregroundColor": {
+          "red": 1.0,
+          "green": 1.0,
+          "blue": 1.0,
+          "alpha": 1
+        }
+      },
+      "00000000-0000-0000-0000-000000000108",
+      {
+        "centerX": 0.73,
+        "centerY": 0.74,
+        "fillColor": {
+          "red": 0.15294117647058825,
+          "green": 0.15294117647058825,
+          "blue": 0.13333333333333333,
+          "alpha": 1
+        },
+        "hapticFeedback": {
+          "duration": 0.06,
+          "intensity": 0.64,
+          "pattern": "pulse",
+          "sharpness": 0.58,
+          "style": "medium"
+        },
+        "heightScale": 1.12,
+        "icon": {
+          "source": "sf_symbol",
+          "value": "escape",
+          "placement": "top",
+          "scale": 0.64,
+          "renderingMode": "template"
+        },
+        "isHidden": false,
+        "isLocationLocked": false,
+        "rotationDegrees": 0,
+        "shadowStrength": 0.2,
+        "shape": "rectangle",
+        "widthScale": 1.28,
+        "zIndex": 0,
+        "cornerRadius": 22,
+        "foregroundColor": {
+          "red": 1.0,
+          "green": 1.0,
+          "blue": 1.0,
+          "alpha": 1
+        }
+      }
+    ],
+    "colorSchemePreference": "light",
+    "controlScale": "standard",
+    "customButtons": [],
+    "designMetadata": {
+      "grid": {
+        "gridSize": 16,
+        "showsGrid": false,
+        "snapToGrid": false,
+        "snapToObjects": true,
+        "snapTolerance": 6
+      },
+      "groups": [],
+      "guides": [],
+      "layerOrder": [
+        {
+          "kind": "system",
+          "system": "top_bar_activation"
+        },
+        {
+          "kind": "builtin",
+          "button": "00000000-0000-0000-0000-000000000101"
+        },
+        {
+          "kind": "builtin",
+          "button": "00000000-0000-0000-0000-000000000102"
+        },
+        {
+          "kind": "builtin",
+          "button": "00000000-0000-0000-0000-000000000103"
+        },
+        {
+          "kind": "builtin",
+          "button": "00000000-0000-0000-0000-000000000104"
+        },
+        {
+          "kind": "builtin",
+          "button": "00000000-0000-0000-0000-000000000107"
+        },
+        {
+          "kind": "builtin",
+          "button": "00000000-0000-0000-0000-000000000108"
+        }
+      ],
+      "notes": "Marketing demonstration profile with real keyboard outputs.",
+      "schemaVersion": 1,
+      "sourceTemplateID": "productivitystarter",
+      "sourceTemplateRevision": 1,
+      "tags": [
+        "accessible",
+        "landscape",
+        "mac-defaults",
+        "productivity"
+      ]
+    },
+    "deviceCanvas": {
+      "frameID": "iphone-17-pro-landscape"
+    },
+    "elements": [
+      {
+        "defaultOutput": {
+          "keyboard": {
+            "keyCode": 49,
+            "modifiersRawValue": 1
+          },
+          "gamepadButtons": []
+        },
+        "id": "00000000-0000-0000-0000-000000000101",
+        "kind": "button",
+        "label": "Search",
+        "layout": {
+          "centerX": 0.27,
+          "centerY": 0.32,
+          "cornerRadius": 22,
+          "fillColor": {
+            "red": 1.0,
+            "green": 0.41568627450980394,
+            "blue": 0.0,
+            "alpha": 1
+          },
+          "hapticFeedback": {
+            "duration": 0.06,
+            "intensity": 0.58,
+            "pattern": "single",
+            "sharpness": 0.9,
+            "style": "rigid"
+          },
+          "heightScale": 1.12,
+          "icon": {
+            "source": "sf_symbol",
+            "value": "magnifyingglass",
+            "placement": "top",
+            "scale": 0.64,
+            "renderingMode": "template"
+          },
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 0.2,
+          "shape": "rounded_rectangle",
+          "widthScale": 1.28,
+          "zIndex": 0,
+          "foregroundColor": {
+            "red": 1.0,
+            "green": 1.0,
+            "blue": 1.0,
+            "alpha": 1
+          }
+        },
+        "output": {
+          "keyboard": {
+            "keyCode": 49,
+            "modifiersRawValue": 1
+          },
+          "gamepadButtons": []
+        },
+        "partOutputs": [],
+        "visualRole": "custom"
+      },
+      {
+        "defaultOutput": {
+          "keyboard": {
+            "keyCode": 48,
+            "modifiersRawValue": 1
+          },
+          "gamepadButtons": []
+        },
+        "id": "00000000-0000-0000-0000-000000000102",
+        "kind": "button",
+        "label": "Switch app",
+        "layout": {
+          "centerX": 0.73,
+          "centerY": 0.32,
+          "cornerRadius": 22,
+          "fillColor": {
+            "red": 0.15294117647058825,
+            "green": 0.15294117647058825,
+            "blue": 0.13333333333333333,
+            "alpha": 1
+          },
+          "hapticFeedback": {
+            "duration": 0.06,
+            "intensity": 0.58,
+            "pattern": "single",
+            "sharpness": 0.9,
+            "style": "rigid"
+          },
+          "heightScale": 1.12,
+          "icon": {
+            "source": "sf_symbol",
+            "value": "rectangle.on.rectangle",
+            "placement": "top",
+            "scale": 0.64,
+            "renderingMode": "template"
+          },
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 0.2,
+          "shape": "rounded_rectangle",
+          "widthScale": 1.28,
+          "zIndex": 0,
+          "foregroundColor": {
+            "red": 1.0,
+            "green": 1.0,
+            "blue": 1.0,
+            "alpha": 1
+          }
+        },
+        "output": {
+          "keyboard": {
+            "keyCode": 48,
+            "modifiersRawValue": 1
+          },
+          "gamepadButtons": []
+        },
+        "partOutputs": [],
+        "visualRole": "custom"
+      },
+      {
+        "defaultOutput": {
+          "keyboard": {
+            "keyCode": 8,
+            "modifiersRawValue": 1
+          },
+          "gamepadButtons": []
+        },
+        "id": "00000000-0000-0000-0000-000000000103",
+        "kind": "button",
+        "label": "Copy",
+        "layout": {
+          "centerX": 0.27,
+          "centerY": 0.53,
+          "cornerRadius": 22,
+          "fillColor": {
+            "red": 0.15294117647058825,
+            "green": 0.15294117647058825,
+            "blue": 0.13333333333333333,
+            "alpha": 1
+          },
+          "hapticFeedback": {
+            "duration": 0.06,
+            "intensity": 0.58,
+            "pattern": "single",
+            "sharpness": 0.9,
+            "style": "rigid"
+          },
+          "heightScale": 1.12,
+          "icon": {
+            "source": "sf_symbol",
+            "value": "doc.on.doc",
+            "placement": "top",
+            "scale": 0.64,
+            "renderingMode": "template"
+          },
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 0.2,
+          "shape": "rounded_rectangle",
+          "widthScale": 1.28,
+          "zIndex": 0,
+          "foregroundColor": {
+            "red": 1.0,
+            "green": 1.0,
+            "blue": 1.0,
+            "alpha": 1
+          }
+        },
+        "output": {
+          "keyboard": {
+            "keyCode": 8,
+            "modifiersRawValue": 1
+          },
+          "gamepadButtons": []
+        },
+        "partOutputs": [],
+        "visualRole": "custom"
+      },
+      {
+        "defaultOutput": {
+          "keyboard": {
+            "keyCode": 9,
+            "modifiersRawValue": 1
+          },
+          "gamepadButtons": []
+        },
+        "id": "00000000-0000-0000-0000-000000000104",
+        "kind": "button",
+        "label": "Paste",
+        "layout": {
+          "centerX": 0.73,
+          "centerY": 0.53,
+          "cornerRadius": 22,
+          "fillColor": {
+            "red": 0.15294117647058825,
+            "green": 0.15294117647058825,
+            "blue": 0.13333333333333333,
+            "alpha": 1
+          },
+          "hapticFeedback": {
+            "duration": 0.06,
+            "intensity": 0.58,
+            "pattern": "single",
+            "sharpness": 0.9,
+            "style": "rigid"
+          },
+          "heightScale": 1.12,
+          "icon": {
+            "source": "sf_symbol",
+            "value": "clipboard",
+            "placement": "top",
+            "scale": 0.64,
+            "renderingMode": "template"
+          },
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 0.2,
+          "shape": "rounded_rectangle",
+          "widthScale": 1.28,
+          "zIndex": 0,
+          "foregroundColor": {
+            "red": 1.0,
+            "green": 1.0,
+            "blue": 1.0,
+            "alpha": 1
+          }
+        },
+        "output": {
+          "keyboard": {
+            "keyCode": 9,
+            "modifiersRawValue": 1
+          },
+          "gamepadButtons": []
+        },
+        "partOutputs": [],
+        "visualRole": "custom"
+      },
+      {
+        "defaultOutput": {
+          "keyboard": {
+            "keyCode": 6,
+            "modifiersRawValue": 1
+          },
+          "gamepadButtons": []
+        },
+        "id": "00000000-0000-0000-0000-000000000107",
+        "kind": "button",
+        "label": "Undo",
+        "layout": {
+          "centerX": 0.27,
+          "centerY": 0.74,
+          "fillColor": {
+            "red": 0.15294117647058825,
+            "green": 0.15294117647058825,
+            "blue": 0.13333333333333333,
+            "alpha": 1
+          },
+          "hapticFeedback": {
+            "duration": 0.06,
+            "intensity": 0.64,
+            "pattern": "pulse",
+            "sharpness": 0.58,
+            "style": "medium"
+          },
+          "heightScale": 1.12,
+          "icon": {
+            "source": "sf_symbol",
+            "value": "arrow.uturn.backward",
+            "placement": "top",
+            "scale": 0.64,
+            "renderingMode": "template"
+          },
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 0.2,
+          "shape": "rectangle",
+          "widthScale": 1.28,
+          "zIndex": 0,
+          "cornerRadius": 22,
+          "foregroundColor": {
+            "red": 1.0,
+            "green": 1.0,
+            "blue": 1.0,
+            "alpha": 1
+          }
+        },
+        "output": {
+          "keyboard": {
+            "keyCode": 6,
+            "modifiersRawValue": 1
+          },
+          "gamepadButtons": []
+        },
+        "partOutputs": [],
+        "visualRole": "custom"
+      },
+      {
+        "defaultOutput": {
+          "keyboard": {
+            "keyCode": 53,
+            "modifiersRawValue": 0
+          },
+          "gamepadButtons": []
+        },
+        "id": "00000000-0000-0000-0000-000000000108",
+        "kind": "button",
+        "label": "Escape",
+        "layout": {
+          "centerX": 0.73,
+          "centerY": 0.74,
+          "fillColor": {
+            "red": 0.15294117647058825,
+            "green": 0.15294117647058825,
+            "blue": 0.13333333333333333,
+            "alpha": 1
+          },
+          "hapticFeedback": {
+            "duration": 0.06,
+            "intensity": 0.64,
+            "pattern": "pulse",
+            "sharpness": 0.58,
+            "style": "medium"
+          },
+          "heightScale": 1.12,
+          "icon": {
+            "source": "sf_symbol",
+            "value": "escape",
+            "placement": "top",
+            "scale": 0.64,
+            "renderingMode": "template"
+          },
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 0.2,
+          "shape": "rectangle",
+          "widthScale": 1.28,
+          "zIndex": 0,
+          "cornerRadius": 22,
+          "foregroundColor": {
+            "red": 1.0,
+            "green": 1.0,
+            "blue": 1.0,
+            "alpha": 1
+          }
+        },
+        "output": {
+          "keyboard": {
+            "keyCode": 53,
+            "modifiersRawValue": 0
+          },
+          "gamepadButtons": []
+        },
+        "partOutputs": [],
+        "visualRole": "custom"
+      }
+    ],
+    "labelOverrides": [
+      "00000000-0000-0000-0000-000000000101",
+      "Search",
+      "00000000-0000-0000-0000-000000000102",
+      "Switch app",
+      "00000000-0000-0000-0000-000000000103",
+      "Copy",
+      "00000000-0000-0000-0000-000000000104",
+      "Paste",
+      "00000000-0000-0000-0000-000000000107",
+      "Undo",
+      "00000000-0000-0000-0000-000000000108",
+      "Escape"
+    ],
+    "layoutMode": "standard",
+    "showsButtonLabels": true,
+    "updatedAt": 0
+  },
+  "name": "Everyday",
+  "orientationPreference": "portrait",
+  "outputMode": "keyboard",
+  "portraitCustomization": {
+    "accentStyle": "blue",
+    "backgroundDarkFillStyle": {
+      "kind": "solid",
+      "color": {
+        "red": 0.9568627450980393,
+        "green": 0.9372549019607843,
+        "blue": 0.8980392156862745,
+        "alpha": 1
+      }
+    },
+    "backgroundLightFillStyle": {
+      "kind": "solid",
+      "color": {
+        "red": 0.9568627450980393,
+        "green": 0.9372549019607843,
+        "blue": 0.8980392156862745,
+        "alpha": 1
+      }
+    },
+    "buttonCustomizations": [
+      "00000000-0000-0000-0000-000000000101",
+      {
+        "centerX": 0.27,
+        "centerY": 0.32,
+        "cornerRadius": 22,
+        "fillColor": {
+          "red": 1.0,
+          "green": 0.41568627450980394,
+          "blue": 0.0,
+          "alpha": 1
+        },
+        "hapticFeedback": {
+          "duration": 0.06,
+          "intensity": 0.58,
+          "pattern": "single",
+          "sharpness": 0.9,
+          "style": "rigid"
+        },
+        "heightScale": 1.12,
+        "icon": {
+          "source": "sf_symbol",
+          "value": "magnifyingglass",
+          "placement": "top",
+          "scale": 0.64,
+          "renderingMode": "template"
+        },
+        "isHidden": false,
+        "isLocationLocked": false,
+        "rotationDegrees": 0,
+        "shadowStrength": 0.2,
+        "shape": "rounded_rectangle",
+        "widthScale": 1.28,
+        "zIndex": 0,
+        "foregroundColor": {
+          "red": 1.0,
+          "green": 1.0,
+          "blue": 1.0,
+          "alpha": 1
+        }
+      },
+      "00000000-0000-0000-0000-000000000102",
+      {
+        "centerX": 0.73,
+        "centerY": 0.32,
+        "cornerRadius": 22,
+        "fillColor": {
+          "red": 0.15294117647058825,
+          "green": 0.15294117647058825,
+          "blue": 0.13333333333333333,
+          "alpha": 1
+        },
+        "hapticFeedback": {
+          "duration": 0.06,
+          "intensity": 0.58,
+          "pattern": "single",
+          "sharpness": 0.9,
+          "style": "rigid"
+        },
+        "heightScale": 1.12,
+        "icon": {
+          "source": "sf_symbol",
+          "value": "rectangle.on.rectangle",
+          "placement": "top",
+          "scale": 0.64,
+          "renderingMode": "template"
+        },
+        "isHidden": false,
+        "isLocationLocked": false,
+        "rotationDegrees": 0,
+        "shadowStrength": 0.2,
+        "shape": "rounded_rectangle",
+        "widthScale": 1.28,
+        "zIndex": 0,
+        "foregroundColor": {
+          "red": 1.0,
+          "green": 1.0,
+          "blue": 1.0,
+          "alpha": 1
+        }
+      },
+      "00000000-0000-0000-0000-000000000103",
+      {
+        "centerX": 0.27,
+        "centerY": 0.53,
+        "cornerRadius": 22,
+        "fillColor": {
+          "red": 0.15294117647058825,
+          "green": 0.15294117647058825,
+          "blue": 0.13333333333333333,
+          "alpha": 1
+        },
+        "hapticFeedback": {
+          "duration": 0.06,
+          "intensity": 0.58,
+          "pattern": "single",
+          "sharpness": 0.9,
+          "style": "rigid"
+        },
+        "heightScale": 1.12,
+        "icon": {
+          "source": "sf_symbol",
+          "value": "doc.on.doc",
+          "placement": "top",
+          "scale": 0.64,
+          "renderingMode": "template"
+        },
+        "isHidden": false,
+        "isLocationLocked": false,
+        "rotationDegrees": 0,
+        "shadowStrength": 0.2,
+        "shape": "rounded_rectangle",
+        "widthScale": 1.28,
+        "zIndex": 0,
+        "foregroundColor": {
+          "red": 1.0,
+          "green": 1.0,
+          "blue": 1.0,
+          "alpha": 1
+        }
+      },
+      "00000000-0000-0000-0000-000000000104",
+      {
+        "centerX": 0.73,
+        "centerY": 0.53,
+        "cornerRadius": 22,
+        "fillColor": {
+          "red": 0.15294117647058825,
+          "green": 0.15294117647058825,
+          "blue": 0.13333333333333333,
+          "alpha": 1
+        },
+        "hapticFeedback": {
+          "duration": 0.06,
+          "intensity": 0.58,
+          "pattern": "single",
+          "sharpness": 0.9,
+          "style": "rigid"
+        },
+        "heightScale": 1.12,
+        "icon": {
+          "source": "sf_symbol",
+          "value": "clipboard",
+          "placement": "top",
+          "scale": 0.64,
+          "renderingMode": "template"
+        },
+        "isHidden": false,
+        "isLocationLocked": false,
+        "rotationDegrees": 0,
+        "shadowStrength": 0.2,
+        "shape": "rounded_rectangle",
+        "widthScale": 1.28,
+        "zIndex": 0,
+        "foregroundColor": {
+          "red": 1.0,
+          "green": 1.0,
+          "blue": 1.0,
+          "alpha": 1
+        }
+      },
+      "00000000-0000-0000-0000-000000000107",
+      {
+        "centerX": 0.27,
+        "centerY": 0.74,
+        "fillColor": {
+          "red": 0.15294117647058825,
+          "green": 0.15294117647058825,
+          "blue": 0.13333333333333333,
+          "alpha": 1
+        },
+        "hapticFeedback": {
+          "duration": 0.06,
+          "intensity": 0.64,
+          "pattern": "pulse",
+          "sharpness": 0.58,
+          "style": "medium"
+        },
+        "heightScale": 1.12,
+        "icon": {
+          "source": "sf_symbol",
+          "value": "arrow.uturn.backward",
+          "placement": "top",
+          "scale": 0.64,
+          "renderingMode": "template"
+        },
+        "isHidden": false,
+        "isLocationLocked": false,
+        "rotationDegrees": 0,
+        "shadowStrength": 0.2,
+        "shape": "rectangle",
+        "widthScale": 1.28,
+        "zIndex": 0,
+        "cornerRadius": 22,
+        "foregroundColor": {
+          "red": 1.0,
+          "green": 1.0,
+          "blue": 1.0,
+          "alpha": 1
+        }
+      },
+      "00000000-0000-0000-0000-000000000108",
+      {
+        "centerX": 0.73,
+        "centerY": 0.74,
+        "fillColor": {
+          "red": 0.15294117647058825,
+          "green": 0.15294117647058825,
+          "blue": 0.13333333333333333,
+          "alpha": 1
+        },
+        "hapticFeedback": {
+          "duration": 0.06,
+          "intensity": 0.64,
+          "pattern": "pulse",
+          "sharpness": 0.58,
+          "style": "medium"
+        },
+        "heightScale": 1.12,
+        "icon": {
+          "source": "sf_symbol",
+          "value": "escape",
+          "placement": "top",
+          "scale": 0.64,
+          "renderingMode": "template"
+        },
+        "isHidden": false,
+        "isLocationLocked": false,
+        "rotationDegrees": 0,
+        "shadowStrength": 0.2,
+        "shape": "rectangle",
+        "widthScale": 1.28,
+        "zIndex": 0,
+        "cornerRadius": 22,
+        "foregroundColor": {
+          "red": 1.0,
+          "green": 1.0,
+          "blue": 1.0,
+          "alpha": 1
+        }
+      }
+    ],
+    "colorSchemePreference": "light",
+    "controlScale": "standard",
+    "customButtons": [],
+    "designMetadata": {
+      "grid": {
+        "gridSize": 16,
+        "showsGrid": false,
+        "snapToGrid": false,
+        "snapToObjects": true,
+        "snapTolerance": 6
+      },
+      "groups": [],
+      "guides": [],
+      "layerOrder": [
+        {
+          "kind": "system",
+          "system": "top_bar_activation"
+        },
+        {
+          "kind": "builtin",
+          "button": "00000000-0000-0000-0000-000000000101"
+        },
+        {
+          "kind": "builtin",
+          "button": "00000000-0000-0000-0000-000000000102"
+        },
+        {
+          "kind": "builtin",
+          "button": "00000000-0000-0000-0000-000000000103"
+        },
+        {
+          "kind": "builtin",
+          "button": "00000000-0000-0000-0000-000000000104"
+        },
+        {
+          "kind": "builtin",
+          "button": "00000000-0000-0000-0000-000000000107"
+        },
+        {
+          "kind": "builtin",
+          "button": "00000000-0000-0000-0000-000000000108"
+        }
+      ],
+      "notes": "Marketing demonstration profile with real keyboard outputs.",
+      "schemaVersion": 1,
+      "sourceTemplateID": "productivitystarter",
+      "sourceTemplateRevision": 1,
+      "tags": [
+        "accessible",
+        "mac-defaults",
+        "portrait",
+        "productivity"
+      ]
+    },
+    "deviceCanvas": {
+      "frameID": "iphone-17-pro-portrait"
+    },
+    "elements": [
+      {
+        "defaultOutput": {
+          "keyboard": {
+            "keyCode": 49,
+            "modifiersRawValue": 1
+          },
+          "gamepadButtons": []
+        },
+        "id": "00000000-0000-0000-0000-000000000101",
+        "kind": "button",
+        "label": "Search",
+        "layout": {
+          "centerX": 0.27,
+          "centerY": 0.32,
+          "cornerRadius": 22,
+          "fillColor": {
+            "red": 1.0,
+            "green": 0.41568627450980394,
+            "blue": 0.0,
+            "alpha": 1
+          },
+          "hapticFeedback": {
+            "duration": 0.06,
+            "intensity": 0.58,
+            "pattern": "single",
+            "sharpness": 0.9,
+            "style": "rigid"
+          },
+          "heightScale": 1.12,
+          "icon": {
+            "source": "sf_symbol",
+            "value": "magnifyingglass",
+            "placement": "top",
+            "scale": 0.64,
+            "renderingMode": "template"
+          },
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 0.2,
+          "shape": "rounded_rectangle",
+          "widthScale": 1.28,
+          "zIndex": 0,
+          "foregroundColor": {
+            "red": 1.0,
+            "green": 1.0,
+            "blue": 1.0,
+            "alpha": 1
+          }
+        },
+        "output": {
+          "keyboard": {
+            "keyCode": 49,
+            "modifiersRawValue": 1
+          },
+          "gamepadButtons": []
+        },
+        "partOutputs": [],
+        "visualRole": "custom"
+      },
+      {
+        "defaultOutput": {
+          "keyboard": {
+            "keyCode": 48,
+            "modifiersRawValue": 1
+          },
+          "gamepadButtons": []
+        },
+        "id": "00000000-0000-0000-0000-000000000102",
+        "kind": "button",
+        "label": "Switch app",
+        "layout": {
+          "centerX": 0.73,
+          "centerY": 0.32,
+          "cornerRadius": 22,
+          "fillColor": {
+            "red": 0.15294117647058825,
+            "green": 0.15294117647058825,
+            "blue": 0.13333333333333333,
+            "alpha": 1
+          },
+          "hapticFeedback": {
+            "duration": 0.06,
+            "intensity": 0.58,
+            "pattern": "single",
+            "sharpness": 0.9,
+            "style": "rigid"
+          },
+          "heightScale": 1.12,
+          "icon": {
+            "source": "sf_symbol",
+            "value": "rectangle.on.rectangle",
+            "placement": "top",
+            "scale": 0.64,
+            "renderingMode": "template"
+          },
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 0.2,
+          "shape": "rounded_rectangle",
+          "widthScale": 1.28,
+          "zIndex": 0,
+          "foregroundColor": {
+            "red": 1.0,
+            "green": 1.0,
+            "blue": 1.0,
+            "alpha": 1
+          }
+        },
+        "output": {
+          "keyboard": {
+            "keyCode": 48,
+            "modifiersRawValue": 1
+          },
+          "gamepadButtons": []
+        },
+        "partOutputs": [],
+        "visualRole": "custom"
+      },
+      {
+        "defaultOutput": {
+          "keyboard": {
+            "keyCode": 8,
+            "modifiersRawValue": 1
+          },
+          "gamepadButtons": []
+        },
+        "id": "00000000-0000-0000-0000-000000000103",
+        "kind": "button",
+        "label": "Copy",
+        "layout": {
+          "centerX": 0.27,
+          "centerY": 0.53,
+          "cornerRadius": 22,
+          "fillColor": {
+            "red": 0.15294117647058825,
+            "green": 0.15294117647058825,
+            "blue": 0.13333333333333333,
+            "alpha": 1
+          },
+          "hapticFeedback": {
+            "duration": 0.06,
+            "intensity": 0.58,
+            "pattern": "single",
+            "sharpness": 0.9,
+            "style": "rigid"
+          },
+          "heightScale": 1.12,
+          "icon": {
+            "source": "sf_symbol",
+            "value": "doc.on.doc",
+            "placement": "top",
+            "scale": 0.64,
+            "renderingMode": "template"
+          },
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 0.2,
+          "shape": "rounded_rectangle",
+          "widthScale": 1.28,
+          "zIndex": 0,
+          "foregroundColor": {
+            "red": 1.0,
+            "green": 1.0,
+            "blue": 1.0,
+            "alpha": 1
+          }
+        },
+        "output": {
+          "keyboard": {
+            "keyCode": 8,
+            "modifiersRawValue": 1
+          },
+          "gamepadButtons": []
+        },
+        "partOutputs": [],
+        "visualRole": "custom"
+      },
+      {
+        "defaultOutput": {
+          "keyboard": {
+            "keyCode": 9,
+            "modifiersRawValue": 1
+          },
+          "gamepadButtons": []
+        },
+        "id": "00000000-0000-0000-0000-000000000104",
+        "kind": "button",
+        "label": "Paste",
+        "layout": {
+          "centerX": 0.73,
+          "centerY": 0.53,
+          "cornerRadius": 22,
+          "fillColor": {
+            "red": 0.15294117647058825,
+            "green": 0.15294117647058825,
+            "blue": 0.13333333333333333,
+            "alpha": 1
+          },
+          "hapticFeedback": {
+            "duration": 0.06,
+            "intensity": 0.58,
+            "pattern": "single",
+            "sharpness": 0.9,
+            "style": "rigid"
+          },
+          "heightScale": 1.12,
+          "icon": {
+            "source": "sf_symbol",
+            "value": "clipboard",
+            "placement": "top",
+            "scale": 0.64,
+            "renderingMode": "template"
+          },
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 0.2,
+          "shape": "rounded_rectangle",
+          "widthScale": 1.28,
+          "zIndex": 0,
+          "foregroundColor": {
+            "red": 1.0,
+            "green": 1.0,
+            "blue": 1.0,
+            "alpha": 1
+          }
+        },
+        "output": {
+          "keyboard": {
+            "keyCode": 9,
+            "modifiersRawValue": 1
+          },
+          "gamepadButtons": []
+        },
+        "partOutputs": [],
+        "visualRole": "custom"
+      },
+      {
+        "defaultOutput": {
+          "keyboard": {
+            "keyCode": 6,
+            "modifiersRawValue": 1
+          },
+          "gamepadButtons": []
+        },
+        "id": "00000000-0000-0000-0000-000000000107",
+        "kind": "button",
+        "label": "Undo",
+        "layout": {
+          "centerX": 0.27,
+          "centerY": 0.74,
+          "fillColor": {
+            "red": 0.15294117647058825,
+            "green": 0.15294117647058825,
+            "blue": 0.13333333333333333,
+            "alpha": 1
+          },
+          "hapticFeedback": {
+            "duration": 0.06,
+            "intensity": 0.64,
+            "pattern": "pulse",
+            "sharpness": 0.58,
+            "style": "medium"
+          },
+          "heightScale": 1.12,
+          "icon": {
+            "source": "sf_symbol",
+            "value": "arrow.uturn.backward",
+            "placement": "top",
+            "scale": 0.64,
+            "renderingMode": "template"
+          },
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 0.2,
+          "shape": "rectangle",
+          "widthScale": 1.28,
+          "zIndex": 0,
+          "cornerRadius": 22,
+          "foregroundColor": {
+            "red": 1.0,
+            "green": 1.0,
+            "blue": 1.0,
+            "alpha": 1
+          }
+        },
+        "output": {
+          "keyboard": {
+            "keyCode": 6,
+            "modifiersRawValue": 1
+          },
+          "gamepadButtons": []
+        },
+        "partOutputs": [],
+        "visualRole": "custom"
+      },
+      {
+        "defaultOutput": {
+          "keyboard": {
+            "keyCode": 53,
+            "modifiersRawValue": 0
+          },
+          "gamepadButtons": []
+        },
+        "id": "00000000-0000-0000-0000-000000000108",
+        "kind": "button",
+        "label": "Escape",
+        "layout": {
+          "centerX": 0.73,
+          "centerY": 0.74,
+          "fillColor": {
+            "red": 0.15294117647058825,
+            "green": 0.15294117647058825,
+            "blue": 0.13333333333333333,
+            "alpha": 1
+          },
+          "hapticFeedback": {
+            "duration": 0.06,
+            "intensity": 0.64,
+            "pattern": "pulse",
+            "sharpness": 0.58,
+            "style": "medium"
+          },
+          "heightScale": 1.12,
+          "icon": {
+            "source": "sf_symbol",
+            "value": "escape",
+            "placement": "top",
+            "scale": 0.64,
+            "renderingMode": "template"
+          },
+          "isHidden": false,
+          "isLocationLocked": false,
+          "rotationDegrees": 0,
+          "shadowStrength": 0.2,
+          "shape": "rectangle",
+          "widthScale": 1.28,
+          "zIndex": 0,
+          "cornerRadius": 22,
+          "foregroundColor": {
+            "red": 1.0,
+            "green": 1.0,
+            "blue": 1.0,
+            "alpha": 1
+          }
+        },
+        "output": {
+          "keyboard": {
+            "keyCode": 53,
+            "modifiersRawValue": 0
+          },
+          "gamepadButtons": []
+        },
+        "partOutputs": [],
+        "visualRole": "custom"
+      }
+    ],
+    "labelOverrides": [
+      "00000000-0000-0000-0000-000000000101",
+      "Search",
+      "00000000-0000-0000-0000-000000000102",
+      "Switch app",
+      "00000000-0000-0000-0000-000000000103",
+      "Copy",
+      "00000000-0000-0000-0000-000000000104",
+      "Paste",
+      "00000000-0000-0000-0000-000000000107",
+      "Undo",
+      "00000000-0000-0000-0000-000000000108",
+      "Escape"
+    ],
+    "layoutMode": "standard",
+    "showsButtonLabels": true,
+    "updatedAt": 0
+  },
+  "updatedAt": 0
+}

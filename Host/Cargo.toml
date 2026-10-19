@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "crates/thumble-receiver",
     "crates/thumble-protocol",
     "crates/thumble-core",
     "crates/thumble-host",

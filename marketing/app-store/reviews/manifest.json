@@ -1,0 +1,25 @@
+{
+  "status": "review-draft",
+  "locale": "en-US",
+  "width": 1206,
+  "height": 2622,
+  "createdAt": "2026-10-19T10:52:10.061Z",
+  "captureMode": "Real native app captures. iPhone uses saved demo profiles in Practice Mode; Mac uses process-only demo preferences in a disposable app copy. No live Mac input acceptance performed.",
+  "pages": [
+    {
+      "file": "exports/en-US/screenshots/01-your-mac-keypad.png",
+      "sha256": "c84ad5d68de917b9bde3a40c32fb43642337db3d881dc4b93847c091f6eebfb5",
+      "source": "01-your-mac-keypad.svg"
+    },
+    {
+      "file": "exports/en-US/screenshots/02-shortcuts-within-reach.png",
+      "sha256": "74eb92efe5f0d4af0a50f52636deb727f505ef3fe597a309de4e9418856305e0",
+      "source": "02-shortcuts-within-reach.svg"
+    },
+    {
+      "file": "exports/en-US/screenshots/03-make-the-layout-yours.png",
+      "sha256": "ac7c82ebfa249fac700d4d6ef1e47fcc660746f471f9ac7490dc33e2414c1126",
+      "source": "03-make-the-layout-yours.svg"
+    }
+  ]
+}

@@ -2,6 +2,20 @@ import Foundation
 import XCTest
 
 final class RustHostInteropTests: XCTestCase {
+    func testCrossPlatformReceiverStatusDecodesInCurrentIOSModel() throws {
+        let fixtureURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Host/crates/thumble-receiver/fixtures/gamepad-status.json")
+        let status = try JSONDecoder().decode(
+            VirtualGamepadStatus.self,
+            from: Data(contentsOf: fixtureURL)
+        )
+        XCTAssertEqual(status.phase, .creationFailed)
+        XCTAssertFalse(status.isAvailable)
+        XCTAssertTrue(try XCTUnwrap(status.lastError).contains("not supported"))
+    }
+
     private struct FixtureFile: Decodable {
         var schema: String
         var version: Int

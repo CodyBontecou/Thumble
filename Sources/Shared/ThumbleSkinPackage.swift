@@ -362,6 +362,10 @@ public enum ThumbleSkinPackageValidator {
         }
 
         private func validateManifestIdentity() {
+            if package.skin?.variants.contains(where: { $0.actionSet != nil }) == true,
+               manifest.compatibility?.requiredFeatures.contains(.actionSetLayers) != true {
+                error("missing-action-set-feature", "Action-set variants require the action_set_layers rendering feature.", path: "manifest.compatibility.requiredFeatures")
+            }
             if manifest.schema != ThumbleSkinManifest.schemaIdentifier {
                 error("unsupported-schema", "Unsupported package schema \(manifest.schema).", path: "manifest.json")
             }

@@ -149,6 +149,8 @@ pub struct HostStatus {
     pub pairing_code: String,
     pub core: StatusSnapshot,
     pub output: OutputSnapshot,
+    #[serde(default)]
+    pub realtime: crate::realtime::RealtimeStatus,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

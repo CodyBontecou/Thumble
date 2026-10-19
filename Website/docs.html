@@ -12,7 +12,7 @@
   <meta property="og:image" content="/assets/app-icon.png">
   <link rel="icon" href="/assets/favicon.png" type="image/png">
   <link rel="apple-touch-icon" href="/assets/app-icon.png">
-  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/styles.css?v=c61718e97179">
 </head>
 <body class="docs-page">
   <header class="site-header">
@@ -64,6 +64,9 @@
         <a href="#mac-app">Mac app</a>
         <a href="#ios-app">iOS app</a>
         <a href="#keypad-editor">Keypad editor</a>
+        <a href="#game-layouts">Game layouts</a>
+        <a href="#wow">World of Warcraft</a>
+        <a href="#receivers">Windows and Linux</a>
         <a href="#skins">Skins</a>
         <a href="#outputs">Outputs</a>
         <a href="#cli">CLI</a>
@@ -212,6 +215,47 @@
           </ol>
         </section>
 
+        <section id="game-layouts" class="doc-section">
+          <p class="eyebrow">game layouts</p>
+          <h2>Build around the controls you actually use</h2>
+          <p>Use the Mac editor to combine buttons, joysticks, triggers, and trackpads. Save separate portrait and landscape variants, use groups and layers to organize controls, and keep friendly labels separate from their outputs. Start with a template or ask an <a href="#agents">AI assistant</a> to draft a layout.</p>
+          <h3>League of Legends: a custom companion pad</h3>
+          <p>There is no built-in League preset. Create a keyboard layout that matches your own game settings: group ability keys together, give summoner spells and items their own buttons, and add controls for your chosen ping shortcuts. Add a trackpad if you want relative pointer movement, tap-to-click, two-finger right click, or scrolling.</p>
+          <p>Record the actual shortcuts from your game settings rather than assuming defaults. Test with the game focused, and refine spacing and size in the editor. This is a configurable keyboard/pointer surface; it does not read game state or provide automatic targeting.</p>
+          <h3>Fit the layout to your hands</h3>
+          <p>On iPhone, use thumb-placement calibration to check reach and touch targets. Practice Mode keeps touch feedback and haptics active while suppressing keyboard, pointer, and controller output. These existing tools also help test more complex layouts before using them in a game.</p>
+        </section>
+
+        <section id="wow" class="doc-section">
+          <p class="eyebrow">in development / World of Warcraft</p>
+          <h2>Two ways to build a WoW setup</h2>
+          <p>The following work is newer than TestFlight 1.0.0 (6). Use matching development builds of the Mac helper and iPhone app; the July beta is not a compatibility guarantee.</p>
+          <h3>WoW Forever controller template</h3>
+          <p>Create a setup from <strong>WoW Forever</strong> in the Mac or iPhone editor, or install it with the CLI. The template has two analog sticks, D-pad, ABXY, shoulders, held triggers, stick clicks, View, and Menu, with separate portrait and landscape layouts. Duplicate and name profiles for each character or talent build.</p>
+          <pre><code>thumble template install wowForever --name "WoW Mage Frost"
+thumble profile duplicate "WoW Mage Frost" "WoW Mage Fire"
+thumble gamepad doctor
+thumble gamepad status --json</code></pre>
+          <p>Enable the game’s native Gamepad interface and assign abilities in WoW. Thumble sends physical press/release state; WoW owns ability assignments, targeting, and action-bar pages. Layered skins can change visible pictures for Base, LT, RT, and LT+RT without changing bindings. There is no automatic class/spec detection or live spell synchronization.</p>
+          <div class="doc-callout"><strong>Controller availability</strong><p>Virtual gamepad output on Mac needs an Apple-authorized signed receiver. Signing and live WoW recognition remain acceptance gates; automated template tests do not establish game compatibility. See the <a href="https://github.com/CodyBontecou/Thumble/blob/main/docs/virtual-controller-support.md">controller status and verification guide</a>.</p></div>
+          <h3>Thumble Link: import your keyboard bindings</h3>
+          <p>The experimental addon targets Forever interface 16001 and Blizzard’s default action bars. Install Thumble Link, type <code>/thumble</code> outside combat, select bars, and generate an export. In the matching Mac app, open <strong>Thumble Link…</strong>, paste the code, choose <strong>Review Import</strong>, then <strong>Create Setup</strong>.</p>
+          <pre><code>thumble wow import --clipboard --dry-run
+thumble wow import --clipboard</code></pre>
+          <p>Re-export after rebinding. Refresh updates the same character setup while preserving positions, styling, deleted controls, and manually edited labels or outputs. This is a copy/paste snapshot for keyboard output, separate from native controller mode. It does not sync cooldowns, live forms, or ability pictures. Live acceptance in the exact Forever client is still pending.</p>
+          <p>In a development checkout containing the addon, copy <code>Addons/ThumbleLink</code> into the supported client’s <code>Interface/AddOns</code> directory. The included README documents supported bars, skipped bindings, and refresh behavior. This addon is not bundled with the current beta.</p>
+        </section>
+
+        <section id="receivers" class="doc-section">
+          <p class="eyebrow">experimental / developer setup</p>
+          <h2>Keyboard and mouse on Windows and Linux</h2>
+          <p>The separate native Rust receiver pairs with the iPhone over a local network and delivers keyboard chords, relative pointer movement, clicks, and scrolling. Native desktop input has been verified with an actual iPhone on both platforms. It does not include virtual gamepad output, rumble, or the Mac editor/MCP tools.</p>
+          <p>From a development checkout containing <code>thumble-receiver</code>, use Rust 1.88 or newer to build it on the target platform:</p>
+          <pre><code>cargo build --locked --release --manifest-path Host/Cargo.toml -p thumble-receiver</code></pre>
+          <p>Run the resulting executable with <code>run</code> as your normal desktop user. Windows uses SendInput; Linux requires access to a virtual <code>uinput</code> keyboard/mouse. Follow the platform permissions and firewall instructions in the checkout’s <code>docs/cross-platform-receiver.md</code> before pairing. Keep both devices on a trusted network.</p>
+          <p>The iPhone uses reliable WebSocket input with this receiver. Setup and packaging are separate from the Mac download on this site; use the matching development client rather than assuming compatibility with the July beta.</p>
+        </section>
+
         <section id="skins" class="doc-section">
           <p class="eyebrow">skins</p>
           <h2>Browse, install, and create visual themes</h2>
@@ -253,7 +297,8 @@ thumble skin render MySkin.pocketpad --clean -o preview.png</code></pre>
         <section id="outputs" class="doc-section">
           <p class="eyebrow">outputs</p>
           <h2>Keyboard, pointer, and controller output</h2>
-          <p>Thumble can send multiple kinds of output depending on the selected profile and binding.</p>
+          <p>Each setup can use keyboard, controller, or custom output mode without replacing its saved bindings. Controller controls include two analog sticks, independent triggers, D-pad, buttons, and stick clicks. Tune stick dead zones, sensitivity, and inversion in the editor.</p>
+          <p>Mac virtual controller support is implemented, but requires the Apple-granted <code>com.apple.developer.hid.virtual.device</code> signing entitlement. GameController, SDL, Steam, and individual game recognition still require validation; support for every game is not established. Keyboard and pointer output remain available in normal builds.</p>
 
           <div class="doc-table" role="table" aria-label="Thumble output modes">
             <div role="row"><strong role="columnheader">Mode</strong><strong role="columnheader">Use it for</strong><strong role="columnheader">Notes</strong></div>

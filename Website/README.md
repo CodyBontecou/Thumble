@@ -109,3 +109,35 @@ wrangler d1 execute pocketpad-waitlist \
   --remote \
   --command "SELECT email, source, consented_at, country FROM waitlist_subscribers ORDER BY created_at DESC;"
 ```
+
+## October 2026 feature copy baseline
+
+The October 19 development update uses App Store Connect's latest iOS upload:
+1.0.0 (6), July 30, 2026 (build ID `e47e3328-b217-4519-9138-ab0c418131e5`).
+Read with `asc builds list --app com.codybontecou.PocketPad --platform IOS
+--sort=-uploadedDate --limit 1 --include preReleaseVersion,betaBuildLocalizations`.
+Development highlights are not claims about the downloadable build. Practice Mode,
+thumb calibration, and orientation variants already existed at that baseline.
+League is a custom keyboard/pointer use case, not a bundled preset. WoW Forever,
+Thumble Link, receiver limits, and virtual gamepad acceptance boundaries follow
+`docs/wow-forever.md`, `Addons/ThumbleLink/README.md`,
+`docs/cross-platform-receiver.md`, `docs/receiver-qa-results.md`, and
+`docs/virtual-controller-support.md`. Recheck these boundaries when publishing a beta.
+
+## Gaming screenshot provenance
+
+The gaming cards use unedited, full-viewport native iPhone app captures, shown
+in real Practice Mode. Image links open the original-resolution PNGs.
+
+- Lux Prism: captured October 19, 2026 with Argent at full scale in the isolated
+  Thumble App Store Capture iPhone 17 Pro simulator (iOS 26.5). Loaded the existing
+  `build/LuxController/LuxPrismController/profile.json` into disposable capture
+  preferences; no community skin was authored or applied. The source profile uses
+  native controls and its existing ability-icon assets. Landscape/dark appearance
+  was selected for capture. The original simulator preferences were backed up.
+- WoW Forever: existing original native capture from
+  `marketing/app-store/gaming/source/captures/wow-controller-landscape.png`.
+
+The screenshots show saved controller UI, not live game recognition or input
+acceptance. No controls or icons were composited onto either capture. Published
+filenames include SHA-256 prefixes because `/assets/*` is cached immutably.

@@ -1,6 +1,14 @@
 {
-  "originHash" : "b26c070fd1f0b029780331f3cefa3909a6d58ea6b3ae242bffe49d6011fe06fe",
+  "originHash" : "11a1a9157d2491989788e3923b7ef9d4e146643244ccfdb114b7df7f34239741",
   "pins" : [
+    {
+      "identity" : "scrawl",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/kitlangton/scrawl",
+      "state" : {
+        "revision" : "6d4fa333475ef5170c4df683e306480f8618b95a"
+      }
+    },
     {
       "identity" : "zipfoundation",
       "kind" : "remoteSourceControl",

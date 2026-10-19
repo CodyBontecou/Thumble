@@ -71,6 +71,30 @@ final class StackSafetyRegressionTests: XCTestCase {
         assertInlineSize(PortableProfileArtifact.self, atMost: 64)
         assertInlineSize(IOSBuilderArtifactPracticePreview.self, atMost: 64)
         assertInlineSize(IOSBuilderArtifactReview.self, atMost: 256)
+        assertInlineSize(ThumbleLinkSnapshot.self, atMost: 512)
+        assertInlineSize(ThumbleLinkImport.Plan.self, atMost: 1024)
+    }
+
+    func testThumbleLinkMaximumSnapshotImportAndRefreshOn512KiBStack() throws {
+        let baseProfile = GamepadConfigurationProfile(name: "Stack Link Base", customization: GamepadCustomization(elements: []))
+        let base = try JSONEncoder().encode(ThumbleKeypadConfigurationExport(profiles: [baseProfile], activeProfileID: baseProfile.id, defaultProfileID: baseProfile.id))
+        let actions: [[String: Any]] = (1...128).map { index in
+            ["command": "ACTIONBUTTON\(index)", "label": "Ability \(index)", "keys": ["SHIFT-1"], "kind": "spell", "actionID": index]
+        }
+        let snapshot = try JSONSerialization.data(withJSONObject: ["schema": "thumble.wow-link", "version": 1,
+            "client": ["flavor": "forever", "version": "1.60.1", "build": "99999", "interface": 16001],
+            "character": ["id": "Player-1234-12345678", "name": "Stack", "realm": "Test", "classTag": "WARRIOR"],
+            "exportedAt": 1792310400, "actions": actions, "warnings": []])
+        let text = String(decoding: snapshot, as: UTF8.self)
+        try runOnThread(stackSize: 512 * 1024, timeout: 30) {
+            let first = try ThumbleLinkImport.prepare(text: text, currentConfiguration: base)
+            let refresh = try ThumbleLinkImport.prepare(text: text, currentConfiguration: first.configurationData)
+            let envelope = try MacConfigurationBindings.decodeKeypadImport(data: refresh.configurationData, sourceName: "Stack")
+            guard refresh.isRefresh, envelope.profiles[0].customization.elements.count == 128,
+                  envelope.profiles[0].portraitCustomization?.elements.count == 128 else {
+                throw StackTestError.unexpectedDecodedState
+            }
+        }
     }
 
     private func assertInlineSize<Value>(
@@ -453,6 +477,17 @@ final class StackSafetyRegressionTests: XCTestCase {
             overrideJumpShape()
             applyUpdatedPackage()
             try validateResult()
+            try validateActionSetResolution()
+        }
+
+        private func validateActionSetResolution() throws {
+            for actionSet in ThumbleActionSet.allCases {
+                let rendered = profile.resolvedCustomization(for: .landscape, colorScheme: .dark,
+                    skinPackage: updatedPackage, actionSet: actionSet)
+                guard rendered.buttonCustomization(for: .preset(6)).icon == .text(actionSet.rawValue) else {
+                    throw StackTestError.skinApplicationFailed
+                }
+            }
         }
 
         private func applyInitialPackage() {
@@ -810,7 +845,12 @@ final class StackSafetyRegressionTests: XCTestCase {
 
     func testProfileSkinApplicationRunsOn512KiBStack() throws {
         let package = makeSkinPackage(shape: .capsule, version: "1.0.0")
-        let updatedPackage = makeSkinPackage(shape: .circle, version: "2.0.0")
+        var updatedPackage = makeSkinPackage(shape: .circle, version: "2.0.0")
+        updatedPackage.skin?.variants = ThumbleActionSet.allCases.map { actionSet in
+            ThumbleSkinVariant(id: actionSet.rawValue, appearance: ThumbleSkinAppearance(buttonRules: [
+                ThumbleSkinButtonRule(button: .preset(6), appearance: ThumbleSkinControlAppearance(icon: .text(actionSet.rawValue)))
+            ]), actionSet: actionSet)
+        }
         let customization = makeRichCustomization()
         let profile = GamepadConfigurationProfile(
             name: "Skin Stack",
@@ -1053,6 +1093,9 @@ final class StackSafetyRegressionTests: XCTestCase {
         }
         control:pressed { transform: scale(0.96); }
         control:disabled { opacity: 0.45; }
+        :root[action-set="left-trigger"] control { -thumble-icon-symbol: "flame.fill"; }
+        :root[action-set="right-trigger"] control { -thumble-icon-symbol: "shield.fill"; }
+        :root[action-set="both-triggers"] control { -thumble-legend: "Utility"; }
         control[role="primary_action"] { background: linear-gradient(135deg, #8A6FD0, #5B4497); color: #FFFFFF; }
         @media (prefers-color-scheme: dark) {
           :root { --surface: #211A46; --ink: #B8A0E8; }

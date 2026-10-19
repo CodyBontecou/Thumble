@@ -1,4 +1,5 @@
 import Foundation
+import ImageIO
 
 public enum ThumbleVectorCompilerError: Error, LocalizedError, Equatable {
     case missingArtboard(String)
@@ -8,6 +9,7 @@ public enum ThumbleVectorCompilerError: Error, LocalizedError, Equatable {
     case missingSource(String)
     case unsupportedSourceFormat(String)
     case outputTooLarge(String)
+    case invalidPNGSource(String)
 
     public var errorDescription: String? {
         switch self {
@@ -16,8 +18,9 @@ public enum ThumbleVectorCompilerError: Error, LocalizedError, Equatable {
         case .invalidColor(let value): "Invalid skin source color: \(value)."
         case .unsafeSourcePath(let path): "Unsafe skin source path: \(path)."
         case .missingSource(let path): "Skin source asset is missing: \(path)."
-        case .unsupportedSourceFormat(let path): "Only sanitized SVG authoring assets are currently compiled: \(path)."
+        case .unsupportedSourceFormat(let path): "Only sanitized SVG or bounded PNG source assets are compiled: \(path)."
         case .outputTooLarge(let id): "Compiled image asset \(id) exceeds the runtime image budget."
+        case .invalidPNGSource(let path): "PNG source must be a complete, single image matching its declared dimensions: \(path)."
         }
     }
 }
@@ -108,8 +111,7 @@ public enum ThumbleVectorCompiler {
         return canvases
     }
 
-    /// Rasterizes declared SVG source assets by ID for CSS-authored workspaces, where
-    /// `background: url(#asset-id)` references them from stylesheets.
+    /// Rasterizes SVG or preserves validated PNG bytes for declared CSS assets.
     public static func compileSourceAssets(
         workspace: ThumbleSkinWorkspace,
         sourceRoot: URL,
@@ -118,20 +120,58 @@ public enum ThumbleVectorCompiler {
         var results: [(String, Data, Int, Int, ThumbleSkinAssetPurpose)] = []
         for source in workspace.sourceAssets {
             let sourceURL = try safeSourceURL(source.path, root: sourceRoot, fileManager: fileManager)
-            guard sourceURL.pathExtension.lowercased() == "svg" else {
+            let png: Data
+            switch sourceURL.pathExtension.lowercased() {
+            case "svg":
+                png = try ThumbleSVGRasterizer.rasterize(
+                    Data(contentsOf: sourceURL, options: [.mappedIfSafe]),
+                    width: source.outputWidth,
+                    height: source.outputHeight
+                )
+            case "png":
+                png = try validatedPNGSource(source, url: sourceURL, fileManager: fileManager)
+            default:
                 throw ThumbleVectorCompilerError.unsupportedSourceFormat(source.path)
             }
-            let png = try ThumbleSVGRasterizer.rasterize(
-                Data(contentsOf: sourceURL, options: [.mappedIfSafe]),
-                width: source.outputWidth,
-                height: source.outputHeight
-            )
             guard png.count <= GamepadImageFill.maximumStoredBytes else {
                 throw ThumbleVectorCompilerError.outputTooLarge(source.id)
             }
             results.append((source.id, png, source.outputWidth, source.outputHeight, source.purpose))
         }
         return results
+    }
+
+    private static func validatedPNGSource(
+        _ source: ThumbleSkinSourceAsset,
+        url: URL,
+        fileManager: FileManager
+    ) throws -> Data {
+        let attributes = try fileManager.attributesOfItem(atPath: url.path)
+        guard let size = attributes[.size] as? NSNumber,
+              size.intValue <= GamepadImageFill.maximumStoredBytes else {
+            throw ThumbleVectorCompilerError.outputTooLarge(source.id)
+        }
+        let data = try Data(contentsOf: url, options: [.mappedIfSafe])
+        guard data.count <= GamepadImageFill.maximumStoredBytes else {
+            throw ThumbleVectorCompilerError.outputTooLarge(source.id)
+        }
+        // Inspect metadata before decoding pixels, bounding allocation even for
+        // a tiny file that declares a very large raster. Never resize the input.
+        guard data.starts(with: [137, 80, 78, 71, 13, 10, 26, 10]),
+              (16...4096).contains(source.outputWidth),
+              (16...4096).contains(source.outputHeight),
+              let imageSource = CGImageSourceCreateWithData(data as CFData, nil),
+              CGImageSourceGetCount(imageSource) == 1,
+              CGImageSourceGetStatus(imageSource).rawValue == 0,
+              let properties = CGImageSourceCopyPropertiesAtIndex(imageSource, 0, nil) as? [CFString: Any],
+              let width = properties[kCGImagePropertyPixelWidth] as? Int,
+              let height = properties[kCGImagePropertyPixelHeight] as? Int,
+              width == source.outputWidth, height == source.outputHeight,
+              let image = CGImageSourceCreateImageAtIndex(imageSource, 0, [kCGImageSourceShouldCache: false] as CFDictionary),
+              image.width == width, image.height == height else {
+            throw ThumbleVectorCompilerError.invalidPNGSource(source.path)
+        }
+        return data
     }
 
     public static func generatedSVG(

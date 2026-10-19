@@ -1,0 +1,48 @@
+name: iOS app to disposable Windows desktop
+on:
+  # Register the workflow while developing it on the isolated test branch.
+  # Push runs are skipped; an explicit dispatch starts an interactive session.
+  push:
+    branches: [codex/receiver-native-ci]
+    paths: [.github/workflows/windows-ios-acceptance.yml]
+  workflow_dispatch:
+    inputs:
+      operator_public_key:
+        description: Base64 DER RSA public key used to encrypt the temporary connection descriptor
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  desktop:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@1.88.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: Host
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: cargo build --locked --release --manifest-path Host/Cargo.toml -p thumble-receiver
+      - name: Install official Actions artifact client
+        run: npm install --prefix .github/actions/receiver-windows-session --no-package-lock --ignore-scripts @actions/artifact@6.3.1
+      - name: Run actual iOS app desktop verification
+        uses: ./.github/actions/receiver-windows-session
+        env:
+          OPERATOR_PUBLIC_KEY: ${{ inputs.operator_public_key }}
+      - name: Stop all session-owned processes
+        if: always()
+        shell: pwsh
+        run: |
+          $session = Join-Path $env:RUNNER_TEMP 'thumble-ios-session'
+          if (Test-Path "$session/pids.json") {
+            $processIds = Get-Content "$session/pids.json" -Raw | ConvertFrom-Json
+            foreach ($processId in $processIds) { Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue }
+          }
+          # Logs can contain transient credentials. Publish only native witness evidence.

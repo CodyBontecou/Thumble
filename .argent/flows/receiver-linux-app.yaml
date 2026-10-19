@@ -1,0 +1,126 @@
+steps:
+  - launch: com.codybontecou.PocketPad.iOS
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: Set Up Later
+  - tap:
+      x: 0.178
+      y: 0.924
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: Manual Connection
+  - tap:
+      on:
+        x: 0.5
+        y: 0.872
+      times: 3
+  - tool: keyboard
+    args:
+      key: backspace
+  - tool: keyboard
+    args:
+      key: backspace
+  - tool: keyboard
+    args:
+      key: backspace
+  - tool: keyboard
+    args:
+      key: backspace
+  - tool: keyboard
+    args:
+      key: backspace
+  - tool: keyboard
+    args:
+      key: backspace
+  - tool: keyboard
+    args:
+      key: backspace
+  - tool: keyboard
+    args:
+      key: backspace
+  - tool: keyboard
+    args:
+      key: backspace
+  - tool: keyboard
+    args:
+      key: backspace
+  - tool: keyboard
+    args:
+      key: backspace
+  - tool: keyboard
+    args:
+      key: backspace
+  - tool: keyboard
+    args:
+      key: backspace
+  - tool: keyboard
+    args:
+      key: backspace
+  - tool: keyboard
+    args:
+      key: backspace
+  - tool: keyboard
+    args:
+      key: backspace
+  - tool: keyboard
+    args:
+      key: backspace
+  - tool: keyboard
+    args:
+      key: backspace
+  - tool: keyboard
+    args:
+      text: 127.0.0.1
+  - tool: keyboard
+    args:
+      key: enter
+  - tap:
+      x: 0.5
+      y: 0.734
+  - tool: keyboard
+    args:
+      key: backspace
+  - tool: keyboard
+    args:
+      key: backspace
+  - tool: keyboard
+    args:
+      key: backspace
+  - tool: keyboard
+    args:
+      key: backspace
+  - tool: keyboard
+    args:
+      key: backspace
+  - tool: keyboard
+    args:
+      key: backspace
+  - tool: keyboard
+    args:
+      text: "18865"
+  - tool: keyboard
+    args:
+      key: enter
+  - tap:
+      role: AXScrollArea
+  - tool: keyboard
+    args:
+      text: "{{secret:RECEIVER_PAIRING_CODE}}"
+  - tap:
+      id: inputView
+  - tool: gesture-swipe
+    args:
+      fromX: 0.85
+      fromY: 0.55
+      toX: 0.85
+      toY: 0.3
+      durationMs: 400
+      momentum: false
+  - tap:
+      role: AXScrollArea
+  - tap:
+      role: AXScrollArea

@@ -1,0 +1,18 @@
+steps:
+  - tap:
+      id: keypad.button.00000000-0000-0000-0000-000000000105
+  - tap:
+      id: keypad.button.00000000-0000-0000-0000-000000000106
+  - tool: gesture-swipe
+    args:
+      fromX: 0.35
+      fromY: 0.3
+      toX: 0.55
+      toY: 0.32
+      durationMs: 400
+      momentum: false
+  - tap:
+      id: keypad.trackpad.00000000-0000-0000-0000-000000000107
+executionPrerequisite: Physical iPhone 13 Pro Max paired to the disposable
+  Windows VM Acceptance receiver through its protected WSS test tunnel; A, S and
+  Trackpad visible; Windows desktop witness entry focused and cursor inside it.

@@ -279,10 +279,43 @@ enum GenerationAcceptance {
     Rejected,
 }
 
-#[derive(Debug, Clone, Copy)]
-enum SequenceStream {
-    Digital,
-    Pointer,
+// Bound replay history by sequence distance. Ordering is per physical press:
+// one finger's newer packet must not suppress another finger's delayed release.
+#[derive(Default)]
+struct InputSequenceHistory {
+    ordered: BTreeMap<u64, (InputIdentity, Option<u64>)>,
+    latest: HashMap<(InputIdentity, Option<u64>), u64>,
+}
+
+impl InputSequenceHistory {
+    const WINDOW: u64 = 4096;
+
+    fn accept(&mut self, sequence: u64, identity: &InputIdentity, press: Option<u64>) -> bool {
+        self.accept_event(sequence, identity, press, true)
+    }
+
+    fn accept_event(&mut self, sequence: u64, identity: &InputIdentity, press: Option<u64>, stateful: bool) -> bool {
+        let highest = self.ordered.last_key_value()
+            .map_or(sequence, |(last, _)| (*last).max(sequence));
+        let key = (identity.clone(), press);
+        if highest.saturating_sub(sequence) >= Self::WINDOW
+            || self.ordered.contains_key(&sequence)
+            || (stateful && self.latest.get(&key).is_some_and(|last| sequence <= *last))
+        {
+            return false;
+        }
+        while self.ordered.first_key_value()
+            .is_some_and(|(first, _)| highest.saturating_sub(*first) >= Self::WINDOW)
+        {
+            let (old_sequence, old_key) = self.ordered.pop_first().expect("history is nonempty");
+            if self.latest.get(&old_key) == Some(&old_sequence) {
+                self.latest.remove(&old_key);
+            }
+        }
+        self.ordered.insert(sequence, key.clone());
+        self.latest.entry(key).and_modify(|last| *last = (*last).max(sequence)).or_insert(sequence);
+        true
+    }
 }
 
 pub struct HostCore {
@@ -295,8 +328,8 @@ pub struct HostCore {
     pairing_blocked_until_millis: i64,
     active_generation: Option<u64>,
     retired_generations: VecDeque<u64>,
-    last_digital_sequence: Option<u64>,
-    last_pointer_sequence: Option<u64>,
+    digital_sequences: InputSequenceHistory,
+    pointer_sequences: InputSequenceHistory,
     physical_holds: HashMap<InputIdentity, PhysicalHold>,
     held_key_counts: BTreeMap<KeyBinding, u32>,
     held_gamepad_counts: BTreeMap<VirtualGamepadButton, u32>,
@@ -346,8 +379,8 @@ impl HostCore {
             pairing_blocked_until_millis: 0,
             active_generation: None,
             retired_generations: VecDeque::new(),
-            last_digital_sequence: None,
-            last_pointer_sequence: None,
+            digital_sequences: InputSequenceHistory::default(),
+            pointer_sequences: InputSequenceHistory::default(),
             physical_holds: HashMap::new(),
             held_key_counts: BTreeMap::new(),
             held_gamepad_counts: BTreeMap::new(),
@@ -444,6 +477,10 @@ impl HostCore {
         self.pairing_failure_count = 0;
         self.pairing_blocked_until_millis = 0;
         Ok(())
+    }
+
+    pub fn counters(&self) -> &StatusCounters {
+        &self.counters
     }
 
     pub fn status(&self) -> StatusSnapshot {
@@ -1122,8 +1159,8 @@ impl HostCore {
         accepted.default_gamepad_profile_id = Some(self.state.default_profile_id.clone());
         accepted.capabilities = Some(Vec::new());
         accepted.input_protocol_version = Some(ControllerWireCodec::CURRENT_INPUT_PROTOCOL_VERSION);
-        // No realtime token: the current iOS client intentionally falls back to
-        // reliable WebSocket input for this milestone.
+        // Transport adapters may attach a session-scoped realtime token when UDP
+        // is available. The core owns input ordering across both transports.
         accepted
     }
 
@@ -1138,10 +1175,6 @@ impl HostCore {
         {
             return;
         }
-        if !self.accept_sequence(connection_id, message, SequenceStream::Digital, effects) {
-            return;
-        }
-
         let Some(state) = message.state else {
             self.reject_input(connection_id, "Input state is required", effects);
             return;
@@ -1181,6 +1214,9 @@ impl HostCore {
             _ => return,
         };
 
+        if !self.accept_sequence(connection_id, message, Some(&identity), effects) {
+            return;
+        }
         self.counters.accepted_inputs = self.counters.accepted_inputs.saturating_add(1);
         match state {
             ButtonPressState::Down => {
@@ -1304,7 +1340,7 @@ impl HostCore {
         {
             return;
         }
-        if !self.accept_sequence(connection_id, message, SequenceStream::Pointer, effects) {
+        if !self.accept_sequence(connection_id, message, None, effects) {
             return;
         }
         let Some(event) = message.pointer_event else {
@@ -1661,7 +1697,7 @@ impl HostCore {
         &mut self,
         connection_id: ConnectionId,
         message: &ControllerMessage,
-        stream: SequenceStream,
+        identity: Option<&InputIdentity>,
         effects: &mut Vec<Effect>,
     ) -> bool {
         let sequence = ControllerWireCodec::input_sequence_number(message);
@@ -1672,15 +1708,29 @@ impl HostCore {
         let Some(sequence) = sequence else {
             return true;
         };
-        let last = match stream {
-            SequenceStream::Digital => &mut self.last_digital_sequence,
-            SequenceStream::Pointer => &mut self.last_pointer_sequence,
+        let accepted = if let Some(identity) = identity {
+            self.digital_sequences.accept(
+                sequence, identity, ControllerWireCodec::input_press_identifier(message),
+            )
+        } else {
+            let key = match (message.pointer_event, message.pointer_button) {
+                (Some(ControllerPointerEventKind::Move), _) => "pointer.move",
+                (Some(ControllerPointerEventKind::Scroll), _) => "pointer.scroll",
+                (Some(ControllerPointerEventKind::Button), Some(ControllerPointerButton::Left)) => "pointer.left",
+                (Some(ControllerPointerEventKind::Button), Some(ControllerPointerButton::Right)) => "pointer.right",
+                (Some(ControllerPointerEventKind::Button), Some(ControllerPointerButton::Middle)) => "pointer.middle",
+                _ => "pointer.invalid",
+            };
+            // Relative motion/scroll deltas commute: apply each sequence once, even
+            // when a faster lane overtakes another delta. Button state is ordered
+            // independently, so a newer move cannot suppress a delayed release.
+            self.pointer_sequences.accept_event(sequence, &InputIdentity::LocalControl(key.into()), None,
+                message.pointer_event == Some(ControllerPointerEventKind::Button))
         };
-        if last.is_some_and(|last| sequence <= last) {
+        if !accepted {
             self.counters.duplicate_sequences = self.counters.duplicate_sequences.saturating_add(1);
             return false;
         }
-        *last = Some(sequence);
         true
     }
 
@@ -1918,8 +1968,8 @@ impl HostCore {
     }
 
     fn reset_sequences(&mut self) {
-        self.last_digital_sequence = None;
-        self.last_pointer_sequence = None;
+        self.digital_sequences = InputSequenceHistory::default();
+        self.pointer_sequences = InputSequenceHistory::default();
         // Establishing v2 must not forget an unexpired legacy analog hold.
         // Lifecycle releases neutralize axes separately from sequence resets.
         for axis in self.analog_axes.values_mut() {
@@ -2192,5 +2242,24 @@ impl Error for CoreError {
 impl From<StateError> for CoreError {
     fn from(error: StateError) -> Self {
         Self::State(error)
+    }
+}
+
+#[cfg(test)]
+mod digital_sequence_tests {
+    use super::*;
+
+    #[test]
+    fn replay_history_is_bounded_and_evicted_presses_cannot_return() {
+        let mut history = InputSequenceHistory::default();
+        let identity = InputIdentity::Button(KeypadElementID::preset(5));
+        for sequence in 1..=10_000 {
+            assert!(history.accept(sequence, &identity, Some(sequence)));
+        }
+        assert!(history.ordered.len() <= InputSequenceHistory::WINDOW as usize);
+        assert!(history.latest.len() <= InputSequenceHistory::WINDOW as usize);
+        assert!(!history.accept(1, &identity, Some(1)));
+        assert!(!history.accept(10_000, &identity, Some(10_000)));
+        assert!(history.accept(10_001, &identity, Some(10_001)));
     }
 }

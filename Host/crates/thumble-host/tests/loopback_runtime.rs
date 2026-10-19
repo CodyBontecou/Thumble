@@ -385,7 +385,7 @@ async fn current_ios_loopback_pairs_reconnects_records_input_and_releases_on_shu
         .unwrap();
     let accepted = receive_type(&mut first, ControllerMessageType::PairingAccepted).await;
     assert_eq!(accepted.input_protocol_version, Some(3));
-    assert_eq!(accepted.realtime_token, None);
+    assert!(accepted.realtime_token.is_some());
     assert_eq!(accepted.capabilities, Some(Vec::new()));
     assert_eq!(
         accepted.gamepad_profiles.as_ref().unwrap()[0]["name"],
@@ -503,7 +503,7 @@ async fn current_ios_loopback_pairs_reconnects_records_input_and_releases_on_shu
     let reaccepted = receive_type(&mut second, ControllerMessageType::PairingAccepted).await;
     assert_eq!(reaccepted.server_id.as_deref(), Some(server_id.as_str()));
     assert_eq!(reaccepted.input_protocol_version, Some(3));
-    assert_eq!(reaccepted.realtime_token, None);
+    assert!(reaccepted.realtime_token.is_some());
 
     let unsupported = ControllerMessage::new(ControllerMessageType::LaunchProfileTarget, 5);
     second

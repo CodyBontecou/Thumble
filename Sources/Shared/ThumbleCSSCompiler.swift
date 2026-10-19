@@ -31,7 +31,7 @@ public enum ThumbleCSSProfile {
     ]
     public static let statePseudoClasses = ["normal", "pressed", "active", "disabled"]
     public static let otherPseudoClasses = ["root"]
-    public static let attributeNames = ["id", "kind", "role", "button", "action", "purpose", "group"]
+    public static let attributeNames = ["id", "kind", "role", "button", "action", "purpose", "group", "action-set"]
     public static let mediaFeatures = ["prefers-color-scheme", "orientation"]
 
     public static let properties = [
@@ -137,6 +137,7 @@ struct ThumbleCSSToken: Equatable, Sendable {
     var text: String
     var line: Int
     var column: Int
+    var precededByWhitespace = false
 
     var isEOF: Bool { text.isEmpty && kind == .delim("\0") }
 
@@ -162,6 +163,14 @@ enum ThumbleCSSTokenizer {
         var index = 0
         var line = 1
         var column = 1
+        var pendingWhitespace = false
+
+        func appendToken(_ token: ThumbleCSSToken) {
+            var value = token
+            value.precededByWhitespace = pendingWhitespace
+            tokens.append(value)
+            pendingWhitespace = false
+        }
 
         func issue(_ code: String, _ message: String, at l: Int, _ c: Int) {
             issues.append(ThumbleCSSIssue(
@@ -207,6 +216,7 @@ enum ThumbleCSSTokenizer {
             }
             let scalar = scalars[index]
             if isWhitespace(scalar) {
+                pendingWhitespace = true
                 advance()
                 continue
             }
@@ -257,7 +267,7 @@ enum ThumbleCSSTokenizer {
                 if !terminated {
                     issue("unterminated-string", "Unterminated string literal.", at: startLine, startColumn)
                 }
-                tokens.append(ThumbleCSSToken(kind: .string(value), text: value, line: startLine, column: startColumn))
+                appendToken(ThumbleCSSToken(kind: .string(value), text: value, line: startLine, column: startColumn))
                 continue
             }
             if scalar == "#" && index + 1 < scalars.count && isIdentScalar(scalars[index + 1]) {
@@ -269,7 +279,7 @@ enum ThumbleCSSTokenizer {
                     value.unicodeScalars.append(scalars[index])
                     advance()
                 }
-                tokens.append(ThumbleCSSToken(kind: .hash, text: value, line: startLine, column: startColumn))
+                appendToken(ThumbleCSSToken(kind: .hash, text: value, line: startLine, column: startColumn))
                 continue
             }
             if scalar == "@" && index + 1 < scalars.count && isIdentStart(scalars[index + 1]) {
@@ -281,7 +291,7 @@ enum ThumbleCSSTokenizer {
                     value.unicodeScalars.append(scalars[index])
                     advance()
                 }
-                tokens.append(ThumbleCSSToken(kind: .atKeyword(value), text: value, line: startLine, column: startColumn))
+                appendToken(ThumbleCSSToken(kind: .atKeyword(value), text: value, line: startLine, column: startColumn))
                 continue
             }
             if isIdentStart(scalar) {
@@ -294,9 +304,9 @@ enum ThumbleCSSTokenizer {
                 }
                 if index < scalars.count && scalars[index] == "(" {
                     advance()
-                    tokens.append(ThumbleCSSToken(kind: .function(value), text: value, line: startLine, column: startColumn))
+                    appendToken(ThumbleCSSToken(kind: .function(value), text: value, line: startLine, column: startColumn))
                 } else {
-                    tokens.append(ThumbleCSSToken(kind: .ident(value), text: value, line: startLine, column: startColumn))
+                    appendToken(ThumbleCSSToken(kind: .ident(value), text: value, line: startLine, column: startColumn))
                 }
                 continue
             }
@@ -346,7 +356,7 @@ enum ThumbleCSSTokenizer {
                 }
                 if index < scalars.count && scalars[index] == "%" {
                     advance()
-                    tokens.append(ThumbleCSSToken(kind: .percentage, text: value, line: startLine, column: startColumn))
+                    appendToken(ThumbleCSSToken(kind: .percentage, text: value, line: startLine, column: startColumn))
                     continue
                 }
                 if index < scalars.count && isIdentStart(scalars[index]) {
@@ -355,10 +365,10 @@ enum ThumbleCSSTokenizer {
                         unit.unicodeScalars.append(scalars[index])
                         advance()
                     }
-                    tokens.append(ThumbleCSSToken(kind: .dimension(unit: unit.lowercased()), text: value, line: startLine, column: startColumn))
+                    appendToken(ThumbleCSSToken(kind: .dimension(unit: unit.lowercased()), text: value, line: startLine, column: startColumn))
                     continue
                 }
-                tokens.append(ThumbleCSSToken(kind: .number, text: value, line: startLine, column: startColumn))
+                appendToken(ThumbleCSSToken(kind: .number, text: value, line: startLine, column: startColumn))
                 continue
             }
             let startLine = line
@@ -377,7 +387,7 @@ enum ThumbleCSSTokenizer {
             default: kind = .delim(Character(scalar))
             }
             advance()
-            tokens.append(ThumbleCSSToken(kind: kind, text: String(Character(scalar)), line: startLine, column: startColumn))
+            appendToken(ThumbleCSSToken(kind: kind, text: String(Character(scalar)), line: startLine, column: startColumn))
         }
         return ThumbleCSSTokenizeResult(tokens: tokens, issues: issues)
     }
@@ -877,8 +887,7 @@ final class ThumbleCSSParser {
 
     private func parseCompoundSelector() -> ThumbleCSSCompoundSelector? {
         var parts: [ThumbleCSSSimpleSelector] = []
-        // A type selector must come first in a compound; a second ident starts a
-        // descendant compound (whitespace was already dropped by the tokenizer).
+        // Whitespace starts a descendant compound, including ID/attribute-only selectors.
         if let token = current, case .ident(let raw) = token.kind {
             let name = raw.lowercased()
             guard ThumbleCSSProfile.typeSelectors.contains(name) else {
@@ -890,6 +899,9 @@ final class ThumbleCSSParser {
             _ = advance()
         }
         while let token = current {
+            if !parts.isEmpty && token.precededByWhitespace {
+                return ThumbleCSSCompoundSelector(parts: parts)
+            }
             switch token.kind {
             case .ident:
                 // Descendant boundary: the next compound begins here.
@@ -1010,6 +1022,10 @@ final class ThumbleCSSParser {
             return nil
         }
         _ = advance()
+        if name == "action-set", operation != "=" || ThumbleActionSet(rawValue: value) == nil {
+            issue(.error, "invalid-action-set", "Use [action-set=\"base|left-trigger|right-trigger|both-triggers\"] on the controller root.", valueToken)
+            return nil
+        }
         return ThumbleCSSSimpleSelector(
             kind: .attribute(name: name, operation: String(operation), value: value),
             line: opening.line,
@@ -1214,6 +1230,7 @@ enum ThumbleCSSDocumentBuilder {
 
 struct ThumbleCSSMatchingContext {
     var state: GamepadControlPresentationState
+    var actionSet: ThumbleActionSet? = nil
 }
 
 enum ThumbleCSSSelectorMatcher {
@@ -1258,6 +1275,9 @@ enum ThumbleCSSSelectorMatcher {
                 let value = rawValue.lowercased()
                 let actual: String
                 switch name {
+                case "action-set":
+                    guard element.isRoot, let actionSet = context.actionSet else { return false }
+                    actual = actionSet.rawValue
                 case "id":
                     guard let control = element.control else { return false }
                     if control.isSynthetic { return false }
@@ -1372,6 +1392,19 @@ final class ThumbleCSSCascade {
 
     var report: ThumbleCSSReport { ThumbleCSSReport(issues: issues) }
 
+    var usesActionSets: Bool {
+        flattened.contains { item in
+            item.rule.selectors.contains { selector in
+                selector.compounds.contains { compound in
+                    compound.parts.contains { part in
+                        if case .attribute(let name, _, _) = part.kind { return name == "action-set" }
+                        return false
+                    }
+                }
+            }
+        }
+    }
+
     /// Selector-match diagnostics across every element and state.
     func reportUnmatchedSelectors(documents: [ThumbleCSSDocument]) {
         var matched = Set<String>()
@@ -1384,13 +1417,15 @@ final class ThumbleCSSCascade {
                 _ = order
                 for document in documents {
                     let anyMatch = document.elements.contains { element in
-                        GamepadControlPresentationState.allCases.contains { state in
-                            ThumbleCSSSelectorMatcher.matches(
-                                selector,
-                                element: element,
-                                document: document,
-                                context: ThumbleCSSMatchingContext(state: state)
-                            )
+                        ThumbleActionSet.allCases.contains { actionSet in
+                            GamepadControlPresentationState.allCases.contains { state in
+                                ThumbleCSSSelectorMatcher.matches(
+                                    selector,
+                                    element: element,
+                                    document: document,
+                                    context: ThumbleCSSMatchingContext(state: state, actionSet: actionSet)
+                                )
+                            }
                         }
                     }
                     if anyMatch {
@@ -1425,7 +1460,8 @@ final class ThumbleCSSCascade {
         state: GamepadControlPresentationState,
         document: ThumbleCSSDocument,
         scheme: ThumbleSkinColorScheme?,
-        orientation: ThumbleSkinOrientation?
+        orientation: ThumbleSkinOrientation?,
+        actionSet: ThumbleActionSet? = nil
     ) -> [ThumbleCSSDeclaration] {
         var rootCustom: [String: [ThumbleCSSToken]] = [:]
         var ownCustom: [String: [ThumbleCSSToken]] = [:]
@@ -1437,11 +1473,11 @@ final class ThumbleCSSCascade {
             for selector in rule.selectors {
                 let matchesElement = ThumbleCSSSelectorMatcher.matches(
                     selector, element: element, document: document,
-                    context: ThumbleCSSMatchingContext(state: state)
+                    context: ThumbleCSSMatchingContext(state: state, actionSet: actionSet)
                 )
                 let matchesRoot = !element.isRoot && ThumbleCSSSelectorMatcher.matches(
                     selector, element: root, document: document,
-                    context: ThumbleCSSMatchingContext(state: state)
+                    context: ThumbleCSSMatchingContext(state: state, actionSet: actionSet)
                 )
                 guard matchesElement || matchesRoot else { continue }
                 let specificity = selector.specificity
@@ -2391,6 +2427,7 @@ public enum ThumbleCSSCompilerError: Error, LocalizedError {
 }
 
 public struct ThumbleCSSLoweredAppearance: Sendable {
+    public var actionSet: ThumbleActionSet? = nil
     public var orientation: ThumbleSkinOrientation?
     public var colorScheme: ThumbleSkinColorScheme?
     public var appearance: ThumbleSkinAppearance
@@ -2447,19 +2484,24 @@ public enum ThumbleCSSCompiler {
         var variants: [ThumbleCSSLoweredAppearance] = []
         for orientation in unique(workspace.orientations) {
             for scheme in unique(workspace.colorSchemes) {
-                let appearance = lowerAppearance(
-                    artboard: artboard,
-                    cascade: cascade,
-                    documents: documents,
-                    scheme: scheme,
-                    orientation: orientation,
-                    issues: &report
-                ).normalized
-                variants.append(ThumbleCSSLoweredAppearance(
-                    orientation: orientation,
-                    colorScheme: scheme,
-                    appearance: appearance
-                ))
+                let actionSets: [ThumbleActionSet?] = cascade.usesActionSets ? ThumbleActionSet.allCases.map { Optional($0) } : [nil]
+                for actionSet in actionSets {
+                    let appearance = lowerAppearance(
+                        artboard: artboard,
+                        cascade: cascade,
+                        documents: documents,
+                        scheme: scheme,
+                        orientation: orientation,
+                        actionSet: actionSet,
+                        issues: &report
+                    ).normalized
+                    variants.append(ThumbleCSSLoweredAppearance(
+                        actionSet: actionSet,
+                        orientation: orientation,
+                        colorScheme: scheme,
+                        appearance: appearance
+                    ))
+                }
             }
         }
         // url(#asset) references must resolve to declared sourceAssets that compile into the package.
@@ -2525,16 +2567,19 @@ public enum ThumbleCSSCompiler {
         var valueIssues: [ThumbleCSSIssue] = []
         for document in documents {
             for scheme in unique(workspace.colorSchemes) {
-                for element in document.elements {
-                    for state in GamepadControlPresentationState.allCases {
-                        let declarations = cascade.resolvedDeclarations(
-                            element: element,
-                            state: state,
-                            document: document,
-                            scheme: scheme,
-                            orientation: document.orientation
-                        )
-                        valueIssues.append(contentsOf: validationIssues(declarations: declarations))
+                for actionSet in ThumbleActionSet.allCases {
+                    for element in document.elements {
+                        for state in GamepadControlPresentationState.allCases {
+                            let declarations = cascade.resolvedDeclarations(
+                                element: element,
+                                state: state,
+                                document: document,
+                                scheme: scheme,
+                                orientation: document.orientation,
+                                actionSet: actionSet
+                            )
+                            valueIssues.append(contentsOf: validationIssues(declarations: declarations))
+                        }
                     }
                 }
             }
@@ -2569,7 +2614,8 @@ public enum ThumbleCSSCompiler {
     public static func computed(
         workspace: ThumbleSkinWorkspace,
         sourceRoot: URL,
-        fileManager: FileManager = .default
+        fileManager: FileManager = .default,
+        actionSet: ThumbleActionSet = .base
     ) throws -> [ComputedDocument] {
         guard let artboard = workspace.resolvedArtboard else {
             throw ThumbleCSSCompilerError.missingArtboard(workspace.artboardID)
@@ -2592,7 +2638,8 @@ public enum ThumbleCSSCompiler {
                         state: state,
                         document: document,
                         scheme: scheme,
-                        orientation: document.orientation
+                        orientation: document.orientation,
+                        actionSet: actionSet
                     )
                     var map: [String: String] = [:]
                     for declaration in declarations { map[declaration.name] = declaration.valueText }
@@ -2606,7 +2653,8 @@ public enum ThumbleCSSCompiler {
                             state: state,
                             document: document,
                             scheme: scheme,
-                            orientation: document.orientation
+                            orientation: document.orientation,
+                        actionSet: actionSet
                         )
                         var map: [String: String] = [:]
                         for declaration in declarations { map[declaration.name] = declaration.valueText }
@@ -2685,6 +2733,7 @@ public enum ThumbleCSSCompiler {
         documents: [ThumbleCSSDocument],
         scheme: ThumbleSkinColorScheme?,
         orientation: ThumbleSkinOrientation?,
+        actionSet: ThumbleActionSet? = nil,
         issues: inout ThumbleCSSReport
     ) -> ThumbleSkinAppearance {
         let relevantDocuments = documents.filter { document in
@@ -2707,6 +2756,7 @@ public enum ThumbleCSSCompiler {
             document: documentsToUse.first ?? ThumbleCSSDocument(orientation: .landscape, controls: []),
             scheme: scheme,
             orientation: orientation,
+            actionSet: actionSet,
             issues: &issues
         )
         var defaultControl: ThumbleSkinControlAppearance?
@@ -2743,6 +2793,7 @@ public enum ThumbleCSSCompiler {
                 document: documentsToUse.first ?? ThumbleCSSDocument(orientation: .landscape, controls: []),
                 scheme: scheme,
                 orientation: orientation,
+                actionSet: actionSet,
                 issues: &issues
             )
             guard !computed.isEmpty else { continue }
@@ -2792,6 +2843,7 @@ public enum ThumbleCSSCompiler {
                 document: document,
                 scheme: scheme,
                 orientation: orientation,
+                actionSet: actionSet,
                 issues: &issues
             )
             guard !computed.isEmpty else { continue }
@@ -2822,6 +2874,7 @@ public enum ThumbleCSSCompiler {
                 document: document,
                 scheme: scheme,
                 orientation: orientation,
+                actionSet: actionSet,
                 issues: &issues
             )
             background = computed.visualStyle.normal.fillStyle
@@ -2886,6 +2939,7 @@ public enum ThumbleCSSCompiler {
         document: ThumbleCSSDocument,
         scheme: ThumbleSkinColorScheme?,
         orientation: ThumbleSkinOrientation?,
+        actionSet: ThumbleActionSet? = nil,
         issues: inout ThumbleCSSReport
     ) -> ThumbleCSSComputedElementStyle {
         var stateValues: [GamepadControlPresentationState: ThumbleCSSParsedValues] = [:]
@@ -2896,7 +2950,8 @@ public enum ThumbleCSSCompiler {
                 state: state,
                 document: document,
                 scheme: scheme,
-                orientation: orientation
+                orientation: orientation,
+                actionSet: actionSet
             )
             var valueIssues: [ThumbleCSSIssue] = []
             let values = validateAndParse(declarations: declarations, issues: &valueIssues)
@@ -2911,7 +2966,8 @@ public enum ThumbleCSSCompiler {
                 state: state,
                 document: document,
                 scheme: scheme,
-                orientation: orientation
+                orientation: orientation,
+                actionSet: actionSet
             )
             var ignored: [ThumbleCSSIssue] = []
             stateValues[state] = ThumbleCSSValueParser.parse(declarations: declarations, currentColor: currentColorFallback)

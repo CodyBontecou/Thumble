@@ -41,6 +41,7 @@ pub struct SkinPreviewRequest {
     pub orientation: Option<SkinPreviewOrientation>,
     pub scheme: Option<SkinPreviewScheme>,
     pub state: Option<SkinPreviewState>,
+    pub action_set: Option<SkinPreviewActionSet>,
     pub scale: Option<f64>,
 }
 
@@ -93,6 +94,25 @@ impl SkinPreviewState {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SkinPreviewActionSet {
+    Base,
+    LeftTrigger,
+    RightTrigger,
+    BothTriggers,
+}
+
+impl SkinPreviewActionSet {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Base => "base",
+            Self::LeftTrigger => "left-trigger",
+            Self::RightTrigger => "right-trigger",
+            Self::BothTriggers => "both-triggers",
+        }
+    }
+}
+
 /// The rendered controller-view frame plus bounded identifying metadata.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SkinPreviewImage {
@@ -102,6 +122,7 @@ pub struct SkinPreviewImage {
     pub orientation: String,
     pub color_scheme: String,
     pub state: String,
+    pub action_set: String,
     pub pixel_width: u32,
     pub pixel_height: u32,
     pub byte_length: u64,
@@ -251,7 +272,17 @@ pub async fn render_skin_preview(request: &SkinPreviewRequest) -> Result<SkinPre
         arguments.push(state.as_str().to_owned());
     }
 
+    if let Some(action_set) = request.action_set {
+        arguments.push("--action-set".to_owned());
+        arguments.push(action_set.as_str().to_owned());
+    }
+
     let summary = run_skin_cli(&cli, &arguments).await?;
+    if let Some(action_set) = request.action_set {
+        if summary.action_set.as_deref() != Some(action_set.as_str()) {
+            return Err("the thumble CLI did not confirm the requested action set; rebuild the CLI with action-set support".to_owned());
+        }
+    }
     let frame = single_frame(&summary)?;
     let frame_path = PathBuf::from(&frame.path);
     let png = fs::read(&frame_path).map_err(|error| {
@@ -290,6 +321,7 @@ pub async fn render_skin_preview(request: &SkinPreviewRequest) -> Result<SkinPre
         orientation: summary.orientation,
         color_scheme: summary.color_scheme,
         state: summary.state,
+        action_set: request.action_set.unwrap_or(SkinPreviewActionSet::Base).as_str().to_owned(),
         pixel_width: width,
         pixel_height: height,
         byte_length: u64::try_from(png.len()).unwrap_or(u64::MAX),
@@ -314,6 +346,8 @@ struct CliPreviewSummary {
     orientation: String,
     color_scheme: String,
     state: String,
+    #[serde(default)]
+    action_set: Option<String>,
     #[serde(default)]
     contact_sheet: Option<bool>,
     #[serde(default)]
@@ -469,6 +503,7 @@ mod tests {
             orientation: Some(SkinPreviewOrientation::Landscape),
             scheme: Some(SkinPreviewScheme::Light),
             state: Some(SkinPreviewState::Normal),
+            action_set: None,
             scale: Some(2.0),
         }
     }
@@ -547,6 +582,7 @@ mod tests {
             orientation: "landscape".to_owned(),
             color_scheme: "light".to_owned(),
             state: "normal".to_owned(),
+            action_set: None,
             contact_sheet: Some(false),
             frame_count: Some(1),
             frames: vec![frame],
@@ -617,9 +653,12 @@ mod tests {
             .enable_all()
             .build()
             .unwrap();
+        let mut review = request(&package);
+        review.action_set = Some(SkinPreviewActionSet::LeftTrigger);
         let image = runtime
-            .block_on(render_skin_preview(&request(&package)))
+            .block_on(render_skin_preview(&review))
             .expect("native render");
+        assert_eq!(image.action_set, "left-trigger");
         assert!(!image.png.is_empty());
         assert_eq!(image.sha256.len(), 64);
         assert!(image.pixel_width > 0 && image.pixel_height > 0);

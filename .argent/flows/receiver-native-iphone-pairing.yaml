@@ -1,0 +1,9 @@
+steps:
+  - launch: com.codybontecou.PocketPad.iOS
+  - tap:
+      text: Set Up Later
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: Manual Connection

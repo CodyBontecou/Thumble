@@ -513,3 +513,72 @@ fn expiry_removes_individual_press_references_and_only_releases_last() {
     )));
     assert_eq!(core.status().counters.expired_holds, 3);
 }
+
+#[test]
+fn independent_presses_allow_reordering_without_losing_releases_or_resurrecting_holds() {
+    let mut core = core();
+    pair(&mut core, 1, "token");
+    let button = KeypadElementID::preset(5);
+    let other = KeypadElementID::preset(6);
+    // The other finger's newer UDP down arrives ahead of the first down's WS copy.
+    let newer = button_message(other, ButtonPressState::Down, Some(1), Some(2), Some(20));
+    core.handle_message(1, newer, 0, &mut no_tokens()).unwrap();
+    let earlier = button_message(button, ButtonPressState::Down, Some(1), Some(1), Some(10));
+    let effects = core.handle_message(1, earlier.clone(), 0, &mut no_tokens()).unwrap();
+    assert!(has_key_down(&effects, 36));
+    assert_eq!(core.status().pressed_buttons.len(), 2);
+    // A newer hold refresh must not suppress the other finger's delayed release.
+    let refresh = button_message(other, ButtonPressState::Down, Some(1), Some(4), Some(20));
+    core.handle_message(1, refresh, 1, &mut no_tokens()).unwrap();
+    let release = button_message(button, ButtonPressState::Up, Some(1), Some(3), Some(10));
+    let effects = core.handle_message(1, release, 1, &mut no_tokens()).unwrap();
+    assert!(has_key_up(&effects, 36));
+    let effects = core.handle_message(1, earlier, 2, &mut no_tokens()).unwrap();
+    assert!(!has_key_down(&effects, 36));
+    assert_eq!(core.status().pressed_buttons, vec![other]);
+    assert_eq!(core.status().counters.expired_holds, 0);
+}
+
+#[test]
+fn overlapping_press_ids_on_one_control_have_independent_ordering() {
+    let mut core = core();
+    pair(&mut core, 1, "token");
+    let button = KeypadElementID::preset(5);
+    for (sequence, press, state) in [(1, 10, ButtonPressState::Down), (3, 20, ButtonPressState::Down),
+        (2, 10, ButtonPressState::Up), (4, 20, ButtonPressState::Up)] {
+        core.handle_message(1, button_message(button, state, Some(1), Some(sequence), Some(press)),
+            sequence as i64, &mut no_tokens()).unwrap();
+    }
+    assert!(core.status().pressed_buttons.is_empty());
+    assert_eq!(core.status().counters.accepted_inputs, 4);
+}
+
+#[test]
+fn pointer_relative_deltas_and_buttons_dedupe_without_suppressing_delayed_releases() {
+    let mut core = core();
+    pair(&mut core, 1, "token");
+    let mut down = pointer_message(ControllerPointerEventKind::Button, 1, 1);
+    down.pointer_button = Some(ControllerPointerButton::Left);
+    down.state = Some(ButtonPressState::Down);
+    core.handle_message(1, down.clone(), 0, &mut no_tokens()).unwrap();
+    let mut newer_move = pointer_message(ControllerPointerEventKind::Move, 1, 4);
+    newer_move.delta_x = Some(7.0);
+    let effect = core.handle_message(1, newer_move.clone(), 1, &mut no_tokens()).unwrap();
+    assert!(effect.iter().any(|e| matches!(e, Effect::PointerMove {delta_x, ..} if *delta_x == 7.0)));
+    let mut earlier_move = pointer_message(ControllerPointerEventKind::Move, 1, 2);
+    earlier_move.delta_x = Some(3.0);
+    let effect = core.handle_message(1, earlier_move.clone(), 2, &mut no_tokens()).unwrap();
+    assert!(effect.iter().any(|e| matches!(e, Effect::PointerMove {delta_x, ..} if *delta_x == 3.0)));
+    let mut up = pointer_message(ControllerPointerEventKind::Button, 1, 3);
+    up.pointer_button = Some(ControllerPointerButton::Left);
+    up.state = Some(ButtonPressState::Up);
+    let effect = core.handle_message(1, up, 3, &mut no_tokens()).unwrap();
+    assert!(effect.iter().any(|e| matches!(e, Effect::PointerButton {pressed:false, ..})));
+    for stale in [down, earlier_move, newer_move] {
+        let effects = core.handle_message(1, stale, 4, &mut no_tokens()).unwrap();
+        assert!(!effects.iter().any(|e| matches!(e, Effect::PointerMove {..} | Effect::PointerButton {..})));
+    }
+    assert!(core.status().active_pointer_buttons.is_empty());
+    assert_eq!(core.status().counters.expired_holds, 0);
+    assert_eq!(core.status().counters.duplicate_sequences, 3);
+}

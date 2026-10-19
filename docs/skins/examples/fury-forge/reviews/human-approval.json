@@ -1,0 +1,10 @@
+{
+  "schema": "com.codybontecou.pocketpad.skin-human-approval",
+  "version": 1,
+  "status": "pending",
+  "approvedBy": null,
+  "approvedAt": null,
+  "reviewedContactSheet": "reviews/contact-sheet-2.png",
+  "packageSHA256": "31c400f4bd0468019100e2e7450e9a375ae05c9e51d05353e058f287c1a6850a",
+  "notes": "Pending human review. Contact sheet SHA-256: 7c1104934782e157b79e533c9e33598bd6ac1b42e0724755718aeab7f3163dad. No live application or publication authorized by this record."
+}

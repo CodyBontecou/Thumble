@@ -1,0 +1,6 @@
+## Interface: 16001
+## Title: Thumble Link
+## Notes: Export your existing keyboard bindings for a Thumble phone keypad.
+## Author: Thumble
+## Version: 0.1.0
+ThumbleLink.lua

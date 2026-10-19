@@ -1,0 +1,97 @@
+{
+  "profiles": [
+    {
+      "customization": {
+        "elements": [
+          {
+            "defaultOutput": {
+              "keyboard": {
+                "keyCode": 0,
+                "modifiersRawValue": 0
+              },
+              "gamepadButtons": []
+            },
+            "id": "00000000-0000-0000-0000-000000000105",
+            "kind": "button",
+            "label": "A",
+            "layout": {
+              "centerX": 0.25,
+              "centerY": 0.75,
+              "widthScale": 1.3,
+              "heightScale": 1.3,
+              "shape": "rounded_rectangle"
+            },
+            "output": {
+              "keyboard": {
+                "keyCode": 0,
+                "modifiersRawValue": 0
+              },
+              "gamepadButtons": []
+            },
+            "partOutputs": [],
+            "visualRole": "primary_action"
+          },
+          {
+            "defaultOutput": {
+              "keyboard": {
+                "keyCode": 1,
+                "modifiersRawValue": 0
+              },
+              "gamepadButtons": []
+            },
+            "id": "00000000-0000-0000-0000-000000000106",
+            "kind": "button",
+            "label": "S",
+            "layout": {
+              "centerX": 0.75,
+              "centerY": 0.75,
+              "widthScale": 1.3,
+              "heightScale": 1.3,
+              "shape": "rounded_rectangle"
+            },
+            "output": {
+              "keyboard": {
+                "keyCode": 1,
+                "modifiersRawValue": 0
+              },
+              "gamepadButtons": []
+            },
+            "partOutputs": [],
+            "visualRole": "primary_action"
+          },
+          {
+            "defaultOutput": {
+              "gamepadButtons": []
+            },
+            "id": "00000000-0000-0000-0000-000000000107",
+            "kind": "trackpad",
+            "label": "Trackpad",
+            "layout": {
+              "centerX": 0.5,
+              "centerY": 0.3,
+              "widthScale": 3,
+              "heightScale": 2.5,
+              "shape": "rounded_rectangle"
+            },
+            "output": {
+              "gamepadButtons": []
+            },
+            "partOutputs": [],
+            "visualRole": "utility"
+          }
+        ]
+      },
+      "id": "00000000-0000-0000-0000-000000000201",
+      "name": "Linux VM Acceptance",
+      "orientationPreference": "automatic",
+      "outputMode": "keyboard",
+      "updatedAt": 0
+    }
+  ],
+  "activeProfileID": "00000000-0000-0000-0000-000000000201",
+  "defaultProfileID": "00000000-0000-0000-0000-000000000201",
+  "keyBindings": {},
+  "outputBindings": {},
+  "profileKeyBindings": {},
+  "profileOutputBindings": {}
+}

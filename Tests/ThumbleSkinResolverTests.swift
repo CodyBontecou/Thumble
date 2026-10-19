@@ -2,6 +2,71 @@ import SwiftUI
 import XCTest
 
 final class ThumbleSkinResolverTests: XCTestCase {
+    func testActionSetMirrorHandlesChordsTouchOwnersAndReset() {
+        var inputs = ThumbleActionSetInputState()
+        XCTAssertEqual(inputs.actionSet, .base)
+        inputs.record(input: "lt", pressed: true, pressIdentifier: 1, buttons: [.leftTriggerButton])
+        inputs.record(input: "lt", pressed: true, pressIdentifier: 2, buttons: [.leftTriggerButton])
+        inputs.record(input: "rt", pressed: true, pressIdentifier: 3, buttons: [.rightTriggerButton])
+        XCTAssertEqual(inputs.actionSet, .bothTriggers)
+        // A refresh with a changed binding does not change ownership established on down.
+        inputs.record(input: "lt", pressed: true, pressIdentifier: 1, buttons: [.rightTriggerButton])
+        inputs.record(input: "lt", pressed: false, pressIdentifier: 1, buttons: [])
+        XCTAssertEqual(inputs.actionSet, .bothTriggers)
+        inputs.record(input: "rt", pressed: false, pressIdentifier: 3, buttons: [])
+        XCTAssertEqual(inputs.actionSet, .leftTrigger)
+        inputs.record(input: "lt", pressed: false, pressIdentifier: 2, buttons: [])
+        XCTAssertEqual(inputs.actionSet, .base)
+        inputs.record(input: "attack", pressed: true, buttons: [.south])
+        inputs.record(input: "attack", pressed: true, buttons: [.leftTriggerButton])
+        XCTAssertEqual(inputs.actionSet, .base, "Refreshes preserve the original non-trigger binding too")
+        inputs.record(input: "attack", pressed: false, buttons: [])
+        inputs.record(trigger: .left, value: 0.8)
+        inputs.record(input: "lt", pressed: true, buttons: [.leftTriggerButton])
+        inputs.record(trigger: .left, value: 0)
+        XCTAssertEqual(inputs.actionSet, .leftTrigger, "Digital and analog sources cannot release each other")
+        inputs.record(input: "lt", pressed: false, buttons: [])
+        inputs.record(trigger: .right, value: 0.8)
+        XCTAssertEqual(inputs.actionSet, .rightTrigger)
+        inputs.record(trigger: .right, value: .nan)
+        XCTAssertEqual(inputs.actionSet, .base)
+        inputs.record(input: "chord", pressed: true, buttons: [.leftTriggerButton, .rightTriggerButton])
+        inputs.reset()
+        XCTAssertEqual(inputs.actionSet, .base)
+    }
+
+    func testActionSetVariantsRoundTripAndPreserveInputAndGeometry() throws {
+        var package = makeSkinPackage()
+        let button = KeypadElementID.preset(5)
+        let variants = ThumbleActionSet.allCases.map { actionSet in
+            ThumbleSkinVariant(id: actionSet.rawValue,
+                appearance: ThumbleSkinAppearance(buttonRules: [
+                    ThumbleSkinButtonRule(button: button,
+                        appearance: ThumbleSkinControlAppearance(icon: .text(actionSet.rawValue)))
+                ]), actionSet: actionSet)
+        }
+        package.skin = ThumbleSkin(base: package.skin!.base, variants: variants)
+        let decoded = try JSONDecoder().decode(ThumbleSkin.self, from: JSONEncoder().encode(package.skin!))
+        XCTAssertEqual(decoded, package.skin)
+        let original = declaredActionCustomization().normalized
+        var profile = GamepadConfigurationProfile(name: "Layered", customization: original)
+        profile.applySkin(package)
+        for actionSet in ThumbleActionSet.allCases {
+            let rendered = profile.resolvedCustomization(for: .landscape, colorScheme: .dark,
+                skinPackage: package, actionSet: actionSet)
+            XCTAssertEqual(rendered.buttonCustomization(for: button).icon, .text(actionSet.rawValue))
+            XCTAssertEqual(rendered.elements.map(\.output), original.elements.map(\.output))
+            XCTAssertEqual(rendered.elements.map(\.partOutputs), original.elements.map(\.partOutputs))
+            XCTAssertEqual(rendered.elements.map(\.id), original.elements.map(\.id))
+            XCTAssertEqual(rendered.elements.map { $0.layout.centerX }, original.elements.map { $0.layout.centerX })
+        }
+        XCTAssertEqual(profile.resolvedCustomization(for: .landscape, colorScheme: .dark,
+            skinPackage: package).buttonCustomization(for: button).icon, .text("base"))
+        let legacy = try JSONDecoder().decode(ThumbleSkinVariant.self,
+            from: JSONEncoder().encode(ThumbleSkinVariant(id: "legacy", appearance: .empty)))
+        XCTAssertNil(legacy.actionSet)
+    }
+
     private func declaredActionCustomization() -> GamepadCustomization {
         var result = GamepadCustomization.defaultValue
         if let index = result.elements.firstIndex(where: { $0.defaultControlID == .preset(5) }) {
@@ -95,6 +160,39 @@ final class ThumbleSkinResolverTests: XCTestCase {
 
         XCTAssertEqual(resolved.customButtons.first { $0.id == id }?.layout.styleID, "skin-utility")
         XCTAssertEqual(resolved.elements.first { $0.id == id }?.visualRole, .utility)
+    }
+
+    func testMaterialOnlySkinRetainsNativeImageLabelsAndExplicitStyleIconsReplaceThem() throws {
+        var customization = declaredActionCustomization()
+        let nativeIcon = GamepadControlIcon(source: .asset, value: "ability", scale: 2.4, renderingMode: .original)
+        var jump = customization.buttonCustomization(for: .preset(5))
+        jump.icon = nativeIcon
+        jump.showsIntegratedLabel = false
+        customization.setButtonCustomization(jump, for: .preset(5))
+        customization.addCustomButton()
+        let index = try XCTUnwrap(customization.customButtons.indices.last)
+        let customID = customization.customButtons[index].id
+        customization.customButtons[index].layout.icon = nativeIcon
+        customization.customButtons[index].visualRole = .primaryAction
+        let material = GamepadStyleToken(id: "material", name: "Material", visualStyle: .init(normal: .init(fillStyle: .solid(color("#123456")))))
+        var skin = ThumbleSkin(base: ThumbleSkinAppearance(
+            roleRules: [.init(role: .primaryAction, appearance: .init(styleID: material.id))],
+            styleLibrary: .init(styles: [material])))
+        func package(_ skin: ThumbleSkin) -> ThumbleSkinPackage {
+            .init(manifest: .init(identifier: "com.example.material", version: "1.0.0", name: "Material", author: .init(name: "Tests")), skin: skin)
+        }
+        for options in [ThumbleSkinApplicationOptions.replacingAppearance, .preservingUserOverrides] {
+            let resolved = customization.applying(skinPackage: package(skin), orientation: .landscape, colorScheme: .dark, options: options)
+            XCTAssertEqual(resolved.buttonCustomization(for: .preset(5)).icon, nativeIcon)
+            XCTAssertEqual(resolved.customButtons.first { $0.id == customID }?.layout.icon, nativeIcon)
+            XCTAssertFalse(resolved.buttonCustomization(for: .preset(5)).showsIntegratedLabel)
+        }
+        var explicitStyle = material
+        explicitStyle.visualStyle.icon = .sfSymbol("sparkles")
+        skin.base.styleLibrary = .init(styles: [explicitStyle])
+        let replaced = customization.applying(skinPackage: package(skin), orientation: .landscape, colorScheme: .dark, options: .replacingAppearance)
+        XCTAssertEqual(replaced.buttonCustomization(for: .preset(5)).icon, .sfSymbol("sparkles"))
+        XCTAssertEqual(replaced.customButtons.first { $0.id == customID }?.layout.icon, .sfSymbol("sparkles"))
     }
 
     func testExternalAssetReferencesMaterializeForBackgroundAndControlIcons() throws {

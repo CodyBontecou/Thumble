@@ -202,6 +202,7 @@ public enum ThumbleBridgeControllerTemplate: String, CaseIterable, Decodable, Se
     case playStation
     case xbox
     case softWhite
+    case wowForever
 
     var template: GamepadControllerTemplate {
         GamepadControllerTemplate(rawValue: rawValue)!
@@ -224,7 +225,7 @@ public enum ThumbleBridgeControllerTemplate: String, CaseIterable, Decodable, Se
             5
         case .playStation, .xbox:
             6
-        case .nintendo64:
+        case .nintendo64, .wowForever:
             8
         case .softWhite:
             15

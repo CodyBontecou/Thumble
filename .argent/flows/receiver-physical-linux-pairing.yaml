@@ -1,0 +1,83 @@
+steps:
+  - launch: com.codybontecou.PocketPad.iOS
+  - tool: await-ui-element
+    args:
+      selector:
+        text: Manual Connection
+      condition: visible
+  - run: receiver-physical-scroll-inputs.yaml
+  - tap:
+      text: 192.168.0.113
+  - tool: run-sequence
+    args:
+      steps:
+        - tool: keyboard
+          args:
+            key: backspace
+          delayMs: 0
+        - tool: keyboard
+          args:
+            key: backspace
+          delayMs: 0
+        - tool: keyboard
+          args:
+            key: backspace
+          delayMs: 0
+        - tool: keyboard
+          args:
+            key: backspace
+          delayMs: 0
+        - tool: keyboard
+          args:
+            key: backspace
+          delayMs: 0
+        - tool: keyboard
+          args:
+            key: backspace
+          delayMs: 0
+        - tool: keyboard
+          args:
+            key: backspace
+          delayMs: 0
+        - tool: keyboard
+          args:
+            key: backspace
+          delayMs: 0
+        - tool: keyboard
+          args:
+            key: backspace
+          delayMs: 0
+        - tool: keyboard
+          args:
+            key: backspace
+          delayMs: 0
+        - tool: keyboard
+          args:
+            key: backspace
+          delayMs: 0
+        - tool: keyboard
+          args:
+            key: backspace
+          delayMs: 0
+        - tool: keyboard
+          args:
+            key: backspace
+          delayMs: 0
+        - tool: keyboard
+          args:
+            key: backspace
+          delayMs: 0
+        - tool: keyboard
+          args:
+            key: backspace
+          delayMs: 0
+        - tool: keyboard
+          args:
+            key: backspace
+          delayMs: 0
+        - tool: keyboard
+          args:
+            text: 192.168.1.149
+        - tool: keyboard
+          args:
+            key: enter

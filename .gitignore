@@ -25,3 +25,7 @@ scripts/app-store-images/node_modules/
 # Local agent working state
 /.pi/todos/
 /context.md
+
+# Machine-specific Finder and Xcode workspace state
+.DS_Store
+**/xcuserdata/

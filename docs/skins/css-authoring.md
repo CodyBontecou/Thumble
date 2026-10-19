@@ -110,7 +110,7 @@ Specificity, source order, and `var()` fallbacks follow CSS semantics. Custom pr
 | `-thumble-knob-color` | joystick knob color (joystick role) |
 | `-thumble-haptic-style` | `none` `light` `medium` `heavy` `soft` `rigid` |
 
-Image fills reference SVG source assets declared in `skin-source.json` (`sourceAssets`). The compiler rasterizes each declared asset at its declared output size, embeds the PNG in the package, and resolves `url(#asset-id)` to a native image fill. Unknown IDs are strict compile errors.
+Image fills and icons reference SVG or PNG source assets declared in `skin-source.json` (`sourceAssets`). The compiler rasterizes SVG at the declared output size. PNG inputs retain their original bytes and must be complete single images, within the runtime image byte budget, with dimensions matching the declaration (16–4096 pixels per axis). Both formats use the same path and symlink checks. The compiler embeds validated PNG media in the package and resolves `url(#asset-id)` to native presentation. Unknown IDs are strict compile errors. Keep executable bindings in the separate profile; image labels belong in the appearance package rather than embedded binary profile exports.
 
 Lengths use `px` (compiled 1:1 to points). Gradients support `deg` angles, `to top|right|bottom|left` directions (including diagonals like `to top left`), and evenly-distributed or explicit percentage stops. Colors accept hex (`#RGB`, `#RGBA`, `#RRGGBB`, `#RRGGBBAA`), `rgb()`/`rgba()`, `transparent`, `currentColor`, and common keyword colors.
 
@@ -214,3 +214,41 @@ Compatible custom controllers do not need a canonical template identity. Changin
 geometry inputs hides aligned artwork until the package is recompiled and reviewed. Changing
 bindings does not change geometry compatibility. Legacy contracts that omit rotation retain
 their original bounds-only comparison for that field.
+
+## Held-trigger action sets
+
+The controller root exposes an appearance-only `action-set` attribute. Its exact states are `base`, `left-trigger`, `right-trigger`, and `both-triggers`. The both-trigger bank is separate: it does not also match the left/right selectors. Ordinary rules apply to every bank; omitted bank rules fall back to those rules.
+
+```css
+/* Replace this UUID with the control being styled. Declare icon assets in sourceAssets. */
+:root[action-set="left-trigger"] #builtin-00000000-0000-0000-0000-000000000105 {
+  -thumble-icon: url(#bloodthirst);
+  -thumble-icon-placement: center;
+  -thumble-icon-rendering: original;
+  -thumble-legend: "";
+}
+:root[action-set="right-trigger"] #builtin-00000000-0000-0000-0000-000000000105 {
+  -thumble-icon: url(#charge);
+  -thumble-legend: "";
+}
+```
+
+Bank selectors work with orientation/scheme media queries, root custom properties, and each control's normal/pressed/active/disabled state. No CSS runs in the app: compilation resolves the bank matrix into native skin variants. Packages declare the `action_set_layers` rendering feature so older clients cannot silently treat conditional variants as unconditional styling. Skins without bank selectors retain their existing compiled form.
+
+The iOS controller follows successfully queued trigger-button edges (including multiple identified touches) and analog trigger values above 50%; practice mode mirrors the same local display without transmitting inputs. Releasing one trigger shows the remaining held bank. Release-all, connection teardown, and the existing profile/editor cancellation paths restore Base. This is a local input mirror, not an acknowledgment from WoW. Analog activation thresholds in a game's client may differ.
+
+These rules change icons, legends and paint only. They do not remap buttons, add spells, infer class/talents, or change touch geometry. Keep the action-set pictures aligned with the game's actual bar assignments. Existing personal appearance overrides remain the final cascade layer.
+
+Review an individual bank or the complete native matrix:
+
+```sh
+thumble skin css computed WORKSPACE --action-set left-trigger --json
+thumble skin preview WORKSPACE -o left-trigger.png --action-set left-trigger
+thumble skin preview WORKSPACE -o banks.png --all-action-sets --contact-sheet
+thumble skin preview WORKSPACE -o full-matrix.png \
+  --all-action-sets --all-variants --all-states --contact-sheet
+```
+
+Review every authored bank before approving a layered skin; the existing `design review` workflow currently samples Base, so supplement it with the explicit native action-set matrix above.
+
+The macOS skin library offers the same four-state preview picker. MCP `preview_skin_workspace` accepts `actionSet` with the same values, returns the selected bank in its metadata, and requires a CLI that confirms the requested bank.

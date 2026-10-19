@@ -3,104 +3,110 @@
     {
       "file": "productivityStarter.json",
       "revision": 1,
-      "sha256": "9f8207be94f62bbd108be3a9a252656d3c11fc35cddc8a91c285d4497d9dcf76",
+      "sha256": "57aca04c3015ca70a894f6eadba1940fc0d9fcead25c79ba8fdb3b2eba171787",
       "templateID": "productivityStarter"
     },
     {
       "file": "productivityOneHandedLeft.json",
       "revision": 1,
-      "sha256": "e75c6de2d3d18f870c17fd6dc355d3413279435e664c2b0744338086979eb922",
+      "sha256": "6946db0ff0d55c16e97129cf716cfa7e363ffac552bf2a9195a672e754642a59",
       "templateID": "productivityOneHandedLeft"
     },
     {
       "file": "productivityOneHandedRight.json",
       "revision": 1,
-      "sha256": "4e1662b38cb8d5d77a9220116ac4636748a02b063040ad0ab7428bc86305b27c",
+      "sha256": "89bb19095272d9e4bc5bef4f3cdae51b9fc677cd3870bb95c77d91628270b98d",
       "templateID": "productivityOneHandedRight"
     },
     {
       "file": "nes.json",
       "revision": 1,
-      "sha256": "0fe6b17522fe4dfc854b63ec7057141b45b1739db27d61d252a3b75eca97447b",
+      "sha256": "d1b3c0845197d2d7d32ce0f300fc19efc3af1f8ff319f3e864bfa49a6a9bb250",
       "templateID": "nes"
     },
     {
       "file": "snes.json",
       "revision": 2,
-      "sha256": "7a1f2e0cc36295fc67420e2be346db4216f3cf42334b4520b9db952ab029211a",
+      "sha256": "fdf47fae4a6973d467e8f7cb044b31a0eb8e5693b3a9602da5f88d51e9326959",
       "templateID": "snes"
     },
     {
       "file": "nintendo64.json",
       "revision": 1,
-      "sha256": "b1f4f18ea1071aa59fc8609eb50d5d75322f568e762262aa644da2ce201ecd65",
+      "sha256": "40c16ea284b4097b8166a0990a667c34684abbf4d9d7d202717a467fed27a08e",
       "templateID": "nintendo64"
     },
     {
       "file": "gameCube.json",
       "revision": 1,
-      "sha256": "0a562e8eb90e9ba8a4f0a0ca0e251aa10b4e317a0cf9a6fcadf73ab8963a986f",
+      "sha256": "652bd0360c258df7c651a45b903367a791cfb4af9b246424ee7ba20e940668ad",
       "templateID": "gameCube"
     },
     {
       "file": "gameBoy.json",
       "revision": 1,
-      "sha256": "3b0294b62fba17f8050b1994127713c792f0a72305749130818e27c50012e68c",
+      "sha256": "781a73c255307e5a45218bd93a5e12962ac905b67efa43534a01445c90482e5d",
       "templateID": "gameBoy"
     },
     {
       "file": "gameBoyAdvance.json",
       "revision": 1,
-      "sha256": "656279893d8cfbe01c1d1b53f83080619a713965ef9e54ac5948fceb9b05b696",
+      "sha256": "9806b78d5c00b9a913c4eff8f66252f712d11559bfa6fc5e646f0b610a059e65",
       "templateID": "gameBoyAdvance"
     },
     {
       "file": "genesisSixButton.json",
       "revision": 1,
-      "sha256": "dfdcea6165ef75889ae67901bb03f0533595ec72c73043d0cccd2109da02cc5d",
+      "sha256": "b8d0b172ec20302f9408f99c8aecfee46530dd6d085e011327995478561354ca",
       "templateID": "genesisSixButton"
     },
     {
       "file": "saturn.json",
       "revision": 1,
-      "sha256": "a425dd2953db990c7c68485b594346f964cbf42f3cda2a336da560a75dc9fd71",
+      "sha256": "c02c2e69d8d7b30ddf016bdbbf8c77640e97da92fc5c103a892829c25c643c23",
       "templateID": "saturn"
     },
     {
       "file": "dreamcast.json",
       "revision": 1,
-      "sha256": "76728b200c9c84fbdbff7ebdbcae8eb8e5339ce10209a4f036d4bfec8c74dd70",
+      "sha256": "0330ef154037cf109a27b48567480e1d78b3bbc63abaf37a0f7ea830378ccdbf",
       "templateID": "dreamcast"
     },
     {
       "file": "arcadeStick.json",
       "revision": 1,
-      "sha256": "7a1ae6094408bea53925bab9cd606d182a2e4c1a4517b719902d6461c6eff72f",
+      "sha256": "94707982417174d6fb84d751a4933cef1e624bb21e024bed06ce4acc2d399661",
       "templateID": "arcadeStick"
     },
     {
       "file": "psp.json",
       "revision": 1,
-      "sha256": "09fb12846f3ad65609d80505d1bed7023fd2e432d60f311e12808fed08dde947",
+      "sha256": "80e59201cfb96c96835e3f56091ce6f5e3af5c81f05502b3bfb8253fd9798f69",
       "templateID": "psp"
     },
     {
       "file": "playStation.json",
       "revision": 1,
-      "sha256": "9e0e025275c462e7685e05e4e0f7babbb5d79c0aee76ee332506a08b81c1e203",
+      "sha256": "0c07bff6d6c124e9dcc450524ec132fc662f97df10fc934170c6ced1fdf9bebf",
       "templateID": "playStation"
     },
     {
       "file": "xbox.json",
       "revision": 1,
-      "sha256": "2c1360558d6faeb48265adbbb9baa8e9b6b55de69d14072df364e659e3cce333",
+      "sha256": "a73b56354e55e2dad3426f924de286a5f7d5cd101aeab622cce974ba23ae586b",
       "templateID": "xbox"
     },
     {
       "file": "softWhite.json",
       "revision": 1,
-      "sha256": "1687466a5a21780f2551e2f43b49e96d8b9d3f4d3c19cd65f523d47b95f87761",
+      "sha256": "ce3d4baa010358133dbca31be7c88b85cb5520952201cd04facb55b0ea42f9e6",
       "templateID": "softWhite"
+    },
+    {
+      "file": "wowForever.json",
+      "revision": 1,
+      "sha256": "ee00b2df14271eb817c1a69414af2f970d35e72040be91b29e0bc90878438cfc",
+      "templateID": "wowForever"
     }
   ],
   "schema": "com.codybontecou.thumble.controller-template-fixture-manifest",

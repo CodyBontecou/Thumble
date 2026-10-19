@@ -1,0 +1,20 @@
+:root { --ground:#E3DFD8; --face:#D1D4D7; --ink:#20252B; --edge:#59636E; --recess:#9CA2A8; --pressed:#A7ADB2; --disabled:#B7BDC2; --rage:#A72532; --shadow:#818991; --highlight:#F4F5F5; }
+controller { background:var(--ground); }
+control { background:var(--face); color:var(--ink); border:1px solid var(--edge); border-radius:7px; box-shadow:0px 2px 1px var(--shadow),inset 1px 1px 0px var(--highlight); font-size:14px; font-weight:semibold; }
+control:pressed { background:var(--pressed); border:2px solid var(--rage); box-shadow:inset 0px 2px 1px var(--shadow); transform:scale(1); }
+control:active { background:var(--face); border:3px solid var(--rage); box-shadow:0px 2px 1px var(--shadow); transform:scale(1); }
+control:disabled { background:var(--disabled); color:var(--ink); border:1px solid var(--edge); box-shadow:none; opacity:0.70; transform:scale(1); }
+control[group~="abilities"] { -thumble-legend:" "; background:#111316; color:#F0ECE6; border:1.5px solid var(--edge); border-radius:6px; box-shadow:0px 3px 1px var(--shadow),inset 1px 1px 0px var(--highlight); }
+control[group~="abilities"]:pressed { background:#07090C; border:2px solid var(--rage); box-shadow:inset 0px 2px 1px var(--shadow); }
+control[group~="abilities"]:active { background:#111316; border:3px solid var(--rage); box-shadow:0px 2px 1px var(--shadow); }
+control[group~="abilities"]:disabled { background:#111316; border:1px solid var(--edge); box-shadow:none; opacity:0.50; }
+joystick { background:var(--recess); border-radius:60px; border:1px solid var(--edge); box-shadow:inset 0px 2px 1px var(--shadow); -thumble-joystick-ring-color:var(--edge); -thumble-joystick-ring-stroke-width:1px; -thumble-joystick-knob-fill:var(--face); -thumble-joystick-knob-stroke:var(--rage); -thumble-joystick-knob-stroke-width:2px; -thumble-joystick-knob-ratio:0.48; }
+joystick:pressed { -thumble-joystick-knob-fill:var(--pressed); -thumble-joystick-knob-stroke-width:3px; }
+joystick:active { -thumble-joystick-ring-color:var(--rage); -thumble-joystick-ring-stroke-width:3px; }
+joystick:disabled { -thumble-joystick-knob-fill:var(--disabled); -thumble-joystick-knob-stroke:var(--edge); }
+@media (prefers-color-scheme:dark) { :root { --ground:#111316; --face:#343C44; --ink:#F0ECE6; --edge:#89939C; --recess:#171B20; --pressed:#171D23; --disabled:#2A3036; --rage:#DC4349; --shadow:#07090C; --highlight:#65717D; } }
+control[action="fury.control-bar-toggle"] { -thumble-icon-symbol:"chevron.down"; -thumble-icon-placement:center; -thumble-icon-rendering:template; }
+control[action="fury.bloodthirst"] { -thumble-icon:url(#bloodthirst); -thumble-icon-placement:center; -thumble-icon-scale:3; -thumble-icon-rendering:original; }
+control[action="fury.whirlwind"] { -thumble-icon:url(#whirlwind); -thumble-icon-placement:center; -thumble-icon-scale:3; -thumble-icon-rendering:original; }
+control[action="fury.execute"] { -thumble-icon:url(#execute); -thumble-icon-placement:center; -thumble-icon-scale:3; -thumble-icon-rendering:original; }
+control[action="fury.cleave"] { -thumble-icon:url(#cleave); -thumble-icon-placement:center; -thumble-icon-scale:3; -thumble-icon-rendering:original; }

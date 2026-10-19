@@ -2029,6 +2029,30 @@ final class ThumbleConfigurationBridgeTests: XCTestCase {
         }
     }
 
+    func testWoWForeverTemplateHasNativeAxesAndNoKeyboardFallbacks() throws {
+        let profile = GamepadControllerTemplate.wowForever.makeProfile()
+        XCTAssertEqual(profile.outputMode, .controller)
+        let landscape = try XCTUnwrap(profile.landscapeCustomization)
+        let portrait = try XCTUnwrap(profile.portraitCustomization)
+        XCTAssertEqual(Set(landscape.elements.map(\.id)), Set(portrait.elements.map(\.id)))
+        for customization in [landscape, portrait] {
+            XCTAssertEqual(customization.elements.count, 18)
+            let sticks = customization.elements.filter { $0.kind == .joystick }
+            XCTAssertEqual(sticks.count, 2)
+            XCTAssertEqual(Set(sticks.compactMap { $0.joystickOutputSettings?.analogTarget }), [.leftStick, .rightStick])
+            XCTAssertTrue(sticks.allSatisfy { $0.joystickOutputSettings?.sendsDigitalDirections == false && $0.partOutputs.isEmpty })
+            XCTAssertTrue(customization.elements.allSatisfy { $0.output?.keyboard == nil && $0.defaultOutput?.keyboard == nil })
+            let buttons = customization.elements.filter { $0.kind == .button }
+            XCTAssertEqual(buttons.count, 16)
+            XCTAssertEqual(Set(buttons.flatMap { $0.output?.gamepadButtons ?? [] }),
+                           [.dpadUp, .dpadDown, .dpadLeft, .dpadRight, .south, .east, .west, .north,
+                            .leftShoulder, .rightShoulder, .leftTriggerButton, .rightTriggerButton,
+                            .leftStickPress, .rightStickPress, .select, .start])
+        }
+        let encoded = try JSONEncoder().encode(profile)
+        XCTAssertEqual(try JSONDecoder().decode(GamepadConfigurationProfile.self, from: encoded), profile)
+    }
+
     func testTemplateInstallRemapsSoftWhiteLayerReferences() throws {
         let rawProfile = try encodedObject(GamepadConfigurationProfile(
             id: profileID,

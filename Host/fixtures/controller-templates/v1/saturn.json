@@ -403,7 +403,7 @@
             }
           },
           "partOutputs": [],
-          "visualRole": "movement"
+          "visualRole": "custom"
         },
         {
           "defaultOutput": {
@@ -447,7 +447,7 @@
             }
           },
           "partOutputs": [],
-          "visualRole": "movement"
+          "visualRole": "custom"
         },
         {
           "defaultOutput": {
@@ -491,7 +491,7 @@
             }
           },
           "partOutputs": [],
-          "visualRole": "movement"
+          "visualRole": "custom"
         },
         {
           "defaultOutput": {
@@ -535,7 +535,7 @@
             }
           },
           "partOutputs": [],
-          "visualRole": "movement"
+          "visualRole": "custom"
         },
         {
           "defaultOutput": {
@@ -578,7 +578,7 @@
             }
           },
           "partOutputs": [],
-          "visualRole": "secondary_action"
+          "visualRole": "custom"
         },
         {
           "defaultOutput": {
@@ -621,7 +621,7 @@
             }
           },
           "partOutputs": [],
-          "visualRole": "primary_action"
+          "visualRole": "custom"
         },
         {
           "defaultOutput": {
@@ -664,7 +664,7 @@
             }
           },
           "partOutputs": [],
-          "visualRole": "primary_action"
+          "visualRole": "custom"
         },
         {
           "defaultOutput": {
@@ -707,7 +707,7 @@
             }
           },
           "partOutputs": [],
-          "visualRole": "secondary_action"
+          "visualRole": "custom"
         },
         {
           "defaultOutput": {
@@ -750,7 +750,7 @@
             }
           },
           "partOutputs": [],
-          "visualRole": "menu"
+          "visualRole": "custom"
         },
         {
           "defaultOutput": {

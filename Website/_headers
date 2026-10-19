@@ -18,3 +18,6 @@
   Content-Type: application/vnd.pocketpad.skin+zip
   Content-Disposition: attachment
   X-Content-Type-Options: nosniff
+
+/styles.css
+  Cache-Control: public, max-age=0, must-revalidate

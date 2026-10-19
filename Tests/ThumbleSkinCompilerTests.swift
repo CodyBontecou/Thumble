@@ -230,6 +230,27 @@ final class ThumbleSkinCompilerTests: XCTestCase {
         XCTAssertThrowsError(try ThumbleSkinCompiler.compile(source: source))
     }
 
+    func testPNGSourcePreservesBytesAndRejectsMalformedMismatchedOrOversizedInput() throws {
+        let source = try makePublishableWorkspace()
+        var workspace = try JSONDecoder().decode(ThumbleSkinWorkspace.self, from: Data(contentsOf: source.appendingPathComponent("skin-source.json")))
+        let svg = Data(#"<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" fill='#D7B673'/></svg>"#.utf8)
+        let original = try ThumbleSVGRasterizer.rasterize(svg, width: 64, height: 64)
+        let url = source.appendingPathComponent("sources/artwork/ability.png")
+        try original.write(to: url)
+        workspace.sourceAssets = [.init(id: "ability", path: "sources/artwork/ability.png", purpose: .icon, outputWidth: 64, outputHeight: 64)]
+        let compiled = try ThumbleVectorCompiler.compileSourceAssets(workspace: workspace, sourceRoot: source)
+        XCTAssertEqual(compiled.first?.data, original, "Native icons must retain original PNG bytes")
+        workspace.sourceAssets[0].outputWidth = 63
+        XCTAssertThrowsError(try ThumbleVectorCompiler.compileSourceAssets(workspace: workspace, sourceRoot: source))
+        workspace.sourceAssets[0].outputWidth = 64
+        try original.prefix(32).write(to: url)
+        XCTAssertThrowsError(try ThumbleVectorCompiler.compileSourceAssets(workspace: workspace, sourceRoot: source))
+        try Data(repeating: 0, count: GamepadImageFill.maximumStoredBytes + 1).write(to: url)
+        XCTAssertThrowsError(try ThumbleVectorCompiler.compileSourceAssets(workspace: workspace, sourceRoot: source)) { error in
+            XCTAssertEqual(error as? ThumbleVectorCompilerError, .outputTooLarge("ability"))
+        }
+    }
+
     private func makePublishableWorkspace() throws -> URL {
         let source = temporaryDirectory.appendingPathComponent("IndigoPocket", isDirectory: true)
         var workspace = try ThumbleSkinScaffolder.write(
