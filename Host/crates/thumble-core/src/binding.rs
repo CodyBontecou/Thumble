@@ -141,9 +141,15 @@ impl<'de, T: Deserialize<'de>> Deserialize<'de> for ButtonBindings<T> {
         let raw = BTreeMap::<String, T>::deserialize(deserializer)?;
         let mut bindings = BTreeMap::new();
         for (key, value) in raw {
-            let id = KeypadElementID::parse(&key).ok_or_else(|| serde::de::Error::custom("binding keys must be element UUIDs; named slots are no longer supported"))?;
+            let id = KeypadElementID::parse(&key).ok_or_else(|| {
+                serde::de::Error::custom(
+                    "binding keys must be element UUIDs; named slots are no longer supported",
+                )
+            })?;
             if bindings.insert(id.to_string(), value).is_some() {
-                return Err(serde::de::Error::custom("duplicate element UUID in binding map"));
+                return Err(serde::de::Error::custom(
+                    "duplicate element UUID in binding map",
+                ));
             }
         }
         Ok(Self(bindings))
@@ -187,9 +193,10 @@ impl<T> ButtonBindings<T> {
 
     pub fn iter_ids(&self) -> impl Iterator<Item = (KeypadElementID, &T)> {
         self.0.iter().map(|(key, value)| {
-            (KeypadElementID::parse(key).expect("binding keys are validated UUIDs"), value)
+            (
+                KeypadElementID::parse(key).expect("binding keys are validated UUIDs"),
+                value,
+            )
         })
     }
 }
-
-pub(crate) fn button_name(button: KeypadElementID) -> String { button.to_string() }

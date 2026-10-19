@@ -37,9 +37,10 @@ use thumble_core::{
     ConnectionId, ControllerSnapshot, CoreTime, Effect, HostCore, OutputBinding, PersistentState,
     TokenSource,
 };
+#[cfg(test)]
+use thumble_protocol::KeypadElementID;
 use thumble_protocol::{
-    ControllerMessage, ControllerMessageType, ControllerWireCodec, KeypadElementID,
-    KeypadElementInputPart,
+    ControllerMessage, ControllerMessageType, ControllerWireCodec, KeypadElementInputPart,
 };
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{mpsc, watch, Semaphore};
@@ -347,7 +348,9 @@ impl SharedRuntime {
             .select_profile_locally(profile_id)
             .map_err(|error| error.to_string())?;
         if let Err(error) = self.execute_effects(&mut inner, effects) {
-            inner.core.restore_state_after_failed_local_selection(previous);
+            inner
+                .core
+                .restore_state_after_failed_local_selection(previous);
             return Err(error);
         }
         let state = inner.core.persistent_state();
@@ -2435,7 +2438,11 @@ mod tests {
         assert!(ids.contains(&format!("element:{STICK_ID}#joystick_up").as_str()));
         assert!(ids.contains(&format!("element:{STICK_ID}#joystick_down").as_str()));
         assert!(!ids.iter().any(|id| id.contains(DECORATION_ID)));
-        assert!(!serde_json::to_string(&controls.iter().map(|c| &c.summary).collect::<Vec<_>>()).unwrap().contains("keyCode"));
+        assert!(
+            !serde_json::to_string(&controls.iter().map(|c| &c.summary).collect::<Vec<_>>())
+                .unwrap()
+                .contains("keyCode")
+        );
         assert!(!ids.iter().any(|id| id.contains("shell")));
     }
 
@@ -2517,7 +2524,10 @@ mod tests {
         object.remove("artifactVersion");
         object.remove("catalogRevision");
         object.remove("contentHash");
-        object.insert("version".to_owned(), Value::from(thumble_core::PROFILE_ARTIFACT_SCHEMA_VERSION));
+        object.insert(
+            "version".to_owned(),
+            Value::from(thumble_core::PROFILE_ARTIFACT_SCHEMA_VERSION),
+        );
         let artifact_json = serde_json::to_string(&legacy).unwrap();
         let core = HostCore::new(state, "123456").unwrap();
         let (shutdown, _) = watch::channel(false);
@@ -2545,15 +2555,31 @@ mod tests {
             obsolete["version"] = Value::from(version);
             let rejected = shared.cli_profile_transaction(&CliProfileRequest {
                 schema_version: cli_profile::CLI_PROFILE_SCHEMA_VERSION,
-                invocation_id: Some(Uuid::parse_str("abcdefab-cdef-5abc-8def-abcdefabcdef").unwrap()),
+                invocation_id: Some(
+                    Uuid::parse_str("abcdefab-cdef-5abc-8def-abcdefabcdef").unwrap(),
+                ),
                 expected_configuration_revision: Some(1),
                 command: cli_profile::CliProfileCommand::Import {
                     artifact_json: serde_json::to_string(&obsolete).unwrap(),
-                    append_as_copies: true, select: true, make_default: false,
+                    append_as_copies: true,
+                    select: true,
+                    make_default: false,
                 },
             });
-            assert!(!rejected.ok, "obsolete schema {version} must not be imported");
-            assert_eq!(shared.inner.lock().unwrap().core.persistent_state().configuration_revision, 1);
+            assert!(
+                !rejected.ok,
+                "obsolete schema {version} must not be imported"
+            );
+            assert_eq!(
+                shared
+                    .inner
+                    .lock()
+                    .unwrap()
+                    .core
+                    .persistent_state()
+                    .configuration_revision,
+                1
+            );
             assert!(!paths.state_file.exists());
             assert!(!paths.drafts_dir.exists());
         }

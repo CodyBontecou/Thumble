@@ -7,7 +7,8 @@ use thumble_host::control::{send_request, ControlRequest, ControlResponse, HostS
 use thumble_host::paths::{HostPaths, CONTROL_SOCKET_ENV, STATE_DIR_ENV};
 use thumble_host::storage::save_atomic;
 use thumble_protocol::{
-    ButtonPressState, ControllerMessage, ControllerMessageType, ControllerWireCodec, KeypadElementID,
+    ButtonPressState, ControllerMessage, ControllerMessageType, ControllerWireCodec,
+    KeypadElementID,
 };
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream};

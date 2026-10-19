@@ -86,8 +86,8 @@ pub fn endpoint_present(paths: &HostPaths) -> bool {
     if fs::symlink_metadata(&paths.control_socket).is_ok() {
         return false;
     }
-    if !socket_directory(paths)
-        .is_some_and(|directory| fs::symlink_metadata(directory.join(SOCKET_NAME)).is_ok())
+    if socket_directory(paths)
+        .is_none_or(|directory| fs::symlink_metadata(directory.join(SOCKET_NAME)).is_err())
     {
         return false;
     }
@@ -140,7 +140,9 @@ pub fn execute(paths: &HostPaths, request: &CliProfileRequest) -> CliProfileResp
         return fail(&error.code, &error.message);
     }
     if let Some(mut replay) = snapshot.replay_response {
-        if let Some(outcome) = replay.outcome.as_mut() { outcome.idempotent_replay = true; }
+        if let Some(outcome) = replay.outcome.as_mut() {
+            outcome.idempotent_replay = true;
+        }
         return replay;
     }
     if matches!(
@@ -158,7 +160,11 @@ pub fn execute(paths: &HostPaths, request: &CliProfileRequest) -> CliProfileResp
         );
     };
     let (mut response, candidate) = evaluate_with_drafts(
-        &document, snapshot.configuration_revision, &normalized_request, Some(paths));
+        &document,
+        snapshot.configuration_revision,
+        &normalized_request,
+        Some(paths),
+    );
     if !response.ok {
         return response;
     }
@@ -188,9 +194,18 @@ pub fn execute(paths: &HostPaths, request: &CliProfileRequest) -> CliProfileResp
         response = replay;
     }
     if response.ok {
-        if let crate::cli_profile::CliProfileCommand::DesignApply { draft_id: Some(id), expected_draft_revision: Some(revision), .. } = &request.command {
+        if let crate::cli_profile::CliProfileCommand::DesignApply {
+            draft_id: Some(id),
+            expected_draft_revision: Some(revision),
+            ..
+        } = &request.command
+        {
             if let Some(committed_revision) = revision.checked_add(1) {
-                let _ = DraftStore::new(paths).discard(&id.to_string(), committed_revision, crate::cli_profile::now_millis());
+                let _ = DraftStore::new(paths).discard(
+                    &id.to_string(),
+                    committed_revision,
+                    crate::cli_profile::now_millis(),
+                );
             }
         }
     }
@@ -207,8 +222,12 @@ pub fn evaluate(
     evaluate_with_drafts(document, revision, request, None)
 }
 
-fn evaluate_with_drafts(document: &ConfigurationDocument, revision: u64, request: &CliProfileRequest,
-                        durable_paths: Option<&HostPaths>) -> (CliProfileResponse, Option<ConfigurationDocument>) {
+fn evaluate_with_drafts(
+    document: &ConfigurationDocument,
+    revision: u64,
+    request: &CliProfileRequest,
+    durable_paths: Option<&HostPaths>,
+) -> (CliProfileResponse, Option<ConfigurationDocument>) {
     let invocation_id = request.invocation_id.unwrap_or_else(Uuid::new_v4);
     let fail = |code: &str, message: &str| {
         (
@@ -242,23 +261,50 @@ fn evaluate_with_drafts(document: &ConfigurationDocument, revision: u64, request
     };
     let ephemeral_paths = HostPaths::new(staging.0.clone(), staging.0.join("unused.sock"));
     use crate::cli_profile::CliProfileCommand;
-    let durable = matches!(&request.command,
-        CliProfileCommand::DesignSnapshot { create_draft: true, .. }
-        | CliProfileCommand::DesignSnapshot { draft_id: Some(_), .. }
-        | CliProfileCommand::DesignApply { draft_id: Some(_), .. });
+    let durable = matches!(
+        &request.command,
+        CliProfileCommand::DesignSnapshot {
+            create_draft: true,
+            ..
+        } | CliProfileCommand::DesignSnapshot {
+            draft_id: Some(_),
+            ..
+        } | CliProfileCommand::DesignApply {
+            draft_id: Some(_),
+            ..
+        }
+    );
     let paths = if durable {
-        let Some(paths) = durable_paths else { return fail("private_draft_authority_required", "Private design drafts require the canonical native authority directory"); };
+        let Some(paths) = durable_paths else {
+            return fail(
+                "private_draft_authority_required",
+                "Private design drafts require the canonical native authority directory",
+            );
+        };
         paths
-    } else { &ephemeral_paths };
+    } else {
+        &ephemeral_paths
+    };
     let captured_id = match &request.command {
-        CliProfileCommand::DesignSnapshot { draft_id: Some(id), .. } | CliProfileCommand::DesignApply { draft_id: Some(id), .. } => Some(id),
+        CliProfileCommand::DesignSnapshot {
+            draft_id: Some(id), ..
+        }
+        | CliProfileCommand::DesignApply {
+            draft_id: Some(id), ..
+        } => Some(id),
         _ => None,
     };
     if let Some(id) = captured_id {
-        let draft = match DraftStore::new(paths).get(&id.to_string(), crate::cli_profile::now_millis()) {
-            Ok(draft) => draft,
-            Err(_) => return fail("design_draft_unavailable", "Private design draft is unavailable"),
-        };
+        let draft =
+            match DraftStore::new(paths).get(&id.to_string(), crate::cli_profile::now_millis()) {
+                Ok(draft) => draft,
+                Err(_) => {
+                    return fail(
+                        "design_draft_unavailable",
+                        "Private design draft is unavailable",
+                    )
+                }
+            };
         if draft.base_configuration_revision != revision || &draft.base_document != document {
             return fail("native_draft_base_conflict", "Native configuration differs from the private draft base; rebase explicitly before capturing or applying it");
         }
@@ -266,12 +312,12 @@ fn evaluate_with_drafts(document: &ConfigurationDocument, revision: u64, request
 
     let mut candidate_document = None;
     let mut response = execute_profile_transaction(
-        &paths,
+        paths,
         &state,
         request,
         "native",
         |draft_id, draft_revision, base_revision, commit_id, request_digest| {
-            let store = DraftStore::new(&paths);
+            let store = DraftStore::new(paths);
             let PreparedConfigurationCommit { candidate, summary } = prepare_configuration_commit(
                 &state,
                 &store,
@@ -300,7 +346,10 @@ fn evaluate_with_drafts(document: &ConfigurationDocument, revision: u64, request
     );
     // Temporary drafts are not resumable durable Rust-authority drafts.
     if !durable {
-        if let Some(error) = response.error.as_mut() { error.draft_id = None; error.draft_revision = None; }
+        if let Some(error) = response.error.as_mut() {
+            error.draft_id = None;
+            error.draft_revision = None;
+        }
     }
     if !response.ok {
         candidate_document = None;
@@ -566,8 +615,12 @@ mod tests {
         let paths = HostPaths::new(root.0.clone(), root.0.join("unused.sock"));
         let state = PersistentState::minimal("native-design-test").unwrap();
         let document = ConfigurationDocument::from_state(&state).unwrap();
-        let mut capture = request(CliProfileCommand::DesignSnapshot { target: ProfileSelector::Active,
-            create_draft: true, draft_id: None, expected_draft_revision: None });
+        let mut capture = request(CliProfileCommand::DesignSnapshot {
+            target: ProfileSelector::Active,
+            create_draft: true,
+            draft_id: None,
+            expected_draft_revision: None,
+        });
         capture.expected_configuration_revision = Some(17);
         let (response, candidate) = evaluate_with_drafts(&document, 17, &capture, Some(&paths));
         assert!(response.ok, "{:?}", response.error);
@@ -576,10 +629,16 @@ mod tests {
         let snapshot = response.design_snapshot.unwrap();
         let id = snapshot.draft_id.unwrap();
         assert_eq!(snapshot.draft_revision, Some(1));
-        let draft = DraftStore::new(&paths).get(&id.to_string(), crate::cli_profile::now_millis()).unwrap();
+        let draft = DraftStore::new(&paths)
+            .get(&id.to_string(), crate::cli_profile::now_millis())
+            .unwrap();
         assert_eq!(draft.base_document, document);
-        let mut resume = request(CliProfileCommand::DesignSnapshot { target: ProfileSelector::Active,
-            create_draft: false, draft_id: Some(id), expected_draft_revision: Some(1) });
+        let mut resume = request(CliProfileCommand::DesignSnapshot {
+            target: ProfileSelector::Active,
+            create_draft: false,
+            draft_id: Some(id),
+            expected_draft_revision: Some(1),
+        });
         resume.expected_configuration_revision = Some(17);
         let (response, candidate) = evaluate_with_drafts(&document, 17, &resume, Some(&paths));
         assert!(response.ok, "{:?}", response.error);
@@ -590,7 +649,10 @@ mod tests {
         let (rejected, _) = evaluate_with_drafts(&changed, 17, &resume, Some(&paths));
         assert_eq!(rejected.error.unwrap().code, "native_draft_base_conflict");
         let (rejected, _) = evaluate(&document, 17, &capture);
-        assert_eq!(rejected.error.unwrap().code, "private_draft_authority_required");
+        assert_eq!(
+            rejected.error.unwrap().code,
+            "private_draft_authority_required"
+        );
         assert!(!paths.state_file.exists());
     }
 

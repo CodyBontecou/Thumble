@@ -9,6 +9,7 @@ It is no longer game-specific: use it for terminal workflows, tmux prefixes, Cur
 - `ThumbleMac` — macOS 14+ SwiftUI helper, WebSocket pairing/control server plus UDP realtime listener preferring port `8765` with automatic fallback if unavailable, Bonjour Smart Connect advertising with peer-to-peer enabled, CGEvent keyboard shortcut injection.
 - `ThumbleiOS` — iOS 17+ SwiftUI programmable keypad with multitouch controls and Smart Connect reconnects.
 - `ThumbleCLI` — macOS command-line configuration and control tool for generating, editing, importing/exporting, selecting, and testing keypad profiles for the Mac helper.
+- `Host/crates/thumble-receiver` — native Windows/Linux LAN keyboard and mouse receiver; [setup and current limits](docs/cross-platform-receiver.md).
 - `Host/crates/thumble-host` — standalone Rust macOS receiver MVP with the same current iOS pairing and reliable WebSocket input protocol, native Bonjour discovery, strict persistence/current-configuration adoption, and a local lifecycle CLI.
 - `Host/crates/thumble-mcp` — local stdio MCP adapter exposing curated host status, pairing, profiles, installed controls, revision-safe controller drafts, MCP Apps previews/editing, and emergency release tools to Claude, OpenAI Codex, and compatible clients.
 - `ThumbleBridge` / `thumble-bridge` — packaged, bounded Swift model transformer for allowlisted rich profile/theme/orientation operations; it receives no state paths, credentials, argv, or persistence authority. See [`docs/rust-host.md`](docs/rust-host.md).

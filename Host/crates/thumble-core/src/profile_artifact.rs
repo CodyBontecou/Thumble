@@ -129,7 +129,9 @@ impl ProfileArtifact {
     ) -> Result<Self, ProfileArtifactError> {
         // Validate the original domain before selection or portable filtering.
         // Otherwise stale/orphan maps could be silently discarded on export.
-        document.validate().map_err(ProfileArtifactError::InvalidConfiguration)?;
+        document
+            .validate()
+            .map_err(ProfileArtifactError::InvalidConfiguration)?;
         let portable_profiles = document
             .profiles
             .iter()
@@ -216,8 +218,8 @@ impl ProfileArtifact {
         if data.len() > MAXIMUM_PROFILE_ARTIFACT_BYTES {
             return Err(ProfileArtifactError::TooLarge(data.len()));
         }
-        let artifact: Self =
-            thumble_protocol::decode_unique_json(data).map_err(|_| ProfileArtifactError::DecodingFailed)?;
+        let artifact: Self = thumble_protocol::decode_unique_json(data)
+            .map_err(|_| ProfileArtifactError::DecodingFailed)?;
         artifact.validate()?;
         Ok(artifact)
     }
@@ -232,8 +234,8 @@ impl ProfileArtifact {
         if data.len() > MAXIMUM_PROFILE_ARTIFACT_BYTES {
             return Err(ProfileArtifactError::TooLarge(data.len()));
         }
-        let value: Value =
-            thumble_protocol::decode_unique_json(data).map_err(|_| ProfileArtifactError::DecodingFailed)?;
+        let value: Value = thumble_protocol::decode_unique_json(data)
+            .map_err(|_| ProfileArtifactError::DecodingFailed)?;
         let object = value
             .as_object()
             .ok_or(ProfileArtifactError::DecodingFailed)?;
@@ -969,8 +971,8 @@ impl Error for ProfileArtifactError {
 mod tests {
     use super::*;
     use crate::{KeyStroke, MAXIMUM_CONFIGURATION_PROFILES};
-    use thumble_protocol::KeypadElementID;
     use serde_json::json;
+    use thumble_protocol::KeypadElementID;
 
     const FIRST_ID: &str = "aaaaaaaa-0000-0000-0000-000000000201";
     const SECOND_ID: &str = "bbbbbbbb-0000-0000-0000-000000000202";
@@ -1038,8 +1040,12 @@ mod tests {
         assert_eq!(first, ProfileArtifact::decode_import_json(&bytes).unwrap());
         ProfileArtifact::decode_json(&first.encode_compact_json().unwrap()).unwrap();
         for version in [0, 1, 2, 3, 5] {
-            assert_eq!(ProfileArtifact::decode_import_json(&serde_json::to_vec(&envelope(version)).unwrap()),
-                Err(ProfileArtifactError::UnsupportedSchemaVersion(version)));
+            assert_eq!(
+                ProfileArtifact::decode_import_json(
+                    &serde_json::to_vec(&envelope(version)).unwrap()
+                ),
+                Err(ProfileArtifactError::UnsupportedSchemaVersion(version))
+            );
         }
     }
 
@@ -1048,8 +1054,13 @@ mod tests {
         for omit_timestamp in [false, true] {
             let mut value = envelope(PROFILE_ARTIFACT_SCHEMA_VERSION);
             value.as_object_mut().unwrap().remove("version");
-            if omit_timestamp { value.as_object_mut().unwrap().remove("exportedAt"); }
-            assert_eq!(ProfileArtifact::decode_import_json(&serde_json::to_vec(&value).unwrap()), Err(ProfileArtifactError::DecodingFailed));
+            if omit_timestamp {
+                value.as_object_mut().unwrap().remove("exportedAt");
+            }
+            assert_eq!(
+                ProfileArtifact::decode_import_json(&serde_json::to_vec(&value).unwrap()),
+                Err(ProfileArtifactError::DecodingFailed)
+            );
         }
     }
 
@@ -1057,7 +1068,8 @@ mod tests {
     fn current_envelope_without_export_timestamp_uses_zero() {
         let mut value = envelope(PROFILE_ARTIFACT_SCHEMA_VERSION);
         value.as_object_mut().unwrap().remove("exportedAt");
-        let imported = ProfileArtifact::decode_import_json(&serde_json::to_vec(&value).unwrap()).unwrap();
+        let imported =
+            ProfileArtifact::decode_import_json(&serde_json::to_vec(&value).unwrap()).unwrap();
         assert_eq!(imported.exported_at, 0);
         assert_eq!(imported.version, PROFILE_ARTIFACT_SCHEMA_VERSION);
     }
@@ -1073,12 +1085,16 @@ mod tests {
         let mut first = keys.remove(FIRST_ID).unwrap();
         first[FIRST_CONTROL]["futureBinding"] = json!({"kept":1});
         keys.insert(FIRST_ID.to_uppercase(), first);
-        let imported = ProfileArtifact::decode_import_json(&serde_json::to_vec(&value).unwrap()).unwrap();
+        let imported =
+            ProfileArtifact::decode_import_json(&serde_json::to_vec(&value).unwrap()).unwrap();
         assert_eq!(imported.active_profile_id.as_deref(), Some(FIRST_ID));
         assert_eq!(imported.default_profile_id, None);
         assert_eq!(imported.profiles[0]["futureProfileField"]["import"], "kept");
         assert_eq!(imported.extensions["futureTopLevel"]["nested"][2], "kept");
-        assert_eq!(imported.profile_key_bindings[FIRST_ID][FIRST_CONTROL]["futureBinding"]["kept"], 1);
+        assert_eq!(
+            imported.profile_key_bindings[FIRST_ID][FIRST_CONTROL]["futureBinding"]["kept"],
+            1
+        );
         let document = imported.to_configuration_document().unwrap();
         assert_eq!(document.active_profile_id, FIRST_ID);
         assert_eq!(document.default_profile_id, FIRST_ID);
@@ -1093,11 +1109,18 @@ mod tests {
                 (orphan.to_owned(), json!({"jump":{"keyCode":1}})),
                 ("not-a-profile-uuid".to_owned(), json!({})),
                 (FIRST_ID.to_owned(), json!({"jump":{"keyCode":1}})),
-                (FIRST_ID.to_owned(), json!({FIRST_CONTROL:{"keyCode":1}, FIRST_CONTROL.to_lowercase():{"keyCode":2}})),
+                (
+                    FIRST_ID.to_owned(),
+                    json!({FIRST_CONTROL:{"keyCode":1}, FIRST_CONTROL.to_lowercase():{"keyCode":2}}),
+                ),
             ] {
                 let mut value = envelope(PROFILE_ARTIFACT_SCHEMA_VERSION);
                 value[map][&profile] = bindings;
-                assert!(ProfileArtifact::decode_import_json(&serde_json::to_vec(&value).unwrap()).is_err(), "{map}: {profile}");
+                assert!(
+                    ProfileArtifact::decode_import_json(&serde_json::to_vec(&value).unwrap())
+                        .is_err(),
+                    "{map}: {profile}"
+                );
             }
         }
     }
@@ -1106,20 +1129,39 @@ mod tests {
     fn current_envelope_rejects_nonportable_globals_references_and_schema() {
         let mut embedded = envelope(PROFILE_ARTIFACT_SCHEMA_VERSION);
         embedded["profiles"][0]["customization"]["asset"] = json!({"data":"embedded"});
-        assert!(matches!(ProfileArtifact::decode_import_json(&serde_json::to_vec(&embedded).unwrap()), Err(ProfileArtifactError::ForbiddenField(field)) if field == "data"));
-        for (field, expected) in [("activeProfileID", ProfileArtifactError::ActiveProfileMissing), ("defaultProfileID", ProfileArtifactError::DefaultProfileMissing)] {
+        assert!(
+            matches!(ProfileArtifact::decode_import_json(&serde_json::to_vec(&embedded).unwrap()), Err(ProfileArtifactError::ForbiddenField(field)) if field == "data")
+        );
+        for (field, expected) in [
+            (
+                "activeProfileID",
+                ProfileArtifactError::ActiveProfileMissing,
+            ),
+            (
+                "defaultProfileID",
+                ProfileArtifactError::DefaultProfileMissing,
+            ),
+        ] {
             let mut value = envelope(PROFILE_ARTIFACT_SCHEMA_VERSION);
             value[field] = json!("00000000-0000-0000-0000-000000000999");
-            assert_eq!(ProfileArtifact::decode_import_json(&serde_json::to_vec(&value).unwrap()), Err(expected));
+            assert_eq!(
+                ProfileArtifact::decode_import_json(&serde_json::to_vec(&value).unwrap()),
+                Err(expected)
+            );
         }
         for field in ["keyBindings", "outputBindings", "contentHash"] {
             let mut value = envelope(PROFILE_ARTIFACT_SCHEMA_VERSION);
             value[field] = Value::Null;
-            assert!(ProfileArtifact::decode_import_json(&serde_json::to_vec(&value).unwrap()).is_err());
+            assert!(
+                ProfileArtifact::decode_import_json(&serde_json::to_vec(&value).unwrap()).is_err()
+            );
         }
         let mut wrong_schema = envelope(PROFILE_ARTIFACT_SCHEMA_VERSION);
         wrong_schema["schema"] = json!("wrong");
-        assert_eq!(ProfileArtifact::decode_import_json(&serde_json::to_vec(&wrong_schema).unwrap()), Err(ProfileArtifactError::UnsupportedSchema));
+        assert_eq!(
+            ProfileArtifact::decode_import_json(&serde_json::to_vec(&wrong_schema).unwrap()),
+            Err(ProfileArtifactError::UnsupportedSchema)
+        );
     }
 
     #[test]
@@ -1250,7 +1292,10 @@ mod tests {
         let mut source = document();
         source.active_profile_id = SECOND_ID.to_owned();
         let mut second_keys = ButtonBindings::default();
-        second_keys.insert(KeypadElementID::parse(SECOND_CONTROL).unwrap(), KeyBinding::new(14, 0));
+        second_keys.insert(
+            KeypadElementID::parse(SECOND_CONTROL).unwrap(),
+            KeyBinding::new(14, 0),
+        );
         let mut second_outputs = ButtonBindings::default();
         second_outputs.insert(
             KeypadElementID::parse(SECOND_CONTROL).unwrap(),
@@ -1283,11 +1328,16 @@ mod tests {
         source
             .profile_key_bindings
             .insert(orphan.to_owned(), ButtonBindings::default());
-        assert_eq!(ProfileArtifact::from_configuration(
-            &source,
-            ProfileArtifactSelection::ProfileId(FIRST_ID.to_owned()),
-            10,
-        ), Err(ProfileArtifactError::InvalidConfiguration(crate::ConfigurationDocumentError::BindingProfileMissing)));
+        assert_eq!(
+            ProfileArtifact::from_configuration(
+                &source,
+                ProfileArtifactSelection::ProfileId(FIRST_ID.to_owned()),
+                10,
+            ),
+            Err(ProfileArtifactError::InvalidConfiguration(
+                crate::ConfigurationDocumentError::BindingProfileMissing
+            ))
+        );
 
         let mut decoded = artifact();
         decoded

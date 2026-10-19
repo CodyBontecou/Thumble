@@ -1,6 +1,6 @@
 # Thumble Rust host
 
-The Rust host is a standalone macOS receiver for Thumble. It is designed so the transport, pairing, profile, and input state machine can later be reused by Windows and Linux hosts while output injection and service management remain platform adapters.
+The Rust host is a standalone macOS receiver for Thumble. Its protocol and host core are also used by the native Windows/Linux keyboard and mouse receiver, [`thumble-receiver`](cross-platform-receiver.md).
 
 ## Architecture
 
@@ -48,7 +48,7 @@ The macOS MVP includes:
 - a local CLI for foreground/background lifecycle, status, pairing, and Accessibility setup;
 - a local stdio MCP adapter for Claude, OpenAI Codex, and other MCP clients.
 
-Authenticated UDP, skin mutation, launch targets, and Windows/Linux platform backends remain subsequent milestones. Virtual HID is implemented but signed-device and GameController/SDL/Steam/game compatibility remain unverified; see [controller acceptance gates](virtual-controller-support.md). The iOS client already falls back to reliable WebSocket input when a pairing response does not advertise a realtime UDP token.
+Authenticated UDP, skin mutation, and launch targets remain subsequent milestones for this Mac host. Windows/Linux keyboard and mouse adapters are available in the separate `thumble-receiver`; virtual gamepad output there remains unsupported. Virtual HID is implemented but signed-device and GameController/SDL/Steam/game compatibility remain unverified; see [controller acceptance gates](virtual-controller-support.md). The iOS client already falls back to reliable WebSocket input when a pairing response does not advertise a realtime UDP token.
 
 ## Developer workflow
 

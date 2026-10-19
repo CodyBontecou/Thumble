@@ -2,7 +2,9 @@ mod common;
 
 use common::{core, error_text, no_tokens, pair, sent_message, ScriptedTokens};
 use thumble_core::{CoreTime, Effect, HostCore, KeyBinding, PersistentState, TrustedClient};
-use thumble_protocol::{ButtonPressState, ControllerMessage, ControllerMessageType, KeypadElementID};
+use thumble_protocol::{
+    ButtonPressState, ControllerMessage, ControllerMessageType, KeypadElementID,
+};
 
 #[test]
 fn explicit_pairing_code_rotation_is_validated_and_preserves_state() {

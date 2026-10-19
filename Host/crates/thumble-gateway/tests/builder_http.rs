@@ -145,7 +145,10 @@ async fn builder_streamable_http_lists_exact_catalog_and_replays_terminal_tools(
         .body(r#"{"jsonrpc":"2.0","id":99,"method":"tools/call","params":{"name":"begin_builder_session","arguments":{"name":"First","\u006eame":"Second"}}}"#)
         .send().await.unwrap();
     assert_eq!(ambiguous.status(), 400);
-    assert_eq!(ambiguous.json::<Value>().await.unwrap()["error"], "ambiguous_json");
+    assert_eq!(
+        ambiguous.json::<Value>().await.unwrap()["error"],
+        "ambiguous_json"
+    );
     assert_eq!(state.builder_mutation_semaphore.available_permits(), 4);
 
     let begun = call(

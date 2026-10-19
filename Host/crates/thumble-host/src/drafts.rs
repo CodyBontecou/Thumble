@@ -772,7 +772,10 @@ mod tests {
             serde_json::from_str::<serde_json::Value>(&encoded).unwrap()
         );
         fs::write(&path, &ambiguous).unwrap();
-        assert!(matches!(store.get(&draft.draft_id, 2_000), Err(DraftError::Malformed)));
+        assert!(matches!(
+            store.get(&draft.draft_id, 2_000),
+            Err(DraftError::Malformed)
+        ));
         assert_eq!(fs::read_to_string(&path).unwrap(), ambiguous);
     }
 

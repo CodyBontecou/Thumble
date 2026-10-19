@@ -58,7 +58,13 @@ fn legacy_v1_is_accepted_only_before_v2_establishes() {
     let mut core = core();
     pair(&mut core, 1, "token");
 
-    let legacy_down = button_message(KeypadElementID::preset(5), ButtonPressState::Down, None, None, None);
+    let legacy_down = button_message(
+        KeypadElementID::preset(5),
+        ButtonPressState::Down,
+        None,
+        None,
+        None,
+    );
     let effects = core
         .handle_message(1, legacy_down, 0, &mut no_tokens())
         .unwrap();
@@ -75,8 +81,13 @@ fn legacy_v1_is_accepted_only_before_v2_establishes() {
         .unwrap();
     assert_eq!(core.status().active_generation, Some(10));
 
-    let missing_generation =
-        button_message(KeypadElementID::preset(10), ButtonPressState::Down, None, None, None);
+    let missing_generation = button_message(
+        KeypadElementID::preset(10),
+        ButtonPressState::Down,
+        None,
+        None,
+        None,
+    );
     let effects = core
         .handle_message(1, missing_generation, 2, &mut no_tokens())
         .unwrap();
@@ -200,7 +211,10 @@ fn reliable_sequences_are_monotonic_and_deduplicated() {
         assert!(!has_key_up(&effects, 36));
     }
     assert_eq!(core.status().counters.duplicate_sequences, 2);
-    assert_eq!(core.status().pressed_buttons, vec![KeypadElementID::preset(5)]);
+    assert_eq!(
+        core.status().pressed_buttons,
+        vec![KeypadElementID::preset(5)]
+    );
 }
 
 #[test]
@@ -275,7 +289,12 @@ fn heartbeat_refresh_dedupes_while_overlapping_press_ids_emit_distinct_pulse() {
 #[test]
 fn identical_bindings_are_reference_counted_across_inputs() {
     let mut state = PersistentState::minimal("server-1").unwrap();
-    set_owned_output(&mut state, DEFAULT_PROFILE_ID, KeypadElementID::preset(6), OutputBinding::keyboard(KeyBinding::new(36, 0)));
+    set_owned_output(
+        &mut state,
+        DEFAULT_PROFILE_ID,
+        KeypadElementID::preset(6),
+        OutputBinding::keyboard(KeyBinding::new(36, 0)),
+    );
     let mut core = HostCore::new(state, "111111").unwrap();
     pair(&mut core, 1, "token");
 
@@ -484,7 +503,10 @@ fn expiry_removes_individual_press_references_and_only_releases_last() {
 
     let effects = core.expire_holds(100, 100);
     assert!(!has_key_up(&effects, 36));
-    assert_eq!(core.status().pressed_buttons, vec![KeypadElementID::preset(5)]);
+    assert_eq!(
+        core.status().pressed_buttons,
+        vec![KeypadElementID::preset(5)]
+    );
 
     let mut heartbeat = ControllerMessage::new(ControllerMessageType::Heartbeat, 0);
     heartbeat.input_protocol_version = Some(3);

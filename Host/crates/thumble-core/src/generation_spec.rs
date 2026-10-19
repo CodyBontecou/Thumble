@@ -4,9 +4,9 @@
 //! bounded, and compatible with Swift's normalized control-style encoding.
 
 use crate::{
-    generated_modifier_mask, generated_semantic_key_code,
-    semantic_key_name, ButtonBindings, ControllerLayoutQualitySnapshot, KeyBinding, OutputBinding,
-    PersistentState, ProfileArtifact, ProfileArtifactError, ProfileArtifactSelection,
+    generated_modifier_mask, generated_semantic_key_code, semantic_key_name, ButtonBindings,
+    ControllerLayoutQualitySnapshot, KeyBinding, OutputBinding, PersistentState, ProfileArtifact,
+    ProfileArtifactError, ProfileArtifactSelection,
 };
 use serde::Serialize;
 use serde_json::{json, Map, Value};
@@ -496,8 +496,8 @@ pub fn plan_generation_spec(
     if spec_json.len() > MAXIMUM_GENERATION_SPEC_BYTES {
         return Err(GenerationSpecError::TooLarge(spec_json.len()));
     }
-    let value: Value =
-        thumble_protocol::decode_unique_json(spec_json).map_err(|_| GenerationSpecError::DecodingFailed)?;
+    let value: Value = thumble_protocol::decode_unique_json(spec_json)
+        .map_err(|_| GenerationSpecError::DecodingFailed)?;
     scan_for_control_characters(&value, "$")?;
     if let Some(requested_game_name) = requestedGameName {
         ensure_no_control_characters(requested_game_name, "requestedGameName")?;
@@ -583,9 +583,14 @@ pub fn plan_generation_spec(
             continue;
         }
         let explicit_available = control.button.filter(|id| !used.contains(id));
-        let generated_id = Uuid::new_v5(&GENERATION_UUID_NAMESPACE,
-            format!("element:{descriptor_digest}:{ordinal}").as_bytes()).hyphenated().to_string();
-        let button = explicit_available.unwrap_or_else(|| KeypadElementID::parse(&generated_id).unwrap());
+        let generated_id = Uuid::new_v5(
+            &GENERATION_UUID_NAMESPACE,
+            format!("element:{descriptor_digest}:{ordinal}").as_bytes(),
+        )
+        .hyphenated()
+        .to_string();
+        let button =
+            explicit_available.unwrap_or_else(|| KeypadElementID::parse(&generated_id).unwrap());
         if let Some(explicit_button) = control.button.filter(|_| explicit_available.is_none()) {
             push_warning(
                 &mut warnings,
@@ -1009,9 +1014,15 @@ fn parse_control(index: usize, value: &Value) -> Result<ParsedControl, Generatio
     if let Some(id) = &id {
         ensure_byte_bound(id, MAX_IDENTIFIER_BYTES, &format!("{path}.id"))?;
     }
-    let button = id.as_deref().map(|id| KeypadElementID::parse(id).ok_or_else(||
-        GenerationSpecError::InvalidEnum { path: format!("{path}.id"), value: id.to_owned() }
-    )).transpose()?;
+    let button = id
+        .as_deref()
+        .map(|id| {
+            KeypadElementID::parse(id).ok_or_else(|| GenerationSpecError::InvalidEnum {
+                path: format!("{path}.id"),
+                value: id.to_owned(),
+            })
+        })
+        .transpose()?;
     let default_label = button
         .map(button_display_name)
         .or(id.as_deref())
@@ -2251,10 +2262,14 @@ fn parse_joystick_mapping(
                 &["up", "down", "left", "right"],
             )?;
             Some(JoystickMapping {
-                up: optional_direction_output(mapping, "up", path)?.unwrap_or_else(|| JoystickMapping::default().up),
-                down: optional_direction_output(mapping, "down", path)?.unwrap_or_else(|| JoystickMapping::default().down),
-                left: optional_direction_output(mapping, "left", path)?.unwrap_or_else(|| JoystickMapping::default().left),
-                right: optional_direction_output(mapping, "right", path)?.unwrap_or_else(|| JoystickMapping::default().right),
+                up: optional_direction_output(mapping, "up", path)?
+                    .unwrap_or_else(|| JoystickMapping::default().up),
+                down: optional_direction_output(mapping, "down", path)?
+                    .unwrap_or_else(|| JoystickMapping::default().down),
+                left: optional_direction_output(mapping, "left", path)?
+                    .unwrap_or_else(|| JoystickMapping::default().left),
+                right: optional_direction_output(mapping, "right", path)?
+                    .unwrap_or_else(|| JoystickMapping::default().right),
             })
         }
     };
@@ -2274,10 +2289,16 @@ fn parse_joystick_mapping(
     }))
 }
 
-fn optional_direction_output(object: &Map<String, Value>, field: &str, path: &str) -> Result<Option<OutputBinding>, GenerationSpecError> {
+fn optional_direction_output(
+    object: &Map<String, Value>,
+    field: &str,
+    path: &str,
+) -> Result<Option<OutputBinding>, GenerationSpecError> {
     match object.get(field) {
         None | Some(Value::Null) => Ok(None),
-        Some(value) => serde_json::from_value(value.clone()).map(Some).map_err(|_| invalid_type(&format!("{path}.{field}"), "an explicit output binding")),
+        Some(value) => serde_json::from_value(value.clone())
+            .map(Some)
+            .map_err(|_| invalid_type(&format!("{path}.{field}"), "an explicit output binding")),
     }
 }
 
@@ -2417,25 +2438,25 @@ fn infer_role(control: &ParsedControl, kind: Kind) -> Role {
         return Role::Movement;
     }
     {
-            let normalized = normalized_control_text(control);
-            if ["inventory", "map", "item"]
-                .iter()
-                .any(|word| normalized.contains(word))
-            {
-                Role::Utility
-            } else if ["pause", "escape", "menu"]
-                .iter()
-                .any(|word| normalized.contains(word))
-            {
-                Role::System
-            } else if ["focus", "cast", "special", "magic"]
-                .iter()
-                .any(|word| normalized.contains(word))
-            {
-                Role::Secondary
-            } else {
-                Role::Primary
-            }
+        let normalized = normalized_control_text(control);
+        if ["inventory", "map", "item"]
+            .iter()
+            .any(|word| normalized.contains(word))
+        {
+            Role::Utility
+        } else if ["pause", "escape", "menu"]
+            .iter()
+            .any(|word| normalized.contains(word))
+        {
+            Role::System
+        } else if ["focus", "cast", "special", "magic"]
+            .iter()
+            .any(|word| normalized.contains(word))
+        {
+            Role::Secondary
+        } else {
+            Role::Primary
+        }
     }
 }
 
@@ -2589,8 +2610,14 @@ fn element_value(control: &Assigned<'_>) -> Value {
     element.insert("kind".to_owned(), json!(control.kind.as_str()));
     element.insert("layout".to_owned(), Value::Object(layout_object));
     if !source.key.trim().is_empty() {
-        if let (Some(key_code), Some(modifiers)) = (generated_semantic_key_code(source.key.trim()), generated_modifier_mask(&source.modifiers)) {
-            element.insert("output".to_owned(), OutputBinding::keyboard(KeyBinding::new(key_code, modifiers)).element_value());
+        if let (Some(key_code), Some(modifiers)) = (
+            generated_semantic_key_code(source.key.trim()),
+            generated_modifier_mask(&source.modifiers),
+        ) {
+            element.insert(
+                "output".to_owned(),
+                OutputBinding::keyboard(KeyBinding::new(key_code, modifiers)).element_value(),
+            );
         }
     }
     element.insert(
@@ -2603,10 +2630,19 @@ fn element_value(control: &Assigned<'_>) -> Value {
     if control.kind == Kind::Joystick {
         let mapping = source.joystick_mapping.clone().unwrap_or_default();
         element.insert("joystickMapping".to_owned(), mapping.value());
-        element.insert("partOutputs".to_owned(), json!([
-            "joystick_up", mapping.up.element_value(), "joystick_down", mapping.down.element_value(),
-            "joystick_left", mapping.left.element_value(), "joystick_right", mapping.right.element_value()
-        ]));
+        element.insert(
+            "partOutputs".to_owned(),
+            json!([
+                "joystick_up",
+                mapping.up.element_value(),
+                "joystick_down",
+                mapping.down.element_value(),
+                "joystick_left",
+                mapping.left.element_value(),
+                "joystick_right",
+                mapping.right.element_value()
+            ]),
+        );
         element.insert("joystickOutputSettings".to_owned(), json!({"analogTarget":"none","sendsDigitalDirections":true,"deadZone":0.12,"sensitivity":1.0,"invertX":false,"invertY":false,"snapToCardinal":false}));
     }
     if control.kind == Kind::Trigger {
@@ -2981,21 +3017,6 @@ fn optional_u64(
     }
 }
 
-fn optional_button(
-    object: &Map<String, Value>,
-    field: &str,
-    path: &str,
-) -> Result<Option<KeypadElementID>, GenerationSpecError> {
-    optional_string(object, field, path)?
-        .map(|value| {
-            parse_button(&value).ok_or_else(|| GenerationSpecError::InvalidEnum {
-                path: path.to_owned(),
-                value,
-            })
-        })
-        .transpose()
-}
-
 fn optional_enum(
     object: &Map<String, Value>,
     field: &str,
@@ -3137,13 +3158,20 @@ fn parse_button(value: &str) -> Option<KeypadElementID> {
     KeypadElementID::parse(value)
 }
 fn button_rank(button: KeypadElementID) -> usize {
-    button.starter_index().map(|index| index - 1).unwrap_or(usize::MAX)
+    button
+        .starter_index()
+        .map(|index| index - 1)
+        .unwrap_or(usize::MAX)
 }
 fn button_rank_name(button: &str) -> usize {
     parse_button(button).map_or(usize::MAX, button_rank)
 }
-fn button_name(button: KeypadElementID) -> String { button.to_string() }
-fn button_display_name(_button: KeypadElementID) -> &'static str { "Button" }
+fn button_name(button: KeypadElementID) -> String {
+    button.to_string()
+}
+fn button_display_name(_button: KeypadElementID) -> &'static str {
+    "Button"
+}
 fn role_name(role: Role) -> &'static str {
     match role {
         Role::Movement => "movement",

@@ -6,7 +6,10 @@ use thumble_protocol::{ControllerMessage, ControllerWireCodec};
 
 fn main() {
     let directory = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures");
-    write(&directory.join("state/minimal-profile.json"), &thumble_core::minimal_default_profile());
+    write(
+        &directory.join("state/minimal-profile.json"),
+        &thumble_core::minimal_default_profile(),
+    );
     let mut fixture = json!({
         "schema": "com.codybontecou.pocketpad.wire-fixtures", "version": 1,
         "vectors": [
@@ -45,7 +48,8 @@ fn main() {
     });
     for vector in fixture["vectors"].as_array_mut().unwrap() {
         if vector["kind"] == "compact" {
-            let message: ControllerMessage = serde_json::from_value(vector["message"].clone()).unwrap();
+            let message: ControllerMessage =
+                serde_json::from_value(vector["message"].clone()).unwrap();
             let bytes = ControllerWireCodec::encode(&message).unwrap();
             assert_eq!(ControllerWireCodec::decode(&bytes).unwrap(), message);
             vector["hex"] = Value::String(bytes.iter().map(|byte| format!("{byte:02x}")).collect());
@@ -55,6 +59,10 @@ fn main() {
 }
 
 fn write(path: &Path, value: &Value) {
-    fs::write(path, format!("{}\n", serde_json::to_string_pretty(value).unwrap())).unwrap();
+    fs::write(
+        path,
+        format!("{}\n", serde_json::to_string_pretty(value).unwrap()),
+    )
+    .unwrap();
     println!("{}", path.display());
 }

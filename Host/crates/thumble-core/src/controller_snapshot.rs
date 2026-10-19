@@ -908,7 +908,9 @@ fn snapshot_primary_role(element: &ControllerElementSnapshot) -> Option<bool> {
         return None;
     }
     match thumble_protocol::KeypadElementID::parse(&element.id).and_then(|id| id.starter_index()) {
-        Some(1..=4) => Some(true), Some(5..=8) => Some(false), _ => None,
+        Some(1..=4) => Some(true),
+        Some(5..=8) => Some(false),
+        _ => None,
     }
 }
 
@@ -1274,7 +1276,10 @@ fn resolved_elements(
         }
         // Starter UUIDs are appearance anchors only for button declarations.
         let appearance_anchor = element.get("id").and_then(Value::as_str).filter(|id| {
-            kind == "button" && thumble_protocol::KeypadElementID::parse(id).and_then(|id| id.starter_index()).is_some()
+            kind == "button"
+                && thumble_protocol::KeypadElementID::parse(id)
+                    .and_then(|id| id.starter_index())
+                    .is_some()
         });
         let shape = allowed_shape(layout_field("shape").and_then(Value::as_str))
             .unwrap_or_else(|| default_shape(kind, appearance_anchor));
@@ -1698,15 +1703,32 @@ fn allowed_visual_role(value: &str) -> bool {
 }
 
 fn sanitize_joystick_mapping(value: Option<&Value>) -> (Option<Value>, bool) {
-    let Some(value) = value else { return (None, false); };
-    let Some(object) = value.as_object() else { return (None, true); };
-    if object.keys().any(|key| !["up", "down", "left", "right"].contains(&key.as_str())) { return (None, true); }
+    let Some(value) = value else {
+        return (None, false);
+    };
+    let Some(object) = value.as_object() else {
+        return (None, true);
+    };
+    if object
+        .keys()
+        .any(|key| !["up", "down", "left", "right"].contains(&key.as_str()))
+    {
+        return (None, true);
+    }
     let mut safe = serde_json::Map::new();
     let mut omitted = false;
     for direction in ["up", "down", "left", "right"] {
-        let Some(binding) = object.get(direction) else { return (None, true); };
-        let Ok(output) = serde_json::from_value::<crate::OutputBinding>(binding.clone()) else { return (None, true); };
-        omitted |= binding.as_object().is_some_and(|fields| fields.keys().any(|key| !["keyboard", "gamepadButtons"].contains(&key.as_str())));
+        let Some(binding) = object.get(direction) else {
+            return (None, true);
+        };
+        let Ok(output) = serde_json::from_value::<crate::OutputBinding>(binding.clone()) else {
+            return (None, true);
+        };
+        omitted |= binding.as_object().is_some_and(|fields| {
+            fields
+                .keys()
+                .any(|key| !["keyboard", "gamepadButtons"].contains(&key.as_str()))
+        });
         safe.insert(direction.to_owned(), output.element_value());
     }
     (Some(Value::Object(safe)), omitted)
@@ -1846,36 +1868,6 @@ fn sanitize_trackpad_settings(value: Option<&Value>) -> (Option<Value>, bool) {
         ),
         omitted,
     )
-}
-
-fn sanitize_enum_object(
-    value: Option<&Value>,
-    fields: &[(&str, &[&str])],
-) -> (Option<Value>, bool) {
-    let Some(value) = value else {
-        return (None, false);
-    };
-    let Some(object) = value.as_object() else {
-        return (None, true);
-    };
-    if object
-        .keys()
-        .any(|key| !fields.iter().any(|(field, _)| key == field))
-    {
-        return (None, true);
-    }
-    let mut safe = serde_json::Map::new();
-    for (field, allowed) in fields {
-        let Some(value) = object
-            .get(*field)
-            .and_then(Value::as_str)
-            .filter(|value| allowed.contains(value))
-        else {
-            return (None, true);
-        };
-        safe.insert((*field).to_owned(), Value::String(value.to_owned()));
-    }
-    (Some(Value::Object(safe)), false)
 }
 
 fn sanitize_element_outputs(
@@ -2107,8 +2099,16 @@ fn resolved_layers(
     });
 
     for element in elements.iter().take(MAXIMUM_CONTROLLER_SOURCE_ELEMENTS) {
-        let Some(element) = element.as_object() else { continue; };
-        let Some(id) = element.get("id").and_then(Value::as_str).and_then(thumble_protocol::KeypadElementID::parse) else { continue; };
+        let Some(element) = element.as_object() else {
+            continue;
+        };
+        let Some(id) = element
+            .get("id")
+            .and_then(Value::as_str)
+            .and_then(thumble_protocol::KeypadElementID::parse)
+        else {
+            continue;
+        };
         let id_text = id.to_string();
         let kind = allowed_kind(element.get("kind").and_then(Value::as_str)).unwrap_or("button");
         let starter = kind == "button" && id.starter_index().is_some();
@@ -2118,14 +2118,20 @@ fn resolved_layers(
             key: format!("{prefix}:{}", id_text.to_ascii_lowercase()),
             target_id: id_text.clone(),
             stable_id: format!("{prefix}.{id_text}"),
-            label: element.get("label").and_then(Value::as_str).unwrap_or("Button").to_owned(),
+            label: element
+                .get("label")
+                .and_then(Value::as_str)
+                .unwrap_or("Button")
+                .to_owned(),
             kind: kind.to_owned(),
             z_index: layer_z_index(layout),
             is_hidden: layer_bool(layout, "isHidden"),
             is_location_locked: layer_bool(layout, "isLocationLocked"),
             style_id: layer_style_id(layout),
         });
-        if sources.len() >= MAXIMUM_CONTROLLER_SNAPSHOT_LAYERS { break; }
+        if sources.len() >= MAXIMUM_CONTROLLER_SNAPSHOT_LAYERS {
+            break;
+        }
     }
 
     let source_by_key = sources
@@ -2600,20 +2606,6 @@ fn resolved_groups(
         .collect()
 }
 
-fn saved_button_layout<'a>(
-    customization: &'a serde_json::Map<String, Value>,
-    button: &str,
-) -> Option<&'a serde_json::Map<String, Value>> {
-    let values = customization
-        .get("buttonCustomizations")
-        .and_then(Value::as_array)?;
-    values.chunks_exact(2).find_map(|pair| {
-        (pair[0].as_str() == Some(button))
-            .then(|| pair[1].as_object())
-            .flatten()
-    })
-}
-
 fn layer_z_index(layout: Option<&serde_json::Map<String, Value>>) -> i32 {
     layout
         .and_then(|layout| layout.get("zIndex"))
@@ -2974,14 +2966,17 @@ fn allowed_shape(value: Option<&str>) -> Option<&'static str> {
     }
 }
 
-fn allowed_button(value: &str) -> Option<&str> { thumble_protocol::KeypadElementID::parse(value).map(|_| value) }
-
 fn default_shape(kind: &str, appearance_anchor: Option<&str>) -> &'static str {
     match kind {
         "joystick" => "circle",
         "trigger" => "capsule",
         "trackpad" | "button" | "decoration" => {
-            if matches!(appearance_anchor, Some("00000000-0000-0000-0000-000000000109" | "00000000-0000-0000-0000-00000000010A")) {
+            if matches!(
+                appearance_anchor,
+                Some(
+                    "00000000-0000-0000-0000-000000000109" | "00000000-0000-0000-0000-00000000010A"
+                )
+            ) {
                 "capsule"
             } else {
                 "rounded_rectangle"
@@ -3091,8 +3086,14 @@ mod tests {
         let snapshot = state.controller_snapshot().unwrap();
         let element = &snapshot.elements[0];
         assert_eq!(element.label, "Joystick");
-        assert!((element.frame.x + element.frame.width / 2.0 - snapshot.canvas.width / 2.0).abs() < 1e-10);
-        assert!((element.frame.y + element.frame.height / 2.0 - snapshot.canvas.height / 2.0).abs() < 1e-10);
+        assert!(
+            (element.frame.x + element.frame.width / 2.0 - snapshot.canvas.width / 2.0).abs()
+                < 1e-10
+        );
+        assert!(
+            (element.frame.y + element.frame.height / 2.0 - snapshot.canvas.height / 2.0).abs()
+                < 1e-10
+        );
     }
 
     #[test]
@@ -3129,7 +3130,10 @@ mod tests {
         assert!(!snapshot.canvas.unsupported_content_omitted);
         assert_eq!(snapshot.elements.len(), 10);
         assert_eq!(snapshot.layers.len(), 11);
-        assert_eq!(snapshot.layers[0].stable_id, "builtin.00000000-0000-0000-0000-000000000101");
+        assert_eq!(
+            snapshot.layers[0].stable_id,
+            "builtin.00000000-0000-0000-0000-000000000101"
+        );
         assert_eq!(
             snapshot.layers[0].target_id,
             "00000000-0000-0000-0000-000000000101"
@@ -3582,7 +3586,10 @@ mod tests {
             .as_array_mut()
             .unwrap()
             .iter_mut()
-            .find(|element| element.get("id").and_then(Value::as_str) == Some("00000000-0000-0000-0000-000000000105"))
+            .find(|element| {
+                element.get("id").and_then(Value::as_str)
+                    == Some("00000000-0000-0000-0000-000000000105")
+            })
             .unwrap();
         jump["output"] = json!({
             "keyboard": {"keyCode": 13, "modifiersRawValue": 10},

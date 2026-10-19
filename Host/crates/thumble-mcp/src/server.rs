@@ -43,16 +43,17 @@ use thumble_host::draft_operation::{
     ConfigurationGamepadButton, ConfigurationLayoutMode, ConfigurationOperation,
     ConfigurationOrientationPreference, ConfigurationOutputMode, ConfigurationRgbaColor,
     ConfigurationVariant, ControlAlignment, ControlBarItemChanges, ControlBarMoveDirection,
-    ControlDistribution, ControllerTemplate, CustomizationChanges, ElementChanges, ElementPresentation,
+    ControlDistribution, ControllerTemplate, CustomizationChanges, ElementChanges,
     ElementCornerRadii, ElementFill, ElementGradientStop, ElementGradientType, ElementHitInsets,
     ElementInputPart, ElementJoystickAnalogTarget, ElementJoystickMapping, ElementJoystickSettings,
-    ElementJoystickVisualStyle, ElementKind, ElementOutputChanges, ElementShape,
-    ElementTileAlignment, ElementTilePattern, ElementTrackpadSettings, ElementTriggerOrientation,
-    ElementTriggerSettings, ElementTriggerTarget, ElementVisualRole, GamepadOutputEdit,
-    GeneratedProfileDestination, GenerationPreset, KeyboardOutputEdit, LayerMoveDestination,
-    LayoutRepairCanvas, LayoutRepairKind, LayoutRepairTarget, OrientationVariant,
-    SemanticKeyStroke, SemanticModifier, StyleAppearance, StyleHaptic, StyleHapticKind,
-    StyleHapticPattern, StyleIcon, StyleIconSource, StyleMaterialPreset, StyleShadow,
+    ElementJoystickVisualStyle, ElementKind, ElementOutputChanges, ElementPresentation,
+    ElementShape, ElementTileAlignment, ElementTilePattern, ElementTrackpadSettings,
+    ElementTriggerOrientation, ElementTriggerSettings, ElementTriggerTarget, ElementVisualRole,
+    GamepadOutputEdit, GeneratedProfileDestination, GenerationPreset, KeyboardOutputEdit,
+    LayerMoveDestination, LayoutRepairCanvas, LayoutRepairKind, LayoutRepairTarget,
+    OrientationVariant, SemanticKeyStroke, SemanticModifier, StyleAppearance, StyleHaptic,
+    StyleHapticKind, StyleHapticPattern, StyleIcon, StyleIconSource, StyleMaterialPreset,
+    StyleShadow,
 };
 use thumble_protocol::KeypadElementID;
 
@@ -3552,7 +3553,9 @@ pub struct ElementJoystickMappingInput {
 /// Explicit semantic keyboard/gamepad outputs, never a reference to another input.
 #[derive(Debug, Clone, JsonSchema)]
 #[schemars(transparent)]
-pub struct ElementOutputBindingInput(#[schemars(with = "ElementOutputBindingSpecInput")] thumble_core::OutputBinding);
+pub struct ElementOutputBindingInput(
+    #[schemars(with = "ElementOutputBindingSpecInput")] thumble_core::OutputBinding,
+);
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -3568,45 +3571,68 @@ impl<'de> Deserialize<'de> for ElementOutputBindingInput {
     fn deserialize<D: serde::Deserializer<'de>>(decoder: D) -> Result<Self, D::Error> {
         let spec = ElementOutputBindingSpecInput::deserialize(decoder)?;
         if spec.gamepad_buttons.len() > 32 {
-            return Err(serde::de::Error::custom("at most 32 gamepad output buttons are supported"));
+            return Err(serde::de::Error::custom(
+                "at most 32 gamepad output buttons are supported",
+            ));
         }
-        let keyboard = spec.keyboard.map(|stroke| -> Result<thumble_core::KeyBinding, D::Error> {
-            let key_code = thumble_core::generated_semantic_key_code(&stroke.key)
-                .ok_or_else(|| serde::de::Error::custom("a supported semantic keyboard key is required"))?;
-            if stroke.modifiers.len() > 4 {
-                return Err(serde::de::Error::custom("at most four keyboard modifiers are supported"));
-            }
-            let mut mask = 0;
-            for modifier in stroke.modifiers {
-                let bit = match modifier {
-                    SemanticModifierInput::Command => 1,
-                    SemanticModifierInput::Shift => 2,
-                    SemanticModifierInput::Option => 4,
-                    SemanticModifierInput::Control => 8,
-                };
-                if mask & bit != 0 {
-                    return Err(serde::de::Error::custom("repeated keyboard modifiers are not supported"));
+        let keyboard = spec
+            .keyboard
+            .map(|stroke| -> Result<thumble_core::KeyBinding, D::Error> {
+                let key_code =
+                    thumble_core::generated_semantic_key_code(&stroke.key).ok_or_else(|| {
+                        serde::de::Error::custom("a supported semantic keyboard key is required")
+                    })?;
+                if stroke.modifiers.len() > 4 {
+                    return Err(serde::de::Error::custom(
+                        "at most four keyboard modifiers are supported",
+                    ));
                 }
-                mask |= bit;
-            }
-            Ok(thumble_core::KeyBinding::new(key_code, mask))
-        }).transpose()?;
+                let mut mask = 0;
+                for modifier in stroke.modifiers {
+                    let bit = match modifier {
+                        SemanticModifierInput::Command => 1,
+                        SemanticModifierInput::Shift => 2,
+                        SemanticModifierInput::Option => 4,
+                        SemanticModifierInput::Control => 8,
+                    };
+                    if mask & bit != 0 {
+                        return Err(serde::de::Error::custom(
+                            "repeated keyboard modifiers are not supported",
+                        ));
+                    }
+                    mask |= bit;
+                }
+                Ok(thumble_core::KeyBinding::new(key_code, mask))
+            })
+            .transpose()?;
         let gamepad_button_count = spec.gamepad_buttons.len();
-        let gamepad_buttons = spec.gamepad_buttons.into_iter().map(|button| {
-            let value = serde_json::to_value(ConfigurationGamepadButton::from(button))
-                .map_err(serde::de::Error::custom)?;
-            value.as_str().map(str::to_owned)
-                .ok_or_else(|| serde::de::Error::custom("a supported gamepad output button is required"))
-        }).collect::<Result<std::collections::BTreeSet<_>, D::Error>>()?;
+        let gamepad_buttons = spec
+            .gamepad_buttons
+            .into_iter()
+            .map(|button| {
+                let value = serde_json::to_value(ConfigurationGamepadButton::from(button))
+                    .map_err(serde::de::Error::custom)?;
+                value.as_str().map(str::to_owned).ok_or_else(|| {
+                    serde::de::Error::custom("a supported gamepad output button is required")
+                })
+            })
+            .collect::<Result<std::collections::BTreeSet<_>, D::Error>>()?;
         if gamepad_buttons.len() != gamepad_button_count {
-            return Err(serde::de::Error::custom("repeated gamepad output buttons are not supported"));
+            return Err(serde::de::Error::custom(
+                "repeated gamepad output buttons are not supported",
+            ));
         }
-        Ok(Self(thumble_core::OutputBinding { keyboard, gamepad_buttons }))
+        Ok(Self(thumble_core::OutputBinding {
+            keyboard,
+            gamepad_buttons,
+        }))
     }
 }
 
 impl From<ElementOutputBindingInput> for thumble_core::OutputBinding {
-    fn from(value: ElementOutputBindingInput) -> Self { value.0 }
+    fn from(value: ElementOutputBindingInput) -> Self {
+        value.0
+    }
 }
 impl From<ElementJoystickMappingInput> for ElementJoystickMapping {
     fn from(v: ElementJoystickMappingInput) -> Self {
@@ -3804,8 +3830,15 @@ pub struct ElementPresentationInput {
 }
 impl From<ElementPresentationInput> for ElementPresentation {
     fn from(v: ElementPresentationInput) -> Self {
-        Self { schema_version: v.schema_version.unwrap_or(1), action_id: v.action_id, purpose_id: v.purpose_id,
-            group_ids: v.group_ids, legend: v.legend, caption: v.caption, accessibility_name: v.accessibility_name }
+        Self {
+            schema_version: v.schema_version.unwrap_or(1),
+            action_id: v.action_id,
+            purpose_id: v.purpose_id,
+            group_ids: v.group_ids,
+            legend: v.legend,
+            caption: v.caption,
+            accessibility_name: v.accessibility_name,
+        }
     }
 }
 
@@ -3997,10 +4030,15 @@ impl From<SemanticModifierInput> for SemanticModifier {
 #[derive(Debug, Clone, Copy, Deserialize, JsonSchema)]
 #[serde(transparent)]
 #[schemars(transparent)]
-pub struct ElementIDInput(#[schemars(with = "String", extend("format" = "uuid"), regex(pattern = r"^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$"))] KeypadElementID);
+pub struct ElementIDInput(
+    #[schemars(with = "String", extend("format" = "uuid"), regex(pattern = r"^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$"))]
+     KeypadElementID,
+);
 
 impl From<ElementIDInput> for KeypadElementID {
-    fn from(value: ElementIDInput) -> Self { value.0 }
+    fn from(value: ElementIDInput) -> Self {
+        value.0
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -4183,41 +4221,120 @@ impl ThumbleMcp {
         }
     }
 
-    #[tool(description = "Return the installed native controller-design capabilities, including bounded typography/chrome properties, source budgets, exact authored orientation rules, and explicitly unsupported features.", annotations(read_only_hint = true, destructive_hint = false, idempotent_hint = true, open_world_hint = false))]
+    #[tool(
+        description = "Return the installed native controller-design capabilities, including bounded typography/chrome properties, source budgets, exact authored orientation rules, and explicitly unsupported features.",
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
+    )]
     pub async fn controller_design_capabilities(&self) -> Result<Json<Value>, String> {
         Ok(Json(crate::controller_design::capabilities().await?))
     }
 
-    #[tool(description = "Record immutable structured agent critique against exact current native review hashes. Issues name exact controls, actions, artwork layers and frame titles, with severity, observations and requested corrections. Enforce independent criticOne, criticTwo, qa sequencing. Records never grant human publication approval or modify live controllers.", annotations(read_only_hint = false, destructive_hint = false, idempotent_hint = false, open_world_hint = false))]
-    pub async fn critique_controller_design(&self, Parameters(params): Parameters<crate::controller_design::CritiqueParams>) -> Result<Json<Value>, String> {
+    #[tool(
+        description = "Record immutable structured agent critique against exact current native review hashes. Issues name exact controls, actions, artwork layers and frame titles, with severity, observations and requested corrections. Enforce independent criticOne, criticTwo, qa sequencing. Records never grant human publication approval or modify live controllers.",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = false,
+            idempotent_hint = false,
+            open_world_hint = false
+        )
+    )]
+    pub async fn critique_controller_design(
+        &self,
+        Parameters(params): Parameters<crate::controller_design::CritiqueParams>,
+    ) -> Result<Json<Value>, String> {
         Ok(Json(crate::controller_design::critique(params).await?))
     }
 
-    #[tool(description = "Inspect a controller-design workspace without changing it. Return the frozen artboard, exact control-to-CSS aliases, appearance action/purpose/group tags, source inventory and synchronization status, and installed native capabilities. This exposes no executable bindings or host credentials.", annotations(read_only_hint = true, destructive_hint = false, idempotent_hint = true, open_world_hint = false))]
-    pub async fn inspect_controller_design(&self, Parameters(params): Parameters<crate::controller_design::InspectParams>) -> Result<Json<Value>, String> {
+    #[tool(
+        description = "Inspect a controller-design workspace without changing it. Return the frozen artboard, exact control-to-CSS aliases, appearance action/purpose/group tags, source inventory and synchronization status, and installed native capabilities. This exposes no executable bindings or host credentials.",
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
+    )]
+    pub async fn inspect_controller_design(
+        &self,
+        Parameters(params): Parameters<crate::controller_design::InspectParams>,
+    ) -> Result<Json<Value>, String> {
         Ok(Json(crate::controller_design::inspect(params).await?))
     }
 
-    #[tool(description = "Begin an editable controller-design workspace from an exact authoritative profile or private draft at expected revisions. Freeze UUID geometry, explicit viewport safe areas, native assets and a separate binding snapshot. This writes only a local authoring workspace and never selects, applies, or saves a live profile.", annotations(read_only_hint = false, destructive_hint = false, idempotent_hint = false, open_world_hint = false))]
-    pub async fn begin_controller_design(&self, Parameters(params): Parameters<crate::controller_design::BeginParams>) -> Result<Json<Value>, String> {
+    #[tool(
+        description = "Begin an editable controller-design workspace from an exact authoritative profile or private draft at expected revisions. Freeze UUID geometry, explicit viewport safe areas, native assets and a separate binding snapshot. This writes only a local authoring workspace and never selects, applies, or saves a live profile.",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = false,
+            idempotent_hint = false,
+            open_world_hint = false
+        )
+    )]
+    pub async fn begin_controller_design(
+        &self,
+        Parameters(params): Parameters<crate::controller_design::BeginParams>,
+    ) -> Result<Json<Value>, String> {
         Ok(Json(crate::controller_design::begin(params).await?))
     }
 
-    #[tool(description = "Transactionally update bounded editable CSS/JSON/SVG/PNG sources against an expected design-session revision, or synchronize direct file edits with an empty edits array. Validate before replacement, preserve frozen input identity and previous evidence, and report stale reviews. No live controller changes.", annotations(read_only_hint = false, destructive_hint = false, idempotent_hint = false, open_world_hint = false))]
-    pub async fn update_controller_design(&self, Parameters(params): Parameters<crate::controller_design::UpdateParams>) -> Result<Json<Value>, String> {
+    #[tool(
+        description = "Transactionally update bounded editable CSS/JSON/SVG/PNG sources against an expected design-session revision, or synchronize direct file edits with an empty edits array. Validate before replacement, preserve frozen input identity and previous evidence, and report stale reviews. No live controller changes.",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = false,
+            idempotent_hint = false,
+            open_world_hint = false
+        )
+    )]
+    pub async fn update_controller_design(
+        &self,
+        Parameters(params): Parameters<crate::controller_design::UpdateParams>,
+    ) -> Result<Json<Value>, String> {
         Ok(Json(crate::controller_design::update(params).await?))
     }
 
-    #[tool(description = "Apply the exact hashed native review package to its captured profile through an authoritative revision transaction. Reject changed source, evidence, images, renderer, profile or configuration. Preserve bindings and defaults, use an invocation UUID for replay, and return the save receipt. This is local application; it does not publish or grant human approval. Requires MCP config-write opt-in.", annotations(read_only_hint = false, destructive_hint = false, idempotent_hint = true, open_world_hint = false))]
-    pub async fn apply_controller_design(&self, Parameters(params): Parameters<crate::controller_design::ApplyParams>) -> Result<Json<Value>, String> {
-        if !self.allow_config_write { return Err("controller design apply requires --allow-config-write".into()); }
+    #[tool(
+        description = "Apply the exact hashed native review package to its captured profile through an authoritative revision transaction. Reject changed source, evidence, images, renderer, profile or configuration. Preserve bindings and defaults, use an invocation UUID for replay, and return the save receipt. This is local application; it does not publish or grant human approval. Requires MCP config-write opt-in.",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
+    )]
+    pub async fn apply_controller_design(
+        &self,
+        Parameters(params): Parameters<crate::controller_design::ApplyParams>,
+    ) -> Result<Json<Value>, String> {
+        if !self.allow_config_write {
+            return Err("controller design apply requires --allow-config-write".into());
+        }
         Ok(Json(crate::controller_design::apply(params).await?))
     }
 
-    #[tool(description = "Compile an unsaved exact controller design once, render all authored orientations in light/dark and normal/pressed/active/disabled plus mixed states through the native app renderer, preserve numbered hashed evidence, and return controller, bar and measured drawer scene sheets inline (bar/drawer can be explicitly omitted). Diagnostics do not grant aesthetic approval. This never imports or applies the skin or changes live input state.", annotations(read_only_hint = false, destructive_hint = false, idempotent_hint = false, open_world_hint = false))]
-    pub async fn review_controller_design(&self, Parameters(params): Parameters<crate::controller_design::ReviewParams>) -> Result<CallToolResult, String> {
+    #[tool(
+        description = "Compile an unsaved exact controller design once, render all authored orientations in light/dark and normal/pressed/active/disabled plus mixed states through the native app renderer, preserve numbered hashed evidence, and return controller, bar and measured drawer scene sheets inline (bar/drawer can be explicitly omitted). Diagnostics do not grant aesthetic approval. This never imports or applies the skin or changes live input state.",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = false,
+            idempotent_hint = false,
+            open_world_hint = false
+        )
+    )]
+    pub async fn review_controller_design(
+        &self,
+        Parameters(params): Parameters<crate::controller_design::ReviewParams>,
+    ) -> Result<CallToolResult, String> {
         let (structured, images) = crate::controller_design::review(params).await?;
-        let mut content: Vec<ContentBlock> = images.into_iter().map(|image| ContentBlock::image(image, "image/png")).collect();
+        let mut content: Vec<ContentBlock> = images
+            .into_iter()
+            .map(|image| ContentBlock::image(image, "image/png"))
+            .collect();
         content.push(ContentBlock::text("Native exact-controller evidence, including bar and settled drawer scenes when requested. Independent visual critique and human publication approval remain pending."));
         let mut call = CallToolResult::success(content);
         call.structured_content = Some(structured);
@@ -5164,8 +5281,15 @@ impl ServerHandler for ThumbleMcp {
         _context: RequestContext<RoleServer>,
     ) -> Result<ReadResourceResponse, ErrorData> {
         if request.uri == "thumble://design/capabilities-v1" {
-            let value = crate::controller_design::capabilities().await.map_err(|error| ErrorData::internal_error(error, None))?;
-            return Ok(ReadResourceResult::new(vec![ResourceContents::text(value.to_string(), request.uri).with_mime_type("application/json")]).into());
+            let value = crate::controller_design::capabilities()
+                .await
+                .map_err(|error| ErrorData::internal_error(error, None))?;
+            return Ok(ReadResourceResult::new(vec![ResourceContents::text(
+                value.to_string(),
+                request.uri,
+            )
+            .with_mime_type("application/json")])
+            .into());
         }
         let (content, mime_type) = match request.uri.as_str() {
             CONTROLLER_UI_URI => (CONTROLLER_UI_HTML, CONTROLLER_UI_MIME_TYPE),
@@ -5244,20 +5368,36 @@ mod tests {
         }
         let input: ElementOutputBindingInput = serde_json::from_value(serde_json::json!({
             "keyboard":{"key":"Space","modifiers":["control"]}, "gamepadButtons":["south"]
-        })).unwrap();
+        }))
+        .unwrap();
         let binding: thumble_core::OutputBinding = input.into();
         assert_eq!(binding.keyboard, Some(thumble_core::KeyBinding::new(49, 8)));
-        assert_eq!(binding.gamepad_buttons.into_iter().collect::<Vec<_>>(), ["south"]);
-        let empty: ElementOutputBindingInput = serde_json::from_value(serde_json::json!({})).unwrap();
-        assert_eq!(thumble_core::OutputBinding::from(empty), thumble_core::OutputBinding::default());
+        assert_eq!(
+            binding.gamepad_buttons.into_iter().collect::<Vec<_>>(),
+            ["south"]
+        );
+        let empty: ElementOutputBindingInput =
+            serde_json::from_value(serde_json::json!({})).unwrap();
+        assert_eq!(
+            thumble_core::OutputBinding::from(empty),
+            thumble_core::OutputBinding::default()
+        );
     }
 
     #[test]
     fn published_operation_schema_contains_only_owned_uuid_bindings() {
         let schema: Value = serde_json::from_str(CONFIGURATION_OPERATION_SCHEMA_JSON).unwrap();
         assert!(!CONFIGURATION_OPERATION_SCHEMA_JSON.contains("mappedButton"));
-        assert_eq!(schema.pointer("/$defs/ElementIDInput/format").and_then(Value::as_str), Some("uuid"));
-        assert_eq!(schema.pointer("/$defs/ElementOutputBindingInput/additionalProperties"), Some(&Value::Bool(false)));
+        assert_eq!(
+            schema
+                .pointer("/$defs/ElementIDInput/format")
+                .and_then(Value::as_str),
+            Some("uuid")
+        );
+        assert_eq!(
+            schema.pointer("/$defs/ElementOutputBindingInput/additionalProperties"),
+            Some(&Value::Bool(false))
+        );
         for operation in [
             serde_json::json!({"type":"element.add","profileID":"00000000-0000-0000-0000-000000000201","variant":"primary","kind":"button","mappedButton":null,"changes":{}}),
             serde_json::json!({"type":"element.set","profileID":"00000000-0000-0000-0000-000000000201","variant":"primary","elementID":"00000000-0000-0000-0000-000000000105","changes":{"mappedButton":null}}),
@@ -5674,8 +5814,19 @@ mod tests {
         assert!(!schema_json.contains("PocketPad"));
         assert!(!schema_json.contains("pocketpad-"));
         assert_eq!(tools.len(), 28);
-        for name in ["controller_design_capabilities", "begin_controller_design", "update_controller_design", "review_controller_design", "apply_controller_design", "inspect_controller_design", "critique_controller_design"] {
-            assert!(tools.iter().any(|tool| tool.name == name), "missing design facade: {name}");
+        for name in [
+            "controller_design_capabilities",
+            "begin_controller_design",
+            "update_controller_design",
+            "review_controller_design",
+            "apply_controller_design",
+            "inspect_controller_design",
+            "critique_controller_design",
+        ] {
+            assert!(
+                tools.iter().any(|tool| tool.name == name),
+                "missing design facade: {name}"
+            );
         }
         assert!(tools
             .iter()

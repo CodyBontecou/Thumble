@@ -13,8 +13,7 @@ pub use strict_json::{decode_unique_json, validate_unique_json};
 
 pub use message::{
     ButtonPressState, ControllerCapability, ControllerMessage, ControllerMessageType,
-    ControllerPointerButton, ControllerPointerEventKind, KeypadElementID,
-    GamepadProfileOrientationPreference, KeypadElementInputPart, VirtualGamepadStick,
-    VirtualGamepadTrigger,
+    ControllerPointerButton, ControllerPointerEventKind, GamepadProfileOrientationPreference,
+    KeypadElementID, KeypadElementInputPart, VirtualGamepadStick, VirtualGamepadTrigger,
 };
 pub use wire::{ControllerWireCodec, ControllerWireCodecError};

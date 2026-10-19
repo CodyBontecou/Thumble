@@ -1242,16 +1242,41 @@ fn apply_edit_to_document(
             }
             paths.push("/profiles/active/customization/elements".to_owned());
             let input = parse_button(&metadata.element_id)?;
-            let still_declared = ["customization", "landscapeCustomization", "portraitCustomization"].into_iter()
-                .filter_map(|name| profile.get(name))
-                .filter_map(|customization| customization.get("elements").and_then(Value::as_array)).flatten()
-                .any(|element| element.get("id").and_then(Value::as_str).and_then(KeypadElementID::parse) == Some(input));
+            let still_declared = [
+                "customization",
+                "landscapeCustomization",
+                "portraitCustomization",
+            ]
+            .into_iter()
+            .filter_map(|name| profile.get(name))
+            .filter_map(|customization| customization.get("elements").and_then(Value::as_array))
+            .flatten()
+            .any(|element| {
+                element
+                    .get("id")
+                    .and_then(Value::as_str)
+                    .and_then(KeypadElementID::parse)
+                    == Some(input)
+            });
             if !still_declared {
                 document.key_bindings.remove(input);
                 document.output_bindings.remove(input);
-                if let Some(keys) = document.profile_key_bindings.get_mut(&active_id) { keys.remove(input); }
-                if let Some(outputs) = document.profile_output_bindings.get_mut(&active_id) { outputs.remove(input); }
-                paths.extend(["/keyBindings", "/outputBindings", "/profileKeyBindings/active", "/profileOutputBindings/active"].into_iter().map(str::to_owned));
+                if let Some(keys) = document.profile_key_bindings.get_mut(&active_id) {
+                    keys.remove(input);
+                }
+                if let Some(outputs) = document.profile_output_bindings.get_mut(&active_id) {
+                    outputs.remove(input);
+                }
+                paths.extend(
+                    [
+                        "/keyBindings",
+                        "/outputBindings",
+                        "/profileKeyBindings/active",
+                        "/profileOutputBindings/active",
+                    ]
+                    .into_iter()
+                    .map(str::to_owned),
+                );
             }
         }
         BuilderEdit::BindingSet {
@@ -1282,7 +1307,12 @@ fn apply_edit_to_document(
                 .profile_output_bindings
                 .entry(active_id.clone())
                 .or_default();
-            changed |= set_keyboard_output(profile_outputs, button_value, Some(binding), owned_output.as_ref());
+            changed |= set_keyboard_output(
+                profile_outputs,
+                button_value,
+                Some(binding),
+                owned_output.as_ref(),
+            );
             let semantic_output = profile_outputs.get(&button_value).cloned();
             let elements_changed =
                 sync_mapped_element_outputs(profile, button_value, semantic_output.as_ref())?;
@@ -1306,8 +1336,16 @@ fn apply_edit_to_document(
             if let Some(bindings) = document.profile_key_bindings.get_mut(&active_id) {
                 changed |= bindings.remove(button_value).is_some();
             }
-            changed |= set_keyboard_output(&mut document.output_bindings, button_value, None, owned_output.as_ref());
-            let outputs = document.profile_output_bindings.entry(active_id.clone()).or_default();
+            changed |= set_keyboard_output(
+                &mut document.output_bindings,
+                button_value,
+                None,
+                owned_output.as_ref(),
+            );
+            let outputs = document
+                .profile_output_bindings
+                .entry(active_id.clone())
+                .or_default();
             changed |= set_keyboard_output(outputs, button_value, None, owned_output.as_ref());
             let semantic_output = outputs.get(&button_value).cloned();
             let elements_changed =
@@ -1356,7 +1394,7 @@ fn find_element_metadata(
     customization: &Map<String, Value>,
     element_id: &str,
 ) -> Result<ElementMetadata, BuilderError> {
-    let element = customization
+    customization
         .get("elements")
         .and_then(Value::as_array)
         .and_then(|elements| {
@@ -1468,28 +1506,43 @@ fn remove_control_references(customization: &mut Map<String, Value>, element: &s
     let id = KeypadElementID::parse(element).expect("validated control UUID");
     for field in ["buttonCustomizations", "labelOverrides"] {
         match customization.get_mut(field) {
-            Some(Value::Object(values)) => values.retain(|key, _| KeypadElementID::parse(key) != Some(id)),
+            Some(Value::Object(values)) => {
+                values.retain(|key, _| KeypadElementID::parse(key) != Some(id))
+            }
             Some(Value::Array(values)) => {
-                *values = values.chunks_exact(2).filter(|pair| pair[0].as_str().and_then(KeypadElementID::parse) != Some(id))
-                    .flat_map(|pair| pair.iter().cloned()).collect();
+                *values = values
+                    .chunks_exact(2)
+                    .filter(|pair| pair[0].as_str().and_then(KeypadElementID::parse) != Some(id))
+                    .flat_map(|pair| pair.iter().cloned())
+                    .collect();
             }
             _ => {}
         }
     }
     let points_to_removed = |value: &Value| {
-        let raw = if let Some(raw) = value.as_str() { raw.split_once('.').map(|(_, raw)| raw).unwrap_or(raw) }
-            else { match value.get("kind").and_then(Value::as_str) {
-                Some("builtin") => value.get("button").and_then(Value::as_str).unwrap_or_default(),
+        let raw = if let Some(raw) = value.as_str() {
+            raw.split_once('.').map(|(_, raw)| raw).unwrap_or(raw)
+        } else {
+            match value.get("kind").and_then(Value::as_str) {
+                Some("builtin") => value
+                    .get("button")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default(),
                 Some("custom") => value.get("id").and_then(Value::as_str).unwrap_or_default(),
                 _ => "",
-            }};
+            }
+        };
         KeypadElementID::parse(raw) == Some(id)
     };
     if let Some(metadata) = customization.get_mut("designMetadata") {
-        if let Some(order) = metadata.get_mut("layerOrder").and_then(Value::as_array_mut) { order.retain(|value| !points_to_removed(value)); }
+        if let Some(order) = metadata.get_mut("layerOrder").and_then(Value::as_array_mut) {
+            order.retain(|value| !points_to_removed(value));
+        }
         if let Some(groups) = metadata.get_mut("groups").and_then(Value::as_array_mut) {
             for group in groups {
-                if let Some(children) = group.get_mut("children").and_then(Value::as_array_mut) { children.retain(|value| !points_to_removed(value)); }
+                if let Some(children) = group.get_mut("children").and_then(Value::as_array_mut) {
+                    children.retain(|value| !points_to_removed(value));
+                }
             }
         }
     }
@@ -1497,19 +1550,49 @@ fn remove_control_references(customization: &mut Map<String, Value>, element: &s
 
 /// Validate actual ownership before any edit. A sidecar entry cannot create a
 /// control; configured/default outputs remain authoritative over stale maps.
-fn owned_control_output(profile: &Map<String, Value>, id: KeypadElementID) -> Result<Option<OutputBinding>, BuilderError> {
+fn owned_control_output(
+    profile: &Map<String, Value>,
+    id: KeypadElementID,
+) -> Result<Option<OutputBinding>, BuilderError> {
     let mut found = false;
-    for name in ["customization", "landscapeCustomization", "portraitCustomization"] {
-        let Some(elements) = profile.get(name).and_then(|c| c.get("elements")).and_then(Value::as_array) else { continue; };
+    for name in [
+        "customization",
+        "landscapeCustomization",
+        "portraitCustomization",
+    ] {
+        let Some(elements) = profile
+            .get(name)
+            .and_then(|c| c.get("elements"))
+            .and_then(Value::as_array)
+        else {
+            continue;
+        };
         for element in elements {
-            if element.get("id").and_then(Value::as_str).and_then(KeypadElementID::parse) != Some(id) { continue; }
+            if element
+                .get("id")
+                .and_then(Value::as_str)
+                .and_then(KeypadElementID::parse)
+                != Some(id)
+            {
+                continue;
+            }
             found = true;
-            if let Some(value) = element.get("output").filter(|v| !v.is_null()).or_else(|| element.get("defaultOutput").filter(|v| !v.is_null())) {
-                return serde_json::from_value(value.clone()).map(Some).map_err(|_| BuilderError::InvalidDocument);
+            if let Some(value) = element
+                .get("output")
+                .filter(|v| !v.is_null())
+                .or_else(|| element.get("defaultOutput").filter(|v| !v.is_null()))
+            {
+                return serde_json::from_value(value.clone())
+                    .map(Some)
+                    .map_err(|_| BuilderError::InvalidDocument);
             }
         }
     }
-    if found { Ok(None) } else { Err(BuilderError::ControlNotFound) }
+    if found {
+        Ok(None)
+    } else {
+        Err(BuilderError::ControlNotFound)
+    }
 }
 
 fn sync_mapped_element_outputs(
@@ -1532,7 +1615,10 @@ fn sync_mapped_element_outputs(
             continue;
         };
         for element in elements {
-            let mapped = element.get("id").and_then(Value::as_str).and_then(KeypadElementID::parse);
+            let mapped = element
+                .get("id")
+                .and_then(Value::as_str)
+                .and_then(KeypadElementID::parse);
             if mapped != Some(button) {
                 continue;
             }
@@ -1541,15 +1627,35 @@ fn sync_mapped_element_outputs(
                 .ok_or(BuilderError::InvalidDocument)?;
             // Keyboard authoring updates each canvas owner's own output, not
             // the first owner's gamepad channel. Keep safe raw output metadata.
-            let mut next_value = object.get("output").filter(|value| value.is_object())
-                .or_else(|| object.get("defaultOutput").filter(|value| value.is_object()))
-                .cloned().unwrap_or_else(|| element_output_value(&output.cloned().unwrap_or_default()));
-            let next = next_value.as_object_mut().ok_or(BuilderError::InvalidDocument)?;
+            let mut next_value = object
+                .get("output")
+                .filter(|value| value.is_object())
+                .or_else(|| {
+                    object
+                        .get("defaultOutput")
+                        .filter(|value| value.is_object())
+                })
+                .cloned()
+                .unwrap_or_else(|| element_output_value(&output.cloned().unwrap_or_default()));
+            let next = next_value
+                .as_object_mut()
+                .ok_or(BuilderError::InvalidDocument)?;
             let authored = element_output_value(&output.cloned().unwrap_or_default());
             if let Some(keyboard) = authored.get("keyboard") {
-                let mut raw_keyboard = next.get("keyboard").and_then(Value::as_object).cloned().unwrap_or_default();
-                for field in ["keyCode", "modifiers", "modifiersRawValue", "sequence"] { raw_keyboard.remove(field); }
-                raw_keyboard.extend(keyboard.as_object().ok_or(BuilderError::InvalidDocument)?.clone());
+                let mut raw_keyboard = next
+                    .get("keyboard")
+                    .and_then(Value::as_object)
+                    .cloned()
+                    .unwrap_or_default();
+                for field in ["keyCode", "modifiers", "modifiersRawValue", "sequence"] {
+                    raw_keyboard.remove(field);
+                }
+                raw_keyboard.extend(
+                    keyboard
+                        .as_object()
+                        .ok_or(BuilderError::InvalidDocument)?
+                        .clone(),
+                );
                 next.insert("keyboard".to_owned(), Value::Object(raw_keyboard));
             } else {
                 next.remove("keyboard");
@@ -1607,7 +1713,10 @@ fn set_keyboard_output(
     owned_output: Option<&OutputBinding>,
 ) -> bool {
     let previous = outputs.get(&button).cloned();
-    let mut next = owned_output.cloned().or_else(|| previous.clone()).unwrap_or_default();
+    let mut next = owned_output
+        .cloned()
+        .or_else(|| previous.clone())
+        .unwrap_or_default();
     next.keyboard = keyboard;
     // Empty is an authoritative clear, never a request to restore defaults.
     outputs.insert(button, next);
@@ -1833,9 +1942,20 @@ fn valid_changed_paths(record: &BuilderOperationRecord) -> bool {
     }
     if binding_maps_optional {
         let mut with_bindings = expected.clone();
-        with_bindings.extend(["/keyBindings", "/outputBindings", "/profileKeyBindings/active", "/profileOutputBindings/active"].into_iter().map(str::to_owned));
+        with_bindings.extend(
+            [
+                "/keyBindings",
+                "/outputBindings",
+                "/profileKeyBindings/active",
+                "/profileOutputBindings/active",
+            ]
+            .into_iter()
+            .map(str::to_owned),
+        );
         with_bindings.sort();
-        if record.changed_paths == with_bindings { return true; }
+        if record.changed_paths == with_bindings {
+            return true;
+        }
     }
     if element_output_optional {
         let mut with_elements = expected;

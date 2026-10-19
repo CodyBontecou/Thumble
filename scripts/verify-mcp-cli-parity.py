@@ -42,6 +42,7 @@ FORBIDDEN_SCHEMA_KEYS = {
 
 # Functions whose first string-case switch is their command dispatcher.
 SUBCOMMAND_FUNCTIONS = {
+    "controllerDesign": "design",
     "profile": "profile",
     "template": "template",
     "theme": "theme",

@@ -305,8 +305,8 @@ fn validate_fixture_set(
         {
             return Err(BuilderError::InvalidTemplateFixtures);
         }
-        let fixture: TemplateFixture =
-            thumble_protocol::decode_unique_json(bytes).map_err(|_| BuilderError::InvalidTemplateFixtures)?;
+        let fixture: TemplateFixture = thumble_protocol::decode_unique_json(bytes)
+            .map_err(|_| BuilderError::InvalidTemplateFixtures)?;
         if fixture.fixture_version != FIXTURE_VERSION
             || fixture.template_id != metadata.template_id
             || fixture.revision != metadata.revision
