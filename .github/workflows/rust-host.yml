@@ -182,6 +182,8 @@ jobs:
           workspaces: Host
       - name: Install XcodeGen
         run: command -v xcodegen >/dev/null || brew install xcodegen
+      - name: Generate the canonical Xcode project
+        run: xcodegen generate --spec project.yml
       - run: ./scripts/verify-rust-host.sh
         env:
           MACOSX_DEPLOYMENT_TARGET: "14.0"

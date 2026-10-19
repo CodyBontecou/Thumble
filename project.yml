@@ -59,6 +59,7 @@ targets:
       - path: Sources/Mac/KeyMap.swift
       - path: Sources/Mac/MacControlOutputBinding.swift
       - path: Sources/Mac/MacConfigurationBindings.swift
+      - path: Sources/Mac/ThumbleLinkImport.swift
       - path: Sources/CLI
     dependencies:
       - package: ZIPFoundation
@@ -79,6 +80,7 @@ targets:
       - path: Sources/Mac/KeyMap.swift
       - path: Sources/Mac/MacControlOutputBinding.swift
       - path: Sources/Mac/MacConfigurationBindings.swift
+      - path: Sources/Mac/ThumbleLinkImport.swift
       - path: Sources/Bridge
     dependencies:
       - package: ZIPFoundation
@@ -99,6 +101,7 @@ targets:
       - path: Sources/Mac/KeyMap.swift
       - path: Sources/Mac/MacControlOutputBinding.swift
       - path: Sources/Mac/MacConfigurationBindings.swift
+      - path: Sources/Mac/ThumbleLinkImport.swift
       - path: Sources/CLI
     dependencies:
       - package: ZIPFoundation
@@ -119,6 +122,7 @@ targets:
       - path: Sources/Mac/KeyMap.swift
       - path: Sources/Mac/MacControlOutputBinding.swift
       - path: Sources/Mac/MacConfigurationBindings.swift
+      - path: Sources/Mac/ThumbleLinkImport.swift
       - path: Sources/CLI
     dependencies:
       - package: ZIPFoundation
@@ -139,6 +143,8 @@ targets:
       - path: Sources/Mac/KeyMap.swift
       - path: Sources/Mac/MacControlOutputBinding.swift
       - path: Sources/Mac/MacConfigurationBindings.swift
+      - path: Sources/Mac/ThumbleLinkImport.swift
+      - path: Sources/Mac/ThumbleLinkImportView.swift
       - path: Sources/Mac/MacRustAuthorityInterlock.swift
       - path: Sources/Mac/MacSharedKeypadImport.swift
       - path: Sources/Mac/VirtualGamepadInjector.swift
