@@ -95,7 +95,7 @@ and receive-state behavior without injecting keyboard events into other apps.
 ## Deliberate slice boundaries
 
 Calibration, offline layout editing/reconciliation, haptics, installed-skin resolution,
-vector display lists, broader symbol coverage, remaining style effects and complete typography remain unfinished. Apple continuous
+vector display lists, broader symbol coverage and complete typography remain unfinished. Apple continuous
 corner curves still differ from Android rounded paths. Advanced controls have
 physical-device and Rust recording evidence; real Mac pointer/HID consumer acceptance
 and broader device geometry remain pending. Unsupported interactive control kinds are omitted and listed above
@@ -373,8 +373,7 @@ unchanged. Pointing indicators now draw in their own control layer.
 `AssetStyleDeviceTest` covers image pixels, cache/downsampling, resizing modes,
 EXIF orientations, adjustment mapping, state inheritance, physical ownership and
 visible normal/pressed captures. Evidence is in `app/build/evidence/assets/`.
-Vector assets, icon rendering, installed skin asset hydration, remaining style
-effects, full typography, cross-platform color-management and fractional-cap
+Vector assets, installed skin asset hydration, full typography, cross-platform color-management and fractional-cap
 comparison remain open parity work. No full skin or release-performance parity
 is claimed.
 
@@ -398,4 +397,18 @@ and the broader device matrix remain pending.
 `IconArtworkDeviceTest` verifies pixels, icon modes, gesture ownership, legend
 policy, passive layering and blend compatibility. Captures and the acceptance
 receipt are under `app/build/evidence/icons-artwork/`. Full vector/skin rendering,
-remaining effects, typography and release acceptance are still open in PARITY.md.
+typography and release acceptance are still open in PARITY.md.
+
+## Control visual effects
+
+Controls render stacked outer shadows, glow, clipped highlights/inner shadows,
+bevels and state marks. Whole-face blur includes legends, icons and indicators;
+visual outsets and scaling preserve the original touch region. Surface-owned caches
+are bounded, and large effects use an adaptive raster budget. Shadow arrays use the
+shared model's 96-point radius/offset limit.
+
+`EffectsDeviceTest` covers pixels, state changes, physical press identity, four
+simultaneous pressed faces and visible practice-mode captures. Evidence is in
+`app/build/evidence/effects/`. Blur uses a premultiplied three-box approximation;
+exact native kernels/color, older-device behavior and release performance remain
+open acceptance work.

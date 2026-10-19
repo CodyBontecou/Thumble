@@ -17,7 +17,7 @@ reviewed 2026-10-19. Update this inventory as additional iOS behavior is found.
 | Buttons, element parts, per-touch hold/slide/release behavior | TouchCaptureView, ControllerClient | Buttons and canonical joystick/trigger parts implemented; Pixel mixed holds, capture, cancellation, accessibility actions, and Rust recorded bindings verified; broader geometry/device coverage pending |
 | Joystick directions, analog sticks/triggers, pointer trackpad/move/scroll/click/drag | ControllerClient, shared keypad renderers | Implemented joystick capture/transforms, analog coalescing/refresh/neutral, trigger thresholds, trackpad movement/scroll/taps. Pixel native gestures → Rust recorder pass with direct UDP and mid-hold UDP loss; actual Mac pointer/HID consumer output and drag coverage remain pending |
 | Haptics, control/accessibility feedback, keep awake, appearance/settings | IOSLocalKeypadUX, IOSContentView | Basic accessibility and keep-awake implemented; remaining settings/feedback missing |
-| Full renderer: element kinds, style tokens, layers/action sets, skins, vector/raster assets, fills, text, hit regions, dark/light | Shared skin compiler/resolver/renderers, ControllerClient | Native size/center/clamp rules, builtin override ownership, design layer order, all seven canonical shapes, per-corner radii, solid/linear/radial/tile fills, profile appearance, legend visibility and accessibility names implemented. Pixel pixel/gesture/portrait/landscape captures pass. Canonical raster asset references/inline data, fit/crop/tile/nine-slice modes, JPEG EXIF orientation, image adjustments, native token/inline state inheritance, core fill/foreground/border/opacity/scale and authored text fields are now implemented/tested. Passive artwork planes (including blend/rotation/opacity/order), text/raster icons, native icon/legend placement and template symbol equivalents are implemented/tested. Broader symbol coverage, vector display lists, installed-skin hydration, remaining style effects and full typography remain missing; native continuous corner curves are not exact. Authored Lux positions remain overlapping |
+| Full renderer: element kinds, style tokens, layers/action sets, skins, vector/raster assets, fills, text, hit regions, dark/light | Shared skin compiler/resolver/renderers, ControllerClient | Native size/center/clamp rules, builtin override ownership, design layer order, all seven canonical shapes, per-corner radii, solid/linear/radial/tile fills, profile appearance, legend visibility and accessibility names implemented. Pixel pixel/gesture/portrait/landscape captures pass. Canonical raster asset references/inline data, fit/crop/tile/nine-slice modes, JPEG EXIF orientation, image adjustments, native token/inline state inheritance, core fill/foreground/border/opacity/scale and authored text fields are now implemented/tested. Passive artwork planes (including blend/rotation/opacity/order), text/raster icons, native icon/legend placement and template symbol equivalents are implemented/tested. Stacked outer shadows, glow, masked inner shadows/highlights, bevels, state marks and whole-face blur are implemented with Pixel pixel/gesture/capture acceptance. Broader symbol coverage, vector display lists, installed-skin hydration and full typography remain missing; native continuous corner curves are not exact. Authored Lux positions remain overlapping |
 | Profile selection/default, orientation mutations, profile launch targets, capability/readiness display | ControllerClient, IOSContentView | Selection only; honor server capabilities and authoritative responses |
 | Local layout editing, offline pending edits and reconciliation, color preference | ControllerClient pendingKeypadLayoutEdits, IOSLocalKeypadUX | Missing; conflict/ack/restart tests required |
 | Skin library/import/export/apply/detach/remove, .pocketpad sharing/review | IOSSkinLibraryView, IOSContentView, shared skin packages | Missing; editable source and native renderer validation required; no publishing or approval implied |
@@ -40,7 +40,7 @@ rendering, persistence, or Mac output evidence. No full-parity completion is cla
 ## Latest verified milestone (2026-10-19)
 
 - Build and lint complete (zero lint errors; existing toolchain/icon/backup warnings remain).
-- 41 unit tests pass, including geometry, layer/override ownership, icon/legend placement, artwork normalization/blend math, native style inheritance/palette/scales, advanced gestures and wire streams.
+- 43 unit tests pass, including geometry, layer/override ownership, icon/legend placement, artwork normalization/blend math, native style inheritance/palette/scales, advanced gestures and wire streams.
 - Pixel full suite: 33 methods, 29 exercised; four optional live methods skip without pairing data. The final icon/artwork class passes five methods, including an additional independent legacy surface golden (34 combined methods / 30 exercised). All seven asset/style methods pass expanded EXIF/adjustment coverage. Renderer acceptance includes pixel assertions for shapes, alpha, gradients, all tile patterns, rotated hit insets, and forced-theme hold retention; visible controller captures cover both orientations and canvas color schemes.
 - Renderer evidence: app/build/evidence/renderer/renderer-result.json, four PNG captures and renderer-motion.mp4. Asset/style evidence: app/build/evidence/assets/asset-style-result.json and visible normal/pressed PNGs. These do not prove full skin or release performance parity.
 - Latest normal Mac real-input regression passes with the icon/artwork build: 2 UDP + 10 WebSocket inputs, exactly six AppKit key events, 25 UDP datagrams dropped including all three releases; no held keys.
@@ -57,6 +57,25 @@ rendering, persistence, or Mac output evidence. No full-parity completion is cla
 - Actual Mac configuration and all five profiles remain unchanged. Its receiver remains input-enabled with Accessibility trusted and no held inputs. Backup/install receipt: build/AndroidReceiver/advanced-install-receipt.json.
 
 Next acceptance area: actual Mac pointer/HID consumer output and broader gesture/device
-coverage. Next implementation area: vector display lists, broader symbol coverage, installed skin resolution, remaining visual effects, renderer/skin fidelity and editing,
+coverage. Next implementation area: vector display lists, broader symbol coverage, installed skin resolution, renderer/skin fidelity and editing,
 calibration, artifact, settings, onboarding and device acceptance rows above.
 This milestone does not complete the full iOS parity goal.
+
+## Effects acceptance (2026-10-19)
+
+- Full physical Pixel suite passes 39 methods: 35 exercised, four optional live tests
+  skipped without pairing parameters. All five effects methods pass, covering shadow
+  alpha chaining and outsets, masked inner effects, state marks, premultiplied blur,
+  unchanged logical hit geometry and four simultaneous pressed faces.
+- Shadow arrays now preserve the shared model's 96-point radius/offset budget;
+  scalar effect budgets remain distinct. Pixel assertions cover authored offsets
+  above 64 and clamping at 96.
+- Normal and pressed captures were inspected in app/build/evidence/effects/.
+  The visible fixture runs in offline practice mode and sends no input.
+- Real Mac keyboard UDP-loss rerun passes with exactly six AppKit events, overlapping
+  holds and complete releases: two UDP + ten WebSocket inputs, 24 dropped datagrams
+  including all three releases. The first attempt failed its strict AppKit assertion
+  because an extra key-down preceded the test sequence; it is retained separately.
+- Whole-face blur uses a premultiplied three-box Gaussian approximation. Exact
+  native blur/kernel/color comparison, actual older devices and release performance
+  remain unverified. Raster/cache budgets do not substitute for performance acceptance.

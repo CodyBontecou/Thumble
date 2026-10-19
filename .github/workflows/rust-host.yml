@@ -16,12 +16,18 @@ on:
       - "Sources/Shared/GamepadOutputTypes.swift"
       - "Sources/Shared/KeypadConfigurationExport.swift"
       - "Sources/Shared/ThumbleConfigurationBridge.swift"
+      - "Sources/Shared/ThumbleSkin.swift"
+      - "Sources/Shared/ThumbleLinkSnapshot.swift"
       - "Sources/Bridge/**"
       - "Sources/iOS/ControllerClient.swift"
       - "Sources/Mac/MacControllerServer.swift"
       - "Sources/Mac/MacControlOutputBinding.swift"
       - "Sources/Mac/KeyMap.swift"
       - "Tests/RustHostInteropTests.swift"
+      - "Tests/GamepadSharedOperationsSmokeTests.swift"
+      - "Tests/ThumbleSkinCompatibilityTests.swift"
+      - "Tests/ThumbleLinkTests.swift"
+      - "Tests/Fixtures/ThumbleLink/**"
       - "Tests/ThumbleCLIBackendTests.swift"
       - "Tests/ThumbleCLISmokeTestSuite.swift"
       - "Tests/ThumbleConfigurationBridgeTests.swift"
@@ -42,6 +48,7 @@ on:
       - "scripts/verify-controller-template-fixtures.sh"
       - "scripts/test_verify_controller_template_fixtures.py"
       - "scripts/verify-rust-host.sh"
+      - "scripts/verify-thumble-link-cli.py"
       - "scripts/release/macos-host.sh"
       - ".github/workflows/rust-host.yml"
       - "fly.toml"
@@ -60,12 +67,18 @@ on:
       - "Sources/Shared/GamepadOutputTypes.swift"
       - "Sources/Shared/KeypadConfigurationExport.swift"
       - "Sources/Shared/ThumbleConfigurationBridge.swift"
+      - "Sources/Shared/ThumbleSkin.swift"
+      - "Sources/Shared/ThumbleLinkSnapshot.swift"
       - "Sources/Bridge/**"
       - "Sources/iOS/ControllerClient.swift"
       - "Sources/Mac/MacControllerServer.swift"
       - "Sources/Mac/MacControlOutputBinding.swift"
       - "Sources/Mac/KeyMap.swift"
       - "Tests/RustHostInteropTests.swift"
+      - "Tests/GamepadSharedOperationsSmokeTests.swift"
+      - "Tests/ThumbleSkinCompatibilityTests.swift"
+      - "Tests/ThumbleLinkTests.swift"
+      - "Tests/Fixtures/ThumbleLink/**"
       - "Tests/ThumbleCLIBackendTests.swift"
       - "Tests/ThumbleCLISmokeTestSuite.swift"
       - "Tests/ThumbleConfigurationBridgeTests.swift"
@@ -86,6 +99,7 @@ on:
       - "scripts/verify-controller-template-fixtures.sh"
       - "scripts/test_verify_controller_template_fixtures.py"
       - "scripts/verify-rust-host.sh"
+      - "scripts/verify-thumble-link-cli.py"
       - "scripts/release/macos-host.sh"
       - ".github/workflows/rust-host.yml"
       - "fly.toml"
@@ -178,6 +192,9 @@ jobs:
           -scheme ThumbleCLI
           -destination 'platform=macOS'
           -only-testing:ThumbleCLITests/RustHostInteropTests
+          -only-testing:ThumbleCLITests/GamepadSharedOperationsSmokeTests
+          -only-testing:ThumbleCLITests/ThumbleSkinCompatibilityTests
+          -only-testing:ThumbleCLITests/ThumbleLinkTests
           -only-testing:ThumbleCLITests/ThumbleConfigurationBridgeTests
           -only-testing:ThumbleCLITests/ThumbleCLIBackendTests
           -only-testing:ThumbleCLITests/ThumbleCLISmokeTestSuite
@@ -194,6 +211,7 @@ jobs:
           test -x "$APP/Contents/MacOS/thumble-bridge"
           test -x "$APP/Contents/MacOS/thumble"
           test -x "$APP/Contents/MacOS/thumble-cli-bridge"
+          python3 scripts/verify-thumble-link-cli.py "$APP/Contents/MacOS"
           ./scripts/verify-profile-artifact-flow.sh "$APP/Contents/MacOS"
           ./scripts/verify-generation-spec-flow.sh "$APP/Contents/MacOS"
           ./scripts/verify-controller-template-fixtures.sh "$APP/Contents/MacOS"

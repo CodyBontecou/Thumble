@@ -402,7 +402,7 @@
           "id": "DE252A56-0FF1-5086-AA0E-798E72E3032A",
           "label": "R3",
           "layout": {
-            "centerX": 0.56,
+            "centerX": 0.69,
             "centerY": 0.88,
             "fillColor": {
               "alpha": 1,
@@ -1128,7 +1128,7 @@
           "kind": "button",
           "label": "R3",
           "layout": {
-            "centerX": 0.56,
+            "centerX": 0.69,
             "centerY": 0.88,
             "fillColor": {
               "alpha": 1,
@@ -1569,7 +1569,7 @@
           "id": "DE252A56-0FF1-5086-AA0E-798E72E3032A",
           "label": "R3",
           "layout": {
-            "centerX": 0.56,
+            "centerX": 0.69,
             "centerY": 0.88,
             "fillColor": {
               "alpha": 1,
@@ -2295,7 +2295,7 @@
           "kind": "button",
           "label": "R3",
           "layout": {
-            "centerX": 0.56,
+            "centerX": 0.69,
             "centerY": 0.88,
             "fillColor": {
               "alpha": 1,

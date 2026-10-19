@@ -354,7 +354,6 @@ struct RepairControl {
     stable_id: String,
     element_id: Option<thumble_protocol::KeypadElementID>,
     visual_role: Option<String>,
-    label: String,
     kind: String,
     center_x: f64,
     center_y: f64,
@@ -1167,7 +1166,6 @@ fn resolved_repair_controls(
                 .get("visualRole")
                 .and_then(Value::as_str)
                 .map(str::to_owned),
-            label: builtin_visual_label(customization, button),
             kind: "button".to_owned(),
             center_x,
             center_y,
@@ -1253,11 +1251,6 @@ fn resolved_repair_controls(
                 .get("visualRole")
                 .and_then(Value::as_str)
                 .map(str::to_owned),
-            label: button
-                .get("label")
-                .and_then(Value::as_str)
-                .unwrap_or("Button")
-                .to_owned(),
             kind: kind.to_owned(),
             center_x,
             center_y,
@@ -1296,7 +1289,6 @@ fn resolved_repair_controls(
             stable_id: "system.top_bar_activation".to_owned(),
             element_id: None,
             visual_role: Some("system".to_owned()),
-            label: "Control Bar".to_owned(),
             kind: "decoration".to_owned(),
             center_x,
             center_y,
@@ -2049,50 +2041,13 @@ fn ergonomic_role(control: &RepairControl) -> ErgonomicRole {
     {
         return ErgonomicRole::Exempt;
     }
+    // Match Swift's explicit role contract; labels and starter IDs are not semantics.
     match control.visual_role.as_deref() {
-        Some("movement") => return ErgonomicRole::Movement,
-        Some("utility" | "menu") => return ErgonomicRole::Utility,
-        Some("decoration" | "system" | "joystick" | "trackpad" | "trigger") => {
-            return ErgonomicRole::Exempt
-        }
-        Some("primary_action" | "secondary_action") => return ErgonomicRole::Action,
-        _ => {}
+        Some("movement") => ErgonomicRole::Movement,
+        Some("utility" | "menu") => ErgonomicRole::Utility,
+        Some("primary_action" | "secondary_action") => ErgonomicRole::Action,
+        _ => ErgonomicRole::Exempt,
     }
-    if control.identity.starts_with("custom:") && is_utility_label(&control.label) {
-        return ErgonomicRole::Utility;
-    }
-    match control.element_id.and_then(|id| id.starter_index()) {
-        Some(1..=4) => ErgonomicRole::Movement,
-        Some(9..=10) => ErgonomicRole::Utility,
-        _ => ErgonomicRole::Action,
-    }
-}
-
-fn is_utility_label(label: &str) -> bool {
-    let label = label.trim().to_ascii_lowercase();
-    matches!(
-        label.as_str(),
-        "+" | "-"
-            | "−"
-            | "l"
-            | "r"
-            | "zl"
-            | "zr"
-            | "lb"
-            | "rb"
-            | "lt"
-            | "rt"
-            | "menu"
-            | "start"
-            | "select"
-            | "back"
-            | "home"
-            | "options"
-            | "share"
-            | "coin"
-            | "utility"
-    ) || label.contains("shoulder")
-        || label.contains("bumper")
 }
 
 fn ergonomic_issues(

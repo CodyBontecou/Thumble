@@ -10,6 +10,9 @@ final class ThumbleSkinCompatibilityTests: XCTestCase {
             requiredRoles: [.movement, .primaryAction]
         )
         var exact = GamepadCustomization.defaultValue
+        // Semantic roles are explicit; starter button positions do not imply them.
+        exact.elements[0].visualRole = .movement
+        exact.elements[1].visualRole = .primaryAction
         exact.designMetadata = GamepadDesignMetadata(sourceTemplateID: "showcase", sourceTemplateRevision: 1)
 
         let exactResult = ThumbleSkinCompatibilityEvaluator.evaluate(

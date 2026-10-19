@@ -605,7 +605,7 @@ final class GamepadSharedOperationsSmokeTests: XCTestCase {
         )
         XCTAssertEqual(root["schema"] as? String, "com.codybontecou.thumble.customization-fix-goldens")
         let cases = try XCTUnwrap(root["cases"] as? [[String: Any]])
-        XCTAssertEqual(cases.count, 12)
+        XCTAssertEqual(cases.count, 13)
 
         for fixture in cases {
             let name = fixture["name"] as? String ?? "unnamed"

@@ -17,8 +17,8 @@ internal class ControlEffectPainter(private val presentation: JSONObject, privat
             val s = array.getJSONObject(index)
             val color = rgbaColor(s.optJSONObject("color"), Color.TRANSPARENT)
             Shadow((color and 0x00ffffff) or ((Color.alpha(color) * s.finite("opacity", 1.0).coerceIn(0.0, 1.0)).roundToInt() shl 24),
-                s.finite("radius", 0.0).coerceIn(0.0, 64.0).toFloat() * density,
-                s.finite("x", 0.0).coerceIn(-64.0, 64.0).toFloat() * density, s.finite("y", 0.0).coerceIn(-64.0, 64.0).toFloat() * density)
+                s.finite("radius", 0.0).coerceIn(0.0, 96.0).toFloat() * density,
+                s.finite("x", 0.0).coerceIn(-96.0, 96.0).toFloat() * density, s.finite("y", 0.0).coerceIn(-96.0, 96.0).toFloat() * density)
         }.filter { Color.alpha(it.color) > 0 } else listOf(Shadow(rgbaColor(presentation.optJSONObject("shadowColor"), Color.TRANSPARENT), n("shadowRadius"), n("shadowX"), n("shadowY"))).filter { Color.alpha(it.color) > 0 }
         val shadowOutset = shadows.sumOf { (it.radius * 3 + max(abs(it.x), abs(it.y))).toDouble() }.toFloat()
         val glow = if (presentation.has("glowColor")) n("glowRadius") * 3 else 0f

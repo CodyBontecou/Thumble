@@ -414,7 +414,8 @@ pub fn minimal_default_customization() -> Value {
     let elements = (1..=10).map(|number| {
         let id = KeypadElementID::preset(number);
         let output = OutputBinding { keyboard: keys.get(&id).cloned(), gamepad_buttons: std::collections::BTreeSet::from([gamepad[number as usize - 1].to_owned()]) }.element_value();
-        let visual_role = match number { 1..=4 => "movement", 5..=6 => "primary_action", 7..=8 => "secondary_action", 9 => "utility", _ => "menu" };
+        // Match Swift: starter identity and output do not imply a semantic role.
+        let visual_role = "custom";
         json!({"id": id, "label": labels[number as usize - 1], "kind": "button", "visualRole": visual_role, "layout": {}, "output": output, "defaultOutput": output, "partOutputs": []})
     }).collect::<Vec<_>>();
     json!({"elements": elements})
