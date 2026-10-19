@@ -149,9 +149,17 @@ jobs:
         run: ./scripts/verify-hosted-builder-local.sh --focused
 
   macos-host:
-    runs-on: macos-15
+    runs-on: macos-26
+    timeout-minutes: 60
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
     steps:
       - uses: actions/checkout@v4
+      - name: Show release build toolchain
+        run: |
+          test "$(uname -m)" = arm64
+          xcodebuild -version
+          swift --version
       - uses: dtolnay/rust-toolchain@1.88.0
         with:
           components: rustfmt, clippy
