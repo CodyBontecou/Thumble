@@ -16,8 +16,10 @@ concurrency:
 jobs:
   verify:
     name: Constrained stack and frame budgets
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 35
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
 
     steps:
       - name: Check out repository
