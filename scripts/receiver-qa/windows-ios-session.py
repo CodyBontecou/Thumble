@@ -136,13 +136,15 @@ async def session(args):
         if hashlib.sha256(binary.read_bytes()).hexdigest() != "4d2490e74082c5d48dbfedaf92576fa5bd1702379ab88eb7faa0cfbe8dc891b6":
             raise RuntimeError("Tunnel binary checksum mismatch")
         server = await asyncio.start_server(proxy, "127.0.0.1", 18867, limit=16384)
-        spawn([str(binary), "tunnel", "--url", "http://127.0.0.1:18867", "--no-autoupdate"], "tunnel")
+        tunnel = spawn([str(binary), "tunnel", "--protocol", "http2", "--url", "http://127.0.0.1:18867", "--no-autoupdate"], "tunnel")
         hostname = None
         for _ in range(120):
             found = re.search(r"https://[a-z0-9-]+\.trycloudflare\.com", (directory / "tunnel.log").read_text(errors="replace"))
-            if found:
+            if found and "Registered tunnel connection" in (directory / "tunnel.log").read_text(errors="replace"):
                 hostname = found.group(0)
                 break
+            if tunnel.poll() is not None:
+                raise RuntimeError("Tunnel exited before connecting")
             await asyncio.sleep(.5)
         if not hostname:
             raise RuntimeError("Tunnel did not become ready")

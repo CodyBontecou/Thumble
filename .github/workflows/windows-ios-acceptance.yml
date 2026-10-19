@@ -30,46 +30,12 @@ jobs:
         with:
           python-version: '3.12'
       - run: cargo build --locked --release --manifest-path Host/Cargo.toml -p thumble-receiver
-      - name: Start isolated Windows receiver and desktop
+      - name: Install official Actions artifact client
+        run: npm install --prefix .github/actions/receiver-windows-session --no-package-lock --ignore-scripts @actions/artifact@6.3.1
+      - name: Run actual iOS app desktop verification
+        uses: ./.github/actions/receiver-windows-session
         env:
           OPERATOR_PUBLIC_KEY: ${{ inputs.operator_public_key }}
-        shell: pwsh
-        run: |
-          $session = Join-Path $env:RUNNER_TEMP 'thumble-ios-session'
-          New-Item -ItemType Directory -Force $session | Out-Null
-          $script = Join-Path $env:GITHUB_WORKSPACE 'scripts/receiver-qa/windows-ios-session.py'
-          Start-Process python -ArgumentList @('-u', $script, '--directory', $session, '--public-key', $env:OPERATOR_PUBLIC_KEY) -RedirectStandardOutput "$session/coordinator.log" -RedirectStandardError "$session/coordinator-error.log"
-          for ($i = 0; $i -lt 180; $i++) {
-            if (Test-Path "$session/connection.bin") { exit 0 }
-            if (Test-Path "$session/complete") {
-              Get-Content "$session/coordinator-error.log" -ErrorAction SilentlyContinue
-              Get-Content "$session/desktop.log" -ErrorAction SilentlyContinue
-              throw 'Session setup failed'
-            }
-            Start-Sleep -Seconds 1
-          }
-          throw 'Session setup timed out'
-      - uses: actions/upload-artifact@v4
-        with:
-          name: windows-ios-encrypted-connection
-          path: ${{ runner.temp }}/thumble-ios-session/connection.bin
-          retention-days: 1
-          if-no-files-found: error
-      - name: Wait for actual iOS app desktop verification
-        shell: pwsh
-        run: |
-          $session = Join-Path $env:RUNNER_TEMP 'thumble-ios-session'
-          for ($i = 0; $i -lt 960; $i++) {
-            if (Test-Path "$session/complete") {
-              if (Test-Path "$session/evidence/result.json") {
-                $result = Get-Content "$session/evidence/result.json" -Raw | ConvertFrom-Json
-                if ($result.accepted) { exit 0 }
-              }
-              throw 'Actual iOS acceptance failed'
-            }
-            Start-Sleep -Seconds 1
-          }
-          throw 'Actual iOS acceptance timed out'
       - name: Stop all session-owned processes
         if: always()
         shell: pwsh
@@ -80,12 +46,3 @@ jobs:
             foreach ($processId in $processIds) { Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue }
           }
           # Logs can contain transient credentials. Publish only native witness evidence.
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: windows-ios-desktop-evidence
-          path: |
-            ${{ runner.temp }}/thumble-ios-session/evidence/*.json
-            ${{ runner.temp }}/thumble-ios-session/evidence/*.png
-          retention-days: 7
-          if-no-files-found: warn
