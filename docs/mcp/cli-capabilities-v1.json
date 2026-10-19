@@ -1560,6 +1560,22 @@
           "gate": "none"
         }
       ]
+    },
+    {
+      "id": "wow",
+      "executor": "swift-cli-and-rust-profile-authority",
+      "gate": "configuration-write",
+      "phoneEffect": "imported or refreshed profile synchronizes through host authority",
+      "operations": [
+        {
+          "id": "wow.import",
+          "cli": [
+            "wow import"
+          ],
+          "status": "host-cli-only",
+          "mcpTool": "edit_configuration_draft"
+        }
+      ]
     }
   ]
 }

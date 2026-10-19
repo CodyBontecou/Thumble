@@ -294,8 +294,16 @@ impl InputSequenceHistory {
         self.accept_event(sequence, identity, press, true)
     }
 
-    fn accept_event(&mut self, sequence: u64, identity: &InputIdentity, press: Option<u64>, stateful: bool) -> bool {
-        let highest = self.ordered.last_key_value()
+    fn accept_event(
+        &mut self,
+        sequence: u64,
+        identity: &InputIdentity,
+        press: Option<u64>,
+        stateful: bool,
+    ) -> bool {
+        let highest = self
+            .ordered
+            .last_key_value()
             .map_or(sequence, |(last, _)| (*last).max(sequence));
         let key = (identity.clone(), press);
         if highest.saturating_sub(sequence) >= Self::WINDOW
@@ -304,7 +312,9 @@ impl InputSequenceHistory {
         {
             return false;
         }
-        while self.ordered.first_key_value()
+        while self
+            .ordered
+            .first_key_value()
             .is_some_and(|(first, _)| highest.saturating_sub(*first) >= Self::WINDOW)
         {
             let (old_sequence, old_key) = self.ordered.pop_first().expect("history is nonempty");
@@ -313,7 +323,10 @@ impl InputSequenceHistory {
             }
         }
         self.ordered.insert(sequence, key.clone());
-        self.latest.entry(key).and_modify(|last| *last = (*last).max(sequence)).or_insert(sequence);
+        self.latest
+            .entry(key)
+            .and_modify(|last| *last = (*last).max(sequence))
+            .or_insert(sequence);
         true
     }
 }
@@ -1712,22 +1725,36 @@ impl HostCore {
         };
         let accepted = if let Some(identity) = identity {
             self.digital_sequences.accept(
-                sequence, identity, ControllerWireCodec::input_press_identifier(message),
+                sequence,
+                identity,
+                ControllerWireCodec::input_press_identifier(message),
             )
         } else {
             let key = match (message.pointer_event, message.pointer_button) {
                 (Some(ControllerPointerEventKind::Move), _) => "pointer.move",
                 (Some(ControllerPointerEventKind::Scroll), _) => "pointer.scroll",
-                (Some(ControllerPointerEventKind::Button), Some(ControllerPointerButton::Left)) => "pointer.left",
-                (Some(ControllerPointerEventKind::Button), Some(ControllerPointerButton::Right)) => "pointer.right",
-                (Some(ControllerPointerEventKind::Button), Some(ControllerPointerButton::Middle)) => "pointer.middle",
+                (Some(ControllerPointerEventKind::Button), Some(ControllerPointerButton::Left)) => {
+                    "pointer.left"
+                }
+                (
+                    Some(ControllerPointerEventKind::Button),
+                    Some(ControllerPointerButton::Right),
+                ) => "pointer.right",
+                (
+                    Some(ControllerPointerEventKind::Button),
+                    Some(ControllerPointerButton::Middle),
+                ) => "pointer.middle",
                 _ => "pointer.invalid",
             };
             // Relative motion/scroll deltas commute: apply each sequence once, even
             // when a faster lane overtakes another delta. Button state is ordered
             // independently, so a newer move cannot suppress a delayed release.
-            self.pointer_sequences.accept_event(sequence, &InputIdentity::LocalControl(key.into()), None,
-                message.pointer_event == Some(ControllerPointerEventKind::Button))
+            self.pointer_sequences.accept_event(
+                sequence,
+                &InputIdentity::LocalControl(key.into()),
+                None,
+                message.pointer_event == Some(ControllerPointerEventKind::Button),
+            )
         };
         if !accepted {
             self.counters.duplicate_sequences = self.counters.duplicate_sequences.saturating_add(1);

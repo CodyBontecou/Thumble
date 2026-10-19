@@ -321,7 +321,11 @@ pub async fn render_skin_preview(request: &SkinPreviewRequest) -> Result<SkinPre
         orientation: summary.orientation,
         color_scheme: summary.color_scheme,
         state: summary.state,
-        action_set: request.action_set.unwrap_or(SkinPreviewActionSet::Base).as_str().to_owned(),
+        action_set: request
+            .action_set
+            .unwrap_or(SkinPreviewActionSet::Base)
+            .as_str()
+            .to_owned(),
         pixel_width: width,
         pixel_height: height,
         byte_length: u64::try_from(png.len()).unwrap_or(u64::MAX),

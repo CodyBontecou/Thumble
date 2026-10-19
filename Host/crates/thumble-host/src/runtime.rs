@@ -1897,7 +1897,7 @@ fn decode_and_handle(
 
 async fn wait_for_shutdown_signal() {
     use std::future::pending;
-    use tokio::signal::unix::{SignalKind, signal};
+    use tokio::signal::unix::{signal, SignalKind};
 
     let mut terminate = signal(SignalKind::terminate()).ok();
     let mut hangup = signal(SignalKind::hangup()).ok();
@@ -2443,7 +2443,9 @@ mod tests {
             inner.realtime.accept(1, "test-realtime-token".into());
             let mut hello = ControllerMessage::new(ControllerMessageType::Hello, 0);
             hello.realtime_token = Some("test-realtime-token".into());
-            inner.realtime.route("127.0.0.1:3456".parse().unwrap(), &hello);
+            inner
+                .realtime
+                .route("127.0.0.1:3456".parse().unwrap(), &hello);
             assert!(inner.realtime.status.authenticated);
             let effects = inner
                 .core
@@ -2476,7 +2478,9 @@ mod tests {
         assert!(!inner.realtime.status.authenticated);
         let mut hello = ControllerMessage::new(ControllerMessageType::Hello, 0);
         hello.realtime_token = Some("test-realtime-token".into());
-        inner.realtime.route("127.0.0.1:3456".parse().unwrap(), &hello);
+        inner
+            .realtime
+            .route("127.0.0.1:3456".parse().unwrap(), &hello);
         assert!(!inner.realtime.status.authenticated);
         assert_eq!(inner.output.snapshot().held_key_count, 0);
         assert!(inner.output.gamepad_status().pressed_buttons.is_empty());

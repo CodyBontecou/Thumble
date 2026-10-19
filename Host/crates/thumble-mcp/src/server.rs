@@ -1,8 +1,8 @@
 use crate::channel::SharedHostChannel;
 use crate::rate_limit::PressRateLimiter;
 use crate::skin_preview::{
-    render_skin_preview, SkinPreviewActionSet, SkinPreviewOrientation, SkinPreviewRequest, SkinPreviewScheme,
-    SkinPreviewState,
+    render_skin_preview, SkinPreviewActionSet, SkinPreviewOrientation, SkinPreviewRequest,
+    SkinPreviewScheme, SkinPreviewState,
 };
 use rmcp::{
     handler::server::{router::tool::ToolRouter, wrapper::Parameters},
@@ -6124,7 +6124,9 @@ mod tests {
     #[tokio::test]
     async fn preview_skin_workspace_rejects_unknown_action_set_before_cli() {
         let server = ThumbleMcp::new(
-            PathBuf::from("/definitely/missing/control.sock"), false, false,
+            PathBuf::from("/definitely/missing/control.sock"),
+            false,
+            false,
         );
         let error = server
             .preview_skin_workspace(Parameters(PreviewSkinWorkspaceParams {

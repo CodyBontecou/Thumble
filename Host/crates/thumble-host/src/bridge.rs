@@ -8636,13 +8636,15 @@ fn valid_generated_install(
         || profile
             .get("outputMode")
             .and_then(serde_json::Value::as_str)
-            != Some(if expectation.template.is_some_and(|(template, _)| {
-                template == crate::draft_operation::ControllerTemplate::WowForever
-            }) {
-                "controller"
-            } else {
-                "keyboard"
-            })
+            != Some(
+                if expectation.template.is_some_and(|(template, _)| {
+                    template == crate::draft_operation::ControllerTemplate::WowForever
+                }) {
+                    "controller"
+                } else {
+                    "keyboard"
+                },
+            )
         || [
             "launchTarget",
             "skinReference",

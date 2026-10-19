@@ -1,11 +1,11 @@
 use futures_util::{SinkExt, StreamExt};
 use std::time::Duration;
-use tempfile::{TempDir, tempdir};
+use tempfile::{tempdir, TempDir};
 use thumble_core::PersistentState;
 use thumble_host::{
-    control::{ControlRequest, HostStatus, send_request},
+    control::{send_request, ControlRequest, HostStatus},
     paths::HostPaths,
-    runtime::{RuntimeOptions, run_runtime},
+    runtime::{run_runtime, RuntimeOptions},
     storage::save_atomic,
 };
 use thumble_protocol::{
@@ -16,7 +16,7 @@ use tokio::{
     net::{TcpStream, UdpSocket},
     task::JoinHandle,
 };
-use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async, tungstenite::Message};
+use tokio_tungstenite::{connect_async, tungstenite::Message, MaybeTlsStream, WebSocketStream};
 
 type Ws = WebSocketStream<MaybeTlsStream<TcpStream>>;
 async fn start(
@@ -171,8 +171,12 @@ async fn udp_auth_mirrored_multitouch_and_websocket_release_after_udp_loss() {
     datagram.send(&edge(6, true, 4, 11)).await.unwrap();
     wait(&paths, |s| s.realtime.udp_accepted_inputs == 2).await;
     // UDP drops here: older reliable releases must still release both holds.
-    ws.send(Message::Binary(edge(5, false, 3, 10).into())).await.unwrap();
-    ws.send(Message::Binary(edge(6, false, 5, 11).into())).await.unwrap();
+    ws.send(Message::Binary(edge(5, false, 3, 10).into()))
+        .await
+        .unwrap();
+    ws.send(Message::Binary(edge(6, false, 5, 11).into()))
+        .await
+        .unwrap();
     let released = wait(&paths, |s| s.core.counters.accepted_inputs == 5).await;
     assert!(released.core.pressed_buttons.is_empty());
     assert_eq!(released.realtime.udp_accepted_inputs, 2);
@@ -240,8 +244,14 @@ async fn ipv6_udp_release_barrier_retires_delayed_generation() {
     barrier.input_protocol_version = Some(3);
     barrier.input_generation = Some(8);
     barrier.input_sequence = Some(1);
-    socket.send(&ControllerWireCodec::encode(&barrier).unwrap()).await.unwrap();
-    wait(&paths, |s| s.core.active_generation == Some(8) && s.core.pressed_buttons.is_empty()).await;
+    socket
+        .send(&ControllerWireCodec::encode(&barrier).unwrap())
+        .await
+        .unwrap();
+    wait(&paths, |s| {
+        s.core.active_generation == Some(8) && s.core.pressed_buttons.is_empty()
+    })
+    .await;
     socket.send(&edge(5, true, 2, 2)).await.unwrap();
     let status = wait(&paths, |s| s.core.counters.stale_generations > 0).await;
     assert!(status.core.pressed_buttons.is_empty());
@@ -268,14 +278,23 @@ async fn reordered_relative_udp_motion_cannot_suppress_reliable_pointer_release(
     let mut down = pointer(ControllerPointerEventKind::Button, 1);
     down.pointer_button = Some(ControllerPointerButton::Left);
     down.state = Some(ButtonPressState::Down);
-    datagram.send(&ControllerWireCodec::encode(&down).unwrap()).await.unwrap();
+    datagram
+        .send(&ControllerWireCodec::encode(&down).unwrap())
+        .await
+        .unwrap();
     wait(&paths, |s| s.core.active_pointer_buttons.len() == 1).await;
     let mut motion = pointer(ControllerPointerEventKind::Move, 4);
     motion.delta_x = Some(7.0);
-    datagram.send(&ControllerWireCodec::encode(&motion).unwrap()).await.unwrap();
+    datagram
+        .send(&ControllerWireCodec::encode(&motion).unwrap())
+        .await
+        .unwrap();
     let mut scroll = pointer(ControllerPointerEventKind::Scroll, 5);
     scroll.delta_y = Some(2.0);
-    datagram.send(&ControllerWireCodec::encode(&scroll).unwrap()).await.unwrap();
+    datagram
+        .send(&ControllerWireCodec::encode(&scroll).unwrap())
+        .await
+        .unwrap();
     wait(&paths, |s| s.realtime.udp_accepted_inputs == 3).await;
     let mut earlier = pointer(ControllerPointerEventKind::Move, 3);
     earlier.delta_x = Some(3.0);
@@ -289,7 +308,10 @@ async fn reordered_relative_udp_motion_cannot_suppress_reliable_pointer_release(
     assert!(status.output.held_pointer_buttons.is_empty());
     assert_eq!(status.output.events_executed - baseline, 5);
     assert_eq!(status.core.counters.expired_holds, 0);
-    datagram.send(&ControllerWireCodec::encode(&down).unwrap()).await.unwrap();
+    datagram
+        .send(&ControllerWireCodec::encode(&down).unwrap())
+        .await
+        .unwrap();
     send(&mut ws, &motion).await;
     let status = wait(&paths, |s| s.core.counters.duplicate_sequences >= 2).await;
     assert!(status.core.active_pointer_buttons.is_empty());

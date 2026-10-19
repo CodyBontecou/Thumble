@@ -59,6 +59,14 @@ internal object ControlPresentation {
         }
         val stateStyle = merge(JSONObject(), normal)
         if (override != null) merge(stateStyle, override)
+        // Native color-only effects acquire usable defaults before explicit
+        // radii/opacity/width from this same state are applied (including zero).
+        if (stateStyle.has("innerShadowColor") && result.finite("innerShadowRadius",0.0) <= 0) result.put("innerShadowRadius",4)
+        if (stateStyle.has("highlightColor")) {
+            if (result.finite("highlightOpacity",0.0) <= 0) result.put("highlightOpacity",.42)
+            if (result.finite("highlightRadius",0.0) <= 0) result.put("highlightRadius",8)
+        }
+        if ((stateStyle.has("bevelHighlightColor") || stateStyle.has("bevelShadowColor")) && result.finite("bevelWidth",0.0) <= 0) result.put("bevelWidth",1)
         merge(result, stateStyle)
         visual.optJSONObject("icon")?.let { result.put("icon", it) }
     }
@@ -74,7 +82,10 @@ internal object ControlPresentation {
     }
     private fun normalize(result: JSONObject) {
         val ranges = mapOf("strokeWidth" to (0.0 to 12.0), "opacity" to (0.0 to 1.0), "scale" to (.5 to 1.5), "shadowRadius" to (0.0 to 48.0),
-            "shadowX" to (-64.0 to 64.0), "shadowY" to (-64.0 to 64.0), "blurRadius" to (0.0 to 24.0), "glowRadius" to (0.0 to 64.0))
+            "shadowX" to (-64.0 to 64.0), "shadowY" to (-64.0 to 64.0), "blurRadius" to (0.0 to 24.0), "glowRadius" to (0.0 to 64.0),
+            "innerShadowRadius" to (0.0 to 64.0),"innerShadowX" to (-64.0 to 64.0),"innerShadowY" to (-64.0 to 64.0),
+            "highlightRadius" to (0.0 to 64.0),"highlightX" to (-64.0 to 64.0),"highlightY" to (-64.0 to 64.0),"highlightOpacity" to (0.0 to 1.0),
+            "bevelWidth" to (0.0 to 24.0),"indexWidth" to (0.0 to 12.0))
         for ((key, range) in ranges) if (result.has(key)) result.put(key, result.finite(key, range.first).coerceIn(range.first, range.second))
         result.optJSONObject("content")?.let { content ->
             for ((key, range) in mapOf("fontSize" to (8.0 to 72.0), "tracking" to (-4.0 to 12.0), "labelPadding" to (0.0 to 32.0))) {

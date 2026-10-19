@@ -17,7 +17,7 @@ EXPECTED = {
     "detachApplicationFromProfile": (1, 1),
     "launchAttachedApplication": (1, 0),
     "skin": (3, 2),
-    "renderSkinPreview": (1, 0),
+    "renderSkinPreview": (2, 0),  # mutually exclusive lazy reads; artifact previews need no store
     "customization": (2, 0),
     "validateLayout": (1, 0),
     "previewLayout": (1, 0),

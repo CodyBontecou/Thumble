@@ -37,6 +37,7 @@ internal class ControllerSurface(context: Context, private val legacyArtworkBlen
     private var dark = false
     private var canvasLayout = JSONObject()
     private var assets = AssetImages()
+    private var effectCache = EffectRasterCache()
     private var artwork = ArtworkPainter(null, assets, resources.displayMetrics.density, legacyArtworkBlending)
     private var legacyArtworkBuffer: android.graphics.Bitmap? = null
     private data class Faces(val normal: JSONObject, val engaged: JSONObject)
@@ -52,6 +53,8 @@ internal class ControllerSurface(context: Context, private val legacyArtworkBlen
         controls = profile?.controls(landscape).orEmpty()
         canvasLayout = layout
         assets = AssetImages(layout.optJSONObject("assetLibrary") ?: JSONObject())
+        effectCache = EffectRasterCache()
+        clipChildren = false
         artwork = ArtworkPainter(layout.optJSONArray("artworkLayers"), assets, resources.displayMetrics.density, legacyArtworkBlending)
         artwork.resize(width, height)
         if (!artwork.requiresSoftwareBuffer) legacyArtworkBuffer = null
@@ -112,7 +115,7 @@ internal class ControllerSurface(context: Context, private val legacyArtworkBlen
             view.setTextColor(rgbaColor(face.optJSONObject("foregroundColor"), if (dark) Color.WHITE else Color.BLACK))
             view.isPressed = engaged
             if (control.kind != "text" && view.background !is StateListDrawable) {
-                fun drawable(presentation: JSONObject) = ControlDrawable(control.shape, control.style, presentation.getJSONObject("fillStyle"), resources.displayMetrics.density, assets, presentation)
+                fun drawable(presentation: JSONObject) = ControlDrawable(control.shape, control.style, presentation.getJSONObject("fillStyle"), resources.displayMetrics.density, assets, presentation,effectCache)
                 view.background = StateListDrawable().apply {
                     addState(intArrayOf(android.R.attr.state_pressed), drawable(pair.engaged))
                     addState(intArrayOf(), drawable(pair.normal))
@@ -121,6 +124,11 @@ internal class ControllerSurface(context: Context, private val legacyArtworkBlen
             view.alpha = face.finite("opacity", 1.0).toFloat()
             view.scaleX = ControlPresentation.effectiveScale(control, engaged, face); view.scaleY = view.scaleX
             val faceView = view as ControlFaceView
+            faceView.effectSignature = when (control.kind) {
+                "joystick" -> router.joystickVectors[control.id].toString()
+                "trigger" -> router.triggerValues[control.id].toString()
+                else -> "static"
+            }
             if (faceView.appliedPresentation !== face) {
                 applyContent(view, control, face)
                 faceView.appliedPresentation = face
@@ -132,7 +140,7 @@ internal class ControllerSurface(context: Context, private val legacyArtworkBlen
         val content = face.optJSONObject("content")
         val icon = ControlIcon.parse(face.optJSONObject("icon"))
         val faceView = view as ControlFaceView
-        faceView.configure(control, content, icon, assets, canvasLayout.optBoolean("showsButtonLabels", true))
+        faceView.configure(control, content, icon, assets, canvasLayout.optBoolean("showsButtonLabels", true),effectCache)
         val visible = faceView.metrics.legendVisible
         val legend = content?.let { if (it.has("legend") && !it.isNull("legend")) it.optString("legend") else null } ?: control.legend
         val text = if (visible) legend else ""
@@ -171,9 +179,11 @@ internal class ControllerSurface(context: Context, private val legacyArtworkBlen
         canvas.drawBitmap(bitmap, 0f, 0f, null)
     }
     override fun dispatchDraw(canvas: Canvas) {
+        val saved = canvas.save(); canvas.clipRect(0,0,width,height)
         artwork.draw(canvas, "underlay", legacyArtworkBuffer)
         super.dispatchDraw(canvas)
         artwork.draw(canvas, "overlay", legacyArtworkBuffer)
+        canvas.restoreToCount(saved)
     }
     override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
         val density = resources.displayMetrics.density
@@ -354,10 +364,15 @@ internal class ControlFaceView(context: Context) : TextView(context) {
     private var labels = true
     private val painters = mutableMapOf<ControlIcon, IconPainter>()
     private var iconPainter: IconPainter? = null
+    private var effectCache = EffectRasterCache()
+    private val effectID = EffectRasterCache.id()
+    var effectSignature = "static"
+    private var lastDynamicKey: String? = null
     var metrics = IconLayout(0.0, Vector(), Vector(), false)
         private set
-    fun configure(control: Control, content: JSONObject?, icon: ControlIcon?, assets: AssetImages, labels: Boolean) {
+    fun configure(control: Control, content: JSONObject?, icon: ControlIcon?, assets: AssetImages, labels: Boolean, effects: EffectRasterCache) {
         this.control = control; this.content = content; this.icon = icon; this.labels = labels
+        effectCache = effects
         iconPainter = if (icon != null && control.kind in setOf("button", "trigger", "decoration")) painters.getOrPut(icon) { IconPainter(icon, assets) } else null
         updateMetrics()
     }
@@ -366,6 +381,24 @@ internal class ControlFaceView(context: Context) : TextView(context) {
         control?.let { metrics = iconLayout(it, width / density.toDouble(), height / density.toDouble(), content, icon, labels) }
     }
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) { super.onSizeChanged(w, h, oldw, oldh); updateMetrics() }
+    override fun draw(canvas: Canvas) {
+        val radius = (appliedPresentation?.finite("blurRadius",0.0) ?: 0.0).toFloat() * resources.displayMetrics.density
+        if (radius <= .01f || width <= 0 || height <= 0) { super.draw(canvas); return }
+        val key = "$effectID:$width:$height:${System.identityHashCode(appliedPresentation)}:$effectSignature"
+        if (effectSignature != "static" && lastDynamicKey != key) { lastDynamicKey?.let { effectCache.remove(it) }; lastDynamicKey = key }
+        val raster = effectCache.get(key) {
+            val extent = (background?.current as? ControlDrawable)?.visualOutset ?: 0f
+            val pad = ceil(extent + radius * 3 + 2).toInt()
+            val scale = max(1.0,sqrt((width+2.0*pad)*(height+2.0*pad)/1_048_576)).toFloat()
+            val bitmap = android.graphics.Bitmap.createBitmap(ceil((width+2*pad)/scale).toInt(),ceil((height+2*pad)/scale).toInt(),android.graphics.Bitmap.Config.ARGB_8888)
+            val local = Canvas(bitmap); local.scale(1/scale,1/scale); local.translate(pad.toFloat(),pad.toFloat()); drawUnblurred(local)
+            val blurred = blurBitmap(bitmap,radius/scale)
+            if (blurred !== bitmap) bitmap.recycle()
+            EffectRaster(blurred,-pad.toFloat(),-pad.toFloat(),scale)
+        }
+        raster.draw(canvas)
+    }
+    private fun drawUnblurred(canvas: Canvas) = super.draw(canvas)
     override fun onDraw(canvas: Canvas) {
         drawIndicator(canvas)
         val density = resources.displayMetrics.density

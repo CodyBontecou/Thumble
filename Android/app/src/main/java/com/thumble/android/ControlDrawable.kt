@@ -22,7 +22,7 @@ internal fun rgbaColor(json: JSONObject?, fallback: Int): Int = if (json == null
 /** Canonical shape/fill rendering. Reuses its path and shader across touch frames. */
 internal class ControlDrawable(private val shape: String, private val style: JSONObject,
     private val fill: JSONObject, private val density: Float, private val assets: AssetImages = AssetImages(),
-    private val presentation: JSONObject = JSONObject()) : Drawable() {
+    private val presentation: JSONObject = JSONObject(), private val effectCache: EffectRasterCache = EffectRasterCache()) : Drawable() {
     private val path = Path()
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { this.style = Paint.Style.STROKE }
@@ -31,9 +31,14 @@ internal class ControlDrawable(private val shape: String, private val style: JSO
     private var baseAlpha = 255
     private var externalFilter: ColorFilter? = null
     private var image: ImageFillPainter? = null
+    private val effects = ControlEffectPainter(presentation,density)
+    private val effectID = EffectRasterCache.id()
+    private var effectRevision = 0
+    private val compositePaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+    val visualOutset: Float get() = if (effects.hasEffects) effects.outset else 0f
     private val pressFilter = ColorMatrixColorFilter(ColorMatrix(floatArrayOf(
         .74f, 0f, 0f, 0f, 0f, 0f, .74f, 0f, 0f, 0f, 0f, 0f, .74f, 0f, 0f, 0f, 0f, 0f, 1f, 0f)))
-    fun setPressed(value: Boolean) { if (pressed != value) { pressed = value; invalidateSelf() } }
+    fun setPressed(value: Boolean) { if (pressed != value) { pressed = value; effectRevision++; invalidateSelf() } }
     override fun onBoundsChange(bounds: Rect) {
         path.reset()
         val rect = RectF(bounds)
@@ -127,19 +132,28 @@ internal class ControlDrawable(private val shape: String, private val style: JSO
         }
     }
     override fun draw(canvas: Canvas) {
+        compositePaint.alpha = opacity; compositePaint.colorFilter = externalFilter
+        if (effects.hasEffects) {
+            val key = "$effectID:$effectRevision:$bounds"
+            effectCache.get(key) { effects.raster(bounds,path,::drawCore) }.draw(canvas,compositePaint)
+        } else if (opacity < 255 || externalFilter != null) {
+            val save = canvas.saveLayer(RectF(bounds),compositePaint); drawCore(canvas); canvas.restoreToCount(save)
+        } else drawCore(canvas)
+    }
+    private fun drawCore(canvas: Canvas) {
         val imagePainter = image
         if (imagePainter != null) {
-            val saved = canvas.save(); canvas.clipPath(path); imagePainter.draw(canvas, opacity); canvas.restoreToCount(saved)
+            val saved = canvas.save(); canvas.clipPath(path); imagePainter.draw(canvas, 255); canvas.restoreToCount(saved)
         } else {
-            paint.alpha = if (paint.shader == null) baseAlpha * opacity / 255 else opacity
-            paint.colorFilter = externalFilter ?: if (pressed) pressFilter else null
+            paint.alpha = if (paint.shader == null) baseAlpha else 255
+            paint.colorFilter = if (pressed) pressFilter else null
             canvas.drawPath(path, paint)
         }
         val strokeWidth = presentation.finite("strokeWidth", 0.0).coerceIn(0.0, 12.0).toFloat() * density
         if (strokeWidth > 0) {
             strokePaint.strokeWidth = strokeWidth
             strokePaint.color = rgbaColor(presentation.optJSONObject("strokeColor"), Color.TRANSPARENT)
-            strokePaint.alpha = Color.alpha(strokePaint.color) * opacity / 255
+            strokePaint.alpha = Color.alpha(strokePaint.color)
             canvas.drawPath(path, strokePaint)
         }
     }
