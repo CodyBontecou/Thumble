@@ -802,9 +802,17 @@ public enum ControllerDesignWorkspace {
             let current = try JSONDecoder().decodeUnique(ControllerDesignSession.Review.self,
                 from: boundedData(root.appendingPathComponent("reviews/review-\(critique.review)/manifest.json"), root: root))
             guard try digest(current) == critique.evidenceSHA256 else { throw ControllerDesignError.staleEvidence("manifest changed during critique") }
-            for file in [current.package, current.contactSheet] + current.frames.map(\.image)
-                + (current.controlBar.map { [$0.contactSheet] + $0.frames.map(\.image) } ?? [])
-                + (current.drawer.map { [$0.contactSheet] + $0.frames.map(\.image) } ?? []) {
+            var reviewFiles: [ControllerDesignSession.FileDigest] = [current.package, current.contactSheet]
+            reviewFiles.append(contentsOf: current.frames.map(\.image))
+            if let controlBar = current.controlBar {
+                reviewFiles.append(controlBar.contactSheet)
+                reviewFiles.append(contentsOf: controlBar.frames.map(\.image))
+            }
+            if let drawer = current.drawer {
+                reviewFiles.append(drawer.contactSheet)
+                reviewFiles.append(contentsOf: drawer.frames.map(\.image))
+            }
+            for file in reviewFiles {
                 let bytes = try boundedData(root.appendingPathComponent(file.path), root: root)
                 guard bytes.count == file.byteCount, bytes.thumbleSHA256 == file.sha256 else {
                     throw ControllerDesignError.staleEvidence("review pixels or package changed during critique")
