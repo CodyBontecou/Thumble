@@ -508,7 +508,7 @@
             }
           },
           "partOutputs": [],
-          "visualRole": "movement"
+          "visualRole": "custom"
         },
         {
           "defaultOutput": {
@@ -552,7 +552,7 @@
             }
           },
           "partOutputs": [],
-          "visualRole": "movement"
+          "visualRole": "custom"
         },
         {
           "defaultOutput": {
@@ -596,7 +596,7 @@
             }
           },
           "partOutputs": [],
-          "visualRole": "movement"
+          "visualRole": "custom"
         },
         {
           "defaultOutput": {
@@ -640,7 +640,7 @@
             }
           },
           "partOutputs": [],
-          "visualRole": "movement"
+          "visualRole": "custom"
         },
         {
           "defaultOutput": {
@@ -683,7 +683,7 @@
             }
           },
           "partOutputs": [],
-          "visualRole": "primary_action"
+          "visualRole": "custom"
         },
         {
           "defaultOutput": {
@@ -726,7 +726,7 @@
             }
           },
           "partOutputs": [],
-          "visualRole": "primary_action"
+          "visualRole": "custom"
         },
         {
           "defaultOutput": {
@@ -769,7 +769,7 @@
             }
           },
           "partOutputs": [],
-          "visualRole": "menu"
+          "visualRole": "custom"
         },
         {
           "id": "C5EC51F7-C610-572F-9171-A8699D614ED6",
