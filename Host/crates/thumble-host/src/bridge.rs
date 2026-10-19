@@ -158,6 +158,17 @@ impl ConfigurationBridge {
     }
 
     fn execute(&self, input: Vec<u8>) -> Result<Vec<u8>, ConfigurationBridgeError> {
+        self.execute_bounded(input, MAXIMUM_BRIDGE_BYTES)
+    }
+
+    pub(crate) fn execute_bounded(
+        &self,
+        input: Vec<u8>,
+        maximum_input_bytes: usize,
+    ) -> Result<Vec<u8>, ConfigurationBridgeError> {
+        if input.len() > maximum_input_bytes + 1 {
+            return Err(ConfigurationBridgeError::InputTooLarge);
+        }
         validate_executable(&self.executable)?;
         let mut command = Command::new(&self.executable);
         command

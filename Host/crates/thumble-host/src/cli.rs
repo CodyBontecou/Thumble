@@ -58,6 +58,11 @@ pub enum HostCommand {
         #[arg(long)]
         json: bool,
     },
+    /// Manage the running receiver's skin library and profile appearance.
+    Skin {
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        arguments: Vec<String>,
+    },
     /// Select an installed profile by ID.
     SelectProfile {
         profile_id: String,
@@ -176,6 +181,7 @@ pub async fn execute(cli: Cli, paths: HostPaths) -> Result<(), String> {
         HostCommand::Accessibility(arguments) => accessibility(&paths, arguments).await,
         HostCommand::Profiles { json } => profiles(&paths, json).await,
         HostCommand::Controls { json } => controls(&paths, json).await,
+        HostCommand::Skin { arguments } => skin(&paths, arguments).await,
         HostCommand::SelectProfile { profile_id, json } => {
             select_profile(&paths, profile_id, json).await
         }
@@ -646,6 +652,174 @@ fn print_human_status(status: &HostStatus) {
     for url in &status.urls {
         println!("URL: {url}");
     }
+}
+
+async fn skin(paths: &HostPaths, args: Vec<String>) -> Result<(), String> {
+    use crate::cli_profile::ProfileSelector;
+    use crate::skin_command::SkinCommand;
+    use crate::skins::SkinReference;
+    use base64::{engine::general_purpose::STANDARD, Engine};
+    use std::io::Read;
+    let action = args
+        .first()
+        .map(String::as_str)
+        .ok_or("Expected skin list|import|export|apply|detach|remove")?;
+    let action = match action {
+        "ls" => "list",
+        "set" => "apply",
+        "rm" => "remove",
+        other => other,
+    };
+    let mut target = None;
+    let mut profile = ProfileSelector::Active;
+    let mut profile_seen = false;
+    let mut appearance = "light".to_owned();
+    let mut appearance_seen = false;
+    let mut output = None;
+    let mut replace = false;
+    let mut allow_downgrade = false;
+    let mut i = 1;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--json" => (),
+            "--replace" if !replace => replace = true,
+            "--allow-downgrade" if !allow_downgrade => allow_downgrade = true,
+            "--profile" if !profile_seen => {
+                i += 1;
+                let value = args.get(i).ok_or("Missing profile selector")?;
+                profile = match value.as_str() {
+                    "active" => ProfileSelector::Active,
+                    "default" => ProfileSelector::Default,
+                    _ => uuid::Uuid::parse_str(value)
+                        .map(|profile_id| ProfileSelector::Id { profile_id })
+                        .unwrap_or_else(|_| ProfileSelector::Name {
+                            name: value.clone(),
+                        }),
+                };
+                profile_seen = true;
+            }
+            "--appearance" if !appearance_seen => {
+                i += 1;
+                appearance = args.get(i).ok_or("Missing appearance")?.clone();
+                appearance_seen = true;
+            }
+            "-o" | "--output" if output.is_none() => {
+                i += 1;
+                output = Some(args.get(i).ok_or("Missing output path")?.clone());
+            }
+            value if !value.starts_with('-') && target.is_none() => target = Some(value.to_owned()),
+            _ => return Err("Unexpected or repeated skin argument".into()),
+        }
+        i += 1;
+    }
+    if !matches!(appearance.as_str(), "light" | "dark") {
+        return Err("Expected light or dark appearance".into());
+    }
+    if (profile_seen || appearance_seen) && !matches!(action, "apply" | "detach") {
+        return Err("Profile/appearance require apply or detach".into());
+    }
+    if output.is_some() && !matches!(action, "export" | "share") {
+        return Err("Output requires export".into());
+    }
+    if (replace || allow_downgrade) && !matches!(action, "import" | "install") {
+        return Err("Replace requires import".into());
+    }
+    if matches!(action, "list" | "detach") && target.is_some() {
+        return Err("Unexpected skin target".into());
+    }
+    let target = target.unwrap_or_default();
+    let reference = || -> Result<SkinReference, String> {
+        let (identifier, version) = target
+            .rsplit_once('@')
+            .ok_or("Use an exact identifier@version")?;
+        if identifier.is_empty() || version.is_empty() {
+            return Err("Use an exact identifier@version".into());
+        }
+        Ok(SkinReference {
+            identifier: identifier.into(),
+            version: version.into(),
+        })
+    };
+    let request = match action {
+        "list" => SkinCommand::List,
+        "import" | "install" => {
+            let file = File::open(&target).map_err(|_| "Could not read skin archive")?;
+            let mut bytes = Vec::new();
+            file.take(3 * 1024 * 1024 + 1)
+                .read_to_end(&mut bytes)
+                .map_err(|_| "Could not read skin archive")?;
+            if bytes.len() > 3 * 1024 * 1024 {
+                return Err("skin_sync_limit".into());
+            }
+            SkinCommand::Import {
+                archive: STANDARD.encode(bytes),
+                policy: if allow_downgrade {
+                    "allowDowngrade"
+                } else if replace {
+                    "replaceSameVersion"
+                } else {
+                    "newerOnly"
+                }
+                .into(),
+            }
+        }
+        "export" | "share" => SkinCommand::Export {
+            reference: reference()?,
+        },
+        "apply" => SkinCommand::Apply {
+            reference: reference()?,
+            profile,
+            appearance,
+        },
+        "detach" => SkinCommand::Detach {
+            profile,
+            appearance,
+        },
+        "remove" | "delete" => SkinCommand::Remove {
+            reference: reference()?,
+        },
+        _ => return Err("Unknown receiver skin command".into()),
+    };
+    let response =
+        require_ok(send_request(&paths.control_socket, &ControlRequest::Skin { request }).await?)?;
+    let value = response.skin.ok_or("Missing skin response")?;
+    if matches!(action, "export" | "share") {
+        let path = output.ok_or("Skin export requires -o <file>")?;
+        let bytes = STANDARD
+            .decode(
+                value
+                    .get("archive")
+                    .and_then(serde_json::Value::as_str)
+                    .ok_or("Missing archive")?,
+            )
+            .map_err(|_| "Invalid archive response")?;
+        let destination = std::path::PathBuf::from(path);
+        let temporary = destination.with_extension(format!("{}.tmp", uuid::Uuid::new_v4()));
+        let result = (|| {
+            use std::io::Write;
+            let mut file = OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .mode(0o600)
+                .open(&temporary)
+                .map_err(|e| e.to_string())?;
+            file.write_all(&bytes)
+                .and_then(|()| file.sync_all())
+                .map_err(|e| e.to_string())?;
+            std::fs::rename(&temporary, &destination).map_err(|e| e.to_string())
+        })();
+        if result.is_err() {
+            let _ = std::fs::remove_file(temporary);
+        }
+        result?;
+        println!("Exported exact skin archive");
+    } else {
+        println!(
+            "{}",
+            serde_json::to_string(&value).map_err(|e| e.to_string())?
+        );
+    }
+    Ok(())
 }
 
 #[cfg(test)]

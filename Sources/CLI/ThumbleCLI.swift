@@ -1831,11 +1831,47 @@ struct ThumbleCLI {
 
     // MARK: - Shareable skins
 
+    /// A live Rust receiver owns the library as well as profiles. Never write a
+    /// legacy defaults domain after that owner has accepted a skin command.
+    private static func routeSkinToRuntime(_ arguments: [String]) throws -> Bool {
+        guard let command = arguments.first,
+              ["list", "ls", "import", "install", "apply", "set", "detach", "remove", "delete", "rm", "export", "share"].contains(command)
+        else { return false }
+        let backend = try ThumbleCLIRuntimeBackend()
+        let status = try backend.perform(.status)
+        if status.owner == .none {
+            try requireExplicitUnmigratedProfileAccess(operation: "skin \(command)")
+            return false
+        }
+        if status.owner != .rust {
+            guard case .legacy = try runtimeRoute(.status) else { throw CLIError.message("No verified skin runtime owner.") }
+            return false
+        }
+        guard status.ok else { throw CLIError.message("Rust runtime is unavailable; skin command was not sent.") }
+        let executable = URL(fileURLWithPath: CommandLine.arguments[0]).standardizedFileURL
+            .deletingLastPathComponent().appendingPathComponent("thumble-host")
+        try ThumbleCLIProfileBackend.validateExecutable(at: executable)
+        let process = Process()
+        process.executableURL = executable
+        process.arguments = ["skin"] + arguments
+        process.standardInput = FileHandle.nullDevice
+        process.standardOutput = FileHandle.standardOutput
+        process.standardError = FileHandle.standardError
+        try process.run()
+        let deadline = Date().addingTimeInterval(20)
+        while process.isRunning && Date() < deadline { Thread.sleep(forTimeInterval: 0.01) }
+        if process.isRunning { process.terminate(); process.waitUntilExit(); throw CLIError.message("Skin receiver request timed out; inspect receiver state before retrying.") }
+        process.waitUntilExit()
+        guard process.terminationStatus == 0 else { throw CLIError.message("Receiver skin command failed.") }
+        return true
+    }
+
     private static func skin(arguments: [String]) throws {
         guard let subcommand = arguments.first else {
             throw CLIError.message("Missing skin subcommand. Use artboard, scaffold, css, compile, preview, quality, list, inspect, validate, import, apply, detach, export, pack, or unpack.")
         }
         let rest = Array(arguments.dropFirst())
+        if try routeSkinToRuntime(arguments) { return }
         switch subcommand {
         case "artboard", "artboards":
             guard let action = rest.first else {

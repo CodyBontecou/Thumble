@@ -33,6 +33,9 @@ const CONTROL_REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
 #[serde(tag = "command", rename_all = "kebab-case")]
 pub enum ControlRequest {
     Status,
+    Skin {
+        request: crate::skin_command::SkinCommand,
+    },
     PairingCode {
         #[serde(default)]
         rotate: bool,
@@ -305,6 +308,8 @@ pub struct ControlResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub application_launch: Option<crate::application_launch::LaunchStatus>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub skin: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub released: Option<bool>,
 }
 
@@ -341,6 +346,7 @@ impl ControlResponse {
             profile_changed: None,
             stopping: None,
             application_launch: None,
+            skin: None,
             released: None,
         }
     }

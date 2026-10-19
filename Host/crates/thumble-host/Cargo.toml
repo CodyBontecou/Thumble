@@ -13,6 +13,7 @@ name = "thumble-host"
 path = "src/main.rs"
 
 [dependencies]
+unicode-normalization = "=0.1.25"
 base64 = "=0.22.1"
 clap = { version = "=4.5.47", features = ["derive"] }
 fs2 = "=0.4.3"

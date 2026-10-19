@@ -1,3 +1,5 @@
+#[path = "runtime_skins.rs"]
+mod skin_runtime;
 use crate::authority::{
     prepare_configuration_commit, ConfigurationCommitError, ConfigurationCommitInput,
     PreparedConfigurationCommit,
@@ -130,6 +132,8 @@ struct RuntimeInner {
 struct SharedRuntime {
     inner: Mutex<RuntimeInner>,
     application_launcher: crate::application_launch::ApplicationLauncher,
+    skin_service: Option<skin_runtime::SkinService>,
+    skin_jobs: Mutex<Option<std::sync::mpsc::SyncSender<(ConnectionId, ControllerMessage)>>>,
     paths: HostPaths,
     requested_port: u16,
     actual_port: u16,
@@ -155,6 +159,19 @@ impl SharedRuntime {
         connection_id: ConnectionId,
         message: ControllerMessage,
     ) -> Result<(), String> {
+        if self.skin_service.is_some() && skin_runtime::is_skin_message(&message) {
+            let inner = self.inner.lock().expect("runtime mutex poisoned");
+            if !inner.core.is_authenticated(connection_id) {
+                return Ok(());
+            }
+            drop(inner);
+            let jobs = self.skin_jobs.lock().expect("skin jobs poisoned");
+            return jobs
+                .as_ref()
+                .ok_or("skin worker unavailable")?
+                .try_send((connection_id, message))
+                .map_err(|_| "skin worker is busy; reconnect to replay".into());
+        }
         let mut inner = self.inner.lock().expect("runtime mutex poisoned");
         self.guard_input_liveness(&mut inner);
         if !inner.connections.contains_key(&connection_id) {
@@ -683,6 +700,7 @@ impl SharedRuntime {
                     message,
                 } => {
                     let mut outgoing = message.as_ref().clone();
+                    self.decorate_skin_snapshot(&mut outgoing);
                     if outgoing.message_type == ControllerMessageType::PairingAccepted
                         && inner.realtime.status.enabled
                     {
@@ -1418,6 +1436,14 @@ fn save_error_response(error: SaveConfigurationError) -> ControlResponse {
 impl ControlHandler for SharedRuntime {
     fn handle(&self, request: ControlRequest) -> ControlResponse {
         match request {
+            ControlRequest::Skin { request } => match self.skin_command(request, None) {
+                Ok(value) => {
+                    let mut response = ControlResponse::success();
+                    response.skin = Some(value);
+                    response
+                }
+                Err(error) => ControlResponse::error(error.0),
+            },
             ControlRequest::Status => {
                 let mut response = ControlResponse::success();
                 response.status = Some(self.status());
@@ -1721,6 +1747,7 @@ pub async fn run_runtime(paths: HostPaths, options: RuntimeOptions) -> Result<()
     let core = HostCore::new_with_tokens(state, &mut tokens)
         .map_err(|error| format!("initialize host core: {error}"))?;
     let (shutdown_tx, shutdown_rx) = watch::channel(false);
+    let skin_service = skin_runtime::SkinService::open(&paths).ok();
     let shared = Arc::new(SharedRuntime {
         inner: Mutex::new(RuntimeInner {
             core,
@@ -1739,10 +1766,28 @@ pub async fn run_runtime(paths: HostPaths, options: RuntimeOptions) -> Result<()
         configuration_write_enabled: options.configuration_write,
         bonjour: Arc::new(bonjour),
         shutdown: shutdown_tx.clone(),
+        skin_service,
+        skin_jobs: Mutex::new(None),
         application_launcher: Default::default(),
         started_at: crate::input_liveness::InputClock::now(),
     });
 
+    if shared.skin_service.is_some() {
+        let (sender, jobs) = std::sync::mpsc::sync_channel(8);
+        *shared.skin_jobs.lock().expect("skin jobs poisoned") = Some(sender);
+        let weak = Arc::downgrade(&shared);
+        std::thread::Builder::new()
+            .name("skin-sync".into())
+            .spawn(move || {
+                while let Ok((id, message)) = jobs.recv() {
+                    let Some(runtime) = weak.upgrade() else {
+                        break;
+                    };
+                    runtime.handle_skin_message(id, message);
+                }
+            })
+            .map_err(|_| "could not start skin worker")?;
+    }
     {
         let mut inner = shared.inner.lock().expect("runtime mutex poisoned");
         inner.realtime.status.enabled = !datagram_listeners.is_empty();
@@ -2491,6 +2536,8 @@ mod tests {
             configuration_write_enabled: false,
             bonjour: Arc::new(BonjourRegistration::disabled("Test".into())),
             shutdown,
+            skin_service: None,
+            skin_jobs: Mutex::new(None),
             application_launcher: Default::default(),
             started_at: crate::input_liveness::InputClock::now(),
         }
@@ -2808,6 +2855,8 @@ mod tests {
             configuration_write_enabled: true,
             bonjour: Arc::new(BonjourRegistration::disabled("Test".to_owned())),
             shutdown,
+            skin_service: None,
+            skin_jobs: Mutex::new(None),
             application_launcher: Default::default(),
             started_at: crate::input_liveness::InputClock::now(),
         };
@@ -2905,6 +2954,8 @@ mod tests {
             configuration_write_enabled: false,
             bonjour: Arc::new(BonjourRegistration::disabled("Test".to_owned())),
             shutdown,
+            skin_service: None,
+            skin_jobs: Mutex::new(None),
             application_launcher: Default::default(),
             started_at: crate::input_liveness::InputClock::now(),
         };
@@ -2989,6 +3040,8 @@ mod tests {
             configuration_write_enabled: true,
             bonjour: Arc::new(BonjourRegistration::disabled("Test".to_owned())),
             shutdown,
+            skin_service: None,
+            skin_jobs: Mutex::new(None),
             application_launcher: Default::default(),
             started_at: crate::input_liveness::InputClock::now(),
         };

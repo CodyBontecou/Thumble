@@ -4,6 +4,97 @@ import XCTest
 final class ThumbleConfigurationBridgeTests: XCTestCase {
     private let profileID = UUID(uuidString: "00000000-0000-0000-0000-000000000201")!
 
+    func testReceiverSkinImportUsesNativeVersionAndReplacementPolicies() throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let data = try Data(contentsOf: root.appendingPathComponent("Website/skins/packages/solar-sumi-1.0.0-edbecde5b708.pocketpad"))
+        let package = try ThumbleSkinPackageCodec.decode(data)
+        func inspect(policy: String, version: String, digest: String) throws -> ThumbleSkinBridgeResponse {
+            let raw: [String: Any] = ["schemaVersion": 1, "invocationID": UUID().uuidString, "skinCommand": "inspect", "nowMillis": 0,
+                "packageData": data.base64EncodedString(), "installation": ["policy": policy, "installed": [[
+                    "reference": ["identifier": package.manifest.identifier, "version": version], "archiveSHA256": digest]]]]
+            let request = try JSONDecoder().decodeUnique(ThumbleSkinBridgeRequest.self, from: JSONSerialization.data(withJSONObject: raw))
+            return try ThumbleSkinBridge.transform(request)
+        }
+        let other = String(repeating: "0", count: 64)
+        XCTAssertNoThrow(try inspect(policy: "newerOnly", version: package.manifest.version, digest: data.thumbleSHA256))
+        XCTAssertThrowsError(try inspect(policy: "newerOnly", version: package.manifest.version, digest: other))
+        XCTAssertNoThrow(try inspect(policy: "replaceSameVersion", version: package.manifest.version, digest: other))
+        XCTAssertThrowsError(try inspect(policy: "replaceSameVersion", version: "99.0.0", digest: other))
+        XCTAssertNoThrow(try inspect(policy: "allowDowngrade", version: "99.0.0", digest: other))
+        XCTAssertThrowsError(try inspect(policy: "unknown", version: package.manifest.version, digest: other))
+        XCTAssertThrowsError(try inspect(policy: "newerOnly", version: package.manifest.version, digest: "not-a-digest"))
+    }
+
+    func testSkinBridgeCapabilityProbeAndCanonicalReferences() throws {
+        let invocation = UUID()
+        func perform(_ command: String, reference: [String: String]? = nil) throws -> ThumbleSkinBridgeResponse {
+            var value: [String: Any] = ["schemaVersion": 1, "invocationID": invocation.uuidString, "skinCommand": command, "nowMillis": 0]
+            if let reference { value["reference"] = reference }
+            let request = try JSONDecoder().decodeUnique(ThumbleSkinBridgeRequest.self, from: JSONSerialization.data(withJSONObject: value))
+            return try ThumbleSkinBridge.transform(request)
+        }
+        let capabilities = try perform("capabilities")
+        XCTAssertEqual(capabilities.invocationID, invocation)
+        XCTAssertNil(capabilities.reference)
+        XCTAssertNil(capabilities.storageKey)
+        let composed = try perform("reference", reference: ["identifier": " COM.EXAMPLE.SKIN ", "version": "1.0.0-café"])
+        let decomposed = try perform("reference", reference: ["identifier": "com.example.skin", "version": "1.0.0-cafe\u{301}"])
+        XCTAssertEqual(composed.storageKey, decomposed.storageKey)
+        XCTAssertEqual(composed.storageKey?.count, 64)
+        XCTAssertEqual(composed.reference?.identifier, "com.example.skin")
+        // Native prerelease syntax permits path characters. They stay data and
+        // become an opaque key; the Rust store never joins them into paths.
+        let pathText = try perform("reference", reference: ["identifier": "com.example.skin", "version": "1.0.0-../../outside"])
+        XCTAssertEqual(pathText.storageKey?.count, 64)
+        XCTAssertThrowsError(try perform("reference", reference: ["identifier": "../outside", "version": "1.0.0"]))
+        XCTAssertThrowsError(try perform("capabilities", reference: ["identifier": "com.example.skin", "version": "1.0.0"]))
+    }
+
+    func testPureSkinBridgeInspectsAppliesDetachesAndPreservesUnknownInputMetadata() throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let data = try Data(contentsOf: root.appendingPathComponent("Website/skins/packages/solar-sumi-1.0.0-edbecde5b708.pocketpad"))
+        let package = try ThumbleSkinPackageCodec.decode(data)
+        let fixture = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: root.appendingPathComponent("Host/fixtures/controller-templates/v1/productivityStarter.json"))) as? [String: Any])
+        var raw = try XCTUnwrap(fixture["profile"] as? [String: Any])
+        raw["futureProfile"] = ["preserved": true]
+        var customization = try XCTUnwrap(raw["customization"] as? [String: Any])
+        var elements = try XCTUnwrap(customization["elements"] as? [[String: Any]])
+        elements[0]["futureInputMetadata"] = ["preserved": true]
+        customization["elements"] = elements; raw["customization"] = customization
+        let original = try JSONDecoder().decode(GamepadConfigurationProfile.self, from: JSONSerialization.data(withJSONObject: raw))
+        let invocation = UUID()
+        func request(_ command: String, profile: Any? = nil, archive: Data? = data) throws -> ThumbleSkinBridgeRequest {
+            var value: [String: Any] = ["schemaVersion": 1, "invocationID": invocation.uuidString, "skinCommand": command, "nowMillis": 123, "colorScheme": "light"]
+            if let profile { value["profile"] = profile }
+            if let archive { value["packageData"] = archive.base64EncodedString() }
+            return try JSONDecoder().decodeUnique(ThumbleSkinBridgeRequest.self, from: JSONSerialization.data(withJSONObject: value))
+        }
+        let inspected = try ThumbleSkinBridge.transform(request("inspect"))
+        XCTAssertEqual(inspected.invocationID, invocation)
+        XCTAssertEqual(inspected.archiveSHA256, data.thumbleSHA256)
+        XCTAssertEqual(inspected.reference?.identifier, package.manifest.identifier)
+        XCTAssertNil(inspected.profile)
+        let applied = try ThumbleSkinBridge.transform(request("apply", profile: raw))
+        let appliedJSON = try XCTUnwrap(applied.profile)
+        let appliedObject = try object(from: appliedJSON)
+        XCTAssertEqual((appliedObject["futureProfile"] as? [String: Bool])?["preserved"], true)
+        let actual: GamepadConfigurationProfile = try decoded(appliedJSON)
+        var expected = original; expected.applySkin(package, colorScheme: .light); expected.updatedAt = 123
+        XCTAssertEqual(actual, expected.normalized)
+        let kept = try XCTUnwrap((appliedObject["customization"] as? [String: Any])?["elements"] as? [[String: Any]])
+        XCTAssertEqual((kept[0]["futureInputMetadata"] as? [String: Bool])?["preserved"], true)
+        let detached = try ThumbleSkinBridge.transform(request("detach", profile: appliedObject))
+        var expectedDetached = actual; expectedDetached.detachSkin(resolving: package, colorScheme: .light); expectedDetached.updatedAt = 123
+        let detachedProfile: GamepadConfigurationProfile = try decoded(XCTUnwrap(detached.profile))
+        XCTAssertEqual(detachedProfile, expectedDetached.normalized)
+        XCTAssertNil(detachedProfile.skinReference)
+        XCTAssertEqual(detachedProfile.id, original.id)
+        let missing = try ThumbleSkinBridge.transform(request("detach", profile: appliedObject, archive: nil))
+        let missingProfile: GamepadConfigurationProfile = try decoded(XCTUnwrap(missing.profile))
+        XCTAssertNil(missingProfile.skinReference)
+        XCTAssertThrowsError(try ThumbleSkinBridge.transform(request("inspect", archive: Data("invalid".utf8))))
+    }
+
     func testElementOnlyControlEditsAndRepairsPreserveIdentityOutputsAndMetadata() throws {
         let id = "B6FD297D-7508-4FF4-AFF7-97B3831F6AD0"
         let output: [String: Any] = ["keyboard": ["keyCode": 49, "modifiersRawValue": 0], "gamepadButtons": ["south"]]

@@ -4737,3 +4737,146 @@ private extension JSONEncoder {
 private extension JSONDecoder {
     static var bridge: JSONDecoder { JSONDecoder() }
 }
+
+/// Pure, credential-free skin operations for the Rust authority. No store paths or
+/// review/approval assertions are accepted; archive inspection never adopts a profile.
+public struct ThumbleSkinBridgeRequest: Decodable, Sendable {
+    public enum Command: String, Decodable, Sendable { case capabilities, reference, inspect, apply, detach }
+    public let schemaVersion: Int
+    public let invocationID: UUID
+    public let skinCommand: Command
+    public let packageData: Data?
+    public let reference: ThumbleSkinReference?
+    public let profile: ThumbleBridgeJSONValue?
+    public let colorScheme: ThumbleSkinColorScheme
+    public let nowMillis: Int64
+    public struct Installation: Decodable, Sendable {
+        public enum Policy: String, Decodable, Sendable { case newerOnly, replaceSameVersion, allowDowngrade }
+        public struct Installed: Decodable, Sendable {
+            public let reference: ThumbleSkinReference
+            public let archiveSHA256: String
+        }
+        public let policy: Policy
+        public let installed: [Installed]
+    }
+    public let installation: Installation?
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: ThumbleBridgeCodingKey.self)
+        try container.requireOnly(["schemaVersion", "invocationID", "skinCommand", "packageData", "reference", "profile", "colorScheme", "nowMillis", "installation"])
+        schemaVersion = try container.decode(Int.self, forKey: .init("schemaVersion"))
+        invocationID = try container.decode(UUID.self, forKey: .init("invocationID"))
+        skinCommand = try container.decode(Command.self, forKey: .init("skinCommand"))
+        packageData = try container.decodeIfPresent(Data.self, forKey: .init("packageData"))
+        reference = try container.decodeIfPresent(ThumbleSkinReference.self, forKey: .init("reference"))
+        profile = try container.decodeIfPresent(ThumbleBridgeJSONValue.self, forKey: .init("profile"))
+        colorScheme = try container.decodeIfPresent(ThumbleSkinColorScheme.self, forKey: .init("colorScheme")) ?? .light
+        nowMillis = try container.decode(Int64.self, forKey: .init("nowMillis"))
+        installation = try container.decodeIfPresent(Installation.self, forKey: .init("installation"))
+    }
+}
+
+public struct ThumbleSkinBridgeResponse: Encodable, Sendable {
+    public let schemaVersion = 1
+    public let invocationID: UUID
+    public let reference: ThumbleSkinReference?
+    public let archiveSHA256: String?
+    public let storageKey: String?
+    public let name: String?
+    public let profile: ThumbleBridgeJSONValue?
+}
+
+public enum ThumbleSkinBridgeError: String, Error {
+    case unsupportedSchema = "unsupported_skin_schema"
+    case invalidRequest = "invalid_skin_request"
+    case invalidPackage = "invalid_skin_package"
+    case invalidProfile = "invalid_skin_profile"
+    case installationRejected = "skin_installation_rejected"
+}
+
+public enum ThumbleSkinBridge {
+    public static func transform(_ request: ThumbleSkinBridgeRequest) throws -> ThumbleSkinBridgeResponse {
+        try Workspace(request).run()
+    }
+
+    private final class Workspace {
+        let request: ThumbleSkinBridgeRequest
+        var package: ThumbleSkinPackage?
+        var result: ThumbleBridgeJSONValue?
+        init(_ request: ThumbleSkinBridgeRequest) { self.request = request }
+
+        func run() throws -> ThumbleSkinBridgeResponse {
+            guard request.schemaVersion == 1 else { throw ThumbleSkinBridgeError.unsupportedSchema }
+            guard request.nowMillis >= 0 else { throw ThumbleSkinBridgeError.invalidRequest }
+            try inspectPackage()
+            if let installation = request.installation {
+                guard request.skinCommand == .inspect, let package, installation.installed.count <= 256,
+                      let incoming = ThumbleSemanticVersion(package.manifest.version)
+                else { throw ThumbleSkinBridgeError.invalidRequest }
+                let reference = ThumbleSkinReference(identifier: package.manifest.identifier, version: package.manifest.version)
+                guard installation.installed.allSatisfy({ $0.reference.isValid && $0.archiveSHA256.count == 64 && $0.archiveSHA256.allSatisfy({ $0.isHexDigit && !$0.isUppercase }) })
+                else { throw ThumbleSkinBridgeError.invalidRequest }
+                let existing = installation.installed.filter { $0.reference.identifier == reference.identifier }
+                if let same = existing.first(where: { $0.reference == reference }) {
+                    if same.archiveSHA256 != request.packageData?.thumbleSHA256 && installation.policy == .newerOnly {
+                        throw ThumbleSkinBridgeError.installationRejected
+                    }
+                } else if installation.policy != .allowDowngrade,
+                          existing.compactMap({ ThumbleSemanticVersion($0.reference.version) }).contains(where: { incoming < $0 }) {
+                    throw ThumbleSkinBridgeError.installationRejected
+                }
+            }
+            var reference = package.map { ThumbleSkinReference(identifier: $0.manifest.identifier, version: $0.manifest.version) }
+            switch request.skinCommand {
+            case .capabilities:
+                guard request.profile == nil, request.packageData == nil, request.reference == nil else { throw ThumbleSkinBridgeError.invalidRequest }
+            case .reference:
+                guard request.profile == nil, request.packageData == nil, let supplied = request.reference else { throw ThumbleSkinBridgeError.invalidRequest }
+                reference = ThumbleSkinReference(identifier: supplied.identifier, version: supplied.version)
+            case .inspect:
+                guard request.profile == nil, package != nil else { throw ThumbleSkinBridgeError.invalidRequest }
+            case .apply:
+                guard package != nil else { throw ThumbleSkinBridgeError.invalidRequest }
+                try mutateProfile()
+            case .detach:
+                try mutateProfile()
+            }
+            if request.skinCommand != .reference, request.reference != nil { throw ThumbleSkinBridgeError.invalidRequest }
+            if let reference, !reference.isValid { throw ThumbleSkinBridgeError.invalidRequest }
+            // Swift String equality is canonically equivalent; hash NFC bytes so
+            // decomposed references address the same Rust archive without path text.
+            let storageKey = reference.map { Data(($0.identifier.precomposedStringWithCanonicalMapping + "\0" + $0.version.precomposedStringWithCanonicalMapping).utf8).thumbleSHA256 }
+            return ThumbleSkinBridgeResponse(invocationID: request.invocationID,
+                reference: reference,
+                archiveSHA256: request.packageData?.thumbleSHA256, storageKey: storageKey, name: package?.manifest.name, profile: result)
+        }
+
+        private func inspectPackage() throws {
+            guard let data = request.packageData else { return }
+            do {
+                let decoded = try ThumbleSkinPackageCodec.decode(data)
+                guard decoded.skin != nil else { throw ThumbleSkinBridgeError.invalidPackage }
+                package = decoded
+            } catch { throw ThumbleSkinBridgeError.invalidPackage }
+        }
+
+        private func mutateProfile() throws {
+            guard let raw = request.profile else { throw ThumbleSkinBridgeError.invalidRequest }
+            do {
+                var profile = try JSONDecoder().decode(GamepadConfigurationProfile.self, from: JSONEncoder().encode(raw))
+                switch request.skinCommand {
+                case .apply:
+                    guard let package else { throw ThumbleSkinBridgeError.invalidRequest }
+                    profile.applySkin(package, colorScheme: request.colorScheme)
+                case .detach:
+                    if let package { profile.detachSkin(resolving: package, colorScheme: request.colorScheme) }
+                    else { profile.detachSkin() }
+                case .capabilities, .reference, .inspect: throw ThumbleSkinBridgeError.invalidRequest
+                }
+                profile.updatedAt = request.nowMillis
+                result = try ThumbleConfigurationBridge.preservingProfileMetadata(raw, after: profile.normalized)
+            } catch let error as ThumbleSkinBridgeError { throw error }
+            catch { throw ThumbleSkinBridgeError.invalidProfile }
+        }
+    }
+}

@@ -15,5 +15,7 @@ pub mod paths;
 pub mod platform;
 pub mod realtime;
 pub mod runtime;
+pub mod skin_command;
+pub mod skins;
 pub mod storage;
 pub mod three_way_merge;

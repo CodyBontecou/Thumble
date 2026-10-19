@@ -20,7 +20,7 @@ reviewed 2026-10-19. Update this inventory as additional iOS behavior is found.
 | Full renderer: element kinds, style tokens, layers/action sets, skins, vector/raster assets, fills, text, hit regions, dark/light | Shared skin compiler/resolver/renderers, ControllerClient | Native size/center/clamp rules, builtin override ownership, design layer order, all seven canonical shapes, per-corner radii, solid/linear/radial/tile fills, profile appearance, legend visibility and accessibility names implemented. Pixel pixel/gesture/portrait/landscape captures pass. Canonical raster asset references/inline data, fit/crop/tile/nine-slice modes, JPEG EXIF orientation, image adjustments, native token/inline state inheritance, core fill/foreground/border/opacity/scale and authored text fields are now implemented/tested. Passive artwork planes (including blend/rotation/opacity/order), text/raster icons, native icon/legend placement and template symbol equivalents are implemented/tested. Stacked outer shadows, glow, masked inner shadows/highlights, bevels, state marks and whole-face blur are implemented with Pixel pixel/gesture/capture acceptance. Matching installed-skin hydration is now connected to the live controller (see acceptance below). Broader symbol coverage and full typography remain missing; native continuous corner curves are not exact. Authored Lux positions remain overlapping |
 | Profile selection/default, orientation mutations, profile launch targets, capability/readiness display | ControllerClient, IOSContentView | Selection, cached default identity and native default/orientation/launch request generation implemented. Orientation mutations are capability-gated; launch is suppressed offline. Ordinary connected practice permits explicit launch, matching iOS. Offline default choices persist locally. 57 local tests pass; API 26 native action/menu checks pass. Rust orientation and launch execution are now installed on the normal Mac. Swift CLI launch routing passes all four selectors through the Rust authority; actual private app activation, key neutralization and missing-app recovery pass Android acceptance. Broader consumer/UI acceptance and attachment editing remain open |
 | Local layout editing, offline pending edits and reconciliation, color preference | ControllerClient pendingKeypadLayoutEdits, IOSLocalKeypadUX | Missing; conflict/ack/restart tests required |
-| Skin library/import/export/apply/detach/remove, .pocketpad sharing/review | IOSSkinLibraryView, IOSContentView, shared skin packages | Archive/store foundation implemented: bounded ZIP/ZIP64, payload integrity, duplicate JSON rejection, private atomic installation/version policy/exact export/removal and asset decoding pass JVM/API 26 tests with four existing native packages. Pure appearance stages now pass Swift-generated cascade/override/library/corner fixtures on JVM and API 26. Canonical-model compatibility and whole-profile application now match native fixtures. Strict appearance-model normalization is now integrated. Matching installed references now resolve and hydrate in the live controller on a worker, with safe saved-appearance fallback and cache invalidation. Apply/reapply/detach and atomic pending selection persistence now match native transition fixtures; basic import review and profile-menu actions are implemented and exercised offline. Full manifest/profile normalization, system document navigation acceptance, full preview/library/share/remove UI and Rust receiver skin support remain missing; authenticated incoming package installation is now implemented (see latest acceptance); full native renderer acceptance is still open; no publishing or approval implied |
+| Skin library/import/export/apply/detach/remove, .pocketpad sharing/review | IOSSkinLibraryView, IOSContentView, shared skin packages | Archive/store foundation implemented: bounded ZIP/ZIP64, payload integrity, duplicate JSON rejection, private atomic installation/version policy/exact export/removal and asset decoding pass JVM/API 26 tests with four existing native packages. Pure appearance stages now pass Swift-generated cascade/override/library/corner fixtures on JVM and API 26. Canonical-model compatibility and whole-profile application now match native fixtures. Strict appearance-model normalization is now integrated. Matching installed references now resolve and hydrate in the live controller on a worker, with safe saved-appearance fallback and cache invalidation. Apply/reapply/detach and atomic pending selection persistence now match native transition fixtures; basic import review and profile-menu actions are implemented and exercised offline. Full manifest/profile normalization, system document navigation acceptance and full preview/library/share/remove UI remain open. Authenticated package installation and real Mac receiver synchronization now pass physical Pixel acceptance (see latest section); legacy/bundled-library migration and full native renderer acceptance remain open; no publishing or approval implied |
 | Shared build deep links, preview/keep, pending artifact store, practice preview, Mac adoption and retry/cancel | IOSBuilderArtifactPickup, IOSPendingBuilderArtifactStore, IOSContentView | Missing; shared artifact validation/adoption contract must match |
 | Onboarding, connection/settings navigation, error recovery | IOSContentView | Minimal connection screen; native Android flows and full screen/device QA required |
 | Transport v3: UDP auth/mirroring/fallback, generation/sequence safety and neutralization | ControllerClient, Rust/native receivers | Physical Pixel + Mac real-keyboard UDP/drop tests pass; advanced native gestures → Rust recording pass with UDP loss. Receiver pointer ordering now deduplicates relative deltas while preserving delayed reliable button releases |
@@ -646,3 +646,56 @@ nine WebSocket inputs, exactly six AppKit events, 24 dropped UDP datagrams
 including every release frame, and no held input. The final combined device
 run includes the observed wire release counts and replacement archive hashes.
 No normal receiver binaries or profile configuration were changed for this work.
+
+## Real Mac receiver skin synchronization (2026-10-19)
+
+This acceptance supersedes the earlier receiver-skin-support gap. The Rust Mac
+receiver now owns a private atomic archive library, delegates package inspection,
+version policy and apply/detach to the native Swift bridge, and advertises skin
+capabilities only after that subsystem opens successfully. Authenticated phone
+messages run on a bounded worker; native decoding never holds the input mutex.
+Profile changes recheck the configuration revision and current authenticated
+connection, release captured input, persist atomically, then install and publish
+the authoritative profile. Failed changes receive no false acknowledgement, so
+the Android pending-selection journal remains intact. Import never adopts an
+archive's embedded profile. Removal rejects packages referenced by a profile.
+
+The primary `thumble skin` runtime commands route to this same receiver authority:
+list/import/export/apply/detach/remove, with exact `identifier@version` selectors.
+Import supports native newer-only, same-version replacement and explicit downgrade
+policies. A stopped/unreachable Rust owner cannot silently redirect writes into a
+legacy profile store. Existing pure authoring/validation commands remain native.
+Receiver reference selection currently requires an explicit version; package-path
+application should be performed as import followed by apply. Existing legacy
+library/bundled-package migration and large-package transport remain separate work.
+The receiver sync budget is 3 MiB per CLI archive and 4 MiB of Base64 library replay;
+the existing 8 MiB wire frame limit still applies. This is not chunked transport.
+
+The final physical Pixel 7 / API 37 run uses the actual staged Rust receiver and
+Swift CLI/bridge over the LAN, with private Mac state and normal phone trust and
+skin archives preserved. It verifies:
+
+- Initial Mac-to-phone archive replay and a visibly rendered installed skin.
+- Native phone import review, archive upload, apply and detach; the journal clears
+  only after the real Mac commits and returns the authoritative profile.
+- Byte-exact export from the receiver and unchanged profile identity.
+- A CLI skin change reaching the phone, releasing a held native-view capture and
+  leaving no pressed input in the receiver.
+- Receiver restart, saved-token reconnect, archive replay and no pending selection.
+- Invalid archive rejection preserving authority, and rejection of in-use removal.
+
+The unchanged Solar Sumi and Foldline Relay packages are fixtures. The Productivity
+layout does not satisfy all their captured artwork contracts: the visible warning
+correctly gates incompatible artwork while semantic control styling renders.
+This proves synchronization and safe rendering, not full skin pixel fidelity,
+artwork approval, publication, actual system document-provider navigation or full
+Android/iOS parity. No normal Mac receiver installation was replaced by this test.
+
+Reproduce with `Android/scripts/verify-mac-skin-sync.py` and its explicit built host,
+CLI, native bridge and CLI-bridge paths. Final device evidence is under
+`app/build/evidence/mac-skin-sync/20261019-180518/`; earlier failed harness runs are
+retained separately. The final native screenshots wait for rendered controls,
+rather than capturing the loading transition. The Pixel was explicitly released
+and this run's temporary external files removed after preserving evidence.
+
+Final local gates for this integration pass: 97 Android JVM tests, app/test APK builds and lint; 635 Rust workspace tests plus both explicit native store/runtime acceptance tests; 539 XCTest plus three Swift Testing tests; and the complete Swift stack-safety verifier. The native runtime/store tests are also wired into the macOS packaged-release CI job.

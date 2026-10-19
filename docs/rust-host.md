@@ -514,3 +514,48 @@ configuration-write settings and Accessibility access were preserved, with priva
 state and binary backups. The post-install real keyboard UDP-loss regression passes
 on the API 26 emulator: exactly six AppKit key events, all releases recovered, and
 no held input. See `Android/PARITY.md` for the broader incomplete Android inventory.
+
+### Runtime skin library and phone synchronization
+
+The Mac host opens a private archive store only when its sibling `thumble-bridge`
+supports native skin operations. It then advertises `skin_packages` and
+`gamepad_profile_skin_selection`. Initial pairing replays installed archives;
+subsequent authenticated uploads and selections use a bounded worker independent
+of the input lock. Swift owns package semantics and appearance transforms; Rust
+owns archive persistence, revision checks, current connection checks and durable
+profile commits. Embedded package profiles are never imported by these operations.
+
+The primary Swift CLI routes runtime skin operations to the running Rust owner:
+
+```sh
+thumble skin import ./skin.pocketpad
+thumble skin import ./skin.pocketpad --replace
+thumble skin list --json
+thumble skin apply com.example.skin@1.0.0 --profile active --appearance light
+thumble skin detach --profile active
+thumble skin export com.example.skin@1.0.0 -o exact.pocketpad
+thumble skin remove com.example.skin@1.0.0
+```
+
+`--allow-downgrade` explicitly permits an older import. The native version
+comparator enforces the same policy as the native store. Runtime references
+currently require an explicit version; import a file before applying it. The
+receiver JSON list exposes `packages` with canonical reference, digest, name and
+opaque storage key. Removal rejects in-use references. Export preserves exact
+archive bytes. Native authoring, compile and validation paths remain available.
+
+Archives use owner-only files, no-follow opens, opaque hashed keys, atomic rename,
+bounded library size and a filesystem lock. Native archive interpretation runs
+outside the runtime input mutex. A profile change checks its original revision,
+releases held input, persists, then broadcasts. Failed phone changes remain
+unacknowledged for journal recovery; skin failure codes are recorded in the host
+log without forcibly disconnecting the controller.
+
+This first sync path bounds CLI archives to 3 MiB and total Base64 library replay
+to 4 MiB; the transport retains its 8 MiB frame ceiling. There is no archive
+chunking or automatic adoption of another legacy/bundled skin library. Physical
+Pixel 7 acceptance covers both directions, CLI changes, held-capture release,
+restart/reconnect, exact export and rejection without authority corruption through
+`Android/scripts/verify-mac-skin-sync.py`. Its private receiver does not replace the
+normal installation. Full skin library UI and renderer parity remain tracked in
+`Android/PARITY.md`.

@@ -744,3 +744,17 @@ methods, 38 exercised/two optional live skips), builds/lint and Swift stack safe
 Evidence: `app/build/evidence/incoming-skin-sync`. The normal Rust receiver still
 needs skin-store/selection/removal support and CLI routing; controlled-host client
 acceptance does not establish real Mac skin synchronization or full parity.
+
+## Real Mac skin sync
+
+Authenticated package upload/download and skin apply/detach now work with the Rust
+Mac receiver and its native Swift bridge. The receiver persists a selection before
+acknowledging it; Android retains unacknowledged selections across reconnects.
+The CLI uses the same receiver-owned archive library and profile authority.
+
+A physical Pixel 7 passed initial package replay, native import review and upload,
+apply/detach acknowledgement, a CLI-driven skin replacement with held-capture
+release, and trusted reconnect after receiver restart. Exact archive export and
+invalid/in-use rejection also passed. This test uses a real receiver with private
+Mac state; it does not replace the normal installed receiver or change its profiles.
+See `PARITY.md` for evidence, reproduction and the remaining UI/rendering gaps.

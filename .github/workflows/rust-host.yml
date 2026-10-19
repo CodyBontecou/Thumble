@@ -221,6 +221,8 @@ jobs:
           lipo "$APP/Contents/MacOS/thumble-mcp" -verify_arch arm64 x86_64
           lipo "$APP/Contents/MacOS/thumble-bridge" -verify_arch arm64 x86_64
           codesign --verify --deep --strict "$APP"
+          THUMBLE_TEST_SKIN_RUNTIME_BIN="$APP/Contents/MacOS" cargo test --manifest-path Host/Cargo.toml --locked -p thumble-host --test skin_sync -- --ignored
+          THUMBLE_TEST_SKIN_BRIDGE="$APP/Contents/MacOS/thumble-bridge" cargo test --manifest-path Host/Cargo.toml --locked -p thumble-host skins::tests:: -- --ignored
           unzip -tq "$OUTPUT/ThumbleHost-0.1.0-macOS-universal.zip"
           python3 - "$APP/Contents/MacOS/thumble-bridge" Host/fixtures/state/minimal-profile.json <<'PY'
           import json
