@@ -174,6 +174,58 @@ final class StackSafetyRegressionTests: XCTestCase {
         }
     }
 
+    func testOwnedResourceWireAndSavedStartupFitConstrainedThread() throws {
+        try runOnThread(stackSize: 512 * 1024, timeout: 30) {
+            try OwnedResourceTransportJob().run()
+        }
+    }
+
+    private final class OwnedResourceTransportJob {
+        private var profile: GamepadConfigurationProfile?
+        private var wire = Data()
+
+        func run() throws {
+            try readProfile()
+            try encodeWire()
+            try decodeWire()
+            try verifySavedStartup()
+        }
+        private func readProfile() throws {
+            let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            let fixture = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf:
+                root.appendingPathComponent("Host/fixtures/profile-resources/v1/fixture.json"))) as? [String: Any])
+            let data = try JSONSerialization.data(withJSONObject: XCTUnwrap(fixture["pooledProfile"]))
+            profile = try JSONDecoder().decodeUnique(GamepadConfigurationProfile.self, from: data)
+        }
+        private func encodeWire() throws {
+            let profile = try XCTUnwrap(profile)
+            wire = try ControllerWireCodec.encode(ControllerMessage(type: .gamepadProfiles,
+                gamepadProfiles: [profile], gamepadProfileID: profile.id, defaultGamepadProfileID: profile.id), using: JSONEncoder())
+        }
+        private func decodeWire() throws {
+            let message = try ControllerWireCodec.decode(wire, using: JSONDecoder())
+            guard message.gamepadProfiles?.first == profile,
+                  message.gamepadProfileID == profile?.id else { throw StackTestError.unexpectedDecodedState }
+        }
+        private struct SavedState: Encodable {
+            let profiles: [GamepadConfigurationProfile]
+            let activeProfileID: UUID
+            let defaultProfileID: UUID
+        }
+        private func verifySavedStartup() throws {
+            let profile = try XCTUnwrap(profile)
+            let suite = "ThumbleOwnedResourceStack.\(UUID().uuidString)"
+            let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+            defer { defaults.removePersistentDomain(forName: suite) }
+            let bytes = try JSONEncoder().encode(SavedState(profiles: [profile], activeProfileID: profile.id, defaultProfileID: profile.id))
+            defaults.set(bytes, forKey: GamepadConfigurationProfilePersistence.defaultsKey)
+            let loaded = try GamepadConfigurationProfilePersistence.load(activeCustomization: .defaultValue, defaults: defaults)
+            guard loaded.activeProfile == profile, loaded.defaultProfileID == profile.id else {
+                throw StackTestError.persistenceStartupFailed
+            }
+        }
+    }
+
     func testPhoneLayoutReplacementAndRecoveryFitConstrainedThread() throws {
         try runOnThread(stackSize: 512 * 1024, timeout: 30) {
             let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()

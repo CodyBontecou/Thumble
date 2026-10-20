@@ -22,7 +22,9 @@ Copy all required resources into the destination before dropping the skin refere
 
 Phone geometry editing canonicalizes appearance before recording entry, undo, committed and offline snapshots. A rendered dark or held-trigger canvas must never become a new immutable appearance reference merely because a control moved or was restored by Undo.
 
-This is not an activated upgrade path. Version-4 native configuration import/export and the current Rust authority reject non-null banks. Before accepting a bank into live authority, implement the retained peers and version-5 capability handshake, preserve raw unknown metadata, consolidate repeated resource bytes, enforce the final document byte limits, and complete the backup/compare-and-swap recovery transaction below. Do not advertise version 5 or enable automatic migration merely because native profile roundtrips pass.
+Native profile encoding now uses `appearanceResourceVersion: 1` and a profile-level `appearanceResources` map from SHA-256 to canonical Base64. Binary fields contain exactly `{"resourceSHA256":"<digest>"}`; canonical layout and all states share those bytes. Native decoding returns shared COW Data, and the Rust/Android preparation readers use the same fixture. This context is separate from the bank schema; standalone snapshots/banks keep their expanded codecs. Launch metadata is pooled too: after removing local-only fields for portable export, prune unreachable blobs while preserving references from unknown metadata. See Host/fixtures/profile-resources/README.md.
+
+This is not an activated upgrade path. Version-4 native configuration import/export and the current Rust authority reject non-null banks; the authority also rejects resource markers on their own. Before accepting a bank into live authority, integrate the retained peers and version-5 capability handshake, preserve raw unknown metadata, enforce resource/document bounds across full configurations and pending phone edits, and complete the backup/compare-and-swap recovery transaction below. Do not advertise version 5 or enable automatic migration merely because native profile roundtrips pass.
 
 ## Layout conversion
 

@@ -214,6 +214,8 @@ impl ConfigurationView<'_> {
             if object
                 .get("appearanceBank")
                 .is_some_and(|bank| !bank.is_null())
+                || object.contains_key("appearanceResources")
+                || object.contains_key("appearanceResourceVersion")
             {
                 return Err(ConfigurationDocumentError::UnsupportedAppearanceBank);
             }

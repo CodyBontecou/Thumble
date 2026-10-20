@@ -13,6 +13,7 @@ pub use element_identity::ElementPresentation;
 mod gamepad;
 mod generation_spec;
 mod profile_artifact;
+mod profile_resources;
 mod resolver;
 mod semantic_key;
 mod state;
@@ -56,6 +57,7 @@ pub use profile_artifact::{
     PROFILE_ARTIFACT_HASH_ALGORITHM, PROFILE_ARTIFACT_SCHEMA, PROFILE_ARTIFACT_SCHEMA_VERSION,
     PROFILE_ARTIFACT_VERSION,
 };
+pub use profile_resources::{ProfileResourceError, ProfileResourceTable};
 pub use semantic_key::{
     generated_modifier_mask, generated_semantic_key_code, semantic_key_code, semantic_key_name,
 };

@@ -20,6 +20,7 @@ MAC_RUNTIME_OBJECT_NAMES = (
     "GamepadCustomization.o",
     "ControllerProtocol.o",
     "MacControllerServer.o",
+    "GamepadProfileResourceCodec.o",
 )
 IOS_RUNTIME_OBJECT_NAMES = (
     "GamepadCustomization.o",
@@ -31,6 +32,7 @@ IOS_RUNTIME_OBJECT_NAMES = (
     "GamepadAppearanceSnapshot.o",
     "GamepadAppearanceBank.o",
     "GamepadAppearanceEditMerge.o",
+    "GamepadProfileResourceCodec.o",
     "ThumbleLegacyAppearanceMaterializer.o",
     "ThumbleSkin.o",
     "ThumbleSkinPackage.o",
@@ -169,6 +171,8 @@ def is_shared_runtime_symbol(name: str) -> bool:
             ".GamepadAppearanceSnapshot.",
             ".GamepadAppearanceBank.",
             ".GamepadAppearanceEditMerge.",
+            ".GamepadProfileResourceCodec.",
+            ".GamepadAppearanceResourceReferences.",
             ".GamepadControlAppearanceSnapshot.",
             ".ThumbleLegacyAppearanceMaterializer.",
         )
@@ -200,8 +204,10 @@ def is_shared_runtime_symbol(name: str) -> bool:
             for fragment in (
                 ".init(from:",
                 ".init(decoded:",
+                ".init(unpooledFrom:",
                 ".init(id:",
                 ".encode(to:",
+                ".encodeUnpooled(to:",
                 ".normalized.getter",
                 ".customization.getter",
                 ".Customization.getter",
@@ -374,6 +380,7 @@ def is_ios_runtime_symbol(name: str) -> bool:
             fragment in name
             for fragment in (
                 "handleIncoming",
+                ".(send in ",
                 "handlePairingMessage",
                 "handleProfileStateMessage",
                 "handleRuntimeMessage",
@@ -475,7 +482,7 @@ def required_sentinels(scope: str) -> tuple[tuple[str, tuple[str, ...]], ...]:
     )
 
 
-def call_path_budgets(scope: str) -> tuple[CallPathBudget, ...]:
+def base_call_path_budgets(scope: str) -> tuple[CallPathBudget, ...]:
     if scope in ("network", "mac-network"):
         return (
             CallPathBudget(
@@ -486,6 +493,7 @@ def call_path_budgets(scope: str) -> tuple[CallPathBudget, ...]:
                     ("wire codec", ("ControllerWireCodec.decode",)),
                     ("message decoder", ("ControllerMessage.init(from:",)),
                     ("profile decoder", ("GamepadConfigurationProfile.init(from:",)),
+                    ("profile decode coordinator", ("GamepadConfigurationProfile.init(unpooledFrom:",)),
                     ("profile field decoder", ("GamepadConfigurationProfile.(decode",)),
                     ("customization decoder", ("GamepadCustomization.init(from:",)),
                     ("customization normalized getter", ("GamepadCustomization.normalized.getter",)),
@@ -503,7 +511,8 @@ def call_path_budgets(scope: str) -> tuple[CallPathBudget, ...]:
                     ("wire codec", ("ControllerWireCodec.encode(_:",)),
                     ("message encoder", ("ControllerMessage.encode(to:",)),
                     ("profile encoder", ("GamepadConfigurationProfile.encode(to:",)),
-                    ("profile field encoder", ("GamepadConfigurationProfile.(encode",)),
+                    ("profile encode coordinator", ("GamepadConfigurationProfile.(encodeUnpooled",)),
+                    ("profile field encoder", ("GamepadConfigurationProfile.(encode", "Customization")),
                     ("customization encoder", ("GamepadCustomization.encode(to:",)),
                     ("customization encode phase", ("GamepadCustomization.(encode",)),
                     ("element synchronization phase", ("appendSynchronized",)),
@@ -521,6 +530,7 @@ def call_path_budgets(scope: str) -> tuple[CallPathBudget, ...]:
                 ("wire codec", ("ControllerWireCodec.decode",)),
                 ("message decoder", ("ControllerMessage.init(from:",)),
                 ("profile decoder", ("GamepadConfigurationProfile.init(from:",)),
+                ("profile decode coordinator", ("GamepadConfigurationProfile.init(unpooledFrom:",)),
                 ("profile field decoder", ("GamepadConfigurationProfile.(decode",)),
                 ("customization decoder", ("GamepadCustomization.init(from:",)),
                 ("customization normalized getter", ("GamepadCustomization.normalized.getter",)),
@@ -535,6 +545,7 @@ def call_path_budgets(scope: str) -> tuple[CallPathBudget, ...]:
             groups=(
                 ("persistence load", ("GamepadConfigurationProfilePersistence.load(",)),
                 ("profile decoder", ("GamepadConfigurationProfile.init(from:",)),
+                ("profile decode coordinator", ("GamepadConfigurationProfile.init(unpooledFrom:",)),
                 ("profile field decoder", ("GamepadConfigurationProfile.(decode",)),
                 ("customization decoder", ("GamepadCustomization.init(from:",)),
                 ("customization normalized getter", ("GamepadCustomization.normalized.getter",)),
@@ -548,7 +559,8 @@ def call_path_budgets(scope: str) -> tuple[CallPathBudget, ...]:
             groups=(
                 ("persistence save", ("GamepadConfigurationProfilePersistence.save(",)),
                 ("profile encoder", ("GamepadConfigurationProfile.encode(to:",)),
-                ("profile field encoder", ("GamepadConfigurationProfile.(encode",)),
+                ("profile encode coordinator", ("GamepadConfigurationProfile.(encodeUnpooled",)),
+                ("profile field encoder", ("GamepadConfigurationProfile.(encode", "Customization")),
                 ("customization encoder", ("GamepadCustomization.encode(to:",)),
                 ("customization encode phase", ("GamepadCustomization.(encode",)),
             ),
@@ -786,6 +798,57 @@ def call_path_budgets(scope: str) -> tuple[CallPathBudget, ...]:
                 ("visual-style normalization", ("GamepadControlVisualStyle.normalized.getter",)),
                 ("button normalization", ("GamepadButtonCustomization.normalized.getter",)),
                 ("button normalization phase", ("GamepadButtonCustomization.(normalize",)),
+            ),
+        ),
+    )
+
+
+def call_path_budgets(scope: str) -> tuple[CallPathBudget, ...]:
+    paths = base_call_path_budgets(scope)
+    if scope not in ("network", "mac-network", "ios-runtime"):
+        return paths
+    mac = scope in ("network", "mac-network")
+    decode_parent = (("receive", ("handleReceivedDataOnNetworkQueue",)),) if mac else (("incoming router", ("handleIncoming",)),)
+    encode_parent = (("send", ("sendNowOnNetworkQueue",)),) if mac else (("send", ("ControllerClient.(send in ",)),)
+    # These are the nested payload phases. Resource-table loading and raw JSON
+    # projection finish before the inner model decoder starts, so do not add
+    # those sequential frames to these paths. Runtime tests cover the full loader.
+    return paths + (
+        CallPathBudget(
+            name=f"{scope} owned profile payload decode",
+            maximum_bytes=128 * KIB,
+            groups=decode_parent + (
+                ("wire codec", ("ControllerWireCodec.decode",)),
+                ("message decoder", ("ControllerMessage.init(from:",)),
+                ("profile decoder", ("GamepadConfigurationProfile.init(from:",)),
+                ("resource entry", ("GamepadProfileResourceCodec.decode<",)),
+                ("resource payload", ("GamepadProfileResourceCodec.(DecodingWorkspace", ".decode<")),
+                ("native callback", ("GamepadConfigurationProfile.(UnpooledProfile", ".init(from:")),
+                ("profile coordinator", ("GamepadConfigurationProfile.init(unpooledFrom:",)),
+                ("profile layout phase", ("GamepadConfigurationProfile.(decodePrimaryCustomization",)),
+                ("customization decoder", ("GamepadCustomization.init(from:",)),
+                ("customization normalization", ("GamepadCustomization.normalized.getter",)),
+                ("normalization coordinator", ("GamepadCustomization.normalizeInPlace",)),
+                ("normalization phase", ("GamepadCustomization.(normalize",)),
+                ("button normalization", ("GamepadButtonCustomization.normalized.getter",)),
+                ("button normalization phase", ("GamepadButtonCustomization.(normalize",)),
+            ),
+        ),
+        CallPathBudget(
+            name=f"{scope} owned profile payload encode",
+            maximum_bytes=128 * KIB,
+            groups=encode_parent + (
+                ("wire codec", ("ControllerWireCodec.encode(_:",)),
+                ("message encoder", ("ControllerMessage.encode(to:",)),
+                ("profile encoder", ("GamepadConfigurationProfile.encode(to:",)),
+                ("resource entry", ("GamepadProfileResourceCodec.encode<",)),
+                ("resource coordinator", ("GamepadProfileResourceCodec.(EncodingWorkspace", ".encode<")),
+                ("resource payload", ("GamepadProfileResourceCodec.(EncodingWorkspace", ".encodePayload<")),
+                ("native callback", ("GamepadConfigurationProfile.(UnpooledProfile", ".encode(to:")),
+                ("profile coordinator", ("GamepadConfigurationProfile.(encodeUnpooled",)),
+                ("profile layout phase", ("GamepadConfigurationProfile.(encodePrimaryCustomization",)),
+                ("customization encoder", ("GamepadCustomization.encode(to:",)),
+                ("customization phase", ("GamepadCustomization.(encode",)),
             ),
         ),
     )

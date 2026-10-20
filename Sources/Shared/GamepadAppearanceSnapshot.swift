@@ -38,28 +38,58 @@ public struct GamepadControlAppearanceSnapshot: Codable, Equatable, Sendable {
 
     // This allowlist is also the persistence boundary: geometry can never be
     // smuggled into an appearance bank by an old or hand-written document.
-    private static let fields: Set<String> = [
-        "shape", "accentStyle", "fillColor", "lightFillColor", "darkFillColor",
-        "fillStyle", "lightFillStyle", "darkFillStyle", "joystickKnobColor",
-        "lightJoystickKnobColor", "darkJoystickKnobColor", "joystickVisualStyle",
-        "styleID", "visualStyle", "icon", "hapticStyle", "hapticFeedback",
-        "cornerRadius", "cornerRadii", "shadowStrength", "showsIntegratedLabel"
-    ]
+    private enum Field: String, CodingKey, CaseIterable {
+        case shape, accentStyle, fillColor, lightFillColor, darkFillColor
+        case fillStyle, lightFillStyle, darkFillStyle, joystickKnobColor
+        case lightJoystickKnobColor, darkJoystickKnobColor, joystickVisualStyle
+        case styleID, visualStyle, icon, hapticStyle, hapticFeedback
+        case cornerRadius, cornerRadii, shadowStrength, showsIntegratedLabel
+    }
 
     public init(from decoder: Decoder) throws {
-        try AppearanceSnapshotCodingKey.require(fields: Self.fields, from: decoder)
+        try AppearanceSnapshotCodingKey.require(fields: Set(Field.allCases.map(\.rawValue)), from: decoder)
         self.init(try GamepadButtonCustomization(from: decoder))
     }
 
     public func encode(to encoder: Encoder) throws {
-        // Encoding is a save/export operation, never part of applying a bank to
-        // a touch event. Reuse the native codec to preserve style wire formats.
-        let encoded = try JSONEncoder().encode(storage.value)
-        let fields = try JSONDecoder().decode([String: ThumbleBridgeJSONValue].self, from: encoded)
-        var container = encoder.container(keyedBy: AppearanceSnapshotCodingKey.self)
-        for (key, value) in fields where Self.fields.contains(key) {
-            try container.encode(value, forKey: AppearanceSnapshotCodingKey(key))
-        }
+        // Keep typed Data visible to the owning profile's resource strategy.
+        // An intermediate JSON tree here would bypass content deduplication.
+        var container = encoder.container(keyedBy: Field.self)
+        try encodeFills(into: &container)
+        try encodeStyle(into: &container)
+        try encodeFeedback(into: &container)
+    }
+
+    private func encodeFills(into container: inout KeyedEncodingContainer<Field>) throws {
+        try container.encodeIfPresent(storage.value.fillColor, forKey: .fillColor)
+        try container.encodeIfPresent(storage.value.lightFillColor, forKey: .lightFillColor)
+        try container.encodeIfPresent(storage.value.darkFillColor, forKey: .darkFillColor)
+        try container.encodeIfPresent(storage.value.fillStyle, forKey: .fillStyle)
+        try container.encodeIfPresent(storage.value.lightFillStyle, forKey: .lightFillStyle)
+        try container.encodeIfPresent(storage.value.darkFillStyle, forKey: .darkFillStyle)
+        try container.encodeIfPresent(storage.value.joystickKnobColor?.normalized, forKey: .joystickKnobColor)
+        try container.encodeIfPresent(storage.value.lightJoystickKnobColor?.normalized, forKey: .lightJoystickKnobColor)
+        try container.encodeIfPresent(storage.value.darkJoystickKnobColor?.normalized, forKey: .darkJoystickKnobColor)
+    }
+    private func encodeStyle(into container: inout KeyedEncodingContainer<Field>) throws {
+        try container.encodeIfPresent(storage.value.shape, forKey: .shape)
+        try container.encodeIfPresent(storage.value.accentStyle, forKey: .accentStyle)
+        try container.encodeIfPresent(storage.value.joystickVisualStyle, forKey: .joystickVisualStyle)
+        try container.encodeIfPresent(storage.value.styleID, forKey: .styleID)
+        try container.encodeIfPresent(storage.value.visualStyle, forKey: .visualStyle)
+        try container.encodeIfPresent(storage.value.icon, forKey: .icon)
+        try container.encodeIfPresent(storage.value.cornerRadius, forKey: .cornerRadius)
+        try container.encodeIfPresent(storage.value.cornerRadii, forKey: .cornerRadii)
+        try container.encode(storage.value.shadowStrength, forKey: .shadowStrength)
+        if !storage.value.showsIntegratedLabel { try container.encode(false, forKey: .showsIntegratedLabel) }
+    }
+    private func encodeFeedback(into container: inout KeyedEncodingContainer<Field>) throws {
+        try container.encodeIfPresent(storage.value.hapticStyle, forKey: .hapticStyle)
+        try container.encodeIfPresent(storage.value.hapticFeedback, forKey: .hapticFeedback)
+    }
+
+    fileprivate func collectResources(into collector: GamepadAppearanceResourceReferences) {
+        collector.control(storage.value)
     }
 }
 
@@ -219,34 +249,18 @@ public struct GamepadAppearanceSnapshot: Codable, Equatable, Sendable {
     }
 
     /// Migration/export validation, deliberately separate from runtime application.
-    /// Inspect the serialized design tree so nested state/content/paint references
-    /// get the same coverage as top-level fills and icons.
+    /// Walk nested state/content references without expanding image bytes to JSON.
     public func missingResourceIDs() throws -> [String] {
-        let encoded = try JSONEncoder().encode(self)
-        var pending = [try JSONDecoder().decode(ThumbleBridgeJSONValue.self, from: encoded)]
-        let available = Set(storage.content.assetLibrary.assets.compactMap { asset in
-            asset.data?.isEmpty == false ? asset.id : nil
-        })
-        var missing = Set<String>()
-        while let node = pending.popLast() {
-            switch node {
-            case .object(let fields):
-                if case .string(let id) = fields["assetID"], !available.contains(id) {
-                    let hasInlineData: Bool
-                    if case .string(let encodedData) = fields["data"] {
-                        hasInlineData = Data(base64Encoded: encodedData)?.isEmpty == false
-                    } else { hasInlineData = false }
-                    if !hasInlineData { missing.insert(id) }
-                }
-                if fields["source"] == .string("asset"), case .string(let id) = fields["value"], !available.contains(id) {
-                    missing.insert(id)
-                }
-                pending.append(contentsOf: fields.values)
-            case .array(let children): pending.append(contentsOf: children)
-            default: break
-            }
-        }
-        return missing.sorted()
+        let collector = GamepadAppearanceResourceReferences(library: storage.content.assetLibrary)
+        collector.fill(storage.content.backgroundFillStyle)
+        collector.fill(storage.content.backgroundLightFillStyle)
+        collector.fill(storage.content.backgroundDarkFillStyle)
+        for layer in storage.content.artworkLayers { collector.fill(layer.fillStyle) }
+        for appearance in storage.content.controls.values { appearance.collectResources(into: collector) }
+        storage.content.topBar.collectResources(into: collector)
+        for appearance in storage.content.controlBar.values { appearance.collectResources(into: collector) }
+        for token in storage.content.styleLibrary.styles { collector.visual(token.visualStyle) }
+        return collector.missing.sorted()
     }
 
     // Split surface/control work on a heap-backed workspace to keep constrained
@@ -318,6 +332,43 @@ public struct GamepadAppearanceSnapshot: Codable, Equatable, Sendable {
     }
 
     public func encode(to encoder: Encoder) throws { try storage.content.encode(to: encoder) }
+}
+
+/// Validation walks typed references without encoding large image payloads.
+private final class GamepadAppearanceResourceReferences {
+    let available: Set<String>
+    private(set) var missing = Set<String>()
+    init(library: GamepadAssetLibrary) {
+        available = Set(library.assets.compactMap { $0.data?.isEmpty == false ? $0.id : nil })
+    }
+    func fill(_ fill: GamepadFillStyle?) {
+        guard case .image(let image)? = fill, let id = image.assetID,
+              image.data?.isEmpty != false, !available.contains(id) else { return }
+        missing.insert(id)
+    }
+    func icon(_ icon: GamepadControlIcon?) {
+        guard let icon, icon.source == .asset, !available.contains(icon.value) else { return }
+        missing.insert(icon.value)
+    }
+    func visual(_ style: GamepadControlVisualStyle?) {
+        guard let style else { return }
+        icon(style.icon)
+        state(style.normal)
+        if let value = style.pressed { state(value) }
+        if let value = style.active { state(value) }
+        if let value = style.disabled { state(value) }
+    }
+    private func state(_ style: GamepadControlStateStyle) {
+        fill(style.fillStyle)
+        icon(style.content?.icon)
+    }
+    func control(_ layout: GamepadButtonCustomization) {
+        fill(layout.fillStyle)
+        fill(layout.lightFillStyle)
+        fill(layout.darkFillStyle)
+        icon(layout.icon)
+        visual(layout.visualStyle)
+    }
 }
 
 private struct AppearanceSnapshotCodingKey: CodingKey {

@@ -5,6 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+base64 = "=0.22.1"
 thumble-protocol = { path = "../thumble-protocol" }
 serde.workspace = true
 serde_json.workspace = true

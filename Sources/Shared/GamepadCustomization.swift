@@ -5320,6 +5320,14 @@ public struct GamepadConfigurationProfile: Identifiable, Codable, Equatable, Sen
     }
 
     public init(from decoder: Decoder) throws {
+        if try GamepadProfileResourceCodec.hasResources(decoder) {
+            self = try GamepadProfileResourceCodec.decode(UnpooledProfile.self, from: decoder).value
+        } else {
+            try self.init(unpooledFrom: decoder)
+        }
+    }
+
+    private init(unpooledFrom decoder: Decoder) throws {
         let workspace = DecodingWorkspace()
         let container = try decoder.container(keyedBy: CodingKeys.self)
         try Self.decodeIdentityFields(from: container, into: workspace)
@@ -5487,6 +5495,21 @@ public struct GamepadConfigurationProfile: Identifiable, Codable, Equatable, Sen
     }
 
     public func encode(to encoder: Encoder) throws {
+        if appearanceBank != nil {
+            try GamepadProfileResourceCodec.encode(UnpooledProfile(value: self), to: encoder)
+        } else {
+            try encodeUnpooled(to: encoder)
+        }
+    }
+
+    private struct UnpooledProfile: Codable {
+        let value: GamepadConfigurationProfile
+        init(value: GamepadConfigurationProfile) { self.value = value }
+        init(from decoder: Decoder) throws { value = try GamepadConfigurationProfile(unpooledFrom: decoder) }
+        func encode(to encoder: Encoder) throws { try value.encodeUnpooled(to: encoder) }
+    }
+
+    private func encodeUnpooled(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try encodeIdentityFields(into: &container)
         try encodePrimaryCustomization(into: &container)
