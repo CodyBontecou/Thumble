@@ -1,0 +1,14 @@
+/* Everyday Play — appearance only, classic-16-bit-v1 revision2. */
+:root { --ground:#ECEEE8; --cap:#F7F8F2; --ink:#233831; --edge:#5B6F68; --accent:#355F50; --coral:#80513F; --pressed:#CDD8CE; --pressure:#365E4B; --active:#FFFFFF; --disabled:#D8DED7; --shadow:#A3B2A7; --highlight:#FFFFFF; }
+controller { background:var(--ground); }
+control { background:var(--cap); color:var(--ink); border:1.5px solid var(--edge); border-radius:11px; box-shadow:0px 2px 1px var(--shadow),inset 1px 1px 0px var(--highlight); font-size:16px; font-weight:semibold; -thumble-label-placement:center; }
+control:pressed { background:var(--pressed); border:2px solid var(--pressure); box-shadow:inset 0px 3px 2px var(--shadow); transform:scale(1); }
+control:active { background:var(--active); border:3px solid var(--accent); box-shadow:0px 3px 1px var(--shadow); transform:scale(1); }
+control:disabled { background:var(--disabled); color:var(--ink); border:1px solid var(--edge); box-shadow:none; opacity:1; transform:scale(1); }
+control[role="primary_action"], control[role="secondary_action"] { border-radius:40px; }
+control[role="secondary_action"] { --accent:var(--coral); }
+control[role="menu"], control[role="utility"], control[role="custom"], control[role="system"] { border-radius:8px; font-size:13px; }
+control[role="system"] { -thumble-icon-symbol:"chevron.down"; -thumble-icon-placement:center; -thumble-icon-rendering:template; }
+@media (prefers-color-scheme:dark) { :root { --ground:#141C20; --cap:#34464A; --ink:#F0F4E9; --edge:#809A96; --accent:#A8CEBF; --coral:#D7AA96; --pressed:#253437; --pressure:#D5E5C5; --active:#40575A; --disabled:#273438; --shadow:#0A1114; --highlight:#607977; } }
+
+control[role="primary_action"]:normal, control[role="secondary_action"]:normal { border-color:var(--accent); }

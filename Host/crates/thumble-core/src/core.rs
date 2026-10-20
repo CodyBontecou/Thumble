@@ -622,6 +622,15 @@ impl HostCore {
             return Ok(effects);
         }
 
+        if message.has_adoption_payload() {
+            self.send_diagnostic(
+                connection_id,
+                "profile artifact adoption requires a supporting reliable host adapter",
+                &mut effects,
+            );
+            return Ok(effects);
+        }
+
         match message.message_type {
             ControllerMessageType::PairingRequest => {
                 self.handle_pairing_request(
@@ -700,6 +709,11 @@ impl HostCore {
             | ControllerMessageType::SkinPackages
             | ControllerMessageType::SkinPackageRemoval
             | ControllerMessageType::GamepadProfileSkinSelection
+            | ControllerMessageType::ProfileArtifactAdoptionBegin
+            | ControllerMessageType::ProfileArtifactAdoptionChunk
+            | ControllerMessageType::ProfileArtifactAdoptionCommit
+            | ControllerMessageType::ProfileArtifactAdoptionCancel
+            | ControllerMessageType::ProfileArtifactAdoptionResult
             | ControllerMessageType::LaunchProfileTarget => {
                 self.send_diagnostic(
                     connection_id,
@@ -2286,6 +2300,11 @@ fn message_type_name(message_type: ControllerMessageType) -> &'static str {
             "gamepad_profile_orientation_preference_mutation"
         }
         ControllerMessageType::LaunchProfileTarget => "launch_profile_target",
+        ControllerMessageType::ProfileArtifactAdoptionBegin => "profile_artifact_adoption_begin",
+        ControllerMessageType::ProfileArtifactAdoptionChunk => "profile_artifact_adoption_chunk",
+        ControllerMessageType::ProfileArtifactAdoptionCommit => "profile_artifact_adoption_commit",
+        ControllerMessageType::ProfileArtifactAdoptionCancel => "profile_artifact_adoption_cancel",
+        ControllerMessageType::ProfileArtifactAdoptionResult => "profile_artifact_adoption_result",
         ControllerMessageType::Error => "error",
     }
 }

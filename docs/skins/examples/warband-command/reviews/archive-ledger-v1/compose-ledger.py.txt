@@ -1,0 +1,24 @@
+"""Reproduce passive 16pt ability miniatures. Never edits native screenshots.
+The 2x2 row order is A, X / B, Y. Editable SVG owns the surrounding frame.
+Run from any directory after editing original command SVGs/CSS.
+"""
+from pathlib import Path
+from PIL import Image
+import json
+p=Path(__file__).resolve().parent.parent
+s=json.loads((p/'skin-source.json').read_text())
+s['sourceAssets']=[a for a in s['sourceAssets'] if not a['id'].startswith('ledger-')]
+banks=json.loads((p/'sources/example-ability-mapping.json').read_text())
+for original in list(s['sourceAssets'][:4]):
+ ori=original['orientation'];scheme=original['colorScheme'];W,H=(874,402) if ori=='landscape' else (402,874)
+ lx,ly,lw,lh=(365,148,260,70) if ori=='landscape' else (20,250,362,55)
+ image=Image.new('RGBA',(W*2,H*2),(0,0,0,0))
+ for i,mapping in enumerate(banks.values()):
+  pw=lw/4-5;cx=lx+i*lw/4+pw/2
+  for j,name in enumerate(mapping[4:]):
+   art=Image.open(p/f'sources/abilities/{name}.png').convert('RGBA').resize((32,32),Image.Resampling.LANCZOS)
+   x=(cx-19+(j%2)*29) if ori=="portrait" else (cx-17+(j%2)*18);y=ly+18+(j//2)*18
+   image.alpha_composite(art,(round(x*2),round(y*2)))
+ name=f'ledger-{ori}-{scheme}'; path=f'sources/artwork/{name}.png'; image.save(p/path)
+ a=dict(original);a.update(id=name,path=path);a['anchor']=dict(original['anchor']);a['anchor']['zIndex']=1;s['sourceAssets'].append(a)
+(p/'skin-source.json').write_text(json.dumps(s,indent=2)+'\n')

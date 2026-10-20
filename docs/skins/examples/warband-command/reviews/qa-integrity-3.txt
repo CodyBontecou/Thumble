@@ -1,0 +1,16 @@
+assets/command-landscape-light.png 1748 804 43176
+assets/command-landscape-dark.png 1748 804 43416
+assets/command-portrait-light.png 804 1748 50680
+assets/command-portrait-dark.png 804 1748 51020
+assets/bloodthirst.png 56 56 4109
+assets/whirlwind.png 56 56 4862
+assets/execute.png 56 56 5392
+assets/cleave.png 56 56 4452
+assets/charge.png 56 56 2681
+assets/death-wish.png 56 56 5004
+assets/berserker-rage.png 56 56 5391
+assets/recklessness.png 56 56 5424
+PASS: compiled skin JSON and all four SVG raster PNGs byte-identical to archived 1.0.1.
+PASS: 8 original PNG/API SHA1/SHA256 pairs and exact crop pixel/byte reproduction, no resize or filter.
+PASS: 12 asset hashes/dimensions; 8 original and PNG provenance pairs; exact appearance-only file allowlist; no executable/profile/binding keys; pending approval.
+Total unpacked bytes: 3145643

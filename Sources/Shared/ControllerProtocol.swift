@@ -240,6 +240,8 @@ public enum ThumbleMacIPC {
     public static let onboardingCompletedDefaultsKey = "PocketPadMac.onboarding.completed.v1"
     public static let editorFirstKeypadOnboardingCompletedDefaultsKey = "PocketPad.GamepadEditor.firstKeypadOnboardingCompleted.v1"
     public static let editorFirstKeypadOnboardingReplayRequestedDefaultsKey = "PocketPad.GamepadEditor.firstKeypadOnboardingReplayRequested.v1"
+    public static let editorCleanPreviewDefaultsKey = "PocketPadMac.editorCleanPreview.v1"
+    public static let editorPresentationChangedNotificationName = "com.codybontecou.PocketPadMac.editorPresentationChanged"
     public static let captureLogPath = "/tmp/thumble-capture.jsonl"
     public static let legacyThumbConsoleCaptureLogPath = "/tmp/thumbconsole-capture.jsonl"
     public static let legacyThumbleCaptureLogPath = "/tmp/pocketpad-capture.jsonl"

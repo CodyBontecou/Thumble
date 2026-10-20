@@ -207,6 +207,7 @@
 		7868405382E2DFDA5D0DA68E /* ControllerActiveInputState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E7BCF7847D7362428517C49 /* ControllerActiveInputState.swift */; };
 		78784A8E46C42B260FC724D4 /* KeyMap.swift in Sources */ = {isa = PBXBuildFile; fileRef = E31C57440A2A9DEBD0F4EB86 /* KeyMap.swift */; };
 		78AB0AE041CF687F53ACAF44 /* BuilderArtifactShare.swift in Sources */ = {isa = PBXBuildFile; fileRef = C399D36AF8D1E1523BED9E3D /* BuilderArtifactShare.swift */; };
+		6CB5FEC69D903BB1C571A842 /* AndroidLayoutEditOracleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB87AF89DE61D5630992D38C /* AndroidLayoutEditOracleTests.swift */; };
 		78FF9604C5E99E8C1BC34549 /* IOSLocalKeypadUXTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4519A904104433910A4BCCD7 /* IOSLocalKeypadUXTests.swift */; };
 		793D9B17FA2FF20B600C19A0 /* MacSharedKeypadImport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3385192268D6E7B862446993 /* MacSharedKeypadImport.swift */; };
 		53920DA9E51813159DE0AE4B /* ThumbleLinkImportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC301AE907EDFD923181262 /* ThumbleLinkImportView.swift */; };
@@ -467,6 +468,7 @@
 		43A91C0CCA23D63A11106CD8 /* GamepadCustomization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GamepadCustomization.swift; sourceTree = "<group>"; };
 		44916FAE61260FE7B7A18A7E /* GameKeypadGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameKeypadGenerator.swift; sourceTree = "<group>"; };
 		6E439B7A4C9527FF4E7B777E /* ThumbleLinkSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThumbleLinkSnapshot.swift; sourceTree = "<group>"; };
+		DB87AF89DE61D5630992D38C /* AndroidLayoutEditOracleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AndroidLayoutEditOracleTests.swift; sourceTree = "<group>"; };
 		4519A904104433910A4BCCD7 /* IOSLocalKeypadUXTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSLocalKeypadUXTests.swift; sourceTree = "<group>"; };
 		4C4A5E7154DDF0FBB3BDAA12 /* ThumbleSkinWorkspaceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThumbleSkinWorkspaceTests.swift; sourceTree = "<group>"; };
 		4C4DA35DAFCB53FC6D4956A0 /* KeyboardInjector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardInjector.swift; sourceTree = "<group>"; };
@@ -732,6 +734,7 @@
 				8744EFAB7599C0E0D41BF2E6 /* InputLatencySimulationSmokeTests.swift */,
 				9B3C4EFEC73C060C2B3860CA /* IOSBuilderArtifactPickupTests.swift */,
 				0A9580393522D816FF924C17 /* IOSBuilderArtifactPracticePreviewTests.swift */,
+				DB87AF89DE61D5630992D38C /* AndroidLayoutEditOracleTests.swift */,
 				4519A904104433910A4BCCD7 /* IOSLocalKeypadUXTests.swift */,
 				C9C75B166A7E582814C744E9 /* IOSPendingBuilderArtifactStoreTests.swift */,
 				FB9E05BD7ED6CFAEB8A21D03 /* KeypadAccessibilityTests.swift */,
@@ -1329,6 +1332,7 @@
 				A7891B0610FBBD9DD2C69DE1 /* IOSBuilderArtifactPickupTests.swift in Sources */,
 				F11D4BEDADCEF7A97E6FD8CE /* IOSBuilderArtifactPracticePreviewTests.swift in Sources */,
 				380EE25507A5A8D4AD6BEC0F /* IOSLocalKeypadUX.swift in Sources */,
+				6CB5FEC69D903BB1C571A842 /* AndroidLayoutEditOracleTests.swift in Sources */,
 				78FF9604C5E99E8C1BC34549 /* IOSLocalKeypadUXTests.swift in Sources */,
 				DF7C19CAAF97003243BBAFAE /* IOSPendingBuilderArtifactStore.swift in Sources */,
 				CE7FDB22B1E952DA587AEF10 /* IOSPendingBuilderArtifactStoreTests.swift in Sources */,

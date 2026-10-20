@@ -1,0 +1,388 @@
+{
+  "artboardID": "wow-forever-v1",
+  "assignments": [],
+  "author": {
+    "name": "Thumble Studio"
+  },
+  "colorSchemes": [
+    "light",
+    "dark"
+  ],
+  "components": [],
+  "identifier": "com.thumble.warband-command",
+  "license": "Original framing MIT; Blizzard icons \u00a9 Blizzard Entertainment (all rights reserved)",
+  "materials": [],
+  "name": "Warband Command",
+  "orientations": [
+    "landscape",
+    "portrait"
+  ],
+  "palette": [
+    {
+      "dark": "#211A46",
+      "id": "surface",
+      "light": "#F2EEF5"
+    },
+    {
+      "dark": "#A77CFF",
+      "id": "accent",
+      "light": "#7C61A8"
+    }
+  ],
+  "previews": [
+    {
+      "artboardID": "wow-forever-v1",
+      "colorScheme": "light",
+      "id": "landscape-light-normal",
+      "orientation": "landscape",
+      "scale": 2,
+      "state": "normal"
+    },
+    {
+      "artboardID": "wow-forever-v1",
+      "colorScheme": "dark",
+      "id": "landscape-dark-normal",
+      "orientation": "landscape",
+      "scale": 2,
+      "state": "normal"
+    },
+    {
+      "artboardID": "wow-forever-v1",
+      "colorScheme": "light",
+      "id": "portrait-light-normal",
+      "orientation": "portrait",
+      "scale": 2,
+      "state": "normal"
+    },
+    {
+      "artboardID": "wow-forever-v1",
+      "colorScheme": "dark",
+      "id": "portrait-dark-normal",
+      "orientation": "portrait",
+      "scale": 2,
+      "state": "normal"
+    }
+  ],
+  "schema": "com.codybontecou.pocketpad.skin-source",
+  "schemaVersion": 3,
+  "sourceAssets": [
+    {
+      "id": "command-landscape-light",
+      "path": "sources/artwork/command-landscape-light.svg",
+      "purpose": "canvas_artwork",
+      "format": "png",
+      "outputWidth": 1748,
+      "outputHeight": 804,
+      "orientation": "landscape",
+      "colorScheme": "light",
+      "anchor": {
+        "group": "command",
+        "scaleX": 1.200918964076859,
+        "scaleY": 1.1424024553127399,
+        "offsetX": -0.004770698676515774,
+        "offsetY": 0.0023444826508284005,
+        "plane": "underlay"
+      }
+    },
+    {
+      "id": "command-landscape-dark",
+      "path": "sources/artwork/command-landscape-dark.svg",
+      "purpose": "canvas_artwork",
+      "format": "png",
+      "outputWidth": 1748,
+      "outputHeight": 804,
+      "orientation": "landscape",
+      "colorScheme": "dark",
+      "anchor": {
+        "group": "command",
+        "scaleX": 1.200918964076859,
+        "scaleY": 1.1424024553127399,
+        "offsetX": -0.004770698676515774,
+        "offsetY": 0.0023444826508284005,
+        "plane": "underlay"
+      }
+    },
+    {
+      "id": "command-portrait-light",
+      "path": "sources/artwork/command-portrait-light.svg",
+      "purpose": "canvas_artwork",
+      "format": "png",
+      "outputWidth": 804,
+      "outputHeight": 1748,
+      "orientation": "portrait",
+      "colorScheme": "light",
+      "anchor": {
+        "group": "command",
+        "scaleX": 1.1298228257936864,
+        "scaleY": 1.1741094098017986,
+        "offsetX": 0.0028105045417753894,
+        "offsetY": -0.01841363578964899,
+        "plane": "underlay"
+      }
+    },
+    {
+      "id": "command-portrait-dark",
+      "path": "sources/artwork/command-portrait-dark.svg",
+      "purpose": "canvas_artwork",
+      "format": "png",
+      "outputWidth": 804,
+      "outputHeight": 1748,
+      "orientation": "portrait",
+      "colorScheme": "dark",
+      "anchor": {
+        "group": "command",
+        "scaleX": 1.1298228257936864,
+        "scaleY": 1.1741094098017986,
+        "offsetX": 0.0028105045417753894,
+        "offsetY": -0.01841363578964899,
+        "plane": "underlay"
+      }
+    },
+    {
+      "id": "bloodthirst",
+      "path": "sources/abilities/bloodthirst.png",
+      "purpose": "icon",
+      "format": "png",
+      "outputWidth": 56,
+      "outputHeight": 56
+    },
+    {
+      "id": "whirlwind",
+      "path": "sources/abilities/whirlwind.png",
+      "purpose": "icon",
+      "format": "png",
+      "outputWidth": 56,
+      "outputHeight": 56
+    },
+    {
+      "id": "execute",
+      "path": "sources/abilities/execute.png",
+      "purpose": "icon",
+      "format": "png",
+      "outputWidth": 56,
+      "outputHeight": 56
+    },
+    {
+      "id": "cleave",
+      "path": "sources/abilities/cleave.png",
+      "purpose": "icon",
+      "format": "png",
+      "outputWidth": 56,
+      "outputHeight": 56
+    },
+    {
+      "id": "charge",
+      "path": "sources/abilities/charge.png",
+      "purpose": "icon",
+      "format": "png",
+      "outputWidth": 56,
+      "outputHeight": 56
+    },
+    {
+      "id": "death-wish",
+      "path": "sources/abilities/death-wish.png",
+      "purpose": "icon",
+      "format": "png",
+      "outputWidth": 56,
+      "outputHeight": 56
+    },
+    {
+      "id": "berserker-rage",
+      "path": "sources/abilities/berserker-rage.png",
+      "purpose": "icon",
+      "format": "png",
+      "outputWidth": 56,
+      "outputHeight": 56
+    },
+    {
+      "id": "recklessness",
+      "path": "sources/abilities/recklessness.png",
+      "purpose": "icon",
+      "format": "png",
+      "outputWidth": 56,
+      "outputHeight": 56
+    }
+  ],
+  "stylesheets": [
+    "styles/controller.css"
+  ],
+  "summary": "Warrior ability tiles, four held modifier banks, and quiet thumb instruments.",
+  "version": "1.0.2",
+  "controlSemantics": [
+    {
+      "controlID": "builtin.00000000-0000-0000-0000-000000000101",
+      "action": "warband.up",
+      "purpose": "utility.up",
+      "groups": [
+        "utility",
+        "command",
+        "abilities"
+      ]
+    },
+    {
+      "controlID": "builtin.00000000-0000-0000-0000-000000000102",
+      "action": "warband.down",
+      "purpose": "utility.down",
+      "groups": [
+        "utility",
+        "command",
+        "abilities"
+      ]
+    },
+    {
+      "controlID": "builtin.00000000-0000-0000-0000-000000000103",
+      "action": "warband.left",
+      "purpose": "utility.left",
+      "groups": [
+        "utility",
+        "command",
+        "abilities"
+      ]
+    },
+    {
+      "controlID": "builtin.00000000-0000-0000-0000-000000000104",
+      "action": "warband.right",
+      "purpose": "utility.right",
+      "groups": [
+        "utility",
+        "command",
+        "abilities"
+      ]
+    },
+    {
+      "controlID": "builtin.00000000-0000-0000-0000-000000000105",
+      "action": "warband.cleave",
+      "purpose": "abilities.cleave",
+      "groups": [
+        "abilities",
+        "command"
+      ]
+    },
+    {
+      "controlID": "builtin.00000000-0000-0000-0000-000000000106",
+      "action": "warband.bloodthirst",
+      "purpose": "abilities.bloodthirst",
+      "groups": [
+        "abilities",
+        "command"
+      ]
+    },
+    {
+      "controlID": "builtin.00000000-0000-0000-0000-000000000107",
+      "action": "warband.execute",
+      "purpose": "abilities.execute",
+      "groups": [
+        "abilities",
+        "command"
+      ]
+    },
+    {
+      "controlID": "builtin.00000000-0000-0000-0000-000000000108",
+      "action": "warband.whirlwind",
+      "purpose": "abilities.whirlwind",
+      "groups": [
+        "abilities",
+        "command"
+      ]
+    },
+    {
+      "controlID": "builtin.00000000-0000-0000-0000-000000000109",
+      "action": "warband.view",
+      "purpose": "utility.view",
+      "groups": [
+        "utility",
+        "command"
+      ]
+    },
+    {
+      "controlID": "builtin.00000000-0000-0000-0000-00000000010A",
+      "action": "warband.menu",
+      "purpose": "utility.menu",
+      "groups": [
+        "utility",
+        "command"
+      ]
+    },
+    {
+      "controlID": "custom.joystick.10",
+      "action": "warband.move",
+      "purpose": "sticks.move",
+      "groups": [
+        "sticks",
+        "command"
+      ]
+    },
+    {
+      "controlID": "custom.joystick.11",
+      "action": "warband.look",
+      "purpose": "sticks.look",
+      "groups": [
+        "sticks",
+        "command"
+      ]
+    },
+    {
+      "controlID": "custom.button.12",
+      "action": "warband.lt",
+      "purpose": "utility.lt",
+      "groups": [
+        "utility",
+        "command"
+      ]
+    },
+    {
+      "controlID": "custom.button.13",
+      "action": "warband.rt",
+      "purpose": "utility.rt",
+      "groups": [
+        "utility",
+        "command"
+      ]
+    },
+    {
+      "controlID": "custom.button.14",
+      "action": "warband.lb",
+      "purpose": "utility.lb",
+      "groups": [
+        "utility",
+        "command"
+      ]
+    },
+    {
+      "controlID": "custom.button.15",
+      "action": "warband.rb",
+      "purpose": "utility.rb",
+      "groups": [
+        "utility",
+        "command"
+      ]
+    },
+    {
+      "controlID": "custom.button.16",
+      "action": "warband.l3",
+      "purpose": "utility.l3",
+      "groups": [
+        "utility",
+        "command"
+      ]
+    },
+    {
+      "controlID": "custom.button.17",
+      "action": "warband.r3",
+      "purpose": "utility.r3",
+      "groups": [
+        "utility",
+        "command"
+      ]
+    },
+    {
+      "controlID": "system.top_bar_activation",
+      "action": "warband.control-bar-toggle",
+      "purpose": "utility.control-bar-toggle",
+      "groups": [
+        "utility",
+        "command"
+      ]
+    }
+  ]
+}

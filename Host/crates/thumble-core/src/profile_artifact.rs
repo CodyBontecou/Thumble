@@ -79,9 +79,27 @@ pub enum ProfileArtifactSelection {
 /// element UUID. Known binding fields are parsed only during validation/import.
 pub type ProfileArtifactBindingMaps = BTreeMap<String, Value>;
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct ProfileArtifact {
+    pub schema: String,
+    pub version: u32,
+    pub artifact_version: u32,
+    pub exported_at: i64,
+    pub profiles: Vec<Value>,
+    pub active_profile_id: Option<String>,
+    pub default_profile_id: Option<String>,
+    pub profile_key_bindings: ProfileArtifactBindingMaps,
+    pub profile_output_bindings: ProfileArtifactBindingMaps,
+    pub catalog_revision: ProfileArtifactCatalogRevision,
+    pub content_hash: ProfileArtifactContentHash,
+    pub extensions: BTreeMap<String, Value>,
+    // Presence affects the signed JSON, even when the decoded values are empty.
+    omitted_optional_fields: Vec<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ProfileArtifact {
+struct ProfileArtifactWire {
     pub schema: String,
     pub version: u32,
     pub artifact_version: u32,
@@ -99,6 +117,67 @@ pub struct ProfileArtifact {
     pub content_hash: ProfileArtifactContentHash,
     #[serde(flatten, default)]
     pub extensions: BTreeMap<String, Value>,
+}
+
+impl<'de> Deserialize<'de> for ProfileArtifact {
+    fn deserialize<D: serde::Deserializer<'de>>(decoder: D) -> Result<Self, D::Error> {
+        let value = Value::deserialize(decoder)?;
+        let omitted_optional_fields = [
+            "defaultProfileID",
+            "profileKeyBindings",
+            "profileOutputBindings",
+        ]
+        .into_iter()
+        .filter(|key| value.get(*key).is_none())
+        .map(str::to_owned)
+        .collect();
+        let wire: ProfileArtifactWire =
+            serde_json::from_value(value).map_err(serde::de::Error::custom)?;
+        Ok(Self {
+            schema: wire.schema,
+            version: wire.version,
+            artifact_version: wire.artifact_version,
+            exported_at: wire.exported_at,
+            profiles: wire.profiles,
+            active_profile_id: wire.active_profile_id,
+            default_profile_id: wire.default_profile_id,
+            profile_key_bindings: wire.profile_key_bindings,
+            profile_output_bindings: wire.profile_output_bindings,
+            catalog_revision: wire.catalog_revision,
+            content_hash: wire.content_hash,
+            extensions: wire.extensions,
+            omitted_optional_fields,
+        })
+    }
+}
+impl Serialize for ProfileArtifact {
+    fn serialize<S: serde::Serializer>(&self, encoder: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeMap;
+        let content = self.semantic_content();
+        let mut map = encoder.serialize_map(None)?;
+        // Retain the established export field order as well as signed presence.
+        for key in ["schema", "version", "artifactVersion"] {
+            map.serialize_entry(key, &content[key])?;
+        }
+        map.serialize_entry("exportedAt", &self.exported_at)?;
+        for key in [
+            "profiles",
+            "activeProfileID",
+            "defaultProfileID",
+            "profileKeyBindings",
+            "profileOutputBindings",
+            "catalogRevision",
+        ] {
+            if let Some(value) = content.get(key) {
+                map.serialize_entry(key, value)?;
+            }
+        }
+        map.serialize_entry("contentHash", &self.content_hash)?;
+        for (key, value) in &self.extensions {
+            map.serialize_entry(key, value)?;
+        }
+        map.end()
+    }
 }
 
 impl ProfileArtifact {
@@ -207,6 +286,7 @@ impl ProfileArtifact {
             profile_output_bindings: filter_raw_binding_maps(&all_output_bindings, &selected_ids)?,
             catalog_revision: ProfileArtifactCatalogRevision::default(),
             content_hash: ProfileArtifactContentHash::placeholder(),
+            omitted_optional_fields: Vec::new(),
             extensions: BTreeMap::new(),
         };
         artifact.refresh_content_hash()?;
@@ -327,6 +407,7 @@ impl ProfileArtifact {
             profile_output_bindings: filter_raw_binding_maps(&raw_output_bindings, &profile_ids)?,
             catalog_revision: ProfileArtifactCatalogRevision::default(),
             content_hash: ProfileArtifactContentHash::placeholder(),
+            omitted_optional_fields: Vec::new(),
             extensions,
         };
         artifact.refresh_content_hash()?;
@@ -500,6 +581,17 @@ impl ProfileArtifact {
             "catalogRevision".to_owned(),
             serde_json::to_value(self.catalog_revision).unwrap_or(Value::Null),
         );
+        for key in &self.omitted_optional_fields {
+            let still_empty = match key.as_str() {
+                "defaultProfileID" => self.default_profile_id.is_none(),
+                "profileKeyBindings" => self.profile_key_bindings.is_empty(),
+                "profileOutputBindings" => self.profile_output_bindings.is_empty(),
+                _ => false,
+            };
+            if still_empty {
+                object.remove(key);
+            }
+        }
         object.extend(
             self.extensions
                 .iter()
@@ -1046,6 +1138,46 @@ mod tests {
                 ),
                 Err(ProfileArtifactError::UnsupportedSchemaVersion(version))
             );
+        }
+    }
+
+    #[test]
+    fn native_optional_field_omissions_preserve_signed_content_and_round_trip() {
+        for omitted in [
+            vec!["profileKeyBindings", "profileOutputBindings"],
+            vec!["defaultProfileID"],
+            vec![
+                "defaultProfileID",
+                "profileKeyBindings",
+                "profileOutputBindings",
+            ],
+        ] {
+            let mut value = serde_json::to_value(artifact()).unwrap();
+            for key in &omitted {
+                value.as_object_mut().unwrap().remove(*key);
+            }
+            let mut content = value.clone();
+            content.as_object_mut().unwrap().remove("contentHash");
+            content.as_object_mut().unwrap().remove("exportedAt");
+            value["contentHash"]["value"] = Value::String(sha256_hex(
+                &serde_json_canonicalizer::to_vec(&content).unwrap(),
+            ));
+            let decoded =
+                ProfileArtifact::decode_json(&serde_json::to_vec(&value).unwrap()).unwrap();
+            assert_eq!(serde_json::to_value(&decoded).unwrap(), value);
+            assert_eq!(
+                serde_json::from_slice::<Value>(&decoded.encode_compact_json().unwrap()).unwrap(),
+                value
+            );
+            let mut tampered = value.clone();
+            tampered["profiles"][0]["name"] = json!("tampered");
+            assert_eq!(
+                ProfileArtifact::decode_json(&serde_json::to_vec(&tampered).unwrap()),
+                Err(ProfileArtifactError::ContentHashMismatch)
+            );
+            for key in &omitted {
+                assert!(serde_json::to_value(&decoded).unwrap().get(*key).is_none());
+            }
         }
     }
 

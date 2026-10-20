@@ -1,0 +1,12 @@
+{
+  "compiledSkinJSONByteIdentical": true,
+  "compiledSkinSHA256Before": "8a961c414d1463326411488be4ce5291d2e9091508283e2aacd500701a59e09d",
+  "compiledSkinSHA256After": "8a961c414d1463326411488be4ce5291d2e9091508283e2aacd500701a59e09d",
+  "svgRasterByteEquality": {
+    "assets/command-landscape-light.png": true,
+    "assets/command-landscape-dark.png": true,
+    "assets/command-portrait-light.png": true,
+    "assets/command-portrait-dark.png": true
+  },
+  "explanation": "Entire compiled native style, bank mapping, geometry compatibility and appearance JSON is byte-identical. All four authored SVG raster assets are byte-identical. Changes are confined to icon PNG bytes and package version/manifest media metadata."
+}

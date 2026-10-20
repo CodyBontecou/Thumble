@@ -1,0 +1,42 @@
+{
+  "base": [
+    "charge",
+    "berserker-rage",
+    "death-wish",
+    "recklessness",
+    "cleave",
+    "bloodthirst",
+    "execute",
+    "whirlwind"
+  ],
+  "left-trigger": [
+    "death-wish",
+    "recklessness",
+    "charge",
+    "berserker-rage",
+    "execute",
+    "whirlwind",
+    "bloodthirst",
+    "cleave"
+  ],
+  "right-trigger": [
+    "recklessness",
+    "charge",
+    "berserker-rage",
+    "death-wish",
+    "bloodthirst",
+    "cleave",
+    "whirlwind",
+    "execute"
+  ],
+  "both-triggers": [
+    "berserker-rage",
+    "death-wish",
+    "recklessness",
+    "charge",
+    "whirlwind",
+    "execute",
+    "cleave",
+    "bloodthirst"
+  ]
+}

@@ -25,7 +25,7 @@ internal fun iconLayout(control: Control, width: Double, height: Double, content
     val legend = content?.let { if (it.has("legend") && !it.isNull("legend")) it.optString("legend") else null } ?: control.legend
     val visible = control.kind == "text" || (control.kind != "decoration" && showsLabels && control.style.optBoolean("showsIntegratedLabel", true)
         && !(control.kind == "joystick" && control.style.optString("joystickVisualStyle") == "thumbstick")
-        && (control.kind in setOf("joystick", "trackpad") || icon?.placement != "center" || legend.codePointCount(0, legend.length) <= 2))
+        && (control.kind in setOf("joystick", "trackpad") || icon?.placement != "center" || ControlTypography.shortLegend(legend)))
     val padding = content?.finite("labelPadding", defaultLabelPadding(control)) ?: defaultLabelPadding(control)
     val labelOffset = if (content?.has("labelPlacement") == true) when (content.optString("labelPlacement")) {
         "top" -> Vector(0.0, -height * .32 + padding); "bottom" -> Vector(0.0, height * .32 - padding)

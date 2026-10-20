@@ -1,0 +1,255 @@
+{
+  "artboardID": "classic-16-bit-v1",
+  "assignments": [],
+  "author": {
+    "name": "Thumble Studio"
+  },
+  "colorSchemes": [
+    "light",
+    "dark"
+  ],
+  "components": [],
+  "identifier": "com.thumble.everyday-play",
+  "license": "MIT \u2014 original authored appearance",
+  "materials": [],
+  "name": "Everyday Play",
+  "orientations": [
+    "landscape",
+    "portrait"
+  ],
+  "palette": [
+    {
+      "id": "ground",
+      "dark": "#141C20",
+      "light": "#ECEEE8"
+    },
+    {
+      "id": "cap",
+      "dark": "#34464A",
+      "light": "#F7F8F2"
+    },
+    {
+      "id": "ink",
+      "dark": "#F0F4E9",
+      "light": "#233831"
+    },
+    {
+      "id": "sea-glass",
+      "dark": "#A8CEBF",
+      "light": "#355F50"
+    },
+    {
+      "id": "coral",
+      "dark": "#D7AA96",
+      "light": "#80513F"
+    }
+  ],
+  "previews": [
+    {
+      "artboardID": "classic-16-bit-v1",
+      "colorScheme": "light",
+      "id": "landscape-light-normal",
+      "orientation": "landscape",
+      "scale": 2,
+      "state": "normal"
+    },
+    {
+      "artboardID": "classic-16-bit-v1",
+      "colorScheme": "dark",
+      "id": "landscape-dark-normal",
+      "orientation": "landscape",
+      "scale": 2,
+      "state": "normal"
+    },
+    {
+      "artboardID": "classic-16-bit-v1",
+      "colorScheme": "light",
+      "id": "portrait-light-normal",
+      "orientation": "portrait",
+      "scale": 2,
+      "state": "normal"
+    },
+    {
+      "artboardID": "classic-16-bit-v1",
+      "colorScheme": "dark",
+      "id": "portrait-dark-normal",
+      "orientation": "portrait",
+      "scale": 2,
+      "state": "normal"
+    }
+  ],
+  "schema": "com.codybontecou.pocketpad.skin-source",
+  "schemaVersion": 3,
+  "sourceAssets": [
+    {
+      "id": "everyday-landscape-dark",
+      "path": "sources/artwork/everyday-landscape-dark.svg",
+      "purpose": "canvas_artwork",
+      "format": "png",
+      "outputWidth": 1748,
+      "outputHeight": 804,
+      "orientation": "landscape",
+      "colorScheme": "dark",
+      "anchor": {
+        "group": "everyday",
+        "scaleX": 1.098924141125297,
+        "scaleY": 1.2588000466410307,
+        "offsetX": -0.0044000966611624755,
+        "offsetY": 0.054081654402499554,
+        "plane": "underlay"
+      }
+    },
+    {
+      "id": "everyday-landscape-light",
+      "path": "sources/artwork/everyday-landscape-light.svg",
+      "purpose": "canvas_artwork",
+      "format": "png",
+      "outputWidth": 1748,
+      "outputHeight": 804,
+      "orientation": "landscape",
+      "colorScheme": "light",
+      "anchor": {
+        "group": "everyday",
+        "scaleX": 1.098924141125297,
+        "scaleY": 1.2588000466410307,
+        "offsetX": -0.0044000966611624755,
+        "offsetY": 0.054081654402499554,
+        "plane": "underlay"
+      }
+    },
+    {
+      "id": "everyday-portrait-dark",
+      "path": "sources/artwork/everyday-portrait-dark.svg",
+      "purpose": "canvas_artwork",
+      "format": "png",
+      "outputWidth": 804,
+      "outputHeight": 1748,
+      "orientation": "portrait",
+      "colorScheme": "dark",
+      "anchor": {
+        "group": "everyday",
+        "scaleX": 1.1821925589321218,
+        "scaleY": 1.103434940855323,
+        "offsetX": 0.0348859225598789,
+        "offsetY": 0.0044181579213427,
+        "plane": "underlay"
+      }
+    },
+    {
+      "id": "everyday-portrait-light",
+      "path": "sources/artwork/everyday-portrait-light.svg",
+      "purpose": "canvas_artwork",
+      "format": "png",
+      "outputWidth": 804,
+      "outputHeight": 1748,
+      "orientation": "portrait",
+      "colorScheme": "light",
+      "anchor": {
+        "group": "everyday",
+        "scaleX": 1.1821925589321218,
+        "scaleY": 1.103434940855323,
+        "offsetX": 0.0348859225598789,
+        "offsetY": 0.0044181579213427,
+        "plane": "underlay"
+      }
+    }
+  ],
+  "stylesheets": [
+    "styles/controller.css"
+  ],
+  "summary": "Quiet mineral keycaps in individually machined sockets, with sea-glass and coral accents.",
+  "version": "1.0.0",
+  "controlSemantics": [
+    {
+      "controlID": "builtin.00000000-0000-0000-0000-000000000101",
+      "action": "everyday.input-1",
+      "groups": [
+        "everyday"
+      ]
+    },
+    {
+      "controlID": "builtin.00000000-0000-0000-0000-000000000102",
+      "action": "everyday.input-2",
+      "groups": [
+        "everyday"
+      ]
+    },
+    {
+      "controlID": "builtin.00000000-0000-0000-0000-000000000103",
+      "action": "everyday.input-3",
+      "groups": [
+        "everyday"
+      ]
+    },
+    {
+      "controlID": "builtin.00000000-0000-0000-0000-000000000104",
+      "action": "everyday.input-4",
+      "groups": [
+        "everyday"
+      ]
+    },
+    {
+      "controlID": "builtin.00000000-0000-0000-0000-000000000108",
+      "action": "everyday.input-5",
+      "groups": [
+        "everyday"
+      ]
+    },
+    {
+      "controlID": "builtin.00000000-0000-0000-0000-000000000107",
+      "action": "everyday.input-6",
+      "groups": [
+        "everyday"
+      ]
+    },
+    {
+      "controlID": "builtin.00000000-0000-0000-0000-000000000105",
+      "action": "everyday.input-7",
+      "groups": [
+        "everyday"
+      ]
+    },
+    {
+      "controlID": "builtin.00000000-0000-0000-0000-000000000106",
+      "action": "everyday.input-8",
+      "groups": [
+        "everyday"
+      ]
+    },
+    {
+      "controlID": "builtin.00000000-0000-0000-0000-000000000109",
+      "action": "everyday.input-9",
+      "groups": [
+        "everyday"
+      ]
+    },
+    {
+      "controlID": "builtin.00000000-0000-0000-0000-00000000010A",
+      "action": "everyday.input-10",
+      "groups": [
+        "everyday"
+      ]
+    },
+    {
+      "controlID": "custom.button.10",
+      "action": "everyday.input-11",
+      "groups": [
+        "everyday"
+      ]
+    },
+    {
+      "controlID": "custom.button.11",
+      "action": "everyday.input-12",
+      "groups": [
+        "everyday"
+      ]
+    },
+    {
+      "controlID": "system.top_bar_activation",
+      "action": "everyday.input-13",
+      "groups": [
+        "everyday"
+      ]
+    }
+  ]
+}

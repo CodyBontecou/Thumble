@@ -1,0 +1,28 @@
+steps:
+  - launch: com.codybontecou.PocketPad.iOS
+  - tool: rotate
+    args:
+      orientation: LandscapeLeft
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: Pair With Mac
+  - echo: Scroll the isolated landscape connection screen to View Saved Keypad.
+  - tool: gesture-swipe
+    args:
+      fromX: 0.25
+      fromY: 0.6
+      toX: 0.75
+      toY: 0.6
+      momentum: false
+  - echo: Tap View Saved Keypad at the AX-service frame. Native SwiftUI hierarchy has no target; text selector failed the scratch assertion.
+  - tool: gesture-tap
+    args:
+      x: 0.1855
+      y: 0.5005
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: Practice Mode. Outgoing input is off.

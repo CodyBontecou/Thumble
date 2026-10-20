@@ -6,6 +6,13 @@ use serde_json::json;
 use thumble_protocol::ControllerCapability;
 use unicode_normalization::UnicodeNormalization;
 
+pub(super) enum ProfileJob {
+    Adoption(Box<(thumble_protocol::AdoptionMetadata, Vec<u8>)>),
+    Skin(Box<ControllerMessage>),
+    Appearance(Box<crate::phone_appearance::PhoneAppearanceRequest>),
+    Layout(Box<crate::phone_layout::PhoneLayoutRequest>),
+}
+
 fn same_reference(a: &SkinReference, b: &SkinReference) -> bool {
     // Swift String identity is canonically equivalent. Do not permit removal
     // of a used archive through an alternate Unicode spelling of its version.
@@ -57,6 +64,135 @@ pub(super) fn is_skin_message(message: &ControllerMessage) -> bool {
 }
 
 impl SharedRuntime {
+    pub(super) fn handle_profile_job(&self, id: ConnectionId, job: ProfileJob) {
+        let job = match job {
+            ProfileJob::Adoption(work) => {
+                let (metadata, bytes) = *work;
+                self.run_adoption_job(id, metadata, bytes);
+                return;
+            }
+            other => other,
+        };
+        let job = match job {
+            ProfileJob::Layout(request) => {
+                self.handle_phone_layout(id, *request);
+                return;
+            }
+            other => other,
+        };
+        let ProfileJob::Appearance(request) = job else {
+            if let ProfileJob::Skin(message) = job {
+                self.handle_skin_message(id, *message);
+            }
+            return;
+        };
+        let result = (|| {
+            let service = self
+                .skin_service
+                .as_ref()
+                .ok_or("appearance_bridge_unavailable")?;
+            let _mutation = service.mutation.try_lock().map_err(|_| "appearance_busy")?;
+            self.skin_state(Some(id))
+                .map_err(|_| "appearance_session_retired")?;
+            let bridge =
+                ConfigurationBridge::discover().map_err(|_| "appearance_bridge_unavailable")?;
+            let prepared = request.prepare(&bridge, unix_millis())?;
+            let mut inner = self.inner.lock().expect("runtime mutex poisoned");
+            self.guard_input_liveness(&mut inner);
+            if !inner.connections.contains_key(&id) || !inner.core.is_authenticated(id) {
+                return Err("appearance_session_retired");
+            }
+            if let Some(candidate) = prepared.candidate(inner.core.persistent_state())? {
+                let releases = inner.core.release_all();
+                self.execute_effects(&mut inner, releases)
+                    .map_err(|_| "appearance_input_release_failed")?;
+                storage::save_atomic(&self.paths.state_file, &candidate)
+                    .map_err(|_| "appearance_profile_save_failed")?;
+                let effects = inner.core.install_validated_persisted_state(candidate);
+                self.execute_effects(&mut inner, effects)
+                    .map_err(|_| "appearance_delivery_failed")?;
+            } else {
+                self.handle_input_locked(
+                    &mut inner,
+                    id,
+                    ControllerMessage::new(ControllerMessageType::GamepadProfiles, unix_millis()),
+                    false,
+                )
+                .map_err(|_| "appearance_delivery_failed")?;
+            }
+            Ok::<(), &'static str>(())
+        })();
+        if let Err(code) = result {
+            self.skin_error(id, code);
+        }
+    }
+
+    fn handle_phone_layout(
+        &self,
+        id: ConnectionId,
+        request: crate::phone_layout::PhoneLayoutRequest,
+    ) {
+        let result = (|| {
+            let bridge = self
+                .phone_layout_bridge
+                .as_ref()
+                .ok_or("phone_layout_bridge_unavailable")?;
+            let _library_mutation = self
+                .skin_service
+                .as_ref()
+                .map(|service| {
+                    service
+                        .mutation
+                        .lock()
+                        .map_err(|_| "phone_layout_skin_unavailable")
+                })
+                .transpose()?;
+            let current = self
+                .skin_state(Some(id))
+                .map_err(|_| "phone_layout_session_retired")?;
+            let request = request.rebase(current)?;
+            let reference = request.skin_reference()?;
+            let package = if let (Some(service), Some(reference)) = (&self.skin_service, reference)
+            {
+                service
+                    .library
+                    .load(&reference)
+                    .map_err(|_| "phone_layout_package_unavailable")?
+            } else {
+                None
+            };
+            let prepared =
+                request.prepare(bridge, package.as_ref().map(|v| v.archive()), unix_millis())?;
+            let mut inner = self.inner.lock().expect("runtime mutex poisoned");
+            self.guard_input_liveness(&mut inner);
+            if !inner.connections.contains_key(&id) || !inner.core.is_authenticated(id) {
+                return Err("phone_layout_session_retired");
+            }
+            if let Some(candidate) = prepared.candidate(inner.core.persistent_state())? {
+                let releases = inner.core.release_all();
+                self.execute_effects(&mut inner, releases)
+                    .map_err(|_| "phone_layout_release_failed")?;
+                storage::save_atomic(&self.paths.state_file, &candidate)
+                    .map_err(|_| "phone_layout_save_failed")?;
+                let effects = inner.core.install_validated_persisted_state(candidate);
+                self.execute_effects(&mut inner, effects)
+                    .map_err(|_| "phone_layout_delivery_failed")?;
+            } else {
+                self.handle_input_locked(
+                    &mut inner,
+                    id,
+                    ControllerMessage::new(ControllerMessageType::GamepadProfiles, unix_millis()),
+                    false,
+                )
+                .map_err(|_| "phone_layout_delivery_failed")?;
+            }
+            Ok::<(), &'static str>(())
+        })();
+        if let Err(code) = result {
+            self.skin_error(id, code);
+        }
+    }
+
     fn skin_state(&self, connection: Option<ConnectionId>) -> Result<PersistentState, SkinError> {
         let inner = self.inner.lock().expect("runtime mutex poisoned");
         if connection.is_some_and(|id| {

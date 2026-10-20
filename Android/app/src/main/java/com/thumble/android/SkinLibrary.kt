@@ -8,7 +8,7 @@ import java.nio.file.StandardCopyOption
 internal enum class SkinInstallPolicy { NEWER_ONLY, REPLACE_SAME_VERSION, ALLOW_DOWNGRADE }
 internal enum class SkinInstallChange { INSTALLED, UPDATED, REPLACED, UNCHANGED }
 internal data class SkinInstallResult(val reference: SkinReference,val change: SkinInstallChange,val previousVersion: String?=null)
-internal data class InstalledSkin(val reference: SkinReference,val name: String,val archiveSHA256: String)
+internal data class InstalledSkin(val reference: SkinReference,val name: String,val archiveSHA256: String,val author: String="",val summary: String="",val license: String="")
 
 /** Private, independently shareable archives. Atomic replacement never exposes a partial package. */
 internal class SkinLibrary(private val root: File) {
@@ -80,7 +80,7 @@ internal class SkinLibrary(private val root: File) {
             for (file in directory.listFiles().orEmpty()) {
                 if (file.extension!="pocketpad" || !file.isFile || Files.isSymbolicLink(file.toPath())) continue
                 val p=runCatching { SkinPackageCodec.decode(read(file)) }.getOrNull() ?: continue
-                if (p.hasSkin && runCatching { destination(p.reference)==file }.getOrDefault(false)) result.add(InstalledSkin(p.reference,p.name,p.archiveSHA256))
+                if (p.hasSkin && runCatching { destination(p.reference)==file }.getOrDefault(false)) result.add(InstalledSkin(p.reference,p.name,p.archiveSHA256,p.authorName,p.manifestJSON().optString("summary"),p.manifestJSON().optString("license")))
             }
         }
         return result

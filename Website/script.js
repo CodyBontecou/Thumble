@@ -21,6 +21,10 @@ async function hydrateMacRelease() {
   const shaNode = document.querySelector("[data-mac-release-sha]");
   if (!link || !versionNode || !statusNode || !shaNode) return;
 
+  link.addEventListener("click", (event) => {
+    if (link.getAttribute("aria-disabled") === "true") event.preventDefault();
+  });
+
   try {
     const response = await fetch("/api/releases/latest-mac", {
       headers: { Accept: "application/json" }

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Thumble — your iPhone, your controller</title>
   <meta name="description" content="Build an iPhone control surface for your Mac: custom game layouts, keyboard shortcuts, trackpads, and configurable controller output.">
-  <meta name="theme-color" content="#f4efe5">
+  <meta name="theme-color" content="#080909">
   <meta property="og:title" content="Thumble — your iPhone, your controller">
   <meta property="og:description" content="Pair an iPhone with your Mac, customize touch controls, and send keyboard shortcuts, pointer gestures, or gamepad output.">
   <meta property="og:type" content="website">
@@ -13,319 +13,91 @@
   <link rel="icon" href="/assets/favicon.png" type="image/png">
   <link rel="apple-touch-icon" href="/assets/app-icon.png">
   <link rel="stylesheet" href="/styles.css?v=c61718e97179">
+  <link rel="stylesheet" href="/design.css?v=20261020">
 </head>
-<body class="landing-page">
+<body class="home-page">
+  <a class="skip-link" href="#top">Skip to content</a>
   <header class="site-header">
-    <a class="brand" href="#top" aria-label="Thumble home">
-      <span class="brand-mark">TC</span>
-      <span>Thumble</span>
-    </a>
-    <nav aria-label="Primary navigation">
-      <a href="#games">Gaming</a>
-      <a href="/skins.html">Skins</a>
-      <a href="#details">Details</a>
-      <a href="#download">Download</a>
-      <a href="/docs.html">Docs</a>
-      <a href="/blog.html">Blog</a>
-      <a class="nav-cta" href="#waitlist">Waitlist</a>
-    </nav>
+    <a class="brand" href="/" aria-label="Thumble home"><img src="/assets/app-icon.png" width="30" height="30" alt=""><span>thumble<span class="brand-period">.</span></span></a>
+    <nav aria-label="Primary navigation"><a href="#details">Overview</a><a href="/skins.html">Skins</a><a href="/docs.html">Docs</a><a href="/blog.html">Changelog</a><a class="nav-cta" href="#download">Get Thumble <span aria-hidden="true">↗</span></a></nav>
   </header>
-
   <main id="top">
-    <section class="hero section-shell">
-      <div class="hero-copy">
-        <p class="eyebrow">in development / macOS + iOS</p>
-        <h1>your game. your layout. your iPhone.</h1>
-        <p class="lede">Build a control surface around the way you play and work. Mix shortcuts, touch sticks, triggers, and trackpads, then switch layouts from your iPhone.</p>
-
-        <div class="hero-actions">
-          <a class="pixel-button" href="#download">download mac</a>
-          <a class="pixel-button pixel-button-secondary" href="/skins.html">browse skins</a>
-          <a class="pixel-button pixel-button-secondary" href="#games">explore game layouts</a>
-          <a class="pixel-button pixel-button-secondary" href="#screens">see screenshots</a>
+    <section class="home-hero section-shell" aria-labelledby="hero-title">
+      <h1 id="hero-title">Your iPhone. Your kind of <span>control.</span></h1>
+      <p class="home-lede">A controller for your games. A shortcut for your workflow.</p>
+      <div class="controller-showcase" id="games">
+        <div class="layout-switcher" role="tablist" aria-label="Explore controller layouts">
+          <button type="button" role="tab" id="tab-classic" aria-controls="layout-classic" aria-selected="false" tabindex="-1">Everyday play</button>
+          <button type="button" role="tab" id="tab-wow" aria-controls="layout-wow" aria-selected="true" tabindex="0">World of Warcraft</button>
         </div>
-
-        <form id="waitlist" class="waitlist-form signup" action="/api/subscribe" method="post" data-source="hero">
-          <input type="hidden" name="source" value="hero">
-          <label for="hero-email">launch list</label>
-          <div class="form-row">
-            <input id="hero-email" name="email" type="email" autocomplete="email" inputmode="email" placeholder="email address" required>
-            <button type="submit">join</button>
+        <div class="showcase-stage">
+          <span class="stage-label stage-label-left">YOUR PHONE. REIMAGINED.</span><span class="stage-label stage-label-right"><span class="status-dot"></span> NATIVE CONTROLLER PREVIEWS</span>
+          <div class="controller-panel" id="layout-classic" role="tabpanel" aria-labelledby="tab-classic" tabindex="0" hidden>
+            <div class="showcase-phone"><img src="/assets/screenshots/everyday-play-1.0.0-b8e9ec1276a6.png" width="1748" height="804" alt="Everyday Play controller with mineral keycaps, sea-glass and coral rims, D-pad, shoulder buttons, and ABXY controls" loading="lazy"></div>
+            <div class="showcase-caption"><span>Everyday Play · Familiar controls, a quieter finish.</span><a href="/docs.html#keypad-editor">Meet the editor <span aria-hidden="true">↗</span></a></div>
           </div>
-          <label class="consent-row">
-            <input name="consent" type="checkbox" required>
-            <span>Send me Thumble launch updates. No spam, unsubscribe anytime.</span>
-          </label>
-          <label class="bot-field" aria-hidden="true">Company <input name="company" tabindex="-1" autocomplete="off"></label>
-          <p class="form-status" role="status" aria-live="polite"></p>
-        </form>
-      </div>
-
-      <div class="product-card" aria-label="Thumble controller preview">
-        <div class="product-topline">
-          <span>thumble / 01</span>
-          <span>local network control</span>
-        </div>
-        <div class="iphone-frame-stage hero-device">
-          <img class="iphone-screen-shot" src="/assets/screenshots/controller-landscape.png" alt="Thumble iPhone controller in landscape mode with D-pad, shoulder buttons, and ABXY controls">
-          <img class="iphone-frame-art" src="/assets/iphone-17-pro-landscape.png" alt="" aria-hidden="true">
-        </div>
-        <div class="product-caption">
-          <img class="product-icon" src="/assets/app-icon.png" alt="" width="54" height="54">
-          <p>custom layouts / keyboard / pointer / controller</p>
-        </div>
-      </div>
-    </section>
-
-    <section class="spec-strip section-shell" aria-label="Thumble summary">
-      <div><span>transport</span><strong>UDP + WebSocket</strong></div>
-      <div><span>pairing</span><strong>QR + Smart Connect</strong></div>
-      <div><span>profiles</span><strong>editable JSON</strong></div>
-      <div><span>outputs</span><strong>keys + pointer + gamepad</strong></div>
-    </section>
-
-    <section id="games" class="gaming section-shell" aria-labelledby="gaming-title">
-      <div class="gaming-heading">
-        <div>
-          <p class="eyebrow">a setup for every session</p>
-          <h2 id="gaming-title">Make room for<br>your kind of play.</h2>
-        </div>
-        <p>From a few essential hotkeys to a full controller. Build around your game, your hands, and your iPhone.</p>
-      </div>
-
-      <div class="game-grid">
-        <article class="game-card game-card-league">
-          <figure class="game-capture">
-            <a href="/assets/screenshots/league-lux-01500e4a8f77.png" target="_blank" rel="noopener" aria-label="Open full-size Lux controller screenshot">
-              <img src="/assets/screenshots/league-lux-01500e4a8f77.png" width="2622" height="1206" alt="Thumble’s Lux Prism controller running on iPhone: analog stick, Aim trackpad, Lux ability icons, D and F buttons, and utility controls" loading="lazy">
-            </a>
-            <figcaption><span>Lux Prism / custom layout</span><span>Practice Mode · iPhone capture</span></figcaption>
-          </figure>
-          <div class="game-copy">
-            <h3>League of Legends</h3>
-            <p>Keep abilities, items, and pings within reach. Build a custom shortcut pad around your bindings, with a trackpad alongside.</p>
-            <a href="/docs.html#game-layouts">Build your layout <span aria-hidden="true">↗</span></a>
+          <div class="controller-panel" id="layout-wow" role="tabpanel" aria-labelledby="tab-wow" tabindex="0">
+            <div class="showcase-phone"><img src="/assets/screenshots/warband-command-1.0.2-67ae6f7fd33d.png" width="1748" height="804" alt="Warband Command Warrior controller with ability icons, LT and RT modifier triggers, and Move and Look sticks" fetchpriority="high"></div>
+            <div class="showcase-caption"><span>Warband Command · Warrior ability layout</span><a href="/docs.html#wow">Explore WoW setups <span aria-hidden="true">↗</span></a></div>
           </div>
-        </article>
-
-        <article class="game-card game-card-wow">
-          <figure class="game-capture">
-            <a href="/assets/screenshots/wow-forever-1881a2863e6c.png" target="_blank" rel="noopener" aria-label="Open full-size WoW Forever controller screenshot">
-              <img src="/assets/screenshots/wow-forever-1881a2863e6c.png" width="2622" height="1206" alt="Thumble’s WoW Forever controller running on iPhone: Move and Look sticks, D-pad, ABXY buttons, shoulders, triggers, and utility controls" loading="lazy">
-            </a>
-            <figcaption><span>WoW Forever / template</span><span>Practice Mode · iPhone capture</span></figcaption>
-          </figure>
-          <div class="game-copy">
-            <h3>World of Warcraft</h3>
-            <p>Start with the WoW Forever controller template. Save setups per character, or import keyboard bindings with the experimental Thumble Link addon.</p>
-            <a href="/docs.html#wow">Explore WoW setups <span aria-hidden="true">↗</span></a>
-          </div>
-        </article>
-      </div>
-
-      <div class="controller-summary">
-        <div><span class="eyebrow">your controls, all together</span><h3>Keys. Sticks. Triggers. Trackpads.</h3></div>
-        <p>Mix input types, tune analog feel, and save portrait and landscape layouts.</p>
-        <a href="/docs.html#outputs" aria-label="Read about controller output">Output guide <span aria-hidden="true">↗</span></a>
-      </div>
-      <p class="gaming-release-note">Development preview · Actual iPhone app captures in Practice Mode. League shows a custom Lux layout. Mac gamepad output requires an authorized signed receiver; game compatibility is being validated. <a href="/blog/development-update-october-2026.html">What’s new since the July beta ↗</a></p>
-    </section>
-
-    <section id="screens" class="screens section-shell">
-      <div class="section-heading">
-        <p class="eyebrow">screens</p>
-        <h2>design the keypad on Mac, use it instantly on iPhone.</h2>
-      </div>
-
-      <div class="screen-gallery">
-        <figure class="screen-card wide device-frame-card">
-          <div class="iphone-frame-stage">
-            <img class="iphone-screen-shot" src="/assets/screenshots/controller-landscape.png" alt="Landscape Thumble keypad with game controls">
-            <img class="iphone-frame-art" src="/assets/iphone-17-pro-landscape.png" alt="" aria-hidden="true">
-          </div>
-          <figcaption><span>iPhone controller</span>landscape touch controls with synced profiles</figcaption>
-        </figure>
-
-        <figure class="screen-card editor">
-          <img src="/assets/screenshots/keypad-editor.png" alt="Thumble Mac keypad editor with a canvas, setup list, and inspector controls">
-          <figcaption><span>macOS editor</span>profiles, device canvases, shortcuts, styles, haptics, and output mode</figcaption>
-        </figure>
-
-        <figure class="screen-card portrait">
-          <img src="/assets/screenshots/controller-portrait.png" alt="Thumble iPhone controller in portrait orientation">
-          <figcaption><span>portrait keypad</span>saved layouts adapt when the phone rotates</figcaption>
-        </figure>
-      </div>
-    </section>
-
-    <section class="skin-directory-promo section-shell" aria-labelledby="skin-promo-title">
-      <div class="skin-directory-promo-preview">
-        <img src="/skins/previews/indigo-pocket-1.0.0.png" alt="Indigo Pocket appearance-only skin on a Thumble keypad" width="1748" height="804" loading="lazy">
-        <span>featured / indigo pocket</span>
-      </div>
-      <div class="skin-directory-promo-copy">
-        <p class="eyebrow">new / skin directory</p>
-        <h2 id="skin-promo-title">change the look, never the bindings.</h2>
-        <p>Browse reviewed <code>.pocketpad</code> themes, preview every package, and install from Safari or your Mac. Skins can style controls and backgrounds, but they cannot import shortcuts, launch targets, or executable actions.</p>
-        <div class="hero-actions">
-          <a class="pixel-button" href="/skins.html">browse skins</a>
-          <a class="pixel-button pixel-button-secondary" href="/docs.html#skins">make a skin</a>
         </div>
+        <p class="showcase-note">Development preview. Gamepad output requires an authorized signed Mac receiver. Game compatibility is being validated.</p>
+      </div>
+      <div class="home-actions"><a class="button button-primary" href="#download">Get Thumble <span aria-hidden="true">↗</span></a><a class="button button-quiet" href="/docs.html#getting-started">See how it works <span aria-hidden="true">→</span></a></div>
+      <p class="platform-note">Made for iPhone + Mac <span>·</span> In development</p>
+      <a class="status-pill" href="/blog/development-update-october-2026.html"><span class="status-dot"></span> A little more control. A lot more possibility. <span aria-hidden="true">↗</span></a>
+      <div class="capability-line" aria-label="Supported controls"><span>Keyboard shortcuts</span><i aria-hidden="true">/</i><span>Touch sticks</span><i aria-hidden="true">/</i><span>Trackpads</span><i aria-hidden="true">/</i><span>Controller output</span></div>
+    </section>
+    <section class="home-section section-shell" id="details">
+      <div class="section-intro"><p class="eyebrow">A surface for whatever’s next</p><h2>Less reaching. <br>More doing.</h2><p>The right controls, right under your thumbs. Bring a few favorite shortcuts or build an entire controller around the way you play and work.</p></div>
+      <div class="possibilities">
+        <a href="/docs.html#game-layouts"><span class="feature-symbol" aria-hidden="true">✣</span><h3>Find your game.</h3><p>Abilities, items, movement, and menus. Keep the inputs you need within reach.</p><span class="text-link">Explore game layouts ↗</span></a>
+        <a href="/docs.html#outputs"><span class="feature-symbol" aria-hidden="true">⌘</span><h3>Make work flow.</h3><p>Terminal commands, editor shortcuts, window management. Give repetitive actions a home.</p><span class="text-link">Explore shortcuts ↗</span></a>
+        <a href="/docs.html#keypad-editor"><span class="feature-symbol" aria-hidden="true">⊞</span><h3>Make it your own.</h3><p>Mix buttons, sticks, triggers, and trackpads. Tune the feel. Save a setup for each session.</p><span class="text-link">Meet the editor ↗</span></a>
       </div>
     </section>
-
-    <section id="details" class="details section-shell">
-      <div class="section-heading">
-        <p class="eyebrow">details</p>
-        <h2>one phone, many control surfaces.</h2>
+    <section class="home-section section-shell editor-section" id="screens">
+      <div class="editor-copy"><p class="eyebrow">Big canvas. Small screen.</p><h2>Build on Mac. <br>Play on iPhone.</h2><p>Arrange your controls in the Mac editor, then take them for a spin on your phone. Separate portrait and landscape layouts make every orientation feel at home.</p><ul class="quiet-checklist"><li>Layouts, layers, and groups</li><li>Thumb calibration and haptic feedback</li><li>Practice Mode to try before you connect</li></ul><a class="text-link" href="/docs.html#keypad-editor">Take a look around the editor <span aria-hidden="true">↗</span></a></div>
+      <figure class="editor-visual"><div class="window-bar"><span aria-hidden="true">● ● ●</span><span>Thumble · Keypad editor</span><span aria-hidden="true">↗</span></div><a href="/assets/screenshots/keypad-editor.png" target="_blank" rel="noopener" aria-label="Open full-size Mac editor screenshot"><img src="/assets/screenshots/keypad-editor.png" width="3200" height="2000" alt="Thumble Mac editor showing the profile list, controller canvas, and control inspector" loading="lazy"></a><figcaption>The actual Mac editor. Every detail, in your hands.</figcaption></figure>
+    </section>
+    <section class="home-section section-shell skin-section">
+      <div class="section-heading-row"><div><p class="eyebrow">Same controls. Different character.</p><h2>Find your feel.</h2></div><div><p>A quiet instrument. A warm arcade deck. <br>A skin for your kind of setup.</p><a class="text-link" href="/skins.html">Explore the skin directory <span aria-hidden="true">↗</span></a></div></div>
+      <div class="home-skin-grid">
+        <a class="home-skin" href="/skins.html?skin=indigo-pocket"><div><img src="/skins/previews/indigo-pocket-1.0.0.png" width="1748" height="804" alt="Indigo Pocket skin in deep violet and warm ivory" loading="lazy"></div><span>Indigo Pocket <span aria-hidden="true">↗</span></span><small>Quietly precise.</small></a>
+        <a class="home-skin" href="/skins.html?skin=solar-sumi"><div><img src="/skins/previews/solar-sumi-1.0.0.png" width="1748" height="804" alt="Solar Sumi skin with warm paper and vermilion controls" loading="lazy"></div><span>Solar Sumi <span aria-hidden="true">↗</span></span><small>A little arcade warmth.</small></a>
       </div>
-
-      <div class="feature-list">
-        <article>
-          <span>01</span>
-          <h3>layouts that fit</h3>
-          <p>Save portrait and landscape designs, arrange controls in layers and groups, and calibrate thumb reach on iPhone. Practice Mode lets you try a layout without sending input.</p>
-        </article>
-        <article>
-          <span>02</span>
-          <h3>edit with an assistant</h3>
-          <p>Describe a controller to ChatGPT, Claude, or a terminal agent. Draft, preview, and refine the layout with Thumble’s MCP and CLI tools, then sync it to your iPhone.</p>
-        </article>
-        <article>
-          <span>03</span>
-          <h3>low latency</h3>
-          <p>Authenticated UDP carries compact input frames for responsiveness while WebSocket mirroring keeps button state recoverable if packets drop.</p>
-        </article>
-        <article>
-          <span>04</span>
-          <h3>CLI included</h3>
-          <p>Generate profiles, install templates, import/export JSON, set bindings, check status, restart the helper, and test taps from the terminal.</p>
-        </article>
+      <p class="skin-footnote">Skins change the look. Your layout and bindings stay yours.</p>
+    </section>
+    <section class="home-section section-shell agent-section">
+      <div><p class="eyebrow">For the way you build</p><h2>A little help<br>from your agent.</h2><p>Describe your ideal controller to ChatGPT, Claude, or a terminal agent. Draft, preview, and refine it with Thumble’s MCP and CLI tools.</p><a class="text-link" href="/docs.html#agents">Build with an assistant <span aria-hidden="true">↗</span></a></div>
+      <div class="terminal-card"><div class="terminal-heading"><span class="status-dot"></span> thumble <span>CLI + MCP</span></div><p class="terminal-comment"># A starting point for your next session</p><pre><code><span>$</span> thumble template list
+<span>$</span> thumble profile list --ids
+<span>$</span> thumble profile export --all \
+    -o thumble-profiles.json</code></pre><div class="terminal-footer">Your layouts. Editable JSON. Ready to script.<a href="/docs.html#cli" aria-label="Read CLI documentation">↗</a></div></div>
+    </section>
+    <section class="home-section section-shell setup-section">
+      <div class="section-intro"><p class="eyebrow">From desktop to thumbs</p><h2>A few steps. Then you’re in.</h2></div>
+      <ol class="setup-steps"><li><span>01</span><h3>Get connected.</h3><p>Install the Mac helper, enable Accessibility, and pair your iPhone with QR or Smart Connect.</p></li><li><span>02</span><h3>Set your surface.</h3><p>Choose a template or start fresh. Move controls, record shortcuts, and make room for your thumbs.</p></li><li><span>03</span><h3>Make your move.</h3><p>Try your layout in Practice Mode, then send input to the focused app on your Mac.</p></li></ol>
+      <a class="text-link" href="/docs.html#getting-started">Follow the setup guide <span aria-hidden="true">↗</span></a>
+    </section>
+    <section class="home-section section-shell home-download" id="download">
+      <div class="section-intro"><p class="eyebrow"><span class="status-dot"></span> A work in progress. Ready for what’s next.</p><h2>Put your phone<br>to a new kind of use.</h2><p>Get the Mac helper and follow along as we build Thumble.</p></div>
+      <div class="home-download-grid">
+        <article data-mac-release-card><span class="download-platform">macOS <span aria-hidden="true">↙</span></span><h3>Meet your Mac’s other half.</h3><p>The companion app for pairing, editing layouts, and receiving input.</p><a class="button button-primary" href="/api/download-mac" data-mac-download-link aria-disabled="true">Checking latest build…</a><dl class="release-meta"><div><dt>Version</dt><dd data-mac-release-version>Checking…</dd></div><div><dt>Build</dt><dd data-mac-release-status>Checking availability…</dd></div><div><dt>SHA-256</dt><dd data-mac-release-sha>—</dd></div></dl></article>
+        <article><span class="download-platform">iPhone <span aria-hidden="true">↗</span></span><h3>Something to look forward to.</h3><p>The iOS controller is in TestFlight. Join the launch list for future beta invitations and release updates.</p><a class="button button-secondary" href="#waitlist">Keep me in the loop <span aria-hidden="true">→</span></a><p class="download-detail">iOS 17+ · Mac helper required<br>New controller features are in development.</p></article>
       </div>
     </section>
-
-    <section class="docs-preview section-shell" aria-label="Thumble documentation preview">
-      <div class="section-heading">
-        <p class="eyebrow">documentation</p>
-        <h2>full setup and editor guides are built into the site.</h2>
-      </div>
-
-      <div class="docs-preview-grid">
-        <a href="/docs.html#getting-started">
-          <span>start</span>
-          <strong>Pair Mac + iPhone</strong>
-          <p>Permissions, local network prompts, QR scanning, Smart Connect, and manual fallback.</p>
-        </a>
-        <a href="/docs.html#keypad-editor">
-          <span>build</span>
-          <strong>Keypad editor</strong>
-          <p>Profiles, device frames, portrait/landscape variants, grid tools, controls, styling, and haptics.</p>
-        </a>
-        <a href="/docs.html#outputs">
-          <span>send</span>
-          <strong>Keyboard, pointer, gamepad</strong>
-          <p>Shortcut recording, trackpad gestures, virtual controller output, and mixed bindings.</p>
-        </a>
-        <a href="/docs.html#cli">
-          <span>script</span>
-          <strong>CLI parity</strong>
-          <p>Everything you can configure in the Mac editor is also scriptable with <code>thumble</code>.</p>
-        </a>
-        <a href="/skins.html">
-          <span>style</span>
-          <strong>Skin directory</strong>
-          <p>Browse, preview, and install appearance-only themes without changing any control binding.</p>
-        </a>
-      </div>
-    </section>
-
-    <section class="workflow section-shell" aria-label="How Thumble works">
-      <div class="workflow-line">
-        <div><strong>allow</strong><span>enable Mac Accessibility</span></div>
-        <div><strong>pair</strong><span>scan QR or use Smart Connect</span></div>
-        <div><strong>edit</strong><span>choose a keypad setup</span></div>
-        <div><strong>press</strong><span>control the focused Mac app</span></div>
-      </div>
-    </section>
-
-    <section class="use-cases section-shell">
-      <p class="eyebrow">made for</p>
-      <div class="tags" aria-label="Example Thumble uses">
-        <span>terminal workflows</span>
-        <span>Cursor shortcuts</span>
-        <span>tmux prefixes</span>
-        <span>window management</span>
-        <span>League of Legends layouts</span>
-        <span>WoW Forever</span>
-        <span>Hollow Knight</span>
-        <span>Celeste</span>
-        <span>emulators</span>
-        <span>trackpad controls</span>
-        <span>custom layouts</span>
-      </div>
-    </section>
-
-    <section id="download" class="download section-shell">
-      <div class="section-heading">
-        <p class="eyebrow">download</p>
-        <h2>install the Mac helper, join the iOS beta.</h2>
-      </div>
-
-      <div class="download-grid">
-        <article class="download-card" data-mac-release-card>
-          <span>macOS helper</span>
-          <h3>direct download via Cloudflare</h3>
-          <p>Thumble Mac is distributed as a Developer ID signed and notarized zip from Cloudflare R2 through this Pages site.</p>
-          <a class="pixel-button" href="/api/download-mac" data-mac-download-link>checking latest build…</a>
-          <dl class="release-meta">
-            <div><dt>latest</dt><dd data-mac-release-version>not uploaded yet</dd></div>
-            <div><dt>status</dt><dd data-mac-release-status>waiting for first release</dd></div>
-            <div><dt>sha256</dt><dd data-mac-release-sha>—</dd></div>
-          </dl>
-        </article>
-
-        <article class="download-card">
-          <span>iOS controller</span>
-          <h3>TestFlight beta</h3>
-          <p>The latest uploaded beta is 1.0.0 (6), from July 30, 2026. Newer controller and game-layout work is in development. Join the launch list for future beta invitations and release updates.</p>
-          <a class="pixel-button pixel-button-secondary" href="#waitlist">join launch list</a>
-          <dl class="release-meta">
-            <div><dt>channel</dt><dd>TestFlight</dd></div>
-            <div><dt>target</dt><dd>iOS 17+</dd></div>
-            <div><dt>pairing</dt><dd>Mac helper required</dd></div>
-          </dl>
-        </article>
-      </div>
-    </section>
-
-    <section class="final-cta section-shell">
-      <div>
-        <p class="eyebrow">launch list</p>
-        <h2>follow the next build.</h2>
-      </div>
-      <form class="waitlist-form signup compact" action="/api/subscribe" method="post" data-source="footer">
-        <input type="hidden" name="source" value="footer">
-        <label for="footer-email">email</label>
-        <div class="form-row">
-          <input id="footer-email" name="email" type="email" autocomplete="email" inputmode="email" placeholder="email address" required>
-          <button type="submit">notify me</button>
-        </div>
-        <label class="consent-row">
-          <input name="consent" type="checkbox" required>
-          <span>I agree to receive Thumble launch updates.</span>
-        </label>
-        <label class="bot-field" aria-hidden="true">Company <input name="company" tabindex="-1" autocomplete="off"></label>
-        <p class="form-status" role="status" aria-live="polite"></p>
-      </form>
+    <section class="home-section section-shell home-faq"><p class="eyebrow">A few things to know</p><h2>Before you jump in.</h2><div class="faq-list">
+      <details><summary>What do I need to use Thumble?</summary><p>An iPhone running iOS 17 or later and the Mac helper. Pair the two devices, allow Mac Accessibility access, and keep the app you want to control in focus. See the <a href="/docs.html#getting-started">setup guide</a>.</p></details>
+      <details><summary>Can I use it with any game?</summary><p>Keyboard and pointer layouts use your own bindings. Gamepad output requires an authorized signed Mac receiver, and compatibility is still being validated. The game layouts above are app previews, not a guarantee of game support. See the <a href="/docs.html#outputs">output guide</a>.</p></details>
+      <details><summary>Can I make my own layouts and skins?</summary><p>Yes. Build layouts in the Mac editor or with the CLI and MCP tools. Skins change appearance without replacing bindings. Start with the <a href="/docs.html#keypad-editor">editor guide</a> or browse the <a href="/skins.html">skin directory</a>.</p></details>
+      <details><summary>Where can I follow development?</summary><p>Read the <a href="/blog.html">development journal</a> for feature updates and join the launch list below for beta invitations and release news.</p></details>
+    </div></section>
+    <section class="home-section section-shell home-waitlist" id="waitlist"><div><p class="eyebrow">Stay a little closer</p><h2>Good things<br>at your fingertips.</h2><p>New builds, beta invitations, and the occasional update. <br>Only when there’s something to share.</p></div>
+      <form class="waitlist-form" action="/api/subscribe" method="post" data-source="footer"><input type="hidden" name="source" value="footer"><label for="footer-email">Get Thumble updates</label><div class="form-row"><input id="footer-email" name="email" type="email" autocomplete="email" inputmode="email" placeholder="you@example.com" required><button type="submit">Keep me posted <span aria-hidden="true">→</span></button></div><label class="consent-row"><input name="consent" type="checkbox" required><span>I agree to receive Thumble launch updates. Unsubscribe anytime.</span></label><label class="bot-field" aria-hidden="true">Company <input name="company" tabindex="-1" autocomplete="off"></label><p class="form-status" role="status" aria-live="polite"></p></form>
     </section>
   </main>
-
-  <footer class="site-footer section-shell">
-    <span>© <span id="year">2026</span> Thumble</span>
-    <span class="footer-links"><a href="/skins.html">skins</a><a href="/docs.html">docs</a><a href="/blog.html">blog</a><a href="/privacy.html">privacy</a></span>
-  </footer>
-
-  <script src="/config.js"></script>
-  <script src="/script.js" defer></script>
+  <footer class="site-footer section-shell"><a class="brand" href="#top">thumble<span class="brand-period">.</span></a><span>Made for the way you do things.</span><span class="footer-links"><a href="/docs.html">Docs</a><a href="/blog.html">Blog</a><a href="/privacy.html">Privacy</a><a href="https://myself.md">myself.md ↗</a></span><small>© <span id="year">2026</span> Thumble</small></footer>
+  <script src="/config.js"></script><script src="/script.js" defer></script><script src="/home.js?v=20261020" defer></script>
 </body>
 </html>

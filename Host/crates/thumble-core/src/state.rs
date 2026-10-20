@@ -56,6 +56,8 @@ pub struct PersistentState {
     pub configuration_updated_at: i64,
     #[serde(default)]
     pub recent_configuration_commits: Vec<ConfigurationCommitRecord>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub profile_artifact_adoptions: Vec<thumble_protocol::AdoptionReceipt>,
     pub profiles: Vec<Value>,
     #[serde(
         rename = "activeProfileID",
@@ -153,6 +155,7 @@ impl PersistentState {
             configuration_revision: INITIAL_CONFIGURATION_REVISION,
             configuration_updated_at: 0,
             recent_configuration_commits: Vec::new(),
+            profile_artifact_adoptions: Vec::new(),
             profiles: vec![profile],
             active_profile_id: DEFAULT_PROFILE_ID.to_owned(),
             default_profile_id: DEFAULT_PROFILE_ID.to_owned(),
@@ -176,6 +179,18 @@ impl PersistentState {
         }
         if self.server_id.trim().is_empty() {
             return Err(StateError::EmptyServerId);
+        }
+        let mut operations = std::collections::HashSet::new();
+        if self.profile_artifact_adoptions.len() > thumble_protocol::ADOPTION_LEDGER_ENTRIES
+            || self.profile_artifact_adoptions.iter().any(|receipt| {
+                receipt.metadata.validate(&self.server_id).is_err()
+                    || !receipt.result.validates(&receipt.metadata)
+                    || receipt.result.status != thumble_protocol::AdoptionStatus::Succeeded
+                    || receipt.completed_at_milliseconds < 0
+                    || !operations.insert(receipt.metadata.operation_id)
+            })
+        {
+            return Err(StateError::InvalidAdoptionLedger);
         }
         if self
             .profiles
@@ -451,6 +466,7 @@ pub fn canonical_default_profile_key_bindings() -> ButtonBindings<KeyBinding> {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StateError {
+    InvalidAdoptionLedger,
     EmptyServerId,
     UnsupportedInputSlots,
     InvalidConfigurationRevision,
@@ -462,6 +478,7 @@ pub enum StateError {
 impl fmt::Display for StateError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::InvalidAdoptionLedger => formatter.write_str("invalid saved profile artifact adoption receipts"),
             Self::UnsupportedInputSlots => formatter.write_str("controls must declare unique element UUIDs; named input slots and routing fields are no longer supported; recreate the setup with element UUIDs"),
             Self::EmptyServerId => {
                 formatter.write_str("the persistent server ID must not be empty")

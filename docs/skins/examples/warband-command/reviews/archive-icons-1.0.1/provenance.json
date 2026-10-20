@@ -1,0 +1,122 @@
+[
+  {
+    "ability": "bloodthirst",
+    "textureName": "spell_nature_bloodlust",
+    "url": "https://render.worldofwarcraft.com/icons/56/spell_nature_bloodlust.jpg",
+    "originalSHA256": "d071c700739826e2d32e60b88438650d2785b10e13261ecd4209f0dae8527f99",
+    "pngSHA256": "1b5e2e478760678f3889a5d104ecc8a0dbade0975e09cf8c20c87e80b95c92e8",
+    "dimensions": [
+      56,
+      56
+    ],
+    "provenance": "Blizzard official render CDN; shared WoW artwork, not verified against installed Forever beta client",
+    "attribution": "\u00a9 Blizzard Entertainment. All rights reserved.",
+    "originalFile": "originals/bloodthirst.jpg",
+    "pngFile": "abilities/bloodthirst.png"
+  },
+  {
+    "ability": "whirlwind",
+    "textureName": "ability_whirlwind",
+    "url": "https://render.worldofwarcraft.com/icons/56/ability_whirlwind.jpg",
+    "originalSHA256": "97d323ba60c97dff66384afc600f600bb9d33fae3ea2a78dbb50190ff5256d6e",
+    "pngSHA256": "77146dd1f180bcdf493ccb38cfb2086bc9833a4a5cc0ae158fa1c2bf8ae209df",
+    "dimensions": [
+      56,
+      56
+    ],
+    "provenance": "Blizzard official render CDN; shared WoW artwork, not verified against installed Forever beta client",
+    "attribution": "\u00a9 Blizzard Entertainment. All rights reserved.",
+    "originalFile": "originals/whirlwind.jpg",
+    "pngFile": "abilities/whirlwind.png"
+  },
+  {
+    "ability": "execute",
+    "textureName": "inv_sword_48",
+    "url": "https://render.worldofwarcraft.com/icons/56/inv_sword_48.jpg",
+    "originalSHA256": "cd9b8bae9e185223336774813f3ab0f39179e473ea56ca398145649d9d117354",
+    "pngSHA256": "7a89efebd73e1ba13869d0c3be4472e3ba1e310d7c1e3b4e29ae05b863954f46",
+    "dimensions": [
+      56,
+      56
+    ],
+    "provenance": "Blizzard official render CDN; shared WoW artwork, not verified against installed Forever beta client",
+    "attribution": "\u00a9 Blizzard Entertainment. All rights reserved.",
+    "originalFile": "originals/execute.jpg",
+    "pngFile": "abilities/execute.png"
+  },
+  {
+    "ability": "cleave",
+    "textureName": "ability_warrior_cleave",
+    "url": "https://render.worldofwarcraft.com/icons/56/ability_warrior_cleave.jpg",
+    "originalSHA256": "0921f57bf25808223332452f329aabee7d9a92e97da9b6c175e9544134d95036",
+    "pngSHA256": "812930b564dbd7f52bc152556a53a448757dac27c4a856f152aa33646e4e3efc",
+    "dimensions": [
+      56,
+      56
+    ],
+    "provenance": "Blizzard official render CDN; shared WoW artwork, not verified against installed Forever beta client",
+    "attribution": "\u00a9 Blizzard Entertainment. All rights reserved.",
+    "originalFile": "originals/cleave.jpg",
+    "pngFile": "abilities/cleave.png"
+  },
+  {
+    "ability": "charge",
+    "textureName": "ability_warrior_charge",
+    "url": "https://render.worldofwarcraft.com/icons/56/ability_warrior_charge.jpg",
+    "originalSHA256": "63992db41f3189e1ca9da9801d893392fcac11cf022906894baf01b2d4565875",
+    "pngSHA256": "d5a913f811f04f3adb2b453c54dbcb9114fa7da7b4beff8a505367888eb5a458",
+    "dimensions": [
+      56,
+      56
+    ],
+    "provenance": "Blizzard official render CDN; shared WoW artwork, not verified against installed Forever beta client",
+    "attribution": "\u00a9 Blizzard Entertainment. All rights reserved.",
+    "originalFile": "originals/charge.jpg",
+    "pngFile": "abilities/charge.png"
+  },
+  {
+    "ability": "death-wish",
+    "textureName": "spell_shadow_deathpact",
+    "url": "https://render.worldofwarcraft.com/icons/56/spell_shadow_deathpact.jpg",
+    "originalSHA256": "98c5c139784c3ce4474397aecbcb9eaeca008dd323ffa48b016d8c5ba62dc56d",
+    "pngSHA256": "2b947a0b67ce28abec1a601e2263492d81530d6fe0bbde17cea708e3974f1c12",
+    "dimensions": [
+      56,
+      56
+    ],
+    "provenance": "Blizzard official render CDN; shared WoW artwork, not verified against installed Forever beta client",
+    "attribution": "\u00a9 Blizzard Entertainment. All rights reserved.",
+    "originalFile": "originals/death-wish.jpg",
+    "pngFile": "abilities/death-wish.png"
+  },
+  {
+    "ability": "berserker-rage",
+    "textureName": "spell_nature_ancestralguardian",
+    "url": "https://render.worldofwarcraft.com/icons/56/spell_nature_ancestralguardian.jpg",
+    "originalSHA256": "88e94db3239f9840a55e19c21cf69983a80b7c4e66f4258406c33d7f76ae29cd",
+    "pngSHA256": "6f2d8affae369353faca0248e5c924baab9fb3de95b262643830a8cb50efed91",
+    "dimensions": [
+      56,
+      56
+    ],
+    "provenance": "Blizzard official render CDN; shared WoW artwork, not verified against installed Forever beta client",
+    "attribution": "\u00a9 Blizzard Entertainment. All rights reserved.",
+    "originalFile": "originals/berserker-rage.jpg",
+    "pngFile": "abilities/berserker-rage.png"
+  },
+  {
+    "ability": "recklessness",
+    "textureName": "ability_criticalstrike",
+    "url": "https://render.worldofwarcraft.com/icons/56/ability_criticalstrike.jpg",
+    "originalSHA256": "16a6eb3dbcaeb9659b9b402d043e44d80bc18c107dc8c1910cda0998779c1e66",
+    "pngSHA256": "8fe138b6c884020d5ec476c419cad10c5ecbb2ac8758db04e447248cab6ec72b",
+    "dimensions": [
+      56,
+      56
+    ],
+    "provenance": "Blizzard official render CDN; shared WoW artwork, not verified against installed Forever beta client",
+    "attribution": "\u00a9 Blizzard Entertainment. All rights reserved.",
+    "originalFile": "originals/recklessness.jpg",
+    "pngFile": "abilities/recklessness.png"
+  }
+]

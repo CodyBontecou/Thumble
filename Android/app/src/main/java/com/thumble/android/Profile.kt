@@ -102,7 +102,7 @@ internal fun JSONObject.swiftMap(key: String): Map<String, Any> {
 }
 
 data class ProfileSnapshot(val profiles: List<ControllerProfile> = emptyList(), val selectedID: UUID? = null,
-    val defaultID: UUID? = null) {
+    val defaultID: UUID? = null, val bindingPresentations: List<ProfileBindingPresentations> = emptyList()) {
     val selected: ControllerProfile? get() = profiles.firstOrNull { it.id == selectedID }
     fun applying(message: JSONObject): ProfileSnapshot {
         val array = message.optJSONArray("gamepadProfiles")
@@ -118,6 +118,7 @@ data class ProfileSnapshot(val profiles: List<ControllerProfile> = emptyList(), 
         } else incoming
         val default = if (message.has("defaultGamepadProfileID")) message.optString("defaultGamepadProfileID")
             .takeIf { it.isNotBlank() && it != "null" }?.let(UUID::fromString) else defaultID
-        return ProfileSnapshot(next, selected, default?.takeIf { id -> next.any { it.id == id } })
+        val bindings=message.optJSONArray("bindingPresentations")?.let(BindingPresentations::decode) ?: bindingPresentations
+        return ProfileSnapshot(next, selected, default?.takeIf { id -> next.any { it.id == id } }, bindings)
     }
 }

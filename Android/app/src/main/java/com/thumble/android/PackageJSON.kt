@@ -8,12 +8,12 @@ import java.nio.charset.CodingErrorAction
 
 /** Same duplicate-key and finite-number contract on Android and the JVM test runtime. */
 internal object PackageJSON {
-    fun objectValue(bytes: ByteArray): JSONObject {
+    fun objectValue(bytes: ByteArray, portable: Boolean = false): JSONObject {
         val text = Charsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
             .onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(bytes)).toString()
-        return Reader(text).read() as? JSONObject ?: throw SkinPackageException("invalid-json")
+        return Reader(text,portable).read() as? JSONObject ?: throw SkinPackageException("invalid-json")
     }
-    private class Reader(private val text: String) {
+    private class Reader(private val text: String,private val portable: Boolean) {
         private var at = 0
         private fun bad(): Nothing = throw SkinPackageException("invalid-json")
         private fun space() { while (at < text.length && text[at] in " \t\n\r") at++ }
@@ -23,22 +23,25 @@ internal object PackageJSON {
             space();if (at == text.length) bad()
             return when (text[at]) {
                 '{' -> {
+                    if(portable && depth>=64) bad()
                     at++;space();val result=JSONObject();val seen=mutableSetOf<String>()
                     if (at < text.length && text[at] == '}') { at++;return result }
                     while (true) {
-                        space();val key=string();if (!seen.add(SkinText.canonicalKey(key))) throw SkinPackageException("duplicate-json-key")
+                        space();val key=string();if(portable && key.toByteArray(Charsets.UTF_8).size>256) bad()
+                        if (!seen.add(SkinText.canonicalKey(key))) throw SkinPackageException("duplicate-json-key")
                         space();if (at == text.length || text[at++] != ':') bad()
-                        result.put(key,value(depth+1));space()
+                        result.put(key,value(depth+1));if(portable && result.length()>4096) bad();space()
                         if (at == text.length) bad()
                         when (text[at++]) { '}' -> return result; ',' -> {}; else -> bad() }
                     }
                     @Suppress("UNREACHABLE_CODE") result
                 }
                 '[' -> {
+                    if(portable && depth>=64) bad()
                     at++;space();val result=JSONArray()
                     if (at < text.length && text[at] == ']') { at++;return result }
                     while (true) {
-                        result.put(value(depth+1));space();if (at == text.length) bad()
+                        result.put(value(depth+1));if(portable && result.length()>4096) bad();space();if (at == text.length) bad()
                         when (text[at++]) { ']' -> return result; ',' -> {}; else -> bad() }
                     }
                     @Suppress("UNREACHABLE_CODE") result
@@ -52,6 +55,10 @@ internal object PackageJSON {
                     while (at < text.length && text[at] !in ",]} \t\n\r") at++
                     val number=text.substring(start,at)
                     if (!number.matches(Regex("-?(0|[1-9][0-9]*)(\\.[0-9]+)?([eE][+-]?[0-9]+)?"))) bad()
+                    if(portable && number.none { it in ".eE" }) {
+                        val magnitude=number.removePrefix("-")
+                        if(magnitude.length>16 || magnitude.length==16 && magnitude>"9007199254740991") bad()
+                    }
                     number.toLongOrNull() ?: number.toDoubleOrNull()?.takeIf { it.isFinite() } ?: bad()
                 }
             }
@@ -64,7 +71,9 @@ internal object PackageJSON {
             val start=at++
             while (at < text.length) {
                 when (val c=text[at++]) {
-                    '"' -> return (JSONTokener(text.substring(start,at)).nextValue() as? String)?.takeIf(SkinText::isWellFormed) ?: bad()
+                    '"' -> return (JSONTokener(text.substring(start,at)).nextValue() as? String)?.takeIf {
+                        SkinText.isWellFormed(it) && (!portable || it.toByteArray(Charsets.UTF_8).size<=256*1024)
+                    } ?: bad()
                     '\\' -> {
                         if (at == text.length) bad()
                         when (text[at++]) {

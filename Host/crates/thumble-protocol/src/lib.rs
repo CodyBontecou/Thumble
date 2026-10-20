@@ -5,7 +5,9 @@
 //! a Rust host can forward fields introduced by newer clients without losing
 //! them.
 
+mod adoption;
 mod message;
+pub use adoption::*;
 mod strict_json;
 mod wire;
 

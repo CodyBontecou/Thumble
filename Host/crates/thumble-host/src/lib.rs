@@ -1,5 +1,6 @@
 pub mod application_launch;
 pub(crate) mod authority;
+mod binding_presentations;
 pub mod bonjour;
 pub mod bridge;
 pub mod cli;
@@ -12,7 +13,10 @@ mod input_liveness;
 pub mod native_configuration;
 pub mod output;
 pub mod paths;
+mod phone_appearance;
+mod phone_layout;
 pub mod platform;
+mod profile_adoption;
 pub mod realtime;
 pub mod runtime;
 pub mod skin_command;

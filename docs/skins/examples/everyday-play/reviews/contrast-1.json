@@ -1,0 +1,328 @@
+{
+  "method": "WCAG2 relative luminance of opaque compiled palette values; no opacity in disabled states.",
+  "contrastCorrection": "Dark cap-edge lightened #718A88\u2192#809A96: original ratio2.684 against normal cap; corrected ratio3.291. Light cap-edge darkened #5D716A\u2192#5B6F68: socket boundary2.982\u21923.071.",
+  "results": [
+    {
+      "scheme": "light",
+      "state": "normal",
+      "type": "native legend",
+      "ratio": 11.694,
+      "threshold": 4.5
+    },
+    {
+      "scheme": "light",
+      "state": "normal",
+      "type": "native boundary",
+      "token": "edge",
+      "adjacent": "normal",
+      "ratio": 5.018,
+      "threshold": 3
+    },
+    {
+      "scheme": "light",
+      "state": "normal",
+      "type": "native boundary",
+      "token": "edge",
+      "adjacent": "socket",
+      "ratio": 3.071,
+      "threshold": 3
+    },
+    {
+      "scheme": "light",
+      "state": "normal",
+      "type": "native boundary",
+      "token": "sea",
+      "adjacent": "normal",
+      "ratio": 6.771,
+      "threshold": 3
+    },
+    {
+      "scheme": "light",
+      "state": "normal",
+      "type": "native boundary",
+      "token": "sea",
+      "adjacent": "socket",
+      "ratio": 4.144,
+      "threshold": 3
+    },
+    {
+      "scheme": "light",
+      "state": "normal",
+      "type": "native boundary",
+      "token": "coral",
+      "adjacent": "normal",
+      "ratio": 6.21,
+      "threshold": 3
+    },
+    {
+      "scheme": "light",
+      "state": "normal",
+      "type": "native boundary",
+      "token": "coral",
+      "adjacent": "socket",
+      "ratio": 3.801,
+      "threshold": 3
+    },
+    {
+      "scheme": "light",
+      "state": "pressed",
+      "type": "native legend",
+      "ratio": 8.51,
+      "threshold": 4.5
+    },
+    {
+      "scheme": "light",
+      "state": "pressed",
+      "type": "native boundary",
+      "token": "pressure",
+      "adjacent": "pressed",
+      "ratio": 5.004,
+      "threshold": 3
+    },
+    {
+      "scheme": "light",
+      "state": "pressed",
+      "type": "native boundary",
+      "token": "pressure",
+      "adjacent": "socket",
+      "ratio": 4.209,
+      "threshold": 3
+    },
+    {
+      "scheme": "light",
+      "state": "active",
+      "type": "native legend",
+      "ratio": 12.489,
+      "threshold": 4.5
+    },
+    {
+      "scheme": "light",
+      "state": "active",
+      "type": "native boundary",
+      "token": "sea",
+      "adjacent": "active",
+      "ratio": 7.231,
+      "threshold": 3
+    },
+    {
+      "scheme": "light",
+      "state": "active",
+      "type": "native boundary",
+      "token": "sea",
+      "adjacent": "socket",
+      "ratio": 4.144,
+      "threshold": 3
+    },
+    {
+      "scheme": "light",
+      "state": "active",
+      "type": "native boundary",
+      "token": "coral",
+      "adjacent": "active",
+      "ratio": 6.632,
+      "threshold": 3
+    },
+    {
+      "scheme": "light",
+      "state": "active",
+      "type": "native boundary",
+      "token": "coral",
+      "adjacent": "socket",
+      "ratio": 3.801,
+      "threshold": 3
+    },
+    {
+      "scheme": "light",
+      "state": "disabled",
+      "type": "native legend",
+      "ratio": 9.129,
+      "threshold": 4.5
+    },
+    {
+      "scheme": "light",
+      "state": "disabled",
+      "type": "native boundary",
+      "token": "edge",
+      "adjacent": "disabled",
+      "ratio": 3.917,
+      "threshold": 3
+    },
+    {
+      "scheme": "light",
+      "state": "disabled",
+      "type": "native boundary",
+      "token": "edge",
+      "adjacent": "socket",
+      "ratio": 3.071,
+      "threshold": 3
+    },
+    {
+      "scheme": "light",
+      "type": "signature",
+      "ratio": 5.607,
+      "threshold": 4.5
+    },
+    {
+      "scheme": "dark",
+      "state": "normal",
+      "type": "native legend",
+      "ratio": 8.874,
+      "threshold": 4.5
+    },
+    {
+      "scheme": "dark",
+      "state": "normal",
+      "type": "native boundary",
+      "token": "edge",
+      "adjacent": "normal",
+      "ratio": 3.291,
+      "threshold": 3
+    },
+    {
+      "scheme": "dark",
+      "state": "normal",
+      "type": "native boundary",
+      "token": "edge",
+      "adjacent": "socket",
+      "ratio": 6.184,
+      "threshold": 3
+    },
+    {
+      "scheme": "dark",
+      "state": "normal",
+      "type": "native boundary",
+      "token": "sea",
+      "adjacent": "normal",
+      "ratio": 5.774,
+      "threshold": 3
+    },
+    {
+      "scheme": "dark",
+      "state": "normal",
+      "type": "native boundary",
+      "token": "sea",
+      "adjacent": "socket",
+      "ratio": 10.848,
+      "threshold": 3
+    },
+    {
+      "scheme": "dark",
+      "state": "normal",
+      "type": "native boundary",
+      "token": "coral",
+      "adjacent": "normal",
+      "ratio": 4.752,
+      "threshold": 3
+    },
+    {
+      "scheme": "dark",
+      "state": "normal",
+      "type": "native boundary",
+      "token": "coral",
+      "adjacent": "socket",
+      "ratio": 8.929,
+      "threshold": 3
+    },
+    {
+      "scheme": "dark",
+      "state": "pressed",
+      "type": "native legend",
+      "ratio": 11.583,
+      "threshold": 4.5
+    },
+    {
+      "scheme": "dark",
+      "state": "pressed",
+      "type": "native boundary",
+      "token": "pressure",
+      "adjacent": "pressed",
+      "ratio": 9.749,
+      "threshold": 3
+    },
+    {
+      "scheme": "dark",
+      "state": "pressed",
+      "type": "native boundary",
+      "token": "pressure",
+      "adjacent": "socket",
+      "ratio": 14.034,
+      "threshold": 3
+    },
+    {
+      "scheme": "dark",
+      "state": "active",
+      "type": "native legend",
+      "ratio": 6.897,
+      "threshold": 4.5
+    },
+    {
+      "scheme": "dark",
+      "state": "active",
+      "type": "native boundary",
+      "token": "sea",
+      "adjacent": "active",
+      "ratio": 4.487,
+      "threshold": 3
+    },
+    {
+      "scheme": "dark",
+      "state": "active",
+      "type": "native boundary",
+      "token": "sea",
+      "adjacent": "socket",
+      "ratio": 10.848,
+      "threshold": 3
+    },
+    {
+      "scheme": "dark",
+      "state": "active",
+      "type": "native boundary",
+      "token": "coral",
+      "adjacent": "active",
+      "ratio": 3.694,
+      "threshold": 3
+    },
+    {
+      "scheme": "dark",
+      "state": "active",
+      "type": "native boundary",
+      "token": "coral",
+      "adjacent": "socket",
+      "ratio": 8.929,
+      "threshold": 3
+    },
+    {
+      "scheme": "dark",
+      "state": "disabled",
+      "type": "native legend",
+      "ratio": 11.515,
+      "threshold": 4.5
+    },
+    {
+      "scheme": "dark",
+      "state": "disabled",
+      "type": "native boundary",
+      "token": "edge",
+      "adjacent": "disabled",
+      "ratio": 4.271,
+      "threshold": 3
+    },
+    {
+      "scheme": "dark",
+      "state": "disabled",
+      "type": "native boundary",
+      "token": "edge",
+      "adjacent": "socket",
+      "ratio": 6.184,
+      "threshold": 3
+    },
+    {
+      "scheme": "dark",
+      "type": "signature",
+      "ratio": 9.878,
+      "threshold": 4.5
+    }
+  ],
+  "minimumLegend": 6.897,
+  "minimumBoundary": 3.071
+}

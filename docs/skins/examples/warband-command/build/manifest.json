@@ -1,0 +1,146 @@
+{
+  "assets" : [
+    {
+      "byteCount" : 43176,
+      "contentType" : "image/png",
+      "id" : "command-landscape-light",
+      "path" : "assets/command-landscape-light.png",
+      "role" : "texture",
+      "sha256" : "8549c5133064867bb2bcbd500a8b825034419691fea753890329c0b5fe19621c"
+    },
+    {
+      "byteCount" : 43416,
+      "contentType" : "image/png",
+      "id" : "command-landscape-dark",
+      "path" : "assets/command-landscape-dark.png",
+      "role" : "texture",
+      "sha256" : "01c434f911448001330fa5c70f211b1f996f1d364f34ee1f9626743b415a7f6c"
+    },
+    {
+      "byteCount" : 50680,
+      "contentType" : "image/png",
+      "id" : "command-portrait-light",
+      "path" : "assets/command-portrait-light.png",
+      "role" : "texture",
+      "sha256" : "64569c430112771b1d37bc112358d4b6b8785075fd6dfc0314a02b57f6d29862"
+    },
+    {
+      "byteCount" : 51020,
+      "contentType" : "image/png",
+      "id" : "command-portrait-dark",
+      "path" : "assets/command-portrait-dark.png",
+      "role" : "texture",
+      "sha256" : "1436649ecfe40ee8fc259bb2dc17a51ed56f1394c1a360123e1a97ee4f8cf56e"
+    },
+    {
+      "byteCount" : 4109,
+      "contentType" : "image/png",
+      "id" : "bloodthirst",
+      "path" : "assets/bloodthirst.png",
+      "role" : "icon",
+      "sha256" : "80f4b6cabb8c97cabd6de7fe53ba004f883eb9e85979f254f75636296d61121d"
+    },
+    {
+      "byteCount" : 4862,
+      "contentType" : "image/png",
+      "id" : "whirlwind",
+      "path" : "assets/whirlwind.png",
+      "role" : "icon",
+      "sha256" : "ecb8f888950723630d6a1208da37d87a943d0a419effda0a74e3a34d7d0eb0ae"
+    },
+    {
+      "byteCount" : 5392,
+      "contentType" : "image/png",
+      "id" : "execute",
+      "path" : "assets/execute.png",
+      "role" : "icon",
+      "sha256" : "4ab74733e048c69f9d0eddb68906802d6c69581a5f7f2ea2626aae07d69bb702"
+    },
+    {
+      "byteCount" : 4452,
+      "contentType" : "image/png",
+      "id" : "cleave",
+      "path" : "assets/cleave.png",
+      "role" : "icon",
+      "sha256" : "adb5f1dad9b0a46f1ecbb08dd363f94a6ad5e68302c969e2a4f92d6905d5d590"
+    },
+    {
+      "byteCount" : 2681,
+      "contentType" : "image/png",
+      "id" : "charge",
+      "path" : "assets/charge.png",
+      "role" : "icon",
+      "sha256" : "c153bdf02988fb67c2400cc9f5a57d42b933e10f86cad415a8721077fcf92793"
+    },
+    {
+      "byteCount" : 5004,
+      "contentType" : "image/png",
+      "id" : "death-wish",
+      "path" : "assets/death-wish.png",
+      "role" : "icon",
+      "sha256" : "a85a21240e50e96646cd99df8a37a24d69ae8fb081cb4bfc27b350e435f95a30"
+    },
+    {
+      "byteCount" : 5391,
+      "contentType" : "image/png",
+      "id" : "berserker-rage",
+      "path" : "assets/berserker-rage.png",
+      "role" : "icon",
+      "sha256" : "e2047ebb222c8bf0242ff1d1eb4c4a9b4cdccf639939cb91c04a04357272b0d2"
+    },
+    {
+      "byteCount" : 5424,
+      "contentType" : "image/png",
+      "id" : "recklessness",
+      "path" : "assets/recklessness.png",
+      "role" : "icon",
+      "sha256" : "bb5df09de5519f6b0d683e16b4eff8c1885ebf12c459339c7a420563b248baac"
+    }
+  ],
+  "author" : {
+    "name" : "Thumble Studio"
+  },
+  "compatibility" : {
+    "maximumAspectRatio" : 2.5,
+    "minimumAspectRatio" : 0.4,
+    "mode" : "template_aligned",
+    "orientations" : [
+      "landscape",
+      "portrait"
+    ],
+    "requiredFeatures" : [
+      "artwork_layers",
+      "action_set_layers"
+    ],
+    "requiredRoles" : [
+      "joystick"
+    ],
+    "templates" : [
+      {
+        "maximumRevision" : 1,
+        "minimumRevision" : 1,
+        "templateID" : "wowforever"
+      }
+    ]
+  },
+  "identifier" : "com.thumble.warband-command",
+  "kind" : "skin",
+  "license" : "Original framing MIT; Blizzard icons © Blizzard Entertainment (all rights reserved)",
+  "minimumAppVersion" : "1.0.0",
+  "name" : "Warband Command",
+  "previews" : [
+
+  ],
+  "schema" : "com.codybontecou.pocketpad.skin-package",
+  "schemaVersion" : 2,
+  "skinPath" : "skin.json",
+  "skinSHA256" : "8a961c414d1463326411488be4ce5291d2e9091508283e2aacd500701a59e09d",
+  "summary" : "Warrior ability tiles, four held modifier banks, and quiet thumb instruments.",
+  "tags" : [
+    "css",
+    "handcrafted",
+    "thumble-css-core-1",
+    "wow-forever-v1"
+  ],
+  "version" : "1.0.2"
+}

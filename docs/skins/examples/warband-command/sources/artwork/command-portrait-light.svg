@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="402" height="874" viewBox="0 0 402 874">
+<text x="201.00" y="63.00" fill="#282B29" font-family="Helvetica,Arial,sans-serif" font-size="14" font-weight="700" text-anchor="middle" letter-spacing="1">WARBAND COMMAND</text>
+<text x="201.00" y="485.00" fill="#55594F" font-family="Helvetica,Arial,sans-serif" font-size="9" font-weight="500" text-anchor="middle" letter-spacing="1">WARRIOR / CONFIGURED ABILITIES</text>
+<path d="M164 500L238 500" fill="none" stroke="#715323" stroke-width="1"/>
+<text x="201.00" y="518.00" fill="#55594F" font-family="Helvetica,Arial,sans-serif" font-size="8" font-weight="500" text-anchor="middle" letter-spacing="1">HOLD LT · RT TO CHANGE BANK</text>
+<rect x="70.10" y="673.10" width="49.81" height="49.81" rx="8" fill="#C9C5BA" stroke="#958363" stroke-width="1"/>
+<text x="95.00" y="729.90" fill="#282B29" font-family="Helvetica,Arial,sans-serif" font-size="9" font-weight="700" text-anchor="middle" letter-spacing="1">↑</text>
+<rect x="70.10" y="777.10" width="49.81" height="49.81" rx="8" fill="#C9C5BA" stroke="#958363" stroke-width="1"/>
+<text x="95.00" y="775.10" fill="#282B29" font-family="Helvetica,Arial,sans-serif" font-size="9" font-weight="700" text-anchor="middle" letter-spacing="1">↓</text>
+<rect x="18.10" y="725.10" width="49.81" height="49.81" rx="8" fill="#C9C5BA" stroke="#958363" stroke-width="1"/>
+<text x="73.90" y="753.00" fill="#282B29" font-family="Helvetica,Arial,sans-serif" font-size="9" font-weight="700" text-anchor="middle" letter-spacing="1">←</text>
+<rect x="122.10" y="725.10" width="49.81" height="49.81" rx="8" fill="#C9C5BA" stroke="#958363" stroke-width="1"/>
+<text x="116.10" y="753.00" fill="#282B29" font-family="Helvetica,Arial,sans-serif" font-size="9" font-weight="700" text-anchor="middle" letter-spacing="1">→</text>
+<rect x="280.10" y="777.10" width="49.81" height="49.81" rx="8" fill="#C9C5BA" stroke="#958363" stroke-width="1"/>
+<text x="305.00" y="775.10" fill="#282B29" font-family="Helvetica,Arial,sans-serif" font-size="9" font-weight="700" text-anchor="middle" letter-spacing="1">A</text>
+<rect x="228.10" y="725.10" width="49.81" height="49.81" rx="8" fill="#C9C5BA" stroke="#958363" stroke-width="1"/>
+<text x="283.90" y="753.00" fill="#282B29" font-family="Helvetica,Arial,sans-serif" font-size="9" font-weight="700" text-anchor="middle" letter-spacing="1">X</text>
+<rect x="332.10" y="725.10" width="49.81" height="49.81" rx="8" fill="#C9C5BA" stroke="#958363" stroke-width="1"/>
+<text x="326.10" y="753.00" fill="#282B29" font-family="Helvetica,Arial,sans-serif" font-size="9" font-weight="700" text-anchor="middle" letter-spacing="1">B</text>
+<rect x="280.10" y="673.10" width="49.81" height="49.81" rx="8" fill="#C9C5BA" stroke="#958363" stroke-width="1"/>
+<text x="305.00" y="729.90" fill="#282B29" font-family="Helvetica,Arial,sans-serif" font-size="9" font-weight="700" text-anchor="middle" letter-spacing="1">Y</text>
+
+
+</svg>

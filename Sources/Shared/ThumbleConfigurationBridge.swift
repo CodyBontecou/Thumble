@@ -3,6 +3,48 @@ import Foundation
 public let thumbleConfigurationBridgeSchemaVersion = 1
 public let thumbleConfigurationBridgeMaximumBytes = (8 * 1024 * 1024) + (256 * 1024)
 
+/// Read-only native decoding for portable artifacts. The caller retains the exact
+/// portable bytes; returned profiles are the current native normalized subset.
+public struct ThumbleProfileArtifactBridgeRequest: Decodable, Sendable {
+    public let schemaVersion: Int
+    public let invocationID: UUID
+    public let profileArtifactCommand: String
+    public let artifactBase64: String?
+}
+
+public struct ThumbleProfileArtifactBridgeResponse: Encodable, Sendable {
+    public let schemaVersion = 1
+    public let invocationID: UUID
+    public let contentHash: String?
+    public let rawSHA256: String?
+    public let activeProfileID: UUID?
+    public let defaultProfileID: UUID?
+    public let profiles: [GamepadConfigurationProfile]?
+}
+
+public enum ThumbleProfileArtifactBridge {
+    public static func validate(_ request: ThumbleProfileArtifactBridgeRequest) throws -> ThumbleProfileArtifactBridgeResponse {
+        guard request.schemaVersion == 1 else { throw ThumbleConfigurationBridgeError.invalidProfile }
+        if request.profileArtifactCommand == "capabilities", request.artifactBase64 == nil {
+            return ThumbleProfileArtifactBridgeResponse(invocationID: request.invocationID,
+                contentHash: nil, rawSHA256: nil, activeProfileID: nil, defaultProfileID: nil, profiles: nil)
+        }
+        guard request.profileArtifactCommand == "validate", let encoded = request.artifactBase64,
+              encoded.utf8.count <= ((PortableProfileArtifact.maximumBytes + 2) / 3) * 4,
+              let data = Data(base64Encoded: encoded), data.count <= PortableProfileArtifact.maximumBytes
+        else { throw ThumbleConfigurationBridgeError.invalidProfile }
+        let artifact = try PortableProfileArtifact(validating: data)
+        return response(for: artifact, invocationID: request.invocationID, data: data)
+    }
+
+    private static func response(for artifact: PortableProfileArtifact, invocationID: UUID, data: Data) -> ThumbleProfileArtifactBridgeResponse {
+        ThumbleProfileArtifactBridgeResponse(invocationID: invocationID,
+            contentHash: artifact.contentHash.value, rawSHA256: ProfileArtifactAdoptionMetadata.sha256(data),
+            activeProfileID: artifact.activeProfileID, defaultProfileID: artifact.defaultProfileID,
+            profiles: artifact.profiles)
+    }
+}
+
 /// Credential-free configuration transformed by the constrained Swift bridge.
 /// Profile payloads remain lossless JSON so fields from newer model versions survive.
 public struct ThumbleBridgeConfigurationDocument: Codable, Equatable, Sendable {
@@ -4263,8 +4305,62 @@ public enum ThumbleConfigurationBridge {
     }
 
     private static func decoded<T: Decodable>(_ value: ThumbleBridgeJSONValue) throws -> T {
-        let data = try JSONEncoder.bridge.encode(value)
+        let input = T.self == GamepadConfigurationProfile.self ? profileForNativeDecoding(value) : value
+        let data = try JSONEncoder.bridge.encode(input)
         return try JSONDecoder.bridge.decode(T.self, from: data)
+    }
+
+    /// Existing Rust authority profiles may contain the host keyboard spelling
+    /// `modifiers`. Adapt only the typed decoding projection. Original raw JSON
+    /// remains authoritative, and portable artifact validation stays strict.
+    private static func profileForNativeDecoding(_ value: ThumbleBridgeJSONValue) -> ThumbleBridgeJSONValue {
+        guard case var .object(profile) = value else { return value }
+        for key in ["customization", "landscapeCustomization", "portraitCustomization", "skinBaselineCustomization", "landscapeSkinBaselineCustomization", "portraitSkinBaselineCustomization"] {
+            guard case var .object(layout) = profile[key] else { continue }
+            for field in ["elements", "customButtons"] {
+                if case let .array(controls) = layout[field] {
+                    layout[field] = .array(controls.map(controlForNativeDecoding))
+                }
+            }
+            profile[key] = .object(layout)
+        }
+        return .object(profile)
+    }
+
+    private static func controlForNativeDecoding(_ value: ThumbleBridgeJSONValue) -> ThumbleBridgeJSONValue {
+        guard case var .object(control) = value else { return value }
+        for key in ["output", "defaultOutput"] {
+            if let output = control[key] { control[key] = outputForNativeDecoding(output) }
+        }
+        if case var .array(parts) = control["partOutputs"] {
+            for index in stride(from: 1, to: parts.count, by: 2) { parts[index] = outputForNativeDecoding(parts[index]) }
+            control["partOutputs"] = .array(parts)
+        }
+        if case var .object(mapping) = control["joystickMapping"] {
+            for key in ["up", "down", "left", "right"] {
+                if let output = mapping[key] { mapping[key] = outputForNativeDecoding(output) }
+            }
+            control["joystickMapping"] = .object(mapping)
+        }
+        return .object(control)
+    }
+
+    private static func outputForNativeDecoding(_ value: ThumbleBridgeJSONValue) -> ThumbleBridgeJSONValue {
+        guard case var .object(output) = value, case var .object(keyboard) = output["keyboard"] else { return value }
+        func stroke(_ fields: [String: ThumbleBridgeJSONValue]) -> [String: ThumbleBridgeJSONValue] {
+            var result = fields
+            if result["modifiersRawValue"] == nil { result["modifiersRawValue"] = result["modifiers"] }
+            return result
+        }
+        keyboard = stroke(keyboard)
+        if case let .array(sequence) = keyboard["sequence"] {
+            keyboard["sequence"] = .array(sequence.map { value in
+                guard case let .object(fields) = value else { return value }
+                return .object(stroke(fields))
+            })
+        }
+        output["keyboard"] = .object(keyboard)
+        return .object(output)
     }
 
     private static func encodedJSONValue<T: Encodable>(_ value: T) throws -> ThumbleBridgeJSONValue {
@@ -4738,8 +4834,114 @@ private extension JSONDecoder {
     static var bridge: JSONDecoder { JSONDecoder() }
 }
 
-/// Pure, credential-free skin operations for the Rust authority. No store paths or
-/// review/approval assertions are accepted; archive inspection never adopts a profile.
+/// Pure, credential-free phone layout transformation for the Rust authority.
+public struct ThumblePhoneLayoutBridgeRequest: Decodable, Sendable {
+    public enum Command: String, Decodable, Sendable { case capabilities, replace }
+    public let schemaVersion: Int
+    public let invocationID: UUID
+    public let phoneLayoutCommand: Command
+    public let profileID: UUID?
+    public let profile: ThumbleBridgeJSONValue?
+    public let customization: ThumbleBridgeJSONValue?
+    public let packageData: Data?
+    public let nowMillis: Int64
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: ThumbleBridgeCodingKey.self)
+        try container.requireOnly(["schemaVersion", "invocationID", "phoneLayoutCommand", "profileID", "profile", "customization", "packageData", "nowMillis"])
+        schemaVersion = try container.decode(Int.self, forKey: .init("schemaVersion"))
+        invocationID = try container.decode(UUID.self, forKey: .init("invocationID"))
+        phoneLayoutCommand = try container.decode(Command.self, forKey: .init("phoneLayoutCommand"))
+        profileID = try container.decodeIfPresent(UUID.self, forKey: .init("profileID"))
+        profile = try container.decodeIfPresent(ThumbleBridgeJSONValue.self, forKey: .init("profile"))
+        customization = try container.decodeIfPresent(ThumbleBridgeJSONValue.self, forKey: .init("customization"))
+        packageData = try container.decodeIfPresent(Data.self, forKey: .init("packageData"))
+        nowMillis = try container.decode(Int64.self, forKey: .init("nowMillis"))
+    }
+}
+
+public struct ThumblePhoneLayoutBridgeResponse: Encodable, Sendable {
+    public let schemaVersion = 1
+    public let invocationID: UUID
+    public let profile: ThumbleBridgeJSONValue?
+    public let changed: Bool
+    public let recovered: Bool
+}
+
+public enum ThumblePhoneLayoutBridgeError: String, Error {
+    case unsupportedSchema = "unsupported_phone_layout_schema"
+    case invalidRequest = "invalid_phone_layout_request"
+    case invalidPackage = "invalid_phone_layout_package"
+    case invalidProfile = "invalid_phone_layout_profile"
+}
+
+/// Pure phone-originated layout replacement. No state paths, credentials,
+/// binding-map writes or selection changes are accepted. Existing profile
+/// metadata is supplied only by the receiver and remains unchanged.
+public enum ThumblePhoneLayoutBridge {
+    public static func transform(_ request: ThumblePhoneLayoutBridgeRequest) throws -> ThumblePhoneLayoutBridgeResponse {
+        try Workspace(request).run()
+    }
+    private final class Workspace {
+        let request: ThumblePhoneLayoutBridgeRequest
+        var customization: GamepadCustomization?
+        var profile: GamepadConfigurationProfile?
+        var changed = false
+        init(_ request: ThumblePhoneLayoutBridgeRequest) { self.request = request }
+        func run() throws -> ThumblePhoneLayoutBridgeResponse {
+            guard request.schemaVersion == 1 else { throw ThumblePhoneLayoutBridgeError.unsupportedSchema }
+            guard request.nowMillis >= 0 else { throw ThumblePhoneLayoutBridgeError.invalidRequest }
+            if request.phoneLayoutCommand == .capabilities {
+                guard request.profileID == nil, request.profile == nil, request.customization == nil, request.packageData == nil
+                else { throw ThumblePhoneLayoutBridgeError.invalidRequest }
+                return .init(invocationID: request.invocationID, profile: nil, changed: false, recovered: false)
+            }
+            try decodeModels()
+            try dehydratePackageAssets()
+            try replaceCustomization()
+            guard let profile else { throw ThumblePhoneLayoutBridgeError.invalidProfile }
+            let result: ThumbleBridgeJSONValue
+            if let raw = request.profile {
+                result = try ThumbleConfigurationBridge.preservingProfileMetadata(raw, after: profile)
+            } else {
+                result = try JSONDecoder().decode(ThumbleBridgeJSONValue.self, from: JSONEncoder().encode(profile))
+            }
+            return .init(invocationID: request.invocationID, profile: result, changed: changed, recovered: request.profile == nil)
+        }
+        private func decodeModels() throws {
+            guard let id = request.profileID, let raw = request.customization else { throw ThumblePhoneLayoutBridgeError.invalidRequest }
+            customization = try JSONDecoder().decode(GamepadCustomization.self, from: JSONEncoder().encode(raw)).normalized
+            if let rawProfile = request.profile {
+                profile = try JSONDecoder().decode(GamepadConfigurationProfile.self, from: JSONEncoder().encode(rawProfile))
+                guard profile?.id == id else { throw ThumblePhoneLayoutBridgeError.invalidProfile }
+            } else {
+                guard let customization else { throw ThumblePhoneLayoutBridgeError.invalidRequest }
+                profile = GamepadConfigurationProfile(id: id, name: "Recovered Phone Layout", primaryCustomization: customization, updatedAt: request.nowMillis)
+            }
+        }
+        private func dehydratePackageAssets() throws {
+            guard let bytes = request.packageData else { return }
+            let package = try ThumbleSkinPackageCodec.decode(bytes)
+            let reference = ThumbleSkinReference(identifier: package.manifest.identifier, version: package.manifest.version)
+            let selected = profile?.skinReference.map { ThumbleSkinReference(identifier: $0.identifier, version: $0.version) }
+            guard package.skin != nil, selected == reference else { throw ThumblePhoneLayoutBridgeError.invalidPackage }
+            customization = customization?.dehydratingAssets(from: package)
+        }
+        private func replaceCustomization() throws {
+            guard var customization, var profile else { throw ThumblePhoneLayoutBridgeError.invalidProfile }
+            let orientation = customization.deviceCanvas.editorDeviceFrame.orientation
+            if request.profile != nil && profile.customization(for: orientation).hasSamePresentation(as: customization) { return }
+            customization.updatedAt = request.nowMillis
+            profile.setCustomization(customization, for: orientation)
+            profile.updatedAt = request.nowMillis
+            self.profile = profile
+            self.customization = customization
+            changed = true
+        }
+    }
+}
+
+/// Pure skin operations; archive inspection never adopts an embedded profile.
 public struct ThumbleSkinBridgeRequest: Decodable, Sendable {
     public enum Command: String, Decodable, Sendable { case capabilities, reference, inspect, apply, detach }
     public let schemaVersion: Int

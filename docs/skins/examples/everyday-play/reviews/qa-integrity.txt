@@ -1,0 +1,6 @@
+assets/everyday-landscape-dark.png (1748, 804) 105354 a824678ce9c5ad769c866c24fe1749d55fbd4e402240fd6ebc820ec9f5f9bb29
+assets/everyday-landscape-light.png (1748, 804) 103995 34eca20deacd768a109f1169e0c6737b0fdc9a94607312e88dcc18a16c57bfcf
+assets/everyday-portrait-dark.png (804, 1748) 106835 b29cd5e2ac99ec80c97ae2721a7abc31654f78075a1b7edfd34a0c5d9d29cf8a
+assets/everyday-portrait-light.png (804, 1748) 105385 2dfeb227e3b65c11c63b86bdab370a1b13b08707f0cb875fceea25d1de208dd6
+PASS: 4 PNG hashes/dimensions/byte counts; skin hash; appearance-only file allowlist; no scripts/profile/binding payload or symlinks; retained editable SVG/CSS; canonical revision2 metadata; recorded contrast thresholds; pending approval.
+Total unpacked bytes: 1130016

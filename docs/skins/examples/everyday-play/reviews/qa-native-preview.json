@@ -1,0 +1,16 @@
+{
+  "actionSet" : "base",
+  "artboardID" : "snes",
+  "colorScheme" : "all",
+  "contactSheet" : true,
+  "frameCount" : 16,
+  "frames" : [
+
+  ],
+  "orientation" : "all",
+  "output" : "\/tmp\/thumble-everyday-qa\/native-contact-sheet-base.png",
+  "skinIdentifier" : "com.thumble.everyday-play",
+  "skinName" : "Everyday Play",
+  "skinVersion" : "1.0.0",
+  "state" : "all"
+}

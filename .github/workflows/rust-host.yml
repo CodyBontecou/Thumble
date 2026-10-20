@@ -15,15 +15,19 @@ on:
       - "Sources/Shared/GamepadLayoutQuality.swift"
       - "Sources/Shared/GamepadOutputTypes.swift"
       - "Sources/Shared/KeypadConfigurationExport.swift"
+      - "Sources/Shared/PortableProfileArtifact.swift"
+      - "Android/scripts/verify-shared-build-profile-models.py"
       - "Sources/Shared/ThumbleConfigurationBridge.swift"
       - "Sources/Shared/ThumbleSkin.swift"
       - "Sources/Shared/ThumbleLinkSnapshot.swift"
       - "Sources/Bridge/**"
       - "Sources/iOS/ControllerClient.swift"
+      - "Sources/iOS/IOSLocalKeypadUX.swift"
       - "Sources/Mac/MacControllerServer.swift"
       - "Sources/Mac/MacControlOutputBinding.swift"
       - "Sources/Mac/KeyMap.swift"
       - "Tests/RustHostInteropTests.swift"
+      - "Tests/AndroidLayoutEditOracleTests.swift"
       - "Tests/GamepadSharedOperationsSmokeTests.swift"
       - "Tests/ThumbleSkinCompatibilityTests.swift"
       - "Tests/ThumbleLinkTests.swift"
@@ -66,15 +70,19 @@ on:
       - "Sources/Shared/GamepadLayoutQuality.swift"
       - "Sources/Shared/GamepadOutputTypes.swift"
       - "Sources/Shared/KeypadConfigurationExport.swift"
+      - "Sources/Shared/PortableProfileArtifact.swift"
+      - "Android/scripts/verify-shared-build-profile-models.py"
       - "Sources/Shared/ThumbleConfigurationBridge.swift"
       - "Sources/Shared/ThumbleSkin.swift"
       - "Sources/Shared/ThumbleLinkSnapshot.swift"
       - "Sources/Bridge/**"
       - "Sources/iOS/ControllerClient.swift"
+      - "Sources/iOS/IOSLocalKeypadUX.swift"
       - "Sources/Mac/MacControllerServer.swift"
       - "Sources/Mac/MacControlOutputBinding.swift"
       - "Sources/Mac/KeyMap.swift"
       - "Tests/RustHostInteropTests.swift"
+      - "Tests/AndroidLayoutEditOracleTests.swift"
       - "Tests/GamepadSharedOperationsSmokeTests.swift"
       - "Tests/ThumbleSkinCompatibilityTests.swift"
       - "Tests/ThumbleLinkTests.swift"
@@ -164,7 +172,8 @@ jobs:
 
   macos-host:
     runs-on: macos-26
-    timeout-minutes: 60
+    # Cold universal builds can take an hour; leave time for native tests and cache upload.
+    timeout-minutes: 90
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
     steps:
@@ -194,6 +203,7 @@ jobs:
           -scheme ThumbleCLI
           -destination 'platform=macOS'
           -only-testing:ThumbleCLITests/RustHostInteropTests
+          -only-testing:ThumbleCLITests/AndroidLayoutEditOracleTests
           -only-testing:ThumbleCLITests/GamepadSharedOperationsSmokeTests
           -only-testing:ThumbleCLITests/ThumbleSkinCompatibilityTests
           -only-testing:ThumbleCLITests/ThumbleLinkTests
@@ -222,6 +232,8 @@ jobs:
           lipo "$APP/Contents/MacOS/thumble-bridge" -verify_arch arm64 x86_64
           codesign --verify --deep --strict "$APP"
           THUMBLE_TEST_SKIN_RUNTIME_BIN="$APP/Contents/MacOS" cargo test --manifest-path Host/Cargo.toml --locked -p thumble-host --test skin_sync -- --ignored
+          THUMBLE_TEST_ARTIFACT_RUNTIME_BIN="$APP/Contents/MacOS" cargo test --manifest-path Host/Cargo.toml --locked -p thumble-host --test profile_adoption -- --ignored --test-threads=1
+          python3 Android/scripts/verify-shared-build-profile-models.py --bridge "$APP/Contents/MacOS/thumble-bridge"
           THUMBLE_TEST_SKIN_BRIDGE="$APP/Contents/MacOS/thumble-bridge" cargo test --manifest-path Host/Cargo.toml --locked -p thumble-host skins::tests:: -- --ignored
           unzip -tq "$OUTPUT/ThumbleHost-0.1.0-macOS-universal.zip"
           python3 - "$APP/Contents/MacOS/thumble-bridge" Host/fixtures/state/minimal-profile.json <<'PY'

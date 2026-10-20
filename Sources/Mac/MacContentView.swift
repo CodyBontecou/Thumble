@@ -13,6 +13,9 @@ struct MacContentView: View {
     @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
     @AppStorage(ThumbleMacIPC.onboardingCompletedDefaultsKey) private var hasCompletedOnboarding = false
     @State private var selectedSection: MacSidebarSection? = .gamepad
+    @AppStorage(ThumbleMacIPC.editorCleanPreviewDefaultsKey) private var isCleanPreview = false
+    @State private var navigationColumnVisibility: NavigationSplitViewVisibility = .all
+    @State private var editorAppearanceCache = ThumbleSkinEditorPreviewCache()
     @State private var advancedConfigExpanded = false
     @State private var isShowingOnboarding = false
     @State private var gamepadEditorUndoTarget = MacGamepadEditorUndoTarget()
@@ -52,6 +55,22 @@ struct MacContentView: View {
                 applicationContent
                     .transition(accessibilityReduceMotion ? .identity : .opacity)
             }
+        }
+        .environment(\.gamepadEditorCleanPreview, isCleanPreview)
+        .onChange(of: server.installedSkins) { _, _ in
+            editorAppearanceCache = ThumbleSkinEditorPreviewCache()
+        }
+        .onReceive(DistributedNotificationCenter.default().publisher(for: Notification.Name("com.codybontecou.PocketPadMac.skinStoreChanged"))) { _ in
+            editorAppearanceCache = ThumbleSkinEditorPreviewCache()
+        }
+        .onAppear { navigationColumnVisibility = isCleanPreview ? .detailOnly : .all }
+        .onChange(of: isCleanPreview) { _, enabled in
+            navigationColumnVisibility = enabled ? .detailOnly : .all
+            if enabled { selectedSection = .gamepad }
+        }
+        .onReceive(DistributedNotificationCenter.default().publisher(for: Notification.Name(ThumbleMacIPC.editorPresentationChangedNotificationName))) { _ in
+            UserDefaults.standard.synchronize()
+            isCleanPreview = UserDefaults.standard.bool(forKey: ThumbleMacIPC.editorCleanPreviewDefaultsKey)
         }
         .animation(accessibilityReduceMotion ? nil : .easeInOut(duration: 0.24), value: shouldPresentOnboarding)
         .fileExporter(
@@ -142,7 +161,7 @@ struct MacContentView: View {
     }
 
     private var applicationContent: some View {
-        NavigationSplitView {
+        NavigationSplitView(columnVisibility: $navigationColumnVisibility) {
             List(selection: $selectedSection) {
                 ForEach(MacSidebarSection.allCases) { section in
                     Label(section.title, systemImage: section.systemImage)
@@ -158,6 +177,14 @@ struct MacContentView: View {
         }
         .geistScreenBackground()
         .toolbar {
+            ToolbarItem {
+                Button {
+                    isCleanPreview.toggle()
+                } label: {
+                    Label(isCleanPreview ? "Return to Editor" : "Clean Preview", systemImage: isCleanPreview ? "pencil" : "eye")
+                }
+                .help(isCleanPreview ? "Return to editing with guides and binding labels" : "Preview the keypad without editor guides or binding labels")
+            }
             ToolbarItem {
                 Button { isShowingThumbleLinkImport = true } label: {
                     Label("Thumble Link…", systemImage: "link")
@@ -1386,11 +1413,13 @@ struct MacContentView: View {
     ) -> GamepadCustomization {
         let local = profile.customization(for: orientation)
         let scheme = local.resolvedColorScheme(system: colorScheme)
-        return profile.resolvedCustomization(
-            for: orientation,
-            colorScheme: scheme == .dark ? .dark : .light,
-            skinPackage: profile.skinReference.flatMap { try? server.skinPackage(for: $0) }
-        )
+        return editorAppearanceCache.resolve(
+            profile: profile,
+            orientation: orientation,
+            colorScheme: scheme == .dark ? .dark : .light
+        ) {
+            profile.skinReference.flatMap { try? server.skinPackage(for: $0) }
+        }
     }
 
     private func dehydratedEditorCustomization(_ customization: GamepadCustomization) -> GamepadCustomization {

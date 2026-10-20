@@ -154,6 +154,8 @@ pub enum ControllerPointerButton {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ControllerCapability {
+    #[serde(rename = "profile_artifact_adoption_v1")]
+    ProfileArtifactAdoptionV1,
     #[serde(rename = "gamepad_profile_orientation_preference_mutation")]
     GamepadProfileOrientationPreferenceMutation,
     #[serde(rename = "skin_packages")]
@@ -206,12 +208,22 @@ pub enum ControllerMessageType {
     GamepadProfileOrientationPreferenceMutation,
     #[serde(rename = "launch_profile_target")]
     LaunchProfileTarget,
+    #[serde(rename = "profile_artifact_adoption_begin")]
+    ProfileArtifactAdoptionBegin,
+    #[serde(rename = "profile_artifact_adoption_chunk")]
+    ProfileArtifactAdoptionChunk,
+    #[serde(rename = "profile_artifact_adoption_commit")]
+    ProfileArtifactAdoptionCommit,
+    #[serde(rename = "profile_artifact_adoption_cancel")]
+    ProfileArtifactAdoptionCancel,
+    #[serde(rename = "profile_artifact_adoption_result")]
+    ProfileArtifactAdoptionResult,
     #[serde(rename = "error")]
     Error,
 }
 
 impl ControllerMessageType {
-    pub const ALL: [Self; 22] = [
+    pub const ALL: [Self; 27] = [
         Self::Hello,
         Self::PairingRequest,
         Self::PairingChallenge,
@@ -233,6 +245,11 @@ impl ControllerMessageType {
         Self::GamepadDefaultProfile,
         Self::GamepadProfileOrientationPreferenceMutation,
         Self::LaunchProfileTarget,
+        Self::ProfileArtifactAdoptionBegin,
+        Self::ProfileArtifactAdoptionChunk,
+        Self::ProfileArtifactAdoptionCommit,
+        Self::ProfileArtifactAdoptionCancel,
+        Self::ProfileArtifactAdoptionResult,
         Self::Error,
     ];
 
@@ -292,6 +309,19 @@ pub enum VirtualGamepadTrigger {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ControllerMessage {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub profile_artifact_adoption_metadata: Option<crate::AdoptionMetadata>,
+    #[serde(
+        rename = "profileArtifactAdoptionOperationID",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub profile_artifact_adoption_operation_id: Option<uuid::Uuid>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub profile_artifact_adoption_chunk_index: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub profile_artifact_adoption_chunk_data: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub profile_artifact_adoption_result: Option<crate::AdoptionResult>,
     #[serde(rename = "type")]
     pub message_type: ControllerMessageType,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -379,8 +409,20 @@ pub struct ControllerMessage {
 }
 
 impl ControllerMessage {
+    pub fn has_adoption_payload(&self) -> bool {
+        self.profile_artifact_adoption_metadata.is_some()
+            || self.profile_artifact_adoption_operation_id.is_some()
+            || self.profile_artifact_adoption_chunk_index.is_some()
+            || self.profile_artifact_adoption_chunk_data.is_some()
+            || self.profile_artifact_adoption_result.is_some()
+    }
     pub fn new(message_type: ControllerMessageType, timestamp: i64) -> Self {
         Self {
+            profile_artifact_adoption_metadata: None,
+            profile_artifact_adoption_operation_id: None,
+            profile_artifact_adoption_chunk_index: None,
+            profile_artifact_adoption_chunk_data: None,
+            profile_artifact_adoption_result: None,
             message_type,
             button: None,
             element_id: None,

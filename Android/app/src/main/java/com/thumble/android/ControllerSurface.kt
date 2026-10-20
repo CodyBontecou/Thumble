@@ -108,6 +108,24 @@ internal class ControllerSurface(context: Context, private val legacyArtworkBlen
         renderColors()
         requestLayout()
     }
+    private var bindingGroups=emptyList<ProfileBindingPresentations>()
+    private var showBindingGlyphs=true
+    /** Metadata-only changes retain children and all in-flight physical press identities. */
+    fun showBindingPresentations(groups: List<ProfileBindingPresentations>,showGlyphs: Boolean) {
+        if(bindingGroups==groups && showBindingGlyphs==showGlyphs) return
+        bindingGroups=groups;showBindingGlyphs=showGlyphs
+        controls.forEachIndexed { index,control ->
+            (getChildAt(index) as? ControlFaceView)?.let { updateSecondary(it,control) }
+        }
+    }
+    private fun updateSecondary(view: ControlFaceView,control: Control) {
+        val entries=currentProfile?.let { BindingPresentations.entries(bindingGroups,it.id,currentLandscape) }.orEmpty()
+        val caption=control.source.optJSONObject("presentation")?.let { if(it.has("caption") && !it.isNull("caption")) it.getString("caption").takeIf(String::isNotEmpty) else null }
+        val hint=if(showBindingGlyphs && control.kind!="text") BindingPresentations.visibleHint(
+            BindingPresentations.text(control,entries),control.label,ControlIcon.parse(view.appliedPresentation?.optJSONObject("icon"))) else null
+        view.secondaryLines=if(view.metrics.legendVisible) listOfNotNull(caption,hint) else emptyList()
+        view.accessibleBindingText=BindingPresentations.text(control,entries,true)
+    }
     private val Int.dp: Int get() = (this * resources.displayMetrics.density).roundToInt()
     private fun playHaptic(id: UUID) {
         val index=controls.indexOfFirst { it.id == id }
@@ -147,6 +165,7 @@ internal class ControllerSurface(context: Context, private val legacyArtworkBlen
             if (faceView.appliedPresentation !== face) {
                 applyContent(view, control, face)
                 faceView.appliedPresentation = face
+                updateSecondary(faceView,control)
             }
             view.invalidate()
         }
@@ -160,22 +179,7 @@ internal class ControllerSurface(context: Context, private val legacyArtworkBlen
         val legend = content?.let { if (it.has("legend") && !it.isNull("legend")) it.optString("legend") else null } ?: control.legend
         val text = if (visible) legend else ""
         if (view.text.toString() != text) view.text = text
-        val family = when (content?.optString("fontDesign")) { "serif" -> "serif"; "monospaced" -> "monospace"; else -> "sans-serif" }
-        val weight = when (content?.optString("fontWeight")) { "regular" -> 400; "medium" -> 500; "bold" -> 700; else -> 600 }
-        view.typeface = if (android.os.Build.VERSION.SDK_INT >= 28) android.graphics.Typeface.create(android.graphics.Typeface.create(family, android.graphics.Typeface.NORMAL), weight, false)
-            else android.graphics.Typeface.create(if (weight in 500..600 && family == "sans-serif") "sans-serif-medium" else family, if (weight >= 700) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
-        view.maxLines = content?.optInt("lineLimit", 1) ?: 1
-        val font = content?.optDouble("fontSize")?.takeIf { it.isFinite() }
-        if (font != null) {
-            view.setAutoSizeTextTypeWithDefaults(TextView.AUTO_SIZE_TEXT_TYPE_NONE)
-            view.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, font.toFloat())
-        } else view.setAutoSizeTextTypeUniformWithConfiguration(8, if (legend.length <= 2) 32 else 16, 1, android.util.TypedValue.COMPLEX_UNIT_SP)
-        view.letterSpacing = ((content?.finite("tracking", 0.0) ?: 0.0) / (font ?: 16.0)).toFloat()
-        val padding = ((content?.finite("labelPadding", defaultLabelPadding(control)) ?: defaultLabelPadding(control)) * resources.displayMetrics.density).roundToInt()
-        view.setPadding(padding, 2.dp, padding, 2.dp)
-        view.gravity = android.view.Gravity.CENTER_VERTICAL or when (content?.optString("alignment")) {
-            "leading" -> android.view.Gravity.START; "trailing" -> android.view.Gravity.END; else -> android.view.Gravity.CENTER_HORIZONTAL
-        }
+        faceView.refreshTypography()
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
@@ -305,6 +309,7 @@ internal class ControllerSurface(context: Context, private val legacyArtworkBlen
     private fun controlAccessibility(control: Control) = object : View.AccessibilityDelegate() {
         override fun onInitializeAccessibilityNodeInfo(host: View, info: AccessibilityNodeInfo) {
             super.onInitializeAccessibilityNodeInfo(host, info)
+            info.hintText=(host as? ControlFaceView)?.accessibleBindingText
             when (control.kind) {
                 "joystick" -> for ((id, label) in listOf(R.id.control_up to "Up", R.id.control_down to "Down", R.id.control_left to "Left", R.id.control_right to "Right")) {
                     info.addAction(AccessibilityNodeInfo.AccessibilityAction(id, label))
@@ -374,6 +379,10 @@ internal class ControllerSurface(context: Context, private val legacyArtworkBlen
 
 }
 internal class ControlFaceView(context: Context) : TextView(context) {
+    var accessibleBindingText: String? = null
+    var secondaryLines: List<String> = emptyList()
+        set(value) { if(field!=value) { field=value.toList();secondaryVersion++;invalidate() } }
+    private var secondaryVersion=0L
     var appliedPresentation: JSONObject? = null
     var drawIndicator: (Canvas) -> Unit = {}
     private var control: Control? = null
@@ -386,6 +395,22 @@ internal class ControlFaceView(context: Context) : TextView(context) {
     private val effectID = EffectRasterCache.id()
     var effectSignature = "static"
     private var lastDynamicKey: String? = null
+    private data class TypographyKey(val metrics: ControlTypography,val text: String,val width: Int,val height: Int,val fontScale: Float)
+    private var typographyKey: TypographyKey?=null
+    fun refreshTypography(w: Int=width,h: Int=height) {
+        val value=control ?: return
+        if(w<=0 || h<=0) { requestLayout();return }
+        val density=resources.displayMetrics.density
+        val typography=ControlTypography.resolve(value,w/density.toDouble(),h/density.toDouble(),content)
+        val key=TypographyKey(typography,text.toString(),w,h,resources.configuration.fontScale)
+        if(key==typographyKey) return
+        typographyKey=key
+        ControlLegendTypography.apply(this,typography,w,h)
+    }
+    override fun onMeasure(widthMeasureSpec: Int,heightMeasureSpec: Int) {
+        refreshTypography(MeasureSpec.getSize(widthMeasureSpec),MeasureSpec.getSize(heightMeasureSpec))
+        super.onMeasure(widthMeasureSpec,heightMeasureSpec)
+    }
     var metrics = IconLayout(0.0, Vector(), Vector(), false)
         private set
     fun configure(control: Control, content: JSONObject?, icon: ControlIcon?, assets: AssetImages, labels: Boolean, effects: EffectRasterCache) {
@@ -402,7 +427,7 @@ internal class ControlFaceView(context: Context) : TextView(context) {
     override fun draw(canvas: Canvas) {
         val radius = (appliedPresentation?.finite("blurRadius",0.0) ?: 0.0).toFloat() * resources.displayMetrics.density
         if (radius <= .01f || width <= 0 || height <= 0) { super.draw(canvas); return }
-        val key = "$effectID:$width:$height:${System.identityHashCode(appliedPresentation)}:$effectSignature"
+        val key = "$effectID:$width:$height:${System.identityHashCode(appliedPresentation)}:$effectSignature:$secondaryVersion"
         if (effectSignature != "static" && lastDynamicKey != key) { lastDynamicKey?.let { effectCache.remove(it) }; lastDynamicKey = key }
         val raster = effectCache.get(key) {
             val extent = (background?.current as? ControlDrawable)?.visualOutset ?: 0f
@@ -417,13 +442,51 @@ internal class ControlFaceView(context: Context) : TextView(context) {
         raster.draw(canvas)
     }
     private fun drawUnblurred(canvas: Canvas) = super.draw(canvas)
+    private data class SecondaryKey(val lines: List<String>,val width: Int,val color: Int,val fontScale: Float)
+    private var secondaryKey: SecondaryKey?=null
+    private var secondaryLayouts=emptyList<android.text.StaticLayout>()
+    private fun secondaryLayouts(): List<android.text.StaticLayout> {
+        val available=min(width*.88f,(width-paddingLeft-paddingRight).toFloat()).toInt().coerceAtLeast(1)
+        val key=SecondaryKey(secondaryLines,available,currentTextColor,resources.configuration.fontScale)
+        if(secondaryKey==key) return secondaryLayouts
+        secondaryKey=key
+        secondaryLayouts=secondaryLines.map { value ->
+            val paint=android.text.TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+                typeface=if(android.os.Build.VERSION.SDK_INT>=28) android.graphics.Typeface.create(android.graphics.Typeface.MONOSPACE,500,false) else android.graphics.Typeface.MONOSPACE
+                textSize=android.util.TypedValue.applyDimension(android.util.TypedValue.COMPLEX_UNIT_SP,10f,resources.displayMetrics)
+                color=(currentTextColor and 0x00ffffff) or ((Color.alpha(currentTextColor)*.76f).roundToInt() shl 24)
+                val desired=android.text.Layout.getDesiredWidth(value,this)
+                if(desired>available) textSize*=max(.5f,available/desired)
+            }
+            android.text.StaticLayout.Builder.obtain(value,0,value.length,paint,available)
+                .setAlignment(android.text.Layout.Alignment.ALIGN_CENTER).setIncludePad(false).setMaxLines(1)
+                .setEllipsize(android.text.TextUtils.TruncateAt.END).build()
+        }
+        return secondaryLayouts
+    }
     override fun onDraw(canvas: Canvas) {
         drawIndicator(canvas)
         val density = resources.displayMetrics.density
         iconPainter?.draw(canvas, width / 2f + (metrics.offset.x * density).toFloat(), height / 2f + (metrics.offset.y * density).toFloat(), (metrics.size * density).toFloat(), currentTextColor)
         val saved = canvas.save()
         canvas.translate((metrics.labelOffset.x * density).toFloat(), (metrics.labelOffset.y * density).toFloat())
-        super.onDraw(canvas); canvas.restoreToCount(saved)
+        val secondary=secondaryLayouts()
+        val gap=density
+        val secondaryHeight=secondary.sumOf { it.height.toDouble() }.toFloat()+gap*secondary.size
+        val primaryHeight=if(text.isEmpty()) 0f else layout?.height?.toFloat() ?: textSize
+        canvas.translate(0f,-secondaryHeight/2)
+        super.onDraw(canvas)
+        canvas.translate(0f,secondaryHeight/2)
+        var y=height/2f+primaryHeight/2-secondaryHeight/2
+        for(line in secondary) {
+            y+=gap
+            val lineSave=canvas.save()
+            canvas.translate((width-line.width)/2f,y)
+            line.draw(canvas)
+            canvas.restoreToCount(lineSave)
+            y+=line.height
+        }
+        canvas.restoreToCount(saved)
     }
 }
 internal fun JSONObject.finite(key: String, fallback: Double): Double = optDouble(key, fallback).takeIf { it.isFinite() } ?: fallback

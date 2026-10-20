@@ -9,6 +9,9 @@ private typealias ContractDecoder = (Any) -> Any
 
 /** Strict typed decoding for compatibility/captured contracts, before package validation. */
 internal object SkinContractCodec {
+    /** Validate an untrusted profile's native layout model without rewriting its bytes. */
+    fun validateLayout(raw: JSONObject) { rawLayout(raw) }
+    fun decodedLayout(raw: JSONObject): JSONObject = rawLayout(raw)
     private fun bad(): Nothing = throw SkinPackageException("invalid-skin-contract")
     private fun value(o: JSONObject,k: String): Any? = o.opt(k).takeUnless { it===JSONObject.NULL }
     private fun obj(v: Any) = v as? JSONObject ?: bad()

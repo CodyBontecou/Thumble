@@ -1,0 +1,16 @@
+{
+  "actionSet" : "all",
+  "artboardID" : "wowforever",
+  "colorScheme" : "all",
+  "contactSheet" : true,
+  "frameCount" : 64,
+  "frames" : [
+
+  ],
+  "orientation" : "all",
+  "output" : "\/tmp\/thumble-warband-qa-3\/native-contact-sheet.png",
+  "skinIdentifier" : "com.thumble.warband-command",
+  "skinName" : "Warband Command",
+  "skinVersion" : "1.0.2",
+  "state" : "all"
+}

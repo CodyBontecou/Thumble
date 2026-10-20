@@ -789,3 +789,19 @@ private extension ThumbleSkinColorScheme {
         }
     }
 }
+
+/// Reuses appearance resolution across editor redraws. Confined to the UI actor;
+/// callers clear it when the installed skin library changes.
+@MainActor
+final class ThumbleSkinEditorPreviewCache {
+    func resolve(
+        profile: GamepadConfigurationProfile,
+        orientation: GamepadEditorDeviceOrientation,
+        colorScheme: ThumbleSkinColorScheme,
+        loadPackage: () -> ThumbleSkinPackage?
+    ) -> GamepadCustomization {
+        profile.resolvedCustomization(for: orientation, colorScheme: colorScheme, skinPackage: loadPackage())
+    }
+
+    func removeAll() {}
+}

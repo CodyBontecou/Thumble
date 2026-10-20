@@ -19,7 +19,7 @@ import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.unit.dp
 
 @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
-@Composable internal fun KeypadSettings(intensity: Double, error: String?, onIntensity: (Double)->Unit, onDismiss: ()->Unit) {
+@Composable internal fun KeypadSettings(intensity: Double, error: String?, onIntensity: (Double)->Unit, appearance: AppearancePreference? = null, onAppearance: (AppearancePreference)->Unit = {}, showBindingGlyphs: Boolean = true, onShowBindingGlyphs: (Boolean)->Unit = {}, onDismiss: ()->Unit) {
     AlertDialog(onDismissRequest=onDismiss,containerColor=MaterialTheme.colorScheme.surface,title={ Text("Keypad settings") },
         text={
             val view=LocalView.current
@@ -32,6 +32,23 @@ import androidx.compose.ui.unit.dp
             }
             LaunchedEffect(intensity) { preview.cancel() }
             Column(Modifier.fillMaxWidth().semantics { testTagsAsResourceId=true }.verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(8.dp)) {
+                Text("Appearance",style=MaterialTheme.typography.titleSmall)
+                Text(if(appearance==null) "Choose a saved keypad to change its appearance." else "Saved with this keypad and synced with your Mac.",style=MaterialTheme.typography.bodyMedium)
+                Column(Modifier.selectableGroup()) {
+                    AppearancePreference.entries.forEach { choice ->
+                        Row(Modifier.fillMaxWidth().heightIn(min=48.dp).testTag("appearance-${choice.wireValue}")
+                            .semantics { contentDescription="${choice.label} appearance" }.selectable(selected=appearance==choice,enabled=appearance!=null,
+                            onClick={ onAppearance(choice) },role=Role.RadioButton).padding(horizontal=8.dp),verticalAlignment=Alignment.CenterVertically) {
+                            RadioButton(selected=appearance==choice,onClick=null,enabled=appearance!=null)
+                            Text(choice.label,Modifier.padding(start=12.dp))
+                        }
+                    }
+                }
+                Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
+                    Text("Show binding hints",Modifier.weight(1f))
+                    Switch(checked=showBindingGlyphs,onCheckedChange=onShowBindingGlyphs,
+                        modifier=Modifier.testTag("show-binding-hints").semantics { contentDescription="Show binding hints" })
+                }
                 Text("Haptic intensity",style=MaterialTheme.typography.titleSmall)
                 Text("Scales each control’s feedback while preserving its relative strength. Your phone’s vibration settings still apply.",style=MaterialTheme.typography.bodyMedium)
                 Column(Modifier.selectableGroup()) {

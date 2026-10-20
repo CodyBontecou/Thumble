@@ -1,6 +1,12 @@
 package com.thumble.android
 
 import org.json.JSONObject
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 /** Appearance projection only. The client continues to own the original profile and bindings. */
 internal data class SkinRenderProjection(
@@ -15,6 +21,15 @@ internal data class SkinRenderProjection(
 
 /** Call on a worker. One decoded archive and one projection bound memory use. */
 internal class SkinRenderRepository(private val loadPackage: (SkinReference) -> SkinPackage) {
+    private val displayGate = Mutex()
+    /** Cancel superseded display requests before they enter blocking native-model work. */
+    suspend fun resolveForDisplay(source: ControllerProfile?, landscape: Boolean, systemDark: Boolean): SkinRenderProjection =
+        displayGate.withLock {
+            withContext(Dispatchers.IO) {
+                currentCoroutineContext().ensureActive()
+                resolve(source, landscape, systemDark)
+            }
+        }
     companion object {
         fun fromDirectory(root: java.io.File): SkinRenderRepository {
             val library by lazy { SkinLibrary(root) }

@@ -1,0 +1,85 @@
+{
+  "assets" : [
+    {
+      "byteCount" : 105354,
+      "contentType" : "image/png",
+      "id" : "everyday-landscape-dark",
+      "path" : "assets/everyday-landscape-dark.png",
+      "role" : "texture",
+      "sha256" : "a824678ce9c5ad769c866c24fe1749d55fbd4e402240fd6ebc820ec9f5f9bb29"
+    },
+    {
+      "byteCount" : 103995,
+      "contentType" : "image/png",
+      "id" : "everyday-landscape-light",
+      "path" : "assets/everyday-landscape-light.png",
+      "role" : "texture",
+      "sha256" : "34eca20deacd768a109f1169e0c6737b0fdc9a94607312e88dcc18a16c57bfcf"
+    },
+    {
+      "byteCount" : 106835,
+      "contentType" : "image/png",
+      "id" : "everyday-portrait-dark",
+      "path" : "assets/everyday-portrait-dark.png",
+      "role" : "texture",
+      "sha256" : "b29cd5e2ac99ec80c97ae2721a7abc31654f78075a1b7edfd34a0c5d9d29cf8a"
+    },
+    {
+      "byteCount" : 105385,
+      "contentType" : "image/png",
+      "id" : "everyday-portrait-light",
+      "path" : "assets/everyday-portrait-light.png",
+      "role" : "texture",
+      "sha256" : "2dfeb227e3b65c11c63b86bdab370a1b13b08707f0cb875fceea25d1de208dd6"
+    }
+  ],
+  "author" : {
+    "name" : "Thumble Studio"
+  },
+  "compatibility" : {
+    "maximumAspectRatio" : 2.5,
+    "minimumAspectRatio" : 0.4,
+    "mode" : "template_aligned",
+    "orientations" : [
+      "landscape",
+      "portrait"
+    ],
+    "requiredFeatures" : [
+      "artwork_layers"
+    ],
+    "requiredRoles" : [
+      "menu",
+      "movement",
+      "primary_action",
+      "secondary_action",
+      "utility"
+    ],
+    "templates" : [
+      {
+        "maximumRevision" : 2,
+        "minimumRevision" : 2,
+        "templateID" : "snes"
+      }
+    ]
+  },
+  "identifier" : "com.thumble.everyday-play",
+  "kind" : "skin",
+  "license" : "MIT — original authored appearance",
+  "minimumAppVersion" : "1.0.0",
+  "name" : "Everyday Play",
+  "previews" : [
+
+  ],
+  "schema" : "com.codybontecou.pocketpad.skin-package",
+  "schemaVersion" : 2,
+  "skinPath" : "skin.json",
+  "skinSHA256" : "3010b4ff1fc4a94b2c23d677ea664a53fce91e9c0b341e33da5f2e97d14eb0b5",
+  "summary" : "Quiet mineral keycaps in individually machined sockets, with sea-glass and coral accents.",
+  "tags" : [
+    "classic-16-bit-v1",
+    "css",
+    "handcrafted",
+    "thumble-css-core-1"
+  ],
+  "version" : "1.0.0"
+}

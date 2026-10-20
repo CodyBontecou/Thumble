@@ -1,0 +1,71 @@
+steps:
+  - echo: Hold LT in Practice Mode; verify pressed trigger before native capture,
+      then release.
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Down
+          x: 0.1705
+          y: 0.77
+  - tool: await-ui-element
+    args:
+      condition: text
+      selector:
+        identifier: keypad.button.addc27cd-a7a7-501b-8876-dd90e59bc9c7
+      expectedText: Pressed
+      timeoutMs: 3000
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Up
+          x: 0.1705
+          y: 0.77
+  - echo: Hold RT in Practice Mode; verify pressed trigger before native capture,
+      then release.
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Down
+          x: 0.1705
+          y: 0.23
+  - tool: await-ui-element
+    args:
+      condition: text
+      selector:
+        identifier: keypad.button.a70c2ef4-9c06-51f2-bc97-a4cd590256d6
+      expectedText: Pressed
+      timeoutMs: 3000
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Up
+          x: 0.1705
+          y: 0.23
+  - echo: Hold BOTH in Practice Mode; verify pressed trigger before native capture,
+      then release.
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Down
+          x: 0.1705
+          y: 0.77
+          x2: 0.1705
+          y2: 0.23
+  - tool: await-ui-element
+    args:
+      condition: text
+      selector:
+        identifier: keypad.button.addc27cd-a7a7-501b-8876-dd90e59bc9c7
+      expectedText: Pressed
+      timeoutMs: 3000
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Up
+          x: 0.1705
+          y: 0.77
+          x2: 0.1705
+          y2: 0.23
+executionPrerequisite: Warband Command final package loaded in saved keypad,
+  Practice Mode enabled, connection bar pinned open, capture simulator physical
+  orientation matching landscape-right mirrored display.

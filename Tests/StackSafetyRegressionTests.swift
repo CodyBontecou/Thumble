@@ -30,6 +30,8 @@ final class StackSafetyRegressionTests: XCTestCase {
     }
 
     func testCriticalValueTypeInlineSizesStayWithinBudgets() {
+        assertInlineSize(ThumblePhoneLayoutBridgeRequest.self, atMost: 512)
+        assertInlineSize(ThumblePhoneLayoutBridgeResponse.self, atMost: 512)
         assertInlineSize(ThumbleSkinBridgeRequest.self, atMost: 512)
         assertInlineSize(ThumbleSkinBridgeResponse.self, atMost: 512)
         assertInlineSize(GamepadCustomization.self, atMost: 4 * 1024)
@@ -86,10 +88,32 @@ final class StackSafetyRegressionTests: XCTestCase {
         assertInlineSize(ThumbleCLIRuntimeBackend.ControlProjection.self, atMost: 1024)
         assertInlineSize(ThumbleCLIRuntimeBackend.Response.self, atMost: 2048)
         assertInlineSize(PortableProfileArtifact.self, atMost: 64)
+        assertInlineSize(ThumbleProfileArtifactBridgeRequest.self, atMost: 128)
+        assertInlineSize(ThumbleProfileArtifactBridgeResponse.self, atMost: 256)
         assertInlineSize(IOSBuilderArtifactPracticePreview.self, atMost: 64)
         assertInlineSize(IOSBuilderArtifactReview.self, atMost: 256)
         assertInlineSize(ThumbleLinkSnapshot.self, atMost: 512)
         assertInlineSize(ThumbleLinkImport.Plan.self, atMost: 1024)
+    }
+
+    func testPhoneLayoutReplacementAndRecoveryFitConstrainedThread() throws {
+        try runOnThread(stackSize: 512 * 1024, timeout: 30) {
+            let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            let fixture = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: root.appendingPathComponent("Host/fixtures/controller-templates/v1/productivityStarter.json"))) as? [String: Any])
+            let profile = try XCTUnwrap(fixture["profile"] as? [String: Any])
+            var layout = try XCTUnwrap(profile["customization"] as? [String: Any])
+            layout["deviceCanvas"] = ["frameID": "iphone-17-pro-portrait"]
+            layout["colorSchemePreference"] = "dark"
+            var fields: [String: Any] = ["schemaVersion": 1, "invocationID": UUID().uuidString, "phoneLayoutCommand": "replace",
+                "profileID": try XCTUnwrap(profile["id"]), "profile": profile, "customization": layout, "nowMillis": 42]
+            let request = try JSONDecoder().decodeUnique(ThumblePhoneLayoutBridgeRequest.self, from: JSONSerialization.data(withJSONObject: fields))
+            let result = try ThumblePhoneLayoutBridge.transform(request)
+            guard result.changed, !result.recovered, result.profile != nil else { throw StackTestError.reconciliationFailed }
+            fields.removeValue(forKey: "profile")
+            let recovery = try JSONDecoder().decodeUnique(ThumblePhoneLayoutBridgeRequest.self, from: JSONSerialization.data(withJSONObject: fields))
+            let recovered = try ThumblePhoneLayoutBridge.transform(recovery)
+            guard recovered.changed, recovered.recovered, recovered.profile != nil else { throw StackTestError.reconciliationFailed }
+        }
     }
 
     func testRuntimeLaunchProjectionDecodesOn512KiBStack() throws {
@@ -625,6 +649,18 @@ final class StackSafetyRegressionTests: XCTestCase {
         try runOnThread(stackSize: 512 * 1024, timeout: 30) {
             let artifact = try PortableProfileArtifact(validating: data)
             guard artifact.rawData == data, artifact.profiles.count == 1 else {
+                throw StackTestError.profileCodableMismatch
+            }
+            let requestData = try JSONSerialization.data(withJSONObject: [
+                "schemaVersion": 1, "invocationID": UUID().uuidString,
+                "profileArtifactCommand": "validate", "artifactBase64": data.base64EncodedString()
+            ])
+            let request = try JSONDecoder().decode(ThumbleProfileArtifactBridgeRequest.self, from: requestData)
+            let response = try ThumbleProfileArtifactBridge.validate(request)
+            let encodedResponse = try JSONEncoder().encode(response)
+            guard response.contentHash == artifact.contentHash.value,
+                  response.rawSHA256 == ProfileArtifactAdoptionMetadata.sha256(data),
+                  response.profiles?.count == 1, !encodedResponse.isEmpty else {
                 throw StackTestError.profileCodableMismatch
             }
         }
@@ -1416,6 +1452,25 @@ extension StackSafetyRegressionTests {
                   }), profile["landscapeCustomization"] == nil else {
                 throw StackTestError.unexpectedDecodedState
             }
+        }
+    }
+
+    func testLegacyHostInlineKeyboardProjectionRunsOn512KiBStack() throws {
+        let id = "00000000-0000-0000-0000-000000000201"
+        let output: [String: Any] = ["gamepadButtons": [], "keyboard": ["keyCode": 12, "modifiers": 1,
+            "sequence": [["keyCode": 12, "modifiers": 1], ["keyCode": 13, "modifiers": 0]]]]
+        let profile: [String: Any] = ["id": id, "name": "Legacy host", "customization": ["elements": [[
+            "id": "00000000-0000-0000-0000-000000000301", "kind": "button", "label": "Legacy",
+            "output": output, "defaultOutput": output, "partOutputs": []]]]]
+        let document: [String: Any] = ["profiles": [profile], "activeProfileID": id, "defaultProfileID": id,
+            "keyBindings": [:], "outputBindings": [:], "profileKeyBindings": [:], "profileOutputBindings": [:]]
+        let data = try JSONSerialization.data(withJSONObject: ["schemaVersion": 1, "nowMillis": 1, "document": document,
+            "operation": ["type": "profile.select", "profileID": id]])
+        try runOnThread(stackSize: 512 * 1024, timeout: 30) {
+            let request = try JSONDecoder().decodeUnique(ThumbleConfigurationBridgeRequest.self, from: data)
+            let response = try ThumbleConfigurationBridge.transform(request)
+            guard response.document.profiles == request.document.profiles else { throw StackTestError.unexpectedDecodedState }
+            _ = try JSONEncoder().encode(response)
         }
     }
 }
