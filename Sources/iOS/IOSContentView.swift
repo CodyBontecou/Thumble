@@ -1956,7 +1956,9 @@ private final class IOSKeypadEditRuntime: ObservableObject {
 
     func begin(with customization: GamepadCustomization, client: ControllerClient) {
         releaseInputs(client: client)
-        session = GamepadLayoutEditSession(entrySnapshot: customization)
+        let canonical = client.canonicalKeypadLayoutEdit(customization,
+            orientation: customization.deviceCanvas.editorDeviceFrame.orientation)
+        session = GamepadLayoutEditSession(entrySnapshot: canonical)
         feedback = client.isConnected ? "Changes save and sync to Mac" : "Changes save on this iPhone"
         refreshSessionState()
         isEditing = true
@@ -2014,10 +2016,11 @@ private final class IOSKeypadEditRuntime: ObservableObject {
         isFinal: Bool,
         client: ControllerClient
     ) {
+        let canonical = client.canonicalKeypadLayoutEdit(customization, orientation: orientation)
         if isFinal {
-            _ = session?.commit(customization)
+            _ = session?.commit(canonical)
         }
-        client.updateSelectedKeypadLayout(customization, orientation: orientation, sendsToMac: isFinal)
+        client.updateSelectedKeypadLayout(canonical, orientation: orientation, sendsToMac: isFinal)
         if isFinal {
             feedback = client.isConnected
                 ? "Saved — awaiting Mac confirmation"

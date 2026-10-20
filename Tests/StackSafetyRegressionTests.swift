@@ -32,6 +32,7 @@ final class StackSafetyRegressionTests: XCTestCase {
     func testCriticalValueTypeInlineSizesStayWithinBudgets() {
         assertInlineSize(GamepadControlAppearanceSnapshot.self, atMost: 8)
         assertInlineSize(GamepadAppearanceSnapshot.self, atMost: 8)
+        assertInlineSize(GamepadAppearanceBank.self, atMost: 8)
         assertInlineSize(ThumblePhoneLayoutBridgeRequest.self, atMost: 512)
         assertInlineSize(ThumblePhoneLayoutBridgeResponse.self, atMost: 512)
         assertInlineSize(ThumbleSkinBridgeRequest.self, atMost: 512)
@@ -129,6 +130,44 @@ final class StackSafetyRegressionTests: XCTestCase {
                 let resolved = profile.resolvedCustomization(for: .landscape, colorScheme: variant.colorScheme,
                     skinPackage: package, actionSet: variant.actionSet)
                 guard variant.appearance.applying(to: profile.customization) == resolved else {
+                    throw StackTestError.unexpectedDecodedState
+                }
+            }
+        }
+    }
+
+    func testOwnedAppearanceProfileCodecAndEditedResolutionFitConstrainedThread() throws {
+        try runOnThread(stackSize: 512 * 1024, timeout: 30) {
+            let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            let package = try ThumbleSkinPackageCodec.decode(Data(contentsOf: root.appendingPathComponent(
+                "Host/fixtures/legacy-skin-packages/solar-sumi-1.0.0-edbecde5b708.pocketpad")))
+            let original = GamepadControllerTemplate.arcadeStick.makeProfile()
+            var legacy = original
+            legacy.applySkin(package)
+            let variants = try ThumbleLegacyAppearanceMaterializer.materialize(legacy, orientation: .landscape, package: package)
+            let reference = try XCTUnwrap(variants.first { $0.colorScheme == .light && $0.actionSet == .base })
+            var profile = GamepadConfigurationProfile(name: "Owned stack",
+                primaryCustomization: reference.appearance.applying(to: original.customization))
+            profile.appearanceBank = try GamepadAppearanceBank(variants: variants)
+            let bytes = try JSONEncoder().encode(profile)
+            var restored = try JSONDecoder().decodeUnique(GamepadConfigurationProfile.self, from: bytes)
+            guard restored == profile else { throw StackTestError.profileCodableMismatch }
+            var edited = restored.customization
+            let button = try XCTUnwrap(edited.elements.first).inputID
+            var control = edited.buttonCustomization(for: button)
+            control.visualStyle = .init(normal: .init(shadowRadius: 17,
+                content: .init(pointing: .init(joystickRingStrokeWidth: 7))))
+            control.lightFillColor = .init(red: 0.9, green: 0.4, blue: 0.7)
+            control.icon = .text("Edited")
+            edited.setButtonCustomization(control, for: button)
+            restored.setCustomization(edited, for: .landscape)
+            for variant in variants {
+                let resolved = restored.resolvedCustomization(for: .landscape, colorScheme: variant.colorScheme,
+                    skinPackage: nil, actionSet: variant.actionSet)
+                guard resolved.buttonCustomization(for: button).visualStyle?.normal.shadowRadius == 17,
+                      resolved.resolvedPresentation(for: resolved.buttonCustomization(for: button), scheme: variant.colorScheme == .dark ? .dark : .light).icon == .text("Edited"),
+                      resolved.elements.map(\.id) == edited.elements.map(\.id),
+                      resolved.elements.map(\.output) == edited.elements.map(\.output) else {
                     throw StackTestError.unexpectedDecodedState
                 }
             }

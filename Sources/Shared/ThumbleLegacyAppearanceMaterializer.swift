@@ -10,11 +10,7 @@ public enum ThumbleLegacyAppearanceMaterializer {
         case missingResources([String])
     }
 
-    public struct Variant: Codable, Equatable, Sendable {
-        public let colorScheme: ThumbleSkinColorScheme
-        public let actionSet: ThumbleActionSet
-        public let appearance: GamepadAppearanceSnapshot
-    }
+    public typealias Variant = GamepadAppearanceBank.Variant
 
     /// Enumerate every state before removing the only installed copy of a package.
     /// A caller must back up the source, validate resources, reconcile pending edits,

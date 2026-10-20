@@ -1785,6 +1785,11 @@ final class ControllerClient: ObservableObject {
         updateLastSentEvent("launch: \(launchTarget.displayName)", immediately: true)
     }
 
+    func canonicalKeypadLayoutEdit(_ customization: GamepadCustomization,
+                                  orientation: GamepadEditorDeviceOrientation) -> GamepadCustomization {
+        selectedGamepadProfile?.canonicalPhoneLayoutEdit(customization, orientation: orientation) ?? customization
+    }
+
     func updateSelectedKeypadLayout(
         _ customization: GamepadCustomization,
         orientation: GamepadEditorDeviceOrientation,
@@ -1792,6 +1797,7 @@ final class ControllerClient: ObservableObject {
     ) {
         guard !isBuilderArtifactPracticePreviewActive else { return }
         var stampedCustomization = Self.customization(customization, matching: orientation).stampedForLocalUpdate
+        stampedCustomization = canonicalKeypadLayoutEdit(stampedCustomization, orientation: orientation)
         if let profile = selectedGamepadProfile,
            let package = skinPackage(for: profile.skinReference) {
             stampedCustomization = stampedCustomization.dehydratingAssets(from: package)

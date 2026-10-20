@@ -64,6 +64,10 @@ public struct ThumbleKeypadConfigurationExport: Codable, Equatable, Sendable {
 
         exportedAt = try container.decodeIfPresent(Int64.self, forKey: .exportedAt) ?? Date.currentMilliseconds
         let decodedProfiles = try container.decode([GamepadConfigurationProfile].self, forKey: .profiles)
+        guard decodedProfiles.allSatisfy({ $0.appearanceBank == nil }) else {
+            throw DecodingError.dataCorruptedError(forKey: .profiles, in: container,
+                debugDescription: "Profile-owned appearance banks require version-5 interchange; version-4 import cannot represent them.")
+        }
         guard !decodedProfiles.isEmpty else {
             throw DecodingError.dataCorruptedError(
                 forKey: .profiles,
@@ -78,6 +82,20 @@ public struct ThumbleKeypadConfigurationExport: Codable, Equatable, Sendable {
         profiles = decodedProfiles.map(\.normalized)
         activeProfileID = decodedActiveID
         defaultProfileID = decodedDefaultID
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        guard profiles.allSatisfy({ $0.appearanceBank == nil }) else {
+            throw EncodingError.invalidValue(version, .init(codingPath: encoder.codingPath,
+                debugDescription: "Profile-owned appearance banks require version-5 interchange, which is not enabled yet."))
+        }
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(schema, forKey: .schema)
+        try container.encode(version, forKey: .version)
+        try container.encode(exportedAt, forKey: .exportedAt)
+        try container.encode(profiles, forKey: .profiles)
+        try container.encodeIfPresent(activeProfileID, forKey: .activeProfileID)
+        try container.encodeIfPresent(defaultProfileID, forKey: .defaultProfileID)
     }
 
     /// Shared native/CLI byte boundary. A failed envelope or artifact is never

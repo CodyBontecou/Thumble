@@ -26,6 +26,12 @@ public struct GamepadControlAppearanceSnapshot: Codable, Equatable, Sendable {
         return result
     }
 
+    func preservingEdits(from edited: Self, baseline: Self, scheme: ThumbleSkinColorScheme?, fallbackAccent: GamepadAccentStyle) -> Self {
+        if edited == baseline { return self }
+        return Self(GamepadAppearanceEditMerge.control(edited.storage.value, baseline.storage.value, storage.value,
+            scheme: scheme, fallbackAccent: fallbackAccent))
+    }
+
     public static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.storage === rhs.storage || lhs.storage.value == rhs.storage.value
     }
@@ -123,6 +129,93 @@ public struct GamepadAppearanceSnapshot: Codable, Equatable, Sendable {
     public func applying(to customization: GamepadCustomization) -> GamepadCustomization {
         let workspace = ApplicationWorkspace(customization, content: storage.content)
         return workspace.apply()
+    }
+
+    /// Resolve another state while retaining only the user's changes from the
+    /// saved reference. Geometry and executable bindings always come from input.
+    public func applying(to customization: GamepadCustomization, preservingEditsFrom baseline: Self,
+                         colorScheme: ThumbleSkinColorScheme? = nil) -> GamepadCustomization {
+        let workspace = EditWorkspace(edited: Content(customization.normalized),
+            baseline: baseline.storage.content, target: storage.content, scheme: colorScheme)
+        return ApplicationWorkspace(customization, content: workspace.merge()).apply()
+    }
+
+    var controlIDs: Set<String> { Set(storage.content.controls.keys) }
+
+    private final class EditWorkspace {
+        let edited: Content
+        let baseline: Content
+        var result: Content
+        let scheme: ThumbleSkinColorScheme?
+        init(edited: Content, baseline: Content, target: Content, scheme: ThumbleSkinColorScheme?) {
+            self.edited = edited; self.baseline = baseline; result = target
+            self.scheme = scheme
+        }
+        func merge() -> Content {
+            if edited == baseline { return result }
+            mergeSurface()
+            mergeControls()
+            mergeLibraries()
+            return result
+        }
+        private func mergeSurface() {
+            apply(\.backgroundLightColor)
+            apply(\.backgroundDarkColor)
+            apply(\.backgroundFillStyle)
+            apply(\.backgroundLightFillStyle)
+            apply(\.backgroundDarkFillStyle)
+            apply(\.accentStyle)
+            apply(\.showsButtonLabels)
+            result.artworkLayers = GamepadAppearanceEditMerge.collection(edited.artworkLayers,
+                baseline.artworkLayers, result.artworkLayers, id: \.id, merge: Self.artwork)
+        }
+        private func apply<T: Equatable>(_ path: WritableKeyPath<Content, T>) {
+            result[keyPath: path] = GamepadAppearanceEditMerge.value(edited[keyPath: path],
+                baseline[keyPath: path], result[keyPath: path])
+        }
+        private func mergeControls() {
+            result.controls = controls(edited.controls, baseline.controls, result.controls)
+            result.topBar = result.topBar.preservingEdits(from: edited.topBar, baseline: baseline.topBar,
+                scheme: scheme, fallbackAccent: result.accentStyle)
+            result.controlBar = controls(edited.controlBar, baseline.controlBar, result.controlBar)
+        }
+        private func controls(_ edited: [String: GamepadControlAppearanceSnapshot],
+                                     _ baseline: [String: GamepadControlAppearanceSnapshot],
+                                     _ target: [String: GamepadControlAppearanceSnapshot]) -> [String: GamepadControlAppearanceSnapshot] {
+            var result = target
+            for (id, original) in baseline {
+                guard let current = edited[id] else { result[id] = nil; continue }
+                if let appearance = target[id] {
+                    result[id] = appearance.preservingEdits(from: current, baseline: original,
+                        scheme: scheme, fallbackAccent: self.result.accentStyle)
+                } else if current != original { result[id] = current }
+            }
+            for (id, current) in edited where baseline[id] == nil {
+                result[id] = target[id]?.preservingEdits(from: current, baseline: .init(.defaultValue),
+                    scheme: scheme, fallbackAccent: self.result.accentStyle) ?? current
+            }
+            return result
+        }
+        private func mergeLibraries() {
+            result.styleLibrary = GamepadStyleLibrary(styles: GamepadAppearanceEditMerge.collection(
+                edited.styleLibrary.styles, baseline.styleLibrary.styles, result.styleLibrary.styles,
+                id: \.id, merge: GamepadAppearanceEditMerge.token))
+            result.assetLibrary = GamepadAssetLibrary(assets: GamepadAppearanceEditMerge.collection(
+                edited.assetLibrary.assets, baseline.assetLibrary.assets, result.assetLibrary.assets,
+                id: \.id, merge: GamepadAppearanceEditMerge.value))
+        }
+        private static func artwork(_ edited: ThumbleSkinArtworkLayer, _ baseline: ThumbleSkinArtworkLayer,
+                                    _ target: ThumbleSkinArtworkLayer) -> ThumbleSkinArtworkLayer {
+            ThumbleSkinArtworkLayer(id: target.id,
+                plane: GamepadAppearanceEditMerge.value(edited.plane, baseline.plane, target.plane),
+                frame: GamepadAppearanceEditMerge.value(edited.frame, baseline.frame, target.frame),
+                fillStyle: GamepadAppearanceEditMerge.value(edited.fillStyle, baseline.fillStyle, target.fillStyle),
+                opacity: GamepadAppearanceEditMerge.value(edited.opacity, baseline.opacity, target.opacity),
+                rotationDegrees: GamepadAppearanceEditMerge.value(edited.rotationDegrees, baseline.rotationDegrees, target.rotationDegrees),
+                blendMode: GamepadAppearanceEditMerge.value(edited.blendMode, baseline.blendMode, target.blendMode),
+                zIndex: GamepadAppearanceEditMerge.value(edited.zIndex, baseline.zIndex, target.zIndex),
+                isHidden: GamepadAppearanceEditMerge.value(edited.isHidden, baseline.isHidden, target.isHidden))
+        }
     }
 
     /// Migration/export validation, deliberately separate from runtime application.

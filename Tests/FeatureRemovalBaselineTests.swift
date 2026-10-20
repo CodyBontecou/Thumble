@@ -222,11 +222,17 @@ final class FeatureRemovalBaselineTests: XCTestCase {
         XCTAssertTrue(compatibility.allowsTemplateArtwork, "\(compatibility.issues)")
         profile.applySkin(package)
         let variants = try ThumbleLegacyAppearanceMaterializer.materialize(profile, orientation: .landscape, package: package)
-        let reloaded = try JSONDecoder().decodeUnique([ThumbleLegacyAppearanceMaterializer.Variant].self,
-            from: JSONEncoder().encode(variants))
+        let reference = try XCTUnwrap(variants.first { $0.colorScheme == .light && $0.actionSet == .base })
+        var candidate = GamepadConfigurationProfile(id: profile.id, name: profile.name,
+            primaryCustomization: reference.appearance.applying(to: profile.customization(for: .landscape)),
+            outputMode: profile.outputMode, launchTarget: profile.launchTarget, updatedAt: profile.updatedAt)
+        candidate.appearanceBank = try GamepadAppearanceBank(variants: variants)
+        let reloaded = try JSONDecoder().decodeUnique(GamepadConfigurationProfile.self, from: JSONEncoder().encode(candidate))
+        XCTAssertNil(reloaded.skinReference)
+        XCTAssertEqual(reloaded, candidate)
         let output = root.appendingPathComponent("build/FeatureRemovalBaseline")
         try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
-        for variant in reloaded where variant.actionSet == .base {
+        for variant in try XCTUnwrap(reloaded.appearanceBank).variants where variant.actionSet == .base {
             let expected = profile.resolvedCustomization(for: .landscape, colorScheme: variant.colorScheme,
                 skinPackage: package, actionSet: variant.actionSet)
             guard case .image(let background)? = expected.backgroundFillStyle else {
@@ -234,7 +240,8 @@ final class FeatureRemovalBaselineTests: XCTestCase {
             }
             XCTAssertFalse(background.data?.isEmpty ?? true)
             XCTAssertFalse(expected.assetLibrary.assets.isEmpty)
-            let migrated = variant.appearance.applying(to: profile.customization)
+            let migrated = reloaded.resolvedCustomization(for: .landscape, colorScheme: variant.colorScheme,
+                skinPackage: nil, actionSet: variant.actionSet)
             XCTAssertEqual(migrated, expected)
             for state in [GamepadControlPresentationState.normal, .pressed] {
                 let originalPNG = try ThumbleNativeSkinPreviewRenderer.pngData(item: .init(title: "Archive migration",
@@ -242,6 +249,7 @@ final class FeatureRemovalBaselineTests: XCTestCase {
                 let migratedPNG = try ThumbleNativeSkinPreviewRenderer.pngData(item: .init(title: "Archive migration",
                     customization: migrated, colorScheme: variant.colorScheme, state: state), scale: 1)
                 XCTAssertEqual(SHA256.hash(data: originalPNG), SHA256.hash(data: migratedPNG))
+                try originalPNG.write(to: output.appendingPathComponent("source-solar-sumi-\(variant.colorScheme.rawValue)-\(state.rawValue).png"), options: .atomic)
                 try migratedPNG.write(to: output.appendingPathComponent("migrated-solar-sumi-\(variant.colorScheme.rawValue)-\(state.rawValue).png"), options: .atomic)
             }
         }

@@ -1,0 +1,45 @@
+{
+  "purpose": "Native profile-owned appearance bank preparation; no live profile migration or publication.",
+  "sourceArchive": "Host/fixtures/legacy-skin-packages/solar-sumi-1.0.0-edbecde5b708.pocketpad",
+  "sourceArchiveSHA256": "edbecde5b7085aff6c99d3ce671f61daba1a3db1b04bc3f0ef83b72301501947",
+  "profile": "Arcade Stick with explicit primary_action, secondary_action, utility and menu roles required by the archive.",
+  "test": "FeatureRemovalBaselineTests.testNativeArchiveAppearanceSurvivesPackageFreeExportAndReload",
+  "profileCodec": "GamepadConfigurationProfile.appearanceBank with canonical light/Base customization and no skin reference.",
+  "comparison": "Original package resolver versus full profile encode/decode and owned-bank runtime resolution, compared within the same native test run.",
+  "interchangeStatus": "Version-5 authority and retained peer support are unfinished; version-4 authority/import/export reject banks.",
+  "scale": 1,
+  "renders": [
+    {
+      "file": "migrated-solar-sumi-light-normal.png",
+      "colorScheme": "light",
+      "state": "normal",
+      "byteCount": 103668,
+      "sourceSHA256": "e7303bab51cbf95dfc1a2005dda02bddc95d3ed6f48a092af8524dc87e4e192a",
+      "migratedSHA256": "e7303bab51cbf95dfc1a2005dda02bddc95d3ed6f48a092af8524dc87e4e192a"
+    },
+    {
+      "file": "migrated-solar-sumi-light-pressed.png",
+      "colorScheme": "light",
+      "state": "pressed",
+      "byteCount": 72349,
+      "sourceSHA256": "b0b0f40ff6ea61eb8c03baded97fb47da088b485b6a7b10d2426851d5c90d7b0",
+      "migratedSHA256": "b0b0f40ff6ea61eb8c03baded97fb47da088b485b6a7b10d2426851d5c90d7b0"
+    },
+    {
+      "file": "migrated-solar-sumi-dark-normal.png",
+      "colorScheme": "dark",
+      "state": "normal",
+      "byteCount": 92381,
+      "sourceSHA256": "b9f52bf9ecbabaa2132b75b56f703b9be6a17c0eac9a91ead606a6cdc58a49b3",
+      "migratedSHA256": "b9f52bf9ecbabaa2132b75b56f703b9be6a17c0eac9a91ead606a6cdc58a49b3"
+    },
+    {
+      "file": "migrated-solar-sumi-dark-pressed.png",
+      "colorScheme": "dark",
+      "state": "pressed",
+      "byteCount": 68793,
+      "sourceSHA256": "5da905364ec5b8c72cffe0a6e6c7b4989843da9f7b8c58a66a4992f33f2af54f",
+      "migratedSHA256": "5da905364ec5b8c72cffe0a6e6c7b4989843da9f7b8c58a66a4992f33f2af54f"
+    }
+  ]
+}

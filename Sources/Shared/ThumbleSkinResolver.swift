@@ -824,7 +824,9 @@ final class ThumbleSkinEditorPreviewCache {
             return entry.customization
         }
         // Do not cache a missing package: a later install must be discoverable.
-        guard let package = loadPackage() else { return profile.customization(for: orientation) }
+        let usesOwnedAppearance = orientation == .landscape && profile.appearanceBank != nil
+        let package = usesOwnedAppearance ? nil : loadPackage()
+        guard package != nil || usesOwnedAppearance else { return profile.customization(for: orientation) }
         let customization = profile.resolvedCustomization(
             for: orientation, colorScheme: colorScheme, skinPackage: package)
         if entries.count >= 32 { entries.removeAll(keepingCapacity: true) }

@@ -5206,6 +5206,9 @@ public struct GamepadConfigurationProfile: Identifiable, Codable, Equatable, Sen
     private var storedPortraitSkinBaselineCustomization: GamepadProfileCustomizationBox?
     /// Installed appearance package. Geometry and executable bindings remain in this profile.
     public var skinReference: ThumbleSkinReference?
+    /// Package-independent landscape appearance. Only migration candidates use
+    /// this until version-5 interchange and peer capability checks are enabled.
+    public var appearanceBank: GamepadAppearanceBank?
     public var orientationPreference: GamepadProfileOrientationPreference
     public var outputMode: GamepadProfileOutputMode
     public var launchTarget: GamepadProfileLaunchTarget?
@@ -5269,6 +5272,7 @@ public struct GamepadConfigurationProfile: Identifiable, Codable, Equatable, Sen
         storedLandscapeSkinBaselineCustomization = landscapeSkinBaselineCustomization.map(GamepadProfileCustomizationBox.init)
         storedPortraitSkinBaselineCustomization = portraitSkinBaselineCustomization.map(GamepadProfileCustomizationBox.init)
         self.skinReference = skinReference
+        appearanceBank = nil
         self.orientationPreference = orientationPreference
         self.outputMode = outputMode
         self.launchTarget = launchTarget
@@ -5305,6 +5309,7 @@ public struct GamepadConfigurationProfile: Identifiable, Codable, Equatable, Sen
         storedLandscapeSkinBaselineCustomization = nil
         storedPortraitSkinBaselineCustomization = nil
         self.skinReference = skinReference
+        appearanceBank = nil
         self.orientationPreference = orientationPreference
         self.outputMode = outputMode
         self.launchTarget = launchTarget
@@ -5335,6 +5340,7 @@ public struct GamepadConfigurationProfile: Identifiable, Codable, Equatable, Sen
         var landscapeCustomization: GamepadCustomization?
         var portraitCustomization: GamepadCustomization?
         var skinReference: ThumbleSkinReference?
+        var appearanceBank: GamepadAppearanceBank?
         var skinBaselineCustomization: GamepadCustomization?
         var landscapeSkinBaselineCustomization: GamepadCustomization?
         var portraitSkinBaselineCustomization: GamepadCustomization?
@@ -5354,6 +5360,7 @@ public struct GamepadConfigurationProfile: Identifiable, Codable, Equatable, Sen
         storedLandscapeSkinBaselineCustomization = nil
         storedPortraitSkinBaselineCustomization = nil
         skinReference = workspace.skinReference
+        appearanceBank = workspace.appearanceBank
         orientationPreference = workspace.orientationPreference
         outputMode = workspace.outputMode
         launchTarget = workspace.launchTarget
@@ -5469,6 +5476,7 @@ public struct GamepadConfigurationProfile: Identifiable, Codable, Equatable, Sen
         into workspace: DecodingWorkspace
     ) throws {
         workspace.skinReference = try container.decodeIfPresent(ThumbleSkinReference.self, forKey: .skinReference)
+        workspace.appearanceBank = try container.decodeIfPresent(GamepadAppearanceBank.self, forKey: .appearanceBank)
         workspace.orientationPreference = try container.decodeIfPresent(GamepadProfileOrientationPreference.self, forKey: .orientationPreference) ?? .automatic
         // Profiles saved before output modes had their Mac output bindings stored next
         // to the profile, not inside it. Treat legacy profiles as custom so any
@@ -5542,6 +5550,7 @@ public struct GamepadConfigurationProfile: Identifiable, Codable, Equatable, Sen
         into container: inout KeyedEncodingContainer<CodingKeys>
     ) throws {
         try container.encodeIfPresent(skinReference, forKey: .skinReference)
+        try container.encodeIfPresent(appearanceBank, forKey: .appearanceBank)
         try container.encode(orientationPreference, forKey: .orientationPreference)
         try container.encode(outputMode, forKey: .outputMode)
         try container.encodeIfPresent(launchTarget?.normalized, forKey: .launchTarget)
@@ -5578,6 +5587,7 @@ public struct GamepadConfigurationProfile: Identifiable, Codable, Equatable, Sen
             if lhs.id != rhs.id { return false }
             if lhs.name != rhs.name { return false }
             if lhs.skinReference != rhs.skinReference { return false }
+            if lhs.appearanceBank != rhs.appearanceBank { return false }
             if lhs.orientationPreference != rhs.orientationPreference { return false }
             if lhs.outputMode != rhs.outputMode { return false }
             if lhs.launchTarget != rhs.launchTarget { return false }
@@ -5742,6 +5752,9 @@ public struct GamepadConfigurationProfile: Identifiable, Codable, Equatable, Sen
         actionSet: ThumbleActionSet = .base
     ) -> GamepadCustomization {
         let local = customization(for: orientation)
+        if orientation == .landscape, let appearanceBank {
+            return appearanceBank.resolve(local, colorScheme: colorScheme, actionSet: actionSet)
+        }
         guard let skinReference,
               let skinPackage,
               skinPackage.manifest.identifier == skinReference.identifier,
@@ -5755,6 +5768,15 @@ public struct GamepadConfigurationProfile: Identifiable, Codable, Equatable, Sen
             overrideBaseline: skinBaseline(for: orientation),
             actionSet: actionSet
         )
+    }
+
+    /// The phone layout editor changes geometry, visibility and membership. Its
+    /// canvas may display another scheme/held-trigger state; keep that transient
+    /// paint out of saved geometry edits and their undo/offline snapshots.
+    func canonicalPhoneLayoutEdit(_ incoming: GamepadCustomization,
+                                  orientation: GamepadEditorDeviceOrientation) -> GamepadCustomization {
+        guard orientation == .landscape, appearanceBank != nil else { return incoming }
+        return GamepadAppearanceSnapshot(customization(for: orientation)).applying(to: incoming)
     }
 
     mutating func applySkin(
@@ -6163,6 +6185,7 @@ public struct GamepadConfigurationProfile: Identifiable, Codable, Equatable, Sen
         case landscapeCustomization
         case portraitCustomization
         case skinReference
+        case appearanceBank
         case skinBaselineCustomization
         case landscapeSkinBaselineCustomization
         case portraitSkinBaselineCustomization

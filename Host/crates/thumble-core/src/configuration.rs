@@ -208,6 +208,15 @@ impl ConfigurationView<'_> {
             let object = profile
                 .as_object()
                 .ok_or(ConfigurationDocumentError::MalformedProfile)?;
+            // Native migration candidates can carry owned appearance banks, but
+            // the current authority/phone interchange still speaks version 4.
+            // Do not commit or export a candidate that older clients would flatten.
+            if object
+                .get("appearanceBank")
+                .is_some_and(|bank| !bank.is_null())
+            {
+                return Err(ConfigurationDocumentError::UnsupportedAppearanceBank);
+            }
             if object.get("outputMode").is_some_and(|mode| {
                 !mode.is_null()
                     && !matches!(mode.as_str(), Some("keyboard" | "controller" | "custom"))
@@ -360,6 +369,7 @@ pub enum ConfigurationDocumentError {
     InvalidProfileCount(usize),
     TooManyProfileBindingMaps,
     MalformedProfile,
+    UnsupportedAppearanceBank,
     InvalidProfileId,
     DuplicateProfileId,
     InvalidProfileName,
@@ -389,6 +399,7 @@ impl fmt::Display for ConfigurationDocumentError {
             ),
             Self::TooManyProfileBindingMaps => formatter.write_str("configuration has too many profile binding maps"),
             Self::MalformedProfile => formatter.write_str("configuration contains a malformed profile"),
+            Self::UnsupportedAppearanceBank => formatter.write_str("profile-owned appearance banks require version-5 interchange, which is not enabled yet"),
             Self::InvalidProfileId => formatter.write_str("configuration contains an invalid profile ID"),
             Self::DuplicateProfileId => formatter.write_str("configuration contains duplicate profile IDs"),
             Self::InvalidProfileName => formatter.write_str("configuration contains an invalid profile name"),
@@ -412,6 +423,31 @@ impl Error for ConfigurationDocumentError {}
 mod tests {
     use super::*;
     use crate::TrustedClient;
+
+    #[test]
+    fn owned_appearance_candidates_cannot_enter_version_four_authority() {
+        let mut state = PersistentState::minimal("server-id").unwrap();
+        let original = state.clone();
+        let mut document = ConfigurationDocument::from_state(&state).unwrap();
+        document.profiles[0]["appearanceBank"] =
+            serde_json::json!({"schemaVersion": 1, "variants": []});
+        assert_eq!(
+            document.validate(),
+            Err(ConfigurationDocumentError::UnsupportedAppearanceBank)
+        );
+        assert_eq!(
+            document.install_into(&mut state),
+            Err(ConfigurationDocumentError::UnsupportedAppearanceBank)
+        );
+        assert_eq!(state, original);
+        state.profiles[0]["appearanceBank"] = document.profiles[0]["appearanceBank"].clone();
+        assert_eq!(
+            ConfigurationDocument::from_state(&state),
+            Err(ConfigurationDocumentError::UnsupportedAppearanceBank)
+        );
+        document.profiles[0]["appearanceBank"] = Value::Null;
+        document.validate().unwrap();
+    }
 
     #[test]
     fn document_round_trip_changes_only_configuration_fields() {

@@ -16,6 +16,14 @@ Edits to retained appearance must affect the rendered result immediately. Do not
 
 Copy all required resources into the destination before dropping the skin reference and baselines. Verify both declared references and data-bearing image/icon fills. If a package is missing, mismatched, corrupt, or cannot provide a required resource, return recovery-required with the original profile preserved. Current detach-without-package fallback is not an acceptable migration.
 
+### Native preparation representation
+
+`GamepadAppearanceBank` currently provides the native staging representation: exactly eight scheme/action variants, a light/Base edit reference, consistent control identities, and validated resource references. `GamepadConfigurationProfile.appearanceBank` participates in native Codable/equality and landscape resolution. Typed three-way comparison applies subsequent ordinary edits without serializing JSON on the input/render path. State/content/pointing properties merge independently; style, asset and artwork entries match by identity. A new reusable-style selection discards unchanged inherited inline paint, while direct fill/icon overrides remain visible.
+
+Phone geometry editing canonicalizes appearance before recording entry, undo, committed and offline snapshots. A rendered dark or held-trigger canvas must never become a new immutable appearance reference merely because a control moved or was restored by Undo.
+
+This is not an activated upgrade path. Version-4 native configuration import/export and the current Rust authority reject non-null banks. Before accepting a bank into live authority, implement the retained peers and version-5 capability handshake, preserve raw unknown metadata, consolidate repeated resource bytes, enforce the final document byte limits, and complete the backup/compare-and-swap recovery transaction below. Do not advertise version 5 or enable automatic migration merely because native profile roundtrips pass.
+
 ## Layout conversion
 
 Prefer an explicit landscape variant, then an existing landscape base layout. If only portrait exists, convert deterministically into the supported landscape canvas with unchanged control IDs, bindings, appearance, and groups; include a review item for manual inspection. Keep the exact portrait original in the backup. Geometry conversion must preserve all controls even when layout-quality warnings remain.

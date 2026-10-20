@@ -29,6 +29,8 @@ IOS_RUNTIME_OBJECT_NAMES = (
     "IOSLocalKeypadUX.o",
     "GamepadAppearance.o",
     "GamepadAppearanceSnapshot.o",
+    "GamepadAppearanceBank.o",
+    "GamepadAppearanceEditMerge.o",
     "ThumbleLegacyAppearanceMaterializer.o",
     "ThumbleSkin.o",
     "ThumbleSkinPackage.o",
@@ -165,6 +167,8 @@ def is_shared_runtime_symbol(name: str) -> bool:
         owner in name
         for owner in (
             ".GamepadAppearanceSnapshot.",
+            ".GamepadAppearanceBank.",
+            ".GamepadAppearanceEditMerge.",
             ".GamepadControlAppearanceSnapshot.",
             ".ThumbleLegacyAppearanceMaterializer.",
         )
