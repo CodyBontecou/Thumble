@@ -66,6 +66,10 @@ SUBCOMMAND_FUNCTIONS = {
 }
 
 
+# This dispatcher declares canonical commands in a guard rather than a switch.
+GUARDED_SUBCOMMAND_FUNCTIONS = {"sharedBuild": "shared-build"}
+
+
 def fail(message: str) -> None:
     print(f"MCP CLI parity verification failed: {message}", file=sys.stderr)
     raise SystemExit(1)
@@ -94,6 +98,15 @@ def direct_string_cases(body: str) -> list[str]:
         if match:
             cases.append(match.group(1))
     return cases
+
+
+def guarded_string_cases(body: str) -> list[str]:
+    match = re.search(
+        r'guard let command = arguments\.first,\s*\[([^\]]+)\]\.contains\(command\)', body
+    )
+    if match is None:
+        fail("missing expected guarded CLI subcommand dispatcher")
+    return re.findall(r'"([^"\n]+)"', match.group(1))
 
 
 def schema_keys(value: Any) -> set[str]:
@@ -178,6 +191,11 @@ def main() -> None:
     for function_name, root in SUBCOMMAND_FUNCTIONS.items():
         body = function_body(source, function_name)
         for subcommand in direct_string_cases(body):
+            path = f"{root} {subcommand}"
+            if not any(candidate == path or candidate.startswith(path + " ") for candidate in cli_paths):
+                missing_subcommands.append(path)
+    for function_name, root in GUARDED_SUBCOMMAND_FUNCTIONS.items():
+        for subcommand in guarded_string_cases(function_body(source, function_name)):
             path = f"{root} {subcommand}"
             if not any(candidate == path or candidate.startswith(path + " ") for candidate in cli_paths):
                 missing_subcommands.append(path)
