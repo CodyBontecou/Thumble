@@ -1,0 +1,14 @@
+# Native and Android version-5 readers
+
+Both explicit readers consume the same 41-row format contract as Rust. They preserve exact original UTF-8 bytes, active/default identities, bindings and opaque metadata independently of mutable/normalized native projections. Tests resolve all eight appearance states without package lookup, verify embedded bytes, mutate returned projections without changing originals, reject malformed/oversized inputs, and retain legacy format offers. Additional contract rows reject duplicate controls and unsupported kinds. Android validates resource-expanded layouts using retained strict control semantics and preserves valid names beyond its legacy 160-character display limit.
+
+Final verification:
+
+- 3 focused native tests pass against the expanded matrix and exact 8 MiB/one-byte-over boundaries. The full required Apple stack gate passes 38 constrained-stack tests and macOS/iOS Debug builds. The new immutable document is 8 bytes inline and its object/symbols are included in existing static budgets; no budget was raised.
+- Android passes all 207 unit tests and `:app:assembleDebugAndroidTest`. Instrumentation was compiled, not run.
+- Full Rust host/MCP gate passes formatting, clippy, 496 tests and retained target checks; three native-dependent tests remain ignored. All three readers consume the same fixture.
+- Fixture verification passes with unchanged original baseline/resource/template inputs and the expanded contract's pinned hashes.
+
+The first full Apple attempt in the shared checkout passed its stack tests but failed to build unrelated in-progress WoW import code: `Sources/Mac/ThumbleLinkImport.swift` referenced an undefined `ThumbleLinkControllerLayout`. Those edits were left untouched. Final native verification therefore ran in an isolated archive of committed base `bbc285a` with only this change's source/project/fixture overlays. `native-snapshot.json` records every overlaid SHA-256 and the snapshot location; each hash was compared to the pending commit, excluding the unrelated warrior fixture project references. This proves the committed reader change builds against its base. It does not claim the concurrent uncommitted checkout builds. The first snapshot setup used a Python tar API unavailable in the system interpreter; it was replaced with the system tar extraction before verification.
+
+The readers are not wired to shipping import/startup/sync. Source bytes remain authoritative; rendering projections must not be reconstructed into v4 exports. Native/Android file editing/writing, portable-export policy, actual transfer admission, backed-up migration/rollback and remaining skin/portrait removal still require work. No user profiles were migrated, no version-5 offer was advertised, and physical haptics/input latency/live WoW were not tested in this batch. Full temporary log hashes and selected excerpts are adjacent.

@@ -1,0 +1,18 @@
+{
+  "baseCommit": "bbc285a2fd5c8350c74fcce7973db8656d8442bb",
+  "snapshotPath": "/private/tmp/thumble-owned-readers-l9kzb9pr",
+  "overlaidFiles": {
+    "Sources/Shared/OwnedConfigurationDocument.swift": "c3e3234aaea49f057341a0ffc395d2e2ba84ae1e9a2066c611c87001e09fbff5",
+    "Sources/Shared/PortableProfileArtifact.swift": "94b87f5d89579f10b7262edb5f6a513484a91c2095012c81522312e05e02ac54",
+    "Tests/OwnedConfigurationDocumentTests.swift": "355e8b7a1f0c69910606c0be11e9df009edaee9510559e026b52bab30a22fd3b",
+    "Tests/StackSafetyRegressionTests.swift": "cc6f0853375f4d01a70282159da8e5f115ee11b937b743ba55d2a697ea493a6a",
+    "scripts/check-controller-stack-frames.py": "9ea900d79a77a8fcccd2a128311ffd23579d1f99fcc16302169d38f7007c0420",
+    "Host/fixtures/owned-configuration/v1/cases.json": "08b78eb7069e10a95e26c2b50c12c7720883de4002b6346b659c00ab0420cef0",
+    "Host/fixtures/owned-configuration/v1/manifest.json": "f066f685c4dbba32e5aad4db76ad75bf8b32d0baf78628de1d22aeda06ac2b0e",
+    "Thumble.xcodeproj/project.pbxproj": "c75a2680e8791c1f1551565bc1c0b06d64c50879e7035ef765d9707d8096b78d"
+  },
+  "excludedUnrelatedChanges": [
+    "in-progress Thumble Link/website/Android credential work",
+    "warrior-classic-era project references"
+  ]
+}

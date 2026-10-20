@@ -407,6 +407,333 @@
       "action": "set",
       "value": {},
       "allowed": false
+    },
+    {
+      "name": "duplicate-control-identity",
+      "path": [
+        "profiles",
+        0,
+        "customization",
+        "elements"
+      ],
+      "action": "set",
+      "value": [
+        {
+          "defaultOutput": {
+            "gamepadButtons": [
+              "select"
+            ],
+            "keyboard": {
+              "keyCode": 48,
+              "modifiersRawValue": 0
+            }
+          },
+          "id": "00000000-0000-0000-0000-000000000109",
+          "kind": "button",
+          "label": "Coin",
+          "layout": {
+            "centerX": 0.4,
+            "centerY": 0.2,
+            "fillColor": {
+              "alpha": 1,
+              "blue": 0.3176470588235294,
+              "green": 0.2549019607843137,
+              "red": 0.21568627450980393
+            },
+            "fillStyle": {
+              "image": {
+                "assetID": "one",
+                "contentMode": "fill",
+                "contrast": 0,
+                "data": {
+                  "resourceSHA256": "8810c61dc998e2ef39791e76b6377bcb78d6b99809e08aeff51ba98216529ece"
+                },
+                "exposure": 0,
+                "highlights": 0,
+                "opacity": 1,
+                "saturation": 0,
+                "shadows": 0,
+                "temperature": 0,
+                "tint": 0
+              },
+              "kind": "image"
+            },
+            "heightScale": 0.38,
+            "icon": {
+              "placement": "center",
+              "renderingMode": "template",
+              "scale": 1,
+              "source": "text",
+              "value": "light/base"
+            },
+            "isHidden": false,
+            "isLocationLocked": false,
+            "rotationDegrees": 0,
+            "shadowStrength": 0.75,
+            "shape": "capsule",
+            "visualStyle": {
+              "active": {
+                "fillStyle": {
+                  "image": {
+                    "assetID": "one",
+                    "contentMode": "fill",
+                    "contrast": 0,
+                    "data": {
+                      "resourceSHA256": "8810c61dc998e2ef39791e76b6377bcb78d6b99809e08aeff51ba98216529ece"
+                    },
+                    "exposure": 0,
+                    "highlights": 0,
+                    "opacity": 1,
+                    "saturation": 0,
+                    "shadows": 0,
+                    "temperature": 0,
+                    "tint": 0
+                  },
+                  "kind": "image"
+                }
+              },
+              "disabled": {
+                "fillStyle": {
+                  "image": {
+                    "assetID": "one",
+                    "contentMode": "fill",
+                    "contrast": 0,
+                    "data": {
+                      "resourceSHA256": "8810c61dc998e2ef39791e76b6377bcb78d6b99809e08aeff51ba98216529ece"
+                    },
+                    "exposure": 0,
+                    "highlights": 0,
+                    "opacity": 1,
+                    "saturation": 0,
+                    "shadows": 0,
+                    "temperature": 0,
+                    "tint": 0
+                  },
+                  "kind": "image"
+                }
+              },
+              "normal": {
+                "fillStyle": {
+                  "image": {
+                    "assetID": "one",
+                    "contentMode": "fill",
+                    "contrast": 0,
+                    "data": {
+                      "resourceSHA256": "8810c61dc998e2ef39791e76b6377bcb78d6b99809e08aeff51ba98216529ece"
+                    },
+                    "exposure": 0,
+                    "highlights": 0,
+                    "opacity": 1,
+                    "saturation": 0,
+                    "shadows": 0,
+                    "temperature": 0,
+                    "tint": 0
+                  },
+                  "kind": "image"
+                }
+              },
+              "pressed": {
+                "fillStyle": {
+                  "image": {
+                    "assetID": "one",
+                    "contentMode": "fill",
+                    "contrast": 0,
+                    "data": {
+                      "resourceSHA256": "8810c61dc998e2ef39791e76b6377bcb78d6b99809e08aeff51ba98216529ece"
+                    },
+                    "exposure": 0,
+                    "highlights": 0,
+                    "opacity": 1,
+                    "saturation": 0,
+                    "shadows": 0,
+                    "temperature": 0,
+                    "tint": 0
+                  },
+                  "kind": "image"
+                }
+              }
+            },
+            "widthScale": 0.52,
+            "zIndex": 0
+          },
+          "output": {
+            "gamepadButtons": [
+              "select"
+            ],
+            "keyboard": {
+              "keyCode": 48,
+              "modifiersRawValue": 0
+            }
+          },
+          "partOutputs": [],
+          "visualRole": "custom"
+        },
+        {
+          "defaultOutput": {
+            "gamepadButtons": [
+              "select"
+            ],
+            "keyboard": {
+              "keyCode": 48,
+              "modifiersRawValue": 0
+            }
+          },
+          "id": "00000000-0000-0000-0000-000000000109",
+          "kind": "button",
+          "label": "Coin",
+          "layout": {
+            "centerX": 0.4,
+            "centerY": 0.2,
+            "fillColor": {
+              "alpha": 1,
+              "blue": 0.3176470588235294,
+              "green": 0.2549019607843137,
+              "red": 0.21568627450980393
+            },
+            "fillStyle": {
+              "image": {
+                "assetID": "one",
+                "contentMode": "fill",
+                "contrast": 0,
+                "data": {
+                  "resourceSHA256": "8810c61dc998e2ef39791e76b6377bcb78d6b99809e08aeff51ba98216529ece"
+                },
+                "exposure": 0,
+                "highlights": 0,
+                "opacity": 1,
+                "saturation": 0,
+                "shadows": 0,
+                "temperature": 0,
+                "tint": 0
+              },
+              "kind": "image"
+            },
+            "heightScale": 0.38,
+            "icon": {
+              "placement": "center",
+              "renderingMode": "template",
+              "scale": 1,
+              "source": "text",
+              "value": "light/base"
+            },
+            "isHidden": false,
+            "isLocationLocked": false,
+            "rotationDegrees": 0,
+            "shadowStrength": 0.75,
+            "shape": "capsule",
+            "visualStyle": {
+              "active": {
+                "fillStyle": {
+                  "image": {
+                    "assetID": "one",
+                    "contentMode": "fill",
+                    "contrast": 0,
+                    "data": {
+                      "resourceSHA256": "8810c61dc998e2ef39791e76b6377bcb78d6b99809e08aeff51ba98216529ece"
+                    },
+                    "exposure": 0,
+                    "highlights": 0,
+                    "opacity": 1,
+                    "saturation": 0,
+                    "shadows": 0,
+                    "temperature": 0,
+                    "tint": 0
+                  },
+                  "kind": "image"
+                }
+              },
+              "disabled": {
+                "fillStyle": {
+                  "image": {
+                    "assetID": "one",
+                    "contentMode": "fill",
+                    "contrast": 0,
+                    "data": {
+                      "resourceSHA256": "8810c61dc998e2ef39791e76b6377bcb78d6b99809e08aeff51ba98216529ece"
+                    },
+                    "exposure": 0,
+                    "highlights": 0,
+                    "opacity": 1,
+                    "saturation": 0,
+                    "shadows": 0,
+                    "temperature": 0,
+                    "tint": 0
+                  },
+                  "kind": "image"
+                }
+              },
+              "normal": {
+                "fillStyle": {
+                  "image": {
+                    "assetID": "one",
+                    "contentMode": "fill",
+                    "contrast": 0,
+                    "data": {
+                      "resourceSHA256": "8810c61dc998e2ef39791e76b6377bcb78d6b99809e08aeff51ba98216529ece"
+                    },
+                    "exposure": 0,
+                    "highlights": 0,
+                    "opacity": 1,
+                    "saturation": 0,
+                    "shadows": 0,
+                    "temperature": 0,
+                    "tint": 0
+                  },
+                  "kind": "image"
+                }
+              },
+              "pressed": {
+                "fillStyle": {
+                  "image": {
+                    "assetID": "one",
+                    "contentMode": "fill",
+                    "contrast": 0,
+                    "data": {
+                      "resourceSHA256": "8810c61dc998e2ef39791e76b6377bcb78d6b99809e08aeff51ba98216529ece"
+                    },
+                    "exposure": 0,
+                    "highlights": 0,
+                    "opacity": 1,
+                    "saturation": 0,
+                    "shadows": 0,
+                    "temperature": 0,
+                    "tint": 0
+                  },
+                  "kind": "image"
+                }
+              }
+            },
+            "widthScale": 0.52,
+            "zIndex": 0
+          },
+          "output": {
+            "gamepadButtons": [
+              "select"
+            ],
+            "keyboard": {
+              "keyCode": 48,
+              "modifiersRawValue": 0
+            }
+          },
+          "partOutputs": [],
+          "visualRole": "custom"
+        }
+      ],
+      "allowed": false
+    },
+    {
+      "name": "unsupported-control-kind",
+      "path": [
+        "profiles",
+        0,
+        "customization",
+        "elements",
+        0,
+        "kind"
+      ],
+      "action": "set",
+      "value": "unsupported_input",
+      "allowed": false
     }
   ]
 }

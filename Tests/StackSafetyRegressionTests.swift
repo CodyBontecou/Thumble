@@ -211,6 +211,19 @@ final class StackSafetyRegressionTests: XCTestCase {
         }
     }
 
+    func testOwnedConfigurationReaderFitsConstrainedThread() throws {
+        assertInlineSize(ThumbleOwnedConfigurationDocument.self, atMost: 8)
+        try runOnThread(stackSize: 512 * 1024, timeout: 30) {
+            let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            let bytes = try Data(contentsOf: root.appendingPathComponent("Host/fixtures/owned-configuration/v1/document.json"))
+            let document = try ThumbleOwnedConfigurationDocument(validating: bytes)
+            guard document.originalData == bytes, document.projectedProfiles.count == 2,
+                  document.projectedProfiles.first?.appearanceBank?.variants.count == 8 else {
+                throw StackTestError.unexpectedDecodedState
+            }
+        }
+    }
+
     func testOwnedResourceWireAndSavedStartupFitConstrainedThread() throws {
         try runOnThread(stackSize: 512 * 1024, timeout: 30) {
             try OwnedResourceTransportJob().run()

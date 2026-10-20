@@ -125,7 +125,7 @@ internal class PortableProfileArtifact private constructor(private val bytes: By
         private fun optionalEnum(raw: JSONObject,key: String,allowed: Set<String>) {
             if(raw.has(key) && !raw.isNull(key) && text(raw.get(key)) !in allowed) bad()
         }
-        private fun keyBinding(binding: JSONObject) {
+        internal fun keyBinding(binding: JSONObject) {
             fun stroke(value: JSONObject) {
                 if(integer(value.opt("keyCode")) !in 0..65535) bad()
                 if(value.has("modifiers") && value.has("modifiersRawValue")) bad()
@@ -139,7 +139,7 @@ internal class PortableProfileArtifact private constructor(private val bytes: By
                 repeat(sequence.length()) { stroke(obj(sequence.get(it))) }
             }
         }
-        private fun outputBinding(binding: JSONObject) {
+        internal fun outputBinding(binding: JSONObject) {
             if(binding.has("keyboard") && !binding.isNull("keyboard")) keyBinding(obj(binding.get("keyboard")))
             if(binding.has("gamepadButtons")) {
                 val buttons=binding.get("gamepadButtons") as? JSONArray ?: bad()
@@ -201,7 +201,7 @@ internal class PortableProfileArtifact private constructor(private val bytes: By
             }
         }
         /** Native known-field types, declarations and appearance ownership; raw bytes stay intact. */
-        private fun validateLayout(layout: JSONObject) {
+        internal fun validateLayout(layout: JSONObject) {
             optionalEnum(layout,"layoutMode",setOf("standard","southpaw"));optionalEnum(layout,"controlScale",setOf("compact","standard","large"))
             optionalEnum(layout,"colorSchemePreference",setOf("system","light","dark"));optionalEnum(layout,"accentStyle",setOf("monochrome","blue","green","purple","pink","amber"))
             if(layout.has("showsButtonLabels") && !layout.isNull("showsButtonLabels") && layout.get("showsButtonLabels") !is Boolean) bad()

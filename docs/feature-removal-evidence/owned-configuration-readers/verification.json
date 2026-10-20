@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-20",
+  "contractCases": 41,
+  "nativeFocusedTests": 3,
+  "constrainedStackTests": 38,
+  "nativeInlineBytes": 8,
+  "advertisedFormats": [
+    4
+  ],
+  "logs": {
+    "nativeTests": {
+      "path": "/tmp/thumble-owned-readers-isolated-tests.log",
+      "sha256": "490267089152d8a8864e5b3ef38f95ac4cb8cde5d00c88358e90ff64d65133f1"
+    },
+    "nativeStack": {
+      "path": "/tmp/thumble-owned-readers-isolated-stack.log",
+      "sha256": "4947b9d6fba8f01ac9f96d34f14ee1c6d59690cb42d7abe3a92880a1ca40d78b"
+    },
+    "androidGate": {
+      "path": "/tmp/thumble-owned-readers-android-final2.log",
+      "sha256": "c63442748daf5648929dcf7cd5a3a0a9363ed562cb6a5075431c97e25c385df5"
+    },
+    "rustGate": {
+      "path": "/tmp/thumble-owned-readers-rust.log",
+      "sha256": "70d55b8f870a00cd5bb1be6b9025d29a7358ebb80dbb1078f370560a26b61378"
+    },
+    "sharedCheckoutAttempt": {
+      "path": "/tmp/thumble-owned-readers-stack.log",
+      "sha256": "f0a13db92e77b333889f0fb0e6c0ba635c868120a294e766dcd43971cb983229"
+    }
+  },
+  "rustPassed": 496,
+  "rustIgnored": 3,
+  "androidTests": 207
+}

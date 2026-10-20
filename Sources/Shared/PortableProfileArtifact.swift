@@ -298,7 +298,7 @@ public struct PortableProfileArtifact: Sendable {
         )
     }
 
-    private static func validateBindingMaps(
+    static func validateBindingMaps(
         _ maps: [String: Any],
         declaredByProfile: [String: Set<UUID>],
         output: Bool
@@ -399,14 +399,14 @@ public struct PortableProfileArtifact: Sendable {
         }
     }
 
-    private static func canonicalUUID(_ string: String) -> UUID? {
+    static func canonicalUUID(_ string: String) -> UUID? {
         guard string.utf8.count == 36, let uuid = UUID(uuidString: string),
               uuid.uuidString.lowercased() == string.lowercased()
         else { return nil }
         return uuid
     }
 
-    private static func exactInteger(_ value: Any?) -> Int64? {
+    static func exactInteger(_ value: Any?) -> Int64? {
         guard let number = value as? NSNumber, !isBoolean(number) else { return nil }
         let double = number.doubleValue
         guard double.isFinite, double.rounded(.towardZero) == double,

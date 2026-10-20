@@ -1,0 +1,7 @@
+Test Case '-[ThumbleCLITests.OwnedConfigurationDocumentTests testDuplicateKeysInvalidUTF8AndExactDocumentLimit]' passed (0.392 seconds).
+Test Case '-[ThumbleCLITests.OwnedConfigurationDocumentTests testExactSourceAndAllStatesSurviveNativeProjectionWithoutPackageLookup]' passed (0.075 seconds).
+Test Case '-[ThumbleCLITests.OwnedConfigurationDocumentTests testSharedVersionFiveContractAndRejectedMutations]' passed (1.006 seconds).
+	 Executed 3 tests, with 0 failures (0 unexpected) in 1.473 (1.475) seconds
+	 Executed 3 tests, with 0 failures (0 unexpected) in 1.473 (1.475) seconds
+	 Executed 3 tests, with 0 failures (0 unexpected) in 1.473 (1.476) seconds
+** TEST SUCCEEDED **

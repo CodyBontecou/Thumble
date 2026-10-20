@@ -44,6 +44,15 @@ internal data class SkinCanvas(val width: Double, val height: Double) {
             "iphone-xs" to (375.0 to 812.0),
             "iphone-xs-max" to (414.0 to 896.0)
         )
+        fun isCanonicalLandscapeFrameID(frameID: String): Boolean {
+            val base = frameID.removeSuffix("-landscape")
+            if (!frameID.endsWith("-landscape")) return false
+            if (base in portraitSizes) return true
+            val match = Regex("custom-([0-9]+)x([0-9]+)").matchEntire(base) ?: return false
+            val width = match.groupValues[1].toIntOrNull() ?: return false
+            val height = match.groupValues[2].toIntOrNull() ?: return false
+            return width in 240..1800 && height in width..1800 && base == "custom-${width}x${height}"
+        }
         fun from(layout: JSONObject): SkinCanvas {
             val id = layout.optJSONObject("deviceCanvas")?.optString("frameID").orEmpty()
             val orientation = id.substringAfterLast('-')
