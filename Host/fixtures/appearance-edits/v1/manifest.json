@@ -1,0 +1,9 @@
+{
+  "fixtureVersion": 1,
+  "nativeGenerator": "Tests/AppearanceEditOracleTests.swift",
+  "nativeGeneratorSHA256": "e2ecb14676eb7f61eb44482f65f4250f714da0512625d238195cea021fa2f11d",
+  "fixtureSHA256": "9dc0b860272d9e558d0d73f9b9f1dd54d9b2782374362307f5d8784c899e3bfd",
+  "caseCount": 21,
+  "resolutionCount": 168,
+  "normalizedColorChannelTolerance": 2e-07
+}

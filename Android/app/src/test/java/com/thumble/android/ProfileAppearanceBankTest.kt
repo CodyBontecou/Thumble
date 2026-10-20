@@ -93,16 +93,16 @@ class ProfileAppearanceBankTest {
             .getJSONObject("fillStyle").getJSONObject("color").getDouble("red"), 0.0)
     }
 
-    @Test fun surfaceCollectionsMergeByIdentityAndKeepVariantOnlySlotsDuringReorder() {
+    @Test fun surfaceCollectionsMergeByIdentityAndApplyNativeArtworkOrder() {
         val p = profile(); val current = layout(p)
         fun artwork(id: String, opacity: Double = 1.0) = JSONObject().put("id", id).put("opacity", opacity)
         variant(p, "light").put("artworkLayers", JSONArray().put(artwork("a")).put(artwork("b")))
         variant(p, "dark").put("artworkLayers", JSONArray().put(artwork("a", .5)).put(artwork("dark-only")).put(artwork("b", .6)))
         current.put("artworkLayers", JSONArray().put(artwork("b").put("rotationDegrees", 15)).put(artwork("a")))
         val output = bank(p).resolve(current, "dark").getJSONArray("artworkLayers")
-        assertEquals(listOf("b", "dark-only", "a"), AppearanceJSON.objects(output).map { it.getString("id") })
-        assertEquals(.6, output.getJSONObject(0).getDouble("opacity"), 0.0)
-        assertEquals(15, output.getJSONObject(0).getInt("rotationDegrees"))
+        assertEquals(listOf("a", "b", "dark-only"), AppearanceJSON.objects(output).map { it.getString("id") })
+        assertEquals(.6, output.getJSONObject(1).getDouble("opacity"), 0.0)
+        assertEquals(15, output.getJSONObject(1).getInt("rotationDegrees"))
         current.put("artworkLayers", JSONArray())
         assertEquals(0, bank(p).resolve(current, "dark").getJSONArray("artworkLayers").length())
     }

@@ -12,6 +12,7 @@ mod element_identity;
 pub use element_identity::ElementPresentation;
 mod gamepad;
 mod generation_spec;
+mod profile_appearance;
 mod profile_artifact;
 mod profile_resources;
 mod resolver;
@@ -50,6 +51,7 @@ pub use generation_spec::{
     GENERATION_SPEC_SCHEMA_VERSION, GENERATION_UUID_NAMESPACE, MAXIMUM_GENERATION_OUTPUT_BYTES,
     MAXIMUM_GENERATION_SOURCE_CONTROLS, MAXIMUM_GENERATION_SPEC_BYTES, MAXIMUM_GENERATION_WARNINGS,
 };
+pub use profile_appearance::{ProfileAppearanceBank, ProfileAppearanceError};
 pub use profile_artifact::{
     ProfileArtifact, ProfileArtifactBindingMaps, ProfileArtifactCatalogRevision,
     ProfileArtifactContentHash, ProfileArtifactError, ProfileArtifactSelection,

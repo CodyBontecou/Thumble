@@ -88,12 +88,12 @@ internal class ProfileAppearanceBank(raw: JSONObject) {
         visit(snapshot)
     }
 
-    private fun snapshot(layout: JSONObject): JSONObject {
+    internal fun snapshot(layout: JSONObject): JSONObject {
         val result = JSONObject()
         for (field in surfaceFields) AppearanceJSON.set(result, field, AppearanceJSON.value(layout, field) ?: when (field) {
             "accentStyle" -> "monochrome"; "showsButtonLabels" -> true; else -> null
         })
-        result.put("artworkLayers", AppearanceJSON.copy(layout.optJSONArray("artworkLayers") ?: JSONArray()))
+        result.put("artworkLayers", normalizedArtwork(layout.optJSONArray("artworkLayers")))
         for ((field, entries) in listOf("styleLibrary" to "styles", "assetLibrary" to "assets"))
             result.put(field, AppearanceJSON.copy(layout.optJSONObject(field) ?: JSONObject().put(entries, JSONArray())))
         val controls = JSONObject(); val overrides = layout.swiftMap("buttonCustomizations")
@@ -107,7 +107,8 @@ internal class ProfileAppearanceBank(raw: JSONObject) {
         result.put("topBar", controlSnapshot(layout.optJSONObject("topBarActivationRegion") ?: defaultTopBar()))
         result.put("controlBar", JSONObject().also { bars ->
             AppearanceJSON.objects(layout.optJSONArray("controlBarItemCustomizations")).forEach {
-                bars.put(it.getString("item"), controlSnapshot(it.getJSONObject("appearance")))
+                val paint = controlSnapshot(it.getJSONObject("appearance"))
+                if (!AppearanceJSON.same(paint, controlSnapshot(JSONObject()))) bars.put(it.getString("item"), paint)
             }
         })
         return result
@@ -150,8 +151,13 @@ internal class ProfileAppearanceBank(raw: JSONObject) {
             (old?.let(AppearanceJSON::objectCopy) ?: JSONObject().put("item", item)).put("appearance",
                 apply(old?.optJSONObject("appearance") ?: JSONObject(), bars.optJSONObject(item) ?: controlSnapshot(JSONObject())))
         }))
+        result.put("artworkLayers", normalizedArtwork(result.optJSONArray("artworkLayers")))
         return result
     }
+
+    private fun normalizedArtwork(layers: JSONArray?): JSONArray = AppearanceJSON.rows(AppearanceJSON.objects(layers)
+        .filterNot { it.optBoolean("isHidden", false) }
+        .sortedWith(compareBy<JSONObject> { it.optString("plane", "underlay") }.thenBy { it.optDouble("zIndex", 0.0) }.thenBy { it.getString("id") }))
 
     private fun controls(edited: JSONObject, baseline: JSONObject, target: JSONObject, scheme: String, accent: String): JSONObject {
         val result = AppearanceJSON.objectCopy(target)
@@ -221,7 +227,9 @@ internal class ProfileAppearanceBank(raw: JSONObject) {
         return fields(edited, baseline ?: JSONObject(), target ?: JSONObject(), nested)
     }
     private fun visual(e: JSONObject?, b: JSONObject?, t: JSONObject?): JSONObject? =
-        optional(e, b, t, listOf("normal", "pressed", "active", "disabled").associateWith { ::state })
+        optional(e, b, t, listOf("normal", "pressed", "active", "disabled").associateWith { ::state })?.also {
+            if (it.optJSONObject("normal") == null) it.put("normal", JSONObject())
+        }
     private fun state(e: JSONObject?, b: JSONObject?, t: JSONObject?): JSONObject? = optional(e, b, t, mapOf("content" to ::content))
     private fun content(e: JSONObject?, b: JSONObject?, t: JSONObject?): JSONObject? = optional(e, b, t,
         mapOf("pointing" to { edited, baseline, target -> optional(edited, baseline, target) }))

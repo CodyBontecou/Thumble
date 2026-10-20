@@ -1,0 +1,5 @@
+> Task :app:compileDebugAndroidTestKotlin
+> Task :app:compileDebugUnitTestKotlin
+> Task :app:testDebugUnitTest
+> Task :app:assembleDebugAndroidTest
+BUILD SUCCESSFUL in 15s

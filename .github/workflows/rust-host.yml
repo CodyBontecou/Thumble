@@ -173,6 +173,9 @@ jobs:
           -only-testing:ThumbleCLITests/GamepadSharedOperationsSmokeTests
           -only-testing:ThumbleCLITests/ThumbleSkinCompatibilityTests
           -only-testing:ThumbleCLITests/ThumbleLinkTests
+          -only-testing:ThumbleCLITests/AppearanceEditOracleTests
+          -only-testing:ThumbleCLITests/GamepadAppearanceBankTests
+          -only-testing:ThumbleCLITests/ProfileResourceCodecTests
           -only-testing:ThumbleCLITests/ThumbleConfigurationBridgeTests
           -only-testing:ThumbleCLITests/ThumbleCLIBackendTests
           -only-testing:ThumbleCLITests/ThumbleCLISmokeTestSuite

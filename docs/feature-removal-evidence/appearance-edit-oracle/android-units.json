@@ -1,0 +1,177 @@
+{
+  "tests": 198,
+  "failures": 0,
+  "errors": 0,
+  "suites": [
+    {
+      "name": "com.thumble.android.BindingPresentationTest",
+      "tests": 7,
+      "failures": 0
+    },
+    {
+      "name": "com.thumble.android.KeypadHapticsTest",
+      "tests": 7,
+      "failures": 0
+    },
+    {
+      "name": "com.thumble.android.ProtocolTest",
+      "tests": 11,
+      "failures": 0
+    },
+    {
+      "name": "com.thumble.android.IncomingSkinSyncTest",
+      "tests": 4,
+      "failures": 0
+    },
+    {
+      "name": "com.thumble.android.ProfileResourceTableTest",
+      "tests": 4,
+      "failures": 0
+    },
+    {
+      "name": "com.thumble.android.SkinContractCodecTest",
+      "tests": 3,
+      "failures": 0
+    },
+    {
+      "name": "com.thumble.android.SkinProfileLifecycleTest",
+      "tests": 1,
+      "failures": 0
+    },
+    {
+      "name": "com.thumble.android.LayoutControlEditsTest",
+      "tests": 8,
+      "failures": 0
+    },
+    {
+      "name": "com.thumble.android.ProfileTest",
+      "tests": 7,
+      "failures": 0
+    },
+    {
+      "name": "com.thumble.android.ControlTypographyTest",
+      "tests": 3,
+      "failures": 0
+    },
+    {
+      "name": "com.thumble.android.AppearanceEditOracleTest",
+      "tests": 1,
+      "failures": 0
+    },
+    {
+      "name": "com.thumble.android.FeatureRemovalBaselineTest",
+      "tests": 3,
+      "failures": 0
+    },
+    {
+      "name": "com.thumble.android.AdvancedControlTest",
+      "tests": 13,
+      "failures": 0
+    },
+    {
+      "name": "com.thumble.android.ControlGeometryTest",
+      "tests": 4,
+      "failures": 0
+    },
+    {
+      "name": "com.thumble.android.SkinRenderRepositoryTest",
+      "tests": 4,
+      "failures": 0
+    },
+    {
+      "name": "com.thumble.android.ProfileActionsTest",
+      "tests": 4,
+      "failures": 0
+    },
+    {
+      "name": "com.thumble.android.SkinSelectionJournalTest",
+      "tests": 3,
+      "failures": 0
+    },
+    {
+      "name": "com.thumble.android.EffectPresentationTest",
+      "tests": 2,
+      "failures": 0
+    },
+    {
+      "name": "com.thumble.android.SkinImportReaderTest",
+      "tests": 5,
+      "failures": 0
+    },
+    {
+      "name": "com.thumble.android.SkinLibraryManagementTest",
+      "tests": 3,
+      "failures": 0
+    },
+    {
+      "name": "com.thumble.android.PendingSharedBuildStoreTest",
+      "tests": 6,
+      "failures": 0
+    },
+    {
+      "name": "com.thumble.android.ControlPresentationTest",
+      "tests": 7,
+      "failures": 0
+    },
+    {
+      "name": "com.thumble.android.SkinTextTest",
+      "tests": 2,
+      "failures": 0
+    },
+    {
+      "name": "com.thumble.android.IconArtworkTest",
+      "tests": 5,
+      "failures": 0
+    },
+    {
+      "name": "com.thumble.android.SkinProfileResolverTest",
+      "tests": 3,
+      "failures": 0
+    },
+    {
+      "name": "com.thumble.android.PortableProfileArtifactTest",
+      "tests": 8,
+      "failures": 0
+    },
+    {
+      "name": "com.thumble.android.AppearancePreferenceJournalTest",
+      "tests": 11,
+      "failures": 0
+    },
+    {
+      "name": "com.thumble.android.SkinPackageTest",
+      "tests": 15,
+      "failures": 0
+    },
+    {
+      "name": "com.thumble.android.ControllerActionSetTest",
+      "tests": 6,
+      "failures": 0
+    },
+    {
+      "name": "com.thumble.android.ProfileAppearanceBankTest",
+      "tests": 10,
+      "failures": 0
+    },
+    {
+      "name": "com.thumble.android.LayoutEditJournalTest",
+      "tests": 16,
+      "failures": 0
+    },
+    {
+      "name": "com.thumble.android.SkinModelCodecTest",
+      "tests": 3,
+      "failures": 0
+    },
+    {
+      "name": "com.thumble.android.SkinAppearanceResolverTest",
+      "tests": 4,
+      "failures": 0
+    },
+    {
+      "name": "com.thumble.android.PendingBuildRecoveryTest",
+      "tests": 5,
+      "failures": 0
+    }
+  ]
+}

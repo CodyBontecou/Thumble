@@ -8,6 +8,7 @@ RUST_TOOLCHAIN="${RUST_TOOLCHAIN:-1.88.0}"
 [[ -f "$MANIFEST" ]] || { echo "Missing Rust host manifest: $MANIFEST" >&2; exit 1; }
 
 python3 "$ROOT_DIR/scripts/verify-mcp-cli-parity.py"
+python3 "$ROOT_DIR/scripts/verify-feature-removal-fixtures.py"
 python3 "$ROOT_DIR/scripts/verify-retired-marketplace.py"
 python3 "$ROOT_DIR/scripts/verify-retired-hosted-runtime.py"
 python3 "$ROOT_DIR/scripts/verify-cli-profile-persistence-allowlist.py"

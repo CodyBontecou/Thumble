@@ -1,0 +1,61 @@
+MCP CLI parity ledger verified: 159 operations, 29 root commands, 274 CLI spellings
+Marketplace retired; four exact legacy packages remain outside the public website
+Hosted gateway, builder, relay, receiver uploads and installer retired; local runtime remains packaged
+CLI direct profile/orientation/binding/output/customization/style/layer/group/control-bar/device persistence allowlist passed.
+    Checking thumble-core v0.1.0 (/Users/codybontecou/dev/Thumble/Host/crates/thumble-core)
+    Checking thumble-host v0.1.0 (/Users/codybontecou/dev/Thumble/Host/crates/thumble-host)
+    Checking thumble-receiver v0.1.0 (/Users/codybontecou/dev/Thumble/Host/crates/thumble-receiver)
+    Checking thumble-mcp v0.1.0 (/Users/codybontecou/dev/Thumble/Host/crates/thumble-mcp)
+    Checking thumble-cli-bridge v0.1.0 (/Users/codybontecou/dev/Thumble/Host/crates/thumble-cli-bridge)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 5.41s
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 6.92s
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.37s
+test result: ok. 54 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.55s
+test current_plus_one_generation_releases_then_transitions_and_retired_is_rejected ... ok
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.27s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test skins::tests::native_bridge_acceptance ... ignored, requires THUMBLE_TEST_SKIN_BRIDGE pointing to the built native executable
+test result: ok. 211 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 8.31s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test native_legacy_inline_outputs_and_integral_float_metadata_round_trip_without_changes ... ignored, requires THUMBLE_TEST_ARTIFACT_RUNTIME_BIN with native compatibility bridge
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.28s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+     Running tests/retired_hosted_builds.rs (Host/target/debug/deps/retired_hosted_builds-fb93af306d5a9f3b)
+test host_cli_hides_and_rejects_retired_commands_without_reading_files_or_opening_state ... ok
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.72s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+test native_receiver_authenticates_skin_changes_and_never_acknowledges_failed_persistence ... ignored, requires THUMBLE_TEST_SKIN_RUNTIME_BIN containing the packaged host and native bridge
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 33 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.70s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+    Checking thumble-core v0.1.0 (/Users/codybontecou/dev/Thumble/Host/crates/thumble-core)
+    Checking thumble-host v0.1.0 (/Users/codybontecou/dev/Thumble/Host/crates/thumble-host)
+    Checking thumble-mcp v0.1.0 (/Users/codybontecou/dev/Thumble/Host/crates/thumble-mcp)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.46s
+Thumble Rust host and MCP verification passed.

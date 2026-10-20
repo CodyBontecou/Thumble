@@ -1,0 +1,16 @@
+Test Suite 'Selected tests' started at 2026-10-20 17:33:21.330.
+Test Suite 'ThumbleCLITests.xctest' started at 2026-10-20 17:33:21.330.
+Test Suite 'AppearanceEditOracleTests' started at 2026-10-20 17:33:21.331.
+Test Suite 'AppearanceEditOracleTests' passed at 2026-10-20 17:33:22.078.
+	 Executed 1 test, with 0 failures (0 unexpected) in 0.746 (0.747) seconds
+Test Suite 'GamepadAppearanceBankTests' started at 2026-10-20 17:33:22.078.
+Test Suite 'GamepadAppearanceBankTests' passed at 2026-10-20 17:33:23.085.
+	 Executed 13 tests, with 0 failures (0 unexpected) in 0.997 (1.007) seconds
+Test Suite 'ProfileResourceCodecTests' started at 2026-10-20 17:33:23.086.
+Test Suite 'ProfileResourceCodecTests' passed at 2026-10-20 17:33:23.997.
+	 Executed 6 tests, with 0 failures (0 unexpected) in 0.910 (0.912) seconds
+Test Suite 'ThumbleCLITests.xctest' passed at 2026-10-20 17:33:23.998.
+	 Executed 20 tests, with 0 failures (0 unexpected) in 2.654 (2.667) seconds
+Test Suite 'Selected tests' passed at 2026-10-20 17:33:23.998.
+	 Executed 20 tests, with 0 failures (0 unexpected) in 2.654 (2.668) seconds
+** TEST SUCCEEDED **

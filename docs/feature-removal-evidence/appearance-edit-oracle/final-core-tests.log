@@ -1,0 +1,8 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.03s
+running 5 tests
+test profile_appearance::tests::future_layout_metadata_and_later_geometry_edits_survive_resolution ... ok
+test profile_appearance::tests::all_eight_pooled_states_resolve_without_package_lookup_or_source_mutation ... ok
+test profile_appearance::tests::corrupt_banks_assets_resources_and_geometry_in_paint_require_recovery ... ok
+test profile_appearance::tests::byte_budget_matches_compact_json_including_escapes_without_rejecting_the_boundary ... ok
+test profile_appearance::tests::native_edit_oracles_match_every_scheme_and_action ... ok
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 49 filtered out; finished in 0.19s
