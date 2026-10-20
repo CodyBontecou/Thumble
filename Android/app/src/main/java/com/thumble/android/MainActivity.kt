@@ -331,80 +331,12 @@ class MainActivity : ComponentActivity() {
         var menu by remember { mutableStateOf(false) }
         LaunchedEffect(menu) { if(menu) session.refreshSkins() }
         val unsupported = profile?.unsupportedKinds(landscape).orEmpty()
-        Column(Modifier.fillMaxSize().safeDrawingPadding().semantics { testTagsAsResourceId=true }) {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                Box {
-                    TextButton(modifier=Modifier.testTag("keypad-options").semantics { contentDescription="Keypad options" },onClick = { surface?.cancelTouches(); menu = true }) { Text(profile?.name ?: "Keypad") }
-                    DropdownMenu(expanded = menu, onDismissRequest = { menu = false },containerColor=MaterialTheme.colorScheme.surface) {
-                        snapshot.profiles.forEach { item -> DropdownMenuItem(text = { Text(item.name + if (item.id == snapshot.defaultID) " · Default" else "") },
-                            onClick = { selectProfile(item.id); menu = false }) }
-                        HorizontalDivider()
-                        DropdownMenuItem(text={ Text("Setup guide") },onClick={ menu=false;surface?.cancelTouches();localError=null;guideOpen=true })
-                        if(session.sharedBuilds.records.isNotEmpty() || session.sharedBuilds.error!=null)
-                            DropdownMenuItem(text={ Text("Recover saved builds") },onClick={ menu=false;openSharedBuilds() })
-                        DropdownMenuItem(text={ Text(if (profile?.id == snapshot.defaultID) "Default keypad" else "Make default keypad") },
-                            enabled=(state.paired || state.viewingSaved) && profile != null && profile.id != snapshot.defaultID,
-                            onClick={ profile?.let { client.setDefaultProfile(it.id) };menu=false })
-                        val canRotate=state.paired && ProfileActions.ORIENTATION_CAPABILITY in state.capabilities
-                        for ((preference,label) in listOf("automatic" to "Automatic rotation","portrait" to "Portrait only","landscape" to "Landscape only")) {
-                            DropdownMenuItem(text={ Text(label) },leadingIcon={ RadioButton(selected=profile?.orientationPreference == preference,onClick=null,enabled=canRotate) },
-                                enabled=canRotate,onClick={ surface?.cancelTouches();client.setOrientationPreference(preference);menu=false })
-                        }
-                        profile?.launchTargetName?.let { target ->
-                            DropdownMenuItem(text={ Text("Launch $target on Mac") },enabled=state.paired,
-                                onClick={ surface?.cancelTouches();client.launchProfileTarget();menu=false })
-                        }
-                        HorizontalDivider()
-                        DropdownMenuItem(text={ Text("Skins") },onClick={ menu=false;openSkinLibrary() })
-                        DropdownMenuItem(text={ Text("Import skin…") },enabled=!session.skinBusy,
-                            onClick={ menu=false;skinDocument.launch(arrayOf("*/*")) })
-                        session.installedSkins.forEach { installed ->
-                            DropdownMenuItem(text={ Text("Apply ${installed.name} · ${installed.reference.version}") },enabled=!session.skinBusy,
-                                onClick={ menu=false;session.applySkin(installed.reference,profile?.skinColorScheme(dark) ?: if(dark) "dark" else "light") })
-                        }
-                        DropdownMenuItem(text={ Text("Detach skin") },enabled=!session.skinBusy && profile?.source?.optJSONObject("skinReference")!=null,
-                            onClick={ menu=false;session.detachSkin(profile?.skinColorScheme(dark) ?: if(dark) "dark" else "light") })
-                        HorizontalDivider()
-                        DropdownMenuItem(text={ Text("Edit layout") },enabled=profile!=null && !loadingSkin && !session.skinBusy,
-                            onClick={ menu=false;surface?.cancelTouches();profile?.let {
-                                client.beginLayoutEditing(it.id,if(landscape) LayoutOrientation.LANDSCAPE else LayoutOrientation.PORTRAIT)
-                            } })
-                        DropdownMenuItem(text={ Text("Settings") },onClick={ menu=false;openSettings() })
-                    }
-                }
-                TextButton(onClick = {
-                    surface?.cancelTouches()
-                    if (state.paired) client.disconnect() else client.showConnection()
-                }) { Text(if (state.paired) "Disconnect" else "Connection") }
-            }
-            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(if (state.practiceMode) "Practice mode · on" else "Practice mode · off", Modifier.padding(top = 14.dp))
-                Switch(checked = state.practiceMode, enabled = state.paired,
-                    modifier = Modifier.semantics { contentDescription = "Practice mode" }, onCheckedChange = { surface?.cancelTouches(); client.setPracticeMode(it) })
-            }
-            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                Column(Modifier.weight(1f)) {
-                    Text(if (state.udpEnabled && state.udpAvailable) "UDP + WebSocket mirror" else "WebSocket fallback", style = MaterialTheme.typography.labelMedium)
-                    Text("Sent: UDP ${state.udpFrames} · WS ${state.webSocketFrames}", style = MaterialTheme.typography.labelSmall)
-                }
-                Row {
-                    Text("UDP", Modifier.padding(top = 14.dp), style = MaterialTheme.typography.labelMedium)
-                    Switch(checked = state.udpEnabled, modifier = Modifier.semantics { contentDescription = "UDP transport" }, onCheckedChange = { client.setUDPEnabled(it) })
-                }
-            }
-            state.error?.let { Text(it, Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.error) }
-            if (loadingSkin) Text("Loading keypad appearance…", Modifier.padding(horizontal = 16.dp), style = MaterialTheme.typography.labelSmall)
-            session.skinError?.let { Text(it, Modifier.padding(horizontal=16.dp),color=MaterialTheme.colorScheme.error) }
-            if(state.pendingSkinChanges>0) Text("${state.pendingSkinChanges} ${if(state.pendingSkinChanges==1) "skin change" else "skin changes"} waiting for Mac sync",Modifier.padding(horizontal=16.dp),style=MaterialTheme.typography.labelSmall)
-            if(state.pendingAppearanceChanges>0) Text("Appearance saved locally; waiting for Mac sync",Modifier.padding(horizontal=16.dp),style=MaterialTheme.typography.labelSmall)
-            if(session.skinBusy) Text("Preparing skin…",Modifier.padding(horizontal=16.dp),style=MaterialTheme.typography.labelSmall)
-            projection?.warning?.let { Text(it, Modifier.padding(horizontal = 16.dp), style = MaterialTheme.typography.labelSmall) }
-            if (unsupported.isNotEmpty()) Text("Not supported in this build: ${unsupported.joinToString()}",
-                Modifier.padding(horizontal = 16.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
-            Box(Modifier.fillMaxWidth().weight(1f)) {
+        var drawerExpanded by rememberSaveable { mutableStateOf(false) }
+        ImmersiveControllerWindow(window)
+        Box(Modifier.fillMaxSize().semantics { testTagsAsResourceId=true }) {
             AndroidView(factory = { context -> ControllerSurface(context).also { surface = it } },
                 update = { view ->
-                    view.importantForAccessibility=android.view.View.IMPORTANT_FOR_ACCESSIBILITY_AUTO
+                    view.importantForAccessibility=if(drawerExpanded) android.view.View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS else android.view.View.IMPORTANT_FOR_ACCESSIBILITY_AUTO
                     val surfaceRevision = state.surfaceRevision
                     view.onEdge = { id, down, press -> client.edge(id, down, press, surfaceRevision) }
                     view.onPartEdge = { id, part, down, press -> client.elementEdge(id, part, down, press, surfaceRevision) }
@@ -418,9 +350,101 @@ class MainActivity : ComponentActivity() {
                         if (loadingSkin || session.skinBusy) null else projection?.appearanceFrames)
                     view.showBindingPresentations(snapshot.bindingPresentations,state.showBindingGlyphs)
                 }, modifier = Modifier.fillMaxSize())
+            // Loading and failures remain visible even with connection chrome collapsed.
+            val notice = state.error ?: session.skinError ?: when {
+                session.skinBusy -> "Preparing skin…"
+                loadingSkin -> "Loading keypad appearance…"
+                else -> null
+            }
+            if (notice != null && !drawerExpanded) {
+                Surface(modifier = Modifier.align(androidx.compose.ui.Alignment.BottomCenter)
+                    .safeDrawingPadding().padding(12.dp), shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+                    tonalElevation = 6.dp, onClick = { surface?.cancelTouches(); drawerExpanded = true }) {
+                    Text(notice, Modifier.padding(horizontal = 16.dp, vertical = 10.dp), style = MaterialTheme.typography.labelMedium)
+                }
+            }
+            ControllerDrawer(
+                expanded = drawerExpanded,
+                onExpandedChange = { expanded ->
+                    if (expanded) surface?.cancelTouches()
+                    drawerExpanded = expanded
+                },
+                status = if (state.practiceMode) "Practice · Input off" else if (state.paired) "Connected" else "Saved keypad"
+            ) {
+                ControllerHeader(snapshot, onSelect = { selectProfile(it) },
+                    connectionLabel = if (state.paired) "Disconnect" else "Connection",
+                    onConnection = {
+                        surface?.cancelTouches()
+                        if (state.paired) client.disconnect() else client.showConnection()
+                    }) {
+                    Box {
+                        IconButton(modifier=Modifier.testTag("keypad-options").semantics { contentDescription="Keypad options" },
+                            onClick = { surface?.cancelTouches(); menu = true }) {
+                            ControllerOptionsIcon()
+                        }
+                        DropdownMenu(expanded = menu, onDismissRequest = { menu = false },containerColor=MaterialTheme.colorScheme.surface) {
+                            DropdownMenuItem(text={ Text("Setup guide") },onClick={ menu=false;surface?.cancelTouches();localError=null;guideOpen=true })
+                            if(session.sharedBuilds.records.isNotEmpty() || session.sharedBuilds.error!=null)
+                                DropdownMenuItem(text={ Text("Recover saved builds") },onClick={ menu=false;openSharedBuilds() })
+                            DropdownMenuItem(text={ Text(if (profile?.id == snapshot.defaultID) "Default keypad" else "Make default keypad") },
+                                enabled=(state.paired || state.viewingSaved) && profile != null && profile.id != snapshot.defaultID,
+                                onClick={ profile?.let { client.setDefaultProfile(it.id) };menu=false })
+                            val canRotate=state.paired && ProfileActions.ORIENTATION_CAPABILITY in state.capabilities
+                            for ((preference,label) in listOf("automatic" to "Automatic rotation","portrait" to "Portrait only","landscape" to "Landscape only")) {
+                                DropdownMenuItem(text={ Text(label) },leadingIcon={ RadioButton(selected=profile?.orientationPreference == preference,onClick=null,enabled=canRotate) },
+                                    enabled=canRotate,onClick={ surface?.cancelTouches();client.setOrientationPreference(preference);menu=false })
+                            }
+                            profile?.launchTargetName?.let { target ->
+                                DropdownMenuItem(text={ Text("Launch $target on Mac") },enabled=state.paired,
+                                    onClick={ surface?.cancelTouches();client.launchProfileTarget();menu=false })
+                            }
+                            HorizontalDivider()
+                            DropdownMenuItem(text={ Text("Skins") },onClick={ menu=false;openSkinLibrary() })
+                            DropdownMenuItem(text={ Text("Import skin…") },enabled=!session.skinBusy,
+                                onClick={ menu=false;skinDocument.launch(arrayOf("*/*")) })
+                            session.installedSkins.forEach { installed ->
+                                DropdownMenuItem(text={ Text("Apply ${installed.name} · ${installed.reference.version}") },enabled=!session.skinBusy,
+                                    onClick={ menu=false;session.applySkin(installed.reference,profile?.skinColorScheme(dark) ?: if(dark) "dark" else "light") })
+                            }
+                            DropdownMenuItem(text={ Text("Detach skin") },enabled=!session.skinBusy && profile?.source?.optJSONObject("skinReference")!=null,
+                                onClick={ menu=false;session.detachSkin(profile?.skinColorScheme(dark) ?: if(dark) "dark" else "light") })
+                            HorizontalDivider()
+                            DropdownMenuItem(text={ Text("Edit layout") },enabled=profile!=null && !loadingSkin && !session.skinBusy,
+                                onClick={ menu=false;surface?.cancelTouches();profile?.let {
+                                    client.beginLayoutEditing(it.id,if(landscape) LayoutOrientation.LANDSCAPE else LayoutOrientation.PORTRAIT)
+                                } })
+                            DropdownMenuItem(text={ Text("Settings") },onClick={ menu=false;openSettings() })
+                        }
+                    }
+                }
+                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(if (state.practiceMode) "Practice mode · on" else "Practice mode · off", Modifier.padding(top = 14.dp))
+                    Switch(checked = state.practiceMode, enabled = state.paired,
+                        modifier = Modifier.semantics { contentDescription = "Practice mode" }, onCheckedChange = { surface?.cancelTouches(); client.setPracticeMode(it) })
+                }
+                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Column(Modifier.weight(1f)) {
+                        Text(if (state.udpEnabled && state.udpAvailable) "UDP + WebSocket mirror" else "WebSocket fallback", style = MaterialTheme.typography.labelMedium)
+                        Text("Sent: UDP ${state.udpFrames} · WS ${state.webSocketFrames}", style = MaterialTheme.typography.labelSmall)
+                    }
+                    Row {
+                        Text("UDP", Modifier.padding(top = 14.dp), style = MaterialTheme.typography.labelMedium)
+                        Switch(checked = state.udpEnabled, modifier = Modifier.semantics { contentDescription = "UDP transport" }, onCheckedChange = { client.setUDPEnabled(it) })
+                    }
+                }
+                state.error?.let { Text(it, Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.error) }
+                if (loadingSkin) Text("Loading keypad appearance…", Modifier.padding(horizontal = 16.dp), style = MaterialTheme.typography.labelSmall)
+                session.skinError?.let { Text(it, Modifier.padding(horizontal=16.dp),color=MaterialTheme.colorScheme.error) }
+                if(state.pendingSkinChanges>0) Text("${state.pendingSkinChanges} ${if(state.pendingSkinChanges==1) "skin change" else "skin changes"} waiting for Mac sync",Modifier.padding(horizontal=16.dp),style=MaterialTheme.typography.labelSmall)
+                if(state.pendingAppearanceChanges>0) Text("Appearance saved locally; waiting for Mac sync",Modifier.padding(horizontal=16.dp),style=MaterialTheme.typography.labelSmall)
+                if(session.skinBusy) Text("Preparing skin…",Modifier.padding(horizontal=16.dp),style=MaterialTheme.typography.labelSmall)
+                projection?.warning?.let { Text(it, Modifier.padding(horizontal = 16.dp), style = MaterialTheme.typography.labelSmall) }
+                if (unsupported.isNotEmpty()) Text("Not supported in this build: ${unsupported.joinToString()}",
+                    Modifier.padding(horizontal = 16.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
             }
         }
     }
+
     override fun onPause() {
         surface?.cancelTouches()
         if (::client.isInitialized) client.surfaceChanged()
