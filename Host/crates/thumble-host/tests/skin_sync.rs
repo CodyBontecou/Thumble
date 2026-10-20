@@ -77,11 +77,13 @@ async fn list(paths: &HostPaths) -> Value {
 fn skin_cli(
     bin: &std::path::Path,
     paths: &HostPaths,
+    fixture_home: &std::path::Path,
     arguments: &[&str],
     succeeds: bool,
 ) -> Vec<u8> {
     let output = Command::new(bin.join("thumble"))
         .arg("skin")
+        .env("HOME", fixture_home)
         .args(arguments)
         .env("THUMBLE_HOST_STATE_DIR", &paths.state_dir)
         .env("THUMBLE_HOST_CONTROL_SOCKET", &paths.control_socket)
@@ -105,11 +107,18 @@ async fn native_receiver_authenticates_skin_changes_and_never_acknowledges_faile
         std::env::var_os("THUMBLE_TEST_SKIN_RUNTIME_BIN")
             .expect("packaged binary directory required"),
     );
-    let directory = tempfile::tempdir().unwrap();
-    let paths = HostPaths::new(
-        directory.path().into(),
-        directory.path().join("control.sock"),
-    );
+    // Use a private child of the trusted account home: /tmp ancestry is
+    // intentionally rejected by the public runtime bridge.
+    let directory = tempfile::Builder::new()
+        .prefix(".th-")
+        .tempdir_in(std::env::var_os("HOME").expect("account home required"))
+        .unwrap();
+    // The trusted Swift runtime bridge intentionally forwards HOME only.
+    // A canonical fixture root lets the public CLI discover this receiver
+    // without custom socket overrides or access to the account's real defaults.
+    let fixture_home = directory.path().to_path_buf();
+    let state_dir = fixture_home.join("Library/Application Support/ThumbleHost");
+    let paths = HostPaths::new(state_dir.clone(), state_dir.join("control.sock"));
     paths.ensure_state_dir().unwrap();
     let fixture: Value = serde_json::from_str(include_str!(
         "../../../fixtures/controller-templates/v1/productivityStarter.json"
@@ -129,11 +138,12 @@ async fn native_receiver_authenticates_skin_changes_and_never_acknowledges_faile
     let _receiver = Receiver(
         Command::new(bin.join("thumble-host"))
             .args(["run", "--port", "0", "--no-input", "--no-bonjour"])
-            .env("THUMBLE_HOST_STATE_DIR", directory.path())
+            .env("HOME", &fixture_home)
+            .env("THUMBLE_HOST_STATE_DIR", &paths.state_dir)
             .env("THUMBLE_HOST_CONTROL_SOCKET", &paths.control_socket)
             .stdin(Stdio::null())
             .stdout(Stdio::null())
-            .stderr(Stdio::null())
+            .stderr(std::fs::File::create(paths.state_dir.join("receiver.stderr")).unwrap())
             .spawn()
             .unwrap(),
     );
@@ -149,7 +159,12 @@ async fn native_receiver_authenticates_skin_changes_and_never_acknowledges_faile
         }
     })
     .await
-    .unwrap();
+    .unwrap_or_else(|_| {
+        panic!(
+            "receiver startup failed: {}",
+            std::fs::read_to_string(paths.state_dir.join("receiver.stderr")).unwrap_or_default()
+        )
+    });
     assert!(list(&paths).await["packages"]
         .as_array()
         .unwrap()
@@ -255,34 +270,54 @@ async fn native_receiver_authenticates_skin_changes_and_never_acknowledges_faile
     // These commands must address this receiver's library and broadcast the same
     // durable profile state that authenticated phones receive.
     let target = format!("{}@{}", reference.identifier, reference.version);
-    let catalog: Value =
-        serde_json::from_slice(&skin_cli(&bin, &paths, &["list", "--json"], true)).unwrap();
+    let catalog: Value = serde_json::from_slice(&skin_cli(
+        &bin,
+        &paths,
+        &fixture_home,
+        &["list", "--json"],
+        true,
+    ))
+    .unwrap();
     assert_eq!(catalog["packages"][0]["reference"], json!(reference));
     let exported = directory.path().join("exact.pocketpad");
     skin_cli(
         &bin,
         &paths,
+        &fixture_home,
         &["export", &target, "-o", exported.to_str().unwrap()],
         true,
     );
     assert_eq!(std::fs::read(&exported).unwrap(), archive);
-    skin_cli(&bin, &paths, &["remove", &target], false);
+    skin_cli(&bin, &paths, &fixture_home, &["remove", &target], false);
     let after_rejected_remove: Value =
         serde_json::from_slice(&std::fs::read(&paths.state_file).unwrap()).unwrap();
     assert_eq!(after_rejected_remove, saved);
 
-    skin_cli(&bin, &paths, &["detach", "--profile", id], true);
+    skin_cli(
+        &bin,
+        &paths,
+        &fixture_home,
+        &["detach", "--profile", id],
+        true,
+    );
     let detached = receive(&mut ws, Kind::GamepadProfiles).await;
     assert!(detached.gamepad_profiles.unwrap()[0]["skinReference"].is_null());
-    skin_cli(&bin, &paths, &["remove", &target], true);
+    skin_cli(&bin, &paths, &fixture_home, &["remove", &target], true);
     assert!(list(&paths).await["packages"]
         .as_array()
         .unwrap()
         .is_empty());
-    skin_cli(&bin, &paths, &["import", exported.to_str().unwrap()], true);
     skin_cli(
         &bin,
         &paths,
+        &fixture_home,
+        &["import", exported.to_str().unwrap()],
+        true,
+    );
+    skin_cli(
+        &bin,
+        &paths,
+        &fixture_home,
         &["apply", &target, "--profile", id, "--appearance", "dark"],
         true,
     );
