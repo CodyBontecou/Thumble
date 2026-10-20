@@ -1,0 +1,304 @@
+{
+  "schemaVersion": 1,
+  "negotiations": [
+    {
+      "name": "legacy-missing-offer",
+      "required": 4,
+      "offered": null,
+      "allowed": true
+    },
+    {
+      "name": "explicit-four",
+      "required": 4,
+      "offered": [
+        4
+      ],
+      "allowed": true
+    },
+    {
+      "name": "explicit-common-four",
+      "required": 4,
+      "offered": [
+        4,
+        5
+      ],
+      "allowed": true
+    },
+    {
+      "name": "owned-without-offer",
+      "required": 5,
+      "offered": null,
+      "allowed": false
+    },
+    {
+      "name": "owned-old-peer",
+      "required": 5,
+      "offered": [
+        4
+      ],
+      "allowed": false
+    },
+    {
+      "name": "owned-future-ready-peer",
+      "required": 5,
+      "offered": [
+        4,
+        5
+      ],
+      "allowed": true
+    },
+    {
+      "name": "new-only-peer-old-host",
+      "required": 4,
+      "offered": [
+        5
+      ],
+      "allowed": false
+    },
+    {
+      "name": "unknown-plus-known",
+      "required": 4,
+      "offered": [
+        4,
+        99
+      ],
+      "allowed": true
+    },
+    {
+      "name": "unknown-only",
+      "required": 4,
+      "offered": [
+        99
+      ],
+      "allowed": false
+    },
+    {
+      "name": "duplicate",
+      "required": 4,
+      "offered": [
+        4,
+        4
+      ],
+      "allowed": false
+    },
+    {
+      "name": "too-many",
+      "required": 4,
+      "offered": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "allowed": false
+    },
+    {
+      "name": "negative",
+      "required": 4,
+      "offered": [
+        -1,
+        4
+      ],
+      "allowed": false
+    },
+    {
+      "name": "empty",
+      "required": 4,
+      "offered": [],
+      "allowed": false
+    },
+    {
+      "name": "future-required",
+      "required": 6,
+      "offered": [
+        4,
+        5,
+        6
+      ],
+      "allowed": false
+    }
+  ],
+  "frames": [
+    {
+      "name": "legacy-plain",
+      "message": {
+        "type": "gamepad_profiles",
+        "gamepadProfiles": [
+          {
+            "id": "ca000000-0000-0000-0000-000000000001"
+          }
+        ],
+        "timestamp": 0
+      },
+      "allowed": true
+    },
+    {
+      "name": "explicit-four",
+      "message": {
+        "type": "gamepad_profiles",
+        "profileFormatVersion": 4,
+        "gamepadProfiles": [],
+        "timestamp": 0
+      },
+      "allowed": true
+    },
+    {
+      "name": "future-before-typed-decode",
+      "message": {
+        "type": "pairing_accepted",
+        "profileFormatVersion": 5,
+        "gamepadProfiles": [
+          {
+            "appearanceBank": {
+              "futureUnknown": "must not decode"
+            }
+          }
+        ],
+        "timestamp": 0
+      },
+      "allowed": false
+    },
+    {
+      "name": "untagged-bank",
+      "message": {
+        "type": "gamepad_profiles",
+        "gamepadProfiles": [
+          {
+            "appearanceBank": {}
+          }
+        ],
+        "timestamp": 0
+      },
+      "allowed": false
+    },
+    {
+      "name": "downgrade-tag-bank",
+      "message": {
+        "type": "gamepad_profiles",
+        "profileFormatVersion": 4,
+        "gamepadProfiles": [
+          {
+            "appearanceBank": {}
+          }
+        ],
+        "timestamp": 0
+      },
+      "allowed": false
+    },
+    {
+      "name": "orphan-resource-envelope",
+      "message": {
+        "type": "gamepad_profiles",
+        "gamepadProfiles": [
+          {
+            "appearanceResourceVersion": 1,
+            "appearanceResources": {}
+          }
+        ],
+        "timestamp": 0
+      },
+      "allowed": false
+    },
+    {
+      "name": "future-customization",
+      "message": {
+        "type": "gamepad_customization",
+        "profileFormatVersion": 5,
+        "gamepadCustomization": {},
+        "timestamp": 0
+      },
+      "allowed": false
+    },
+    {
+      "name": "future-profile-marker",
+      "message": {
+        "type": "gamepad_profiles",
+        "gamepadProfiles": [
+          {
+            "profileFormatVersion": 6
+          }
+        ],
+        "timestamp": 0
+      },
+      "allowed": false
+    },
+    {
+      "name": "legacy-null-bank",
+      "message": {
+        "type": "gamepad_profiles",
+        "gamepadProfiles": [
+          {
+            "appearanceBank": null
+          }
+        ],
+        "timestamp": 0
+      },
+      "allowed": true
+    },
+    {
+      "name": "ordinary-input",
+      "message": {
+        "type": "ping",
+        "timestamp": 12
+      },
+      "allowed": true
+    },
+    {
+      "name": "unknown-profile-metadata",
+      "message": {
+        "type": "gamepad_profiles",
+        "gamepadProfiles": [
+          {
+            "futureMetadata": {
+              "scale": 1,
+              "nullable": null
+            }
+          }
+        ],
+        "timestamp": 0
+      },
+      "allowed": true
+    },
+    {
+      "name": "invalid-profile-marker",
+      "message": {
+        "type": "gamepad_profiles",
+        "gamepadProfiles": [
+          {
+            "profileFormatVersion": 0
+          }
+        ],
+        "timestamp": 0
+      },
+      "allowed": false
+    },
+    {
+      "name": "invalid-selected-version",
+      "message": {
+        "type": "gamepad_profiles",
+        "profileFormatVersion": 0,
+        "gamepadProfiles": [],
+        "timestamp": 0
+      },
+      "allowed": false
+    },
+    {
+      "name": "negative-profile-marker",
+      "message": {
+        "type": "gamepad_profiles",
+        "gamepadProfiles": [
+          {
+            "profileFormatVersion": -1
+          }
+        ],
+        "timestamp": 0
+      },
+      "allowed": false
+    }
+  ]
+}

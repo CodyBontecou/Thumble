@@ -73,7 +73,7 @@ object WireCodec {
             val type = when (data[3].toInt()) { 2 -> "release_all"; 3 -> "heartbeat"; 4 -> "ping"; 5 -> "pong"; else -> error("Invalid control frame") }
             return message(type).put("timestamp", ByteBuffer.wrap(data, 4, 8).order(ByteOrder.LITTLE_ENDIAN).long)
         }
-        return JSONObject(data.toString(Charsets.UTF_8))
+        return StrictJSON.objectValue(data)
     }
 }
 

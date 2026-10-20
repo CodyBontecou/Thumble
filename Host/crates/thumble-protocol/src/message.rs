@@ -372,6 +372,10 @@ pub struct ControllerMessage {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub capabilities: Option<Vec<ControllerCapability>>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub supported_profile_formats: Option<Vec<i64>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub profile_format_version: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub gamepad_profile_orientation_preference_mutation:
         Option<GamepadProfileOrientationPreference>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -444,6 +448,8 @@ impl ControllerMessage {
             gamepad_profile_id: None,
             default_gamepad_profile_id: None,
             capabilities: None,
+            supported_profile_formats: None,
+            profile_format_version: None,
             gamepad_profile_orientation_preference_mutation: None,
             client_device_info: None,
             pointer_event: None,

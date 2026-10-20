@@ -5320,6 +5320,7 @@ public struct GamepadConfigurationProfile: Identifiable, Codable, Equatable, Sen
     }
 
     public init(from decoder: Decoder) throws {
+        try ProfileFormatPolicy.validateStoredProfileHeader(decoder)
         if try GamepadProfileResourceCodec.hasResources(decoder) {
             self = try GamepadProfileResourceCodec.decode(UnpooledProfile.self, from: decoder).value
         } else {

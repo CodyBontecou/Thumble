@@ -29,6 +29,21 @@ final class StackSafetyRegressionTests: XCTestCase {
         }
     }
 
+    func testProfileFormatPreflightAndNegotiationFitConstrainedThread() throws {
+        let profile: [String: Any] = ["id": "ca000000-0000-0000-0000-000000000001",
+            "futureMetadata": String(repeating: "x", count: 1024 * 1024)]
+        let legacy = try JSONSerialization.data(withJSONObject: ["type": "gamepad_profiles", "profileFormatVersion": 4, "gamepadProfiles": [profile]])
+        let future = Data(#"{"type":"gamepad_profiles","profileFormatVersion":5,"gamepadProfiles":[{"appearanceBank":{"schemaVersion":99}}]}"#.utf8)
+        try runOnThread(stackSize: 512 * 1024, timeout: 30) {
+            try ProfileFormatPolicy.validateIncoming(legacy)
+            do {
+                try ProfileFormatPolicy.validateIncoming(future)
+                throw StackTestError.unexpectedDecodedState
+            } catch ProfileFormatPolicy.Failure.updateRequired { }
+            guard try ProfileFormatPolicy.negotiate(required: 4, offered: nil) == 4 else { throw StackTestError.unexpectedDecodedState }
+        }
+    }
+
     func testCriticalValueTypeInlineSizesStayWithinBudgets() {
         assertInlineSize(GamepadControlAppearanceSnapshot.self, atMost: 8)
         assertInlineSize(GamepadAppearanceSnapshot.self, atMost: 8)

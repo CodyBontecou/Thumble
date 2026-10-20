@@ -1,0 +1,46 @@
+Test Case '-[ThumbleCLITests.StackSafetyRegressionTests testBoxedProfileCustomizationsPreserveValueSemantics]' passed (0.016 seconds).
+Test Case '-[ThumbleCLITests.StackSafetyRegressionTests testBoxedStyleTokenPreservesValueSemantics]' passed (0.001 seconds).
+Test Case '-[ThumbleCLITests.StackSafetyRegressionTests testBundledSkinInstallationRunsOn512KiBStack]' passed (0.041 seconds).
+Test Case '-[ThumbleCLITests.StackSafetyRegressionTests testCopyOnWriteVisualStylePreservesValueSemantics]' passed (0.000 seconds).
+Test Case '-[ThumbleCLITests.StackSafetyRegressionTests testCriticalValueTypeInlineSizesStayWithinBudgets]' passed (0.001 seconds).
+Test Case '-[ThumbleCLITests.StackSafetyRegressionTests testCSSSkinCompilationRunsOn512KiBStack]' passed (2.195 seconds).
+Test Case '-[ThumbleCLITests.StackSafetyRegressionTests testDirectFullProfileCodableRunsOn512KiBStack]' passed (0.047 seconds).
+Test Case '-[ThumbleCLITests.StackSafetyRegressionTests testDirectGeneratedOutputAuthoringAndCodableRunOn512KiBStack]' passed (0.027 seconds).
+Test Case '-[ThumbleCLITests.StackSafetyRegressionTests testEmptyPersistenceStartupRunsOn512KiBStack]' passed (0.010 seconds).
+Test Case '-[ThumbleCLITests.StackSafetyRegressionTests testEscapedHeavyFieldNameUsesExpandedDecodeStack]' passed (0.001 seconds).
+Test Case '-[ThumbleCLITests.StackSafetyRegressionTests testExactDesignCaptureAndSourceUpdateRunOn512KiBStack]' passed (0.499 seconds).
+Test Case '-[ThumbleCLITests.StackSafetyRegressionTests testFullProfileWireDecodingRunsFrom512KiBStack]' passed (0.067 seconds).
+Test Case '-[ThumbleCLITests.StackSafetyRegressionTests testFullProfileWireEncodingRunsFrom512KiBStack]' passed (0.013 seconds).
+Test Case '-[ThumbleCLITests.StackSafetyRegressionTests testGamepadReadinessWireRoundTripOn512KiBStack]' passed (0.001 seconds).
+Test Case '-[ThumbleCLITests.StackSafetyRegressionTests testLargeGenerationPlanResponseDecodesOn512KiBStack]' passed (0.013 seconds).
+Test Case '-[ThumbleCLITests.StackSafetyRegressionTests testLegacyAppearanceMaterializationFitsConstrainedThread]' passed (0.614 seconds).
+Test Case '-[ThumbleCLITests.StackSafetyRegressionTests testLegacyHostInlineKeyboardProjectionRunsOn512KiBStack]' passed (0.007 seconds).
+Test Case '-[ThumbleCLITests.StackSafetyRegressionTests testNativeContentResolutionAndEvidenceCodecRunOn512KiBStack]' passed (0.032 seconds).
+Test Case '-[ThumbleCLITests.StackSafetyRegressionTests testOwnedAppearanceProfileCodecAndEditedResolutionFitConstrainedThread]' passed (0.624 seconds).
+Test Case '-[ThumbleCLITests.StackSafetyRegressionTests testOwnedResourceWireAndSavedStartupFitConstrainedThread]' passed (0.089 seconds).
+Test Case '-[ThumbleCLITests.StackSafetyRegressionTests testPackageIndependentAppearanceFitsConstrainedThread]' passed (0.071 seconds).
+Test Case '-[ThumbleCLITests.StackSafetyRegressionTests testPendingReconciliationBranchesRunOn512KiBStack]' passed (0.011 seconds).
+Test Case '-[ThumbleCLITests.StackSafetyRegressionTests testPhoneLayoutReplacementAndRecoveryFitConstrainedThread]' passed (0.071 seconds).
+Test Case '-[ThumbleCLITests.StackSafetyRegressionTests testPortableProfileArtifactDecodesOn512KiBStack]' passed (0.005 seconds).
+Test Case '-[ThumbleCLITests.StackSafetyRegressionTests testPresentationComparisonRunsOn512KiBStack]' passed (0.006 seconds).
+Test Case '-[ThumbleCLITests.StackSafetyRegressionTests testPresentationOnlyRawBridgeTransformRunsOn512KiBStack]' passed (0.024 seconds).
+Test Case '-[ThumbleCLITests.StackSafetyRegressionTests testProfileFormatPreflightAndNegotiationFitConstrainedThread]' passed (0.055 seconds).
+Test Case '-[ThumbleCLITests.StackSafetyRegressionTests testProfileSkinApplicationRunsOn512KiBStack]' passed (0.024 seconds).
+Test Case '-[ThumbleCLITests.StackSafetyRegressionTests testPureRuntimeSkinBridgeFitsConstrainedThread]' passed (0.227 seconds).
+Test Case '-[ThumbleCLITests.StackSafetyRegressionTests testReadOnlyBuildRecoveryFitsConstrainedThread]' passed (0.006 seconds).
+Test Case '-[ThumbleCLITests.StackSafetyRegressionTests testRuntimeLaunchProjectionDecodesOn512KiBStack]' passed (0.001 seconds).
+Test Case '-[ThumbleCLITests.StackSafetyRegressionTests testSavedConfigurationValidationAndRejectionRunOn512KiBStack]' passed (0.861 seconds).
+Test Case '-[ThumbleCLITests.StackSafetyRegressionTests testStrictJSONScanAndDecodePreserveTransportBoundsOn512KiBStack]' passed (0.017 seconds).
+Test Case '-[ThumbleCLITests.StackSafetyRegressionTests testTemplateConstructionAndResolutionRunOn512KiBStack]' passed (0.106 seconds).
+Test Case '-[ThumbleCLITests.StackSafetyRegressionTests testThumbleLinkMaximumSnapshotImportAndRefreshOn512KiBStack]' passed (1.592 seconds).
+Test Case '-[ThumbleCLITests.StackSafetyRegressionTests testWireDecoderRejectsOversizedPayloadBeforeParsing]' passed (0.001 seconds).
+Test Suite 'StackSafetyRegressionTests' passed at 2026-10-20 17:56:21.316.
+	 Executed 36 tests, with 0 failures (0 unexpected) in 7.379 (7.388) seconds
+Test Suite 'ThumbleCLITests.xctest' passed at 2026-10-20 17:56:21.316.
+	 Executed 36 tests, with 0 failures (0 unexpected) in 7.379 (7.388) seconds
+Test Suite 'Selected tests' passed at 2026-10-20 17:56:21.316.
+	 Executed 36 tests, with 0 failures (0 unexpected) in 7.379 (7.388) seconds
+** TEST SUCCEEDED **
+** BUILD SUCCEEDED **
+** BUILD SUCCEEDED **
+Stack-safety verification passed.

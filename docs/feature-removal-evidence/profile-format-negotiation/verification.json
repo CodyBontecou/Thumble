@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-20",
+  "advertisedFormats": [
+    4
+  ],
+  "logs": {
+    "focusedApple": {
+      "sourcePath": "/tmp/thumble-profile-format-swift-tests.log",
+      "sourceSHA256": "098d0f0107a77c3ad705529cb03ce9bd32aa90d8c5e57d9941cd661b898edc88",
+      "sourceBytes": 59204
+    },
+    "stackSafety": {
+      "sourcePath": "/tmp/thumble-profile-format-stack.log",
+      "sourceSHA256": "ebff107a7044238460a6f8549cc94514fbae34795413a3c06bf0576c84fb6c7b",
+      "sourceBytes": 233144
+    },
+    "rustWorkspace": {
+      "sourcePath": "/tmp/thumble-profile-format-rust-gate.log",
+      "sourceSHA256": "a7d65936653469949845d899aed78c0960438601a4c1a23097cf767dbd9ee36b",
+      "sourceBytes": 54234
+    },
+    "wireLoopback": {
+      "sourcePath": "/tmp/thumble-profile-format-loopback.log",
+      "sourceSHA256": "5fc2c02c22cf5018a1a99cf9f17f1fbf0a385bc1bfec2add0366d078610a97a1",
+      "sourceBytes": 656
+    },
+    "androidBuild": {
+      "sourcePath": "/tmp/thumble-profile-format-android-all.log",
+      "sourceSHA256": "9ee46797fdae7034411922955b7fb1be671b8f0a7b35e95c3156588228aa0c63",
+      "sourceBytes": 4096
+    },
+    "androidFinal": {
+      "sourcePath": "/tmp/thumble-profile-format-android-final.log",
+      "sourceSHA256": "f5f9eb18a981c9ff3782e65e497d69ea2abb0be1e3e38310847486e4e824d396",
+      "sourceBytes": 1624
+    }
+  },
+  "android": {
+    "tests": 200,
+    "failures": 0
+  },
+  "rust": {
+    "passed": 488,
+    "ignoredNativeDependent": 3
+  },
+  "apple": {
+    "focusedTests": 40,
+    "constrainedStackTests": 36,
+    "builds": [
+      "macOS Debug",
+      "iOS Debug"
+    ],
+    "budgetsRaised": false
+  }
+}

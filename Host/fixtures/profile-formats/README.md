@@ -1,0 +1,7 @@
+# Profile-format compatibility fixture
+
+`v1.json` is a hand-authored contract, separate from the frozen pre-removal fixtures and native appearance edit oracle. Its SHA-256 and row counts are pinned in `manifest.json`. Swift `ProfileFormatPolicyTests`, Rust protocol tests, and Android `ProfileFramePolicyTest` consume the same rows. The frame rows test only format headers; intentionally incomplete profile bodies must not be treated as valid complete profiles.
+
+Profile data negotiation is independent of real-time input protocol 3. A missing offer means legacy format 4. An offer has at most eight distinct integer versions in 1...65535. The receiver requires its catalog's format to occur explicitly in the offer. Unknown offered versions may coexist with 4, but never authorize interpreting an unknown required format as 4. Reserved format 5 requires an explicit offer; shipped clients continue to advertise only 4.
+
+Incoming selected/profile version markers, bank markers, and resource envelopes cannot downgrade to 4. Unknown unrelated profile metadata is allowed. Supplemental language-specific tests cover duplicate keys, malformed UTF-8, excessive profile counts, compact frame preservation and stored future-version rejection without rewriting source bytes. Core tests simulate a post-validation transition to prove hold release and credential retirement; they do not enable format-5 authority acceptance or migration.

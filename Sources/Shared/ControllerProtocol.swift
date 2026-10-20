@@ -762,6 +762,8 @@ public struct ControllerMessage: Codable, Sendable {
     public var gamepadProfileID: UUID?
     public var defaultGamepadProfileID: UUID?
     public var capabilities: [ControllerCapability]?
+    public var supportedProfileFormats: [Int]?
+    public var profileFormatVersion: Int?
     /// A profile-scoped mutation payload. It is valid only with
     /// `gamepadProfileOrientationPreferenceMutation` and `gamepadProfileID`.
     public var gamepadProfileOrientationPreferenceMutation: GamepadProfileOrientationPreference?
@@ -809,6 +811,8 @@ public struct ControllerMessage: Codable, Sendable {
         gamepadProfileID: UUID? = nil,
         defaultGamepadProfileID: UUID? = nil,
         capabilities: [ControllerCapability]? = nil,
+        supportedProfileFormats: [Int]? = nil,
+        profileFormatVersion: Int? = nil,
         gamepadProfileOrientationPreferenceMutation: GamepadProfileOrientationPreference? = nil,
         clientDeviceInfo: ControllerClientDeviceInfo? = nil,
         pointerEvent: ControllerPointerEventKind? = nil,
@@ -853,6 +857,8 @@ public struct ControllerMessage: Codable, Sendable {
         self.gamepadProfileID = gamepadProfileID
         self.defaultGamepadProfileID = defaultGamepadProfileID
         self.capabilities = capabilities
+        self.supportedProfileFormats = supportedProfileFormats
+        self.profileFormatVersion = profileFormatVersion
         self.gamepadProfileOrientationPreferenceMutation = gamepadProfileOrientationPreferenceMutation
         self.clientDeviceInfo = clientDeviceInfo
         self.pointerEvent = pointerEvent
@@ -1176,6 +1182,8 @@ public enum ControllerWireCodec {
               message.gamepadProfileID == nil,
               message.defaultGamepadProfileID == nil,
               message.capabilities == nil,
+              message.supportedProfileFormats == nil,
+              message.profileFormatVersion == nil,
               message.gamepadProfileOrientationPreferenceMutation == nil,
               message.clientDeviceInfo == nil,
               message.pointerEvent == nil,

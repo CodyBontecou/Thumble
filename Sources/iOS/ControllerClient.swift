@@ -1382,7 +1382,7 @@ final class ControllerClient: ObservableObject {
 
         lastError = nil
         updateLastSentEvent("pairing code sent", immediately: true)
-        send(.init(type: .hello, timestamp: 0, pairingCode: normalizedCode, clientName: UIDevice.current.name, clientDeviceInfo: Self.currentDeviceInfo()))
+        send(.init(type: .hello, timestamp: 0, pairingCode: normalizedCode, clientName: UIDevice.current.name, supportedProfileFormats: ProfileFormatPolicy.supportedFormats, clientDeviceInfo: Self.currentDeviceInfo()))
     }
 
     func setButton(_ button: KeypadElementID, pressed: Bool, pressIdentifier: UInt64? = nil, orientation: GamepadEditorDeviceOrientation? = nil) {
@@ -1963,11 +1963,11 @@ final class ControllerClient: ObservableObject {
             receiveNext(on: stateConnection)
 
             if let authToken {
-                send(.init(type: .hello, timestamp: 0, clientName: clientName, authToken: authToken, serverID: expectedServerID, clientDeviceInfo: Self.currentDeviceInfo()))
+                send(.init(type: .hello, timestamp: 0, clientName: clientName, authToken: authToken, serverID: expectedServerID, supportedProfileFormats: ProfileFormatPolicy.supportedFormats, clientDeviceInfo: Self.currentDeviceInfo()))
             } else if let pairingCode {
-                send(.init(type: .hello, timestamp: 0, pairingCode: pairingCode, clientName: clientName, clientDeviceInfo: Self.currentDeviceInfo()))
+                send(.init(type: .hello, timestamp: 0, pairingCode: pairingCode, clientName: clientName, supportedProfileFormats: ProfileFormatPolicy.supportedFormats, clientDeviceInfo: Self.currentDeviceInfo()))
             } else {
-                send(.init(type: .pairingRequest, timestamp: 0, clientName: clientName, clientDeviceInfo: Self.currentDeviceInfo()))
+                send(.init(type: .pairingRequest, timestamp: 0, clientName: clientName, supportedProfileFormats: ProfileFormatPolicy.supportedFormats, clientDeviceInfo: Self.currentDeviceInfo()))
             }
 
         case .waiting(let error):
@@ -2158,6 +2158,16 @@ final class ControllerClient: ObservableObject {
 
     private func handleIncoming(_ data: Data, from messageConnection: NWConnection) {
         guard connection === messageConnection else { return }
+        do { try ProfileFormatPolicy.validateIncoming(data) }
+        catch {
+            autoReconnectEnabled = false
+            reconnectTask?.cancel(); reconnectTask = nil
+            stopSmartDiscovery(); stopPairingDiscovery()
+            lastError = ProfileFormatPolicy.updateMessage
+            state = .failed(ProfileFormatPolicy.updateMessage)
+            closeConnection(sendReleaseAll: true)
+            return
+        }
         guard let decoded = try? ControllerWireCodec.decode(data, using: decoder) else { return }
         if let status = decoded.virtualGamepadStatus,
            state == .connected || decoded.type == .pairingAccepted || decoded.type == .hello {

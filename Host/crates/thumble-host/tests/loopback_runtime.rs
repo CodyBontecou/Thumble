@@ -351,10 +351,34 @@ async fn current_ios_loopback_pairs_reconnects_records_input_and_releases_on_shu
     );
 
     let url = format!("ws://127.0.0.1:{}", initial_status.port);
+    // A real wire rejection must not create a trusted credential or rewrite
+    // authority bytes before a compatible current client pairs.
+    let original_state = std::fs::read(&paths.state_file).unwrap();
+    let (mut incompatible, _) = connect_async(&url).await.unwrap();
+    let mut unsupported = ControllerMessage::new(ControllerMessageType::PairingRequest, 0);
+    unsupported.supported_profile_formats = Some(vec![5]);
+    incompatible
+        .send(Message::Text(
+            serde_json::to_string(&unsupported).unwrap().into(),
+        ))
+        .await
+        .unwrap();
+    let rejected = receive_type(&mut incompatible, ControllerMessageType::Error).await;
+    assert_eq!(
+        rejected.message.as_deref(),
+        Some(thumble_protocol::PROFILE_UPDATE_MESSAGE)
+    );
+    assert_eq!(rejected.profile_format_version, Some(4));
+    assert!(rejected.gamepad_profiles.is_none());
+    assert!(rejected.gamepad_customization.is_none());
+    assert!(rejected.auth_token.is_none());
+    assert_eq!(std::fs::read(&paths.state_file).unwrap(), original_state);
+    drop(incompatible);
     let (mut first, _) = connect_async(&url).await.unwrap();
 
     let mut pairing_request = ControllerMessage::new(ControllerMessageType::PairingRequest, 1);
     pairing_request.client_name = Some("Loopback iPhone".to_owned());
+    pairing_request.supported_profile_formats = Some(vec![4]);
     first
         .send(Message::Text(
             serde_json::to_string(&pairing_request).unwrap().into(),
@@ -379,12 +403,14 @@ async fn current_ios_loopback_pairs_reconnects_records_input_and_releases_on_shu
     let mut hello = ControllerMessage::new(ControllerMessageType::Hello, 2);
     hello.pairing_code = Some(pairing_code);
     hello.client_name = Some("Loopback iPhone".to_owned());
+    hello.supported_profile_formats = Some(vec![4]);
     first
         .send(Message::Binary(serde_json::to_vec(&hello).unwrap().into()))
         .await
         .unwrap();
     let accepted = receive_type(&mut first, ControllerMessageType::PairingAccepted).await;
     assert_eq!(accepted.input_protocol_version, Some(3));
+    assert_eq!(accepted.profile_format_version, Some(4));
     assert!(accepted.realtime_token.is_some());
     assert_eq!(
         accepted.capabilities,

@@ -208,6 +208,13 @@ impl ConfigurationView<'_> {
             let object = profile
                 .as_object()
                 .ok_or(ConfigurationDocumentError::MalformedProfile)?;
+            if object
+                .get("profileFormatVersion")
+                .filter(|v| !v.is_null())
+                .is_some_and(|v| v.as_f64() != Some(4.0))
+            {
+                return Err(ConfigurationDocumentError::UnsupportedProfileFormat);
+            }
             // Native migration candidates can carry owned appearance banks, but
             // the current authority/phone interchange still speaks version 4.
             // Do not commit or export a candidate that older clients would flatten.
@@ -372,6 +379,7 @@ pub enum ConfigurationDocumentError {
     TooManyProfileBindingMaps,
     MalformedProfile,
     UnsupportedAppearanceBank,
+    UnsupportedProfileFormat,
     InvalidProfileId,
     DuplicateProfileId,
     InvalidProfileName,
@@ -401,6 +409,7 @@ impl fmt::Display for ConfigurationDocumentError {
             ),
             Self::TooManyProfileBindingMaps => formatter.write_str("configuration has too many profile binding maps"),
             Self::MalformedProfile => formatter.write_str("configuration contains a malformed profile"),
+            Self::UnsupportedProfileFormat => formatter.write_str("unsupported stored profile format; update Thumble before opening this configuration"),
             Self::UnsupportedAppearanceBank => formatter.write_str("profile-owned appearance banks require version-5 interchange, which is not enabled yet"),
             Self::InvalidProfileId => formatter.write_str("configuration contains an invalid profile ID"),
             Self::DuplicateProfileId => formatter.write_str("configuration contains duplicate profile IDs"),

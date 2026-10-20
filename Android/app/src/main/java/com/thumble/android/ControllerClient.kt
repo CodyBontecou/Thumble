@@ -645,7 +645,7 @@ internal class ControllerClient(private val store: SessionStore = MemorySessionS
     private fun enqueue(action: () -> Unit) {
         try { queue.execute(action) } catch (_: RejectedExecutionException) { /* Activity already disposed. */ }
     }
-    private fun hello(code: String?): JSONObject = WireCodec.message(if (code == null && !trustedAttempt) "pairing_request" else "hello")
+    private fun hello(code: String?): JSONObject = ProfileFramePolicy.advertise(WireCodec.message(if (code == null && !trustedAttempt) "pairing_request" else "hello"))
         .put("clientName", "Thumble Android (${Build.MODEL})").also {
             if (trustedAttempt) trusted?.let { mac -> it.put("authToken", mac.authToken).put("serverID", mac.serverID) }
             else if (code != null) it.put("pairingCode", code)
@@ -708,6 +708,7 @@ internal class ControllerClient(private val store: SessionStore = MemorySessionS
     private fun receive(bytes: ByteArray, url: String) {
         try {
             val message = WireCodec.decode(bytes)
+            ProfileFramePolicy.validateIncoming(message)
             if(message.optString("type")=="profile_artifact_adoption_result") return // Retired phone upload replies never mutate profiles.
             if (state.paired || message.optString("type") in setOf("hello", "pairing_accepted")) {
                 message.optJSONObject("virtualGamepadStatus")?.let { state = state.copy(virtualGamepadStatus = it) }

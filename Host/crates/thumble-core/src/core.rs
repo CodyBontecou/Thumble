@@ -195,6 +195,7 @@ pub struct StatusSnapshot {
 
 #[derive(Clone)]
 struct ActiveClient {
+    profile_formats: Vec<i64>,
     connection_id: ConnectionId,
     auth_token: String,
     name: String,
@@ -332,6 +333,7 @@ impl InputSequenceHistory {
 }
 
 pub struct HostCore {
+    required_profile_format: i64,
     state: PersistentState,
     pairing_code: String,
     running: bool,
@@ -383,6 +385,7 @@ impl HostCore {
             return Err(CoreError::InvalidPairingCodeGenerated);
         }
         Ok(Self {
+            required_profile_format: thumble_protocol::required_profile_format(&state.profiles),
             state,
             pairing_code,
             running: true,
@@ -622,6 +625,17 @@ impl HostCore {
             return Ok(effects);
         }
 
+        if self.active_client.as_ref().is_some_and(|client| {
+            client.connection_id == connection_id
+                && !client
+                    .profile_formats
+                    .contains(&self.required_profile_format)
+        }) {
+            self.reject_profile_format(connection_id, &mut effects);
+            self.append_status_if_changed(before, &mut effects);
+            return Ok(effects);
+        }
+
         if message.has_adoption_payload()
             && !matches!(
                 message.message_type,
@@ -785,6 +799,8 @@ impl HostCore {
     /// selection save, including its binding mirrors. Released holds are not
     /// recreated and no effects are emitted.
     pub fn restore_state_after_failed_local_selection(&mut self, previous: PersistentState) {
+        self.required_profile_format =
+            thumble_protocol::required_profile_format(&previous.profiles);
         self.state = previous;
     }
 
@@ -795,7 +811,22 @@ impl HostCore {
         let before = self.status();
         let mut effects = Vec::new();
         self.release_all_and_notify_client(&mut effects);
+        self.required_profile_format = thumble_protocol::required_profile_format(&state.profiles);
         self.state = state;
+        if let Some(id) = self
+            .active_client
+            .as_ref()
+            .filter(|client| {
+                !client
+                    .profile_formats
+                    .contains(&self.required_profile_format)
+            })
+            .map(|client| client.connection_id)
+        {
+            self.reject_profile_format(id, &mut effects);
+            self.append_status_if_changed(before, &mut effects);
+            return effects;
+        }
         if let Some(connection_id) = self
             .active_client
             .as_ref()
@@ -936,6 +967,15 @@ impl HostCore {
         tokens: &mut impl TokenSource,
         effects: &mut Vec<Effect>,
     ) -> Result<(), CoreError> {
+        if thumble_protocol::negotiate_profile_format(
+            self.required_profile_format,
+            message.supported_profile_formats.as_deref(),
+        )
+        .is_err()
+        {
+            self.reject_profile_format(connection_id, effects);
+            return Ok(());
+        }
         if self
             .active_client
             .as_ref()
@@ -1020,7 +1060,7 @@ impl HostCore {
                 return Ok(());
             }
 
-            let Some(existing) = self.state.trusted_clients.get(token).cloned() else {
+            if !self.state.trusted_clients.contains_key(token) {
                 self.reject_connection(
                     connection_id,
                     "Trusted pairing expired. Request pairing again from Thumble Host.",
@@ -1028,16 +1068,11 @@ impl HostCore {
                     effects,
                 );
                 return Ok(());
-            };
-            let name = self.safe_client_name(
-                message.client_name.as_deref(),
-                Some(existing.name.as_str()),
-                Some(token),
-            );
+            }
             self.accept_client(
                 connection_id,
                 token.to_owned(),
-                name,
+                message,
                 time.unix_millis,
                 true,
                 effects,
@@ -1122,8 +1157,14 @@ impl HostCore {
         self.pairing_failure_count = 0;
         self.pairing_blocked_until_millis = 0;
         let token = self.generate_unique_auth_token(tokens)?;
-        let name = self.safe_client_name(message.client_name.as_deref(), None, Some(&token));
-        self.accept_client(connection_id, token, name, time.unix_millis, false, effects);
+        self.accept_client(
+            connection_id,
+            token,
+            message,
+            time.unix_millis,
+            false,
+            effects,
+        );
         Ok(())
     }
 
@@ -1131,11 +1172,32 @@ impl HostCore {
         &mut self,
         connection_id: ConnectionId,
         token: String,
-        name: String,
+        message: &ControllerMessage,
         now_millis: i64,
         trusted_reconnect: bool,
         effects: &mut Vec<Effect>,
     ) {
+        if thumble_protocol::negotiate_profile_format(
+            self.required_profile_format,
+            message.supported_profile_formats.as_deref(),
+        )
+        .is_err()
+        {
+            self.reject_profile_format(connection_id, effects);
+            return;
+        }
+        let name = self.safe_client_name(
+            message.client_name.as_deref(),
+            self.state
+                .trusted_clients
+                .get(&token)
+                .map(|client| client.name.as_str()),
+            Some(&token),
+        );
+        let profile_formats = message
+            .supported_profile_formats
+            .clone()
+            .unwrap_or_else(|| vec![thumble_protocol::LEGACY_PROFILE_FORMAT]);
         if let Some(previous) = self.active_client.take() {
             self.release_all_internal(effects);
             self.reset_input_session();
@@ -1174,6 +1236,7 @@ impl HostCore {
             },
         );
         self.active_client = Some(ActiveClient {
+            profile_formats,
             connection_id,
             auth_token: token.clone(),
             name,
@@ -1210,6 +1273,7 @@ impl HostCore {
             ControllerCapability::GamepadProfileOrientationPreferenceMutation,
         ]);
         accepted.input_protocol_version = Some(ControllerWireCodec::CURRENT_INPUT_PROTOCOL_VERSION);
+        accepted.profile_format_version = Some(self.required_profile_format);
         // Transport adapters may attach a session-scoped realtime token when UDP
         // is available. The core owns input ordering across both transports.
         accepted
@@ -1739,7 +1803,15 @@ impl HostCore {
     }
 
     fn profile_state_message(&self, message_type: ControllerMessageType) -> ControllerMessage {
+        if self.active_client.as_ref().is_some_and(|client| {
+            !client
+                .profile_formats
+                .contains(&self.required_profile_format)
+        }) {
+            return self.profile_format_error();
+        }
         let mut response = ControllerMessage::new(message_type, 0);
+        response.profile_format_version = Some(self.required_profile_format);
         response.gamepad_customization = Some(self.state.active_customization());
         response.gamepad_profiles = Some(self.state.profiles.clone());
         response.binding_presentations = Some(Vec::new());
@@ -2118,6 +2190,27 @@ impl HostCore {
         self.active_client
             .as_ref()
             .is_some_and(|active| active.connection_id == connection_id)
+    }
+
+    fn profile_format_error(&self) -> ControllerMessage {
+        let mut message = ControllerMessage::new(ControllerMessageType::Error, 0);
+        message.message = Some(thumble_protocol::PROFILE_UPDATE_MESSAGE.into());
+        message.profile_format_version = Some(self.required_profile_format);
+        message
+    }
+
+    fn reject_profile_format(&mut self, connection_id: ConnectionId, effects: &mut Vec<Effect>) {
+        // Retire authentication and holds synchronously, before an old peer can
+        // send another input or queued edit against the new profile contract.
+        effects.extend(self.disconnect(connection_id));
+        effects.push(Effect::SendMessage {
+            connection_id,
+            message: Box::new(self.profile_format_error()),
+        });
+        effects.push(Effect::CloseConnection {
+            connection_id,
+            reason: thumble_protocol::PROFILE_UPDATE_MESSAGE.into(),
+        });
     }
 
     fn reject_connection(

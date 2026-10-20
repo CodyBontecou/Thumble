@@ -206,6 +206,8 @@ impl ControllerWireCodec {
             || message.gamepad_profile_id.is_some()
             || message.default_gamepad_profile_id.is_some()
             || message.capabilities.is_some()
+            || message.supported_profile_formats.is_some()
+            || message.profile_format_version.is_some()
             || message
                 .gamepad_profile_orientation_preference_mutation
                 .is_some()

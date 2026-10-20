@@ -65,6 +65,7 @@ data class ControllerProfile(val id: UUID, val name: String, val source: JSONObj
     }
     companion object {
         fun parse(json: JSONObject): ControllerProfile {
+            ProfileFramePolicy.validateStoredProfile(json)
             val id = UUID.fromString(json.getString("id"))
             require(json.has("customization")) { "Profile is missing its layout." }
             val profile = ControllerProfile(id, json.optString("name", "Keypad").take(160), json)

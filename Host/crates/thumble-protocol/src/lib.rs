@@ -8,6 +8,8 @@
 mod adoption;
 mod message;
 pub use adoption::*;
+mod profile_formats;
+pub use profile_formats::*;
 mod strict_json;
 mod wire;
 

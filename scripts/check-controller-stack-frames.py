@@ -22,6 +22,7 @@ MAC_RUNTIME_OBJECT_NAMES = (
     "MacControllerServer.o",
     "GamepadProfileResourceCodec.o",
     "PendingProfileRecovery.o",
+    "ProfileFormatPolicy.o",
 )
 IOS_RUNTIME_OBJECT_NAMES = (
     "GamepadCustomization.o",
@@ -36,6 +37,7 @@ IOS_RUNTIME_OBJECT_NAMES = (
     "GamepadAppearanceEditMerge.o",
     "GamepadProfileResourceCodec.o",
     "PendingProfileRecovery.o",
+    "ProfileFormatPolicy.o",
     "ThumbleLegacyAppearanceMaterializer.o",
     "ThumbleSkin.o",
     "ThumbleSkinPackage.o",
@@ -179,6 +181,7 @@ def is_shared_runtime_symbol(name: str) -> bool:
             ".GamepadControlAppearanceSnapshot.",
             ".ThumbleLegacyAppearanceMaterializer.",
             ".PendingProfileRecovery.",
+            ".ProfileFormatPolicy.",
         )
     ):
         return True

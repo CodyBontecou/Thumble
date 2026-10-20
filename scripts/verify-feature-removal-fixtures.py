@@ -38,3 +38,16 @@ for case in oracle["cases"]:
     assert all(set(row["expectedAppearance"]["controls"]) == ids for row in case["resolutions"])
 assert sum(len(case["resolutions"]) for case in oracle["cases"]) == contract["resolutionCount"]
 print("Native appearance edit oracle verified:", contract["caseCount"], "cases,", contract["resolutionCount"], "results")
+
+# The profile-format matrix is a later hand-authored compatibility contract.
+formats = repo / "Host/fixtures/profile-formats"
+contract = json.loads((formats / "manifest.json").read_text())
+assert contract["fixtureVersion"] == 1 and contract["advertisedFormats"] == [4]
+assert hashlib.sha256((formats / "v1.json").read_bytes()).hexdigest() == contract["fixtureSHA256"]
+matrix = json.loads((formats / "v1.json").read_text())
+assert matrix["schemaVersion"] == 1
+for key, count in [("negotiations", "negotiationCount"), ("frames", "frameCount")]:
+    rows = matrix[key]
+    assert len(rows) == contract[count] and len({row["name"] for row in rows}) == len(rows)
+    assert all(isinstance(row["allowed"], bool) for row in rows)
+print("Profile-format matrix verified:", contract["negotiationCount"], "negotiations,", contract["frameCount"], "frames")

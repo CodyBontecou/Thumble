@@ -196,6 +196,7 @@ final class MacControllerServer: ObservableObject {
     private var realtimeConnection: NWConnection?
     private var pairedConnection: NWConnection?
     private var pairedAuthToken: String?
+    private var pairedSupportedProfileFormats: [Int]?
     private var pendingPairingConnection: NWConnection?
     private var activePairingCode: String
     private var realtimeToken: String?
@@ -628,6 +629,7 @@ final class MacControllerServer: ObservableObject {
             realtimeConnection = nil
             pairedConnection = nil
             pairedAuthToken = nil
+            pairedSupportedProfileFormats = nil
             pendingPairingConnection = nil
             realtimeToken = nil
             stopDatagramListenerOnNetworkQueue()
@@ -2377,6 +2379,7 @@ final class MacControllerServer: ObservableObject {
         realtimeConnection = newConnection
         pairedConnection = nil
         pairedAuthToken = nil
+        pairedSupportedProfileFormats = nil
         pendingPairingConnection = newConnection
         realtimeToken = nil
         lastClientActivityUptime = nil
@@ -2733,7 +2736,8 @@ final class MacControllerServer: ObservableObject {
                 from: connection,
                 authToken: authToken,
                 isTrustedReconnect: true,
-                clientDeviceInfo: message.clientDeviceInfo
+                clientDeviceInfo: message.clientDeviceInfo,
+                supportedProfileFormats: message.supportedProfileFormats
             )
             return
         }
@@ -2746,7 +2750,7 @@ final class MacControllerServer: ObservableObject {
             rejectPairingOnNetworkQueue(connection, reason: "Wrong pairing code")
             return
         }
-        acceptPairedClientOnNetworkQueue(message.clientName, from: connection, clientDeviceInfo: message.clientDeviceInfo)
+        acceptPairedClientOnNetworkQueue(message.clientName, from: connection, clientDeviceInfo: message.clientDeviceInfo, supportedProfileFormats: message.supportedProfileFormats)
     }
 
     @discardableResult
@@ -2907,6 +2911,11 @@ final class MacControllerServer: ObservableObject {
 
     private func handlePairingRequestOnNetworkQueue(_ message: ControllerMessage, from connection: NWConnection) {
         guard realtimeConnection === connection else { return }
+        let required = ProfileFormatPolicy.requiredVersion(profiles: realtimeGamepadProfiles)
+        guard (try? ProfileFormatPolicy.negotiate(required: required, offered: message.supportedProfileFormats)) != nil else {
+            rejectPairingOnNetworkQueue(connection, reason: ProfileFormatPolicy.updateMessage, profileFormatVersion: required)
+            return
+        }
 
         let requestClientName = message.clientName ?? "iPhone"
         let newPairingCode = Self.generatePairingCode()
@@ -2914,6 +2923,7 @@ final class MacControllerServer: ObservableObject {
         pendingPairingConnection = connection
         pairedConnection = nil
         pairedAuthToken = nil
+        pairedSupportedProfileFormats = nil
         resetRealtimeDatagramAuthenticationOnNetworkQueue(cancelConnections: true)
         realtimeToken = nil
 
@@ -2950,9 +2960,16 @@ final class MacControllerServer: ObservableObject {
         from connection: NWConnection,
         authToken existingAuthToken: String? = nil,
         isTrustedReconnect: Bool = false,
-        clientDeviceInfo: ControllerClientDeviceInfo? = nil
+        clientDeviceInfo: ControllerClientDeviceInfo? = nil,
+        supportedProfileFormats: [Int]? = nil
     ) {
         guard realtimeConnection === connection else { return }
+        let required = ProfileFormatPolicy.requiredVersion(profiles: realtimeGamepadProfiles)
+        guard (try? ProfileFormatPolicy.negotiate(required: required, offered: supportedProfileFormats)) != nil else {
+            rejectPairingOnNetworkQueue(connection, reason: ProfileFormatPolicy.updateMessage, profileFormatVersion: required)
+            return
+        }
+        pairedSupportedProfileFormats = supportedProfileFormats
 
         let newRealtimeToken = Self.generateRealtimeToken()
         let trustedAuthToken = existingAuthToken ?? Self.generateAuthToken()
@@ -3006,8 +3023,8 @@ final class MacControllerServer: ObservableObject {
         logDebug("pairing_accepted client=\(incomingClientName ?? "Connected iPhone") trusted=\(isTrustedReconnect)")
     }
 
-    private func rejectPairingOnNetworkQueue(_ connection: NWConnection, reason: String) {
-        send(.init(type: .error, message: reason), on: connection) { [weak connection] _ in
+    private func rejectPairingOnNetworkQueue(_ connection: NWConnection, reason: String, profileFormatVersion: Int? = nil) {
+        send(.init(type: .error, message: reason, profileFormatVersion: profileFormatVersion), on: connection) { [weak connection] _ in
             connection?.cancel()
         }
         releaseAllOnNetworkQueue(reason: "Rejected pairing: \(reason)")
@@ -3032,6 +3049,7 @@ final class MacControllerServer: ObservableObject {
             if pairedConnection === connection {
                 pairedConnection = nil
                 pairedAuthToken = nil
+                pairedSupportedProfileFormats = nil
             }
             if realtimeConnection === connection {
                 realtimeConnection = nil
@@ -3044,6 +3062,7 @@ final class MacControllerServer: ObservableObject {
             pendingPairingConnection = nil
             pairedConnection = nil
             pairedAuthToken = nil
+            pairedSupportedProfileFormats = nil
             realtimeToken = nil
             resetRealtimeDatagramAuthenticationOnNetworkQueue(cancelConnections: true)
         }
@@ -4972,6 +4991,20 @@ final class MacControllerServer: ObservableObject {
         completion: ((Error?) -> Void)?
     ) {
         dispatchPrecondition(condition: .onQueue(networkQueue))
+        var message = message
+        if message.gamepadProfiles != nil || message.gamepadCustomization != nil {
+            let required = ProfileFormatPolicy.requiredVersion(profiles: realtimeGamepadProfiles)
+            guard pairedConnection === connection else {
+                completion?(NSError(domain: "ThumbleProfileFormat", code: 1))
+                return
+            }
+            guard (try? ProfileFormatPolicy.negotiate(required: required, offered: pairedSupportedProfileFormats)) != nil else {
+                rejectPairingOnNetworkQueue(connection, reason: ProfileFormatPolicy.updateMessage, profileFormatVersion: required)
+                completion?(NSError(domain: "ThumbleProfileFormat", code: 2, userInfo: [NSLocalizedDescriptionKey: ProfileFormatPolicy.updateMessage]))
+                return
+            }
+            message.profileFormatVersion = required
+        }
         let data: Data
         do {
             data = try ControllerWireCodec.encode(message, using: encoder)
@@ -5240,6 +5273,7 @@ final class MacControllerServer: ObservableObject {
             if pairedConnection === disconnectedConnection {
                 pairedConnection = nil
                 pairedAuthToken = nil
+                pairedSupportedProfileFormats = nil
                 realtimeToken = nil
                 resetRealtimeDatagramAuthenticationOnNetworkQueue(cancelConnections: true)
             }
