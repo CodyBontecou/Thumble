@@ -1,0 +1,10 @@
+{
+  "schema": "com.codybontecou.pocketpad.skin-human-approval",
+  "version": 1,
+  "status": "pending",
+  "approvedBy": null,
+  "approvedAt": null,
+  "reviewedContactSheet": null,
+  "packageSHA256": null,
+  "notes": null
+}

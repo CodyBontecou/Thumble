@@ -32,6 +32,75 @@ const MAXIMUM_BRIDGE_STDERR_BYTES: u64 = 16 * 1024;
 const MAXIMUM_CHANGED_PATHS: usize = 128;
 const MAXIMUM_CHANGED_PATH_BYTES: usize = 512;
 
+fn preserve_equal_json_numbers(before: &Value, after: &mut Value) {
+    fn equal_float_integer(float: &serde_json::Number, integer: &serde_json::Number) -> bool {
+        if !float.is_f64() || integer.is_f64() {
+            return false;
+        }
+        let Some(value) = float.as_f64() else {
+            return false;
+        };
+        if value.fract() != 0.0 {
+            return false;
+        }
+        if let Some(original) = integer.as_i64() {
+            (-9_223_372_036_854_775_808.0..9_223_372_036_854_775_808.0).contains(&value)
+                && value as i64 == original
+        } else if let Some(original) = integer.as_u64() {
+            (0.0..18_446_744_073_709_551_616.0).contains(&value) && value as u64 == original
+        } else {
+            false
+        }
+    }
+    match (before, after) {
+        (Value::Number(original), Value::Number(candidate)) => {
+            if original == candidate
+                || equal_float_integer(original, candidate)
+                || equal_float_integer(candidate, original)
+            {
+                *candidate = original.clone();
+            }
+        }
+        (Value::Object(original), Value::Object(candidate)) => {
+            for (key, value) in candidate {
+                if let Some(original) = original.get(key) {
+                    preserve_equal_json_numbers(original, value);
+                }
+            }
+        }
+        (Value::Array(original), Value::Array(candidate)) => {
+            for (index, candidate) in candidate.iter_mut().enumerate() {
+                let previous = if let Some(id) = candidate.get("id").and_then(Value::as_str) {
+                    original.iter().find(|value| {
+                        value
+                            .get("id")
+                            .and_then(Value::as_str)
+                            .is_some_and(|old| old.eq_ignore_ascii_case(id))
+                    })
+                } else {
+                    original.get(index)
+                };
+                if let Some(previous) = previous {
+                    preserve_equal_json_numbers(previous, candidate);
+                }
+            }
+        }
+        _ => (),
+    }
+}
+
+#[cfg(test)]
+#[test]
+fn numeric_projection_preserves_exact_values_without_rounding_large_integers() {
+    let original = serde_json::json!({"nested":[1.0,2,0.25],"large":9_007_199_254_740_993_i64});
+    let mut response = serde_json::json!({"nested":[1,2.0,0.5],"large":9_007_199_254_740_992.0});
+    preserve_equal_json_numbers(&original, &mut response);
+    assert_eq!(response["nested"][0], original["nested"][0]);
+    assert_eq!(response["nested"][1], original["nested"][1]);
+    assert_ne!(response["nested"][2], original["nested"][2]);
+    assert_ne!(response["large"], original["large"]);
+}
+
 #[derive(Debug, Clone)]
 pub struct ConfigurationBridge {
     executable: PathBuf,
@@ -126,8 +195,18 @@ impl ConfigurationBridge {
             }
             return Err(ConfigurationBridgeError::Rejected(failure.error.code));
         }
-        let response: BridgeSuccess = thumble_protocol::decode_unique_json(&output)
+        let mut value: Value = thumble_protocol::decode_unique_json(&output)
             .map_err(|_| ConfigurationBridgeError::InvalidResponse)?;
+        // Swift's lossless JSON model encodes integral floats as integers. Keep
+        // the original representation when its numeric value is exactly equal,
+        // so unchanged metadata still passes the strict operation delta checks.
+        if let Some(candidate) = value.get_mut("document") {
+            let original = serde_json::to_value(document)
+                .map_err(|_| ConfigurationBridgeError::EncodingFailed)?;
+            preserve_equal_json_numbers(&original, candidate);
+        }
+        let response: BridgeSuccess =
+            serde_json::from_value(value).map_err(|_| ConfigurationBridgeError::InvalidResponse)?;
         if response.schema_version != BRIDGE_SCHEMA_VERSION {
             return Err(ConfigurationBridgeError::InvalidResponse);
         }
@@ -165,6 +244,15 @@ impl ConfigurationBridge {
         &self,
         input: Vec<u8>,
         maximum_input_bytes: usize,
+    ) -> Result<Vec<u8>, ConfigurationBridgeError> {
+        self.execute_with_limits(input, maximum_input_bytes, MAXIMUM_BRIDGE_BYTES)
+    }
+
+    pub(crate) fn execute_with_limits(
+        &self,
+        input: Vec<u8>,
+        maximum_input_bytes: usize,
+        maximum_output_bytes: usize,
     ) -> Result<Vec<u8>, ConfigurationBridgeError> {
         if input.len() > maximum_input_bytes + 1 {
             return Err(ConfigurationBridgeError::InputTooLarge);
@@ -212,7 +300,7 @@ impl ConfigurationBridge {
         });
         let (stdout_sender, stdout_receiver) = mpsc::sync_channel(1);
         thread::spawn(move || {
-            let _ = stdout_sender.send(read_bounded(stdout, MAXIMUM_BRIDGE_BYTES + 1));
+            let _ = stdout_sender.send(read_bounded(stdout, maximum_output_bytes + 1));
         });
         let (stderr_sender, stderr_receiver) = mpsc::sync_channel(1);
         thread::spawn(move || {
@@ -233,7 +321,7 @@ impl ConfigurationBridge {
         stdin_result.map_err(ConfigurationBridgeError::Write)?;
         let stdout = receive_before_deadline(&stdout_receiver, deadline, process_group)??;
         let _stderr = receive_before_deadline(&stderr_receiver, deadline, process_group)??;
-        if stdout.len() > MAXIMUM_BRIDGE_BYTES {
+        if stdout.len() > maximum_output_bytes {
             return Err(ConfigurationBridgeError::OutputTooLarge);
         }
         let output = single_line(&stdout)?;

@@ -1,0 +1,90 @@
+[
+  {
+    "ability": "bloodthirst",
+    "exactAPIHash": true,
+    "cropPixelsEqualOptimizedDownload": true,
+    "format": "PNG",
+    "dimensions": [
+      64,
+      64
+    ],
+    "sha256": "fd302c9cf9588e774e120585ead6169b1beecf654bdcc2d82016a0a983285e38"
+  },
+  {
+    "ability": "whirlwind",
+    "exactAPIHash": true,
+    "cropPixelsEqualOptimizedDownload": true,
+    "format": "PNG",
+    "dimensions": [
+      64,
+      64
+    ],
+    "sha256": "6d2968c7b10beb27411f066f7d963d7cb85c1f7e0c84cd08cb8ffd58cfbaf77d"
+  },
+  {
+    "ability": "execute",
+    "exactAPIHash": true,
+    "cropPixelsEqualOptimizedDownload": true,
+    "format": "PNG",
+    "dimensions": [
+      64,
+      64
+    ],
+    "sha256": "7fc7035c424ea82a637bc1344a63c914bc4ffdd5489f47eba879ad38ba161159"
+  },
+  {
+    "ability": "cleave",
+    "exactAPIHash": true,
+    "cropPixelsEqualOptimizedDownload": true,
+    "format": "PNG",
+    "dimensions": [
+      64,
+      64
+    ],
+    "sha256": "264090b370c06af0022dc7594a2b55945a2da9408c11aa1bf57b67e8fd04363d"
+  },
+  {
+    "ability": "charge",
+    "exactAPIHash": true,
+    "cropPixelsEqualOptimizedDownload": true,
+    "format": "PNG",
+    "dimensions": [
+      64,
+      64
+    ],
+    "sha256": "17a1289ec8d08ef330a630738e273646f74464f3a99574c53efdc7a99786fe7c"
+  },
+  {
+    "ability": "death-wish",
+    "exactAPIHash": true,
+    "cropPixelsEqualOptimizedDownload": true,
+    "format": "PNG",
+    "dimensions": [
+      64,
+      64
+    ],
+    "sha256": "f69fc605f134d5be1364647f5dc19f82b218ecb8fd5382cb5d10d9b27f3fe187"
+  },
+  {
+    "ability": "berserker-rage",
+    "exactAPIHash": true,
+    "cropPixelsEqualOptimizedDownload": true,
+    "format": "PNG",
+    "dimensions": [
+      64,
+      64
+    ],
+    "sha256": "5a507de240bad299e48ced15ab390efcc4be9f933350d9a7aa28abb164ed1cc8"
+  },
+  {
+    "ability": "recklessness",
+    "exactAPIHash": true,
+    "cropPixelsEqualOptimizedDownload": true,
+    "format": "PNG",
+    "dimensions": [
+      64,
+      64
+    ],
+    "sha256": "cfe5bfee0f1e1b49a119a0ea16fe0a39e61ea05a64cd0472f2c68e45bb4aa5a0"
+  }
+]

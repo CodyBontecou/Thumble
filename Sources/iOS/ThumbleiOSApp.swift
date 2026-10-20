@@ -67,6 +67,7 @@ private final class IOSClientStartup: ObservableObject {
     init() {
         do {
             client = try ControllerClient()
+            IOSRetiredPreferenceCleanup.removeCalibration()
             failure = nil
         } catch {
             client = nil

@@ -2,6 +2,35 @@ import SwiftUI
 import XCTest
 
 final class ThumbleSkinResolverTests: XCTestCase {
+    @MainActor
+    func testEditorPreviewReusesResolutionAndInvalidatesChangedInputs() throws {
+        let package = makeSkinPackage()
+        var profile = GamepadConfigurationProfile(name: "Preview", customization: .defaultValue)
+        profile.applySkin(package)
+        let cache = ThumbleSkinEditorPreviewCache()
+        var loads = 0
+        func resolve(_ orientation: GamepadEditorDeviceOrientation = .landscape,
+                     _ scheme: ThumbleSkinColorScheme = .dark) -> GamepadCustomization {
+            cache.resolve(profile: profile, orientation: orientation, colorScheme: scheme) {
+                loads += 1
+                return package
+            }
+        }
+        let first = resolve()
+        XCTAssertEqual(resolve(), first)
+        XCTAssertEqual(loads, 1, "A redraw must not reload and resolve an unchanged skin")
+        _ = resolve(.portrait)
+        _ = resolve(.landscape, .light)
+        XCTAssertEqual(loads, 3, "Orientation and appearance require independent previews")
+        profile.name = "Edited"
+        _ = resolve()
+        XCTAssertEqual(loads, 4, "Profile edits invalidate the previous preview")
+        cache.removeAll()
+        _ = resolve()
+        XCTAssertEqual(loads, 5, "Skin replacement notifications must invalidate cached resolution")
+    }
+
+
     func testActionSetMirrorHandlesChordsTouchOwnersAndReset() {
         var inputs = ThumbleActionSetInputState()
         XCTAssertEqual(inputs.actionSet, .base)

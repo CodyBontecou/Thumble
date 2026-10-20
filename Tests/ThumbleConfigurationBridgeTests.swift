@@ -4,6 +4,23 @@ import XCTest
 final class ThumbleConfigurationBridgeTests: XCTestCase {
     private let profileID = UUID(uuidString: "00000000-0000-0000-0000-000000000201")!
 
+    func testLegacyHostInlineKeyboardProjectionPreservesRawProfilesAndStrictPortableTypes() throws {
+        func profile(modifiers: Int) -> [String: Any] {
+            let output: [String: Any] = ["gamepadButtons": [], "keyboard": ["keyCode": 12, "modifiers": modifiers,
+                "sequence": [["keyCode": 12, "modifiers": modifiers], ["keyCode": 13, "modifiers": 0]]]]
+            return ["id": profileID.uuidString, "name": "Legacy host", "customization": ["elements": [[
+                "id": "00000000-0000-0000-0000-000000000301", "kind": "button", "label": "Legacy",
+                "output": output, "defaultOutput": output, "partOutputs": []]]]]
+        }
+        let raw = profile(modifiers: 1)
+        let request = try decodeRequest(profileObjects: [raw], operation: ["type": "profile.select", "profileID": profileID.uuidString])
+        let response = try ThumbleConfigurationBridge.transform(request)
+        XCTAssertEqual(response.document.profiles, request.document.profiles)
+        XCTAssertThrowsError(try JSONDecoder().decode(GamepadConfigurationProfile.self, from: JSONSerialization.data(withJSONObject: raw)))
+        let invalid = try decodeRequest(profileObjects: [profile(modifiers: 256)], operation: ["type": "profile.select", "profileID": profileID.uuidString])
+        XCTAssertThrowsError(try ThumbleConfigurationBridge.transform(invalid))
+    }
+
     func testReceiverSkinImportUsesNativeVersionAndReplacementPolicies() throws {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         let data = try Data(contentsOf: root.appendingPathComponent("Website/skins/packages/solar-sumi-1.0.0-edbecde5b708.pocketpad"))

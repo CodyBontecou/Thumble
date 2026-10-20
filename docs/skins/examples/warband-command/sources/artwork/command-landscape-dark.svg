@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="874" height="402" viewBox="0 0 874 402">
+<text x="48.00" y="38.00" fill="#F1E8D8" font-family="Helvetica,Arial,sans-serif" font-size="13" font-weight="700" text-anchor="start" letter-spacing="1">WARBAND</text>
+<text x="48.00" y="53.00" fill="#B8B5A9" font-family="Helvetica,Arial,sans-serif" font-size="8" font-weight="500" text-anchor="start" letter-spacing="1">WARRIOR</text>
+<path d="M48 65L123 65" fill="none" stroke="#B8975C" stroke-width="1"/>
+<rect x="258.64" y="196.64" width="52.72" height="52.72" rx="8" fill="#0C1115" stroke="#6F6550" stroke-width="1"/>
+<text x="285.00" y="256.36" fill="#F1E8D8" font-family="Helvetica,Arial,sans-serif" font-size="9" font-weight="700" text-anchor="middle" letter-spacing="1">↑</text>
+<rect x="258.64" y="300.64" width="52.72" height="52.72" rx="8" fill="#0C1115" stroke="#6F6550" stroke-width="1"/>
+<text x="285.00" y="298.64" fill="#F1E8D8" font-family="Helvetica,Arial,sans-serif" font-size="9" font-weight="700" text-anchor="middle" letter-spacing="1">↓</text>
+<rect x="206.64" y="248.64" width="52.72" height="52.72" rx="8" fill="#0C1115" stroke="#6F6550" stroke-width="1"/>
+<text x="265.36" y="278.00" fill="#F1E8D8" font-family="Helvetica,Arial,sans-serif" font-size="9" font-weight="700" text-anchor="middle" letter-spacing="1">←</text>
+<rect x="310.64" y="248.64" width="52.72" height="52.72" rx="8" fill="#0C1115" stroke="#6F6550" stroke-width="1"/>
+<text x="304.64" y="278.00" fill="#F1E8D8" font-family="Helvetica,Arial,sans-serif" font-size="9" font-weight="700" text-anchor="middle" letter-spacing="1">→</text>
+<rect x="703.64" y="280.64" width="52.72" height="52.72" rx="8" fill="#0C1115" stroke="#6F6550" stroke-width="1"/>
+<text x="730.00" y="278.64" fill="#F1E8D8" font-family="Helvetica,Arial,sans-serif" font-size="9" font-weight="700" text-anchor="middle" letter-spacing="1">A</text>
+<rect x="651.64" y="228.64" width="52.72" height="52.72" rx="8" fill="#0C1115" stroke="#6F6550" stroke-width="1"/>
+<text x="710.36" y="258.00" fill="#F1E8D8" font-family="Helvetica,Arial,sans-serif" font-size="9" font-weight="700" text-anchor="middle" letter-spacing="1">X</text>
+<rect x="755.64" y="228.64" width="52.72" height="52.72" rx="8" fill="#0C1115" stroke="#6F6550" stroke-width="1"/>
+<text x="749.64" y="258.00" fill="#F1E8D8" font-family="Helvetica,Arial,sans-serif" font-size="9" font-weight="700" text-anchor="middle" letter-spacing="1">B</text>
+<rect x="703.64" y="176.64" width="52.72" height="52.72" rx="8" fill="#0C1115" stroke="#6F6550" stroke-width="1"/>
+<text x="730.00" y="236.36" fill="#F1E8D8" font-family="Helvetica,Arial,sans-serif" font-size="9" font-weight="700" text-anchor="middle" letter-spacing="1">Y</text>
+
+
+</svg>

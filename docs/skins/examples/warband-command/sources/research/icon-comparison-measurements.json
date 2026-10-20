@@ -1,0 +1,162 @@
+[
+  {
+    "ability": "bloodthirst",
+    "originalDimensions": [
+      64,
+      64
+    ],
+    "crop": [
+      4,
+      4,
+      60,
+      60
+    ],
+    "outputDimensions": [
+      56,
+      56
+    ],
+    "meanAbsoluteRGBDifference": 22.946428571428573,
+    "exactPixelEquality": false,
+    "notes": "Lossless source differs from old JPEG; comparison evidence retained. Neither count nor canvas size implies extra interior resolution."
+  },
+  {
+    "ability": "whirlwind",
+    "originalDimensions": [
+      64,
+      64
+    ],
+    "crop": [
+      4,
+      4,
+      60,
+      60
+    ],
+    "outputDimensions": [
+      56,
+      56
+    ],
+    "meanAbsoluteRGBDifference": 27.38190901360544,
+    "exactPixelEquality": false,
+    "notes": "Lossless source differs from old JPEG; comparison evidence retained. Neither count nor canvas size implies extra interior resolution."
+  },
+  {
+    "ability": "execute",
+    "originalDimensions": [
+      64,
+      64
+    ],
+    "crop": [
+      4,
+      4,
+      60,
+      60
+    ],
+    "outputDimensions": [
+      56,
+      56
+    ],
+    "meanAbsoluteRGBDifference": 25.9985119047619,
+    "exactPixelEquality": false,
+    "notes": "Lossless source differs from old JPEG; comparison evidence retained. Neither count nor canvas size implies extra interior resolution."
+  },
+  {
+    "ability": "cleave",
+    "originalDimensions": [
+      64,
+      64
+    ],
+    "crop": [
+      4,
+      4,
+      60,
+      60
+    ],
+    "outputDimensions": [
+      56,
+      56
+    ],
+    "meanAbsoluteRGBDifference": 17.349064625850342,
+    "exactPixelEquality": false,
+    "notes": "Lossless source differs from old JPEG; comparison evidence retained. Neither count nor canvas size implies extra interior resolution."
+  },
+  {
+    "ability": "charge",
+    "originalDimensions": [
+      64,
+      64
+    ],
+    "crop": [
+      4,
+      4,
+      60,
+      60
+    ],
+    "outputDimensions": [
+      56,
+      56
+    ],
+    "meanAbsoluteRGBDifference": 16.40816326530612,
+    "exactPixelEquality": false,
+    "notes": "Lossless source differs from old JPEG; comparison evidence retained. Neither count nor canvas size implies extra interior resolution."
+  },
+  {
+    "ability": "death-wish",
+    "originalDimensions": [
+      64,
+      64
+    ],
+    "crop": [
+      4,
+      4,
+      60,
+      60
+    ],
+    "outputDimensions": [
+      56,
+      56
+    ],
+    "meanAbsoluteRGBDifference": 25.657100340136054,
+    "exactPixelEquality": false,
+    "notes": "Lossless source differs from old JPEG; comparison evidence retained. Neither count nor canvas size implies extra interior resolution."
+  },
+  {
+    "ability": "berserker-rage",
+    "originalDimensions": [
+      64,
+      64
+    ],
+    "crop": [
+      4,
+      4,
+      60,
+      60
+    ],
+    "outputDimensions": [
+      56,
+      56
+    ],
+    "meanAbsoluteRGBDifference": 26.909863945578234,
+    "exactPixelEquality": false,
+    "notes": "Lossless source differs from old JPEG; comparison evidence retained. Neither count nor canvas size implies extra interior resolution."
+  },
+  {
+    "ability": "recklessness",
+    "originalDimensions": [
+      64,
+      64
+    ],
+    "crop": [
+      4,
+      4,
+      60,
+      60
+    ],
+    "outputDimensions": [
+      56,
+      56
+    ],
+    "meanAbsoluteRGBDifference": 22.79113520408163,
+    "exactPixelEquality": false,
+    "notes": "Lossless source differs from old JPEG; comparison evidence retained. Neither count nor canvas size implies extra interior resolution."
+  }
+]

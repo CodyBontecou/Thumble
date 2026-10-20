@@ -1,0 +1,63 @@
+/* Warband Command. Appearance-only; geometry and bindings remain canonical. */
+:root { --ground:#E8E2D5; --face:#F5F0E5; --ink:#282B29; --edge:#715323; --well:#C9C5BA; --pressed:#C2B69C; --disabled:#CEC9BD; --bank:#715323; --pressure:#241C10; --shadow:#ADA594; --highlight:#FFFFFF; }
+controller { background:var(--ground); }
+control { background:var(--face); color:var(--ink); border:1px solid var(--edge); border-radius:7px; box-shadow:0px 2px 1px var(--shadow),inset 0px 1px 0px var(--highlight); font-size:13px; font-weight:semibold; }
+control:pressed { background:var(--pressed); border:2px solid var(--pressure); box-shadow:inset 0px 2px 1px var(--shadow); transform:scale(1); }
+control:active { background:var(--face); border:3px solid var(--bank); box-shadow:none; transform:scale(1); }
+control:disabled { background:var(--disabled); color:var(--ink); border:1px solid var(--edge); box-shadow:none; opacity:0.62; transform:scale(1); }
+control[group~="abilities"] { -thumble-legend:" "; background:#0C1115; color:#F1E8D8; border:1.5px solid var(--bank); border-radius:5px; box-shadow:0px 2px 1px var(--shadow); -thumble-icon-placement:center; -thumble-icon-scale:2.55; -thumble-icon-rendering:original; }
+control[group~="abilities"]:pressed { background:#000000; border:2px solid var(--pressure); box-shadow:inset 0px 3px 1px var(--shadow); }
+control[group~="abilities"]:active { background:#0C1115; border:3px solid var(--bank); box-shadow:none; }
+control[group~="abilities"]:disabled { background:#0C1115; border:1px solid var(--edge); box-shadow:none; opacity:0.40; }
+joystick { font-size:10px; -thumble-label-placement:center; background:var(--well); border:1px solid var(--edge); border-radius:60px; box-shadow:inset 0px 2px 1px var(--shadow); -thumble-joystick-ring-color:var(--edge); -thumble-joystick-ring-stroke-width:1px; -thumble-joystick-knob-fill:var(--face); -thumble-joystick-knob-stroke:var(--bank); -thumble-joystick-knob-stroke-width:2px; -thumble-joystick-knob-ratio:0.58; }
+joystick:pressed { -thumble-joystick-knob-fill:var(--pressed); -thumble-joystick-knob-stroke-width:3px; }
+joystick:active { -thumble-joystick-ring-color:var(--bank); -thumble-joystick-ring-stroke-width:3px; }
+joystick:disabled { -thumble-joystick-knob-fill:var(--disabled); -thumble-joystick-knob-stroke:var(--edge); }
+control[action="warband.lt"] { -thumble-legend:"LT · HOLD"; }
+control[action="warband.rt"] { -thumble-legend:"RT · HOLD"; }
+control[action="warband.control-bar-toggle"] { -thumble-icon-symbol:"chevron.down"; -thumble-icon-placement:center; -thumble-icon-rendering:template; }
+@media (prefers-color-scheme:dark) { :root { --ground:#11171B; --face:#263239; --ink:#F1E8D8; --edge:#B8975C; --well:#0C1115; --pressed:#11191E; --disabled:#1C252B; --bank:#B8975C; --pressure:#FFF4D9; --shadow:#080C0E; --highlight:#53616A; } }
+:root[action-set="base"] #builtin-00000000-0000-0000-0000-000000000101 { -thumble-icon:url(#charge); }
+:root[action-set="base"] #builtin-00000000-0000-0000-0000-000000000102 { -thumble-icon:url(#berserker-rage); }
+:root[action-set="base"] #builtin-00000000-0000-0000-0000-000000000103 { -thumble-icon:url(#death-wish); }
+:root[action-set="base"] #builtin-00000000-0000-0000-0000-000000000104 { -thumble-icon:url(#recklessness); }
+:root[action-set="base"] #builtin-00000000-0000-0000-0000-000000000105 { -thumble-icon:url(#cleave); }
+:root[action-set="base"] #builtin-00000000-0000-0000-0000-000000000106 { -thumble-icon:url(#bloodthirst); }
+:root[action-set="base"] #builtin-00000000-0000-0000-0000-000000000107 { -thumble-icon:url(#execute); }
+:root[action-set="base"] #builtin-00000000-0000-0000-0000-000000000108 { -thumble-icon:url(#whirlwind); }
+:root[action-set="left-trigger"] { --bank:#365F68; }
+@media (prefers-color-scheme:dark) { :root[action-set="left-trigger"] { --bank:#91B7B9; } }
+:root[action-set="left-trigger"] #builtin-00000000-0000-0000-0000-000000000101 { -thumble-icon:url(#death-wish); }
+:root[action-set="left-trigger"] #builtin-00000000-0000-0000-0000-000000000102 { -thumble-icon:url(#recklessness); }
+:root[action-set="left-trigger"] #builtin-00000000-0000-0000-0000-000000000103 { -thumble-icon:url(#charge); }
+:root[action-set="left-trigger"] #builtin-00000000-0000-0000-0000-000000000104 { -thumble-icon:url(#berserker-rage); }
+:root[action-set="left-trigger"] #builtin-00000000-0000-0000-0000-000000000105 { -thumble-icon:url(#execute); }
+:root[action-set="left-trigger"] #builtin-00000000-0000-0000-0000-000000000106 { -thumble-icon:url(#whirlwind); }
+:root[action-set="left-trigger"] #builtin-00000000-0000-0000-0000-000000000107 { -thumble-icon:url(#bloodthirst); }
+:root[action-set="left-trigger"] #builtin-00000000-0000-0000-0000-000000000108 { -thumble-icon:url(#cleave); }
+:root[action-set="right-trigger"] { --bank:#83512B; }
+@media (prefers-color-scheme:dark) { :root[action-set="right-trigger"] { --bank:#D7A16E; } }
+:root[action-set="right-trigger"] #builtin-00000000-0000-0000-0000-000000000101 { -thumble-icon:url(#recklessness); }
+:root[action-set="right-trigger"] #builtin-00000000-0000-0000-0000-000000000102 { -thumble-icon:url(#charge); }
+:root[action-set="right-trigger"] #builtin-00000000-0000-0000-0000-000000000103 { -thumble-icon:url(#berserker-rage); }
+:root[action-set="right-trigger"] #builtin-00000000-0000-0000-0000-000000000104 { -thumble-icon:url(#death-wish); }
+:root[action-set="right-trigger"] #builtin-00000000-0000-0000-0000-000000000105 { -thumble-icon:url(#bloodthirst); }
+:root[action-set="right-trigger"] #builtin-00000000-0000-0000-0000-000000000106 { -thumble-icon:url(#cleave); }
+:root[action-set="right-trigger"] #builtin-00000000-0000-0000-0000-000000000107 { -thumble-icon:url(#whirlwind); }
+:root[action-set="right-trigger"] #builtin-00000000-0000-0000-0000-000000000108 { -thumble-icon:url(#execute); }
+:root[action-set="both-triggers"] { --bank:#655279; }
+@media (prefers-color-scheme:dark) { :root[action-set="both-triggers"] { --bank:#B6A7D4; } }
+:root[action-set="both-triggers"] #builtin-00000000-0000-0000-0000-000000000101 { -thumble-icon:url(#berserker-rage); }
+:root[action-set="both-triggers"] #builtin-00000000-0000-0000-0000-000000000102 { -thumble-icon:url(#death-wish); }
+:root[action-set="both-triggers"] #builtin-00000000-0000-0000-0000-000000000103 { -thumble-icon:url(#recklessness); }
+:root[action-set="both-triggers"] #builtin-00000000-0000-0000-0000-000000000104 { -thumble-icon:url(#charge); }
+:root[action-set="both-triggers"] #builtin-00000000-0000-0000-0000-000000000105 { -thumble-icon:url(#whirlwind); }
+:root[action-set="both-triggers"] #builtin-00000000-0000-0000-0000-000000000106 { -thumble-icon:url(#execute); }
+:root[action-set="both-triggers"] #builtin-00000000-0000-0000-0000-000000000107 { -thumble-icon:url(#cleave); }
+:root[action-set="both-triggers"] #builtin-00000000-0000-0000-0000-000000000108 { -thumble-icon:url(#bloodthirst); }
+
+/* Readable held status uses the same fixed native capsule and baseline. */
+:root[action-set="left-trigger"] control[action="warband.lt"] { -thumble-legend:"LT · HELD"; }
+:root[action-set="right-trigger"] control[action="warband.rt"] { -thumble-legend:"RT · HELD"; }
+:root[action-set="both-triggers"] control[action="warband.lt"] { -thumble-legend:"LT · HELD"; }
+:root[action-set="both-triggers"] control[action="warband.rt"] { -thumble-legend:"RT · HELD"; }

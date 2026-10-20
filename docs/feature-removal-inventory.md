@@ -1,0 +1,21 @@
+# Feature removal ownership inventory
+
+This inventory identifies the first removal boundaries. Follow references at implementation time; a filename containing Skin or Builder is not sufficient evidence that all of its contents are removable.
+
+| System | Main owners | Treatment |
+| --- | --- | --- |
+| Direct appearance and artwork | Sources/Shared/GamepadDesignSystem.swift, GamepadCustomization.swift, ThumbleArtworkLayerView.swift; general types currently in ThumbleSkin.swift | Preserve and extract from package ownership |
+| Skin cascade and packages | Sources/Shared/ThumbleSkin*.swift; MacSkinLibraryView; IOSSkinLibraryView; Android SkinLibrary, SkinProfileLifecycle, SkinTransfer, SkinRenderRepository | Resolve old profiles first; retain required general render/design types and bounded legacy migration; remove active package workflows |
+| Asset rendering | ThumbleSVGRasterizer, ThumbleVectorCompiler, native preview renderer; Android asset/image views | Audit ordinary design-tool consumers before removing package-specific wrappers |
+| Catalog and authoring | Website/skins.html, skins.js, skins/; scripts/build-skin-directory.sh, verify-skin-directory.py, verify-thumble-skins.sh; docs/skins; project skin-author skill | Remove distribution and authoring product paths after preservation work; old assets remain recoverable in Git |
+| Hosted builder | Host/crates/thumble-gateway, thumble-builder; docs/mcp/hosted-builder*; BuilderArtifact* shared Swift types | Delete hosted transport/session owners; retain local codecs, templates, and generation where shared |
+| Relay | thumble-tunnel; thumble-mcp/src/relay.rs and CLI relay flags; scripts/install-relay-launch-agent.sh; host release packaging | Remove remote transport and installed background relay; preserve local stdio MCP |
+| Phone pickup | IOSBuilderArtifactPickup, IOSPendingBuilderArtifactStore; Android SharedBuild*, BuilderArtifactShare, PendingSharedBuildStore, ProfileArtifactAdoption | Remove hosted entry points; preserve local adopted profiles and required ordinary import transactions |
+| Landscape selection | GamepadOrientationCoordinator; ProfileOrientationSupport; GamepadEditorDeviceCatalog; orientation fields in profile models and bridge/CLI operations; Android profile orientation and MainActivity | Retain landscape device sizing and release barriers; remove portrait controller variants after migration |
+| Calibration | ThumbPlacementCalibrationView; tail of IOSLocalKeypadUX; IOSContentView settings/runtime; Android ThumbCalibration*, ControllerSession, MainActivity, ControllerClient | Remove tracing, reach scoring, stores, and entry points; keep accepted layout changes and general layout validation |
+| Essential input | ControllerClient, TouchCaptureView, MacControllerServer, keyboard/pointer/gamepad injectors; thumble-protocol/core/host/receiver; Android touch router and transport | Preserve and regression-test; removed protocol capabilities must not disturb input sequencing |
+| Essential editing | MacContentView editor, shared design sessions/layout operations; iOS edit runtime and pending reconciler; Android LayoutEditor*, LayoutEdits, AppearancePreferenceJournal | Preserve; change only orientation/package dependencies needed by the final model |
+| WoW | Addons/ThumbleLink; ThumbleLinkSnapshot; Mac ThumbleLinkImport; CLI wow commands; wowForever templates and fixtures | Preserve exporter/import/refresh, addon metadata, physical gamepad outputs, and trigger combinations |
+| Cross-cutting verification | project.yml/generated Xcode project; Host/Cargo.toml/lockfile; .github/workflows; scripts/verify-rust-host.sh; MCP capability ledgers; Android resource fixture source sets | Update with each removal; retain stack, CLI/local-MCP parity, profile interchange, and template/input coverage |
+
+Deployed infrastructure needs a separate live inventory before retirement: service identifiers, routes, shared storage, OAuth credentials, jobs, and backup/retention requirements cannot be proven from source files alone.

@@ -49,6 +49,24 @@ class AdvancedControlTest {
         assertEquals(4.0, TrackpadSettings.parse(JSONObject().put("sensitivity", 99)).sensitivity, 0.0)
     }
 
+    @Test fun `native template analog target reaches the gesture output without digital fallback`() {
+        val raw=JSONObject(javaClass.classLoader!!.getResourceAsStream("controller-templates/v1/wowForever.json")!!.bufferedReader().use { it.readText() })
+            .getJSONObject("profile").getJSONObject("customization").getJSONArray("elements")
+        val native=(0 until raw.length()).map { raw.getJSONObject(it) }.first {
+            it.optJSONObject("joystickOutputSettings")?.optString("analogTarget")=="left_stick"
+        }
+        val settings=JSONObject(native.getJSONObject("joystickOutputSettings").toString()).put("sendsDigitalDirections",false)
+        val control=control("joystick",JSONObject().put("joystickOutputSettings",settings))
+        val h=Harness(listOf(control))
+        h.event(TouchPhase.DOWN,1,0,Triple(1,95.0,50.0))
+        assertEquals("left",h.sticks.single().target);assertTrue(h.sticks.single().vector.x>0)
+        assertTrue("analog-only native controls must not synthesize digital bindings",h.edges.isEmpty())
+        h.event(TouchPhase.UP,1,10,Triple(1,95.0,50.0))
+        assertTrue(h.sticks.last().final);assertEquals(Vector(),h.sticks.last().vector)
+        val right=JoystickSettings.parse(JSONObject(settings.toString()).put("analogTarget","right_stick"))
+        assertEquals("right",right.target);assertFalse(right.digital)
+    }
+
     @Test fun `feedback follows first button activation and completed trackpad click rather than motion or release`() {
         val button=control("button");val pad=control("trackpad")
         val h=Harness(listOf(button,pad))

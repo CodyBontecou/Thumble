@@ -41,7 +41,7 @@ class IncomingSkinSyncDeviceTest {
     private fun packages(type:String,vararg bytes:ByteArray)=WireCodec.message(type).put("skinPackages",JSONArray().also { a -> bytes.forEach { a.put(Base64.getEncoder().encodeToString(it)) } })
     private fun accepted(p:ControllerProfile)=WireCodec.message("pairing_accepted").put("inputProtocolVersion",3).put("serverID","incoming-skin-test")
         .put("authToken","private-fixture-token").put("gamepadProfiles",JSONArray().put(p.source)).put("gamepadProfileID",p.id.toString())
-    private fun target(server:MockWebServer)=PairingTarget.manual(server.url("/").toString().replaceFirst("http://","ws://"),"123456")
+    private fun target(server:MockWebServer)=PairingTarget.manual("ws://127.0.0.1:${server.port}","123456")
     private fun await(label:String,condition:()->Boolean) {
         val limit=SystemClock.elapsedRealtime()+15_000
         while(!condition() && SystemClock.elapsedRealtime()<limit) SystemClock.sleep(20)
@@ -95,7 +95,7 @@ class IncomingSkinSyncDeviceTest {
                 if(bytes.size==56 && bytes[0]==80.toByte() && bytes[21]==1.toByte()) downs.incrementAndGet()
                 else if(bytes.size>0 && bytes[0]==123.toByte() && JSONObject(bytes.utf8()).optString("type")=="release_all") releases.incrementAndGet()
             }
-        }));server.start()
+        }));server.start(java.net.InetAddress.getByName("127.0.0.1"),0)
         try { ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { it.connect(target(server)) }
             var session:ControllerSession?=null
@@ -169,7 +169,7 @@ class IncomingSkinSyncDeviceTest {
                 ws.send(packages("skin_packages",archive()).toString())
                 val hello=accepted(profile());hello.put("skinPackages",packages("skin_packages",archive()).getJSONArray("skinPackages"));ws.send(hello.toString())
             }
-        }));server.start()
+        }));server.start(java.net.InetAddress.getByName("127.0.0.1"),0)
         val client=ControllerClient(store,incomingSkins={offered.incrementAndGet();true}) { state.set(it) }
         try {
             client.connect(target(server).copy(serverID="different-expected-mac"))
@@ -181,7 +181,7 @@ class IncomingSkinSyncDeviceTest {
         val offered=AtomicInteger();val state=AtomicReference(ClientState());val store=MemorySessionStore();val server=MockWebServer();val peer=AtomicReference<WebSocket>();val p=profile()
         server.enqueue(MockResponse().withWebSocketUpgrade(object:WebSocketListener() {
             override fun onOpen(ws:WebSocket,response:Response) { peer.set(ws);ws.send(accepted(p).toString()) }
-        }));server.start()
+        }));server.start(java.net.InetAddress.getByName("127.0.0.1"),0)
         val client=ControllerClient(store,incomingSkins={offered.incrementAndGet();true}) { state.set(it) }
         try {
             client.connect(target(server));await("paired") { state.get().paired }
@@ -198,7 +198,7 @@ class IncomingSkinSyncDeviceTest {
             override fun onOpen(ws:WebSocket,response:Response) {
                 val hello=accepted(profile());hello.put("skinPackages",packages("skin_packages",archive()).getJSONArray("skinPackages"));ws.send(hello.toString())
             }
-        }));server.start()
+        }));server.start(java.net.InetAddress.getByName("127.0.0.1"),0)
         val client=ControllerClient(store,incomingSkins={false}) { state.set(it) }
         try {
             client.connect(target(server));await("bounded retry exposed") { state.get().error?.contains("Skin sync is busy")==true }

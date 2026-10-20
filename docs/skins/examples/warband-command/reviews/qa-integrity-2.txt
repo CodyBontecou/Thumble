@@ -1,0 +1,14 @@
+assets/command-landscape-light.png 1748 804 43176
+assets/command-landscape-dark.png 1748 804 43416
+assets/command-portrait-light.png 804 1748 50680
+assets/command-portrait-dark.png 804 1748 51020
+assets/bloodthirst.png 56 56 7688
+assets/whirlwind.png 56 56 8249
+assets/execute.png 56 56 8146
+assets/cleave.png 56 56 7347
+assets/charge.png 56 56 7097
+assets/death-wish.png 56 56 8027
+assets/berserker-rage.png 56 56 8324
+assets/recklessness.png 56 56 8088
+PASS: 12 asset hashes/dimensions; 8 original and PNG provenance pairs; exact appearance-only file allowlist; no executable/profile/binding keys; pending approval.
+Total unpacked bytes: 3171294

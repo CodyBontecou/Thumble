@@ -57,5 +57,11 @@ internal data class SkinCanvas(val width: Double, val height: Double) {
             if (size == null || orientation !in listOf("portrait","landscape")) return SkinCanvas(874.0,402.0)
             return if (orientation == "portrait") SkinCanvas(size.first,size.second) else SkinCanvas(size.second,size.first)
         }
+        fun orientedFrameID(layout: JSONObject, landscape: Boolean): String {
+            val raw = layout.optJSONObject("deviceCanvas")?.optString("frameID").orEmpty()
+            val spec = raw.substringBeforeLast('-')
+            val known = portraitSizes.containsKey(spec) || Regex("custom-([0-9]+(?:\\.[0-9]+)?)x([0-9]+(?:\\.[0-9]+)?)").matches(spec)
+            return (if (known) spec else "iphone-17-pro") + if (landscape) "-landscape" else "-portrait"
+        }
     }
 }

@@ -246,6 +246,35 @@ class SessionRecoveryTest {
         } finally { client.dispose(); server.shutdown() }
     }
 
+    @Test fun discoveryDoesNotReplaceAConnectedTrustedHandshakeWithAnUnreachableAlternative() {
+        val server=MockWebServer();val alternative=MockWebServer()
+        val peer=AtomicReference<WebSocket>();val hello=AtomicInteger()
+        server.enqueue(MockResponse().withWebSocketUpgrade(object: WebSocketListener() {
+            override fun onMessage(socket: WebSocket,text: String) {
+                if(JSONObject(text).optString("type")=="hello") { peer.set(socket);hello.incrementAndGet() }
+            }
+        }))
+        // Models a newly discovered address whose TCP path exists but whose
+        // WebSocket upgrade cannot complete on the just-restored network.
+        alternative.enqueue(MockResponse().setSocketPolicy(okhttp3.mockwebserver.SocketPolicy.NO_RESPONSE))
+        server.start(InetAddress.getByName("127.0.0.1"),0);alternative.start(InetAddress.getByName("127.0.0.1"),0)
+        val store=MemorySessionStore().apply { saveMac(TrustedMac("recovery-fixture","fixture-trust-only",listOf(server.url("/").toString().replace("http://","ws://")))) }
+        val browser=FixtureDiscovery();val state=AtomicReference(ClientState())
+        val client=ControllerClient(store,browser) { state.set(it) }
+        try {
+            client.resume();await("trusted hello reached cached endpoint") { hello.get()==1 && browser.callback!=null }
+            browser.callback!!(listOf(alternative.url("/").toString().replace("http://","ws://")))
+            // Let the serial client queue consume discovery before releasing the
+            // original host's response, reproducing the startup callback race.
+            client.setHapticIntensity(.5)
+            await("discovery callback processed") { state.get().hapticIntensity==.5 }
+            peer.get().send(acceptance().toString())
+            await("cached trusted handshake survives discovery") { state.get().paired }
+            assertEquals("discovery must not open an alternative while a handshake is healthy",0,alternative.requestCount)
+            assertEquals(1,hello.get())
+        } finally { client.dispose();server.shutdown();alternative.shutdown() }
+    }
+
     @Test fun serviceOnlyQrDiscoversAndPairsWithoutAnInitialUrl() {
         val server = MockWebServer()
         val hello = AtomicReference<JSONObject>()

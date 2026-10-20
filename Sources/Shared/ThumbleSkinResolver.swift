@@ -789,3 +789,50 @@ private extension ThumbleSkinColorScheme {
         }
     }
 }
+
+/// Reuses appearance resolution across editor redraws. Confined to the UI actor;
+/// callers clear it when the installed skin library changes.
+@MainActor
+final class ThumbleSkinEditorPreviewCache {
+    private struct Key: Hashable {
+        let profileID: UUID
+        let orientation: String
+        let colorScheme: String
+    }
+
+    // Keep large profile/customization aggregates out of callers' inline storage.
+    private final class Entry {
+        let profile: GamepadConfigurationProfile
+        let customization: GamepadCustomization
+
+        init(profile: GamepadConfigurationProfile, customization: GamepadCustomization) {
+            self.profile = profile
+            self.customization = customization
+        }
+    }
+
+    private var entries: [Key: Entry] = [:]
+
+    func resolve(
+        profile: GamepadConfigurationProfile,
+        orientation: GamepadEditorDeviceOrientation,
+        colorScheme: ThumbleSkinColorScheme,
+        loadPackage: () -> ThumbleSkinPackage?
+    ) -> GamepadCustomization {
+        let key = Key(profileID: profile.id, orientation: orientation.rawValue, colorScheme: colorScheme.rawValue)
+        if let entry = entries[key], entry.profile == profile {
+            return entry.customization
+        }
+        // Do not cache a missing package: a later install must be discoverable.
+        guard let package = loadPackage() else { return profile.customization(for: orientation) }
+        let customization = profile.resolvedCustomization(
+            for: orientation, colorScheme: colorScheme, skinPackage: package)
+        if entries.count >= 32 { entries.removeAll(keepingCapacity: true) }
+        entries[key] = Entry(profile: profile, customization: customization)
+        return customization
+    }
+
+    func removeAll() {
+        entries.removeAll(keepingCapacity: true)
+    }
+}

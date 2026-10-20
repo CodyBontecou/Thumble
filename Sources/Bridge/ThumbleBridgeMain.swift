@@ -10,7 +10,16 @@ private enum ThumbleBridgeMain {
         do {
             let requestData = try readSingleBoundedRequest()
             let probe = try JSONDecoder().decodeUnique(BridgeRequestKind.self, from: requestData)
-            if probe.skinCommand != nil {
+            if probe.profileArtifactCommand != nil {
+                guard probe.skinCommand == nil, probe.phoneLayoutCommand == nil,
+                      requestData.count <= 12 * 1024 * 1024 else { throw ThumbleBridgeInputError.tooLarge }
+                let request = try JSONDecoder().decodeUnique(ThumbleProfileArtifactBridgeRequest.self, from: requestData)
+                try emit(ThumbleProfileArtifactBridge.validate(request), maximumBytes: 24 * 1024 * 1024)
+            } else if probe.phoneLayoutCommand != nil {
+                guard probe.skinCommand == nil, requestData.count <= 24 * 1024 * 1024 else { throw ThumbleBridgeInputError.tooLarge }
+                let request = try JSONDecoder().decodeUnique(ThumblePhoneLayoutBridgeRequest.self, from: requestData)
+                try emit(ThumblePhoneLayoutBridge.transform(request))
+            } else if probe.skinCommand != nil {
                 let request = try JSONDecoder().decodeUnique(ThumbleSkinBridgeRequest.self, from: requestData)
                 try emit(ThumbleSkinBridge.transform(request))
             } else {
@@ -18,6 +27,9 @@ private enum ThumbleBridgeMain {
                 let request = try JSONDecoder().decodeUnique(ThumbleConfigurationBridgeRequest.self, from: requestData)
                 try emit(ThumbleConfigurationBridge.transform(request))
             }
+        } catch let error as ThumblePhoneLayoutBridgeError {
+            emitFailure(code: error.rawValue, message: "Phone layout operation failed validation")
+            exit(1)
         } catch let error as ThumbleSkinBridgeError {
             emitFailure(code: error.rawValue, message: "Skin operation failed validation")
             exit(1)
@@ -54,11 +66,11 @@ private enum ThumbleBridgeMain {
         return data
     }
 
-    private static func emit<T: Encodable>(_ value: T) throws {
+    private static func emit<T: Encodable>(_ value: T, maximumBytes: Int = thumbleConfigurationBridgeMaximumBytes) throws {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
         var data = try encoder.encode(value)
-        guard data.count <= thumbleConfigurationBridgeMaximumBytes else {
+        guard data.count <= maximumBytes else {
             throw ThumbleBridgeInputError.tooLarge
         }
         data.append(0x0A)
@@ -79,4 +91,8 @@ private enum ThumbleBridgeInputError: Error {
     case multipleRequests
 }
 
-private struct BridgeRequestKind: Decodable { let skinCommand: String? }
+private struct BridgeRequestKind: Decodable {
+    let skinCommand: String?
+    let phoneLayoutCommand: String?
+    let profileArtifactCommand: String?
+}

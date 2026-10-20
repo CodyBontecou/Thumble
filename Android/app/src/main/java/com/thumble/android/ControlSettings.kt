@@ -38,7 +38,11 @@ internal data class JoystickSettings(
     }
     companion object {
         fun parse(json: JSONObject?): JoystickSettings {
-            val target = when (json?.optString("analogTarget")) { "leftStick" -> "left"; "rightStick" -> "right"; else -> null }
+            val target = when (json?.optString("analogTarget")) {
+                "left_stick", "leftStick" -> "left"
+                "right_stick", "rightStick" -> "right"
+                else -> null
+            }
             return JoystickSettings(target, json?.optBoolean("sendsDigitalDirections", true) != false || target == null,
                 setting(json, "deadZone", .12, 0.0, .85), setting(json, "sensitivity", 1.0, .2, 3.0),
                 json?.optBoolean("invertX") == true, json?.optBoolean("invertY") == true, json?.optBoolean("snapToCardinal") == true)

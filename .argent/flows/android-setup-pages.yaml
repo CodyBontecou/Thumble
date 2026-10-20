@@ -1,0 +1,91 @@
+# Reopen an already-completed setup guide from the connection screen.
+# Each Home/foreground cycle verifies step retention and refreshes Argent
+# Android devtools snapshots, which otherwise cache a prior Compose tree.
+steps:
+  - launch: com.thumble.android
+  - await: {"visible": {"text": "Scan Mac QR Code"}, "timeout": 10000}
+  - await: { idle: true }
+  - tap:
+      text: Setup guide
+  - await: {"visible": {"text": "Your Mac shortcuts, right under your thumbs."}, "timeout": 10000}
+  - await: { idle: true }
+  - tap:
+      text: Get Started
+  - tool: button
+    args:
+      button: home
+  - tool: launch-app
+    args:
+      bundleId: com.thumble.android
+  - await: {"visible": {"text": "Allow focused permissions."}, "timeout": 10000}
+  - await: { idle: true }
+  - tap:
+      text: Continue
+  - tool: button
+    args:
+      button: home
+  - tool: launch-app
+    args:
+      bundleId: com.thumble.android
+  - await: {"visible": {"text": "Pair with Thumble Mac."}, "timeout": 10000}
+  - await: { idle: true }
+  - tap:
+      text: Back
+  - tool: button
+    args:
+      button: home
+  - tool: launch-app
+    args:
+      bundleId: com.thumble.android
+  - await: {"visible": {"text": "Allow focused permissions."}, "timeout": 10000}
+  - await: { idle: true }
+  - tap:
+      text: Continue
+  - tool: button
+    args:
+      button: home
+  - tool: launch-app
+    args:
+      bundleId: com.thumble.android
+  - await: {"visible": {"text": "Pair with Thumble Mac."}, "timeout": 10000}
+  - await: { idle: true }
+  - tap:
+      text: Continue
+  - tool: button
+    args:
+      button: home
+  - tool: launch-app
+    args:
+      bundleId: com.thumble.android
+  - await: {"visible": {"text": "Your keypad is ready when you are."}, "timeout": 10000}
+  - await: { idle: true }
+  - tap:
+      text: Open Thumble
+  - tool: button
+    args:
+      button: home
+  - tool: launch-app
+    args:
+      bundleId: com.thumble.android
+  - await: {"visible": {"text": "Scan Mac QR Code"}, "timeout": 10000}
+  - await: { idle: true }
+  - tap:
+      text: Setup guide
+  - tool: button
+    args:
+      button: home
+  - tool: launch-app
+    args:
+      bundleId: com.thumble.android
+  - await: {"visible": {"text": "Your Mac shortcuts, right under your thumbs."}, "timeout": 10000}
+  - await: { idle: true }
+  - tap:
+      text: Set Up Later
+  - tool: button
+    args:
+      button: home
+  - tool: launch-app
+    args:
+      bundleId: com.thumble.android
+  - await: {"visible": {"text": "Scan Mac QR Code"}, "timeout": 10000}
+  - await: { idle: true }

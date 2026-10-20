@@ -6,8 +6,38 @@ import org.junit.Test
 import java.nio.file.Files
 import java.util.Base64
 import java.util.UUID
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
+import kotlinx.coroutines.*
 
 class SkinRenderRepositoryTest {
+    @Test fun cancelledDisplayRequestsDoNotEnterBlockingResolutionBeforeLatestRequest() = runBlocking {
+        val fixture=oracle();val pkg=packageValue(fixture)
+        val entered=CountDownLatch(1);val release=CountDownLatch(1);val loads=AtomicInteger()
+        val repository=SkinRenderRepository {
+            loads.incrementAndGet();entered.countDown()
+            check(release.await(5,TimeUnit.SECONDS));pkg
+        }
+        val local=fixture.getJSONObject("profiles").getJSONObject("arcadeStick")
+        val first=launch(Dispatchers.Default) { repository.resolveForDisplay(profile(local,pkg.reference),false,false) }
+        try {
+            assertTrue(entered.await(5,TimeUnit.SECONDS))
+            first.cancel()
+            val superseded=(0 until 32).map {
+                launch(start=CoroutineStart.UNDISPATCHED) {
+                    repository.resolveForDisplay(profile(local,SkinReference(pkg.reference.identifier,"9.0.0")),false,false)
+                }
+            }
+            superseded.forEach { it.cancel() }
+            val latest=profile(local,pkg.reference)
+            val result=async(start=CoroutineStart.UNDISPATCHED) { repository.resolveForDisplay(latest,false,false) }
+            release.countDown();first.join();superseded.forEach { it.join() }
+            assertTrue(superseded.all { it.isCancelled })
+            assertSame(latest,withTimeout(5_000) { result.await() }.original)
+            assertEquals("cancelled requests must not load their different skin",1,loads.get())
+        } finally { release.countDown();first.cancelAndJoin() }
+    }
     private fun oracle() = javaClass.classLoader!!.getResourceAsStream("skin-resolution/v1/native-profile-oracle.json")!!.use { JSONObject(it.bufferedReader().readText()) }
     private fun packageValue(v: JSONObject): SkinPackage {
         val data=v.getJSONObject("assetPayloads")

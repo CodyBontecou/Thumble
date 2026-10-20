@@ -272,6 +272,8 @@ struct ThumbleCLI {
             try controllerDesign(arguments: rest)
         case "skin", "skins":
             try skin(arguments: rest)
+        case "shared-build":
+            try sharedBuild(arguments: rest)
         case "binding", "bindings", "shortcut", "shortcuts":
             try binding(arguments: rest)
         case "output", "outputs":
@@ -1830,6 +1832,35 @@ struct ThumbleCLI {
     }
 
     // MARK: - Shareable skins
+
+    private static func sharedBuild(arguments: [String]) throws {
+        guard let command = arguments.first, ["adopt", "status", "cancel"].contains(command) else {
+            throw CLIError.message("Usage: thumble shared-build adopt ARTIFACT [--operation-id UUID] [--record-id UUID] [--server-id SERVER] [--json] | status|cancel OPERATION_UUID [--json]")
+        }
+        let backend = try ThumbleCLIRuntimeBackend()
+        let status = try backend.perform(.status)
+        guard status.owner == .rust, status.ok else {
+            throw CLIError.message("Shared-build adoption requires a running Rust receiver with configuration writes enabled.")
+        }
+        let executable = URL(fileURLWithPath: CommandLine.arguments[0]).standardizedFileURL
+            .deletingLastPathComponent().appendingPathComponent("thumble-host")
+        try ThumbleCLIProfileBackend.validateExecutable(at: executable)
+        let process = Process()
+        process.executableURL = executable
+        process.arguments = ["shared-build"] + arguments
+        process.standardInput = FileHandle.nullDevice
+        process.standardOutput = FileHandle.standardOutput
+        process.standardError = FileHandle.standardError
+        try process.run()
+        let deadline = Date().addingTimeInterval(30)
+        while process.isRunning && Date() < deadline { Thread.sleep(forTimeInterval: 0.01) }
+        if process.isRunning {
+            process.terminate(); process.waitUntilExit()
+            throw CLIError.message("Shared-build request timed out. Retry with the same operation and record IDs to inspect or replay its durable outcome.")
+        }
+        process.waitUntilExit()
+        guard process.terminationStatus == 0 else { throw CLIError.message("Shared-build receiver command failed.") }
+    }
 
     /// A live Rust receiver owns the library as well as profiles. Never write a
     /// legacy defaults domain after that owner has accepted a skin command.
@@ -6777,6 +6808,21 @@ struct ThumbleCLI {
             print("Requested Thumble Mac quit.")
         case "screenshot", "capture-window":
             try captureAppScreenshot(arguments: rest)
+        case "editor-view":
+            guard rest.count == 1, let mode = rest.first, ["clean", "edit", "status"].contains(mode) else {
+                throw CLIError.message("Usage: thumble app editor-view clean|edit|status")
+            }
+            guard let defaults = UserDefaults(suiteName: appDefaultsDomain) else {
+                throw CLIError.message("Could not open Thumble Mac preferences.")
+            }
+            if mode != "status" {
+                defaults.set(mode == "clean", forKey: ThumbleMacIPC.editorCleanPreviewDefaultsKey)
+                defaults.synchronize()
+                DistributedNotificationCenter.default().postNotificationName(
+                    Notification.Name(ThumbleMacIPC.editorPresentationChangedNotificationName), object: nil,
+                    userInfo: nil, deliverImmediately: true)
+            }
+            print("Editor view: \(defaults.bool(forKey: ThumbleMacIPC.editorCleanPreviewDefaultsKey) ? "clean" : "edit")")
         case "replay-onboarding", "onboarding", "reset-onboarding":
             try replayOnboarding()
             print("Reset onboarding and opened Thumble Mac.")
@@ -9003,6 +9049,9 @@ struct ThumbleCLI {
           thumble skin pack DIRECTORY -o skin.pocketpad
           thumble skin unpack skin.pocketpad -o DIRECTORY [--force]
           thumble skin render SOURCE|PACKAGE -o OUTPUT [same options as skin preview]
+          thumble shared-build adopt ARTIFACT [--operation-id UUID] [--record-id UUID] [--server-id SERVER] [--json]
+          thumble shared-build status OPERATION_UUID [--json]
+          thumble shared-build cancel OPERATION_UUID [--json]
 
         Bindings:
           thumble binding list [--profile PROFILE]
@@ -9084,6 +9133,7 @@ struct ThumbleCLI {
 
         Runtime:
           thumble app open|quit|replay-onboarding
+          thumble app editor-view clean|edit|status
           thumble app setup-guide
           thumble app local-network-settings
           thumble app ios-app

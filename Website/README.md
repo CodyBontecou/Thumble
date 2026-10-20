@@ -1,10 +1,12 @@
 # Thumble launch site
 
-Pixel-art landing page for Thumble with a Cloudflare Pages Function that saves launch-list emails into Cloudflare D1.
+Dark, product-focused site for Thumble, inspired by myself.md, with a Cloudflare Pages Function that saves launch-list emails into Cloudflare D1.
 
 ## Files
 
-- `index.html` / `styles.css` / `script.js` — static landing page, screenshot gallery, and launch-list form.
+- `index.html` / `home.js` — landing page and accessible controller showcase tabs.
+- `styles.css` / `design.css` — existing content layouts and the shared dark visual theme across every page.
+- `script.js` — release availability, Turnstile, and launch-list forms.
 - `docs.html` — comprehensive Thumble documentation for setup, pairing, skins, editor workflows, outputs, CLI, troubleshooting, and safety behavior.
 - `blog.html` + `blog/` — the Thumble blog index and posts. Posts are static pages that reuse the docs article styles; add a new card to `blog.html` per post.
 - `skins.html` / `skins.js` — searchable, filterable skin directory with package verification, Web Share installation, direct downloads, and detail deep links.
@@ -16,6 +18,14 @@ Pixel-art landing page for Thumble with a Cloudflare Pages Function that saves l
 - `schema.sql` — D1 table and indexes.
 - `wrangler.toml` — Pages + D1/R2 binding config. Replace the placeholder `database_id` before deploy.
 - `config.js` — optional public Turnstile site key.
+
+## Static design preview
+
+Run `python3 -m http.server 8174 --directory Website` from the repository root.
+The static preview covers the page layouts, tabs, FAQ, and skin directory. Release
+metadata and signup submission require the Cloudflare Pages runtime and bindings
+described below. The controller tabs support arrow-key navigation and Enter/Space
+activation; reduced-motion preferences disable decorative transitions.
 
 ## Cloudflare setup
 
@@ -126,18 +136,23 @@ Thumble Link, receiver limits, and virtual gamepad acceptance boundaries follow
 
 ## Gaming screenshot provenance
 
-The gaming cards use unedited, full-viewport native iPhone app captures, shown
-in real Practice Mode. Image links open the original-resolution PNGs.
+The hero defaults to the clean Warband Command native controller render.
+Everyday Play uses its reviewed clean native controller render.
 
-- Lux Prism: captured October 19, 2026 with Argent at full scale in the isolated
-  Thumble App Store Capture iPhone 17 Pro simulator (iOS 26.5). Loaded the existing
-  `build/LuxController/LuxPrismController/profile.json` into disposable capture
-  preferences; no community skin was authored or applied. The source profile uses
-  native controls and its existing ability-icon assets. Landscape/dark appearance
-  was selected for capture. The original simulator preferences were backed up.
-- WoW Forever: existing original native capture from
-  `marketing/app-store/gaming/source/captures/wow-controller-landscape.png`.
+- Everyday Play 1.0.0: exact, unedited native-renderer output from
+  `docs/skins/examples/everyday-play/reviews/landscape-dark-base-1.png`.
+  Mineral keycaps and paired sea-glass/coral rims preserve canonical controls.
+  Hero asset SHA-256: `b8e9ec1276a6c789bb13bc9aa69e07b1dd869f3bddad99b64ab86533b4c72fcf`.
+  Full 16-frame review, original editable SVG/CSS and independent QA are retained
+  in that workspace. Existing docs screenshots remain unchanged.
 
-The screenshots show saved controller UI, not live game recognition or input
-acceptance. No controls or icons were composited onto either capture. Published
+- Warband Command 1.0.2: exact, unedited native-renderer output from
+  `docs/skins/examples/warband-command/reviews/landscape-dark-base-6.png`.
+  The reviewed appearance package removes the passive bank reference; this clean
+  render omits app toolbar chrome. Hero asset SHA-256: `67ae6f7fd33dba405f7a0e394b99e1fd3b8fa57079bd99ba502cd0a5bcea671d`.
+  Full 64-frame review and independent QA are retained in that workspace.
+  This is a configured Warrior example, not live WoW spell synchronization.
+
+These images show configured controller UI, not live game recognition or input
+acceptance. No controls or icons were composited onto the captures or render. Asset
 filenames include SHA-256 prefixes because `/assets/*` is cached immutably.

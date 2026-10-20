@@ -1,0 +1,177 @@
+{
+  "batchcomplete": "",
+  "query": {
+    "normalized": [
+      {
+        "from": "File:Spell_nature_bloodlust.png",
+        "to": "File:Spell nature bloodlust.png"
+      },
+      {
+        "from": "File:Ability_whirlwind.png",
+        "to": "File:Ability whirlwind.png"
+      },
+      {
+        "from": "File:Inv_sword_48.png",
+        "to": "File:Inv sword 48.png"
+      },
+      {
+        "from": "File:Ability_warrior_cleave.png",
+        "to": "File:Ability warrior cleave.png"
+      },
+      {
+        "from": "File:Ability_warrior_charge.png",
+        "to": "File:Ability warrior charge.png"
+      },
+      {
+        "from": "File:Spell_shadow_deathpact.png",
+        "to": "File:Spell shadow deathpact.png"
+      },
+      {
+        "from": "File:Spell_nature_ancestralguardian.png",
+        "to": "File:Spell nature ancestralguardian.png"
+      },
+      {
+        "from": "File:Ability_criticalstrike.png",
+        "to": "File:Ability criticalstrike.png"
+      }
+    ],
+    "pages": {
+      "104176": {
+        "pageid": 104176,
+        "ns": 6,
+        "title": "File:Ability criticalstrike.png",
+        "imagerepository": "local",
+        "imageinfo": [
+          {
+            "size": 6805,
+            "width": 64,
+            "height": 64,
+            "url": "https://warcraft.wiki.gg/images/Ability_criticalstrike.png?c5fd91",
+            "descriptionurl": "https://warcraft.wiki.gg/wiki/File:Ability_criticalstrike.png",
+            "descriptionshorturl": "https://warcraft.wiki.gg/index.php?curid=104176",
+            "sha1": "0c5fd911f3ef447097d50c7a1cfd71117b341b45"
+          }
+        ]
+      },
+      "297503": {
+        "pageid": 297503,
+        "ns": 6,
+        "title": "File:Ability warrior charge.png",
+        "imagerepository": "local",
+        "imageinfo": [
+          {
+            "size": 3663,
+            "width": 64,
+            "height": 64,
+            "url": "https://warcraft.wiki.gg/images/Ability_warrior_charge.png?b2889d",
+            "descriptionurl": "https://warcraft.wiki.gg/wiki/File:Ability_warrior_charge.png",
+            "descriptionshorturl": "https://warcraft.wiki.gg/index.php?curid=297503",
+            "sha1": "b2889d3c9be5293ce4fe55938571017950612780"
+          }
+        ]
+      },
+      "111349": {
+        "pageid": 111349,
+        "ns": 6,
+        "title": "File:Ability warrior cleave.png",
+        "imagerepository": "local",
+        "imageinfo": [
+          {
+            "size": 5493,
+            "width": 64,
+            "height": 64,
+            "url": "https://warcraft.wiki.gg/images/Ability_warrior_cleave.png?2193f4",
+            "descriptionurl": "https://warcraft.wiki.gg/wiki/File:Ability_warrior_cleave.png",
+            "descriptionshorturl": "https://warcraft.wiki.gg/index.php?curid=111349",
+            "sha1": "2193f49214c962e26d33dbdf383a9fd2f26ab225"
+          }
+        ]
+      },
+      "210190": {
+        "pageid": 210190,
+        "ns": 6,
+        "title": "File:Ability whirlwind.png",
+        "imagerepository": "local",
+        "imageinfo": [
+          {
+            "size": 6203,
+            "width": 64,
+            "height": 64,
+            "url": "https://warcraft.wiki.gg/images/Ability_whirlwind.png?800359",
+            "descriptionurl": "https://warcraft.wiki.gg/wiki/File:Ability_whirlwind.png",
+            "descriptionshorturl": "https://warcraft.wiki.gg/index.php?curid=210190",
+            "sha1": "8003592285ecc21f059a537b24297c16b48ecf5c"
+          }
+        ]
+      },
+      "32353": {
+        "pageid": 32353,
+        "ns": 6,
+        "title": "File:Inv sword 48.png",
+        "imagerepository": "local",
+        "imageinfo": [
+          {
+            "size": 6459,
+            "width": 64,
+            "height": 64,
+            "url": "https://warcraft.wiki.gg/images/Inv_sword_48.png?c92e09",
+            "descriptionurl": "https://warcraft.wiki.gg/wiki/File:Inv_sword_48.png",
+            "descriptionshorturl": "https://warcraft.wiki.gg/index.php?curid=32353",
+            "sha1": "c92e099158fb7ee84b81957f2c8e5c16176ea8c2"
+          }
+        ]
+      },
+      "352103": {
+        "pageid": 352103,
+        "ns": 6,
+        "title": "File:Spell nature ancestralguardian.png",
+        "imagerepository": "local",
+        "imageinfo": [
+          {
+            "size": 6662,
+            "width": 64,
+            "height": 64,
+            "url": "https://warcraft.wiki.gg/images/Spell_nature_ancestralguardian.png?95d588",
+            "descriptionurl": "https://warcraft.wiki.gg/wiki/File:Spell_nature_ancestralguardian.png",
+            "descriptionshorturl": "https://warcraft.wiki.gg/index.php?curid=352103",
+            "sha1": "95d588dc70614d128c1ecb31620f1cfec1b38c46"
+          }
+        ]
+      },
+      "469637": {
+        "pageid": 469637,
+        "ns": 6,
+        "title": "File:Spell nature bloodlust.png",
+        "imagerepository": "local",
+        "imageinfo": [
+          {
+            "size": 5239,
+            "width": 64,
+            "height": 64,
+            "url": "https://warcraft.wiki.gg/images/Spell_nature_bloodlust.png?58a08a",
+            "descriptionurl": "https://warcraft.wiki.gg/wiki/File:Spell_nature_bloodlust.png",
+            "descriptionshorturl": "https://warcraft.wiki.gg/index.php?curid=469637",
+            "sha1": "58a08a4a52b55f410e5194bd38677c23b26d1583"
+          }
+        ]
+      },
+      "157661": {
+        "pageid": 157661,
+        "ns": 6,
+        "title": "File:Spell shadow deathpact.png",
+        "imagerepository": "local",
+        "imageinfo": [
+          {
+            "size": 6133,
+            "width": 64,
+            "height": 64,
+            "url": "https://warcraft.wiki.gg/images/Spell_shadow_deathpact.png?4437f2",
+            "descriptionurl": "https://warcraft.wiki.gg/wiki/File:Spell_shadow_deathpact.png",
+            "descriptionshorturl": "https://warcraft.wiki.gg/index.php?curid=157661",
+            "sha1": "4437f2efcc77a25809c8ef89d65839dd70ce1104"
+          }
+        ]
+      }
+    }
+  }
+}

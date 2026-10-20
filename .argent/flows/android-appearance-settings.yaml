@@ -1,0 +1,91 @@
+steps:
+- echo: Requires an isolated test device with a cached keypad and no imported skins;
+    changes appearance and leaves offline practice.
+- launch: com.thumble.android
+- await:
+    visible:
+      text: Practice with saved keypad
+- await:
+    idle: true
+- tap:
+    text: Settings
+- await:
+    visible:
+      text: Keypad settings
+- await:
+    idle: true
+- tap:
+    id: appearance-system
+- await:
+    visible:
+      id: appearance-system
+- await:
+    idle: true
+- tap:
+    id: appearance-dark
+- await:
+    visible:
+      id: appearance-dark
+- await:
+    idle: true
+- tap:
+    text: Done
+- await:
+    hidden:
+      text: Keypad settings
+- await:
+    idle: true
+- tap:
+    text: Practice with saved keypad
+- await:
+    visible:
+      text: Practice mode · on
+- await:
+    idle: true
+- tap:
+    id: keypad-options
+- await:
+    visible:
+      text: Import skin…
+- await:
+    idle: true
+- tap:
+    text: Settings
+- await:
+    visible:
+      text: Keypad settings
+- await:
+    idle: true
+- tap:
+    id: appearance-light
+- await:
+    visible:
+      id: appearance-light
+- await:
+    idle: true
+- tool: button
+  args:
+    button: back
+- await:
+    hidden:
+      text: Keypad settings
+- await:
+    idle: true
+- await:
+    visible:
+      id: keypad-options
+- await:
+    idle: true
+- launch: com.thumble.android
+- await:
+    visible:
+      text: Practice with saved keypad
+- await:
+    idle: true
+- tap:
+    text: Practice with saved keypad
+- await:
+    visible:
+      id: keypad-options
+- await:
+    idle: true

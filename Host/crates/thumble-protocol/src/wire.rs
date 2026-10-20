@@ -182,6 +182,14 @@ impl ControllerWireCodec {
     }
 
     fn has_json_only_field(message: &ControllerMessage) -> bool {
+        if message.profile_artifact_adoption_metadata.is_some()
+            || message.profile_artifact_adoption_operation_id.is_some()
+            || message.profile_artifact_adoption_chunk_index.is_some()
+            || message.profile_artifact_adoption_chunk_data.is_some()
+            || message.profile_artifact_adoption_result.is_some()
+        {
+            return true;
+        }
         message.sent_at.is_some()
             || message.pairing_code.is_some()
             || message.client_name.is_some()

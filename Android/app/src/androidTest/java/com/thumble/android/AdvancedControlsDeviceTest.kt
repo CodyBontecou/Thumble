@@ -46,7 +46,7 @@ class AdvancedControlsDeviceTest {
             val element = JSONObject().put("id", id.toString()).put("label", kind).put("kind", kind)
                 .put("layout", JSONObject().put("centerX", .125 + index * .25).put("centerY", .5)
                     .put("shape", if (kind == "joystick") "circle" else "rectangle").put("widthScale", 1).put("heightScale", 1))
-            if (kind == "joystick") element.put("joystickOutputSettings", JSONObject().put("analogTarget", "leftStick"))
+            if (kind == "joystick") element.put("joystickOutputSettings", JSONObject().put("analogTarget", "left_stick"))
             if (kind == "trigger") element.put("triggerSettings", JSONObject().put("target", "right").put("sendsDigitalButton", true))
             elements.put(element)
         }

@@ -22,8 +22,11 @@ import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
 
+internal data class SharedBuildPracticePreview(val recordID: UUID,val snapshot: ProfileSnapshot)
 internal data class ClientState(
     val status: String = "Ready to connect",
+    val onboardingLoaded: Boolean = false,
+    val onboardingCompleted: Boolean = true,
     val connecting: Boolean = false,
     val paired: Boolean = false,
     val needsCode: Boolean = false,
@@ -36,25 +39,44 @@ internal data class ClientState(
     val canReconnect: Boolean = false,
     val practiceMode: Boolean = false,
     val hapticIntensity: Double = 1.0,
+    val showBindingGlyphs: Boolean = true,
     val preferencesError: String? = null,
     val viewingSaved: Boolean = false,
     val virtualGamepadStatus: JSONObject? = null,
     val capabilities: Set<String> = emptySet(),
     val pendingSkinChanges: Int = 0,
+    val pendingSkinRemovals: Int = 0,
+    val pendingAppearanceChanges: Int = 0,
+    val pendingLayoutChanges: Int = 0,
+    val layoutEditing: Boolean = false,
+    val sharedBuildPreview: SharedBuildPracticePreview? = null,
+    val artifactAdoption: ArtifactAdoptionState? = null,
+    val pairedServerID: String? = null,
+    val layoutEditEntry: LayoutSnapshot? = null,
+    val layoutEditToken: Long = 0,
+    val layoutEditOrientation: LayoutOrientation? = null,
     val surfaceRevision: Long = 0
 )
 
 /** All session state, socket writes, hold refreshes, and touch edges run on one queue. */
-internal class ControllerClient(private val store: SessionStore = MemorySessionStore(), private val discovery: MacDiscovery? = null, private val skinArchive: (SkinReference) -> ByteArray? = { null }, private val incomingSkins: (IncomingSkinPackages) -> Boolean = { true }, private val publish: (ClientState) -> Unit) {
+internal class ControllerClient(private val store: SessionStore = MemorySessionStore(), private val discovery: MacDiscovery? = null, private val skinArchive: (SkinReference) -> ByteArray? = { null }, private val incomingSkins: (IncomingSkinPackages) -> Boolean = { true }, private val removedSkins: (List<SkinReference>, (Boolean)->Unit) -> Unit = { _,completed -> completed(true) }, private val publish: (ClientState) -> Unit) {
     private val queue = Executors.newSingleThreadScheduledExecutor { task -> Thread(task, "Thumble input") }
     private val main = Handler(Looper.getMainLooper())
     private val http = OkHttpClient.Builder().socketFactory(NoDelaySocketFactory()).connectTimeout(5, TimeUnit.SECONDS)
         .readTimeout(0, TimeUnit.MILLISECONDS).pingInterval(5, TimeUnit.SECONDS).build()
     private var state = ClientState()
+    private var pendingRemovals = emptyList<PendingSkinRemoval>()
+    private var removalsLoaded = true
+    private val sentRemovals = mutableSetOf<PendingSkinRemoval>()
+    private val removalRevisions = mutableMapOf<PendingSkinRemoval,Long>()
+    private var nextRemovalRevision = 0L
     private var socket: WebSocket? = null
     private var udp: DatagramSocket? = null
     private var heartbeat: ScheduledFuture<*>? = null
     private var deadline: ScheduledFuture<*>? = null
+    private var adoptionDeadline: ScheduledFuture<*>? = null
+    private var adoptionBytes: ByteArray? = null
+    private var authoritativeProfileIDs: Set<UUID> = emptySet()
     private var inputs: InputSession? = null
     private var target: PairingTarget? = null
     private var addressIndex = 0
@@ -66,6 +88,14 @@ internal class ControllerClient(private val store: SessionStore = MemorySessionS
     private var preferences = ClientPreferences()
     private var pendingSkins = emptyList<PendingSkinSelection>()
     private var pendingSkinsLoaded = true
+    private var pendingAppearance = emptyList<PendingAppearancePreference>()
+    private var pendingAppearanceLoaded = true
+    private var appearanceUploadIDs = emptySet<UUID>()
+    private var pendingLayouts = emptyList<PendingLayoutEdit>()
+    private var pendingLayoutsLoaded = true
+    private var layoutUploadKeys = emptySet<LayoutEditKey>()
+    private var editingProfileID: UUID? = null
+    private var nextEditToken = 0L
     private sealed class Analog(val key: String) {
         class Stick(val target: String, val x: Double, val y: Double) : Analog("stick.$target")
         class Trigger(val target: String, val amount: Double) : Analog("trigger.$target")
@@ -77,7 +107,7 @@ internal class ControllerClient(private val store: SessionStore = MemorySessionS
         analogTasks.values.forEach { it.cancel(false) }
         analogTasks.clear(); pendingAnalog.clear(); lastAnalogAt.clear()
     }
-    private fun acceptsInput(expectedRevision: Long) = expectedRevision == revision && state.paired && !state.practiceMode
+    private fun acceptsInput(expectedRevision: Long) = expectedRevision == revision && state.paired && !state.practiceMode && !state.layoutEditing && state.sharedBuildPreview==null && state.artifactAdoption?.active!=true
     private fun emitAnalog(value: Analog) {
         when (value) {
             is Analog.Stick -> inputs?.stick(value.target, value.x, value.y)
@@ -137,7 +167,14 @@ internal class ControllerClient(private val store: SessionStore = MemorySessionS
                 val mac = trusted ?: return@enqueue
                 trusted = TrustedMac(mac.serverID, mac.authToken, (fresh + mac.urls).distinct().take(16))
                 cancelRetry()
-                connectRemembered()
+                if (state.connecting && socket != null) {
+                    // Discovery often adds IPv6 addresses while the cached LAN
+                    // endpoint is already completing its trusted handshake.
+                    // Keep that attempt alive; try fresh addresses next if it
+                    // fails, rather than restarting on every discovery update.
+                    target = PairingTarget((current.urls.take(addressIndex) + fresh + current.urls.drop(addressIndex)).distinct().take(16),
+                        current.code, current.serverID, current.serviceName)
+                } else connectRemembered()
             } else {
                 target = PairingTarget((current.urls.take(addressIndex) + fresh + current.urls.drop(addressIndex)).distinct().take(16),
                     current.code, current.serverID, current.serviceName)
@@ -166,11 +203,30 @@ internal class ControllerClient(private val store: SessionStore = MemorySessionS
         pendingSkins = runCatching { store.loadPendingSkinSelections() }.getOrElse {
             pendingSkinsLoaded=false;skinError="Could not restore pending skin changes. Your saved data has been kept.";emptyList()
         }
-        state = state.copy(error=skinError,pendingSkinChanges=pendingSkins.size,snapshot = store.loadSnapshot(), canReconnect = trusted != null, practiceMode = preferences.practiceMode,
-            hapticIntensity=preferences.hapticIntensity)
+        pendingAppearance = runCatching { store.loadPendingAppearancePreferences() }.getOrElse {
+            pendingAppearanceLoaded=false;skinError="Could not restore pending appearance choices. Your saved data has been kept.";emptyList()
+        }
+        pendingLayouts = runCatching { store.loadPendingLayoutEdits() }.getOrElse {
+            pendingLayoutsLoaded=false;skinError="Could not restore pending layout edits. Your saved data has been kept.";emptyList()
+        }
+        pendingRemovals=runCatching { store.loadPendingSkinRemovals() }.getOrElse {
+            removalsLoaded=false;skinError="Could not restore pending skin removals. Your saved data has been kept.";emptyList()
+        }
+        val onboardingCompleted=runCatching { store.loadOnboardingCompleted() }.getOrElse {
+            skinError="Could not restore setup progress. Your saved data has been kept.";false
+        }
+        state = state.copy(onboardingLoaded=true,onboardingCompleted=onboardingCompleted,error=skinError,pendingLayoutChanges=pendingLayouts.size,pendingAppearanceChanges=pendingAppearance.size,pendingSkinChanges=pendingSkins.size,snapshot = store.loadSnapshot(), canReconnect = trusted != null, practiceMode = preferences.practiceMode,
+            hapticIntensity=preferences.hapticIntensity,showBindingGlyphs=preferences.showBindingGlyphs)
         publishState()
     } }
 
+    fun completeOnboarding() = enqueue {
+        if(!state.onboardingLoaded) return@enqueue
+        if(state.onboardingCompleted || runCatching { store.saveOnboardingCompleted() }.isSuccess) {
+            state=state.copy(onboardingCompleted=true,error=null)
+        } else state=state.copy(error="Could not save setup progress. Try again.")
+        publishState()
+    }
     fun resume() = enqueue {
         foreground = true
         if (wantsConnection && !state.paired && !state.connecting && trusted != null) connectRemembered()
@@ -197,9 +253,11 @@ internal class ControllerClient(private val store: SessionStore = MemorySessionS
         store.forgetMac()
         trusted = null
         target = null
-        pendingSkins=emptyList();pendingSkinsLoaded=true
-        state = ClientState(status = "Mac forgotten", practiceMode = preferences.practiceMode,
-            hapticIntensity=preferences.hapticIntensity,surfaceRevision = revision)
+        pendingSkins=emptyList();pendingSkinsLoaded=true;pendingRemovals=emptyList();removalsLoaded=true;removalRevisions.clear()
+        pendingAppearance=emptyList();pendingAppearanceLoaded=true;appearanceUploadIDs=emptySet()
+        pendingLayouts=emptyList();pendingLayoutsLoaded=true;layoutUploadKeys=emptySet()
+        state = ClientState(status = "Mac forgotten",onboardingLoaded=state.onboardingLoaded,onboardingCompleted=state.onboardingCompleted, practiceMode = preferences.practiceMode,
+            hapticIntensity=preferences.hapticIntensity,showBindingGlyphs=preferences.showBindingGlyphs,surfaceRevision = revision)
         publishState()
     }
     private fun connectRemembered() {
@@ -268,6 +326,118 @@ internal class ControllerClient(private val store: SessionStore = MemorySessionS
         state = state.copy(udpEnabled = enabled)
         publishState()
     }
+    fun beginLayoutEditing(profileID: UUID, orientation: LayoutOrientation) = enqueue {
+        if(state.sharedBuildPreview!=null || state.artifactAdoption?.active==true) return@enqueue
+        if(state.layoutEditing || state.snapshot.selectedID!=profileID || state.snapshot.selected==null || (!state.paired && !state.viewingSaved)) return@enqueue
+        if(!pendingLayoutsLoaded || !pendingAppearanceLoaded || !pendingSkinsLoaded) {
+            state=state.copy(error="Could not restore pending keypad changes. Your saved data has been kept.");publishState();return@enqueue
+        }
+        invalidateSurface()
+        editingProfileID=state.snapshot.selectedID
+        state=state.copy(layoutEditing=true,
+            layoutEditEntry=LayoutSnapshot.resolved(state.snapshot.selected!!,orientation).oriented(orientation),
+            layoutEditToken=++nextEditToken,layoutEditOrientation=orientation,error=null)
+        publishState()
+    }
+    fun finishLayoutEditing() = enqueue {
+        if(state.layoutEditing) { invalidateSurface();endLayoutEditing();publishState() }
+    }
+    private fun endLayoutEditing() {
+        editingProfileID=null
+        state=state.copy(layoutEditing=false,layoutEditEntry=null,layoutEditToken=++nextEditToken,layoutEditOrientation=null)
+    }
+    private fun persistProfiles(snapshot: ProfileSnapshot, skins: List<PendingSkinSelection>, appearance: List<PendingAppearancePreference>, layouts: List<PendingLayoutEdit>) {
+        if(pendingLayouts.isEmpty() && layouts.isEmpty()) store.saveProfileState(snapshot,skins,appearance)
+        else store.saveEditingState(snapshot,skins,appearance,layouts)
+    }
+    fun commitLayoutEdit(customization: LayoutSnapshot, token: Long, completed: (Boolean)->Unit = {}) = enqueue {
+        fun finish(success: Boolean) { publishState();main.post { completed(success) } }
+        val profile=state.snapshot.selected
+        val orientation=state.layoutEditOrientation
+        if(!state.layoutEditing || token!=state.layoutEditToken || profile==null || profile.id!=editingProfileID || orientation==null ||
+            !pendingLayoutsLoaded || !pendingAppearanceLoaded || !pendingSkinsLoaded) { finish(false);return@enqueue }
+        val prepared=runCatching {
+            val raw=customization.json().put("colorSchemePreference",profile.source.getJSONObject("customization").optString("colorSchemePreference","system"))
+            val edit=PendingLayoutEdit.create(profile.id,orientation,raw,System.currentTimeMillis(),trusted?.serverID)
+            val next=LayoutEditJournal.recording(pendingLayouts,edit)
+            val changed=LayoutEditJournal.applying(profile,edit)
+            Triple(edit,next,state.snapshot.copy(profiles=state.snapshot.profiles.map { if(it.id==profile.id) changed else it }))
+        }.getOrElse {
+            state=state.copy(error="Could not prepare this layout edit. Your saved keypad is unchanged.");finish(false);return@enqueue
+        }
+        val (edit,next,snapshot)=prepared
+        if(runCatching { persistProfiles(snapshot,pendingSkins,pendingAppearance,next) }.isFailure) {
+            state=state.copy(error="Could not save this layout edit. Your saved keypad is unchanged.");finish(false);return@enqueue
+        }
+        pendingLayouts=next;layoutUploadKeys=layoutUploadKeys+edit.key
+        invalidateSurface()
+        state=state.copy(snapshot=snapshot,pendingLayoutChanges=next.size,error=null)
+        flushLayoutEdits();finish(true)
+    }
+    private fun flushLayoutEdits() {
+        if(state.artifactAdoption?.active==true) return
+        if(!state.paired || !pendingLayoutsLoaded || ProfileActions.ORIENTATION_CAPABILITY !in state.capabilities) return
+        for(edit in pendingLayouts.sortedWith(compareBy<PendingLayoutEdit> { it.updatedAt }.thenBy { it.key.toString() })) {
+            if(edit.serverID==null || edit.serverID!=trusted?.serverID || edit.key !in layoutUploadKeys) continue
+            if(pendingSkins.any { it.profileID==edit.profileID && it.serverID==trusted?.serverID }) continue
+            val payload=WireCodec.message("gamepad_customization").put("gamepadProfileID",edit.profileID.toString().uppercase())
+                .put("gamepadCustomization",edit.customization.json()).toString()
+            if(payload.toByteArray().size>WireCodec.MAX_PAYLOAD) {
+                state=state.copy(error="Layout saved locally, but it is too large to sync to this Mac.");continue
+            }
+            if(socket?.send(payload)!=true) return
+        }
+    }
+    fun setAppearancePreference(preference: AppearancePreference) = enqueue {
+        if(state.sharedBuildPreview!=null || state.artifactAdoption?.active==true) return@enqueue
+        val profile = state.snapshot.selected ?: return@enqueue
+        if(state.layoutEditing) { state=state.copy(error="Finish editing before changing appearance.");publishState();return@enqueue }
+        if (!pendingAppearanceLoaded || !pendingSkinsLoaded || !pendingLayoutsLoaded) {
+            state=state.copy(error="Could not restore pending keypad changes. Your saved data has been kept.");publishState();return@enqueue
+        }
+        if (AppearancePreference.forProfile(profile) == preference) return@enqueue
+        val edit = PendingAppearancePreference.create(profile, preference, System.currentTimeMillis(), trusted?.serverID)
+        val next = AppearancePreferenceJournal.recording(pendingAppearance, edit)
+        val snapshot = state.snapshot.copy(profiles=state.snapshot.profiles.map {
+            if(it.id==profile.id) AppearancePreferenceJournal.applying(it, edit) else it
+        })
+        // Saved Mode is profile-wide. Later appearance choices must also be in
+        // outstanding full-layout payloads, so an upload cannot restore an old mode.
+        val layouts=pendingLayouts.map { pending -> if(pending.profileID==profile.id && pending.serverID==edit.serverID)
+            pending.copy(customization=LayoutSnapshot.capture(pending.customization.json().put("colorSchemePreference",preference.wireValue))) else pending }
+        if(runCatching { persistProfiles(snapshot,pendingSkins,next,layouts) }.isFailure) {
+            state=state.copy(error="Could not save keypad appearance. Your keypad is unchanged.");publishState();return@enqueue
+        }
+        pendingAppearance=next
+        pendingLayouts=layouts
+        appearanceUploadIDs=appearanceUploadIDs+edit.profileID
+        invalidateSurface()
+        state=state.copy(snapshot=snapshot,pendingAppearanceChanges=next.size,error=null)
+        flushAppearancePreferences();publishState()
+    }
+    private fun flushAppearancePreferences() {
+        if(state.artifactAdoption?.active==true) return
+        if(!state.paired || !pendingAppearanceLoaded || ProfileActions.ORIENTATION_CAPABILITY !in state.capabilities) return
+        for(edit in pendingAppearance.sortedBy { it.updatedAt }) {
+            if(edit.serverID==null || edit.serverID!=trusted?.serverID || edit.profileID !in appearanceUploadIDs) continue
+            if(pendingSkins.any { it.profileID==edit.profileID && it.serverID==trusted?.serverID }) continue
+            val profile=state.snapshot.profiles.firstOrNull { it.id==edit.profileID } ?: continue
+            val message=WireCodec.message("gamepad_customization").put("gamepadProfileID",edit.profileID.toString().uppercase())
+                .put("gamepadCustomization",profile.source.getJSONObject("customization")).toString()
+            if(message.toByteArray().size>WireCodec.MAX_PAYLOAD) {
+                state=state.copy(error="Appearance is saved locally, but this keypad is too large to sync.");continue
+            }
+            if(socket?.send(message)!=true) return
+        }
+    }
+    fun setShowBindingGlyphs(enabled: Boolean) = enqueue {
+        val next=preferences.copy(showBindingGlyphs=enabled)
+        if(runCatching { store.savePreferences(next) }.isSuccess) {
+            preferences=next
+            state=state.copy(showBindingGlyphs=enabled,preferencesError=null)
+        } else state=state.copy(preferencesError="Could not save binding hint preference. Try again.")
+        publishState()
+    }
     fun setHapticIntensity(value: Double) = enqueue {
         val next=preferences.copy(hapticIntensity=HapticIntensity.normalized(value))
         if (runCatching { store.savePreferences(next) }.isSuccess) {
@@ -277,6 +447,7 @@ internal class ControllerClient(private val store: SessionStore = MemorySessionS
         publishState()
     }
     fun setPracticeMode(enabled: Boolean) = enqueue {
+        if(state.sharedBuildPreview!=null || state.artifactAdoption?.active==true) return@enqueue
         if (!state.paired && !enabled) return@enqueue
         if (state.practiceMode == enabled) return@enqueue
         invalidateSurface()
@@ -286,6 +457,7 @@ internal class ControllerClient(private val store: SessionStore = MemorySessionS
         publishState()
     }
     fun viewSavedKeypad() = enqueue {
+        if(state.sharedBuildPreview!=null || state.artifactAdoption?.active==true) return@enqueue
         if (state.snapshot.selected == null) return@enqueue
         wantsConnection = false
         stopDiscovery(); cancelRetry(); closeSession()
@@ -297,29 +469,38 @@ internal class ControllerClient(private val store: SessionStore = MemorySessionS
     }
     fun showConnection() = enqueue {
         invalidateSurface()
+        if(state.layoutEditing) endLayoutEditing()
         state = state.copy(viewingSaved = false)
         publishState()
     }
-    fun surfaceChanged() = enqueue { invalidateSurface(); publishState() }
+    fun surfaceChanged() = enqueue { invalidateSurface();if(state.layoutEditing) endLayoutEditing();publishState() }
     fun commitSkinChange(expected: ControllerProfile, replacement: ControllerProfile, reference: SkinReference?, completed: (Boolean) -> Unit = {}) = enqueue {
         fun finish(success: Boolean) { publishState();main.post { completed(success) } }
-        if (!pendingSkinsLoaded) { finish(false);return@enqueue }
+        if (!pendingSkinsLoaded || !pendingLayoutsLoaded || !pendingAppearanceLoaded || state.layoutEditing || state.sharedBuildPreview!=null || state.artifactAdoption?.active==true) { finish(false);return@enqueue }
         val current=state.snapshot.selected
         if (current?.id!=expected.id || current.source!==expected.source || replacement.id!=expected.id) {
             state=state.copy(error="The keypad changed while preparing the skin. Try again.");finish(false);return@enqueue
         }
         val next=SkinSelectionJournal.replacing(pendingSkins,PendingSkinSelection(expected.id,reference,System.currentTimeMillis(),trusted?.serverID))
         val snapshot=state.snapshot.copy(profiles=state.snapshot.profiles.map { if(it.id==expected.id) replacement else it })
-        if (runCatching { store.saveSkinState(snapshot,next) }.isFailure) {
+        val layouts=runCatching { pendingLayouts.map { edit ->
+            if(edit.profileID==expected.id && edit.serverID==trusted?.serverID)
+                edit.copy(customization=LayoutSnapshot.resolved(replacement,edit.orientation).oriented(edit.orientation).stamped(edit.updatedAt)) else edit
+        } }.getOrElse { state=state.copy(error="Could not prepare the skin change. Your keypad is unchanged.");finish(false);return@enqueue }
+        if (runCatching {
+            if(pendingLayouts.isEmpty()) store.saveSkinState(snapshot,next)
+            else persistProfiles(snapshot,next,pendingAppearance,layouts)
+        }.isFailure) {
             state=state.copy(error="Could not save the skin change. Your keypad is unchanged.");finish(false);return@enqueue
         }
-        pendingSkins=next
+        pendingSkins=next;pendingLayouts=layouts
         invalidateSurface()
         state=state.copy(snapshot=snapshot,pendingSkinChanges=next.size,error=null)
         flushSkinSelections()
         finish(true)
     }
     private fun flushSkinSelections() {
+        if(state.artifactAdoption?.active==true) return
         if (!state.paired || "gamepad_profile_skin_selection" !in state.capabilities) return
         for (pending in pendingSkins.sortedBy { it.updatedAt }) {
             if(pending.serverID!=null && pending.serverID!=trusted?.serverID) continue
@@ -329,6 +510,62 @@ internal class ControllerClient(private val store: SessionStore = MemorySessionS
             if(socket?.send(pending.request().toString())!=true) return
         }
     }
+    fun queueSkinRemoval(reference: SkinReference, completed: (Boolean)->Unit) = enqueue {
+        val inUse=state.snapshot.profiles.firstOrNull { p ->
+            p.source.optJSONObject("skinReference")?.let { runCatching { SkinReference.parse(it) }.getOrNull() }==reference
+        }
+        fun finish(ok: Boolean) { publishState();main.post { completed(ok) } }
+        if(inUse!=null || pendingSkins.any { it.reference==reference }) {
+            state=state.copy(error="This skin is still used by ${inUse?.name ?: "a pending keypad change"}.");finish(false);return@enqueue
+        }
+        if(!removalsLoaded) { state=state.copy(error="Could not restore pending skin removals.");finish(false);return@enqueue }
+        val serverID=trusted?.serverID
+        val next=if(serverID==null) pendingRemovals else (pendingRemovals+PendingSkinRemoval(reference,serverID)).distinct()
+        if(runCatching { store.savePendingSkinRemovals(next) }.isFailure) {
+            state=state.copy(error="Could not save this skin removal. The package is kept.");finish(false);return@enqueue
+        }
+        pendingRemovals=next
+        if(serverID!=null) removalRevisions[PendingSkinRemoval(reference,serverID)]=++nextRemovalRevision
+        sentRemovals.removeAll { it.reference==reference };state=state.copy(error=null);finish(true)
+    }
+    fun cancelSkinRemoval(reference: SkinReference, completed: (Boolean)->Unit) = enqueue {
+        val next=pendingRemovals.filterNot { it.reference==reference }
+        val ok=removalsLoaded && runCatching { store.savePendingSkinRemovals(next) }.isSuccess
+        if(ok) { pendingRemovals=next;sentRemovals.removeAll { it.reference==reference };removalRevisions.keys.removeAll { it.reference==reference } } else state=state.copy(error="Could not update pending skin removals.")
+        publishState();main.post { completed(ok) }
+    }
+    fun dismissError() = enqueue { state=state.copy(error=null);publishState() }
+    fun flushSkinRemovals() = enqueue { flushSkinRemovalsNow();publishState() }
+    private fun flushSkinRemovalsNow() {
+        if(state.artifactAdoption?.active==true) return
+        if(!state.paired || "skin_packages" !in state.capabilities || !removalsLoaded) return
+        val sent=mutableListOf<PendingSkinRemoval>()
+        for(item in pendingRemovals.filter { it.serverID==trusted?.serverID && it !in sentRemovals }) {
+            val ref=JSONObject().put("identifier",item.reference.identifier).put("version",item.reference.version)
+            if(socket?.send(WireCodec.message("skin_package_removal").put("skinReference",ref).toString())!=true) break
+            sent+=item;sentRemovals+=item
+        }
+        if(sent.isEmpty()) return
+        val revisions=sent.associateWith { removalRevisions[it] ?: 0L }
+        // Keep the durable intent until the serial skin worker has retired any
+        // initial replay. If the app exits first, the next connection retries it.
+        val completed: (Boolean)->Unit = { success -> enqueue {
+            if(disposed) return@enqueue
+            val matching=sent.filter { (removalRevisions[it] ?: 0L)==revisions[it] }.toSet()
+            if(success) {
+                val next=pendingRemovals-matching
+                if(runCatching { store.savePendingSkinRemovals(next) }.isSuccess) {
+                    pendingRemovals=next;sentRemovals.removeAll(matching)
+                    matching.forEach { removalRevisions.remove(it) }
+                }
+            } else if(pendingRemovals.any { it in matching }) {
+                state=state.copy(error="Could not finish this skin removal locally. It will retry after reconnecting.")
+            }
+            publishState()
+        } }
+        runCatching { removedSkins(sent.map { it.reference },completed) }.onFailure { completed(false) }
+    }
+
     fun uploadSkinArchive(bytes: ByteArray) = enqueue {
         if(state.paired && "skin_packages" in state.capabilities) { sendSkinArchive(bytes);publishState() }
     }
@@ -340,14 +577,32 @@ internal class ControllerClient(private val store: SessionStore = MemorySessionS
         if(upload.toByteArray().size>WireCodec.MAX_PAYLOAD) return false
         return socket?.send(upload)==true
     }
-    private fun saveIncomingSkinState(snapshot: ProfileSnapshot, authoritativeProfiles: Boolean): String? {
-        if(!pendingSkinsLoaded) return "Could not restore pending skin changes. Your saved data has been kept."
-        val remaining=if(authoritativeProfiles) SkinSelectionJournal.acknowledge(pendingSkins,snapshot,trusted?.serverID) else pendingSkins
-        return if(runCatching { store.saveSkinState(snapshot,remaining) }.isSuccess) {
-            pendingSkins=remaining;state=state.copy(pendingSkinChanges=remaining.size);null
-        } else "Connected, but could not save your keypad and pending skin changes."
+    private fun saveIncomingSkinState(snapshot: ProfileSnapshot, authoritativeProfiles: Boolean, scalar: JSONObject?): Pair<ProfileSnapshot,String?> {
+        if(!pendingSkinsLoaded || !pendingAppearanceLoaded || !pendingLayoutsLoaded)
+            return snapshot to "Could not restore pending keypad changes. Your saved data has been kept."
+        val remainingSkins=if(authoritativeProfiles) SkinSelectionJournal.acknowledge(pendingSkins,snapshot,trusted?.serverID) else pendingSkins
+        val scalarKeys=if(scalar!=null && snapshot.selectedID!=null)
+            setOf(LayoutEditKey(trusted?.serverID,snapshot.selectedID,LayoutOrientation.of(scalar))) else emptySet()
+        val layouts=LayoutEditJournal.reconcile(snapshot,pendingLayouts,trusted?.serverID,authoritativeProfiles || scalar!=null,
+            if(authoritativeProfiles) null else scalarKeys)
+        val appearance=AppearancePreferenceJournal.reconcile(snapshot,pendingAppearance,trusted?.serverID,
+            authoritativeProfiles || scalar!=null,
+            if(authoritativeProfiles) null else setOfNotNull(snapshot.selectedID))
+        // An echoed value needs no retransmission even when disk persistence
+        // fails. Keep its journal entry until saving succeeds, without an ACK loop.
+        appearanceUploadIDs=appearance.uploads.map { it.profileID }.toSet()
+        layoutUploadKeys=layouts.uploads.map { it.key }.toSet()
+        // ACKs use original authority. Optimistic layout overlays cannot clear
+        // an appearance intent that the Mac has never echoed.
+        val merged=AppearancePreferenceJournal.reconcile(layouts.snapshot,appearance.remaining,trusted?.serverID,false).snapshot
+        return if(runCatching { persistProfiles(merged,remainingSkins,appearance.remaining,layouts.remaining) }.isSuccess) {
+            pendingSkins=remainingSkins;pendingAppearance=appearance.remaining;pendingLayouts=layouts.remaining
+            state=state.copy(pendingSkinChanges=remainingSkins.size,pendingAppearanceChanges=appearance.remaining.size,pendingLayoutChanges=layouts.remaining.size)
+            merged to null
+        } else merged to "Connected, but could not save your keypad and pending changes."
     }
     fun setDefaultProfile(id: UUID) = enqueue {
+        if(state.sharedBuildPreview!=null || state.artifactAdoption?.active==true) return@enqueue
         val request=ProfileActions.defaultProfile(state.snapshot,id) ?: return@enqueue
         if (state.paired) sendProfileAction(request)
         else if (state.viewingSaved) {
@@ -358,12 +613,14 @@ internal class ControllerClient(private val store: SessionStore = MemorySessionS
         }
     }
     fun setOrientationPreference(preference: String) = enqueue {
+        if(state.sharedBuildPreview!=null || state.artifactAdoption?.active==true) return@enqueue
         if (!state.paired) return@enqueue
         val request=ProfileActions.orientation(state.snapshot,state.capabilities,preference) ?: return@enqueue
         invalidateSurface()
         sendProfileAction(request)
     }
     fun launchProfileTarget() = enqueue {
+        if(state.sharedBuildPreview!=null || state.artifactAdoption?.active==true) return@enqueue
         if (!state.paired) return@enqueue
         ProfileActions.launch(state.snapshot)?.let(::sendProfileAction)
     }
@@ -372,6 +629,14 @@ internal class ControllerClient(private val store: SessionStore = MemorySessionS
         else { state=state.copy(error=null);publishState() }
     }
     fun selectProfile(id: UUID) = enqueue {
+        if(state.artifactAdoption?.active==true) return@enqueue
+        state.sharedBuildPreview?.let { preview ->
+            if(preview.snapshot.profiles.any { it.id==id }) {
+                invalidateSurface();state=state.copy(sharedBuildPreview=preview.copy(snapshot=preview.snapshot.copy(selectedID=id)));publishState()
+            }
+            return@enqueue
+        }
+        if(state.layoutEditing) return@enqueue
         if (state.snapshot.profiles.none { it.id == id }) return@enqueue
         invalidateSurface()
         if (state.paired) {
@@ -383,6 +648,84 @@ internal class ControllerClient(private val store: SessionStore = MemorySessionS
         }
         publishState()
     }
+    fun beginSharedBuildPreview(recordID: UUID,snapshot: ProfileSnapshot) = enqueue {
+        if(snapshot.selected==null) return@enqueue
+        invalidateSurface()
+        if(state.layoutEditing) endLayoutEditing()
+        state=state.copy(sharedBuildPreview=SharedBuildPracticePreview(recordID,snapshot),error=null)
+        publishState()
+    }
+    fun endSharedBuildPreview() = enqueue {
+        if(state.sharedBuildPreview!=null) {
+            invalidateSurface();state=state.copy(sharedBuildPreview=null);publishState()
+        }
+    }
+    fun adoptSharedBuild(record: PendingSharedBuild,artifact: PortableProfileArtifact,operationID: UUID,completed: (Boolean)->Unit) = enqueue {
+        fun finish(started: Boolean) { main.post { completed(started) } }
+        val server=state.pairedServerID
+        if(!state.paired || server==null || ArtifactAdoptionMetadata.CAPABILITY !in state.capabilities ||
+            state.artifactAdoption?.active==true || state.layoutEditing || record.intendedServerID!=server || record.operationID!=operationID ||
+            record.rawSHA256!=artifact.rawSHA256 || record.contentHash!=artifact.contentHash || record.bytes!=artifact.byteCount) { finish(false);return@enqueue }
+        val metadata=ArtifactAdoptionMetadata.forRecord(record,server,operationID)
+        if(!metadata.valid()) { finish(false);return@enqueue }
+        invalidateSurface()
+        adoptionBytes=artifact.rawData()
+        state=state.copy(artifactAdoption=ArtifactAdoptionState(metadata,ArtifactAdoptionPhase.UPLOADING,artifact.summaries.size),error=null)
+        val sent=socket?.send(WireCodec.message("profile_artifact_adoption_begin").put("profileArtifactAdoptionMetadata",metadata.json()).toString())==true
+        if(!sent) { adoptionFailed("disconnected");finish(true);return@enqueue }
+        adoptionDeadline?.cancel(false)
+        adoptionDeadline=queue.schedule({ if(state.artifactAdoption?.metadata==metadata && state.artifactAdoption?.active==true) adoptionFailed("upload_expired") },45,TimeUnit.SECONDS)
+        publishState();finish(true)
+    }
+    fun cancelSharedBuildAdoption() = enqueue {
+        val active=state.artifactAdoption?.takeIf { it.active } ?: return@enqueue
+        if(state.paired) socket?.send(WireCodec.message("profile_artifact_adoption_cancel").put("profileArtifactAdoptionOperationID",active.metadata.operationID.toString()).toString())
+        adoptionFailed("disconnected")
+    }
+    private fun adoptionFailed(code: String,notify: Boolean=true) {
+        val active=state.artifactAdoption?.takeIf { it.active } ?: return
+        adoptionDeadline?.cancel(false);adoptionDeadline=null;adoptionBytes=null
+        state=state.copy(artifactAdoption=active.copy(phase=ArtifactAdoptionPhase.FAILED,errorCode=code))
+        if(notify) { invalidateSurface();flushSkinSelections();flushAppearancePreferences();flushLayoutEdits();publishState() }
+    }
+    private fun completeAdoptionIfAuthoritative() {
+        val active=state.artifactAdoption?.takeIf { it.phase==ArtifactAdoptionPhase.AWAITING_SNAPSHOT } ?: return
+        if(!state.paired || state.pairedServerID!=active.metadata.serverID || active.destinationProfileIDs.any { it !in authoritativeProfileIDs }) return
+        adoptionDeadline?.cancel(false);adoptionDeadline=null;adoptionBytes=null
+        state=state.copy(artifactAdoption=active.copy(phase=ArtifactAdoptionPhase.SUCCEEDED),
+            sharedBuildPreview=state.sharedBuildPreview?.takeUnless { it.recordID==active.metadata.recordID })
+        invalidateSurface()
+        flushSkinSelections();flushAppearancePreferences();flushLayoutEdits()
+    }
+    private fun receiveAdoptionResult(message: JSONObject) {
+        val active=state.artifactAdoption?.takeIf { it.active } ?: return
+        if(!state.paired || state.pairedServerID!=active.metadata.serverID) { adoptionFailed("wrong_server");return }
+        val result=try { ArtifactAdoptionResult.parse(message,active.metadata) } catch(_: Exception) { return }
+        when(result.status) {
+            "failed" -> adoptionFailed(result.errorCode ?: "invalid_envelope")
+            "accepted" -> if(active.phase==ArtifactAdoptionPhase.UPLOADING && active.sentChunks==0) {
+                val bytes=adoptionBytes ?: run { adoptionFailed("disconnected");return }
+                for(index in 0 until active.metadata.chunkCount) {
+                    val lower=index*ArtifactAdoptionMetadata.CHUNK_BYTES
+                    val chunk=bytes.copyOfRange(lower,minOf(bytes.size,lower+ArtifactAdoptionMetadata.CHUNK_BYTES))
+                    val message=WireCodec.message("profile_artifact_adoption_chunk").put("profileArtifactAdoptionOperationID",active.metadata.operationID.toString())
+                        .put("profileArtifactAdoptionChunkIndex",index).put("profileArtifactAdoptionChunkData",java.util.Base64.getEncoder().encodeToString(chunk))
+                    if(socket?.send(message.toString())!=true) { adoptionFailed("disconnected");return }
+                    state=state.copy(artifactAdoption=active.copy(sentChunks=index+1))
+                }
+                adoptionBytes=null
+                if(socket?.send(WireCodec.message("profile_artifact_adoption_commit").put("profileArtifactAdoptionOperationID",active.metadata.operationID.toString()).toString())!=true) adoptionFailed("disconnected")
+            }
+            "succeeded","replayed" -> {
+                if(result.destinationIDs.size!=active.sourceProfiles) { adoptionFailed("invalid_envelope");return }
+                state=state.copy(artifactAdoption=active.copy(phase=ArtifactAdoptionPhase.AWAITING_SNAPSHOT,destinationProfileIDs=result.destinationIDs))
+                completeAdoptionIfAuthoritative()
+                if(state.artifactAdoption?.phase==ArtifactAdoptionPhase.AWAITING_SNAPSHOT) socket?.send(WireCodec.message("gamepad_profiles").toString())
+            }
+        }
+        publishState()
+    }
+
     fun disconnect() = enqueue {
         wantsConnection = false
         stopDiscovery()
@@ -467,6 +810,7 @@ internal class ControllerClient(private val store: SessionStore = MemorySessionS
     private fun receive(bytes: ByteArray, url: String) {
         try {
             val message = WireCodec.decode(bytes)
+            if(message.optString("type")=="profile_artifact_adoption_result") { receiveAdoptionResult(message);return }
             if (state.paired || message.optString("type") in setOf("hello", "pairing_accepted")) {
                 message.optJSONObject("virtualGamepadStatus")?.let { state = state.copy(virtualGamepadStatus = it) }
                 message.optJSONArray("capabilities")?.let { array ->
@@ -490,7 +834,7 @@ internal class ControllerClient(private val store: SessionStore = MemorySessionS
                     val expectedID = target?.serverID
                     require(expectedID == null || message.optString("serverID") == expectedID) { "The responding Mac does not match this QR code." }
                     val skinPackages=IncomingSkinPackages.validated(message,bytes.size)
-                    val snapshot = state.snapshot.applying(message)
+                    var snapshot = state.snapshot.applying(message)
                     require(snapshot.selected != null) { "The Mac did not send a selected profile." }
                     deadline?.cancel(false)
                     cancelRetry()
@@ -510,17 +854,23 @@ internal class ControllerClient(private val store: SessionStore = MemorySessionS
                         store.forgetMac()
                         trusted = null
                     }
-                    saveIncomingSkinState(snapshot,message.optJSONArray("gamepadProfiles")!=null)?.let { saveError=it }
+                    authoritativeProfileIDs=snapshot.profiles.map { it.id }.toSet()
+                    val saved=saveIncomingSkinState(snapshot,message.optJSONArray("gamepadProfiles")!=null,message.optJSONObject("gamepadCustomization"))
+                    snapshot=saved.first
+                    saved.second?.let { saveError=it }
                     inputs = InputSession(::sendInput, SecureRandom().nextInt(Int.MAX_VALUE - 1).toLong() + 1)
                     val token = message.optString("realtimeToken").takeIf { it.isNotBlank() && it != "null" }
                     if (token != null) startUDP(url, token)
-                    state = state.copy(paired = true, connecting = false, needsCode = false, error = saveError,
+                    state = state.copy(paired = true, pairedServerID=server, connecting = false, needsCode = false, error = saveError,
                         status = "Connected", snapshot = snapshot, canReconnect = trusted != null, udpAvailable = udp != null, surfaceRevision = ++revision)
                     heartbeat = queue.scheduleWithFixedDelay({
                         if (state.paired) { inputs?.heartbeat(); publishState() }
                     }, 0, 250, TimeUnit.MILLISECONDS)
                     flushSkinSelections()
+                    flushAppearancePreferences()
+                    flushLayoutEdits()
                     if(!offerSkinPackages(skinPackages)) return
+                    flushSkinRemovalsNow()
                     publishState()
                 }
                 "gamepad_profiles", "gamepad_customization", "skin_packages" -> if (state.paired) {
@@ -529,11 +879,21 @@ internal class ControllerClient(private val store: SessionStore = MemorySessionS
                         message.has("gamepadProfileID") || message.has("defaultGamepadProfileID")
                     if(hasProfiles) {
                         val snapshot = state.snapshot.applying(message)
-                        val saveError=saveIncomingSkinState(snapshot,message.optJSONArray("gamepadProfiles")!=null)
+                        if(message.optJSONArray("gamepadProfiles")!=null) authoritativeProfileIDs=snapshot.profiles.map { it.id }.toSet()
+                        val saved=saveIncomingSkinState(snapshot,message.optJSONArray("gamepadProfiles")!=null,message.optJSONObject("gamepadCustomization"))
                         invalidateSurface()
-                        state = state.copy(snapshot = snapshot,error=saveError)
+                        if(state.layoutEditing && saved.first.selectedID!=editingProfileID) endLayoutEditing()
+                        state = state.copy(snapshot = saved.first,error=saved.second)
+                        completeAdoptionIfAuthoritative()
+                        flushAppearancePreferences()
+                        flushLayoutEdits()
+                    } else if(message.optJSONArray("bindingPresentations")!=null) {
+                        val snapshot=state.snapshot.applying(message)
+                        val error=runCatching { store.saveSnapshot(snapshot) }.exceptionOrNull()?.let { "Could not save binding hints. Try reconnecting." }
+                        state=state.copy(snapshot=snapshot,error=error)
                     }
                     if(!offerSkinPackages(skinPackages)) return
+                    flushSkinRemovalsNow()
                     publishState()
                 }
                 "release_all" -> if (state.paired) {
@@ -592,6 +952,10 @@ internal class ControllerClient(private val store: SessionStore = MemorySessionS
         state = state.copy(surfaceRevision = revision)
     }
     private fun closeSession() {
+        adoptionFailed("disconnected",notify=false)
+        authoritativeProfileIDs=emptySet()
+        sentRemovals.clear()
+        endLayoutEditing()
         clearAnalogQueue()
         ++epoch
         ++revision
@@ -604,7 +968,7 @@ internal class ControllerClient(private val store: SessionStore = MemorySessionS
             runCatching { datagram.send(DatagramPacket(data, data.size)) }
         }
         inputs = null
-        state = state.copy(virtualGamepadStatus = null, capabilities = emptySet(), udpAvailable = false)
+        state = state.copy(virtualGamepadStatus = null, capabilities = emptySet(), udpAvailable = false, pairedServerID=null)
         val retiringSocket = socket
         retiringSocket?.send(release)
         socket = null
@@ -615,8 +979,10 @@ internal class ControllerClient(private val store: SessionStore = MemorySessionS
     }
     private fun forgetExpiredTrust() {
         store.forgetMac()
-        pendingSkins=emptyList();pendingSkinsLoaded=true
-        state=state.copy(pendingSkinChanges=0)
+        pendingSkins=emptyList();pendingSkinsLoaded=true;pendingRemovals=emptyList();removalsLoaded=true;removalRevisions.clear()
+        pendingAppearance=emptyList();pendingAppearanceLoaded=true;appearanceUploadIDs=emptySet()
+        pendingLayouts=emptyList();pendingLayoutsLoaded=true;layoutUploadKeys=emptySet()
+        state=state.copy(pendingSkinChanges=0,pendingAppearanceChanges=0,pendingLayoutChanges=0)
         trusted = null
         wantsConnection = false
     }
@@ -633,7 +999,7 @@ internal class ControllerClient(private val store: SessionStore = MemorySessionS
         publishState()
     }
     private fun publishState() {
-        val value = state.copy(udpFrames = udpFrames, webSocketFrames = wsFrames)
+        val value = state.copy(udpFrames = udpFrames, webSocketFrames = wsFrames,pendingSkinRemovals=pendingRemovals.size)
         main.post { publish(value) }
     }
 }

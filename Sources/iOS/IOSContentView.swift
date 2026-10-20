@@ -1820,7 +1820,6 @@ private struct KeypadSettingsSheet: View {
     let supportsOrientationPreferenceMutation: Bool
     let onShowGuide: (() -> Void)?
     let onShowSkins: () -> Void
-    let onStartCalibration: () -> Void
     let onReleaseAllInputs: () -> Void
 
     var body: some View {
@@ -1894,14 +1893,6 @@ private struct KeypadSettingsSheet: View {
                         dismissThenRun(onShowSkins)
                     } label: {
                         Label("Browse Installed Skins", systemImage: "paintpalette.fill")
-                    }
-                }
-
-                Section("Ergonomics") {
-                    Button {
-                        dismissThenRun(onStartCalibration)
-                    } label: {
-                        Label("Calibrate Thumb Placement", systemImage: "hand.draw.fill")
                     }
                 }
 
@@ -2062,9 +2053,7 @@ private struct ControllerPadView: View {
     @State private var isExportingKeypadConfiguration = false
     @State private var isShowingKeypadSettings = false
     @State private var isShowingSkinLibrary = false
-    @State private var practiceModeBeforeCalibration: Bool?
     @StateObject private var editRuntime = IOSKeypadEditRuntime()
-    @StateObject private var calibrationRuntime = ThumbPlacementCalibrationRuntime()
 
     let onShowConnectionPage: (() -> Void)?
     let onShowOnboarding: (() -> Void)?
@@ -2095,7 +2084,6 @@ private struct ControllerPadView: View {
                 isTopBarVisible: $isTopBarVisible,
                 isExportingKeypadConfiguration: $isExportingKeypadConfiguration,
                 editRuntime: editRuntime,
-                calibrationRuntime: calibrationRuntime,
                 onShowSettings: showKeypadSettings,
                 onShowConnectionPage: showConnectionPage,
                 onShowOnboarding: onShowOnboarding
@@ -2115,7 +2103,6 @@ private struct ControllerPadView: View {
                     supportsOrientationPreferenceMutation: client.supportsGamepadProfileOrientationPreferenceMutation,
                     onShowGuide: onShowOnboarding,
                     onShowSkins: { isShowingSkinLibrary = true },
-                    onStartCalibration: { startCalibration(in: context) },
                     onReleaseAllInputs: releaseActiveInputs
                 )
             }
@@ -2130,8 +2117,6 @@ private struct ControllerPadView: View {
             applyInitialTopBarVisibility()
         }
         .onDisappear {
-            calibrationRuntime.cancel()
-            restorePracticeModeAfterCalibration()
             releaseActiveInputs()
         }
         .onChange(of: client.state) { _, newState in
@@ -2147,7 +2132,6 @@ private struct ControllerPadView: View {
             isTopBarVisible = isEditing || !client.isConnected
         }
         .onChange(of: client.selectedGamepadProfileID) { _, _ in
-            calibrationRuntime.cancel()
             if editRuntime.isEditing {
                 editRuntime.finish(client: client)
             }
@@ -2158,16 +2142,10 @@ private struct ControllerPadView: View {
             announce(enabled ? "Practice Mode enabled. Input will not be sent." : "Practice Mode disabled. Live input enabled when connected.")
         }
         .onChange(of: client.builderArtifactPracticePreview?.selectedProfileID) { _, _ in
-            calibrationRuntime.cancel()
             if editRuntime.isEditing { editRuntime.cancel(client: client) }
             releaseActiveInputs()
             if client.isBuilderArtifactPracticePreviewActive {
                 announce("Shared Preview. Not saved. \(client.renderedGamepadProfileName). Input is off.")
-            }
-        }
-        .onChange(of: calibrationRuntime.isActive) { wasActive, isActive in
-            if wasActive && !isActive {
-                restorePracticeModeAfterCalibration()
             }
         }
         .onChange(of: client.gamepadCustomization) { _, _ in
@@ -2219,30 +2197,6 @@ private struct ControllerPadView: View {
     private func showKeypadSettings() {
         releaseActiveInputs()
         isShowingKeypadSettings = true
-    }
-
-    private func startCalibration(in context: ControllerPadRenderContext) {
-        guard !client.isBuilderArtifactPracticePreviewActive else { return }
-        releaseActiveInputs()
-        practiceModeBeforeCalibration = client.isPracticeModeEnabled
-        if !client.isPracticeModeEnabled {
-            client.setPracticeModeEnabled(true)
-        }
-        calibrationRuntime.begin(
-            profileID: client.selectedGamepadProfileID,
-            customization: context.customization,
-            orientation: context.orientation,
-            canvasSize: context.size,
-            safeAreaInsets: context.safeAreaInsets
-        )
-    }
-
-    private func restorePracticeModeAfterCalibration() {
-        guard let previousValue = practiceModeBeforeCalibration else { return }
-        practiceModeBeforeCalibration = nil
-        if client.isPracticeModeEnabled != previousValue {
-            client.setPracticeModeEnabled(previousValue)
-        }
     }
 
     private var practiceModeBinding: Binding<Bool> {
@@ -2367,7 +2321,6 @@ private struct ControllerPadGeometryScene: View {
     @Binding var isTopBarVisible: Bool
     @Binding var isExportingKeypadConfiguration: Bool
     @ObservedObject var editRuntime: IOSKeypadEditRuntime
-    @ObservedObject var calibrationRuntime: ThumbPlacementCalibrationRuntime
     let onShowSettings: () -> Void
     let onShowConnectionPage: (() -> Void)?
     let onShowOnboarding: (() -> Void)?
@@ -2394,18 +2347,6 @@ private struct ControllerPadGeometryScene: View {
             )
 
         }
-        .allowsHitTesting(!calibrationRuntime.isActive)
-        .accessibilityHidden(calibrationRuntime.isActive)
-        .overlay {
-            if calibrationRuntime.isActive {
-                ThumbPlacementCalibrationOverlay(
-                    runtime: calibrationRuntime,
-                    canvasSize: context.size,
-                    safeAreaInsets: context.safeAreaInsets,
-                    onAcceptSuggestion: acceptCalibrationSuggestion
-                )
-            }
-        }
         .overlay(alignment: .bottom) {
             ControllerPadRuntimeBottomChrome(
                 context: context,
@@ -2417,7 +2358,6 @@ private struct ControllerPadGeometryScene: View {
         .environment(\.colorScheme, context.colorScheme)
         .frame(width: context.size.width, height: context.size.height)
         .onChange(of: context.orientation) { _, _ in
-            calibrationRuntime.cancel()
             editRuntime.releaseInputs(client: client)
             if editRuntime.isEditing {
                 editRuntime.finish(client: client)
@@ -2425,17 +2365,6 @@ private struct ControllerPadGeometryScene: View {
         }
     }
 
-    private func acceptCalibrationSuggestion(_ suggestion: ThumbPlacementSuggestionKind) {
-        guard let next = calibrationRuntime.customization(byApplying: suggestion, to: context.customization) else {
-            calibrationRuntime.complete()
-            return
-        }
-        if !editRuntime.isEditing {
-            editRuntime.begin(with: context.customization, client: client)
-        }
-        editRuntime.apply(next, orientation: context.orientation, isFinal: true, client: client)
-        calibrationRuntime.complete()
-    }
 }
 
 private struct ControllerPadRuntimeSurface: View {
@@ -3180,7 +3109,7 @@ private struct ControllerPadSettingsItem: View {
         .gamepadControlBarButtonStyle(customization: context.customization, item: .settings)
         .disabled(client.isBuilderArtifactPracticePreviewActive)
         .accessibilityLabel("Keypad settings")
-        .accessibilityHint("Opens keypad practice, haptic, binding glyph, calibration, appearance, and input reset settings.")
+        .accessibilityHint("Opens keypad practice, haptic, binding glyph, appearance, and input reset settings.")
     }
 }
 

@@ -1386,6 +1386,51 @@ struct PlannedProfileImport {
     profile_names: Vec<String>,
 }
 
+/// Shared-build adoption uses the same append/import planner as the public CLI.
+/// The runtime owns authorization, native validation, the durable receipt and CAS.
+pub(crate) fn plan_profile_adoption(
+    state: &PersistentState,
+    metadata: &thumble_protocol::AdoptionMetadata,
+    bytes: &[u8],
+    native_profiles: &[Value],
+    now: i64,
+) -> Result<(PersistentState, Vec<Uuid>), TransactionFailure> {
+    let artifact = ProfileArtifact::decode_json(bytes).map_err(profile_artifact_import_failure)?;
+    if artifact.content_hash.value != metadata.content_hash {
+        return Err(import_profile_failure());
+    }
+    let text = std::str::from_utf8(bytes).map_err(|_| import_profile_failure())?;
+    let mut import = decode_profile_import(text, true, true, false, metadata.operation_id)?;
+    if import.document.profiles.len() != native_profiles.len() {
+        return Err(import_profile_failure());
+    }
+    for (raw, native) in import.document.profiles.iter_mut().zip(native_profiles) {
+        *raw = crate::profile_adoption::normalized_profile(raw, native);
+    }
+    import
+        .document
+        .validate()
+        .map_err(|_| import_profile_failure())?;
+    let destination =
+        ConfigurationDocument::from_state(state).map_err(|_| import_profile_failure())?;
+    let plan = plan_profile_import(&destination, &import, now)?;
+    let ids = import
+        .descriptor
+        .generated_profile_ids
+        .iter()
+        .map(|id| Uuid::parse_str(id).map_err(|_| import_profile_failure()))
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut candidate = state.clone();
+    plan.candidate
+        .install_into(&mut candidate)
+        .map_err(|_| import_profile_failure())?;
+    candidate
+        .bump_configuration_revision()
+        .map_err(|_| import_profile_failure())?;
+    candidate.configuration_updated_at = now;
+    Ok((candidate, ids))
+}
+
 pub(crate) fn execute_profile_transaction<F>(
     paths: &HostPaths,
     state: &PersistentState,
@@ -4543,7 +4588,7 @@ fn binding_output_projection_from_state(
     })
 }
 
-fn profile_output_mode(
+pub(crate) fn profile_output_mode(
     profile: &serde_json::Value,
 ) -> Result<ConfigurationOutputMode, TransactionFailure> {
     match profile
@@ -4728,7 +4773,7 @@ fn binding_display_groups(
     }
 }
 
-fn orientation_customization(
+pub(crate) fn orientation_customization(
     profile: &serde_json::Value,
     orientation: OrientationVariant,
 ) -> Result<&serde_json::Value, TransactionFailure> {
@@ -4748,11 +4793,38 @@ fn orientation_customization(
         })
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct RawBindingDisplayEntry {
+    pub element_id: Uuid,
+    pub part: KeypadElementInputPart,
+    pub output: OutputBinding,
+}
+
 fn binding_display_entries(
     customization: &serde_json::Value,
     effective_outputs: &thumble_core::ButtonBindings<OutputBinding>,
     mode: ConfigurationOutputMode,
 ) -> Result<Vec<CliBindingDisplayEntry>, TransactionFailure> {
+    raw_binding_display_entries(customization, effective_outputs, mode)?
+        .into_iter()
+        .map(|entry| {
+            Ok(CliBindingDisplayEntry {
+                element_id: entry.element_id,
+                part: entry.part,
+                output: semantic_output(
+                    entry.output.keyboard.as_ref(),
+                    entry.output.gamepad_buttons.iter().map(String::as_str),
+                )?,
+            })
+        })
+        .collect()
+}
+
+pub(crate) fn raw_binding_display_entries(
+    customization: &serde_json::Value,
+    effective_outputs: &thumble_core::ButtonBindings<OutputBinding>,
+    mode: ConfigurationOutputMode,
+) -> Result<Vec<RawBindingDisplayEntry>, TransactionFailure> {
     let elements = normalized_binding_elements(customization)?;
     let mut entries = Vec::new();
     for element in elements {
@@ -4779,7 +4851,31 @@ fn binding_display_entries(
                 "binding display element kind is unsupported",
             ));
         }
-        let explicit_parts = safe_part_outputs(&element)?;
+        if matches!(kind, "text" | "decoration") {
+            continue;
+        }
+        let mut explicit_parts = safe_part_outputs(&element)?;
+        if kind == "joystick" {
+            if let Some(mapping) = element
+                .get("joystickMapping")
+                .filter(|value| !value.is_null())
+            {
+                for (direction, part) in [
+                    ("up", KeypadElementInputPart::JoystickUp),
+                    ("down", KeypadElementInputPart::JoystickDown),
+                    ("left", KeypadElementInputPart::JoystickLeft),
+                    ("right", KeypadElementInputPart::JoystickRight),
+                ] {
+                    if let std::collections::hash_map::Entry::Vacant(entry) =
+                        explicit_parts.entry(part)
+                    {
+                        if let Some(output) = mapping.get(direction) {
+                            entry.insert(parse_safe_output(output)?);
+                        }
+                    }
+                }
+            }
+        }
         let mut parts = vec![KeypadElementInputPart::Primary];
         for part in explicit_parts.keys().copied() {
             if !parts.contains(&part) {
@@ -4804,7 +4900,11 @@ fn binding_display_entries(
         parts.sort_by_key(|part| element_part_order(*part));
         for part in parts {
             let direct = if part == KeypadElementInputPart::Primary {
-                element.get("output").map(parse_safe_output).transpose()?
+                element
+                    .get("output")
+                    .filter(|value| !value.is_null())
+                    .map(parse_safe_output)
+                    .transpose()?
             } else {
                 explicit_parts.get(&part).cloned()
             };
@@ -4819,14 +4919,10 @@ fn binding_display_entries(
                 ConfigurationOutputMode::Controller => output.keyboard = None,
                 ConfigurationOutputMode::Custom => {}
             }
-            let output = semantic_output(
-                output.keyboard.as_ref(),
-                output.gamepad_buttons.iter().map(String::as_str),
-            )?;
-            if output.keyboard.is_empty() && output.gamepad_buttons.is_empty() {
+            if output.keyboard.is_none() && output.gamepad_buttons.is_empty() {
                 continue;
             }
-            entries.push(CliBindingDisplayEntry {
+            entries.push(RawBindingDisplayEntry {
                 element_id,
                 part,
                 output,
@@ -4934,7 +5030,7 @@ fn normalized_binding_elements(
 fn safe_part_outputs(
     element: &serde_json::Value,
 ) -> Result<std::collections::HashMap<KeypadElementInputPart, OutputBinding>, TransactionFailure> {
-    let Some(value) = element.get("partOutputs") else {
+    let Some(value) = element.get("partOutputs").filter(|value| !value.is_null()) else {
         return Ok(std::collections::HashMap::new());
     };
     let values = value.as_array().ok_or_else(|| {

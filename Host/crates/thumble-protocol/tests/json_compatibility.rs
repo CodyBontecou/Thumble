@@ -29,6 +29,11 @@ fn every_controller_message_kind_has_the_swift_wire_name_and_round_trips() {
         "gamepad_default_profile",
         "gamepad_profile_orientation_preference_mutation",
         "launch_profile_target",
+        "profile_artifact_adoption_begin",
+        "profile_artifact_adoption_chunk",
+        "profile_artifact_adoption_commit",
+        "profile_artifact_adoption_cancel",
+        "profile_artifact_adoption_result",
         "error",
     ];
 

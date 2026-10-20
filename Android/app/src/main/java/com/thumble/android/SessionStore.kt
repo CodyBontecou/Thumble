@@ -25,21 +25,37 @@ internal class TrustedMac(val serverID: String, val authToken: String, val urls:
     override fun toString() = "TrustedMac([redacted])"
 }
 
-internal data class ClientPreferences(val practiceMode: Boolean = false, val hapticIntensity: Double = 1.0) {
+internal data class ClientPreferences(val practiceMode: Boolean = false, val hapticIntensity: Double = 1.0, val showBindingGlyphs: Boolean = true) {
     fun normalized() = copy(hapticIntensity=HapticIntensity.normalized(hapticIntensity))
-    fun json() = JSONObject().put("practiceMode",practiceMode).put("hapticIntensity",HapticIntensity.normalized(hapticIntensity))
+    fun json() = JSONObject().put("practiceMode",practiceMode).put("hapticIntensity",HapticIntensity.normalized(hapticIntensity)).put("showBindingGlyphs",showBindingGlyphs)
     companion object {
         fun parse(json: JSONObject) = ClientPreferences(json.optBoolean("practiceMode"),
-            HapticIntensity.normalized(json.optDouble("hapticIntensity",1.0)))
+            HapticIntensity.normalized(json.optDouble("hapticIntensity",1.0)),json.optBoolean("showBindingGlyphs",true))
     }
 }
 
 internal interface SessionStore {
+    // Existing custom stores opt out until they implement durable guide state.
+    fun loadOnboardingCompleted(): Boolean = true
+    fun saveOnboardingCompleted() {}
+
+    fun loadPendingSkinRemovals(): List<PendingSkinRemoval> = emptyList()
+    fun savePendingSkinRemovals(values: List<PendingSkinRemoval>) { check(values.isEmpty()) { "This store cannot persist skin removals" } }
     fun loadMac(): TrustedMac?
     fun saveMac(mac: TrustedMac)
     fun forgetMac()
     fun loadSnapshot(): ProfileSnapshot
     fun saveSnapshot(snapshot: ProfileSnapshot)
+    fun loadPendingAppearancePreferences(): List<PendingAppearancePreference> = emptyList()
+    fun loadPendingLayoutEdits(): List<PendingLayoutEdit> = emptyList()
+    fun saveEditingState(snapshot: ProfileSnapshot, skins: List<PendingSkinSelection>, appearance: List<PendingAppearancePreference>, layouts: List<PendingLayoutEdit>) {
+        check(layouts.isEmpty()) { "This profile store cannot persist pending layout edits" }
+        saveProfileState(snapshot, skins, appearance)
+    }
+    fun saveProfileState(snapshot: ProfileSnapshot, skins: List<PendingSkinSelection>, appearance: List<PendingAppearancePreference>) {
+        check(appearance.isEmpty()) { "This profile store cannot persist pending appearance choices" }
+        saveSkinState(snapshot, skins)
+    }
     fun loadPendingSkinSelections(): List<PendingSkinSelection> = emptyList()
     fun saveSkinState(snapshot: ProfileSnapshot, pending: List<PendingSkinSelection>) {
         check(pending.isEmpty()) { "This profile store cannot persist pending skin changes" }
@@ -54,11 +70,27 @@ internal class MemorySessionStore : SessionStore {
     private var snapshot = ProfileSnapshot()
     private var preferences = ClientPreferences()
     private var pendingSkins = emptyList<PendingSkinSelection>()
+    private var pendingAppearance = emptyList<PendingAppearancePreference>()
+    private var pendingLayouts = emptyList<PendingLayoutEdit>()
+    private var pendingRemovals = emptyList<PendingSkinRemoval>()
+    override fun loadPendingSkinRemovals() = pendingRemovals
+    override fun savePendingSkinRemovals(values: List<PendingSkinRemoval>) { SkinRemovalJournal.encode(values);pendingRemovals=values.toList() }
     override fun loadMac() = mac
     override fun saveMac(mac: TrustedMac) { this.mac = mac }
-    override fun forgetMac() { mac = null; snapshot = ProfileSnapshot(); pendingSkins = emptyList() }
+    override fun forgetMac() { mac = null; snapshot = ProfileSnapshot(); pendingSkins = emptyList(); pendingAppearance = emptyList(); pendingLayouts = emptyList();pendingRemovals=emptyList() }
     override fun loadSnapshot() = snapshot
     override fun saveSnapshot(snapshot: ProfileSnapshot) { this.snapshot = snapshot }
+    override fun loadPendingAppearancePreferences() = pendingAppearance
+    override fun loadPendingLayoutEdits() = pendingLayouts
+    override fun saveEditingState(snapshot: ProfileSnapshot, skins: List<PendingSkinSelection>, appearance: List<PendingAppearancePreference>, layouts: List<PendingLayoutEdit>) {
+        LayoutEditJournal.encode(layouts)
+        saveProfileState(snapshot, skins, appearance)
+        pendingLayouts = layouts.toList()
+    }
+    override fun saveProfileState(snapshot: ProfileSnapshot, skins: List<PendingSkinSelection>, appearance: List<PendingAppearancePreference>) {
+        AppearancePreferenceJournal.encode(appearance)
+        this.snapshot=snapshot;pendingSkins=skins.toList();pendingAppearance=appearance.toList()
+    }
     override fun loadPendingSkinSelections() = pendingSkins
     override fun saveSkinState(snapshot: ProfileSnapshot, pending: List<PendingSkinSelection>) {
         this.snapshot=snapshot;pendingSkins=pending.toList()
@@ -72,7 +104,29 @@ internal class AndroidSessionStore(context: Context, namespace: String = "sessio
     private val directory = File(context.noBackupFilesDir, namespace).apply { mkdirs() }
     private val credential = AtomicFile(File(directory, "trusted-mac.enc"))
     private val profiles = AtomicFile(File(directory, "profiles.json"))
+    private val onboarding = AtomicFile(File(directory,"onboarding.json"))
+    override fun loadOnboardingCompleted(): Boolean {
+        val bytes=try { onboarding.readFully() } catch(_: java.io.FileNotFoundException) {
+            // Keep an established setup available after upgrading from a pre-guide app.
+            val established=File(directory,"profiles.json").isFile || File(directory,"trusted-mac.enc").isFile
+            if(established) saveOnboardingCompleted()
+            return established
+        }
+        require(bytes.size<=1024)
+        return JSONObject(bytes.toString(Charsets.UTF_8)).getBoolean("completed")
+    }
+    override fun saveOnboardingCompleted() = write(onboarding,JSONObject().put("completed",true).toString().toByteArray())
     private val settings = AtomicFile(File(directory, "preferences.json"))
+    private val removals = AtomicFile(File(directory,"skin-removals.json"))
+    override fun loadPendingSkinRemovals(): List<PendingSkinRemoval> {
+        val bytes=try { removals.readFully() } catch(_: java.io.FileNotFoundException) { return emptyList() }
+        require(bytes.size<=256*1024)
+        return SkinRemovalJournal.decode(JSONArray(bytes.toString(Charsets.UTF_8)))
+    }
+    override fun savePendingSkinRemovals(values: List<PendingSkinRemoval>) {
+        val bytes=SkinRemovalJournal.encode(values).toString().toByteArray()
+        require(bytes.size<=256*1024);write(removals,bytes)
+    }
     private val alias = "com.thumble.android.$namespace.v1"
     private val associatedData = "Thumble trusted Mac v1".toByteArray()
 
@@ -102,7 +156,7 @@ internal class AndroidSessionStore(context: Context, namespace: String = "sessio
         write(credential, byteArrayOf(1) + cipher.iv + cipher.doFinal(json))
     }
 
-    override fun forgetMac() { eraseCredential(); profiles.delete() }
+    override fun forgetMac() { eraseCredential(); profiles.delete();removals.delete() }
     private fun eraseCredential() {
         credential.delete()
         runCatching { KeyStore.getInstance("AndroidKeyStore").apply { load(null) }.deleteEntry(alias) }
@@ -119,14 +173,33 @@ internal class AndroidSessionStore(context: Context, namespace: String = "sessio
         val json=JSONObject(bytes.toString(Charsets.UTF_8))
         return SkinSelectionJournal.decode(if(json.has("androidPendingSkinSelections")) json.getJSONArray("androidPendingSkinSelections") else null)
     }
+    override fun loadPendingAppearancePreferences(): List<PendingAppearancePreference> {
+        val bytes=try { profiles.readFully() } catch (_: java.io.FileNotFoundException) { return emptyList() }
+        require(bytes.size<=WireCodec.MAX_PAYLOAD)
+        val json=JSONObject(bytes.toString(Charsets.UTF_8))
+        return AppearancePreferenceJournal.decode(if(json.has("androidPendingAppearancePreferences")) json.getJSONArray("androidPendingAppearancePreferences") else null)
+    }
+    override fun loadPendingLayoutEdits(): List<PendingLayoutEdit> {
+        val bytes=try { profiles.readFully() } catch (_: java.io.FileNotFoundException) { return emptyList() }
+        require(bytes.size<=WireCodec.MAX_PAYLOAD)
+        val json=PackageJSON.objectValue(bytes)
+        return LayoutEditJournal.decode(if(json.has("androidPendingLayoutEdits")) json.getJSONArray("androidPendingLayoutEdits") else null)
+    }
     override fun saveSnapshot(snapshot: ProfileSnapshot) = saveSkinState(snapshot,loadPendingSkinSelections())
-    override fun saveSkinState(snapshot: ProfileSnapshot, pending: List<PendingSkinSelection>) {
-        require(pending.size<=256)
+    override fun saveSkinState(snapshot: ProfileSnapshot, pending: List<PendingSkinSelection>) =
+        saveProfileState(snapshot, pending, loadPendingAppearancePreferences())
+    override fun saveProfileState(snapshot: ProfileSnapshot, skins: List<PendingSkinSelection>, appearance: List<PendingAppearancePreference>) =
+        saveEditingState(snapshot, skins, appearance, loadPendingLayoutEdits())
+    override fun saveEditingState(snapshot: ProfileSnapshot, skins: List<PendingSkinSelection>, appearance: List<PendingAppearancePreference>, layouts: List<PendingLayoutEdit>) {
+        require(skins.size<=256)
         val json = WireCodec.message("gamepad_profiles").put("gamepadProfiles", JSONArray().apply {
             snapshot.profiles.forEach { put(it.source) }
         }).put("gamepadProfileID", snapshot.selectedID?.toString())
             .put("defaultGamepadProfileID",snapshot.defaultID?.toString())
-            .put("androidPendingSkinSelections",SkinSelectionJournal.encode(pending)).toString().toByteArray()
+            .put("bindingPresentations",BindingPresentations.encode(snapshot.bindingPresentations))
+            .put("androidPendingSkinSelections",SkinSelectionJournal.encode(skins))
+            .put("androidPendingLayoutEdits",LayoutEditJournal.encode(layouts))
+            .put("androidPendingAppearancePreferences",AppearancePreferenceJournal.encode(appearance)).toString().toByteArray()
         require(json.size <= WireCodec.MAX_PAYLOAD)
         write(profiles, json)
     }
@@ -162,4 +235,5 @@ internal class AndroidSessionStore(context: Context, namespace: String = "sessio
 /** Ordinary dependency seam; instrumentation can keep fixture sessions out of real saved trust. */
 internal object ClientDependencies {
     var sessionStore: (Context) -> SessionStore = { AndroidSessionStore(it) }
+    var sharedBuildSession: (Context)->SharedBuildSession = { SharedBuildSession(File(it.noBackupFilesDir,"pending-shared-builds/v1").toPath()) }
 }

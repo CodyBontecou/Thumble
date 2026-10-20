@@ -63,6 +63,11 @@ pub enum HostCommand {
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         arguments: Vec<String>,
     },
+    /// Adopt portable shared builds through the live receiver authority.
+    SharedBuild {
+        #[command(subcommand)]
+        command: SharedBuildCommand,
+    },
     /// Select an installed profile by ID.
     SelectProfile {
         profile_id: String,
@@ -146,6 +151,31 @@ pub struct GamepadArgs {
 }
 
 #[derive(Debug, Subcommand)]
+pub enum SharedBuildCommand {
+    Adopt {
+        file: std::path::PathBuf,
+        #[arg(long)]
+        server_id: Option<String>,
+        #[arg(long)]
+        operation_id: Option<uuid::Uuid>,
+        #[arg(long)]
+        record_id: Option<uuid::Uuid>,
+        #[arg(long)]
+        json: bool,
+    },
+    Status {
+        operation_id: uuid::Uuid,
+        #[arg(long)]
+        json: bool,
+    },
+    Cancel {
+        operation_id: uuid::Uuid,
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Debug, Subcommand)]
 pub enum GamepadCommand {
     Status,
     /// Show HID readiness; consumer/game recognition still requires independent tests.
@@ -182,6 +212,7 @@ pub async fn execute(cli: Cli, paths: HostPaths) -> Result<(), String> {
         HostCommand::Profiles { json } => profiles(&paths, json).await,
         HostCommand::Controls { json } => controls(&paths, json).await,
         HostCommand::Skin { arguments } => skin(&paths, arguments).await,
+        HostCommand::SharedBuild { command } => shared_build(&paths, command).await,
         HostCommand::SelectProfile { profile_id, json } => {
             select_profile(&paths, profile_id, json).await
         }
@@ -651,6 +682,107 @@ fn print_human_status(status: &HostStatus) {
     }
     for url in &status.urls {
         println!("URL: {url}");
+    }
+}
+
+async fn shared_build(paths: &HostPaths, command: SharedBuildCommand) -> Result<(), String> {
+    use base64::{engine::general_purpose::STANDARD, Engine};
+    use std::io::Read;
+    use thumble_protocol::{
+        AdoptionConflictPolicy, AdoptionMetadata, AdoptionStatus, ADOPTION_CHUNK_BYTES,
+        ADOPTION_MAX_BYTES,
+    };
+    let (request, json_output) = match command {
+        SharedBuildCommand::Adopt {
+            file,
+            server_id,
+            operation_id,
+            record_id,
+            json,
+        } => {
+            let file = OpenOptions::new()
+                .read(true)
+                .custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC)
+                .open(file)
+                .map_err(|_| "Could not open shared-build artifact")?;
+            let info = file
+                .metadata()
+                .map_err(|_| "Could not inspect shared-build artifact")?;
+            if !info.is_file() || info.len() == 0 || info.len() > ADOPTION_MAX_BYTES as u64 {
+                return Err("Invalid shared-build artifact size".into());
+            }
+            let mut bytes = Vec::new();
+            file.take((ADOPTION_MAX_BYTES + 1) as u64)
+                .read_to_end(&mut bytes)
+                .map_err(|_| "Could not read shared-build artifact")?;
+            if bytes.len() > ADOPTION_MAX_BYTES {
+                return Err("Shared-build artifact exceeds size limit".into());
+            }
+            let artifact = thumble_core::ProfileArtifact::decode_json(&bytes)
+                .map_err(|_| "Invalid portable shared-build artifact")?;
+            let server = match server_id {
+                Some(id) => id,
+                None => {
+                    require_ok(send_request(&paths.control_socket, &ControlRequest::Status).await?)?
+                        .status
+                        .ok_or("Receiver status is unavailable")?
+                        .server_id
+                }
+            };
+            let operation = operation_id.unwrap_or_else(uuid::Uuid::new_v4);
+            let metadata = AdoptionMetadata {
+                operation_id: operation,
+                record_id: record_id.unwrap_or_else(|| {
+                    uuid::Uuid::new_v5(&operation, b"thumble-shared-build-record")
+                }),
+                intended_server_id: server,
+                content_hash: artifact.content_hash.value,
+                raw_sha256: crate::profile_adoption::raw_hash(&bytes),
+                byte_count: bytes.len(),
+                chunk_count: bytes.len().div_ceil(ADOPTION_CHUNK_BYTES),
+                conflict_policy: AdoptionConflictPolicy::AppendAsCopies,
+            };
+            metadata
+                .validate(&metadata.intended_server_id)
+                .map_err(|_| "Invalid intended server or artifact metadata")?;
+            (
+                ControlRequest::AdoptProfileArtifact {
+                    metadata,
+                    artifact_base64: STANDARD.encode(bytes),
+                },
+                json,
+            )
+        }
+        SharedBuildCommand::Status { operation_id, json } => (
+            ControlRequest::ProfileArtifactAdoptionStatus { operation_id },
+            json,
+        ),
+        SharedBuildCommand::Cancel { operation_id, json } => (
+            ControlRequest::CancelProfileArtifactAdoption { operation_id },
+            json,
+        ),
+    };
+    let result = require_ok(send_request(&paths.control_socket, &request).await?)?
+        .profile_artifact_adoption
+        .ok_or("Receiver did not return adoption status")?;
+    if json_output {
+        println!(
+            "{}",
+            serde_json::to_string(&result).map_err(|_| "Could not encode adoption status")?
+        );
+    } else {
+        println!(
+            "Shared build {:?}; operation {}",
+            result.status, result.operation_id
+        );
+    }
+    if result.status == AdoptionStatus::Failed {
+        Err(
+            "Shared-build operation did not complete; inspect its coded result before retrying"
+                .into(),
+        )
+    } else {
+        Ok(())
     }
 }
 

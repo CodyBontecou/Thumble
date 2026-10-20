@@ -132,7 +132,7 @@ Host state uses schema 3 with monotonic configuration revisions. Schemas 1/2 and
 
 Configuration save is independently disabled by default at both layers. Enable it only after explicit user approval by starting the host with `--allow-config-write` and the adapter with either `--allow-config-write` or the exact environment value `THUMBLE_MCP_ALLOW_CONFIG_WRITE=1`. Draft creation/editing remains non-authoritative without this opt-in.
 
-The standalone Swift CLI routes deterministic built-in Hollow Knight installation, bounded deterministic generation-spec planning plus artifact import, all 17 built-in template installs (including `profile create --template`), safe scalar/solid-background customization `set`, all/suggested and seven canonical deterministic customization repairs, sanitized style `list`/`show` plus all five non-file style mutations, sanitized variant-scoped element/layer listing plus layer move/forward/backward/front/back reorders, sanitized variant-scoped group listing plus create/rename/duplicate/ungroup/state/nudge/reorder edits, `profile list`, `select`/`use`, `default`/`set-default`, `rename`, `duplicate`/`copy`, `delete`/`rm`, `reset`, `move`/`reorder`, and bounded `export`/`import`; `orientation get`/`show`, `set`, `copy`, and `arrange`; every `binding` command; every `output` command; catalog-backed device `show` and `set`; control-bar collection `list`/`show`, `set`, `add`, `remove`, `move`, and `reset`; and rich non-file control-bar item `show`, `set`, and `reset` through `thumble-cli-bridge`. Its one-line schema-v8 request contains only a high-level typed command, a catalog template enum, booleans and a bounded optional name, typed profile/variant selectors, up to five bounded scalar/color customization edits, semantic key/modifier or gamepad values, a checked-in device-frame ID, canonical control-bar item IDs, bounded safe appearance changes, an optional exact read revision, one invocation UUID, bounded raw generation-spec JSON for read-only planning, and—only for profile import—bounded raw artifact JSON. Responses contain only a revision-tagged profile catalog, a bounded portable profile artifact for explicit export, a bounded read-only generation plan containing generated/artifact JSON and typed warnings/layout quality, orientation summary, bounded sanitized style definitions, layer records, and variant-scoped group records, bounded semantic binding/output projection, checked-in device-frame selection, bounded ordered control-bar collection projection, sanitized rendering-effective control-bar item appearance, deterministic draft/commit outcome IDs, or coded resume metadata. Missing maps derive only from that profile's declared controls and owned outputs; explicit empty outputs remain clears. No fixed input-slot map or previous-profile fallback is used. Responses never contain raw key codes, modifier masks, unvalidated profile documents, paths, credentials, arbitrary device IDs, or raw control-bar appearance payloads; the only profile document response is the validated 8 MiB-bounded artifact v1 export. Legacy custom canvases are projected only as bounded typed dimensions and orientation; writes remain limited to the checked-in catalog. The helper relays one typed transaction to a reachable same-user host. If no host owns `runtime.lock`, it acquires that exact lock, validates current state through Rust, runs the same begin/edit/validate/compare-and-swap preparation, atomically persists, and releases the lock. A held lock with an unreachable socket fails closed. Live hosts without configuration-write permission reject profile/template/generation/customization/orientation/binding/output/device/control-bar mutations with `configuration_write_disabled`; their bounded reads remain available, and the helper never substitutes an offline authority. Deterministic UUIDv5 IDs and a persisted request digest make same-invocation retries idempotent and conflicting reuse fail closed. Every migrated write uses one draft and one save. Rust independently reconstructs exact semantic binding/output maps, modes, active mirrors, synchronized element outputs, control-bar membership/order, orientation mirrors, and sparse default-frame behavior before accepting a Swift sibling delta. Orientation copy accepts an explicit saved source or the matching primary layout, copies source unknown fields, mirrors the destination into the primary layout, and is independently checked in Rust for exact frame, guide, visible-control rotation, and portrait control-bar collision behavior. Control-bar item writes preserve the standalone partial-edit semantics through the existing independently reconstructed `ControlBarItemChanges` operation; image fills and asset icons remain artifact-gated. Template and built-in generation installs derive destination/profile/element UUIDs inside Rust, use exact catalog revisions, and replay by invocation UUID. Safe customization writes independently reconstruct scalar, checked-in-frame, and solid-color deltas; rich fills and custom-size frames fail closed. Spec-based generation is Rust-planned and installs through the existing artifact-import CAS path; its hosted-builder tool is locally implemented at `partial` status and remains unavailable pending deployment/acceptance. Non-template profile creation, customization reads/resets and issue-code-specific repair aliases, theme and element writes, style import/export, app attachment, and skin/package families remain explicitly unmigrated, and legacy writes are rejected once Rust authority artifacts exist.
+The standalone Swift CLI routes deterministic built-in Hollow Knight installation, bounded deterministic generation-spec planning plus artifact import, all 17 built-in template installs (including `profile create --template`), safe scalar/solid-background customization `set`, all/suggested and seven canonical deterministic customization repairs, sanitized style `list`/`show` plus all five non-file style mutations, sanitized variant-scoped element/layer listing plus layer move/forward/backward/front/back reorders, sanitized variant-scoped group listing plus create/rename/duplicate/ungroup/state/nudge/reorder edits, `profile list`, `select`/`use`, `default`/`set-default`, `rename`, `duplicate`/`copy`, `delete`/`rm`, `reset`, `move`/`reorder`, and bounded `export`/`import`; `orientation get`/`show`, `set`, `copy`, and `arrange`; every `binding` command; every `output` command; catalog-backed device `show` and `set`; control-bar collection `list`/`show`, `set`, `add`, `remove`, `move`, and `reset`; and rich non-file control-bar item `show`, `set`, and `reset` through `thumble-cli-bridge`. Its one-line schema-v8 request contains only a high-level typed command, a catalog template enum, booleans and a bounded optional name, typed profile/variant selectors, up to five bounded scalar/color customization edits, semantic key/modifier or gamepad values, a checked-in device-frame ID, canonical control-bar item IDs, bounded safe appearance changes, an optional exact read revision, one invocation UUID, bounded raw generation-spec JSON for read-only planning, and—only for profile import—bounded raw artifact JSON. Responses contain only a revision-tagged profile catalog, a bounded portable profile artifact for explicit export, a bounded read-only generation plan containing generated/artifact JSON and typed warnings/layout quality, orientation summary, bounded sanitized style definitions, layer records, and variant-scoped group records, bounded semantic binding/output projection, checked-in device-frame selection, bounded ordered control-bar collection projection, sanitized rendering-effective control-bar item appearance, deterministic draft/commit outcome IDs, or coded resume metadata. Missing maps derive only from that profile's declared controls and owned outputs; explicit empty outputs remain clears. No fixed input-slot map or previous-profile fallback is used. Responses never contain raw key codes, modifier masks, unvalidated profile documents, paths, credentials, arbitrary device IDs, or raw control-bar appearance payloads; the only profile document response is the validated 8 MiB-bounded artifact v1 export. Legacy custom canvases are projected only as bounded typed dimensions and orientation; writes remain limited to the checked-in catalog. The helper relays one typed transaction to a reachable same-user host. If no host owns `runtime.lock`, it acquires that exact lock, validates current state through Rust, runs the same begin/edit/validate/compare-and-swap preparation, atomically persists, and releases the lock. A held lock with an unreachable socket fails closed. Live hosts without configuration-write permission reject profile/template/generation/customization/orientation/binding/output/device/control-bar mutations with `configuration_write_disabled`; their bounded reads remain available, and the helper never substitutes an offline authority. Deterministic UUIDv5 IDs and a persisted request digest make same-invocation retries idempotent and conflicting reuse fail closed. Every migrated write uses one draft and one save. Rust independently reconstructs exact semantic binding/output maps, modes, active mirrors, synchronized element outputs, control-bar membership/order, orientation mirrors, and sparse default-frame behavior before accepting a Swift sibling delta. Orientation copy accepts an explicit saved source or the matching primary layout, copies source unknown fields, mirrors the destination into the primary layout, and is independently checked in Rust for exact frame, guide, visible-control rotation, and portrait control-bar collision behavior. Control-bar item writes preserve the standalone partial-edit semantics through the existing independently reconstructed `ControlBarItemChanges` operation; image fills and asset icons remain artifact-gated. Template and built-in generation installs derive destination/profile/element UUIDs inside Rust, use exact catalog revisions, and replay by invocation UUID. Safe customization writes independently reconstruct scalar, checked-in-frame, and solid-color deltas; rich fills and custom-size frames fail closed. Spec-based generation is Rust-planned and installs through the existing artifact-import CAS path; its hosted-builder tool is locally implemented at `partial` status and remains unavailable pending deployment/acceptance. Runtime skin library list/import/export/apply/detach/remove commands route through the live Rust owner, as described under Runtime skin library and phone synchronization below. Non-template profile creation, customization reads/resets and issue-code-specific repair aliases, theme and element writes, style import/export, and app attachment remain explicitly unmigrated, and legacy writes are rejected once Rust authority artifacts exist.
 
 ### Native editor authority
 
@@ -395,6 +395,57 @@ prompt-to-artifact alpha remain pending. See
 `docs/mcp/profile-artifact-v1.md`, `docs/mcp/generation-spec-v1.md`, and
 `docs/mcp/builder-session-v1.md`.
 
+## Android shared-build adoption and CLI
+
+The Rust receiver advertises `profile_artifact_adoption_v1` when configuration
+writes are enabled and the sibling native `thumble-bridge` supports portable
+artifact validation. Android reviews a kept build before uploading it to the
+paired server. Uploads use authenticated WebSocket control messages, including
+when input uses UDP. They are limited to 8 MiB, ordered 256 KiB chunks and a
+30-second upload lifetime. The receiver checks the exact byte hash, RFC 8785
+content hash, server identity and native Swift profile decoding before import.
+Optional omitted fields remain omitted for hashing; decoded empty binding maps
+must not change a valid artifact's signed content.
+
+Adoption appends copies using the existing deterministic profile-import planner,
+selects the artifact's active profile and preserves the Mac default. Native
+normalized control data is installed while safe unknown profile metadata survives.
+Profiles and a successful operation receipt are persisted in one atomic write.
+Receipts are bounded to 64 entries for seven days. Reusing the same operation,
+record, server and hashes replays the original destination IDs; changing metadata
+for that operation fails. Failures before commit leave no receipt, allowing retry.
+Cancellation before durable commit leaves authority unchanged; after commit the
+receipt reports the already completed adoption.
+
+The public CLI routes these commands to the running Rust authority:
+
+```sh
+thumble shared-build adopt ./kept-build.json --operation-id UUID --record-id UUID --json
+thumble shared-build status UUID --json
+thumble shared-build cancel UUID --json
+```
+
+`--server-id` explicitly pins adoption to a server; omission uses the running
+receiver. Keep the same operation and record IDs when retrying a phone operation.
+CLI-created operations derive a stable record ID from `--operation-id` when
+`--record-id` is omitted. Cancellation returns the protocol's failed/disconnected
+result and a nonzero exit status; a committed operation returns replayed success.
+
+Android releases held input and blocks input and profile mutations during
+adoption. It retains the exact pending bytes on failure/cancellation and deletes
+them only after a matching result plus an authoritative snapshot containing all
+destination profiles. The practice preference is preserved.
+
+`Android/scripts/verify-mac-artifact-adoption.py --serial emulator-5554 --bin
+build/ArtifactAdoptionBinaries` runs the reviewed UI flow against an isolated
+no-input receiver, checks saved authority, and verifies public CLI replay before
+and after restart. The ignored `thumble-host` `profile_adoption` integration suite
+uses `THUMBLE_TEST_ARTIFACT_RUNTIME_BIN` with current packaged binaries; CI runs it
+against the native universal package, serially to avoid process-probe contention. It also covers cancellation while native
+validation is running and failed atomic writes. The normal installed receiver
+is not changed by these tests. Production browser association and physical-device
+acceptance remain separate requirements.
+
 ## Security and permissions
 
 The current iOS-compatible transport is unencrypted `ws://` on the local network. Pairing and trusted reconnect authentication prevent unauthenticated input, but the host should only run on networks you trust. Auth tokens are stored in the host state file with per-user permissions and are never included in status output or logs.
@@ -559,3 +610,174 @@ restart/reconnect, exact export and rejection without authority corruption throu
 `Android/scripts/verify-mac-skin-sync.py`. Its private receiver does not replace the
 normal installation. Full skin library UI and renderer parity remain tracked in
 `Android/PARITY.md`.
+
+The packaged native `skin_sync` integration test also invokes the public Swift
+`thumble skin` commands against its private receiver. It checks library listing,
+byte-exact export, in-use removal rejection without state changes, detach/remove,
+reimport and dark-appearance apply. The connected controller must receive the
+committed profile changes; profile identity and paired-client trust are preserved.
+The macOS packaging CI step runs this test with the actual packaged binaries.
+
+With the native phone-layout bridge ready, complete phone customization updates
+use the same bounded worker. They can replace active or inactive orientation
+layouts and recover a deleted profile as `Recovered Phone Layout`, without
+changing the active/default selection. The shared Swift model normalizes layouts,
+preserves the other orientation, maintains primary mirrors, and dehydrates
+installed skin assets. The bridge works independently of archive-store availability;
+older bridge packages retain the scalar appearance compatibility path.
+
+Each queued layout intent takes the current receiver-owned profile when native
+preparation starts. Rust then rejects configuration changes during preparation,
+rechecks the authenticated connection, reconciles only the target profile's
+bindings, and persists before broadcasting acknowledgement. Profile metadata and
+new pairing trust remain receiver-owned. Identical layouts do not increment the
+revision. Queue pressure retains the connection so outstanding phone intents can
+retry on subsequent authoritative snapshots. The native integration test covers a
+twelve-layout burst exceeding the eight-slot queue, metadata/selection preservation,
+recovery, no-op revision stability, receiver CLI reads and failed-save rejection.
+
+`Android/scripts/verify-mac-layout-edits.py` verifies the complete Android round
+trip against a private no-input receiver. `--without-skin-library` additionally
+checks that an unavailable archive store does not disable layout synchronization.
+The public Swift CLI's canonical-state policy is unchanged; private fixture profile
+reads use `thumble-host profiles --json`.
+
+Add `--editor-ui` to exercise visible Android move, resize, rotate, delete,
+Undo/Cancel and offline Done/reconnect, followed by receiver restart and CLI
+identity checks. Add `--template arcadeStick --custom-control` to exercise a
+declared custom button and grouped-control reference pruning. Add
+`--skin path/to/existing.pocketpad` to import/apply an unchanged package through
+the receiver CLI and verify canonical asset references plus exact archive export.
+These acceptance modes use private state, memory-only Android profiles and disabled
+Mac input. They do not modify the normal receiver installation or approve artwork.
+
+
+Android's Skins library now exposes outgoing archive sharing, document export and
+guarded removal. Its client removal journal is bound to the paired Mac and remains
+until queued local replay cleanup finishes. The existing `skin_package_removal`
+message has no explicit receiver persistence acknowledgement; reconnect retries
+and local-cleanup durability are verified with loopback peers. Native Android UI
+removal acceptance against the Mac remains tracked in `Android/PARITY.md`. The
+receiver and public CLI keep their existing in-use-reference checks.
+
+
+## Installed Android adoption acceptance (2026-10-20)
+
+The updated receiver and bridges were installed at the existing user installation
+and tested on port 8765 with real input and configuration writes enabled. The
+Android app was installed on the dedicated API 26 emulator and connected directly
+to that normal receiver. `Android/scripts/verify-installed-artifact-adoption.py`
+checks reviewed adoption, exact public CLI replay/status, late cancellation of a
+committed operation, production Android cancellation with retained bytes, and
+public CLI cancellation delivered to a pending Android WebSocket upload.
+
+The run exposed two legacy configuration-bridge issues. Typed native decoding now
+projects the host's inline keyboard `modifiers` spelling to `modifiersRawValue`
+without changing stored profile JSON; portable artifact decoding stays strict.
+Rust also preserves original integral-float representation when Swift returns an
+exactly equal integer, matching profile/control identities across array moves.
+Changed numeric values and rounded large integers still fail strict delta checks.
+Regression tests cover raw-profile preservation, reordered metadata, invalid
+modifier ranges, and constrained-thread decoding.
+
+The test removes only its synthetic profile IDs through the public CLI and
+restores the original selection. All five original profiles, global/per-profile
+binding maps and the default were verified unchanged against the pre-install
+backup. Evidence: `Android/app/build/evidence/installed-artifact-adoption/20261020T144933Z/verification.json`.
+This checkpoint used the emulator; subsequent physical-phone checkpoints follow.
+
+
+Physical Pixel 7 (API 37) acceptance now also passes against the normal receiver
+through the phone's direct Wi-Fi route, including reviewed adoption, public CLI
+replay/status, Android cancellation, CLI cancellation delivered to Android, and
+restoration of original profiles/bindings/default/selection. The app was updated
+in place and its existing saved Mac connection still works. Receipt and binary
+hashes: `Android/app/build/evidence/installed-artifact-adoption/20261020T145409Z/verification.json`.
+
+
+Physical Pixel 7 Wi-Fi interruption recovery also passes for an incomplete upload
+and a committed operation whose result has not reached Android. A test-only
+phone-local relay pauses the boundary, then USB disables the actual Wi-Fi radio;
+its real upstream failure reaches the production Android client/coordinator.
+Offline pending bytes and operation identity survive. Reconnect/retry and public
+CLI replay create no duplicate profiles, including replay of the already committed
+destination ID. Pending removal waits for authoritative snapshot confirmation.
+Wi-Fi and the original five profiles, bindings, default and selection are restored;
+the normal app reconnects with saved credentials. Repeatable harness:
+`Android/scripts/verify-wifi-adoption-recovery.py`. Evidence:
+`Android/app/build/evidence/wifi-adoption-recovery/20261020T150648Z/verification.json`.
+Long outages and ungated router-failure timing remain separate cases; process-death
+acceptance follows below.
+
+
+Pixel 7 force-stop/relaunch acceptance passes during partial upload and after Mac
+commit before Android confirmation. The actual app process is killed; while its
+PID is absent the app-private pending metadata remains ADOPTING and artifact bytes
+match the original SHA-256. A fresh process launches MainActivity using isolated
+production disk stores, reloads encrypted Mac credentials, recovers the pending
+record as retryable, and retries through Shared builds directly over Wi-Fi.
+Operation/record/server/hashes survive. Each operation creates exactly one profile
+copy; committed retry and public CLI replay return the original destination ID.
+Pending cleanup waits for authoritative confirmation. Original profiles, bindings,
+default and selection are restored, and the normal app reconnects afterward.
+Harness: `Android/scripts/verify-process-death-adoption.py`. Evidence and UI captures:
+`Android/app/build/evidence/process-death-adoption/20261020T151151Z/verification.json`.
+The first attempt uses a test-only boundary relay; reboot acceptance follows below.
+Arbitrary crash timing remains a separate case.
+
+
+Pixel 7 physical reboot acceptance passes for partial upload and a committed result
+not yet delivered to Android. Distinct boot IDs verify reboot; after manual unlock,
+the pending metadata and artifact hash survive on disk before any app launch.
+MainActivity reloads encrypted credentials and the pending record from isolated
+production stores, then a UI retry reconnects directly over Wi-Fi. Each operation
+creates exactly one profile copy; committed retry and CLI replay return the original
+destination ID. Pending cleanup waits for authoritative confirmation. Original five
+profiles, all binding maps, default and selection are restored; the normal app
+reconnects afterward. Harness: `Android/scripts/verify-reboot-adoption.py`.
+Receipt and screenshots:
+`Android/app/build/evidence/reboot-adoption/20261020T152343Z/verification.json`.
+An initial partial-upload reboot run preserved bytes but exceeded the 35-second
+reconnect/recovery wait. The complete rerun passed without a production fix; the
+subsequent discovery-race investigation below provides a reproducible failure and fix.
+Its log is under `Android/app/build/evidence/reboot-adoption/20261020T151542Z/`.
+
+
+Android trusted reconnect now preserves a healthy in-progress handshake when
+Bonjour supplies additional addresses. The previous path canceled that attempt
+and could stall on an unreachable alternative. A controlled regression failed
+before the change and passes on the API 26 emulator and API 37 Pixel afterward;
+normal socket-loss, discovery fallback and explicit-disconnect recovery tests pass.
+Both fixed-app physical reboot adoption UI cases reconnect in under three seconds
+with the original timeout. Per-operation CLI replay confirms one destination each.
+The original timeout lacked a discovery trace, so its historical trigger cannot
+be established conclusively from that run.
+
+The global profile-count guard detected a concurrent Warband Command addition.
+This run's two synthetic profiles were removed and the unrelated profile was
+preserved. Audited operation receipts and timelines:
+`Android/app/build/evidence/reboot-adoption/20261020T154758Z/operation-verification-reviewed.json`.
+Regression evidence and stack-safety gate:
+`Android/app/build/evidence/reconnect-startup-fix/20261020T154435Z/`.
+The normal Host was then intentionally stopped in another chat for the Mac editor;
+additional recovery reruns use a private recording-only receiver and child-process
+home, preserving that requested ownership. No normal Host restart is performed.
+
+
+Post-fix isolated recording-only Wi-Fi and force-stop recovery reruns both pass,
+including retained bytes, UI retry, authoritative cleanup and public CLI replay.
+Receipts: `Android/app/build/evidence/wifi-adoption-recovery/20261020T160550Z/verification.json`
+and `Android/app/build/evidence/process-death-adoption/20261020T160615Z/verification.json`.
+Repeatable isolated runner: `Android/scripts/verify-isolated-adoption-recovery.py`
+with explicit serial, ADB, bin and receiver-host arguments. Combined verification:
+`Android/app/build/evidence/reconnect-startup-fix/20261020T154435Z/verification.json`.
+The driver-only instrumentation fixtures now skip when no external-driver arguments
+are supplied. The normal Host remains intentionally stopped for the Mac editor.
+
+### Controller binding display metadata
+
+Profile snapshots now include `bindingPresentations` for Android and iOS: compact
+output text plus a separate accessibility description, grouped by profile and
+orientation. The receiver and `thumble binding display` share authoritative raw
+binding resolution, including explicit part clears, legacy joystick mappings and
+output-mode filtering. Display strings never choose or execute input bindings.

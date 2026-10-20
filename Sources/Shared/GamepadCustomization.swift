@@ -8,6 +8,17 @@ import UIKit
 import AppKit
 #endif
 
+private struct GamepadEditorCleanPreviewKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    var gamepadEditorCleanPreview: Bool {
+        get { self[GamepadEditorCleanPreviewKey.self] }
+        set { self[GamepadEditorCleanPreviewKey.self] = newValue }
+    }
+}
+
 private let gamepadMaximumLabelLength = 12
 
 public enum GamepadLayoutMode: String, Codable, CaseIterable, Identifiable, Sendable {
@@ -10266,6 +10277,7 @@ private extension View {
 }
 
 struct GamepadCustomizationEditor: View {
+    @Environment(\.gamepadEditorCleanPreview) private var isCleanPreview
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.undoManager) private var undoManager
     @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
@@ -10606,13 +10618,15 @@ struct GamepadCustomizationEditor: View {
 
     private var editorCore: some View {
         VStack(spacing: 0) {
-            if showsPreview {
+            if showsPreview && !isCleanPreview {
                 editorCommandBar
                 Divider()
             }
 
             Group {
-                if showsPreview {
+                if showsPreview && isCleanPreview {
+                    canvasStage
+                } else if showsPreview {
                     GeometryReader { proxy in
                         if proxy.size.width >= 900 {
                             wideEditor
@@ -10647,6 +10661,12 @@ struct GamepadCustomizationEditor: View {
         .animation(accessibilityReduceMotion ? .easeInOut(duration: 0.16) : .spring(response: 0.34, dampingFraction: 0.88), value: activeFirstKeypadOnboardingStep)
         .onChange(of: observedExternalProfiles) { _, _ in
             syncExternalProfileState()
+        }
+        .onChange(of: isCleanPreview) { _, _ in
+            releaseAllTestInputs()
+            finishActiveContinuousEdit()
+            commitPendingEditorChanges()
+            fitCanvas()
         }
         .onChange(of: externalSelectedProfileID) { _, _ in
             syncExternalProfileState()
@@ -10723,22 +10743,24 @@ struct GamepadCustomizationEditor: View {
             }
         }
         .background {
-            GamepadEditorKeyboardShortcutBridge(
-                onDelete: deleteSelectedControl,
-                onUndo: performUndo,
-                onRedo: performRedo,
-                onGroup: performGroupShortcut,
-                onUngroup: performUngroupShortcut,
-                onDuplicate: duplicateSelectedControls,
-                onSelectAll: selectAllVisibleControls,
-                onQuickBind: beginQuickBindSelectedControl,
-                onShowShortcuts: { isShortcutReferencePresented = true; return true },
-                onEscape: handleEditorEscape,
-                onZoom: handleZoomShortcut,
-                onTool: activateCanvasTool,
-                onNudge: nudgeSelectedControls
-            )
-            .frame(width: 0, height: 0)
+            if !isCleanPreview {
+                GamepadEditorKeyboardShortcutBridge(
+                    onDelete: deleteSelectedControl,
+                    onUndo: performUndo,
+                    onRedo: performRedo,
+                    onGroup: performGroupShortcut,
+                    onUngroup: performUngroupShortcut,
+                    onDuplicate: duplicateSelectedControls,
+                    onSelectAll: selectAllVisibleControls,
+                    onQuickBind: beginQuickBindSelectedControl,
+                    onShowShortcuts: { isShortcutReferencePresented = true; return true },
+                    onEscape: handleEditorEscape,
+                    onZoom: handleZoomShortcut,
+                    onTool: activateCanvasTool,
+                    onNudge: nudgeSelectedControls
+                )
+                .frame(width: 0, height: 0)
+            }
         }
     }
 
@@ -13092,6 +13114,7 @@ struct GamepadCustomizationEditor: View {
                             commitPendingEditorChanges()
                         }
                     )
+                    .allowsHitTesting(!isCleanPreview)
                     .environment(\.colorScheme, activeKeypadColorScheme)
                     .environment(\.gamepadControlBarPreviewContext, controlBarPreviewContext)
                     .frame(width: screenDisplayRect.width, height: screenDisplayRect.height)
@@ -13130,17 +13153,19 @@ struct GamepadCustomizationEditor: View {
             }
         }
         .overlay(alignment: .bottom) {
-            if let activeLayoutQualityIssue {
+            if !isCleanPreview, let activeLayoutQualityIssue {
                 layoutIssueRepairBanner(activeLayoutQualityIssue)
                     .padding(Geist.Spacing.s4)
             }
         }
         .overlay(alignment: .topLeading) {
-            canvasSidebarToggleBar
-                .padding(Geist.Spacing.s4)
+            if !isCleanPreview {
+                canvasSidebarToggleBar
+                    .padding(Geist.Spacing.s4)
+            }
         }
         .overlay(alignment: .topTrailing) {
-            if !isInspectorSidebarVisible {
+            if !isCleanPreview && !isInspectorSidebarVisible {
                 canvasAppearanceBadge
                     .padding(Geist.Spacing.s4)
             }
@@ -24350,6 +24375,7 @@ final class GamepadResolvedControlsCache {
 }
 
 private struct GamepadLayoutDesigner: View {
+    @Environment(\.gamepadEditorCleanPreview) private var isCleanPreview
     @Environment(\.colorScheme) private var colorScheme
     @Binding var customization: GamepadCustomization
     @Binding var selectedControlID: GamepadControlIdentity
@@ -24422,9 +24448,11 @@ private struct GamepadLayoutDesigner: View {
                         width: resolvedLayoutSize.width * resolvedDisplayScale,
                         height: resolvedLayoutSize.height * resolvedDisplayScale
                     )
-                layoutGrid(canvasSize: resolvedLayoutSize, displayScale: resolvedDisplayScale)
+                if !isCleanPreview {
+                    layoutGrid(canvasSize: resolvedLayoutSize, displayScale: resolvedDisplayScale)
+                }
 
-                if showsHitAreas {
+                if showsHitAreas && !isCleanPreview {
                     ForEach(controls.filter { !$0.isDecoration }) { control in
                         RoundedRectangle(cornerRadius: 8 * resolvedDisplayScale, style: .continuous)
                             .fill(Geist.color(.blue700, scheme: colorScheme).opacity(0.10))
@@ -24449,7 +24477,7 @@ private struct GamepadLayoutDesigner: View {
                 }
 
                 ForEach(controls) { control in
-                    let isSelected = interactionMode == .edit && isControlSelectionActive && selectedControlIDs.contains(control.id)
+                    let isSelected = !isCleanPreview && interactionMode == .edit && isControlSelectionActive && selectedControlIDs.contains(control.id)
                     let isPressed = control.elementID.map { elementID in
                         pressedElementInputs.contains { $0.elementID == elementID }
                     } ?? false
@@ -24459,8 +24487,8 @@ private struct GamepadLayoutDesigner: View {
                         customization: customization,
                         isSelected: isSelected,
                         isPressed: isPressed,
-                        secondaryBindingText: control.inputID.flatMap { defaultLabelProvider?($0) },
-                        qualityHighlightSeverity: highlightedControlIDs.contains(control.id)
+                        secondaryBindingText: isCleanPreview ? nil : control.inputID.flatMap { defaultLabelProvider?($0) },
+                        qualityHighlightSeverity: !isCleanPreview && highlightedControlIDs.contains(control.id)
                             ? (highlightedIssueSeverity ?? .warning)
                             : nil,
                         isTestMode: interactionMode == .test,
