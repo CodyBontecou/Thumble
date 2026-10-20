@@ -19,10 +19,15 @@ internal fun normalizedStyleID(value: String): String = buildString {
 internal data class RasterAsset(val bitmap: Bitmap, val intrinsicWidth: Int, val intrinsicHeight: Int)
 
 /** One profile surface owns this cache. It never fetches URLs or writes asset data. */
-internal class AssetImages(library: JSONObject = JSONObject()) {
+internal class AssetImages(library: JSONObject = JSONObject(), private val decoded: DecodedCache = DecodedCache()) {
     private val assets = linkedMapOf<String, JSONObject>()
-    private val decoded = object : LruCache<String, RasterAsset>(32 * 1024 * 1024) {
-        override fun sizeOf(key: String, value: RasterAsset) = value.bitmap.allocationByteCount
+    /** Scheme/action states share one bounded raster cache, even when their asset aliases differ. */
+    internal class DecodedCache {
+        private val values = object : LruCache<String, RasterAsset>(32 * 1024 * 1024) {
+            override fun sizeOf(key: String, value: RasterAsset) = value.bitmap.allocationByteCount
+        }
+        fun get(key: String): RasterAsset? = values.get(key)
+        fun put(key: String, value: RasterAsset) { values.put(key, value) }
     }
     init {
         val array = library.optJSONArray("assets")

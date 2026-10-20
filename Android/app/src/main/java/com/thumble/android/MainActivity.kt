@@ -329,8 +329,11 @@ class MainActivity : ComponentActivity() {
         val projection = rendered?.takeIf { it.matches(profile, landscape, dark) }
         var waitsForInitialSkinSync by remember(profile) { mutableStateOf(session.skinSyncInFlight>0) }
         LaunchedEffect(profile,session.skinSyncInFlight) { if(session.skinSyncInFlight==0) waitsForInitialSkinSync=false }
-        val loadingSkin = profile?.source?.optJSONObject("skinReference") != null &&
-            (projection == null || (waitsForInitialSkinSync && session.skinSyncInFlight>0))
+        val hasOwnedAppearance = landscape && profile?.source?.optJSONObject("appearanceBank") != null
+        // Owned resources never wait for an installed-package synchronization job.
+        val loadingSkin = if (hasOwnedAppearance) projection == null else
+            profile?.source?.optJSONObject("skinReference") != null &&
+                (projection == null || (waitsForInitialSkinSync && session.skinSyncInFlight>0))
         var menu by remember { mutableStateOf(false) }
         LaunchedEffect(menu) { if(menu && !sharedPreview) session.refreshSkins() }
         val unsupported = profile?.unsupportedKinds(landscape).orEmpty()
@@ -419,7 +422,8 @@ class MainActivity : ComponentActivity() {
                     view.onReleaseAll = { client.releaseAll() }
                     view.hapticIntensity=state.hapticIntensity
                     view.show(if (loadingSkin || session.skinBusy) null else projection?.profile ?: profile, surfaceRevision, landscape,
-                        profile?.skinColorScheme(dark)=="dark")
+                        profile?.skinColorScheme(dark)=="dark",
+                        if (loadingSkin || session.skinBusy) null else projection?.appearanceFrames)
                     view.showBindingPresentations(snapshot.bindingPresentations,state.showBindingGlyphs)
                 }, modifier = Modifier.fillMaxSize())
             }

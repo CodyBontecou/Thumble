@@ -1,0 +1,22 @@
+{
+  "platform": "Android API 26 arm64 emulator",
+  "avd": "thumble-parity-api26",
+  "serial": "emulator-5556",
+  "nativeViewSize": [
+    1600,
+    700
+  ],
+  "unitTests": 199,
+  "nativeTests": 29,
+  "scope": "Native offscreen ControllerSurface drawing and instrumentation; fake haptic actuator, mock network peers, no physical haptic or physical latency acceptance.",
+  "sha256": {
+    "base.png": "ee682ead1830c64491317a6929fcd803be70581d907f7ea209d01dacf5368197",
+    "both-held.png": "8671cd78ec6e542d133d658a55c66f53cbaad8b3b1aa0c1e9ee3bcbb803d09d6",
+    "left-held.png": "2384a4d5029607e0ff839b40c7f092767fd83a69aaa91f0048869307a0d872f4",
+    "right-held.png": "f1415aa63d67d204b1d1115e8323a9427b39711bf2cef9df5b4832e21715a832"
+  },
+  "apks": {
+    "app": "628dc45934880e867eccf549725aff780d836087a7d40406dcfb0909cbf8ff7b",
+    "tests": "ecd64e198e2ee3939080d83b50701019599fc904e927a5c773274dc156812ad4"
+  }
+}

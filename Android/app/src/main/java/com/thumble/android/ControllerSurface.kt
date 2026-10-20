@@ -31,10 +31,13 @@ internal class ControllerSurface(context: Context, private val legacyArtworkBlen
     var onTrigger: (String, Double, Boolean) -> Unit = { _, _, _ -> }
     var onPointer: (String, Double, Double, String?, Boolean?) -> Unit = { _, _, _, _, _ -> }
     private val router = ControlGestures(::hit, ::local,
-        { id, down, press -> onEdge(id, down, press) },
-        { id, part, down, press -> onPartEdge(id, part, down, press) },
+        { id, down, press -> sendEdge(id, InputPart.PRIMARY, down, press) },
+        { id, part, down, press -> sendEdge(id, part, down, press) },
         { target, x, y, final -> onStick(target, x, y, final) },
-        { target, value, final -> onTrigger(target, value, final) },
+        { target, value, final ->
+            onTrigger(target, value, final)
+            if (currentAppearanceFrames != null) { actionInputs.record(target, value); selectPaint(actionInputs.actionSet) }
+        },
         { kind, x, y, button, down -> onPointer(kind, x, y, button, down) }, ::playHaptic)
     private val indicatorPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private var controls = emptyList<Control>()
@@ -47,17 +50,30 @@ internal class ControllerSurface(context: Context, private val legacyArtworkBlen
     private var effectCache = EffectRasterCache()
     private var artwork = ArtworkPainter(null, assets, resources.displayMetrics.density, legacyArtworkBlending)
     private var legacyArtworkBuffer: android.graphics.Bitmap? = null
-    private data class Faces(val normal: JSONObject, val engaged: JSONObject)
-    private var faces = emptyList<Faces>()
+    private var faces = emptyList<ControlFaces>()
+    private var paintControls = emptyList<Control>()
+    private var currentAppearanceFrames: ControllerAppearanceFrames? = null
+    private val actionInputs = ControllerActionSetInputs()
+    private data class ControlBackground(val states: StateListDrawable, val normal: ControlDrawable, val engaged: ControlDrawable)
+    private data class PaintFrame(val data: ControllerPaintFrame, val assets: AssetImages, val artwork: ArtworkPainter,
+        val background: ControlDrawable, val controls: List<ControlBackground?>)
+    private var paintFrames = emptyMap<ControllerActionSet, PaintFrame>()
+    internal var displayedActionSet = ControllerActionSet.BASE; private set
     private var accessibilityPress = 1_000_000_000L
 
-    fun show(profile: ControllerProfile?, revision: Long, landscape: Boolean, isDark: Boolean) {
-        val layout = profile?.layout(landscape) ?: JSONObject()
+    fun show(profile: ControllerProfile?, revision: Long, landscape: Boolean, isDark: Boolean,
+             appearanceFrames: ControllerAppearanceFrames? = null) {
+        require(appearanceFrames == null || landscape) { "Owned controller frames require a landscape surface" }
+        val layout = appearanceFrames?.get(ControllerActionSet.BASE)?.layout ?: profile?.layout(landscape) ?: JSONObject()
         val resolvedDark = when (layout.optString("colorSchemePreference")) { "dark" -> true; "light" -> false; else -> isDark }
-        if (currentProfile === profile && currentRevision == revision && currentLandscape == landscape && dark == resolvedDark) return
+        if (currentProfile === profile && currentRevision == revision && currentLandscape == landscape && dark == resolvedDark && currentAppearanceFrames === appearanceFrames) return
         if (currentProfile != null) cancelTouches()
         currentProfile = profile; currentRevision = revision; currentLandscape = landscape; dark = resolvedDark
-        controls = profile?.controls(landscape).orEmpty()
+        currentAppearanceFrames = appearanceFrames
+        actionInputs.reset(); displayedActionSet = ControllerActionSet.BASE
+        paintFrames = emptyMap()
+        controls = appearanceFrames?.get(ControllerActionSet.BASE)?.controls ?: profile?.controls(landscape).orEmpty()
+        paintControls = controls
         canvasLayout = layout
         assets = AssetImages(layout.optJSONObject("assetLibrary") ?: JSONObject())
         effectCache = EffectRasterCache()
@@ -65,7 +81,7 @@ internal class ControllerSurface(context: Context, private val legacyArtworkBlen
         artwork = ArtworkPainter(layout.optJSONArray("artworkLayers"), assets, resources.displayMetrics.density, legacyArtworkBlending)
         artwork.resize(width, height)
         if (!artwork.requiresSoftwareBuffer) legacyArtworkBuffer = null
-        faces = controls.map { control -> Faces(ControlPresentation.resolve(control, layout, PresentationState.NORMAL, dark),
+        faces = appearanceFrames?.get(ControllerActionSet.BASE)?.faces ?: controls.map { control -> ControlFaces(ControlPresentation.resolve(control, layout, PresentationState.NORMAL, dark),
             ControlPresentation.resolve(control, layout, if (control.kind in setOf("joystick", "trigger", "trackpad")) PresentationState.ACTIVE else PresentationState.PRESSED, dark)) }
         removeAllViews()
         controls.forEach { control ->
@@ -88,7 +104,7 @@ internal class ControllerSurface(context: Context, private val legacyArtworkBlen
                     when (control.kind) {
                         "button" -> {
                             val token = ++accessibilityPress
-                            onEdge(control.id, true, token); onEdge(control.id, false, token)
+                            sendEdge(control.id, InputPart.PRIMARY, true, token); sendEdge(control.id, InputPart.PRIMARY, false, token)
                             playHaptic(control.id)
                         }
                         "joystick" -> router.accessibilityDirection(control, InputPart.JOYSTICK_UP)
@@ -100,13 +116,60 @@ internal class ControllerSurface(context: Context, private val legacyArtworkBlen
                 rotation = (control.style.finite("rotationDegrees", 0.0) % 360.0).toFloat()
             })
         }
-        val backgroundFill = canvasLayout.optJSONObject(if (dark) "backgroundDarkFillStyle" else "backgroundLightFillStyle")
-            ?: canvasLayout.optJSONObject("backgroundFillStyle")
-            ?: JSONObject().put("kind", "solid").put("color", canvasLayout.optJSONObject(if (dark) "backgroundDarkColor" else "backgroundLightColor")
-                ?: rgbaJSON(if (dark) 0xFF10141C.toInt() else 0xFFF4F6FA.toInt()))
-        setBackground(ControlDrawable("rectangle", JSONObject(), backgroundFill, resources.displayMetrics.density, assets))
+        if (appearanceFrames != null) {
+            require(appearanceFrames[ControllerActionSet.BASE].controls.map { it.id } == controls.map { it.id })
+            val decoded = AssetImages.DecodedCache()
+            paintFrames = ControllerActionSet.entries.associateWith { action ->
+                val data = appearanceFrames[action]
+                val images = AssetImages(data.layout.optJSONObject("assetLibrary") ?: JSONObject(), decoded)
+                val art = ArtworkPainter(data.layout.optJSONArray("artworkLayers"), images, resources.displayMetrics.density, legacyArtworkBlending)
+                art.resize(width, height)
+                val backgrounds = data.controls.mapIndexed { index, control ->
+                    if (control.kind == "text") null else {
+                        val pair = data.faces[index]
+                        fun drawable(face: JSONObject) = ControlDrawable(control.shape, control.style, face.getJSONObject("fillStyle"),
+                            resources.displayMetrics.density, images, face, effectCache)
+                        val normal = drawable(pair.normal); val engaged = drawable(pair.engaged)
+                        ControlBackground(StateListDrawable().apply {
+                            addState(intArrayOf(android.R.attr.state_pressed), engaged)
+                            addState(intArrayOf(), normal)
+                        }, normal, engaged)
+                    }
+                }
+                PaintFrame(data, images, art, surfaceBackground(data.layout, images).apply { setBounds(0, 0, width, height) }, backgrounds)
+            }
+            selectPaint(ControllerActionSet.BASE, force = true)
+        } else setBackground(surfaceBackground(canvasLayout, assets))
         renderColors()
         requestLayout()
+    }
+    private fun surfaceBackground(layout: JSONObject, images: AssetImages): ControlDrawable {
+        val fill = layout.optJSONObject(if (dark) "backgroundDarkFillStyle" else "backgroundLightFillStyle")
+            ?: layout.optJSONObject("backgroundFillStyle")
+            ?: JSONObject().put("kind", "solid").put("color", layout.optJSONObject(if (dark) "backgroundDarkColor" else "backgroundLightColor")
+                ?: rgbaJSON(if (dark) 0xFF10141C.toInt() else 0xFFF4F6FA.toInt()))
+        return ControlDrawable("rectangle", JSONObject(), fill, resources.displayMetrics.density, images)
+    }
+    /** Transport first. This mirror selects paint only; it never changes or injects outputs. */
+    private fun sendEdge(id: UUID, part: InputPart, down: Boolean, press: Long) {
+        if (part == InputPart.PRIMARY) onEdge(id, down, press) else onPartEdge(id, part, down, press)
+        val frames = currentAppearanceFrames ?: return
+        actionInputs.record(id, part, down, press, frames.bindings.buttons(id, part))
+        selectPaint(actionInputs.actionSet)
+    }
+    private fun selectPaint(action: ControllerActionSet, force: Boolean = false) {
+        if (!force && displayedActionSet == action) return
+        val prepared = paintFrames[action] ?: return
+        displayedActionSet = action
+        canvasLayout = prepared.data.layout; paintControls = prepared.data.controls; faces = prepared.data.faces
+        assets = prepared.assets; artwork = prepared.artwork
+        setBackground(prepared.background)
+        if (!artwork.requiresSoftwareBuffer) legacyArtworkBuffer = null
+        prepared.controls.forEachIndexed { index, background ->
+            if (background != null) getChildAt(index).background = background.states
+        }
+        // Child IDs, geometry, accessibility actions and router owners are unchanged.
+        invalidate()
     }
     private var bindingGroups=emptyList<ProfileBindingPresentations>()
     private var showBindingGlyphs=true
@@ -136,12 +199,13 @@ internal class ControllerSurface(context: Context, private val legacyArtworkBlen
     }
     private fun renderColors() {
         val pressed = router.pressedIDs()
-        controls.forEachIndexed { index, control ->
+        controls.forEachIndexed { index, inputControl ->
+            val control = paintControls[index]
             val view = getChildAt(index) as TextView
-            val engaged = when (control.kind) {
-                "joystick" -> router.joystickVectors[control.id]?.neutral == false
-                "trigger" -> (router.triggerValues[control.id] ?: 0.0) > TriggerSettings.parse(control.source.optJSONObject("triggerSettings")).deadZone
-                else -> control.id in pressed
+            val engaged = when (inputControl.kind) {
+                "joystick" -> router.joystickVectors[inputControl.id]?.neutral == false
+                "trigger" -> (router.triggerValues[inputControl.id] ?: 0.0) > TriggerSettings.parse(inputControl.source.optJSONObject("triggerSettings")).deadZone
+                else -> inputControl.id in pressed
             }
             val pair = faces[index]
             val face = if (engaged) pair.engaged else pair.normal
@@ -187,7 +251,10 @@ internal class ControllerSurface(context: Context, private val legacyArtworkBlen
     }
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
-        artwork.resize(w, h)
+        if (paintFrames.isEmpty()) artwork.resize(w, h) else paintFrames.values.forEach { frame ->
+            frame.artwork.resize(w, h)
+            frame.background.setBounds(0, 0, w, h)
+        }
         legacyArtworkBuffer = null
     }
     override fun draw(canvas: Canvas) {
@@ -226,6 +293,10 @@ internal class ControllerSurface(context: Context, private val legacyArtworkBlen
             child.measure(MeasureSpec.makeMeasureSpec(pxW, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(pxH, MeasureSpec.EXACTLY))
             val x = ((cx - cw / 2) * density).roundToInt(); val y = ((cy - ch / 2) * density).roundToInt()
             child.layout(x, y, x + pxW, y + pxH)
+            paintFrames.values.forEach { frame -> frame.controls[index]?.let { background ->
+                background.normal.setBounds(0, 0, pxW, pxH)
+                background.engaged.setBounds(0, 0, pxW, pxH)
+            } }
         }
     }
     private fun visualLocal(control: Control, point: Vector): LocalContact {
@@ -367,6 +438,7 @@ internal class ControllerSurface(context: Context, private val legacyArtworkBlen
     }
     fun cancelTouches() {
         router.cancel()
+        actionInputs.reset(); selectPaint(ControllerActionSet.BASE)
         haptics.cancel()
         onReleaseAll()
         renderColors(); invalidate()
@@ -389,7 +461,8 @@ internal class ControlFaceView(context: Context) : TextView(context) {
     private var content: JSONObject? = null
     private var icon: ControlIcon? = null
     private var labels = true
-    private val painters = mutableMapOf<ControlIcon, IconPainter>()
+    private data class IconPaintKey(val icon: ControlIcon, val assets: AssetImages)
+    private val painters = mutableMapOf<IconPaintKey, IconPainter>()
     private var iconPainter: IconPainter? = null
     private var effectCache = EffectRasterCache()
     private val effectID = EffectRasterCache.id()
@@ -416,7 +489,7 @@ internal class ControlFaceView(context: Context) : TextView(context) {
     fun configure(control: Control, content: JSONObject?, icon: ControlIcon?, assets: AssetImages, labels: Boolean, effects: EffectRasterCache) {
         this.control = control; this.content = content; this.icon = icon; this.labels = labels
         effectCache = effects
-        iconPainter = if (icon != null && control.kind in setOf("button", "trigger", "decoration")) painters.getOrPut(icon) { IconPainter(icon, assets) } else null
+        iconPainter = if (icon != null && control.kind in setOf("button", "trigger", "decoration")) painters.getOrPut(IconPaintKey(icon, assets)) { IconPainter(icon, assets) } else null
         updateMetrics()
     }
     private fun updateMetrics() {

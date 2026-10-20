@@ -12,7 +12,8 @@ import kotlinx.coroutines.withContext
 internal data class SkinRenderProjection(
     val original: ControllerProfile?, val landscape: Boolean, val systemDark: Boolean,
     val profile: ControllerProfile?, val compatibility: SkinCompatibilityResult? = null,
-    val warning: String? = null, val actionSet: String = "base"
+    val warning: String? = null, val actionSet: String = "base",
+    val appearanceFrames: ControllerAppearanceFrames? = null
 ) {
     fun matches(source: ControllerProfile?, landscape: Boolean, systemDark: Boolean, actionSet: String = "base") =
         // Match Compose request keys: profile equality keeps JSON source identity.
@@ -52,18 +53,21 @@ internal class SkinRenderRepository(private val loadPackage: (SkinReference) -> 
             reference = null; packageValue = null; cached = null; cachedRevision = currentRevision
         }
         cached?.takeIf { it.matches(source, landscape, systemDark, actionSet) }?.let { return it }
-        fun finish(profile: ControllerProfile? = source, compatibility: SkinCompatibilityResult? = null, warning: String? = null) =
-            SkinRenderProjection(source, landscape, systemDark, profile, compatibility, warning, actionSet).also { cached = it }
+        fun finish(profile: ControllerProfile? = source, compatibility: SkinCompatibilityResult? = null, warning: String? = null,
+                   frames: ControllerAppearanceFrames? = null) =
+            SkinRenderProjection(source, landscape, systemDark, profile, compatibility, warning, actionSet, frames).also { cached = it }
         if (landscape && source?.source?.optJSONObject("appearanceBank") != null) {
             return try {
-                val table = ProfileResourceTable.fromProfile(source.source)
-                val input = JSONObject().put("layout", source.layout(true)).put("bank", source.source.getJSONObject("appearanceBank"))
-                val expanded = table?.expanding(input) ?: AppearanceJSON.objectCopy(input)
-                val bank = ProfileAppearanceBank(expanded.getJSONObject("bank"))
-                val layout = bank.resolve(expanded.getJSONObject("layout"), source.skinColorScheme(systemDark), actionSet)
-                layout.put("colorSchemePreference", source.source.getJSONObject("customization").optString("colorSchemePreference", "system"))
+                val frames = cached?.takeIf { it.matches(source, landscape, systemDark, it.actionSet) }?.appearanceFrames ?: run {
+                    val table = ProfileResourceTable.fromProfile(source.source)
+                    val input = JSONObject().put("layout", source.layout(true)).put("bank", source.source.getJSONObject("appearanceBank"))
+                    val expanded = table?.expanding(input) ?: AppearanceJSON.objectCopy(input)
+                    val bank = ProfileAppearanceBank(expanded.getJSONObject("bank"))
+                    ControllerAppearanceFrames.prepare(source, expanded.getJSONObject("layout"), bank, source.skinColorScheme(systemDark))
+                }
+                val layout = frames[ControllerActionSet.entries.first { it.key == actionSet }].layout
                 val projected = AppearanceJSON.objectCopy(source.source).put("landscapeCustomization", layout)
-                finish(ControllerProfile(source.id, source.name, projected))
+                finish(ControllerProfile(source.id, source.name, projected), frames = frames)
             } catch (_: Exception) {
                 finish(warning = "This keypad’s owned appearance needs recovery. Its saved profile has been preserved.")
             }
