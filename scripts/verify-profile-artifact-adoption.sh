@@ -48,4 +48,4 @@ python3 scripts/verify-apple-hosted-retirement.py \
   --ios-app "$ARTIFACT_DERIVED_DATA_PATH/Build/Products/Debug-iphonesimulator/Thumble.app" \
   --mac-app "$ARTIFACT_DERIVED_DATA_PATH/Build/Products/Debug/Thumble Mac.app"
 
-echo "profile artifact paired-adoption verification passed"
+echo "local profile import, read-only recovery and retired-adoption rejection verification passed"

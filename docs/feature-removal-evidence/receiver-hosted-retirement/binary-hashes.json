@@ -1,0 +1,11 @@
+{
+  "build/ReceiverRetirement/bin/thumble-host": "25079928cd99935dee7aaba059c36945feb94fcd6385e2ffc35265c29ff939b9",
+  "build/ReceiverRetirement/bin/thumble": "ab8ddf25b7f5076a3f546f6cb387b6bf4d850fdaee68536918cd0dd9ac0af9e3",
+  "build/ReceiverRetirement/bin/thumble-cli-bridge": "0d7042f1cc4ffb0a4a96cef9b623d580e762b6ef1c7d6b6b842b68d18e8f7b8b",
+  "build/ReceiverRetirement/bin/pocketpad": "e0115ee3f4bac45c5372036e086094fd36b9ade792be796a074e1032c3166841",
+  "build/ReceiverRetirement/bin/thumble-bridge": "a8e253109f138c91e988c288c9c3c6233329469c5b449ecaa07dc7eebf9f1424",
+  "build/StackSafetyDerivedData/Build/Products/Debug-iphoneos/Thumble.app/Thumble": "8b3f7643268727cd4d6adb64600bf70b9997e6a9f431f91f77bbb08cef87a6a1",
+  "build/StackSafetyDerivedData/Build/Products/Debug-iphoneos/Thumble.app/Thumble.debug.dylib": "8150ee5abf85b21ac856b7b84b04fbcfe8026806a3c1589a5c243d68113b208b",
+  "build/StackSafetyDerivedData/Build/Products/Debug/Thumble Mac.app/Contents/MacOS/Thumble Mac.debug.dylib": "8b2f750dc607f1f8a6a8308936a7a574e3fd682b75309c04e9695f1f95631aff",
+  "build/StackSafetyDerivedData/Build/Products/Debug/Thumble Mac.app/Contents/MacOS/Thumble Mac": "0c8881909504dbca305ad59a15bfcef6c902c37674dd9bc6d63b6f11064716ac"
+}

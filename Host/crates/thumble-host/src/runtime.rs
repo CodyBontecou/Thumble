@@ -1,5 +1,3 @@
-#[path = "runtime_adoption.rs"]
-mod adoption_runtime;
 #[path = "runtime_skins.rs"]
 mod skin_runtime;
 use crate::authority::{
@@ -136,7 +134,6 @@ struct SharedRuntime {
     application_launcher: crate::application_launch::ApplicationLauncher,
     skin_service: Option<skin_runtime::SkinService>,
     phone_layout_bridge: Option<crate::phone_layout::PhoneLayoutBridge>,
-    adoption_service: Option<adoption_runtime::AdoptionService>,
     skin_jobs: Mutex<Option<std::sync::mpsc::SyncSender<(ConnectionId, skin_runtime::ProfileJob)>>>,
     paths: HostPaths,
     requested_port: u16,
@@ -163,11 +160,17 @@ impl SharedRuntime {
         connection_id: ConnectionId,
         message: ControllerMessage,
     ) -> Result<(), String> {
-        if adoption_runtime::is_adoption(&message) {
-            self.handle_adoption_message(connection_id, message);
-            return Ok(());
-        }
-        if message.has_adoption_payload() {
+        let retired_adoption = matches!(
+            message.message_type,
+            ControllerMessageType::ProfileArtifactAdoptionBegin
+                | ControllerMessageType::ProfileArtifactAdoptionChunk
+                | ControllerMessageType::ProfileArtifactAdoptionCommit
+                | ControllerMessageType::ProfileArtifactAdoptionCancel
+                | ControllerMessageType::ProfileArtifactAdoptionResult
+        );
+        // Legacy adoption messages reach the core's unsupported-message response.
+        // Payloads attached to ordinary input/profile messages remain rejected.
+        if message.has_adoption_payload() && !retired_adoption {
             return Err("unexpected adoption payload".into());
         }
         if (self.skin_service.is_some() || self.phone_layout_bridge.is_some())
@@ -342,7 +345,6 @@ impl SharedRuntime {
     }
 
     fn disconnect(&self, connection_id: ConnectionId) {
-        self.retire_adoption(connection_id);
         let mut inner = self.inner.lock().expect("runtime mutex poisoned");
         inner.connections.remove(&connection_id);
         inner.realtime.retire(connection_id);
@@ -361,7 +363,6 @@ impl SharedRuntime {
     }
 
     fn expire_holds(&self) {
-        self.expire_adoptions();
         let mut inner = self.inner.lock().expect("runtime mutex poisoned");
         self.guard_input_liveness(&mut inner);
         if let Some(permit) = self.application_launcher.take_ready() {
@@ -778,24 +779,6 @@ impl SharedRuntime {
                         outgoing.binding_presentations = Some(
                             crate::binding_presentations::snapshot(inner.core.persistent_state()),
                         );
-                    }
-                    if self.adoption_available()
-                        && matches!(
-                            outgoing.message_type,
-                            ControllerMessageType::PairingAccepted
-                                | ControllerMessageType::GamepadProfiles
-                                | ControllerMessageType::GamepadCustomization
-                                | ControllerMessageType::Hello
-                        )
-                    {
-                        let capabilities = outgoing.capabilities.get_or_insert_with(Vec::new);
-                        if !capabilities.contains(
-                            &thumble_protocol::ControllerCapability::ProfileArtifactAdoptionV1,
-                        ) {
-                            capabilities.push(
-                                thumble_protocol::ControllerCapability::ProfileArtifactAdoptionV1,
-                            );
-                        }
                     }
                     if outgoing.message_type == ControllerMessageType::PairingAccepted
                         && inner.realtime.status.enabled
@@ -1545,40 +1528,12 @@ impl ControlHandler for SharedRuntime {
                 response.status = Some(self.status());
                 response
             }
-            ControlRequest::AdoptProfileArtifact {
-                metadata,
-                artifact_base64,
-            } => {
-                use base64::Engine;
-                if metadata.validate(&metadata.intended_server_id).is_err()
-                    || artifact_base64.len() > thumble_protocol::ADOPTION_MAX_BYTES.div_ceil(3) * 4
-                {
-                    return ControlResponse::error("invalid_artifact_metadata");
-                }
-                let Ok(bytes) = base64::engine::general_purpose::STANDARD.decode(artifact_base64)
-                else {
-                    return ControlResponse::error("invalid_artifact_data");
-                };
-                let mut response = ControlResponse::success();
-                response.profile_artifact_adoption =
-                    Some(self.adopt_artifact(None, &metadata, &bytes));
-                response
-            }
-            ControlRequest::ProfileArtifactAdoptionStatus { operation_id }
-            | ControlRequest::CancelProfileArtifactAdoption { operation_id } => {
-                let cancel = matches!(
-                    request,
-                    ControlRequest::CancelProfileArtifactAdoption { .. }
-                );
-                match self.local_adoption_status(operation_id, cancel) {
-                    Some(result) => {
-                        let mut response = ControlResponse::success();
-                        response.profile_artifact_adoption = Some(result);
-                        response
-                    }
-                    None => ControlResponse::error("operation_missing"),
-                }
-            }
+            ControlRequest::AdoptProfileArtifact { .. }
+            | ControlRequest::ProfileArtifactAdoptionStatus { .. }
+            | ControlRequest::CancelProfileArtifactAdoption { .. } => ControlResponse::coded_error(
+                "hosted_builds_retired",
+                "Hosted shared builds are retired. Use local profile import.",
+            ),
             ControlRequest::PairingCode { rotate } => {
                 let result = if rotate {
                     self.rotate_pairing_code()
@@ -1899,20 +1854,12 @@ pub async fn run_runtime(paths: HostPaths, options: RuntimeOptions) -> Result<()
         shutdown: shutdown_tx.clone(),
         skin_service,
         phone_layout_bridge,
-        adoption_service: if options.configuration_write {
-            adoption_runtime::AdoptionService::open()
-        } else {
-            None
-        },
         skin_jobs: Mutex::new(None),
         application_launcher: Default::default(),
         started_at: crate::input_liveness::InputClock::now(),
     });
 
-    if shared.skin_service.is_some()
-        || shared.phone_layout_bridge.is_some()
-        || shared.adoption_service.is_some()
-    {
+    if shared.skin_service.is_some() || shared.phone_layout_bridge.is_some() {
         let (sender, jobs) = std::sync::mpsc::sync_channel(8);
         *shared.skin_jobs.lock().expect("skin jobs poisoned") = Some(sender);
         let weak = Arc::downgrade(&shared);
@@ -2678,7 +2625,6 @@ mod tests {
             shutdown,
             skin_service: None,
             phone_layout_bridge: None,
-            adoption_service: None,
             skin_jobs: Mutex::new(None),
             application_launcher: Default::default(),
             started_at: crate::input_liveness::InputClock::now(),
@@ -3044,7 +2990,6 @@ mod tests {
             shutdown,
             skin_service: None,
             phone_layout_bridge: None,
-            adoption_service: None,
             skin_jobs: Mutex::new(None),
             application_launcher: Default::default(),
             started_at: crate::input_liveness::InputClock::now(),
@@ -3145,7 +3090,6 @@ mod tests {
             shutdown,
             skin_service: None,
             phone_layout_bridge: None,
-            adoption_service: None,
             skin_jobs: Mutex::new(None),
             application_launcher: Default::default(),
             started_at: crate::input_liveness::InputClock::now(),
@@ -3233,7 +3177,6 @@ mod tests {
             shutdown,
             skin_service: None,
             phone_layout_bridge: None,
-            adoption_service: None,
             skin_jobs: Mutex::new(None),
             application_launcher: Default::default(),
             started_at: crate::input_liveness::InputClock::now(),

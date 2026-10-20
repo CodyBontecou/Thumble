@@ -51,97 +51,6 @@ final class ProfileArtifactAdoptionTests: XCTestCase {
         XCTAssertEqual(tooLarge.validate(expectedServerID: serverID), .invalidSize)
     }
 
-    func testAssemblerOrderedSuccessDuplicateBusyCancelTimeoutAndTamper() throws {
-        let data = Data(repeating: 9, count: ProfileArtifactAdoptionConstants.chunkBytes + 3)
-        let value = metadata(data: data)
-        let assembler = ProfileArtifactAdoptionAssembler()
-        XCTAssertEqual(assembler.begin(value, expectedServerID: serverID, nowMilliseconds: 10), .accepted)
-        XCTAssertEqual(assembler.append(operationID: value.operationID, index: 0, data: data.prefix(ProfileArtifactAdoptionConstants.chunkBytes), nowMilliseconds: 11), .chunkAccepted(0))
-        // A replayed begin is a full retry boundary, so chunk zero is accepted again.
-        XCTAssertEqual(assembler.begin(value, expectedServerID: serverID, nowMilliseconds: 12), .accepted)
-        XCTAssertEqual(assembler.append(operationID: value.operationID, index: 0, data: data.prefix(ProfileArtifactAdoptionConstants.chunkBytes), nowMilliseconds: 13), .chunkAccepted(0))
-        assembler.reset()
-        XCTAssertEqual(assembler.begin(value, expectedServerID: serverID, nowMilliseconds: 14), .accepted)
-        let other = metadata(data: data)
-        XCTAssertEqual(assembler.begin(other, expectedServerID: serverID, nowMilliseconds: 15), .rejected(.uploadBusy))
-        XCTAssertEqual(assembler.append(operationID: value.operationID, index: 1, data: data.suffix(3), nowMilliseconds: 15), .rejected(.outOfOrder))
-        XCTAssertEqual(assembler.append(operationID: value.operationID, index: 0, data: data.prefix(ProfileArtifactAdoptionConstants.chunkBytes), nowMilliseconds: 16), .chunkAccepted(0))
-        XCTAssertEqual(assembler.append(operationID: value.operationID, index: 0, data: data.prefix(ProfileArtifactAdoptionConstants.chunkBytes), nowMilliseconds: 17), .rejected(.outOfOrder))
-        XCTAssertEqual(assembler.append(operationID: value.operationID, index: 1, data: data.suffix(3), nowMilliseconds: 18), .chunkAccepted(1))
-        XCTAssertEqual(assembler.commit(operationID: value.operationID, nowMilliseconds: 19), .completed)
-        let completed = try XCTUnwrap(assembler.takeCompleted())
-        XCTAssertEqual(completed.data, data)
-        XCTAssertEqual(completed.metadata, value)
-
-        XCTAssertEqual(assembler.begin(value, expectedServerID: serverID, nowMilliseconds: 100), .accepted)
-        XCTAssertEqual(assembler.cancel(operationID: UUID()), .rejected(.operationConflict))
-        XCTAssertEqual(assembler.cancel(operationID: value.operationID), .cancelled)
-        XCTAssertNil(assembler.activeOperationID)
-
-        XCTAssertEqual(assembler.begin(value, expectedServerID: serverID, nowMilliseconds: 1_000), .accepted)
-        XCTAssertEqual(assembler.append(operationID: value.operationID, index: 0, data: data.prefix(ProfileArtifactAdoptionConstants.chunkBytes), nowMilliseconds: 31_000), .rejected(.uploadExpired))
-        XCTAssertNil(assembler.activeOperationID)
-
-        var tampered = data
-        tampered[tampered.startIndex] ^= 1
-        XCTAssertEqual(assembler.begin(value, expectedServerID: serverID, nowMilliseconds: 40_000), .accepted)
-        XCTAssertEqual(assembler.append(operationID: value.operationID, index: 0, data: tampered.prefix(ProfileArtifactAdoptionConstants.chunkBytes), nowMilliseconds: 40_001), .chunkAccepted(0))
-        XCTAssertEqual(assembler.append(operationID: value.operationID, index: 1, data: tampered.suffix(3), nowMilliseconds: 40_002), .chunkAccepted(1))
-        XCTAssertEqual(assembler.commit(operationID: value.operationID, nowMilliseconds: 40_003), .rejected(.invalidHash))
-    }
-
-    func testStrictMessageEnvelopesAndChunkFrameStayBounded() throws {
-        let data = Data(repeating: 4, count: ProfileArtifactAdoptionConstants.chunkBytes)
-        let value = metadata(data: data)
-        let begin = ControllerMessage(type: .profileArtifactAdoptionBegin, profileArtifactAdoptionMetadata: value)
-        XCTAssertNil(ProfileArtifactAdoptionEnvelopeValidator.validate(begin))
-        let chunk = ControllerMessage(
-            type: .profileArtifactAdoptionChunk,
-            profileArtifactAdoptionOperationID: value.operationID,
-            profileArtifactAdoptionChunkIndex: 0,
-            profileArtifactAdoptionChunkData: data
-        )
-        XCTAssertNil(ProfileArtifactAdoptionEnvelopeValidator.validate(chunk))
-        let encoded = try ControllerWireCodec.encode(chunk, using: JSONEncoder())
-        XCTAssertLessThan(encoded.count, ControllerWireCodec.maximumInboundPayloadSize)
-        XCTAssertEqual(try ControllerWireCodec.decode(encoded, using: JSONDecoder()).profileArtifactAdoptionChunkData, data)
-        let extraneous = ControllerMessage(
-            type: .profileArtifactAdoptionCommit,
-            message: "not allowed",
-            profileArtifactAdoptionOperationID: value.operationID
-        )
-        XCTAssertEqual(ProfileArtifactAdoptionEnvelopeValidator.validate(extraneous), .invalidEnvelope)
-        XCTAssertEqual(ProfileArtifactAdoptionEnvelopeValidator.validate(.init(type: .profileArtifactAdoptionChunk)), .invalidEnvelope)
-    }
-
-    func testCommittingGateMakesDuplicateBeginAndCommitExactlyOnce() {
-        let value = metadata(data: Data([1, 2, 3]))
-        var gate = ProfileArtifactAdoptionCommitGate()
-        XCTAssertEqual(gate.decision(for: value), .proceed)
-        XCTAssertTrue(gate.begin(value))
-        var importStarts = 1
-        for _ in 0..<10 {
-            switch gate.decision(for: value) {
-            case .proceed:
-                importStarts += 1
-            case .inProgress:
-                break
-            case .busy, .conflict:
-                XCTFail("same operation must be recognized as in progress")
-            }
-            XCTAssertFalse(gate.begin(value))
-        }
-        let other = metadata(data: Data([9]))
-        XCTAssertEqual(gate.decision(for: other), .busy)
-        let conflicting = metadata(data: Data([8]), operationID: value.operationID, recordID: value.recordID)
-        XCTAssertEqual(gate.decision(for: conflicting), .conflict)
-        XCTAssertEqual(importStarts, 1)
-        gate.finish(operationID: UUID())
-        XCTAssertEqual(gate.decision(for: value), .inProgress)
-        gate.finish(operationID: value.operationID)
-        XCTAssertEqual(gate.decision(for: value), .proceed)
-    }
-
     func testMetadataAndResultRejectHostileServerAndDestinationShapes() {
         let data = Data([1])
         XCTAssertEqual(metadata(data: data, serverID: "").validate(expectedServerID: ""), .invalidEnvelope)
@@ -165,66 +74,30 @@ final class ProfileArtifactAdoptionTests: XCTestCase {
         ).validates(against: value))
     }
 
-    func testLedgerReplayConflictPruneRestartAndExactlyOneImportDecision() throws {
-        let now: Int64 = 1_000_000
+    func testRetiredRequestsDecodeAndRejectWithoutUploadOrProfilePayloads() throws {
         let value = metadata(data: Data([1, 2, 3]))
-        let destinations = [UUID()]
-        let entry = ProfileArtifactAdoptionLedgerEntry(
-            metadata: value,
-            status: .succeeded,
-            errorCode: nil,
-            destinationProfileIDs: destinations,
-            completedAtMilliseconds: now
-        )
-        var ledger = ProfileArtifactAdoptionLedger()
-        XCTAssertEqual(ledger.lookup(value, nowMilliseconds: now), .none)
-        var importCount = 0
-        if ledger.lookup(value, nowMilliseconds: now) == .none {
-            importCount += 1
-            ledger.record(entry, nowMilliseconds: now)
+        for type: ControllerMessageType in [.profileArtifactAdoptionBegin, .profileArtifactAdoptionChunk,
+                                             .profileArtifactAdoptionCommit, .profileArtifactAdoptionCancel] {
+            let request = ControllerMessage(type: type,
+                profileArtifactAdoptionMetadata: type == .profileArtifactAdoptionBegin ? value : nil,
+                profileArtifactAdoptionOperationID: type == .profileArtifactAdoptionBegin ? nil : value.operationID,
+                profileArtifactAdoptionChunkIndex: type == .profileArtifactAdoptionChunk ? 0 : nil,
+                profileArtifactAdoptionChunkData: type == .profileArtifactAdoptionChunk ? Data([1, 2, 3]) : nil)
+            let encoded = try ControllerWireCodec.encode(request, using: JSONEncoder())
+            let decoded = try ControllerWireCodec.decode(encoded, using: JSONDecoder())
+            XCTAssertNil(RetiredProfileArtifactAdoption.response(to: decoded, isPaired: false))
+            let response = try XCTUnwrap(RetiredProfileArtifactAdoption.response(to: decoded, isPaired: true))
+            XCTAssertEqual(response.type, .error)
+            XCTAssertTrue(response.message?.contains("retired") == true)
+            XCTAssertNil(response.profileArtifactAdoptionMetadata)
+            XCTAssertNil(response.profileArtifactAdoptionResult)
+            XCTAssertNil(response.profileArtifactAdoptionChunkData)
+            XCTAssertNil(response.gamepadProfiles)
         }
-        if case .replay(let replay) = ledger.lookup(value, nowMilliseconds: now + 1) {
-            XCTAssertEqual(replay.destinationProfileIDs, destinations)
-        } else { XCTFail("expected replay") }
-        XCTAssertEqual(importCount, 1)
-
-        let changed = metadata(data: Data([9]), operationID: value.operationID, recordID: value.recordID)
-        XCTAssertEqual(ledger.lookup(changed, nowMilliseconds: now + 1), .conflict)
-        let encoded = try JSONEncoder().encode(ledger)
-        var restarted = try JSONDecoder().decode(ProfileArtifactAdoptionLedger.self, from: encoded)
-        XCTAssertEqual(restarted.lookup(value, nowMilliseconds: now + 2), .replay(entry))
-        restarted.prune(nowMilliseconds: now + ProfileArtifactAdoptionConstants.ledgerLifetimeMilliseconds + 1)
-        XCTAssertTrue(restarted.allEntries.isEmpty)
-
-        var bounded = ProfileArtifactAdoptionLedger()
-        for offset in 0..<(ProfileArtifactAdoptionConstants.maximumLedgerEntries + 10) {
-            let item = metadata(data: Data([UInt8(offset % 255)]))
-            bounded.record(.init(
-                metadata: item, status: .failed, errorCode: .importFailed,
-                destinationProfileIDs: [], completedAtMilliseconds: now + Int64(offset)
-            ), nowMilliseconds: now + Int64(offset))
-        }
-        XCTAssertEqual(bounded.allEntries.count, ProfileArtifactAdoptionConstants.maximumLedgerEntries)
+        let malformed = ControllerMessage(type: .profileArtifactAdoptionBegin, message: "never reflect this value")
+        let rejection = try XCTUnwrap(RetiredProfileArtifactAdoption.response(to: malformed, isPaired: true))
+        XCTAssertFalse(rejection.message?.contains("never reflect") == true)
+        XCTAssertNil(RetiredProfileArtifactAdoption.response(to: .init(type: .ping), isPaired: true))
+        XCTAssertNil(RetiredProfileArtifactAdoption.response(to: .init(type: .profileArtifactAdoptionResult), isPaired: true))
     }
-
-    func testSavedLedgerRejectsAmbiguousBytesAndRepeatedOperationsBeforeReplay() throws {
-        let value = metadata(data: Data([1, 2, 3]))
-        let entry = ProfileArtifactAdoptionLedgerEntry(metadata: value, status: .succeeded, errorCode: nil,
-            destinationProfileIDs: [UUID()], completedAtMilliseconds: 1_000_000)
-        let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
-        let bytes = try encoder.encode(ProfileArtifactAdoptionLedger(entries: [entry]))
-        var checked = try ProfileArtifactAdoptionLedger.decodeSaved(bytes)
-        XCTAssertEqual(checked.lookup(value, nowMilliseconds: 1_000_000), .replay(entry))
-        let text = try XCTUnwrap(String(data: bytes, encoding: .utf8))
-        for key in ["contentHash", "operationID"] {
-            let field = key == "contentHash" ? value.contentHash : value.operationID.uuidString
-            let ambiguous = Data(text.replacingOccurrences(of: "\"\(key)\":", with: "\"\(key)\":\"\(field)\",\"\(key)\":").utf8)
-            // Reproduce the former ordinary-decoder path on the same bytes.
-            XCTAssertNoThrow(try JSONDecoder().decode(ProfileArtifactAdoptionLedger.self, from: ambiguous))
-            XCTAssertThrowsError(try ProfileArtifactAdoptionLedger.decodeSaved(ambiguous))
-        }
-        let repeated = try encoder.encode(ProfileArtifactAdoptionLedger(entries: [entry, entry]))
-        XCTAssertThrowsError(try ProfileArtifactAdoptionLedger.decodeSaved(repeated))
-    }
-
 }

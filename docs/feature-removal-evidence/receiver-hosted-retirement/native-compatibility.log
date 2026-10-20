@@ -1,0 +1,8 @@
+   Compiling thumble-host v0.1.0 (/Users/codybontecou/dev/Thumble/Host/crates/thumble-host)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.30s
+     Running tests/local_profile_compatibility.rs (Host/target/debug/deps/local_profile_compatibility-05441b70015b895e)
+
+running 1 test
+test native_legacy_inline_outputs_and_integral_float_metadata_round_trip_without_changes ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.52s

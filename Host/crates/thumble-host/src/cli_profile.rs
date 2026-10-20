@@ -1386,51 +1386,6 @@ struct PlannedProfileImport {
     profile_names: Vec<String>,
 }
 
-/// Shared-build adoption uses the same append/import planner as the public CLI.
-/// The runtime owns authorization, native validation, the durable receipt and CAS.
-pub(crate) fn plan_profile_adoption(
-    state: &PersistentState,
-    metadata: &thumble_protocol::AdoptionMetadata,
-    bytes: &[u8],
-    native_profiles: &[Value],
-    now: i64,
-) -> Result<(PersistentState, Vec<Uuid>), TransactionFailure> {
-    let artifact = ProfileArtifact::decode_json(bytes).map_err(profile_artifact_import_failure)?;
-    if artifact.content_hash.value != metadata.content_hash {
-        return Err(import_profile_failure());
-    }
-    let text = std::str::from_utf8(bytes).map_err(|_| import_profile_failure())?;
-    let mut import = decode_profile_import(text, true, true, false, metadata.operation_id)?;
-    if import.document.profiles.len() != native_profiles.len() {
-        return Err(import_profile_failure());
-    }
-    for (raw, native) in import.document.profiles.iter_mut().zip(native_profiles) {
-        *raw = crate::profile_adoption::normalized_profile(raw, native);
-    }
-    import
-        .document
-        .validate()
-        .map_err(|_| import_profile_failure())?;
-    let destination =
-        ConfigurationDocument::from_state(state).map_err(|_| import_profile_failure())?;
-    let plan = plan_profile_import(&destination, &import, now)?;
-    let ids = import
-        .descriptor
-        .generated_profile_ids
-        .iter()
-        .map(|id| Uuid::parse_str(id).map_err(|_| import_profile_failure()))
-        .collect::<Result<Vec<_>, _>>()?;
-    let mut candidate = state.clone();
-    plan.candidate
-        .install_into(&mut candidate)
-        .map_err(|_| import_profile_failure())?;
-    candidate
-        .bump_configuration_revision()
-        .map_err(|_| import_profile_failure())?;
-    candidate.configuration_updated_at = now;
-    Ok((candidate, ids))
-}
-
 pub(crate) fn execute_profile_transaction<F>(
     paths: &HostPaths,
     state: &PersistentState,

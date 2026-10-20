@@ -16,7 +16,6 @@ pub mod paths;
 mod phone_appearance;
 mod phone_layout;
 pub mod platform;
-mod profile_adoption;
 pub mod realtime;
 pub mod runtime;
 pub mod skin_command;

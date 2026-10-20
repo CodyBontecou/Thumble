@@ -622,7 +622,16 @@ impl HostCore {
             return Ok(effects);
         }
 
-        if message.has_adoption_payload() {
+        if message.has_adoption_payload()
+            && !matches!(
+                message.message_type,
+                ControllerMessageType::ProfileArtifactAdoptionBegin
+                    | ControllerMessageType::ProfileArtifactAdoptionChunk
+                    | ControllerMessageType::ProfileArtifactAdoptionCommit
+                    | ControllerMessageType::ProfileArtifactAdoptionCancel
+                    | ControllerMessageType::ProfileArtifactAdoptionResult
+            )
+        {
             self.send_diagnostic(
                 connection_id,
                 "profile artifact adoption requires a supporting reliable host adapter",
@@ -704,16 +713,22 @@ impl HostCore {
                     &mut effects,
                 );
             }
+            ControllerMessageType::ProfileArtifactAdoptionBegin
+            | ControllerMessageType::ProfileArtifactAdoptionChunk
+            | ControllerMessageType::ProfileArtifactAdoptionCommit
+            | ControllerMessageType::ProfileArtifactAdoptionCancel
+            | ControllerMessageType::ProfileArtifactAdoptionResult => {
+                self.send_error(
+                    connection_id,
+                    "Hosted shared builds are retired. Export the saved file and import it locally.",
+                    &mut effects,
+                );
+            }
             ControllerMessageType::PairingChallenge
             | ControllerMessageType::PairingAccepted
             | ControllerMessageType::SkinPackages
             | ControllerMessageType::SkinPackageRemoval
             | ControllerMessageType::GamepadProfileSkinSelection
-            | ControllerMessageType::ProfileArtifactAdoptionBegin
-            | ControllerMessageType::ProfileArtifactAdoptionChunk
-            | ControllerMessageType::ProfileArtifactAdoptionCommit
-            | ControllerMessageType::ProfileArtifactAdoptionCancel
-            | ControllerMessageType::ProfileArtifactAdoptionResult
             | ControllerMessageType::LaunchProfileTarget => {
                 self.send_diagnostic(
                     connection_id,

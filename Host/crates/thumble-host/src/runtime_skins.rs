@@ -7,7 +7,6 @@ use thumble_protocol::ControllerCapability;
 use unicode_normalization::UnicodeNormalization;
 
 pub(super) enum ProfileJob {
-    Adoption(Box<(thumble_protocol::AdoptionMetadata, Vec<u8>)>),
     Skin(Box<ControllerMessage>),
     Appearance(Box<crate::phone_appearance::PhoneAppearanceRequest>),
     Layout(Box<crate::phone_layout::PhoneLayoutRequest>),
@@ -65,14 +64,6 @@ pub(super) fn is_skin_message(message: &ControllerMessage) -> bool {
 
 impl SharedRuntime {
     pub(super) fn handle_profile_job(&self, id: ConnectionId, job: ProfileJob) {
-        let job = match job {
-            ProfileJob::Adoption(work) => {
-                let (metadata, bytes) = *work;
-                self.run_adoption_job(id, metadata, bytes);
-                return;
-            }
-            other => other,
-        };
         let job = match job {
             ProfileJob::Layout(request) => {
                 self.handle_phone_layout(id, *request);

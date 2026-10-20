@@ -1,0 +1,10 @@
+   Compiling thumble-core v0.1.0 (/Users/codybontecou/dev/Thumble/Host/crates/thumble-core)
+   Compiling thumble-host v0.1.0 (/Users/codybontecou/dev/Thumble/Host/crates/thumble-host)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.66s
+     Running tests/retired_hosted_builds.rs (Host/target/debug/deps/retired_hosted_builds-8d2a9be510ee5aef)
+
+running 2 tests
+test old_phone_and_socket_uploads_reject_while_pairing_and_profiles_remain_usable ... ok
+test host_cli_hides_and_rejects_retired_commands_without_reading_files_or_opening_state ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.94s

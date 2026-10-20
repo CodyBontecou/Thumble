@@ -139,7 +139,6 @@ final class MacControllerServer: ObservableObject {
     private static let profileOutputBindingsDefaultsKey = "PocketPadMac.profileOutputBindings.v1"
     private static let serverIdentityDefaultsKey = "PocketPadMac.serverIdentity.v1"
     private static let trustedClientsDefaultsKey = "PocketPadMac.trustedClients.v1"
-    private static let profileArtifactAdoptionLedgerDefaultsKey = "PocketPadMac.profileArtifactAdoptionLedger.v1"
     private static let bonjourServiceType = "_pocketpad._tcp."
     private static let bonjourServiceEndpointType = "_pocketpad._tcp"
     private static let bonjourServiceDomain = "local"
@@ -154,8 +153,7 @@ final class MacControllerServer: ObservableObject {
     private static let advertisedCapabilities: Set<ControllerCapability> = [
         .gamepadProfileOrientationPreferenceMutation,
         .skinPackages,
-        .gamepadProfileSkinSelection,
-        .profileArtifactAdoptionV1
+        .gamepadProfileSkinSelection
     ]
     private static let inputEventLoggingEnabled = false
     private static let inputDebugPublishIntervalNanoseconds: UInt64 = 100_000_000
@@ -199,9 +197,6 @@ final class MacControllerServer: ObservableObject {
     private var pairedConnection: NWConnection?
     private var pairedAuthToken: String?
     private var pendingPairingConnection: NWConnection?
-    private let profileArtifactAdoptionAssembler = ProfileArtifactAdoptionAssembler()
-    private var profileArtifactAdoptionCommitGate = ProfileArtifactAdoptionCommitGate()
-    private var profileArtifactAdoptionLedger = ProfileArtifactAdoptionLedger()
     private var activePairingCode: String
     private var realtimeToken: String?
     private var backgroundActivity: NSObjectProtocol?
@@ -396,12 +391,10 @@ final class MacControllerServer: ObservableObject {
             from: UserDefaults.standard.dictionaryRepresentation(), state: loadedProfileState
         )
         let nativeProfileSourceData = UserDefaults.standard.data(forKey: GamepadConfigurationProfilePersistence.defaultsKey)
-        let loadedAdoptionLedger = try Self.loadProfileArtifactAdoptionLedger()
         self.legacyAuthorityLease = legacyAuthorityLease
         serverID = Self.loadOrCreateServerID()
         bonjourServiceName = Self.defaultBonjourServiceName()
         trustedClients = Self.loadTrustedClients()
-        profileArtifactAdoptionLedger = Self.validProfileArtifactAdoptionLedger(loadedAdoptionLedger, serverID: serverID)
         let loadedSkinStore = Self.makeSkinStore()
         try? loadedSkinStore.installBundledSkinsIfNeeded()
         let loadedSkins = (try? loadedSkinStore.installedSkins()) ?? []
@@ -636,7 +629,6 @@ final class MacControllerServer: ObservableObject {
             pairedConnection = nil
             pairedAuthToken = nil
             pendingPairingConnection = nil
-            profileArtifactAdoptionAssembler.reset()
             realtimeToken = nil
             stopDatagramListenerOnNetworkQueue()
         }
@@ -2386,7 +2378,6 @@ final class MacControllerServer: ObservableObject {
         pairedConnection = nil
         pairedAuthToken = nil
         pendingPairingConnection = newConnection
-        profileArtifactAdoptionAssembler.reset()
         realtimeToken = nil
         lastClientActivityUptime = nil
         heartbeatTimedOutOnNetworkQueue = false
@@ -2816,330 +2807,16 @@ final class MacControllerServer: ObservableObject {
             if isPaired { sendGamepadProfileStateOnNetworkQueue() }
         case .profileArtifactAdoptionBegin, .profileArtifactAdoptionChunk,
              .profileArtifactAdoptionCommit, .profileArtifactAdoptionCancel:
-            handleProfileArtifactAdoptionOnNetworkQueue(
-                message,
-                from: connection,
-                isPaired: isPaired
-            )
+            if pairedConnection === connection,
+               let response = RetiredProfileArtifactAdoption.response(to: message, isPaired: isPaired) {
+                send(response, on: connection)
+            }
         case .profileArtifactAdoptionResult:
             break
         default:
             return false
         }
         return true
-    }
-
-    private func handleProfileArtifactAdoptionOnNetworkQueue(
-        _ message: ControllerMessage,
-        from connection: NWConnection,
-        isPaired: Bool
-    ) {
-        dispatchPrecondition(condition: .onQueue(networkQueue))
-        guard isPaired, pairedConnection === connection else { return }
-        let now = Date.currentMilliseconds
-        guard ProfileArtifactAdoptionEnvelopeValidator.validate(message) == nil else {
-            if let metadata = profileArtifactAdoptionAssembler.activeMetadata {
-                finishProfileArtifactAdoptionFailureOnNetworkQueue(
-                    metadata: metadata,
-                    code: .invalidEnvelope,
-                    connection: connection,
-                    nowMilliseconds: now
-                )
-            }
-            return
-        }
-
-        switch message.type {
-        case .profileArtifactAdoptionBegin:
-            guard let metadata = message.profileArtifactAdoptionMetadata,
-                  metadata.validate(expectedServerID: serverID) == nil
-            else { return }
-            switch profileArtifactAdoptionCommitGate.decision(for: metadata) {
-            case .inProgress:
-                sendProfileArtifactAdoptionResultOnNetworkQueue(
-                    ProfileArtifactAdoptionResult(
-                        metadata: metadata,
-                        serverID: serverID,
-                        status: .accepted
-                    ),
-                    connection: connection
-                )
-                return
-            case .busy:
-                sendEphemeralProfileArtifactAdoptionFailureOnNetworkQueue(
-                    metadata: metadata,
-                    code: .uploadBusy,
-                    connection: connection
-                )
-                return
-            case .conflict:
-                sendEphemeralProfileArtifactAdoptionFailureOnNetworkQueue(
-                    metadata: metadata,
-                    code: .operationConflict,
-                    connection: connection
-                )
-                return
-            case .proceed:
-                break
-            }
-            switch profileArtifactAdoptionLedger.lookup(metadata, nowMilliseconds: now) {
-            case .replay(let entry):
-                profileArtifactAdoptionAssembler.reset()
-                sendProfileArtifactAdoptionResultOnNetworkQueue(
-                    entry.result(serverID: serverID, replayed: true),
-                    connection: connection
-                )
-            case .conflict:
-                profileArtifactAdoptionAssembler.reset()
-                sendProfileArtifactAdoptionResultOnNetworkQueue(
-                    ProfileArtifactAdoptionResult(
-                        metadata: metadata,
-                        serverID: serverID,
-                        status: .failed,
-                        errorCode: .operationConflict
-                    ),
-                    connection: connection
-                )
-            case .none:
-                let event = profileArtifactAdoptionAssembler.begin(
-                    metadata,
-                    expectedServerID: serverID,
-                    nowMilliseconds: now
-                )
-                if event == .accepted {
-                    sendProfileArtifactAdoptionResultOnNetworkQueue(
-                        ProfileArtifactAdoptionResult(
-                            metadata: metadata,
-                            serverID: serverID,
-                            status: .accepted
-                        ),
-                        connection: connection
-                    )
-                } else if case .rejected(let code) = event {
-                    if code == .uploadBusy || code == .operationConflict {
-                        sendEphemeralProfileArtifactAdoptionFailureOnNetworkQueue(
-                            metadata: metadata,
-                            code: code,
-                            connection: connection
-                        )
-                    } else {
-                        finishProfileArtifactAdoptionFailureOnNetworkQueue(
-                            metadata: metadata,
-                            code: code,
-                            connection: connection,
-                            nowMilliseconds: now
-                        )
-                    }
-                }
-            }
-        case .profileArtifactAdoptionChunk:
-            guard let operationID = message.profileArtifactAdoptionOperationID,
-                  let index = message.profileArtifactAdoptionChunkIndex,
-                  let data = message.profileArtifactAdoptionChunkData,
-                  let metadata = profileArtifactAdoptionAssembler.activeMetadata
-            else { return }
-            let event = profileArtifactAdoptionAssembler.append(
-                operationID: operationID,
-                index: index,
-                data: data,
-                nowMilliseconds: now
-            )
-            if case .rejected(let code) = event {
-                finishProfileArtifactAdoptionFailureOnNetworkQueue(
-                    metadata: metadata,
-                    code: code,
-                    connection: connection,
-                    nowMilliseconds: now
-                )
-            }
-        case .profileArtifactAdoptionCommit:
-            guard let operationID = message.profileArtifactAdoptionOperationID,
-                  let metadata = profileArtifactAdoptionAssembler.activeMetadata
-            else { return }
-            let event = profileArtifactAdoptionAssembler.commit(
-                operationID: operationID,
-                nowMilliseconds: now
-            )
-            guard event == .completed,
-                  let upload = profileArtifactAdoptionAssembler.takeCompleted()
-            else {
-                let code: ProfileArtifactAdoptionErrorCode
-                if case .rejected(let rejected) = event { code = rejected }
-                else { code = .invalidEnvelope }
-                finishProfileArtifactAdoptionFailureOnNetworkQueue(
-                    metadata: metadata,
-                    code: code,
-                    connection: connection,
-                    nowMilliseconds: now
-                )
-                return
-            }
-            guard profileArtifactAdoptionCommitGate.begin(upload.metadata) else {
-                sendEphemeralProfileArtifactAdoptionFailureOnNetworkQueue(
-                    metadata: upload.metadata,
-                    code: .uploadBusy,
-                    connection: connection
-                )
-                return
-            }
-            commitProfileArtifactAdoptionOnMainQueue(upload, connection: connection)
-        case .profileArtifactAdoptionCancel:
-            guard let operationID = message.profileArtifactAdoptionOperationID else { return }
-            _ = profileArtifactAdoptionAssembler.cancel(operationID: operationID)
-        default:
-            break
-        }
-    }
-
-    private func commitProfileArtifactAdoptionOnMainQueue(
-        _ upload: CompletedProfileArtifactAdoptionUpload,
-        connection: NWConnection
-    ) {
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self else { return }
-            let artifact: PortableProfileArtifact
-            do {
-                artifact = try PortableProfileArtifact(validating: upload.data)
-            } catch {
-                self.networkQueue.async { [weak self] in
-                    guard let self else { return }
-                    self.finishProfileArtifactAdoptionFailureOnNetworkQueue(
-                        metadata: upload.metadata,
-                        code: .artifactInvalid,
-                        connection: connection,
-                        nowMilliseconds: Date.currentMilliseconds
-                    )
-                }
-                return
-            }
-            guard artifact.contentHash.value == upload.metadata.contentHash else {
-                self.networkQueue.async { [weak self] in
-                    guard let self else { return }
-                    self.finishProfileArtifactAdoptionFailureOnNetworkQueue(
-                        metadata: upload.metadata,
-                        code: .invalidHash,
-                        connection: connection,
-                        nowMilliseconds: Date.currentMilliseconds
-                    )
-                }
-                return
-            }
-            guard (1...256).contains(artifact.profiles.count) else {
-                self.networkQueue.async { [weak self] in
-                    guard let self else { return }
-                    self.finishProfileArtifactAdoptionFailureOnNetworkQueue(
-                        metadata: upload.metadata,
-                        code: .artifactInvalid,
-                        connection: connection,
-                        nowMilliseconds: Date.currentMilliseconds
-                    )
-                }
-                return
-            }
-
-            DispatchQueue.main.async { [weak self] in
-                guard let self else { return }
-                let result: Result<[UUID], Error>
-                do {
-                    let summary = try self.importKeypadConfiguration(
-                        data: upload.data,
-                        sourceName: artifact.profileSummaries.first?.name ?? "Shared Controller",
-                        mode: .appendAsCopies
-                    )
-                    result = .success(summary.destinationProfileIDs)
-                } catch {
-                    // Import rejection is nonmutating; an undo here would itself
-                    // persist a new timestamp and release the existing inputs.
-                    result = .failure(error)
-                }
-                self.networkQueue.async { [weak self] in
-                    guard let self else { return }
-                    let now = Date.currentMilliseconds
-                    switch result {
-                    case .success(let destinationIDs):
-                        let entry = ProfileArtifactAdoptionLedgerEntry(
-                            metadata: upload.metadata,
-                            status: .succeeded,
-                            errorCode: nil,
-                            destinationProfileIDs: destinationIDs,
-                            completedAtMilliseconds: now
-                        )
-                        self.profileArtifactAdoptionLedger.record(entry, nowMilliseconds: now)
-                        self.persistProfileArtifactAdoptionLedgerOnNetworkQueue()
-                        self.profileArtifactAdoptionCommitGate.finish(operationID: upload.metadata.operationID)
-                        guard self.pairedConnection === connection else { return }
-                        self.sendGamepadProfileStateOnNetworkQueue()
-                        self.sendProfileArtifactAdoptionResultOnNetworkQueue(
-                            entry.result(serverID: self.serverID, replayed: false),
-                            connection: connection
-                        )
-                    case .failure:
-                        self.finishProfileArtifactAdoptionFailureOnNetworkQueue(
-                            metadata: upload.metadata,
-                            code: .importFailed,
-                            connection: connection,
-                            nowMilliseconds: now
-                        )
-                    }
-                }
-            }
-        }
-    }
-
-    private func finishProfileArtifactAdoptionFailureOnNetworkQueue(
-        metadata: ProfileArtifactAdoptionMetadata,
-        code: ProfileArtifactAdoptionErrorCode,
-        connection: NWConnection,
-        nowMilliseconds: Int64
-    ) {
-        dispatchPrecondition(condition: .onQueue(networkQueue))
-        profileArtifactAdoptionAssembler.reset()
-        let entry = ProfileArtifactAdoptionLedgerEntry(
-            metadata: metadata,
-            status: .failed,
-            errorCode: code,
-            destinationProfileIDs: [],
-            completedAtMilliseconds: nowMilliseconds
-        )
-        profileArtifactAdoptionLedger.record(entry, nowMilliseconds: nowMilliseconds)
-        persistProfileArtifactAdoptionLedgerOnNetworkQueue()
-        profileArtifactAdoptionCommitGate.finish(operationID: metadata.operationID)
-        guard pairedConnection === connection else { return }
-        sendProfileArtifactAdoptionResultOnNetworkQueue(
-            entry.result(serverID: serverID, replayed: false),
-            connection: connection
-        )
-    }
-
-    private func sendEphemeralProfileArtifactAdoptionFailureOnNetworkQueue(
-        metadata: ProfileArtifactAdoptionMetadata,
-        code: ProfileArtifactAdoptionErrorCode,
-        connection: NWConnection
-    ) {
-        dispatchPrecondition(condition: .onQueue(networkQueue))
-        sendProfileArtifactAdoptionResultOnNetworkQueue(
-            ProfileArtifactAdoptionResult(
-                metadata: metadata,
-                serverID: serverID,
-                status: .failed,
-                errorCode: code
-            ),
-            connection: connection
-        )
-    }
-
-    private func sendProfileArtifactAdoptionResultOnNetworkQueue(
-        _ result: ProfileArtifactAdoptionResult,
-        connection: NWConnection
-    ) {
-        dispatchPrecondition(condition: .onQueue(networkQueue))
-        send(
-            .init(
-                type: .profileArtifactAdoptionResult,
-                profileArtifactAdoptionResult: result
-            ),
-            on: connection
-        )
     }
 
     private func handleClientCustomizationOnNetworkQueue(_ message: ControllerMessage) {
@@ -3237,7 +2914,6 @@ final class MacControllerServer: ObservableObject {
         pendingPairingConnection = connection
         pairedConnection = nil
         pairedAuthToken = nil
-        profileArtifactAdoptionAssembler.reset()
         resetRealtimeDatagramAuthenticationOnNetworkQueue(cancelConnections: true)
         realtimeToken = nil
 
@@ -3349,7 +3025,6 @@ final class MacControllerServer: ObservableObject {
     }
 
     private func clearPairingStateOnNetworkQueue(for connection: NWConnection?) {
-        profileArtifactAdoptionAssembler.reset()
         if let connection {
             if pendingPairingConnection === connection {
                 pendingPairingConnection = nil
@@ -5559,7 +5234,6 @@ final class MacControllerServer: ObservableObject {
         let disconnectedConnection = connection
         releaseAll(reason: reason)
         syncOnNetworkQueue {
-            profileArtifactAdoptionAssembler.reset()
             if realtimeConnection === disconnectedConnection {
                 realtimeConnection = nil
             }
@@ -5596,9 +5270,6 @@ final class MacControllerServer: ObservableObject {
             timer.schedule(deadline: .now() + .milliseconds(250), repeating: .milliseconds(250), leeway: .milliseconds(20))
             timer.setEventHandler { [weak self] in
                 self?.checkHeartbeatTimeoutOnNetworkQueue()
-                if let self {
-                    _ = self.profileArtifactAdoptionAssembler.expire(nowMilliseconds: Date.currentMilliseconds)
-                }
                 self?.expireStalePhysicalHoldsOnNetworkQueue()
                 self?.sendLatencyPingIfDueOnNetworkQueue()
                 self?.refreshAccessibilityIfDueOnNetworkQueue()
@@ -6539,35 +6210,6 @@ final class MacControllerServer: ObservableObject {
         }
 
         return Dictionary(uniqueKeysWithValues: clients.map { ($0.token, $0) })
-    }
-
-    private static func loadProfileArtifactAdoptionLedger() throws -> ProfileArtifactAdoptionLedger {
-        guard let stored = UserDefaults.standard.object(forKey: profileArtifactAdoptionLedgerDefaultsKey) else { return ProfileArtifactAdoptionLedger() }
-        guard let data = stored as? Data, data.count <= 1_048_576 else {
-            throw GamepadSavedConfigurationError.invalid("saved adoption receipts must contain bounded JSON data")
-        }
-        do { return try ProfileArtifactAdoptionLedger.decodeSaved(data) }
-        catch { throw GamepadSavedConfigurationError.invalid("saved adoption receipts: \(GamepadSavedConfigurationError.diagnostic(error))") }
-    }
-
-    private static func validProfileArtifactAdoptionLedger(_ stored: ProfileArtifactAdoptionLedger, serverID: String) -> ProfileArtifactAdoptionLedger {
-        var decoded = stored
-        decoded.prune(nowMilliseconds: Date.currentMilliseconds)
-        let entries = decoded.allEntries.filter { entry in
-            guard entry.status == .succeeded || entry.status == .failed,
-                  entry.metadata.validate(expectedServerID: serverID) == nil
-            else { return false }
-            return entry.result(serverID: serverID, replayed: false).validates(against: entry.metadata)
-        }
-        return ProfileArtifactAdoptionLedger(entries: entries)
-    }
-
-    private func persistProfileArtifactAdoptionLedgerOnNetworkQueue() {
-        dispatchPrecondition(condition: .onQueue(networkQueue))
-        profileArtifactAdoptionLedger.prune(nowMilliseconds: Date.currentMilliseconds)
-        if let data = try? JSONEncoder().encode(profileArtifactAdoptionLedger) {
-            UserDefaults.standard.set(data, forKey: Self.profileArtifactAdoptionLedgerDefaultsKey)
-        }
     }
 
     private static func defaultBonjourServiceName() -> String {

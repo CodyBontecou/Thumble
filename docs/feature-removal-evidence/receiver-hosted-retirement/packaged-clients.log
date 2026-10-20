@@ -1,0 +1,3 @@
+iOS: hosted clients/pruning store absent; retained local recovery/import implementation present
+macOS: hosted clients/pruning store absent; retained local recovery/import implementation present
+iOS source entitlements: no hosted associated domains

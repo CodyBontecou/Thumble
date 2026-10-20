@@ -198,7 +198,7 @@ jobs:
           lipo "$APP/Contents/MacOS/thumble-bridge" -verify_arch arm64 x86_64
           codesign --verify --deep --strict "$APP"
           THUMBLE_TEST_SKIN_RUNTIME_BIN="$APP/Contents/MacOS" cargo test --manifest-path Host/Cargo.toml --locked -p thumble-host --test skin_sync -- --ignored
-          THUMBLE_TEST_ARTIFACT_RUNTIME_BIN="$APP/Contents/MacOS" cargo test --manifest-path Host/Cargo.toml --locked -p thumble-host --test profile_adoption -- --ignored --test-threads=1
+          THUMBLE_TEST_ARTIFACT_RUNTIME_BIN="$APP/Contents/MacOS" cargo test --manifest-path Host/Cargo.toml --locked -p thumble-host --test local_profile_compatibility -- --ignored --test-threads=1
           python3 Android/scripts/verify-shared-build-profile-models.py --bridge "$APP/Contents/MacOS/thumble-bridge"
           THUMBLE_TEST_SKIN_BRIDGE="$APP/Contents/MacOS/thumble-bridge" cargo test --manifest-path Host/Cargo.toml --locked -p thumble-host skins::tests:: -- --ignored
           unzip -tq "$OUTPUT/ThumbleHost-0.1.0-macOS-universal.zip"

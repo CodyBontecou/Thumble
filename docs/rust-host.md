@@ -4,7 +4,7 @@ The Rust host is a standalone macOS receiver for Thumble. Its transport, pairing
 
 For native Windows/Linux keyboard and mouse control, use the separate [`thumble-receiver`](cross-platform-receiver.md) binary. It shares this host's protocol/core and has its own platform input and per-user CLI adapters.
 
-Android hosted shared-build pickup, preview and phone adoption have been retired. Android adoption harness names in historical acceptance sections below refer to removed scripts; the current Android app offers read-only local recovery exports instead. Ordinary local CLI/profile import and paired profile synchronization remain. iOS and receiver-side legacy adoption retirement are tracked in [feature-removal-progress.md](feature-removal-progress.md).
+Hosted shared-build pickup, preview and phone adoption are retired on Android and iOS. Both apps provide read-only local recovery exports. Receivers no longer advertise or accept adoption uploads; ordinary local CLI/profile import and paired profile synchronization remain. See [feature-removal-progress.md](feature-removal-progress.md).
 
 ## Architecture
 
@@ -186,58 +186,13 @@ The tool remains useful as structured/text output if that experimental renderer 
 
 The hosted gateway, cloud builder, remote relay, OAuth flows, and relay installer are removed from the build. Local stdio MCP and CLI design/generation tools remain. `thumble relay uninstall` is a cleanup-only compatibility command for an old local background relay; no command creates or connects a new relay. Service data and live deployment retirement require the inventory in [hosted service retirement](hosted-service-retirement.md).
 
-Phone shared-build pickup and adoption are still being removed; their existing implementation and recovery evidence below describe that transition, not a supported new hosted connection.
+## Retired shared-build uploads
 
-## Android shared-build adoption and CLI
+The Mac and Rust receivers no longer advertise `profile_artifact_adoption_v1`, assemble uploads, invoke native validation for adoption, or import uploaded artifacts. Paired legacy requests receive a fixed retirement error. Legacy socket adoption/status/cancel requests return `hosted_builds_retired` without consulting the old ledger or decoding artifact bytes. The Rust host CLI hides its compatibility-only `shared-build` entry and immediately rejects all arguments; the public `thumble` CLI likewise reports retirement. Use `thumble profile import file.json` or the Mac's Import Setup file picker.
 
-The Rust receiver advertises `profile_artifact_adoption_v1` when configuration
-writes are enabled and the sibling native `thumble-bridge` supports portable
-artifact validation. Android reviews a kept build before uploading it to the
-paired server. Uploads use authenticated WebSocket control messages, including
-when input uses UDP. They are limited to 8 MiB, ordered 256 KiB chunks and a
-30-second upload lifetime. The receiver checks the exact byte hash, RFC 8785
-content hash, server identity and native Swift profile decoding before import.
-Optional omitted fields remain omitted for hashing; decoded empty binding maps
-must not change a valid artifact's signed content.
+Previously adopted local profiles remain ordinary profiles. Old receipt data is preserved: Rust continues to decode/store its bounded legacy field, while the Mac leaves the obsolete defaults entry untouched and no longer loads, prunes or writes it. Phones export valid original pending profile bytes or raw recovery archives without consuming source files. This does not recover gateway-only builds; deployed-service backup and shutdown remain separate operational work.
 
-Adoption appends copies using the existing deterministic profile-import planner,
-selects the artifact's active profile and preserves the Mac default. Native
-normalized control data is installed while safe unknown profile metadata survives.
-Profiles and a successful operation receipt are persisted in one atomic write.
-Receipts are bounded to 64 entries for seven days. Reusing the same operation,
-record, server and hashes replays the original destination IDs; changing metadata
-for that operation fails. Failures before commit leave no receipt, allowing retry.
-Cancellation before durable commit leaves authority unchanged; after commit the
-receipt reports the already completed adoption.
-
-The public CLI routes these commands to the running Rust authority:
-
-```sh
-thumble shared-build adopt ./kept-build.json --operation-id UUID --record-id UUID --json
-thumble shared-build status UUID --json
-thumble shared-build cancel UUID --json
-```
-
-`--server-id` explicitly pins adoption to a server; omission uses the running
-receiver. Keep the same operation and record IDs when retrying a phone operation.
-CLI-created operations derive a stable record ID from `--operation-id` when
-`--record-id` is omitted. Cancellation returns the protocol's failed/disconnected
-result and a nonzero exit status; a committed operation returns replayed success.
-
-Android releases held input and blocks input and profile mutations during
-adoption. It retains the exact pending bytes on failure/cancellation and deletes
-them only after a matching result plus an authoritative snapshot containing all
-destination profiles. The practice preference is preserved.
-
-`Android/scripts/verify-mac-artifact-adoption.py --serial emulator-5554 --bin
-build/ArtifactAdoptionBinaries` runs the reviewed UI flow against an isolated
-no-input receiver, checks saved authority, and verifies public CLI replay before
-and after restart. The ignored `thumble-host` `profile_adoption` integration suite
-uses `THUMBLE_TEST_ARTIFACT_RUNTIME_BIN` with current packaged binaries; CI runs it
-against the native universal package, serially to avoid process-probe contention. It also covers cancellation while native
-validation is running and failed atomic writes. The normal installed receiver
-is not changed by these tests. Production browser association and physical-device
-acceptance remain separate requirements.
+`retired_hosted_builds` runs real paired WebSocket and local socket rejection checks, verifies byte-identical authority/receipt storage, and then exercises Ping and profile synchronization on the same connection. It also checks hidden CLI rejection without creating state or reading a file. `local_profile_compatibility` retains native legacy-output/unknown-metadata coverage previously located in the old adoption test suite; its native bridge test uses `THUMBLE_TEST_ARTIFACT_RUNTIME_BIN` and remains a separate packaged test. Ordinary local artifact import is covered by the retained profile-flow checks.
 
 ## Security and permissions
 

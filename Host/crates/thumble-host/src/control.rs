@@ -36,6 +36,7 @@ pub enum ControlRequest {
     Skin {
         request: crate::skin_command::SkinCommand,
     },
+    // Reserved legacy socket requests; every variant returns hosted_builds_retired.
     AdoptProfileArtifact {
         metadata: thumble_protocol::AdoptionMetadata,
         artifact_base64: String,
@@ -288,8 +289,6 @@ pub struct ControlResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cli_profile: Option<CliProfileResponse>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub profile_artifact_adoption: Option<thumble_protocol::AdoptionResult>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub controller: Option<ControllerSnapshot>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub editable_variant: Option<String>,
@@ -344,7 +343,6 @@ impl ControlResponse {
             profiles: None,
             controls: None,
             cli_profile: None,
-            profile_artifact_adoption: None,
             controller: None,
             editable_variant: None,
             configuration: None,

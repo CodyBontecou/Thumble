@@ -1,0 +1,19 @@
+Test Suite 'Selected tests' started at 2026-10-20 17:15:38.321.
+Test Suite 'ThumbleCLITests.xctest' started at 2026-10-20 17:15:38.322.
+Test Suite 'MacSharedKeypadImportTests' started at 2026-10-20 17:15:38.322.
+Test Suite 'MacSharedKeypadImportTests' passed at 2026-10-20 17:15:38.411.
+	 Executed 3 tests, with 0 failures (0 unexpected) in 0.089 (0.089) seconds
+Test Suite 'PendingProfileRecoveryTests' started at 2026-10-20 17:15:38.412.
+Test Suite 'PendingProfileRecoveryTests' passed at 2026-10-20 17:15:38.460.
+	 Executed 7 tests, with 0 failures (0 unexpected) in 0.047 (0.048) seconds
+Test Suite 'PortableProfileArtifactTests' started at 2026-10-20 17:15:38.460.
+Test Suite 'PortableProfileArtifactTests' passed at 2026-10-20 17:15:38.658.
+	 Executed 10 tests, with 0 failures (0 unexpected) in 0.196 (0.198) seconds
+Test Suite 'ProfileArtifactAdoptionTests' started at 2026-10-20 17:15:38.658.
+Test Suite 'ProfileArtifactAdoptionTests' passed at 2026-10-20 17:15:38.666.
+	 Executed 3 tests, with 0 failures (0 unexpected) in 0.007 (0.007) seconds
+Test Suite 'ThumbleCLITests.xctest' passed at 2026-10-20 17:15:38.666.
+	 Executed 23 tests, with 0 failures (0 unexpected) in 0.337 (0.344) seconds
+Test Suite 'Selected tests' passed at 2026-10-20 17:15:38.666.
+	 Executed 23 tests, with 0 failures (0 unexpected) in 0.337 (0.345) seconds
+** TEST SUCCEEDED **

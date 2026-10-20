@@ -48,7 +48,7 @@ Tests must cover interruption before backup completion, after staging, before co
 
 Keep pairing and real-time input protocol identities unchanged. Remove active advertisements for skin and orientation mutation when their product surfaces are gone. Unsupported legacy mutations return a clear error without profile changes. Retain only bounded decoding/conversion for old exports and supported upgrades; do not keep a user-accessible legacy feature mode.
 
-Old phones that cannot represent the new appearance/layout contract must receive an explicit update-required result rather than an incomplete profile snapshot. Test this handshake alongside paired configuration synchronization. Ordinary local profile import/export, on-phone edits, and local CLI/MCP transactions remain supported independently of hosted artifact transport.
+Old phones that cannot represent the new appearance/layout contract must receive an explicit update-required result rather than an incomplete profile snapshot. Test this handshake alongside paired configuration synchronization. Ordinary local profile import/export, on-phone edits, and local CLI/MCP transactions remain supported independently of hosted artifact transport. Legacy hosted adoption wire identifiers remain reserved for decoding and explicit nonmutating retirement errors. They are no longer advertised. Existing bounded Rust receipt data and obsolete Mac defaults bytes are preserved without new writes or pruning; neither is used to replay an adoption.
 
 ## Verification boundary
 

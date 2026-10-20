@@ -1,0 +1,13 @@
+Test Suite 'Selected tests' started at 2026-10-20 17:15:42.675.
+Test Suite 'ThumbleCLITests.xctest' started at 2026-10-20 17:15:42.675.
+Test Suite 'StackSafetyRegressionTests' started at 2026-10-20 17:15:42.676.
+Test Suite 'StackSafetyRegressionTests' passed at 2026-10-20 17:15:49.207.
+	 Executed 35 tests, with 0 failures (0 unexpected) in 6.526 (6.532) seconds
+Test Suite 'ThumbleCLITests.xctest' passed at 2026-10-20 17:15:49.208.
+	 Executed 35 tests, with 0 failures (0 unexpected) in 6.526 (6.532) seconds
+Test Suite 'Selected tests' passed at 2026-10-20 17:15:49.208.
+	 Executed 35 tests, with 0 failures (0 unexpected) in 6.526 (6.532) seconds
+** TEST SUCCEEDED **
+** BUILD SUCCEEDED **
+** BUILD SUCCEEDED **
+Stack-safety verification passed.

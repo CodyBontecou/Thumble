@@ -13,7 +13,9 @@ if not args.ios_app and not args.mac_app:
     parser.error("provide at least one app bundle")
 
 retired = [b"URLSessionBuilderArtifactFetcher", b"BuilderArtifactShareReference", b"IOSBuilderArtifactPickupCoordinator",
-           b"IOSBuilderArtifactPracticePreview", b"IOSPendingBuilderArtifactStore"]
+           b"IOSBuilderArtifactPracticePreview", b"IOSPendingBuilderArtifactStore",
+           b"ProfileArtifactAdoptionAssembler", b"ProfileArtifactAdoptionCommitGate",
+           b"ProfileArtifactAdoptionLedger"]
 for label, bundle in (("iOS", args.ios_app), ("macOS", args.mac_app)):
     if bundle is None:
         continue

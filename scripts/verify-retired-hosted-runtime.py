@@ -13,6 +13,15 @@ for name in ["thumble-core", "thumble-host", "thumble-mcp", "thumble-cli-bridge"
 assert not (root / "fly.toml").exists()
 assert not (root / "Host/crates/thumble-mcp/src/relay.rs").exists()
 assert not (root / "scripts/install-relay-launch-agent.sh").exists()
+for source in ["runtime_adoption.rs", "profile_adoption.rs"]:
+    assert not (root / "Host/crates/thumble-host/src" / source).exists(), f"Retired receiver upload owner: {source}"
+receiver = (root / "Host/crates/thumble-host/src/runtime.rs").read_text()
+assert "adoption_service" not in receiver and "adopt_artifact(" not in receiver
+assert '"hosted_builds_retired"' in receiver
+assert "ControllerCapability::ProfileArtifactAdoptionV1" not in receiver
+native_receiver = (root / "Sources/Mac/MacControllerServer.swift").read_text()
+assert ".profileArtifactAdoptionV1" not in native_receiver
+assert "profileArtifactAdoptionLedgerDefaultsKey" not in native_receiver
 adapter = (root / "Host/crates/thumble-mcp/src/main.rs").read_text()
 for field in ["relay:", "relay_link:", "relay_relink:", "relay_revoke:", "relay_doctor:"]:
     assert field not in adapter, f"Retired MCP transport flag: {field}"
@@ -21,4 +30,4 @@ assert 'control_socket: Option<PathBuf>' in adapter
 release = (root / "scripts/release/macos-host.sh").read_text()
 assert 'install-relay-launch-agent' not in release
 assert 'thumble-mcp' in release and 'thumble-cli-bridge' in release
-print("Hosted gateway, builder, relay, and installer retired; local runtime remains packaged")
+print("Hosted gateway, builder, relay, receiver uploads and installer retired; local runtime remains packaged")
