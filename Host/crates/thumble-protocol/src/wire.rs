@@ -11,6 +11,9 @@ pub enum ControllerWireCodecError {
         actual_bytes: usize,
         maximum_bytes: usize,
     },
+    OutboundPayloadTooLarge {
+        maximum_bytes: usize,
+    },
     Json(serde_json::Error),
 }
 
@@ -24,6 +27,8 @@ impl fmt::Display for ControllerWireCodecError {
                 formatter,
                 "controller payload is {actual_bytes} bytes; the maximum is {maximum_bytes} bytes"
             ),
+            Self::OutboundPayloadTooLarge { maximum_bytes } => write!(formatter,
+                "controller payload exceeds {maximum_bytes} bytes; saved profiles and edits have been kept"),
             Self::Json(error) => write!(formatter, "invalid controller JSON: {error}"),
         }
     }
@@ -33,7 +38,7 @@ impl Error for ControllerWireCodecError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             Self::Json(error) => Some(error),
-            Self::InboundPayloadTooLarge { .. } => None,
+            Self::InboundPayloadTooLarge { .. } | Self::OutboundPayloadTooLarge { .. } => None,
         }
     }
 }
@@ -62,7 +67,14 @@ impl ControllerWireCodec {
         if let Some(data) = Self::compact_data(message) {
             return Ok(data);
         }
-        Ok(serde_json::to_vec(message)?)
+        crate::encode_bounded_json(message, Self::MAXIMUM_INBOUND_PAYLOAD_SIZE).map_err(|error| {
+            match error {
+                crate::BoundedJsonError::TooLarge { maximum_bytes } => {
+                    ControllerWireCodecError::OutboundPayloadTooLarge { maximum_bytes }
+                }
+                crate::BoundedJsonError::Json(error) => ControllerWireCodecError::Json(error),
+            }
+        })
     }
 
     pub fn decode(data: &[u8]) -> Result<ControllerMessage, ControllerWireCodecError> {

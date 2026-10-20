@@ -188,11 +188,18 @@ impl ConfigurationDocument {
 
 impl ConfigurationView<'_> {
     fn validate(&self) -> Result<(), ConfigurationDocumentError> {
-        let encoded =
-            serde_json::to_vec(self).map_err(|_| ConfigurationDocumentError::EncodingFailed)?;
-        if encoded.len() > MAXIMUM_CONFIGURATION_DOCUMENT_BYTES {
-            return Err(ConfigurationDocumentError::TooLarge(encoded.len()));
-        }
+        // Count the complete catalog, maps and opaque fields without allocating
+        // a second image-bearing document. TooLarge reports a proven lower bound.
+        thumble_protocol::bounded_json_size(self, MAXIMUM_CONFIGURATION_DOCUMENT_BYTES).map_err(
+            |error| match error {
+                thumble_protocol::BoundedJsonError::TooLarge { maximum_bytes } => {
+                    ConfigurationDocumentError::TooLarge(maximum_bytes + 1)
+                }
+                thumble_protocol::BoundedJsonError::Json(_) => {
+                    ConfigurationDocumentError::EncodingFailed
+                }
+            },
+        )?;
         if self.profiles.is_empty() || self.profiles.len() > MAXIMUM_CONFIGURATION_PROFILES {
             return Err(ConfigurationDocumentError::InvalidProfileCount(
                 self.profiles.len(),
@@ -401,7 +408,7 @@ impl fmt::Display for ConfigurationDocumentError {
             Self::EncodingFailed => formatter.write_str("configuration document could not be encoded"),
             Self::TooLarge(bytes) => write!(
                 formatter,
-                "configuration document is {bytes} bytes; maximum is {MAXIMUM_CONFIGURATION_DOCUMENT_BYTES}"
+                "configuration document is at least {bytes} bytes; maximum is {MAXIMUM_CONFIGURATION_DOCUMENT_BYTES}"
             ),
             Self::InvalidProfileCount(count) => write!(
                 formatter,
@@ -434,6 +441,33 @@ impl Error for ConfigurationDocumentError {}
 mod tests {
     use super::*;
     use crate::TrustedClient;
+
+    #[test]
+    fn whole_catalog_bound_includes_opaque_metadata_and_rejects_without_installing() {
+        let mut state = PersistentState::minimal("size-bound-server").unwrap();
+        let original = state.clone();
+        let mut document = ConfigurationDocument::from_state(&state).unwrap();
+        document.profiles[0]["opaqueMetadata"] = Value::String(String::new());
+        let overhead = serde_json::to_vec(&document).unwrap().len();
+        document.profiles[0]["opaqueMetadata"] =
+            Value::String("x".repeat(MAXIMUM_CONFIGURATION_DOCUMENT_BYTES - overhead));
+        document.validate().unwrap();
+        assert_eq!(
+            serde_json::to_vec(&document).unwrap().len(),
+            MAXIMUM_CONFIGURATION_DOCUMENT_BYTES
+        );
+        if let Value::String(value) = &mut document.profiles[0]["opaqueMetadata"] {
+            value.push('x');
+        }
+        assert_eq!(
+            document.validate(),
+            Err(ConfigurationDocumentError::TooLarge(
+                MAXIMUM_CONFIGURATION_DOCUMENT_BYTES + 1
+            ))
+        );
+        assert!(document.install_into(&mut state).is_err());
+        assert_eq!(state, original);
+    }
 
     #[test]
     fn owned_appearance_candidates_cannot_enter_version_four_authority() {

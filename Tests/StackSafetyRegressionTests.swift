@@ -1066,6 +1066,22 @@ final class StackSafetyRegressionTests: XCTestCase {
         }
     }
 
+    func testWireEncoderBoundsCompleteProfileFramesOnConstrainedThread() throws {
+        try runOnThread(stackSize: 512 * 1024, timeout: 30) {
+            var message = ControllerMessage(type: .gamepadProfiles, timestamp: 0, message: "", gamepadProfiles: [])
+            let overhead = try ControllerWireCodec.encode(message, using: JSONEncoder()).count
+            message.message = String(repeating: "x", count: ControllerWireCodec.maximumInboundPayloadSize - overhead)
+            let maximum = try ControllerWireCodec.encode(message, using: JSONEncoder())
+            guard maximum.count == ControllerWireCodec.maximumInboundPayloadSize else { throw StackTestError.unexpectedDecodedState }
+            message.message?.append("x")
+            XCTAssertThrowsError(try ControllerWireCodec.encode(message, using: JSONEncoder())) { error in
+                XCTAssertEqual(error as? ControllerWireCodecError, .outboundPayloadTooLarge(
+                    actualBytes: ControllerWireCodec.maximumInboundPayloadSize + 1,
+                    maximumBytes: ControllerWireCodec.maximumInboundPayloadSize))
+            }
+        }
+    }
+
     func testWireDecoderRejectsOversizedPayloadBeforeParsing() {
         let data = Data(count: ControllerWireCodec.maximumInboundPayloadSize + 1)
 

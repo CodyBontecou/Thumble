@@ -383,3 +383,24 @@ fn json_fallback_accepts_uuid_inputs_and_large_messages_up_to_eight_mib() {
         other => panic!("expected payload-size error, got {other:?}"),
     }
 }
+
+#[test]
+fn complete_outbound_profile_frames_fit_the_same_bound_as_receiving_clients() {
+    let mut message = ControllerMessage::new(ControllerMessageType::GamepadProfiles, 0);
+    message.message = Some(String::new());
+    message.gamepad_profiles = Some(vec![]);
+    let overhead = ControllerWireCodec::encode(&message).unwrap().len();
+    message.message =
+        Some("x".repeat(ControllerWireCodec::MAXIMUM_INBOUND_PAYLOAD_SIZE - overhead));
+    let maximum = ControllerWireCodec::encode(&message).unwrap();
+    assert_eq!(
+        maximum.len(),
+        ControllerWireCodec::MAXIMUM_INBOUND_PAYLOAD_SIZE
+    );
+    assert_eq!(ControllerWireCodec::decode(&maximum).unwrap(), message);
+    message.message.as_mut().unwrap().push('x');
+    assert!(
+        matches!(ControllerWireCodec::encode(&message), Err(ControllerWireCodecError::OutboundPayloadTooLarge { maximum_bytes })
+        if maximum_bytes == ControllerWireCodec::MAXIMUM_INBOUND_PAYLOAD_SIZE)
+    );
+}

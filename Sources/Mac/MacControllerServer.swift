@@ -5009,6 +5009,9 @@ final class MacControllerServer: ObservableObject {
         do {
             data = try ControllerWireCodec.encode(message, using: encoder)
         } catch {
+            if case .outboundPayloadTooLarge = error as? ControllerWireCodecError {
+                rejectPairingOnNetworkQueue(connection, reason: error.localizedDescription)
+            }
             completion?(error)
             return
         }

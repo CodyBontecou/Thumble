@@ -801,8 +801,31 @@ impl SharedRuntime {
                                 .map_err(|error| format!("encode gamepad readiness: {error}"))?,
                         ));
                     }
-                    let encoded = ControllerWireCodec::encode(&outgoing)
-                        .map_err(|error| format!("encode controller response: {error}"))?;
+                    let encoded = match ControllerWireCodec::encode(&outgoing) {
+                        Ok(encoded) => encoded,
+                        Err(error @ thumble_protocol::ControllerWireCodecError::OutboundPayloadTooLarge { .. }) => {
+                            let reason = error.to_string();
+                            let was_paired = inner.core.is_authenticated(*connection_id);
+                            let releases = inner.core.disconnect(*connection_id);
+                            self.execute_effects(inner, releases)?;
+                            inner.realtime.retire(*connection_id);
+                            if was_paired {
+                                if let Err(error) = inner.output.release_tracked() {
+                                    self.log(&format!("oversized response output release: {error}"));
+                                }
+                            }
+                            let mut failure = ControllerMessage::new(ControllerMessageType::Error, 0);
+                            failure.message = Some(reason.clone());
+                            let bytes = ControllerWireCodec::encode(&failure)
+                                .map_err(|error| format!("encode size rejection: {error}"))?;
+                            if let Some(sender) = inner.connections.remove(connection_id) {
+                                let _ = sender.try_send(Outbound::Binary(bytes));
+                                let _ = sender.try_send(Outbound::Close(reason));
+                            }
+                            continue;
+                        }
+                        Err(error) => return Err(format!("encode controller response: {error}")),
+                    };
                     if let Some(sender) = inner.connections.get(connection_id) {
                         if sender.try_send(Outbound::Binary(encoded)).is_err() {
                             inner.connections.remove(connection_id);
@@ -2629,6 +2652,88 @@ mod tests {
             application_launcher: Default::default(),
             started_at: crate::input_liveness::InputClock::now(),
         }
+    }
+
+    #[test]
+    fn oversized_snapshot_releases_holds_retires_peer_and_preserves_authority() {
+        let directory = tempdir().unwrap();
+        let shared = failing_controller_runtime(HostPaths::new(
+            directory.path().into(),
+            directory.path().join("control.sock"),
+        ));
+        let (sender, mut receiver) = mpsc::channel(8);
+        shared.register_connection(1, sender);
+        let mut inner = shared.inner.lock().unwrap();
+        inner.output = OutputExecutor::new(false, None);
+        let mut hello = ControllerMessage::new(ControllerMessageType::Hello, 0);
+        hello.pairing_code = Some("123456".into());
+        let RuntimeInner { core, tokens, .. } = &mut *inner;
+        core.handle_message(1, hello, 1000, tokens).unwrap();
+        assert!(inner.core.is_authenticated(1));
+        let effects = inner
+            .core
+            .set_local_output_binding(
+                "held",
+                Some(OutputBinding {
+                    keyboard: Some(thumble_core::KeyBinding::new(36, 0)),
+                    gamepad_buttons: Default::default(),
+                }),
+                true,
+                0,
+            )
+            .unwrap();
+        shared.execute_effects(&mut inner, effects).unwrap();
+        assert_eq!(inner.output.snapshot().held_key_count, 1);
+        let original = inner.core.persistent_state().clone();
+        let mut message = ControllerMessage::new(ControllerMessageType::GamepadProfiles, 0);
+        message.gamepad_profiles = Some(vec![
+            serde_json::json!({"opaque":"x".repeat(ControllerWireCodec::MAXIMUM_INBOUND_PAYLOAD_SIZE)}),
+        ]);
+        // A stale response for a different connection cannot release the
+        // current controller's holds or retire its authentication.
+        let (other_sender, mut other_receiver) = mpsc::channel(8);
+        inner.connections.insert(2, other_sender);
+        shared
+            .execute_effects(
+                &mut inner,
+                vec![Effect::SendMessage {
+                    connection_id: 2,
+                    message: Box::new(message.clone()),
+                }],
+            )
+            .unwrap();
+        assert!(inner.core.is_authenticated(1));
+        assert_eq!(inner.output.snapshot().held_key_count, 1);
+        assert!(!inner.connections.contains_key(&2));
+        assert!(matches!(other_receiver.try_recv(), Ok(Outbound::Binary(_))));
+        shared
+            .execute_effects(
+                &mut inner,
+                vec![Effect::SendMessage {
+                    connection_id: 1,
+                    message: Box::new(message),
+                }],
+            )
+            .unwrap();
+        assert!(!inner.core.is_authenticated(1));
+        assert!(!inner.connections.contains_key(&1));
+        assert_eq!(inner.output.snapshot().held_key_count, 0);
+        assert_eq!(inner.core.persistent_state(), &original);
+        let mut rejected = false;
+        while let Ok(frame) = receiver.try_recv() {
+            if let Outbound::Binary(bytes) = frame {
+                let message = ControllerWireCodec::decode(&bytes).unwrap();
+                assert!(message.gamepad_profiles.is_none());
+                if message.message_type == ControllerMessageType::Error {
+                    assert!(message
+                        .message
+                        .unwrap()
+                        .contains("saved profiles and edits have been kept"));
+                    rejected = true;
+                }
+            }
+        }
+        assert!(rejected);
     }
 
     #[test]

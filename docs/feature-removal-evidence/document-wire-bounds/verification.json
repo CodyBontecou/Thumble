@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-20",
+  "configurationLimitBytes": 8388608,
+  "wireLimitBytes": 8388608,
+  "constrainedStackTests": 37,
+  "logs": {
+    "rustGate": {
+      "path": "/tmp/thumble-json-bounds-rust-final2.log",
+      "sha256": "5fc8034ec75f7a61478530f65412332b1e67b25f4a28c6e5f6a1f9aea59f5814"
+    },
+    "appleStack": {
+      "path": "/tmp/thumble-json-bounds-stack.log",
+      "sha256": "1f4511cd37b14f067b80c808fcfc3bf59d7beed9385a69c3e05b0ebe0c39a851"
+    }
+  },
+  "rustPassed": 493,
+  "rustIgnored": 3
+}

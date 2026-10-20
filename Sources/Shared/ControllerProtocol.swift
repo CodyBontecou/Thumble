@@ -997,11 +997,14 @@ private final class ControllerCodecExpandedStackJob<Value>: @unchecked Sendable 
 
 public enum ControllerWireCodecError: LocalizedError, Equatable {
     case inboundPayloadTooLarge(actualBytes: Int, maximumBytes: Int)
+    case outboundPayloadTooLarge(actualBytes: Int, maximumBytes: Int)
 
     public var errorDescription: String? {
         switch self {
         case .inboundPayloadTooLarge(let actualBytes, let maximumBytes):
             "Controller payload is \(actualBytes) bytes; the maximum is \(maximumBytes) bytes."
+        case .outboundPayloadTooLarge(let actualBytes, let maximumBytes):
+            "Controller payload is \(actualBytes) bytes; the maximum is \(maximumBytes) bytes. Your saved profiles and edits have been kept."
         }
     }
 }
@@ -1043,12 +1046,18 @@ public enum ControllerWireCodec {
         if let compactData = compactData(for: message) {
             return compactData
         }
+        let data: Data
         if requiresExpandedStack(for: message) {
-            return try withExpandedCodableStack {
+            data = try withExpandedCodableStack {
                 try encoder.encode(message)
             }
+        } else {
+            data = try encoder.encode(message)
         }
-        return try encoder.encode(message)
+        guard data.count <= maximumInboundPayloadSize else {
+            throw ControllerWireCodecError.outboundPayloadTooLarge(actualBytes: data.count, maximumBytes: maximumInboundPayloadSize)
+        }
+        return data
     }
 
     public static func decode(_ data: Data, using decoder: JSONDecoder) throws -> ControllerMessage {

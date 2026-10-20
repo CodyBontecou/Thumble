@@ -6,6 +6,8 @@
 //! them.
 
 mod adoption;
+mod bounded_json;
+pub use bounded_json::{bounded_json_size, encode_bounded_json, BoundedJsonError};
 mod message;
 pub use adoption::*;
 mod profile_formats;
