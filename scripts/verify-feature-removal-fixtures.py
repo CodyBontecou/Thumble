@@ -51,3 +51,21 @@ for key, count in [("negotiations", "negotiationCount"), ("frames", "frameCount"
     assert len(rows) == contract[count] and len({row["name"] for row in rows}) == len(rows)
     assert all(isinstance(row["allowed"], bool) for row in rows)
 print("Profile-format matrix verified:", contract["negotiationCount"], "negotiations,", contract["frameCount"], "frames")
+
+# Explicit v5 destination specimens; not outputs of an activated migration.
+owned = repo / "Host/fixtures/owned-configuration/v1"
+contract = json.loads((owned / "manifest.json").read_text())
+assert contract["fixtureVersion"] == 1
+for name, digest in contract["files"].items():
+    assert Path(name).name == name
+    assert hashlib.sha256((owned / name).read_bytes()).hexdigest() == digest
+for name, digest in contract["sources"].items():
+    assert not Path(name).is_absolute() and ".." not in Path(name).parts
+    assert hashlib.sha256((repo / name).read_bytes()).hexdigest() == digest
+rows = json.loads((owned / "cases.json").read_text())["cases"]
+assert len(rows) == contract["caseCount"] and len({row["name"] for row in rows}) == len(rows)
+document = json.loads((owned / "document.json").read_text())
+assert document["version"] == 5 and all(p["profileFormatVersion"] == 5 for p in document["profiles"])
+retired = {"skinReference", "skinBaselineCustomization", "landscapeSkinBaselineCustomization", "portraitSkinBaselineCustomization", "landscapeCustomization", "portraitCustomization", "orientationPreference"}
+assert all(not (retired & p.keys()) for p in document["profiles"])
+print("Explicit owned-configuration contract verified:", contract["caseCount"], "cases")

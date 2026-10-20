@@ -12,6 +12,8 @@ mod element_identity;
 pub use element_identity::ElementPresentation;
 mod gamepad;
 mod generation_spec;
+mod owned_configuration;
+pub use owned_configuration::{OwnedConfigurationDocument, OwnedConfigurationError};
 mod profile_appearance;
 mod profile_artifact;
 mod profile_resources;

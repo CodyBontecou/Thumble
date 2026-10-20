@@ -133,6 +133,12 @@ impl ConfigurationDocument {
         ConfigurationView::from(self).validate()
     }
 
+    // Reserved for the explicit v5 codec. Normal authority install/startup keep
+    // calling validate(), so a staging document cannot activate an upgrade.
+    pub(crate) fn validate_owned_candidate(&self) -> Result<(), ConfigurationDocumentError> {
+        ConfigurationView::from(self).validate_for_profile_format(5)
+    }
+
     /// Refresh mirrors after an explicit authoring/selection transaction. The
     /// original and incoming domains must be validated before this is called;
     /// this is not a saved-data/import recovery path.
@@ -188,6 +194,12 @@ impl ConfigurationDocument {
 
 impl ConfigurationView<'_> {
     fn validate(&self) -> Result<(), ConfigurationDocumentError> {
+        self.validate_for_profile_format(4)
+    }
+    fn validate_for_profile_format(
+        &self,
+        profile_format: i64,
+    ) -> Result<(), ConfigurationDocumentError> {
         // Count the complete catalog, maps and opaque fields without allocating
         // a second image-bearing document. TooLarge reports a proven lower bound.
         thumble_protocol::bounded_json_size(self, MAXIMUM_CONFIGURATION_DOCUMENT_BYTES).map_err(
@@ -215,23 +227,27 @@ impl ConfigurationView<'_> {
             let object = profile
                 .as_object()
                 .ok_or(ConfigurationDocumentError::MalformedProfile)?;
-            if object
-                .get("profileFormatVersion")
-                .filter(|v| !v.is_null())
-                .is_some_and(|v| v.as_f64() != Some(4.0))
-            {
-                return Err(ConfigurationDocumentError::UnsupportedProfileFormat);
-            }
-            // Native migration candidates can carry owned appearance banks, but
-            // the current authority/phone interchange still speaks version 4.
-            // Do not commit or export a candidate that older clients would flatten.
-            if object
-                .get("appearanceBank")
-                .is_some_and(|bank| !bank.is_null())
-                || object.contains_key("appearanceResources")
-                || object.contains_key("appearanceResourceVersion")
-            {
-                return Err(ConfigurationDocumentError::UnsupportedAppearanceBank);
+            if profile_format == 5 {
+                crate::owned_configuration::validate_profile(profile)?;
+            } else {
+                if object
+                    .get("profileFormatVersion")
+                    .filter(|v| !v.is_null())
+                    .is_some_and(|v| v.as_f64() != Some(4.0))
+                {
+                    return Err(ConfigurationDocumentError::UnsupportedProfileFormat);
+                }
+                // Native migration candidates can carry owned appearance banks, but
+                // the current authority/phone interchange still speaks version 4.
+                // Do not commit or export a candidate that older clients would flatten.
+                if object
+                    .get("appearanceBank")
+                    .is_some_and(|bank| !bank.is_null())
+                    || object.contains_key("appearanceResources")
+                    || object.contains_key("appearanceResourceVersion")
+                {
+                    return Err(ConfigurationDocumentError::UnsupportedAppearanceBank);
+                }
             }
             if object.get("outputMode").is_some_and(|mode| {
                 !mode.is_null()
@@ -387,6 +403,7 @@ pub enum ConfigurationDocumentError {
     MalformedProfile,
     UnsupportedAppearanceBank,
     UnsupportedProfileFormat,
+    InvalidOwnedProfile,
     InvalidProfileId,
     DuplicateProfileId,
     InvalidProfileName,
@@ -417,6 +434,7 @@ impl fmt::Display for ConfigurationDocumentError {
             Self::TooManyProfileBindingMaps => formatter.write_str("configuration has too many profile binding maps"),
             Self::MalformedProfile => formatter.write_str("configuration contains a malformed profile"),
             Self::UnsupportedProfileFormat => formatter.write_str("unsupported stored profile format; update Thumble before opening this configuration"),
+            Self::InvalidOwnedProfile => formatter.write_str("version-5 profiles require one canonical landscape layout and package-independent appearance"),
             Self::UnsupportedAppearanceBank => formatter.write_str("profile-owned appearance banks require version-5 interchange, which is not enabled yet"),
             Self::InvalidProfileId => formatter.write_str("configuration contains an invalid profile ID"),
             Self::DuplicateProfileId => formatter.write_str("configuration contains duplicate profile IDs"),

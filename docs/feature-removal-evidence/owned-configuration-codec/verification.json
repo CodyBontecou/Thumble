@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-20",
+  "formatVersion": 5,
+  "advertisedFormats": [
+    4
+  ],
+  "contractCases": 39,
+  "constrainedStackTests": 37,
+  "logs": {
+    "rustGate": {
+      "path": "/tmp/thumble-owned-codec-rust-gate2.log",
+      "sha256": "7539f9ca6599b3a46e3701d0f87dc19aa99d82ce105c04035bca2e2f18292831"
+    },
+    "appleStack": {
+      "path": "/tmp/thumble-owned-codec-stack.log",
+      "sha256": "bbb64d6e68daa45b905e17f91b59a3d1c56ea93d807a5675e03a6ff74bc26038"
+    }
+  },
+  "rustPassed": 496,
+  "rustIgnored": 3
+}

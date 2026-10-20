@@ -2757,6 +2757,28 @@ fn canvas_orientation(customization: &serde_json::Map<String, Value>) -> Control
     }
 }
 
+pub(crate) fn is_canonical_landscape_frame_id(frame_id: &str) -> bool {
+    if frame_id.len() > MAXIMUM_RAW_FRAME_ID_BYTES || !frame_id.ends_with("-landscape") {
+        return false;
+    }
+    if let Some(custom) = frame_id
+        .strip_prefix("custom-")
+        .and_then(|v| v.strip_suffix("-landscape"))
+    {
+        let Some((width, height)) = custom.split_once('x') else {
+            return false;
+        };
+        let (Ok(width), Ok(height)) = (width.parse::<u32>(), height.parse::<u32>()) else {
+            return false;
+        };
+        return (240..=1800).contains(&width)
+            && (width..=1800).contains(&height)
+            && frame_id == format!("custom-{width}x{height}-landscape");
+    }
+    device_dimensions(frame_id)
+        .is_some_and(|(device, _, _)| frame_id == format!("{device}-landscape"))
+}
+
 fn device_dimensions(frame_id: &str) -> Option<(String, f64, f64)> {
     let normalized = frame_id.trim().to_ascii_lowercase();
     let base = normalized

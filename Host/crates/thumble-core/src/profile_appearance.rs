@@ -227,6 +227,17 @@ fn state_key(scheme: &str, action: &str) -> Result<(), ProfileAppearanceError> {
         Err(ProfileAppearanceError::InvalidState)
     }
 }
+pub(crate) fn validate_canonical_profile_appearance(
+    profile: &Value,
+) -> Result<(), ProfileAppearanceError> {
+    let bank = ProfileAppearanceBank::from_profile(profile)?;
+    let current = snapshot(&profile["customization"])?;
+    validate_snapshot(
+        &current,
+        bank.as_ref().and_then(|bank| bank.resources.as_ref()),
+    )
+}
+
 fn budget(value: &Value) -> Result<(), ProfileAppearanceError> {
     // Count serde_json's compact UTF-8 representation without serializing image
     // strings or allocating another complete document just to check its bound.
