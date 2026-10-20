@@ -20,7 +20,7 @@ final class StackSafetyRegressionTests: XCTestCase {
     func testPureRuntimeSkinBridgeFitsConstrainedThread() throws {
         try runOnThread(stackSize: 512 * 1024, timeout: 30) {
             let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
-            let archive = try Data(contentsOf: root.appendingPathComponent("Website/skins/packages/solar-sumi-1.0.0-edbecde5b708.pocketpad"))
+            let archive = try Data(contentsOf: root.appendingPathComponent("Host/fixtures/legacy-skin-packages/solar-sumi-1.0.0-edbecde5b708.pocketpad"))
             let fixture = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: root.appendingPathComponent("Host/fixtures/controller-templates/v1/productivityStarter.json"))) as? [String: Any])
             let payload: [String: Any] = ["schemaVersion": 1, "invocationID": UUID().uuidString, "skinCommand": "apply", "packageData": archive.base64EncodedString(), "profile": try XCTUnwrap(fixture["profile"]), "nowMillis": 123]
             let request = try JSONDecoder().decodeUnique(ThumbleSkinBridgeRequest.self, from: JSONSerialization.data(withJSONObject: payload))

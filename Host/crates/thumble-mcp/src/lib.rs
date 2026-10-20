@@ -1,7 +1,6 @@
 mod channel;
 mod controller_design;
 mod rate_limit;
-pub mod relay;
 pub mod server;
 mod skin_preview;
 

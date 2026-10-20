@@ -7,11 +7,9 @@ Dark, product-focused site for Thumble, inspired by myself.md, with a Cloudflare
 - `index.html` / `home.js` — landing page and accessible controller showcase tabs.
 - `styles.css` / `design.css` — existing content layouts and the shared dark visual theme across every page.
 - `script.js` — release availability, Turnstile, and launch-list forms.
-- `docs.html` — comprehensive Thumble documentation for setup, pairing, skins, editor workflows, outputs, CLI, troubleshooting, and safety behavior.
+- `docs.html` — comprehensive Thumble documentation for setup, pairing, editor workflows, outputs, CLI, troubleshooting, and safety behavior.
 - `blog.html` + `blog/` — the Thumble blog index and posts. Posts are static pages that reuse the docs article styles; add a new card to `blog.html` per post.
-- `skins.html` / `skins.js` — searchable, filterable skin directory with package verification, Web Share installation, direct downloads, and detail deep links.
-- `skins/catalog.source.json` — editorial catalog data; `skins/catalog.json`, packages, and previews are generated deployable assets.
-- `skins/CONTRIBUTING.md` — reviewed community submission workflow.
+- `skins.html` — retirement notice for old directory links; no catalog or downloads.
 - `functions/api/subscribe.js` — Cloudflare Pages Function for `POST /api/subscribe`.
 - `functions/api/releases/latest-mac.js` — serves the current macOS release manifest from R2.
 - `functions/api/download-mac.js` — streams the latest/versioned macOS release zip from R2.
@@ -22,7 +20,7 @@ Dark, product-focused site for Thumble, inspired by myself.md, with a Cloudflare
 ## Static design preview
 
 Run `python3 -m http.server 8174 --directory Website` from the repository root.
-The static preview covers the page layouts, tabs, FAQ, and skin directory. Release
+The static preview covers the page layouts, tabs, FAQ, and direct appearance editing. Release
 metadata and signup submission require the Cloudflare Pages runtime and bindings
 described below. The controller tabs support arrow-key navigation and Enter/Space
 activation; reduced-motion preferences disable decorative transitions.
@@ -96,21 +94,9 @@ wrangler pages dev .
 
 Then open the local URL shown by Wrangler. The form endpoint is `/api/subscribe`.
 
-## Build and verify the skin directory
+## Retired skin directory
 
-Build the current `thumble` CLI first, then generate versioned packages, clean previews, hashes, and the deployable catalog:
-
-```bash
-scripts/build-skin-directory.sh /path/to/thumble
-```
-
-Production publishes exact human-approved package bytes for Indigo Pocket, Solar Sumi, Tideglass Field, and Foldline Relay. The builder verifies every approval record and package hash, runs strict package and quality validation, creates native-renderer directory previews, and finishes with the dependency-free directory verifier. Run the verifier directly after any hand edit:
-
-```bash
-python3 scripts/verify-skin-directory.py
-```
-
-Approved package filenames include their semantic version and a SHA-256 prefix, preventing stale negative caches while preserving immutable delivery. `catalog.json` has a short cache and is the only runtime data source used by `skins.js`. Install buttons verify the downloaded byte count and SHA-256 before opening the system Share Sheet or downloading a `.pocketpad` file.
+The public catalog, package downloads, previews, submission workflow, and catalog build scripts are removed. `skins.html` keeps old links useful by pointing to direct appearance editing. Test packages required for legacy profile migration live under `Host/fixtures/legacy-skin-packages` and are not deployed with the website.
 
 ## Export signups
 

@@ -273,7 +273,7 @@ struct ThumbleCLI {
         case "skin", "skins":
             try skin(arguments: rest)
         case "shared-build":
-            try sharedBuild(arguments: rest)
+            throw CLIError.message("Hosted shared builds are retired. Use thumble profile import for a local keypad file.")
         case "binding", "bindings", "shortcut", "shortcuts":
             try binding(arguments: rest)
         case "output", "outputs":
@@ -1832,35 +1832,6 @@ struct ThumbleCLI {
     }
 
     // MARK: - Shareable skins
-
-    private static func sharedBuild(arguments: [String]) throws {
-        guard let command = arguments.first, ["adopt", "status", "cancel"].contains(command) else {
-            throw CLIError.message("Usage: thumble shared-build adopt ARTIFACT [--operation-id UUID] [--record-id UUID] [--server-id SERVER] [--json] | status|cancel OPERATION_UUID [--json]")
-        }
-        let backend = try ThumbleCLIRuntimeBackend()
-        let status = try backend.perform(.status)
-        guard status.owner == .rust, status.ok else {
-            throw CLIError.message("Shared-build adoption requires a running Rust receiver with configuration writes enabled.")
-        }
-        let executable = URL(fileURLWithPath: CommandLine.arguments[0]).standardizedFileURL
-            .deletingLastPathComponent().appendingPathComponent("thumble-host")
-        try ThumbleCLIProfileBackend.validateExecutable(at: executable)
-        let process = Process()
-        process.executableURL = executable
-        process.arguments = ["shared-build"] + arguments
-        process.standardInput = FileHandle.nullDevice
-        process.standardOutput = FileHandle.standardOutput
-        process.standardError = FileHandle.standardError
-        try process.run()
-        let deadline = Date().addingTimeInterval(30)
-        while process.isRunning && Date() < deadline { Thread.sleep(forTimeInterval: 0.01) }
-        if process.isRunning {
-            process.terminate(); process.waitUntilExit()
-            throw CLIError.message("Shared-build request timed out. Retry with the same operation and record IDs to inspect or replay its durable outcome.")
-        }
-        process.waitUntilExit()
-        guard process.terminationStatus == 0 else { throw CLIError.message("Shared-build receiver command failed.") }
-    }
 
     /// A live Rust receiver owns the library as well as profiles. Never write a
     /// legacy defaults domain after that owner has accepted a skin command.
@@ -8502,457 +8473,32 @@ struct ThumbleCLI {
         }
     }
 
-    private struct RelayStatus: Encodable {
-        var linked: Bool
-        var tokenFile: String
-        var relayURL: String
-        var online: Bool?
-        var manifestPublished: Bool?
-    }
-
-    private struct RelayDeviceStatus: Decodable {
-        var online: Bool
-        var manifestPublished: Bool?
-        var deviceName: String?
-    }
-
-    private final class RelayStatusBox: @unchecked Sendable {
-        var online: Bool?
-        var manifestPublished: Bool?
-        var deviceName: String?
-    }
-
-    private struct RelayDoctorCheck: Decodable {
-        var id: String
-        var label: String
-        var status: String
-        var detail: String
-        var fix: String?
-    }
-
-    private struct RelayDoctorReport: Decodable {
-        var ready: Bool
-        var checks: [RelayDoctorCheck]
-    }
-
-    private struct RelayCLIOptions {
-        var url = ProcessInfo.processInfo.environment["THUMBLE_MCP_RELAY_URL"] ?? "wss://thumble-mcp-gateway.fly.dev/tunnel"
-        var tokenFile: String?
-        var deviceName: String?
-        var binary: String?
-        var allowConfigurationWrite = false
-        var allowInput = false
-        var json = false
-    }
-
+    /// Compatibility cleanup only. Hosted relay creation and connections are retired.
     private static func relay(arguments: [String]) throws {
-        guard let command = arguments.first else {
-            throw CLIError.message("Usage: thumble relay connect|link|rotate|status|doctor|install|uninstall|revoke [--url wss://thumble-mcp-gateway.fly.dev/tunnel]")
+        guard arguments == ["uninstall"] else {
+            throw CLIError.message("Hosted AI connections are retired. Use local stdio MCP. To remove an old background relay, run thumble relay uninstall.")
         }
-        var options = RelayCLIOptions()
-        var index = 1
-        while index < arguments.count {
-            switch arguments[index] {
-            case "--url":
-                index += 1
-                guard index < arguments.count else { throw CLIError.message("--url requires a value") }
-                options.url = arguments[index]
-            case "--token-file":
-                index += 1
-                guard index < arguments.count else { throw CLIError.message("--token-file requires a path") }
-                options.tokenFile = arguments[index]
-            case "--device-name":
-                index += 1
-                guard index < arguments.count else { throw CLIError.message("--device-name requires a value") }
-                options.deviceName = arguments[index]
-            case "--binary":
-                index += 1
-                guard index < arguments.count else { throw CLIError.message("--binary requires a path") }
-                options.binary = arguments[index]
-            case "--allow-config-write":
-                options.allowConfigurationWrite = true
-            case "--allow-input":
-                options.allowInput = true
-            case "--json":
-                options.json = true
-            default:
-                throw CLIError.message("Unknown relay option: \(arguments[index])")
-            }
-            index += 1
+        let label = "com.codybontecou.thumble.mcp-relay"
+        let plist = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/LaunchAgents/\(label).plist")
+        let exists = FileManager.default.fileExists(atPath: plist.path)
+        if exists {
+            let values = try plist.resourceValues(forKeys: [.isSymbolicLinkKey])
+            guard values.isSymbolicLink != true,
+                  let metadata = try PropertyListSerialization.propertyList(from: Data(contentsOf: plist), format: nil) as? [String: Any],
+                  metadata["Label"] as? String == label,
+                  (metadata["ProgramArguments"] as? [String])?.contains("--relay") == true
+            else { throw CLIError.message("The old relay LaunchAgent does not match Thumble's expected configuration; it was kept.") }
         }
-
-        switch command {
-        case "connect", "start":
-            var relayArguments = ["--relay", options.url]
-            if let tokenFile = options.tokenFile {
-                relayArguments += ["--relay-token-file", tokenFile]
-            }
-            relayArguments += ["--relay-device-name", options.deviceName ?? defaultRelayDeviceName()]
-            if options.allowConfigurationWrite {
-                relayArguments.append("--allow-config-write")
-            }
-            if options.allowInput {
-                relayArguments.append("--allow-input")
-            }
-            try runThumbleMCP(arguments: relayArguments)
-        case "link", "rotate":
-            var relayArguments = [command == "rotate" ? "--relay-relink" : "--relay-link", options.url]
-            if let tokenFile = options.tokenFile {
-                relayArguments += ["--relay-token-file", tokenFile]
-            }
-            relayArguments += ["--relay-device-name", options.deviceName ?? defaultRelayDeviceName()]
-            if options.allowConfigurationWrite {
-                relayArguments.append("--allow-config-write")
-            }
-            if options.allowInput {
-                relayArguments.append("--allow-input")
-            }
-            try runThumbleMCP(arguments: relayArguments)
-        case "revoke":
-            var relayArguments = ["--relay-revoke", options.url]
-            if let tokenFile = options.tokenFile {
-                relayArguments += ["--relay-token-file", tokenFile]
-            }
-            try runThumbleMCP(arguments: relayArguments)
-        case "status":
-            let tokenFile = options.tokenFile ?? defaultRelayTokenPath()
-            let linked = FileManager.default.fileExists(atPath: tokenFile)
-            let remoteStatus = linked ? remoteRelayStatus(relayURL: options.url, tokenFile: tokenFile) : nil
-            let online = linked ? remoteStatus?.online ?? false : false
-            if options.json {
-                try writeJSON(
-                    RelayStatus(
-                        linked: linked,
-                        tokenFile: tokenFile,
-                        relayURL: options.url,
-                        online: linked ? remoteStatus?.online : false,
-                        manifestPublished: linked ? remoteStatus?.manifestPublished : false
-                    ),
-                    to: nil
-                )
-            } else {
-                print(linked ? "Relay linked (token present)." : "Relay not linked.")
-                print("Token: \(tokenFile)")
-                print("Gateway: \(options.url)")
-                print("Online: \(online ? "yes" : "no")")
-                if let manifestPublished = remoteStatus?.manifestPublished {
-                    print("MCP manifest: \(manifestPublished ? "published" : "not published")")
-                } else {
-                    print("MCP manifest: unknown")
-                }
-            }
-        case "doctor":
-            try relayDoctor(options: options)
-        case "install":
-            try relayInstall(options: options)
-        case "uninstall":
-            try relayUninstall()
-        default:
-            throw CLIError.message("Usage: thumble relay connect|link|rotate|status|doctor|install|uninstall|revoke [--url URL] [--token-file PATH]")
-        }
-    }
-
-    private static func remoteRelayStatus(relayURL: String, tokenFile: String) -> (online: Bool, manifestPublished: Bool?, deviceName: String?)? {
-        guard
-            let tokenData = FileManager.default.contents(atPath: tokenFile),
-            let token = String(data: tokenData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
-            !token.isEmpty,
-            var components = URLComponents(string: relayURL)
-        else { return nil }
-        switch components.scheme {
-        case "wss": components.scheme = "https"
-        case "ws": components.scheme = "http"
-        default: return nil
-        }
-        let basePath = components.path.hasSuffix("/tunnel")
-            ? String(components.path.dropLast("/tunnel".count))
-            : components.path
-        components.path = basePath + "/device/status"
-        components.query = nil
-        guard let url = components.url else { return nil }
-
-        var request = URLRequest(url: url)
-        request.timeoutInterval = 10
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        let result = RelayStatusBox()
-        let semaphore = DispatchSemaphore(value: 0)
-        URLSession.shared.dataTask(with: request) { data, response, _ in
-            defer { semaphore.signal() }
-            guard
-                let response = response as? HTTPURLResponse,
-                response.statusCode == 200,
-                let data,
-                let status = try? JSONDecoder().decode(RelayDeviceStatus.self, from: data)
-            else { return }
-            result.online = status.online
-            result.manifestPublished = status.manifestPublished
-            result.deviceName = status.deviceName
-        }.resume()
-        guard semaphore.wait(timeout: .now() + 11) == .success,
-              let online = result.online
-        else { return nil }
-        return (online, result.manifestPublished, result.deviceName)
-    }
-
-    private static func defaultRelayTokenPath() -> String {
-        if let configured = ProcessInfo.processInfo.environment["THUMBLE_HOST_STATE_DIR"], !configured.isEmpty {
-            return URL(fileURLWithPath: configured).appendingPathComponent("relay-token").path
-        }
-        return FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Application Support/ThumbleHost/relay-token")
-            .path
-    }
-
-    /// Friendly default device name for gateway link pages: the Mac's
-    /// hostname without the .local suffix, so multi-device users can tell
-    /// their machines apart without passing --device-name manually.
-    private static func defaultRelayDeviceName() -> String {
-        let hostName = ProcessInfo.processInfo.hostName
-        let trimmed = hostName.hasSuffix(".local") ? String(hostName.dropLast(".local".count)) : hostName
-        return trimmed.isEmpty ? "Mac" : trimmed
-    }
-
-    private static let relayLaunchAgentLabel = "com.codybontecou.thumble.mcp-relay"
-
-    private static func relayLaunchAgentPlistURL() -> URL {
-        FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/LaunchAgents/\(relayLaunchAgentLabel).plist")
-    }
-
-    /// Merge the Rust-side local doctor report with gateway-side device
-    /// status into one readiness report; non-zero exit when not ready.
-    private static func relayDoctor(options: RelayCLIOptions) throws {
-        var arguments = ["--relay-doctor", options.url, "--json"]
-        if let tokenFile = options.tokenFile {
-            arguments += ["--relay-token-file", tokenFile]
-        }
-        arguments += ["--relay-device-name", options.deviceName ?? defaultRelayDeviceName()]
-        let captured = try runThumbleMCPCaptured(
-            arguments: arguments,
-            explicitBinary: options.binary
-        )
-        guard let data = captured.stdout.data(using: .utf8),
-              let report = try? JSONDecoder().decode(RelayDoctorReport.self, from: data)
-        else {
-            throw CLIError.message("could not read the local relay doctor report: \(captured.stdout)")
-        }
-
-        let tokenFile = options.tokenFile ?? defaultRelayTokenPath()
-        let linked = FileManager.default.fileExists(atPath: tokenFile)
-        let remote = linked ? remoteRelayStatus(relayURL: options.url, tokenFile: tokenFile) : nil
-
-        var checks = report.checks
-        if let remote {
-            checks.append(RelayDoctorCheck(
-                id: "gateway",
-                label: "Gateway device",
-                status: remote.online ? "ok" : "fail",
-                detail: remote.online
-                    ? "device \(remote.deviceName ?? "Mac") is online at the gateway"
-                    : "the device is not online at the gateway",
-                fix: remote.online ? nil : "start the relay with `thumble relay connect`, or install the background service with `thumble relay install`"
-            ))
-            checks.append(RelayDoctorCheck(
-                id: "manifest",
-                label: "MCP manifest",
-                status: (remote.manifestPublished ?? false) ? "ok" : "fail",
-                detail: (remote.manifestPublished ?? false)
-                    ? "published for connector validation"
-                    : "not published yet",
-                fix: (remote.manifestPublished ?? false) ? nil : "the relay publishes it automatically once connected; re-run `thumble relay doctor` after a few seconds"
-            ))
-        } else {
-            checks.append(RelayDoctorCheck(
-                id: "gateway",
-                label: "Gateway device",
-                status: "fail",
-                detail: "could not reach the gateway device status endpoint",
-                fix: "link the relay first (`thumble relay link`), then check the gateway URL and network"
-            ))
-        }
-
-        let ready = checks.allSatisfy { $0.status != "fail" }
-        if options.json {
-            struct EncodableReport: Encodable {
-                struct EncodableCheck: Encodable {
-                    var id: String
-                    var label: String
-                    var status: String
-                    var detail: String
-                    var fix: String?
-                }
-                var ready: Bool
-                var checks: [EncodableCheck]
-            }
-            try writeJSON(
-                EncodableReport(
-                    ready: ready,
-                    checks: checks.map {
-                        EncodableReport.EncodableCheck(
-                            id: $0.id, label: $0.label, status: $0.status, detail: $0.detail, fix: $0.fix
-                        )
-                    }
-                ),
-                to: nil
-            )
-        } else {
-            print("thumble relay doctor")
-            for check in checks {
-                let marker: String
-                switch check.status {
-                case "ok": marker = " ok"
-                case "warn": marker = " !!"
-                case "fail": marker = " XX"
-                default: marker = " --"
-                }
-                print("  [\(marker)] \(check.label): \(check.detail)")
-                if let fix = check.fix {
-                    print("        fix: \(fix)")
-                }
-            }
-            print("overall: \(ready ? "ready" : "not ready")")
-        }
-        if !ready {
-            exit(1)
-        }
-    }
-
-    /// Install (or update) the launch agent that keeps the relay running in
-    /// the background, then start it immediately.
-    private static func relayInstall(options: RelayCLIOptions) throws {
-        let binary = try thumbleMCPExecutablePath(explicit: options.binary)
-        let plistURL = relayLaunchAgentPlistURL()
-        let logsDirectory = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Logs/Thumble")
-        try FileManager.default.createDirectory(
-            at: plistURL.deletingLastPathComponent(),
-            withIntermediateDirectories: true
-        )
-        try FileManager.default.createDirectory(at: logsDirectory, withIntermediateDirectories: true)
-
-        var programArguments = [binary, "--relay", options.url]
-        if let tokenFile = options.tokenFile {
-            programArguments += ["--relay-token-file", tokenFile]
-        }
-        programArguments += ["--relay-device-name", options.deviceName ?? defaultRelayDeviceName()]
-        if options.allowConfigurationWrite {
-            programArguments.append("--allow-config-write")
-        }
-        if options.allowInput {
-            programArguments.append("--allow-input")
-        }
-        let payload: [String: Any] = [
-            "Label": relayLaunchAgentLabel,
-            "ProgramArguments": programArguments,
-            "RunAtLoad": true,
-            "KeepAlive": ["SuccessfulExit": false],
-            "ThrottleInterval": 10,
-            "ProcessType": "Background",
-            "StandardOutPath": logsDirectory.appendingPathComponent("mcp-relay.log").path,
-            "StandardErrorPath": logsDirectory.appendingPathComponent("mcp-relay-error.log").path,
-        ]
-        let data = try PropertyListSerialization.data(fromPropertyList: payload, format: .xml, options: 0)
-        try data.write(to: plistURL)
-        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: plistURL.path)
-
-        let uid = getuid()
-        _ = try? runProcessForStatus("/bin/launchctl", arguments: ["bootout", "gui/\(uid)/\(relayLaunchAgentLabel)"])
-        try runProcess("/bin/launchctl", arguments: ["bootstrap", "gui/\(uid)", plistURL.path])
-        try runProcess("/bin/launchctl", arguments: ["kickstart", "-k", "gui/\(uid)/\(relayLaunchAgentLabel)"])
-        print("Installed and started \(relayLaunchAgentLabel)")
-        print("Logs: \(logsDirectory.path)")
-        print("Status: launchctl print gui/\(uid)/\(relayLaunchAgentLabel)")
-        print("Next: thumble relay doctor")
-    }
-
-    private static func relayUninstall() throws {
-        let plistURL = relayLaunchAgentPlistURL()
-        let uid = getuid()
-        _ = try? runProcessForStatus("/bin/launchctl", arguments: ["bootout", "gui/\(uid)/\(relayLaunchAgentLabel)"])
-        if FileManager.default.fileExists(atPath: plistURL.path) {
-            try FileManager.default.removeItem(at: plistURL)
-        }
-        print("Removed \(relayLaunchAgentLabel)")
-    }
-
-    private static func thumbleMCPExecutablePath(explicit: String?) throws -> String {
-        if let explicit {
-            guard FileManager.default.isExecutableFile(atPath: explicit) else {
-                throw CLIError.message("thumble-mcp is not executable: \(explicit)")
-            }
-            return explicit
-        }
-        let invokedCLI = URL(fileURLWithPath: CommandLine.arguments[0]).standardizedFileURL
-        let sibling = invokedCLI.deletingLastPathComponent().appendingPathComponent("thumble-mcp").path
-        if FileManager.default.isExecutableFile(atPath: sibling) {
-            return sibling
-        }
-        let packaged = "/Applications/Thumble Host.app/Contents/MacOS/thumble-mcp"
-        if FileManager.default.isExecutableFile(atPath: packaged) {
-            return packaged
-        }
-        throw CLIError.message("thumble-mcp was not found next to the CLI or in /Applications/Thumble Host.app; pass --binary PATH")
-    }
-
-    @discardableResult
-    private static func runThumbleMCPCaptured(arguments: [String], explicitBinary: String? = nil) throws -> (exitCode: Int32, stdout: String) {
-        if let explicitBinary {
-            guard FileManager.default.isExecutableFile(atPath: explicitBinary) else {
-                throw CLIError.message("thumble-mcp is not executable: \(explicitBinary)")
-            }
-            return try runProcessCaptured(explicitBinary, arguments: arguments)
-        }
-        let invokedCLI = URL(fileURLWithPath: CommandLine.arguments[0]).standardizedFileURL
-        let sibling = invokedCLI.deletingLastPathComponent().appendingPathComponent("thumble-mcp").path
-        if FileManager.default.isExecutableFile(atPath: sibling) {
-            return try runProcessCaptured(sibling, arguments: arguments)
-        }
-        let packaged = "/Applications/Thumble Host.app/Contents/MacOS/thumble-mcp"
-        if FileManager.default.isExecutableFile(atPath: packaged) {
-            return try runProcessCaptured(packaged, arguments: arguments)
-        }
-        return try runProcessCaptured("/usr/bin/env", arguments: ["thumble-mcp"] + arguments)
-    }
-
-    @discardableResult
-    private static func runProcessCaptured(_ executable: String, arguments: [String]) throws -> (exitCode: Int32, stdout: String) {
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: executable)
-        process.arguments = arguments
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = Pipe()
-        try process.run()
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-        return (process.terminationStatus, String(data: data, encoding: .utf8) ?? "")
-    }
-
-    @discardableResult
-    private static func runProcessForStatus(_ executable: String, arguments: [String]) throws -> Int32 {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: executable)
-        process.arguments = arguments
-        process.standardOutput = Pipe()
-        process.standardError = Pipe()
+        process.executableURL = URL(fileURLWithPath: "/bin/launchctl")
+        process.arguments = ["bootout", "gui/\(getuid())/\(label)"]
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
         try process.run()
         process.waitUntilExit()
-        return process.terminationStatus
-    }
-
-    private static func runThumbleMCP(arguments: [String]) throws {
-        let invokedCLI = URL(fileURLWithPath: CommandLine.arguments[0]).standardizedFileURL
-        let sibling = invokedCLI.deletingLastPathComponent().appendingPathComponent("thumble-mcp").path
-        if FileManager.default.isExecutableFile(atPath: sibling) {
-            try runProcess(sibling, arguments: arguments)
-            return
-        }
-        let packaged = "/Applications/Thumble Host.app/Contents/MacOS/thumble-mcp"
-        if FileManager.default.isExecutableFile(atPath: packaged) {
-            try runProcess(packaged, arguments: arguments)
-            return
-        }
-        try runProcess("/usr/bin/env", arguments: ["thumble-mcp"] + arguments)
+        if exists { try FileManager.default.removeItem(at: plist) }
+        print("Removed the retired Thumble relay LaunchAgent. Local CLI and MCP are unchanged.")
     }
 
     private static func runProcess(_ executable: String, arguments: [String]) throws {
@@ -8968,18 +8514,8 @@ struct ThumbleCLI {
         print("""
         thumble — configure and control Thumble Mac from the command line
 
-        Remote connector relay:
-          thumble relay connect [--allow-config-write] [--token-file PATH]
-          thumble relay link [--url wss://thumble-mcp-gateway.fly.dev/tunnel]
-          thumble relay rotate [--url wss://thumble-mcp-gateway.fly.dev/tunnel]
-          thumble relay status [--json]
-          thumble relay doctor [--json] [--binary PATH]
-          thumble relay install [--allow-config-write] [--binary PATH]
+        Retired service cleanup:
           thumble relay uninstall
-          thumble relay revoke [--url URL] [--token-file PATH]
-
-          Primary linking flow: click Connect for Thumble in ChatGPT, then
-          click Allow on this Mac. The displayed code is only a headless fallback.
 
         Controller design:
           thumble design capabilities
@@ -9049,9 +8585,6 @@ struct ThumbleCLI {
           thumble skin pack DIRECTORY -o skin.pocketpad
           thumble skin unpack skin.pocketpad -o DIRECTORY [--force]
           thumble skin render SOURCE|PACKAGE -o OUTPUT [same options as skin preview]
-          thumble shared-build adopt ARTIFACT [--operation-id UUID] [--record-id UUID] [--server-id SERVER] [--json]
-          thumble shared-build status OPERATION_UUID [--json]
-          thumble shared-build cancel OPERATION_UUID [--json]
 
         Bindings:
           thumble binding list [--profile PROFILE]

@@ -24,20 +24,12 @@ silently synchronized in both directions with host state.
   executor, permission gate, phone effect, intended MCP tool, and implementation
   status. `planned`, `foundation`, and `partial` entries are not claims that the
   capability is currently available.
-- `hosted-builder-capabilities-v1.json` separately records the hosted-only
-  builder connector, its pre-adoption authority boundary, tool contracts,
-  shared CLI-operation dependencies, and share endpoint. Builder tools never
-  receive invented CLI paths; `planned`, `foundation`, and `partial` remain
-  non-availability statuses.
 - `profile-artifact-v1.md` specifies the bounded hashed profile interchange
   format, portability boundary, current-only rejection rules, Rust authority import
   semantics, framing limits, and real-binary verification flow.
 - `generation-spec-v1.md` specifies deterministic typed agent-spec planning,
   safe appearance/semantic-key bounds, generated/profile artifact outputs,
   plan-to-import authority routing, fixtures, and real-binary verification.
-- `builder-session-v1.md` specifies the pure pre-adoption session state machine,
-  revision/replay and persistence invariants, edit/generate/template surface,
-  sanitized projections, deterministic emission, bounds, and fixture gates.
 - `configuration-operation-v1.schema.json` is the allowlisted operation
   contract for revision-safe native and Swift-bridge draft transforms. It currently covers deterministic built-in generation and template installation, profile rename/select/default/duplicate/delete/move/create/reset, safe scalar customization, deterministic `customization.fix`, catalog-only persisted device selection, orientation preference/copy, typed control-bar collections/resets and rendering-effective non-file item appearance patches, complete non-file reusable-style create/rename/apply/detach/delete, revision-safe layer ordering and deterministic layer-group create/rename/duplicate/ungroup/visibility/locking/catalog-canvas nudging/reordering, theme application, deterministic six-kind non-file element creation, complete safe non-file element edits, semantic element/part outputs, semantic bindings, and output modes/resets. `customization.fix` accepts `{kind:"all"}` or one of seven canonical repairs, targets primary/portrait/landscape, respects locks unless `includeLocked` is true, and uses exactly one stored, checked-in frame, or 240...1800 bounded width/height canvas. Canvas overrides affect repair geometry only and never persist a custom frame ID. All/suggested mode uses priority-sorted issues, the first suggestion, at most one auto-arrange per pass, and at most three passes. Issue-code targeting remains intentionally CLI-only. Element add/set cover independent UUID controls, explicit outputs (including joystick directions authored as `{keyboard:{key:"W",modifiers:[]},gamepadButtons:["dpadUp"]}` or `{}` for an unbound direction; never `mappedButton` or numeric key codes), labels/roles, geometry, visibility/locking, hit regions/corners, solid/gradient/tile fills, joystick thumb colors, bounded inline appearance, existing style references, text/SF-symbol icons, haptics, joystick/trigger/trackpad behavior, and safe output parts. Style creation includes the CLI's three material presets, solid colors, strokes, glow, inner shadow, highlight, bevel, opacity, up to eight shadows, pressed fill/scale, SF-symbol or text icons, and bounded haptics. It intentionally excludes
   arbitrary JSON patches, raw style/profile payloads, persisted custom dimensions, asset/image/file payloads or icons, artwork IDs, shell/process arguments, filesystem paths, numeric
@@ -46,9 +38,6 @@ silently synchronized in both directions with host state.
 - `device-frames-v1.json` is the bounded read-only catalog of the 68 exact built-in portrait/landscape frame IDs accepted by `device.set`. Custom dimensions and model aliases are deliberately absent from the write contract.
 - `scripts/verify-mcp-cli-parity.py` checks CLI-ledger integrity and compares it
   with the canonical root/subcommand dispatch surface in `ThumbleCLI.swift`.
-- `scripts/verify-hosted-builder-capabilities.py` checks the hosted-only tool
-  set, gates, connector/share contracts, and references back to shared CLI
-  operations without weakening the CLI ledger's mandatory path rule.
 
 ## Non-negotiable transaction rules
 
@@ -85,73 +74,11 @@ Run the ledger gate with:
 
 ```bash
 python3 scripts/verify-mcp-cli-parity.py
-python3 scripts/verify-hosted-builder-capabilities.py
 ```
 
-## Remote connector deployments
+## Local MCP transport
 
-`docs/mcp/remote-deployment-plan.md` documents the hosted relay for remote
-MCP connectors (ChatGPT): an OAuth 2.1-authenticated `thumble-gateway`
-routing Streamable HTTP sessions to the user's own `thumble-mcp --relay`
-over an outbound WebSocket tunnel. The gateway is a router, never an
-authority: this directory's transaction rules, the Rust host's ownership of
-configuration state, and every sanitization contract above continue to apply.
-
-`docs/mcp/hosted-builder-plan.md` is the planning document for the deferred
-tunnel-free **builder connector**: hosted sessions that run `thumble-core`
-server-side and emit importable profile artifacts — pre-adoption state only,
-with no cloud authority over any phone. Phases 0–3, the Phase 4 local
-gateway integration, Phase 5 local iPhone pickup/practice/paired-adoption,
-and Phase 6 local desktop adoption are implemented: the separate capability
-contract, portable profile artifact
-flow, deterministic Rust generation-spec plan/import flow, pure replay-safe
-builder session/template/artifact library, authenticated loopback gateway
-runtime, token-gated share endpoint, defensive iPhone quarantine, practice-only
-preview, explicit append-as-copies transfer into the paired Mac authority, and
-the Mac app's "Import Shared Keypad…" entry (share link or file) through the
-same authority import as `thumble profile import`. Cloud skins stay out of v1
-and the alpha (decision recorded in the plan). The hosted capability
-contracts remain `partial` and unavailable until production, ChatGPT, and
-physical-device acceptance are complete. See
-`docs/mcp/phase4-local-acceptance.md` and
-`docs/mcp/phase5-adoption-local-acceptance.md` for local gates and pending
-receipts.
-
-The relay authority and sanitization contracts remain unchanged for remote
-sessions, which exercise the exact same MCP tool surface
-through the same local adapter. Per-tool remote scopes (`thumble.read`,
-`thumble.draft`, `thumble.config`) are an additional outer gate enforced
-before forwarding; the local `--allow-input` / `--allow-config-write`
-fail-closed flags remain the inner gate, and `pairing_code`, `press_control`,
-and `release_all` are never remotely reachable. Onboarding is one managed
-command (`thumble relay connect`): clicking **Connect** in ChatGPT pushes a
-native approval prompt to the Mac, and clicking **Allow** completes OAuth
-without entering a code. Native push is enabled only for verified ChatGPT
-callback hosts, then limited to relay connections from the same
-gateway-observed network source as the authorization page and one active
-prompt per exact connection; the dialog defaults to Deny. OAuth completion
-waits for the relay's durable-token acknowledgment, and rotation closes the
-previous authenticated control socket. The one-time six-digit code remains a clipboard
-fallback for headless/SSH use. Re-authorization through an already-running
-relay uses the same approval path without rotating its device token;
-`thumble relay rotate` remains the explicit credential-rotation command,
-`thumble relay doctor` reports merged local + gateway readiness with fixes,
-and `thumble relay install` keeps the relay alive as a background launch
-agent. The click-to-connect gateway and release relay were rolled out on
-2026-08-27. Connect → Mac Allow → automatic OAuth return completed in
-production; v16 isolates independent OAuth token families, and the release
-relay independently detects silent half-open control sockets. If ChatGPT shows
-the app as connected but exposes no tools after a server/action change, use
-**Refresh actions** on the Thumble developer-mode app before reconnecting—the
-OAuth link can be active while OpenAI's cached action catalog is still empty.
-The hosted plugin now exposes all 17 remote actions and has completed a real
-`host_status` call; a fresh visible ChatGPT conversation remains the final
-human UI receipt. The production Streamable HTTP endpoint is
-`https://thumble-mcp-gateway.fly.dev/mcp`; refresh tokens are issued only with
-`offline_access`. Production acceptance with the OpenAI-hosted Codex runtime
-bundled in ChatGPT.app is recorded in
-`docs/mcp/openai-client-acceptance.md`.
-
+The MCP adapter uses local stdio and the user's private host control socket. Hosted OAuth endpoints, cloud builder sessions, and remote relays are retired. Local controller authoring, preview, generation, profile interchange, and revision-safe host transactions remain supported.
 
 Controller authoring also exposes `inspect_controller_design` and
 `critique_controller_design`: inspect exact CSS aliases and semantic tags, then preserve

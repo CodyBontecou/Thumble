@@ -3,247 +3,26 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Thumble Skins — Browse and install controller themes</title>
-  <meta name="description" content="Browse trusted Thumble skins, preview controller themes, and install appearance-only .pocketpad packages on iPhone or Mac.">
+  <title>Design your keypad — Thumble</title>
+  <meta name="description" content="Customize your Thumble keypad directly with appearance editing, design tools, and haptics.">
   <meta name="theme-color" content="#080909">
-  <meta property="og:title" content="Thumble Skin Directory">
-  <meta property="og:description" content="Find a new look for your iPhone keypad without changing its controls or bindings.">
-  <meta property="og:type" content="website">
-  <meta property="og:image" content="/skins/previews/indigo-pocket-1.0.0.png">
+  <meta name="robots" content="noindex">
   <link rel="icon" href="/assets/favicon.png" type="image/png">
-  <link rel="apple-touch-icon" href="/assets/app-icon.png">
   <link rel="stylesheet" href="/styles.css?v=c61718e97179">
   <link rel="stylesheet" href="/design.css?v=20261020">
 </head>
-<body class="skins-page">
+<body>
   <header class="site-header">
-    <a class="brand" href="/" aria-label="Thumble home">
-      <img src="/assets/app-icon.png" width="30" height="30" alt="">
-      <span>Thumble</span>
-    </a>
-    <nav aria-label="Primary navigation">
-      <a href="/">Home</a>
-      <a href="/skins.html" aria-current="page">Skins</a>
-      <a href="/docs.html">Docs</a>
-      <a href="/blog.html">Blog</a>
-      <a class="nav-cta" href="/#download">Download</a>
-    </nav>
+    <a class="brand" href="/" aria-label="Thumble home"><img src="/assets/app-icon.png" width="30" height="30" alt=""><span>Thumble</span></a>
+    <nav aria-label="Primary navigation"><a href="/">Home</a><a href="/docs.html">Docs</a><a href="/blog.html">Blog</a></nav>
   </header>
-
-  <main>
-    <section class="skin-hero section-shell">
-      <div class="skin-hero-copy">
-        <p class="eyebrow">community skin directory</p>
-        <h1>make the controls yours.</h1>
-        <p class="lede">Browse appearance-only themes for Thumble. A skin can change materials, color, icons, and pressed states—but never your layout, keyboard shortcuts, controller bindings, or accessibility.</p>
-        <div class="hero-actions">
-          <a class="pixel-button" href="#browse">browse skins</a>
-          <a class="pixel-button pixel-button-secondary" href="#publish">publish yours</a>
-        </div>
-        <div class="skin-hero-stats" aria-label="Directory summary">
-          <div><strong data-skin-count>4</strong><span>skins</span></div>
-          <div><strong>reviewed</strong><span>packages</span></div>
-          <div><strong>zero</strong><span>bindings imported</span></div>
-        </div>
-      </div>
-
-      <div class="skin-hero-stack" aria-label="Featured skin previews">
-        <figure class="skin-hero-card skin-hero-card-back">
-          <img src="/skins/previews/indigo-pocket-1.0.0-light.png" alt="Indigo Pocket light appearance preview" width="1748" height="804">
-          <figcaption><span>light</span> Indigo Pocket</figcaption>
-        </figure>
-        <figure class="skin-hero-card skin-hero-card-front">
-          <img src="/skins/previews/indigo-pocket-1.0.0.png" alt="Indigo Pocket dark appearance preview" width="1748" height="804">
-          <figcaption><span>dark</span> Indigo Pocket</figcaption>
-        </figure>
-      </div>
-    </section>
-
-    <section class="skin-safety-strip section-shell" aria-label="Skin package guarantees">
-      <div><span>format</span><strong>.pocketpad</strong></div>
-      <div><span>contains</span><strong>visuals only</strong></div>
-      <div><span>install</span><strong>review first</strong></div>
-      <div><span>keeps</span><strong>your bindings</strong></div>
-    </section>
-
-    <section id="browse" class="skin-browser section-shell">
-      <header class="skin-browser-heading">
-        <div>
-          <p class="eyebrow">browse</p>
-          <h2>find your next control surface.</h2>
-        </div>
-        <p>Every package listed here passes the same validation used by Thumble before installation. Preview it, inspect the creator and license, then open the Share Sheet or download the file.</p>
-      </header>
-
-      <div class="skin-toolbar" aria-label="Filter skin directory">
-        <label class="skin-search-field" for="skin-search">
-          <span>search</span>
-          <input id="skin-search" type="search" placeholder="name, creator, tag…" autocomplete="off" spellcheck="false">
-        </label>
-        <fieldset class="skin-mode-filter">
-          <legend>appearance</legend>
-          <button type="button" data-mode="all" aria-pressed="true">all</button>
-          <button type="button" data-mode="dark" aria-pressed="false">dark</button>
-          <button type="button" data-mode="light" aria-pressed="false">light</button>
-        </fieldset>
-        <label class="skin-sort-field" for="skin-sort">
-          <span>sort</span>
-          <select id="skin-sort">
-            <option value="featured">featured</option>
-            <option value="newest">newest</option>
-            <option value="name">name</option>
-          </select>
-        </label>
-      </div>
-
-      <div class="skin-results-line">
-        <p id="skin-results-status" role="status" aria-live="polite">Loading directory…</p>
-        <span>safe, portable, reversible</span>
-      </div>
-
-      <div id="skin-directory" class="skin-grid" aria-busy="true"></div>
-
-      <div id="skin-empty" class="skin-empty" hidden>
-        <span>0 matches</span>
-        <h3>nothing in that colorway yet.</h3>
-        <p>Clear the search or publish the skin you were hoping to find.</p>
-        <button class="pixel-button pixel-button-secondary" type="button" data-clear-filters>clear filters</button>
-      </div>
-
-      <noscript>
-        <div class="skin-noscript">
-          <h3>JavaScript is off</h3>
-          <p>You can still download the current packages directly:</p>
-          <ul>
-            <li><a href="/skins/packages/indigo-pocket-1.0.0-72fdbb32d789.pocketpad" download>Indigo Pocket</a></li>
-            <li><a href="/skins/packages/solar-sumi-1.0.0-edbecde5b708.pocketpad" download>Solar Sumi</a></li>
-            <li><a href="/skins/packages/tideglass-field-1.0.0-77927e956d14.pocketpad" download>Tideglass Field</a></li>
-            <li><a href="/skins/packages/foldline-relay-1.0.0-d04c121e9b0a.pocketpad" download>Foldline Relay</a></li>
-          </ul>
-        </div>
-      </noscript>
-    </section>
-
-    <section class="skin-trust section-shell">
-      <div class="section-heading">
-        <p class="eyebrow">what a skin can do</p>
-        <h2>new paint. same controls.</h2>
-      </div>
-      <div class="skin-trust-grid">
-        <article>
-          <span>can change</span>
-          <h3>color + material</h3>
-          <p>Backgrounds, gradients, shape, corner treatments, shadows, visual materials, and light/dark variants.</p>
-        </article>
-        <article>
-          <span>can change</span>
-          <h3>icons + feedback</h3>
-          <p>Visual icons, control-state styling, labels, and safe haptic presentation assigned through semantic roles.</p>
-        </article>
-        <article>
-          <span>cannot change</span>
-          <h3>what a tap does</h3>
-          <p>Keyboard shortcuts, pointer actions, controller outputs, launch targets, and executable bindings stay local.</p>
-        </article>
-        <article>
-          <span>cannot replace</span>
-          <h3>native interaction</h3>
-          <p>Controls remain native and accessible. Artwork decorates them without taking over hit testing or VoiceOver.</p>
-        </article>
-      </div>
-    </section>
-
-    <section id="publish" class="skin-publish section-shell">
-      <div>
-        <p class="eyebrow">for creators</p>
-        <h2>put your skin in the directory.</h2>
-      </div>
-      <div class="skin-publish-copy">
-        <p>Scaffold editable JSON and SVG against a canonical artboard, compile it, inspect every native state, then submit the exact package for critique and human approval. The directory checks identity, hashes, compatibility, archive limits, originality, visual quality, and appearance-only boundaries before anything ships.</p>
-        <pre><code>thumble skin scaffold "My Skin" --identifier com.creator.my-skin -o ./my-skin
-thumble skin compile ./my-skin -o ./my-skin/build/MySkin.pocketpad --clean --strict
-thumble skin quality ./my-skin --strict
-thumble skin preview ./my-skin --all-variants --all-states --contact-sheet -o ./my-skin/reviews/contact-sheet.png</code></pre>
-        <div class="hero-actions">
-          <a class="pixel-button" href="https://github.com/CodyBontecou/Thumble/issues/new?title=Skin%20submission%3A%20" rel="noreferrer">submit a skin</a>
-          <a class="pixel-button pixel-button-secondary" href="/docs.html#skins">read creator guide</a>
-        </div>
-      </div>
+  <main class="section-shell">
+    <section class="docs-hero">
+      <p class="eyebrow">Keypad design</p>
+      <h1>Make your keypad yours.</h1>
+      <p class="lede">The skin directory and package downloads have been retired. Use Thumble’s appearance editor to change colors, icons, artwork, and effects, and tune your controls with haptics and on-phone editing.</p>
+      <p><a class="text-link" href="/docs.html#keypad-editor">Open the editor guide <span aria-hidden="true">→</span></a></p>
     </section>
   </main>
-
-  <dialog id="skin-detail" class="skin-detail-dialog" aria-labelledby="skin-detail-title">
-    <div class="skin-detail-shell">
-      <form method="dialog" class="skin-detail-close-form">
-        <button type="submit" class="skin-detail-close" aria-label="Close skin details">close ×</button>
-      </form>
-      <div class="skin-detail-preview-wrap">
-        <img data-detail-preview src="" alt="" width="1748" height="804">
-        <span data-detail-featured>featured</span>
-      </div>
-      <div class="skin-detail-content">
-        <div class="skin-detail-heading">
-          <div>
-            <p class="eyebrow" data-detail-kicker>skin</p>
-            <h2 id="skin-detail-title" data-detail-name></h2>
-            <p class="skin-detail-author">by <a data-detail-author href="#"></a></p>
-          </div>
-          <div class="skin-detail-palette" data-detail-palette aria-label="Color palette"></div>
-        </div>
-        <p class="skin-detail-description" data-detail-description></p>
-        <div class="skin-detail-tags" data-detail-tags></div>
-        <dl class="skin-detail-facts">
-          <div><dt>version</dt><dd data-detail-version></dd></div>
-          <div><dt>license</dt><dd data-detail-license></dd></div>
-          <div><dt>package</dt><dd data-detail-size></dd></div>
-          <div><dt>sha256</dt><dd><code data-detail-sha></code></dd></div>
-        </dl>
-        <div class="skin-detail-actions">
-          <button class="pixel-button" type="button" data-detail-install>install skin</button>
-          <a class="pixel-button pixel-button-secondary" data-detail-download href="" download>download file</a>
-        </div>
-        <ol class="skin-install-steps">
-          <li><strong>On iPhone:</strong> tap Install Skin, then choose Thumble in the Share Sheet. If the file downloads instead, open it from Downloads.</li>
-          <li><strong>On Mac:</strong> download the package, open the Skins library, then choose Import Skin and select the file.</li>
-          <li>Review the preview and validation report in Thumble before choosing Install or Install &amp; Apply.</li>
-        </ol>
-      </div>
-    </div>
-  </dialog>
-
-  <template id="skin-card-template">
-    <article class="skin-card">
-      <button class="skin-card-preview" type="button" data-open-detail>
-        <img src="" alt="" width="1748" height="804" loading="lazy">
-        <span class="skin-card-number"></span>
-        <span class="skin-card-featured">featured</span>
-      </button>
-      <div class="skin-card-body">
-        <div class="skin-card-title-row">
-          <div>
-            <p class="skin-card-author"></p>
-            <h3></h3>
-          </div>
-          <div class="skin-card-palette" aria-label="Color palette"></div>
-        </div>
-        <p class="skin-card-summary"></p>
-        <div class="skin-card-tags"></div>
-        <footer>
-          <button class="skin-text-button" type="button" data-open-detail>details</button>
-          <button class="pixel-button" type="button" data-install>install</button>
-        </footer>
-      </div>
-    </article>
-  </template>
-
-  <div id="skin-toast" class="skin-toast" role="status" aria-live="polite" hidden></div>
-
-  <footer class="site-footer section-shell">
-    <span>© <span id="year">2026</span> Thumble</span>
-    <span class="footer-links"><a href="/">home</a><a href="/blog.html">blog</a><a href="/docs.html">docs</a><a href="/privacy.html">privacy</a></span>
-  </footer>
-
-  <script src="/script.js" defer></script>
-  <script src="/skins.js" defer></script>
 </body>
 </html>

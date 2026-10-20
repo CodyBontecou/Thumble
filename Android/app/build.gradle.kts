@@ -20,9 +20,9 @@ android {
     sourceSets.getByName("test").java.srcDir("../testSupport")
     sourceSets.getByName("androidTest").java.srcDir("../testSupport")
     sourceSets.getByName("test").resources.srcDir("../../Host/fixtures")
-    sourceSets.getByName("test").resources.srcDir("../../Website/skins/packages")
+    sourceSets.getByName("test").resources.srcDir("../../Host/fixtures/legacy-skin-packages")
     sourceSets.getByName("androidTest").assets.srcDir("../../Host/fixtures")
-    sourceSets.getByName("androidTest").assets.srcDir("../../Website/skins/packages")
+    sourceSets.getByName("androidTest").assets.srcDir("../../Host/fixtures/legacy-skin-packages")
 }
 dependencies {
     implementation(platform("androidx.compose:compose-bom:2024.12.01"))

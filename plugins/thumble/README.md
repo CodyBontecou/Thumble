@@ -57,10 +57,7 @@ Read/inspect tools work without opt-in. See `docs/rust-host.md` for the full mod
 - **MCP Apps UI** (controller preview/editor surfaces) is experimental in Codex desktop;
   enable with `[features] enable_mcp_apps = true` in `~/.codex/config.toml`, then fully
   restart. Tools remain fully usable as structured output without it.
-- **ChatGPT chat-side connectors** require a remote MCP endpoint. Run
-  `thumble-mcp --relay wss://thumble-mcp-gateway.fly.dev/tunnel` and register the
-  gateway URL in ChatGPT developer mode — see `docs/rust-host.md` ("Remote MCP
-  connector relay").
+- Hosted MCP endpoints and remote relays are retired. This plugin uses the local stdio adapter.
 - **Keeping the bundled skill in sync**: `skills/thumble-keypad-generator/SKILL.md` is a
   copy of the repository root `SKILL.md`. Refresh the copy whenever the root skill
   changes before publishing or shipping a release.

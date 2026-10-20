@@ -1,8 +1,7 @@
 # Generation spec v1
 
 Generation spec v1 is the typed, deterministic JSON contract behind
-`thumble generate --spec`, `install-spec`, and the planned hosted-builder
-`generate_from_spec` tool. The canonical implementation is
+`thumble generate --spec` and `install-spec`. The canonical implementation is
 `Host/crates/thumble-core/src/generation_spec.rs`.
 
 ## Input and revisions
@@ -87,9 +86,7 @@ one invocation replays against its original base revision; changing spec or
 options under that invocation conflicts.
 
 `generation.install-spec` is marked `host-cli-only` in the CLI-to-MCP ledger.
-The separate hosted-builder capability is `partial`: the cloud builder endpoint
-executes it locally, but production deployment and visible ChatGPT acceptance
-remain pending.
+Hosted generation endpoints are retired; the local deterministic generation path remains.
 
 ## Fixtures and verification
 

@@ -404,7 +404,7 @@ final class ThumbleSkinResolverTests: XCTestCase {
         synthetic.skin = model.normalized
         synthetic.manifest.compatibility = ThumbleSkinCompatibility(requiredFeatures: [.actionSetLayers])
         var packages = [("synthetic", synthetic)]
-        let sources = root.appendingPathComponent("Website/skins/packages")
+        let sources = root.appendingPathComponent("Host/fixtures/legacy-skin-packages")
         for name in ["solar-sumi-1.0.0-edbecde5b708.pocketpad", "foldline-relay-1.0.0-d04c121e9b0a.pocketpad", "indigo-pocket-1.0.0-72fdbb32d789.pocketpad", "tideglass-field-1.0.0-77927e956d14.pocketpad"] {
             packages.append((name, try ThumbleSkinPackageCodec.read(from: sources.appendingPathComponent(name))))
         }

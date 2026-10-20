@@ -1487,6 +1487,16 @@
           ],
           "status": "planned",
           "mcpTool": "legacy_mac_app_action"
+        },
+        {
+          "id": "app.editor-view",
+          "cli": [
+            "app editor-view clean",
+            "app editor-view edit",
+            "app editor-view status"
+          ],
+          "status": "host-cli-only",
+          "mcpTool": "legacy_mac_app_action"
         }
       ]
     },

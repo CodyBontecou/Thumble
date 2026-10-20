@@ -868,7 +868,8 @@ print(json.dumps(o))
         let bridge = SkinBridge::new(ConfigurationBridge::at_path(helper.into()).unwrap()).unwrap();
         let repository = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
         let archive = fs::read(
-            repository.join("Website/skins/packages/solar-sumi-1.0.0-edbecde5b708.pocketpad"),
+            repository
+                .join("Host/fixtures/legacy-skin-packages/solar-sumi-1.0.0-edbecde5b708.pocketpad"),
         )
         .unwrap();
         let package = bridge.inspect(archive.clone()).unwrap();

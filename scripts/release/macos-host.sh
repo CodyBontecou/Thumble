@@ -142,9 +142,6 @@ for executable in thumble-host thumble-mcp thumble-cli-bridge thumble-bridge thu
   lipo "$MACOS_DIR/$executable" -verify_arch arm64 x86_64
 done
 chmod 755 "$MACOS_DIR/thumble-host" "$MACOS_DIR/thumble-mcp" "$MACOS_DIR/thumble-cli-bridge" "$MACOS_DIR/thumble-bridge" "$MACOS_DIR/thumble"
-cp "$ROOT_DIR/scripts/install-relay-launch-agent.sh" "$RESOURCES_DIR/install-relay-launch-agent.sh"
-chmod 755 "$RESOURCES_DIR/install-relay-launch-agent.sh"
-bash -n "$RESOURCES_DIR/install-relay-launch-agent.sh"
 
 if [[ -n "$SIGNING_IDENTITY" ]]; then
   # Embed before sealing; only the main receiver claims managed HID privileges.

@@ -116,7 +116,6 @@ Run:
 
 ```bash
 python3 scripts/verify-mcp-cli-parity.py
-python3 scripts/verify-hosted-builder-capabilities.py
 ./scripts/verify-rust-host.sh
 ./scripts/verify-profile-artifact-flow.sh /path/to/directory-containing-thumble-and-thumble-cli-bridge
 ./scripts/verify-stack-safety.sh
@@ -124,6 +123,4 @@ python3 scripts/verify-hosted-builder-capabilities.py
 
 The CLI-to-MCP ledger marks profile export/import `host-cli-only`: the
 Rust-authoritative CLI operations are shipped, while their intended general MCP
-tools have not shipped. Hosted builder artifact emission is a separate
-`partial` surface in `hosted-builder-capabilities-v1.json`: implemented and
-locally verified, but not production-available.
+tools have not shipped. Hosted builder artifact emission is retired.

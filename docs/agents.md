@@ -63,7 +63,7 @@ The repository also ships an installable ChatGPT/Codex plugin at `plugins/thumbl
 1. Restart the ChatGPT desktop app with this repository checked out (or run `codex plugin marketplace add /absolute/path/to/Thumble`).
 2. Open **Plugins** in the sidebar, choose the **Thumble (repo marketplace)** source, and install **Thumble**.
 
-The bundled MCP launcher finds the adapter via `$THUMBLE_MCP_BINARY`, the Thumble Host app bundle, or `PATH`. Input and configuration writes stay disabled unless explicitly enabled. See [`plugins/thumble/README.md`](../plugins/thumble/README.md) and [`docs/rust-host.md`](rust-host.md) for details, security defaults, and the remote relay option for ChatGPT chat-side connectors.
+The bundled MCP launcher finds the adapter via `$THUMBLE_MCP_BINARY`, the Thumble Host app bundle, or `PATH`. Input and configuration writes stay disabled unless explicitly enabled. See [`plugins/thumble/README.md`](../plugins/thumble/README.md) and [`docs/rust-host.md`](rust-host.md) for details, security defaults,.
 
 ## Locate or build the CLI
 

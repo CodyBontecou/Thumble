@@ -19,7 +19,7 @@
   <a class="skip-link" href="#top">Skip to content</a>
   <header class="site-header">
     <a class="brand" href="/" aria-label="Thumble home"><img src="/assets/app-icon.png" width="30" height="30" alt=""><span>thumble<span class="brand-period">.</span></span></a>
-    <nav aria-label="Primary navigation"><a href="#details">Overview</a><a href="/skins.html">Skins</a><a href="/docs.html">Docs</a><a href="/blog.html">Changelog</a><a class="nav-cta" href="#download">Get Thumble <span aria-hidden="true">↗</span></a></nav>
+    <nav aria-label="Primary navigation"><a href="#details">Overview</a><a href="/docs.html">Docs</a><a href="/blog.html">Changelog</a><a class="nav-cta" href="#download">Get Thumble <span aria-hidden="true">↗</span></a></nav>
   </header>
   <main id="top">
     <section class="home-hero section-shell" aria-labelledby="hero-title">
@@ -60,16 +60,8 @@
       <div class="editor-copy"><p class="eyebrow">Big canvas. Small screen.</p><h2>Build on Mac. <br>Play on iPhone.</h2><p>Arrange your controls in the Mac editor, then take them for a spin on your phone. Separate portrait and landscape layouts make every orientation feel at home.</p><ul class="quiet-checklist"><li>Layouts, layers, and groups</li><li>On-phone editing and haptic feedback</li><li>Practice Mode to try before you connect</li></ul><a class="text-link" href="/docs.html#keypad-editor">Take a look around the editor <span aria-hidden="true">↗</span></a></div>
       <figure class="editor-visual"><div class="window-bar"><span aria-hidden="true">● ● ●</span><span>Thumble · Keypad editor</span><span aria-hidden="true">↗</span></div><a href="/assets/screenshots/keypad-editor.png" target="_blank" rel="noopener" aria-label="Open full-size Mac editor screenshot"><img src="/assets/screenshots/keypad-editor.png" width="3200" height="2000" alt="Thumble Mac editor showing the profile list, controller canvas, and control inspector" loading="lazy"></a><figcaption>The actual Mac editor. Every detail, in your hands.</figcaption></figure>
     </section>
-    <section class="home-section section-shell skin-section">
-      <div class="section-heading-row"><div><p class="eyebrow">Same controls. Different character.</p><h2>Find your feel.</h2></div><div><p>A quiet instrument. A warm arcade deck. <br>A skin for your kind of setup.</p><a class="text-link" href="/skins.html">Explore the skin directory <span aria-hidden="true">↗</span></a></div></div>
-      <div class="home-skin-grid">
-        <a class="home-skin" href="/skins.html?skin=indigo-pocket"><div><img src="/skins/previews/indigo-pocket-1.0.0.png" width="1748" height="804" alt="Indigo Pocket skin in deep violet and warm ivory" loading="lazy"></div><span>Indigo Pocket <span aria-hidden="true">↗</span></span><small>Quietly precise.</small></a>
-        <a class="home-skin" href="/skins.html?skin=solar-sumi"><div><img src="/skins/previews/solar-sumi-1.0.0.png" width="1748" height="804" alt="Solar Sumi skin with warm paper and vermilion controls" loading="lazy"></div><span>Solar Sumi <span aria-hidden="true">↗</span></span><small>A little arcade warmth.</small></a>
-      </div>
-      <p class="skin-footnote">Skins change the look. Your layout and bindings stay yours.</p>
-    </section>
     <section class="home-section section-shell agent-section">
-      <div><p class="eyebrow">For the way you build</p><h2>A little help<br>from your agent.</h2><p>Describe your ideal controller to ChatGPT, Claude, or a terminal agent. Draft, preview, and refine it with Thumble’s MCP and CLI tools.</p><a class="text-link" href="/docs.html#agents">Build with an assistant <span aria-hidden="true">↗</span></a></div>
+      <div><p class="eyebrow">For the way you build</p><h2>A little help<br>from your agent.</h2><p>Use a local agent with Thumble’s CLI or stdio MCP tools to draft, preview, and refine your controller.</p><a class="text-link" href="/docs.html#agents">Build with an assistant <span aria-hidden="true">↗</span></a></div>
       <div class="terminal-card"><div class="terminal-heading"><span class="status-dot"></span> thumble <span>CLI + MCP</span></div><p class="terminal-comment"># A starting point for your next session</p><pre><code><span>$</span> thumble template list
 <span>$</span> thumble profile list --ids
 <span>$</span> thumble profile export --all \
@@ -90,7 +82,7 @@
     <section class="home-section section-shell home-faq"><p class="eyebrow">A few things to know</p><h2>Before you jump in.</h2><div class="faq-list">
       <details><summary>What do I need to use Thumble?</summary><p>An iPhone running iOS 17 or later and the Mac helper. Pair the two devices, allow Mac Accessibility access, and keep the app you want to control in focus. See the <a href="/docs.html#getting-started">setup guide</a>.</p></details>
       <details><summary>Can I use it with any game?</summary><p>Keyboard and pointer layouts use your own bindings. Gamepad output requires an authorized signed Mac receiver, and compatibility is still being validated. The game layouts above are app previews, not a guarantee of game support. See the <a href="/docs.html#outputs">output guide</a>.</p></details>
-      <details><summary>Can I make my own layouts and skins?</summary><p>Yes. Build layouts in the Mac editor or with the CLI and MCP tools. Skins change appearance without replacing bindings. Start with the <a href="/docs.html#keypad-editor">editor guide</a> or browse the <a href="/skins.html">skin directory</a>.</p></details>
+      <details><summary>Can I design my own keypad?</summary><p>Yes. Arrange controls, edit colors and effects, add artwork, and tune haptics in the Mac editor. Use the CLI and local MCP tools to script your designs. Start with the <a href="/docs.html#keypad-editor">editor guide</a>.</p></details>
       <details><summary>Where can I follow development?</summary><p>Read the <a href="/blog.html">development journal</a> for feature updates and join the launch list below for beta invitations and release news.</p></details>
     </div></section>
     <section class="home-section section-shell home-waitlist" id="waitlist"><div><p class="eyebrow">Stay a little closer</p><h2>Good things<br>at your fingertips.</h2><p>New builds, beta invitations, and the occasional update. <br>Only when there’s something to share.</p></div>

@@ -30,8 +30,8 @@ evidence=root/'Android/app/build/evidence/mac-skin-sync'/time.strftime('%Y%m%d-%
 evidence.mkdir(parents=True,exist_ok=False)
 base=[a.adb,'-s',a.serial]
 assert not a.serial.startswith('emulator-'),'Physical Android phone required'
-first=root/'Website/skins/packages/solar-sumi-1.0.0-edbecde5b708.pocketpad'
-second=root/'Website/skins/packages/foldline-relay-1.0.0-d04c121e9b0a.pocketpad'
+first=root/'Host/fixtures/legacy-skin-packages/solar-sumi-1.0.0-edbecde5b708.pocketpad'
+second=root/'Host/fixtures/legacy-skin-packages/foldline-relay-1.0.0-d04c121e9b0a.pocketpad'
 def reference(path):
     with zipfile.ZipFile(path) as z:v=json.loads(z.read('manifest.json'))
     return v['identifier']+'@'+v['version']
