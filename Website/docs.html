@@ -24,7 +24,6 @@
     <nav aria-label="Primary navigation">
       <a href="/">Home</a>
       <a href="/#screens">Screens</a>
-      <a href="/skins.html">Skins</a>
       <a href="/docs.html">Docs</a>
       <a href="/blog.html">Blog</a>
       <a class="nav-cta" href="/#waitlist">Waitlist</a>
@@ -68,7 +67,7 @@
         <a href="#game-layouts">Game layouts</a>
         <a href="#wow">World of Warcraft</a>
         <a href="#receivers">Windows and Linux</a>
-        <a href="#skins">Skins</a>
+        <a href="#appearance">Appearance</a>
         <a href="#outputs">Outputs</a>
         <a href="#cli">CLI</a>
         <a href="#agents">AI agents</a>
@@ -237,7 +236,7 @@
 thumble profile duplicate "WoW Mage Frost" "WoW Mage Fire"
 thumble gamepad doctor
 thumble gamepad status --json</code></pre>
-          <p>Enable the game’s native Gamepad interface and assign abilities in WoW. Thumble sends physical press/release state; WoW owns ability assignments, targeting, and action-bar pages. Layered skins can change visible pictures for Base, LT, RT, and LT+RT without changing bindings. There is no automatic class/spec detection or live spell synchronization.</p>
+          <p>Enable the game’s native Gamepad interface and assign abilities in WoW. Thumble sends physical press/release state; WoW owns ability assignments, targeting, and action-bar pages. There is no automatic class/spec detection or live spell synchronization.</p>
           <div class="doc-callout"><strong>Controller availability</strong><p>Virtual gamepad output on Mac needs an Apple-authorized signed receiver. Signing and live WoW recognition remain acceptance gates; automated template tests do not establish game compatibility. See the <a href="https://github.com/CodyBontecou/Thumble/blob/main/docs/virtual-controller-support.md">controller status and verification guide</a>.</p></div>
           <h3>Thumble Link: import your keyboard bindings</h3>
           <p>The experimental addon targets Forever interface 16001 and Blizzard’s default action bars. Install Thumble Link, type <code>/thumble</code> outside combat, select bars, and generate an export. In the matching Mac app, open <strong>Thumble Link…</strong>, paste the code, choose <strong>Review Import</strong>, then <strong>Create Setup</strong>.</p>
@@ -257,42 +256,12 @@ thumble wow import --clipboard</code></pre>
           <p>The iPhone uses reliable WebSocket input with this receiver. Setup and packaging are separate from the Mac download on this site; use the matching development client rather than assuming compatibility with the July beta.</p>
         </section>
 
-        <section id="skins" class="doc-section">
-          <p class="eyebrow">skins</p>
-          <h2>Browse, install, and create visual themes</h2>
-          <p>Thumble skins are shareable <code>.pocketpad</code> packages for appearance only. They can style backgrounds, native controls, icons, materials, pressed states, light/dark modes, and portrait/landscape variants. They cannot replace your geometry, labels, keyboard shortcuts, controller bindings, pointer actions, launch targets, or accessibility.</p>
-
-          <div class="doc-card-grid two">
-            <div class="doc-card">
-              <span>browse</span>
-              <h3>Install from the directory</h3>
-              <p>Open the <a href="/skins.html">Skin Directory</a>, preview a theme, and tap Install. On iPhone, choose Thumble in the Share Sheet. On Mac, download the package and choose Import Skin from the Skins library.</p>
-            </div>
-            <div class="doc-card">
-              <span>review</span>
-              <h3>Nothing applies silently</h3>
-              <p>Thumble validates the archive and shows its creator, license, warnings, and visual preview before installation. Install stores it in your library; Install &amp; Apply adds it to the selected keypad.</p>
-            </div>
-            <div class="doc-card">
-              <span>customize</span>
-              <h3>Keep local overrides</h3>
-              <p>Apply a skin as-is, customize its appearance while retaining a package reference, or fork the current result into a fully local look. Detaching never changes bindings.</p>
-            </div>
-            <div class="doc-card">
-              <span>sync</span>
-              <h3>Available on both devices</h3>
-              <p>Installed packages and required assets sync between trusted Mac and iPhone peers. Offline copies remain available for saved keypads and reconnect safely.</p>
-            </div>
-          </div>
-
-          <h3>Create a directory-ready skin</h3>
-          <p>Copy the starter under <code>docs/skins/starter</code>, give it a unique reverse-DNS identifier and semantic version, then use semantic roles such as <code>movement</code>, <code>primary_action</code>, <code>menu</code>, and <code>trackpad</code> instead of profile UUIDs.</p>
-          <pre><code>cp -R docs/skins/starter MySkin
-thumble skin validate MySkin
-thumble skin pack MySkin -o MySkin.pocketpad
-thumble skin validate MySkin.pocketpad --strict
-thumble skin render MySkin.pocketpad --clean -o preview.png</code></pre>
-          <p>Packages submitted to the public directory must pass strict validation, include a preview and license, use declared assets with SHA-256 hashes, and contain no executable files or profile bindings. See the repository’s <a href="https://github.com/CodyBontecou/Thumble/tree/main/docs/skins" rel="noreferrer">complete format and security guide</a>.</p>
+        <section id="appearance" class="doc-section">
+          <p class="eyebrow">appearance</p>
+          <h2>Design your keypad directly</h2>
+          <p>Use the Mac editor to change control colors, gradients, icons, typography, artwork, and pressed-state effects. Reusable styles, layers, and groups help keep a design consistent. Light and dark appearance remain part of your setup.</p>
+          <p>Adjust control placement on your phone, and use Practice Mode to try the layout and haptics before sending input. See the <a href="#keypad-editor">editor guide</a> for the editing workflow.</p>
+          <p>The public skin directory and package downloads have been retired. Your saved layouts and input bindings remain yours.</p>
         </section>
 
         <section id="outputs" class="doc-section">
@@ -336,9 +305,6 @@ thumble template list
 thumble template install snes --name "SNES Browser Controls" --default
 thumble profile export --all -o thumble-profiles.json
 thumble profile import thumble-profiles.json
-thumble skin list
-thumble skin import Aurora.pocketpad
-thumble skin apply com.example.pocketpad.skin.aurora --profile active
 thumble binding set focus --sequence 'Control+B,H'
 thumble output mode keyboard
 thumble element add joystick --label "Right Stick" --up custom1 --down custom2 --left custom3 --right custom4
@@ -360,7 +326,7 @@ thumble release-all</code></pre>
         <section id="agents" class="doc-section">
           <p class="eyebrow">ai agents</p>
           <h2>Tell an agent what you want, not how to click</h2>
-          <p>Thumble includes a repository <a href="https://github.com/CodyBontecou/Thumble/blob/main/SKILL.md" rel="noreferrer"><code>SKILL.md</code></a> for terminal-capable agents. It explains how to choose between game generation, templates, targeted profile editing, layout repair, skin operations, and runtime diagnostics while avoiding unsafe UI automation.</p>
+          <p>Thumble includes a repository <a href="https://github.com/CodyBontecou/Thumble/blob/main/SKILL.md" rel="noreferrer"><code>SKILL.md</code></a> for terminal-capable agents. It explains how to choose between game generation, templates, targeted profile editing, layout repair and runtime diagnostics while avoiding unsafe UI automation.</p>
 
           <div class="doc-card-grid three">
             <div class="doc-card">
@@ -393,7 +359,7 @@ could be confirmed. Do not use UI automation.</code></pre>
           <ol class="doc-steps compact">
             <li><strong>Inspect.</strong><p>Run <code>profile list</code>, <code>profile show active --json</code>, and <code>status --json</code> before editing.</p></li>
             <li><strong>Preview.</strong><p>Use <code>generate --dry-run</code>, <code>layout validate</code>, and <code>layout preview</code> when available.</p></li>
-            <li><strong>Apply.</strong><p>Make only the requested profile, binding, output, layout, or skin changes. Generation selects and defaults a profile unless the agent passes <code>--no-select</code> or <code>--no-default</code>.</p></li>
+            <li><strong>Apply.</strong><p>Make only the requested profile, binding, output, layout, or appearance changes. Generation selects and defaults a profile unless the agent passes <code>--no-select</code> or <code>--no-default</code>.</p></li>
             <li><strong>Verify.</strong><p>Re-read the saved profile and bindings, rerun layout checks, and distinguish saved configuration from confirmed iPhone sync or physical-device feel.</p></li>
           </ol>
 
@@ -403,11 +369,10 @@ could be confirmed. Do not use UI automation.</code></pre>
             <li>Use <code>thumble app screenshot</code> for visual checks; do not activate the app or send keyboard/mouse events.</li>
             <li>Ask before launching apps, opening System Settings, triggering permission prompts, restarting the server, or sending test input.</li>
             <li>Treat <code>test tap|down|up</code> as real output to the currently focused Mac app, and use <code>release-all</code> if a test is interrupted.</li>
-            <li>Inspect before deleting/resetting profiles, removing skins, clearing bindings, or replacing output modes. Export all profiles before a broad migration or reset.</li>
-            <li>For handcrafted community skins, require editable source, native-rendered review evidence, independent critique/QA, and explicit human approval before publication.</li>
+            <li>Inspect before deleting/resetting profiles, clearing bindings, or replacing output modes. Export all profiles before a broad migration or reset.</li>
           </ul>
 
-          <p>See the complete <a href="https://github.com/CodyBontecou/Thumble/blob/main/docs/agents.md" rel="noreferrer">Using Thumble with an AI agent</a> guide for reusable instruction-file snippets and copy-paste prompts for games, productivity pads, layout repair, diagnostics, and skin installation. For chatting with ChatGPT or Claude instead of driving a local terminal agent, see <a href="/blog/connect-chatgpt-claude.html">Build Mac controllers by chatting</a>.</p>
+          <p>See the complete <a href="https://github.com/CodyBontecou/Thumble/blob/main/docs/agents.md" rel="noreferrer">Using Thumble with an AI agent</a> guide for reusable instruction-file snippets and copy-paste prompts for games, productivity pads, layout repair, diagnostics, and appearance editing. Hosted connectors are retired; see the <a href="/blog/connect-chatgpt-claude.html">local controller tools guide</a>.</p>
         </section>
 
         <section id="troubleshooting" class="doc-section">
@@ -468,8 +433,8 @@ could be confirmed. Do not use UI automation.</code></pre>
             <p>Yes. Install templates, generate a profile from a known game, or create an agent-provided JSON spec and import it with the CLI.</p>
           </details>
           <details>
-            <summary>Can a downloaded skin change what my buttons do?</summary>
-            <p>No. Skin packages are appearance-only. Thumble rejects profile content and executable assets, and applying a skin preserves your local geometry, labels, bindings, launch targets, and accessibility.</p>
+            <summary>Do appearance edits change my bindings?</summary>
+            <p>Appearance settings and input bindings are edited separately. Changing colors, icons, or effects keeps your assigned shortcuts and controller inputs.</p>
           </details>
         </section>
       </article>
@@ -478,7 +443,7 @@ could be confirmed. Do not use UI automation.</code></pre>
 
   <footer class="site-footer section-shell">
     <span>© <span id="year">2026</span> Thumble</span>
-    <span class="footer-links"><a href="/">home</a><a href="/skins.html">skins</a><a href="/blog.html">blog</a><a href="/privacy.html">privacy</a></span>
+    <span class="footer-links"><a href="/">home</a><a href="/blog.html">blog</a><a href="/privacy.html">privacy</a></span>
   </footer>
 
   <script src="/script.js" defer></script>
