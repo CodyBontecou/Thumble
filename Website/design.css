@@ -116,7 +116,7 @@ h3 { letter-spacing: -.025em; font-size: 1.15rem; line-height: 1.4; }
 .possibilities p { font-size: 13px; margin-bottom: 22px; }
 .text-link { display: inline-block; color: #d9d6e1; font-size: 12px; text-decoration: none; }
 .text-link:hover, .possibilities a:hover .text-link { color: var(--orange); }
-.editor-section.section-shell { display: block; width: min(1600px, calc(100% - 40px)); padding-block: clamp(32px, 5vw, 72px); border: 0; }
+.editor-section.section-shell { display: block; width: min(1120px, calc(100% - 40px)); padding-block: clamp(32px, 5vw, 72px); border: 0; }
 .editor-copy > p { max-width: 365px; }
 .quiet-checklist { margin: 25px 0 28px; padding: 0; list-style: none; font-size: 12px; color: #b6b4bf; }
 .quiet-checklist li { margin: 10px 0; }.quiet-checklist li::before { content: "✓"; color: #837c96; margin-right: 12px; }
