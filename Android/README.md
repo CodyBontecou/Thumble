@@ -99,9 +99,17 @@ broader symbol coverage and complete typography remain unfinished. Apple continu
 corner curves still differ from Android rounded paths. Advanced controls have
 physical-device and Rust recording evidence; real Mac pointer/HID consumer acceptance
 and broader device geometry remain pending. Unsupported interactive control kinds are omitted and listed above
-the keypad. Basic rendering is not a claim of full iOS visual parity. Shared build
-pickup/adoption, skin sharing/library, onboarding and additional settings are also
-tracked in the parity checklist.
+the keypad. Basic rendering is not a claim of full iOS visual parity. Skin sharing/library,
+onboarding and additional settings are also tracked in the parity checklist.
+
+Hosted shared-build pickup, preview and phone adoption have been retired on Android.
+The app no longer registers the hosted HTTPS link activity or includes its HTTP fetcher.
+If legacy files remain, **Recover saved builds** exports validated profile bytes unchanged
+for ordinary local import, or a recovery ZIP containing original corrupt/orphaned files.
+Opening recovery never prunes expired/interrupted builds, repairs metadata, changes paired
+profiles, or deletes the originals. The old pruning store is test support only. Hosted-only
+Android adoption launchers and scenarios were removed; portable profile validation,
+paired profile synchronization, local editing and Practice Mode remain.
 
 Bonjour service-only QR codes work over the shared LAN. Apple peer-to-peer-only
 networking still needs an Android equivalent; this remains a parity gap. Older

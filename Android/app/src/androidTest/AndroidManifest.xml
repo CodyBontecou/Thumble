@@ -5,7 +5,6 @@
             android:authorities="com.thumble.android.test.skin-source" android:exported="false" android:grantUriPermissions="true" />
         <activity android:name="com.thumble.android.testfixtures.SkinSenderActivity" android:exported="true"
             android:excludeFromRecents="true" android:taskAffinity="com.thumble.android.test.skin_sender" />
-        <activity android:name="com.thumble.android.testfixtures.SharedBuildSenderActivity" android:exported="true"
-            android:excludeFromRecents="true" android:taskAffinity="com.thumble.android.test.shared_sender" />
+
     </application>
 </manifest>

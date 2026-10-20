@@ -1,0 +1,9 @@
+# Android hosted-build retirement verification
+
+The shipped debug APK excludes the hosted-link activity, bearer-link HTTP fetcher, phone preview/adoption state and upload commands, and legacy pruning store. `Android/scripts/verify-hosted-retirement.py <unminified.apk>` verifies the packaged DEX/manifest boundary. The old store exists only in test support to retain prior-format regression coverage. Local portable-artifact validation tests were retained and renamed; only hosted-only tests/launchers were removed.
+
+The 197-test JVM suite includes read-only discovery, expired/interrupted state, valid byte-preserving exports, corrupt/orphaned recovery archives, source-change checks, failed destinations, symlink rejection, size bounds and unknown-file preservation. The 32-test native API 26 run includes recovery before onboarding/pairing, activity recreation, system file-picker cancellation, source preservation on successful/failed export, and absence of the old manifest activity. It also runs existing owned trigger, advanced input/transport, haptic routing/settings, assets/styles, renderer and binding metadata checks.
+
+`instrumentation.txt` records the passing native run. `verification.json` identifies the tested APKs and records the stack gate result: 34 constrained-thread tests plus macOS/iOS Debug builds, with unchanged budgets. Frozen source fixtures still verify against checkpoint `5fadf15`. During diagnosis an emulator System UI ANR and a competing accessibility connection obscured the screen; these were cleared before the final passing run. The picker test accounts for Back first dismissing its filename keyboard on API 26.
+
+No pending source file is expired, repaired, adopted or deleted by recovery. No physical haptic/latency, live WoW or iOS hosted retirement acceptance is claimed. No deployed service was stopped.

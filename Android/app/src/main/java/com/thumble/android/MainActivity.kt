@@ -52,14 +52,7 @@ class MainActivity : ComponentActivity() {
         val resolver=applicationContext.contentResolver
         session.receiveSkinImport(uri.toString()) { resolver.openInputStream(uri) ?: throw SkinImportException("Could not open this skin file.") }
     }
-    private fun receiveSharedBuildHandoff(): Boolean {
-        val raw=SharedBuildInbox.take() ?: return false
-        launchSkinIntentHandled=true
-        session.sharedBuilds.openLink(raw);openSharedBuilds()
-        return true
-    }
     private fun receiveSkinIntent(value: android.content.Intent) {
-        if(receiveSharedBuildHandoff()) return
         launchSkinIntentHandled=true
         if(value.action !in setOf(android.content.Intent.ACTION_VIEW,android.content.Intent.ACTION_SEND,android.content.Intent.ACTION_SEND_MULTIPLE)) return
         val shared=if(value.action==android.content.Intent.ACTION_VIEW) value.dataString?.let { session.sharedBuilds.route(it) }==true else false
@@ -73,12 +66,16 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         receiveSkinIntent(intent)
     }
+    private val saveBuildDocument = registerForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
+        if(uri==null) session.sharedBuilds.documentExport=null
+        else session.sharedBuilds.saveDocument { contentResolver.openOutputStream(uri,"w") ?: error("Could not open destination") }
+    }
     private val saveSkinDocument = registerForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
         if(uri==null) session.documentExport=null
         else if(session.documentExport==null) session.reportSkinTransferError("Choose Save file again to export this package.")
         else session.saveSkinDocument { contentResolver.openOutputStream(uri,"w") ?: error("Could not open the destination file.") }
     }
-    private fun openSkinLibrary() { surface?.cancelTouches();client.endSharedBuildPreview();client.surfaceChanged();settingsOpen=false;sharedBuildsOpen=false;skinsOpen=true }
+    private fun openSkinLibrary() { surface?.cancelTouches();client.surfaceChanged();settingsOpen=false;sharedBuildsOpen=false;skinsOpen=true }
     private fun openSharedBuilds() { surface?.cancelTouches();client.surfaceChanged();session.cancelSkinImport();settingsOpen=false;skinsOpen=false;sharedBuildsOpen=true }
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putBoolean("skinsOpen",skinsOpen)
@@ -126,13 +123,9 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         session = ViewModelProvider(this, ControllerSession.Factory(applicationContext))[ControllerSession::class.java]
         client = session.client
-        val previewClient=client
-        session.sharedBuilds.onPreview={ record,snapshot -> previewClient.beginSharedBuildPreview(record,snapshot) }
-        session.sharedBuilds.onAdopt={ record,artifact,operation,done -> previewClient.adoptSharedBuild(record,artifact,operation,done) }
-        session.sharedBuilds.onCancelAdoption={ previewClient.cancelSharedBuildAdoption() }
         setContent {
             val current = state
-            LaunchedEffect(current.paired, current.viewingSaved, current.snapshot.selectedID, current.snapshot.selected?.orientationPreference,current.sharedBuildPreview?.snapshot?.selectedID,current.sharedBuildPreview?.snapshot?.selected?.orientationPreference) {
+            LaunchedEffect(current.paired, current.viewingSaved, current.snapshot.selectedID, current.snapshot.selected?.orientationPreference) {
                 applyProfileOrientation(current)
                 if (current.paired) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                 else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -149,27 +142,30 @@ class MainActivity : ComponentActivity() {
                             } catch(_: Exception) { session.reportSkinTransferError("Could not open the system share or file picker. Try again.") }
                         }
                     }
-                    LaunchedEffect(current.sharedBuildPreview?.recordID,session.sharedBuilds.requestedPreviewID) {
-                        if(session.sharedBuilds.requestedPreviewID!=null && current.sharedBuildPreview?.recordID==session.sharedBuilds.requestedPreviewID) {
-                            sharedBuildsOpen=false;session.sharedBuilds.consumePreviewRequest()
-                        }
-                    }
                     LaunchedEffect(current.onboardingCompleted,completingGuide) {
                         if(completingGuide && current.onboardingCompleted) {
                             completingGuide=false;guideOpen=false
                             if(current.canReconnect && !current.paired && !current.connecting) reconnectSavedMac()
                         }
                     }
-                    val showGuide=current.onboardingLoaded && (!current.onboardingCompleted || guideOpen) && current.sharedBuildPreview==null
-                    if(sharedBuildsOpen) SharedBuildScreen(session.sharedBuilds,current.sharedBuildPreview,{ client.endSharedBuildPreview() },{ sharedBuildsOpen=false },
-                        adoptionServer=current.pairedServerID?.takeIf { current.paired && ArtifactAdoptionMetadata.CAPABILITY in current.capabilities && ArtifactAdoptionMetadata.validServer(it) })
+                    val showGuide=current.onboardingLoaded && (!current.onboardingCompleted || guideOpen)
+                    if(sharedBuildsOpen) SharedBuildScreen(session.sharedBuilds, onSave={ record ->
+                        session.sharedBuilds.documentExport=record
+                        saveBuildDocument.launch("thumble-recovered-${record.id}.${if(record.profileFile) "json" else "zip"}")
+                    }, onDone={ sharedBuildsOpen=false })
                     else if(skinsOpen) SkinLibraryScreen(session,dark,{ skinDocument.launch(arrayOf("*/*")) },{ skinsOpen=false })
-                    else if(showGuide) OnboardingScreen(current,localError,guideOpen,
-                        onSmartConnect={ if(current.canReconnect) reconnectSavedMac() else localError="Pair once with the Mac QR code to enable Smart Connect." },
-                        onComplete={ localError=null;completingGuide=true;client.completeOnboarding() },
-                        onClose={ guideOpen=false })
+                    else if(showGuide) Column(Modifier.fillMaxSize()) {
+                        if(session.sharedBuilds.records.isNotEmpty() || session.sharedBuilds.error!=null)
+                            TextButton(onClick={ openSharedBuilds() }) { Text("Recover saved builds") }
+                        Box(Modifier.weight(1f)) {
+                            OnboardingScreen(current,localError,guideOpen,
+                                onSmartConnect={ if(current.canReconnect) reconnectSavedMac() else localError="Pair once with the Mac QR code to enable Smart Connect." },
+                                onComplete={ localError=null;completingGuide=true;client.completeOnboarding() },
+                                onClose={ guideOpen=false })
+                        }
+                    }
                     else if(!current.onboardingLoaded) Box(Modifier.fillMaxSize(),contentAlignment=androidx.compose.ui.Alignment.Center) { CircularProgressIndicator() }
-                    else if (state.paired || state.viewingSaved || state.sharedBuildPreview!=null) ControllerScreen(dark,openSettings) else ConnectionScreen(openSettings)
+                    else if (state.paired || state.viewingSaved) ControllerScreen(dark,openSettings) else ConnectionScreen(openSettings)
                     if(skinsOpen) session.reviewedSkin?.let { reviewed ->
                         AlertDialog(onDismissRequest={ session.cancelSkinImport() },containerColor=MaterialTheme.colorScheme.surface,title={ Text("Import skin") },
                             text={ Column(Modifier.verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(8.dp)) {
@@ -196,8 +192,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
-        if(receiveSharedBuildHandoff()) { /* consumed only from transient process memory */ }
-        else if(!launchSkinIntentHandled) receiveSkinIntent(intent)
+        if(!launchSkinIntentHandled) receiveSkinIntent(intent)
         else savedInstanceState?.getString("recoverableSkinImportURI")?.let { uri ->
             if(session.recoverableSkinImportURI==null && session.reviewedSkin==null) {
                 val parsed=android.net.Uri.parse(uri)
@@ -221,7 +216,7 @@ class MainActivity : ComponentActivity() {
         } else client.connect(target)
     }
     private fun applyProfileOrientation(value: ClientState) {
-        val preference = value.sharedBuildPreview?.snapshot?.selected?.orientationPreference ?: if (value.paired || value.viewingSaved) value.snapshot.selected?.orientationPreference else "automatic"
+        val preference = if (value.paired || value.viewingSaved) value.snapshot.selected?.orientationPreference else "automatic"
         val requested = when (preference) {
             "portrait" -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
             "landscape" -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
@@ -265,7 +260,8 @@ class MainActivity : ComponentActivity() {
             }
             Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick={ openSkinLibrary() }) { Text("Skins") }
-                OutlinedButton(onClick={ openSharedBuilds() }) { Text("Shared builds") }
+                if(session.sharedBuilds.records.isNotEmpty() || session.sharedBuilds.error!=null)
+                    OutlinedButton(onClick={ openSharedBuilds() }) { Text("Recover saved builds") }
             }
             Text("Your Mac, at your fingertips", style = MaterialTheme.typography.titleMedium)
             Text("Open Thumble on your Mac, then scan its pairing QR code. Keep both devices on the same Wi-Fi.")
@@ -308,9 +304,7 @@ class MainActivity : ComponentActivity() {
     @Composable private fun ControllerScreen(dark: Boolean,openSettings: ()->Unit) {
         val configuration = LocalConfiguration.current
         val landscape = configuration.screenWidthDp >= configuration.screenHeightDp
-        val sharedPreview=state.sharedBuildPreview!=null
-        val adopting=state.artifactAdoption?.active==true
-        val snapshot=state.sharedBuildPreview?.snapshot ?: state.snapshot
+        val snapshot=state.snapshot
         val profile = snapshot.selected
         if (state.layoutEditing && profile != null) {
             key(state.layoutEditToken) {
@@ -335,7 +329,7 @@ class MainActivity : ComponentActivity() {
             profile?.source?.optJSONObject("skinReference") != null &&
                 (projection == null || (waitsForInitialSkinSync && session.skinSyncInFlight>0))
         var menu by remember { mutableStateOf(false) }
-        LaunchedEffect(menu) { if(menu && !sharedPreview) session.refreshSkins() }
+        LaunchedEffect(menu) { if(menu) session.refreshSkins() }
         val unsupported = profile?.unsupportedKinds(landscape).orEmpty()
         Column(Modifier.fillMaxSize().safeDrawingPadding().semantics { testTagsAsResourceId=true }) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -346,8 +340,8 @@ class MainActivity : ComponentActivity() {
                             onClick = { selectProfile(item.id); menu = false }) }
                         HorizontalDivider()
                         DropdownMenuItem(text={ Text("Setup guide") },onClick={ menu=false;surface?.cancelTouches();localError=null;guideOpen=true })
-                        DropdownMenuItem(text={ Text("Shared builds") },onClick={ menu=false;openSharedBuilds() })
-                        if(!sharedPreview) {
+                        if(session.sharedBuilds.records.isNotEmpty() || session.sharedBuilds.error!=null)
+                            DropdownMenuItem(text={ Text("Recover saved builds") },onClick={ menu=false;openSharedBuilds() })
                         DropdownMenuItem(text={ Text(if (profile?.id == snapshot.defaultID) "Default keypad" else "Make default keypad") },
                             enabled=(state.paired || state.viewingSaved) && profile != null && profile.id != snapshot.defaultID,
                             onClick={ profile?.let { client.setDefaultProfile(it.id) };menu=false })
@@ -376,21 +370,19 @@ class MainActivity : ComponentActivity() {
                                 client.beginLayoutEditing(it.id,if(landscape) LayoutOrientation.LANDSCAPE else LayoutOrientation.PORTRAIT)
                             } })
                         DropdownMenuItem(text={ Text("Settings") },onClick={ menu=false;openSettings() })
-                        }
                     }
                 }
                 TextButton(onClick = {
                     surface?.cancelTouches()
-                    if(sharedPreview) client.endSharedBuildPreview() else if (state.paired) client.disconnect() else client.showConnection()
-                }) { Text(if(sharedPreview) "Close preview" else if (state.paired) "Disconnect" else "Connection") }
+                    if (state.paired) client.disconnect() else client.showConnection()
+                }) { Text(if (state.paired) "Disconnect" else "Connection") }
             }
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(if(adopting) "Adding shared build · input off" else if(sharedPreview) "Shared preview · input off" else if (state.practiceMode) "Practice mode · on" else "Practice mode · off", Modifier.padding(top = 14.dp))
-                Switch(checked = state.practiceMode || sharedPreview || adopting, enabled = state.paired && !sharedPreview && !adopting,
+                Text(if (state.practiceMode) "Practice mode · on" else "Practice mode · off", Modifier.padding(top = 14.dp))
+                Switch(checked = state.practiceMode, enabled = state.paired,
                     modifier = Modifier.semantics { contentDescription = "Practice mode" }, onCheckedChange = { surface?.cancelTouches(); client.setPracticeMode(it) })
             }
-            if(adopting) TextButton(onClick={ client.cancelSharedBuildAdoption() }) { Text("Cancel adoption") }
-            if(!sharedPreview && !adopting) Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                 Column(Modifier.weight(1f)) {
                     Text(if (state.udpEnabled && state.udpAvailable) "UDP + WebSocket mirror" else "WebSocket fallback", style = MaterialTheme.typography.labelMedium)
                     Text("Sent: UDP ${state.udpFrames} · WS ${state.webSocketFrames}", style = MaterialTheme.typography.labelSmall)

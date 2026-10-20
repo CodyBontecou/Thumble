@@ -23,7 +23,7 @@ internal data class PendingSharedBuild(val id: UUID,val contentHash: String,val 
 }
 internal class PendingBuildStoreException: IllegalStateException("Pending shared builds could not be stored safely.")
 
-/** One serialized owner per app session. Only UUID pair files live in this no-backup directory. */
+/** Legacy writer retained only to exercise frozen pre-retirement storage in tests. Never ship this pruning store. */
 internal class PendingSharedBuildStore(private val directory: Path,private val now: ()->Long=System::currentTimeMillis) {
     companion object {
         const val MAX_RECORDS=32

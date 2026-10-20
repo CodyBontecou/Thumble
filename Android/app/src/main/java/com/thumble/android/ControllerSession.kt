@@ -77,7 +77,7 @@ internal class ControllerSession(store: SessionStore, discovery: MacDiscovery, v
         if(!accepted) main.post { if(!cleared) skinSyncInFlight-- }
         accepted
     }) {
-        if(!cleared) { state = it;sharedBuilds.observeAdoption(it.artifactAdoption) }
+        if(!cleared) { state = it }
     }
     private data class ImportRequest(val uri: String?,val epoch: Long,val open: ()->java.io.InputStream)
     private var importEpoch=0L

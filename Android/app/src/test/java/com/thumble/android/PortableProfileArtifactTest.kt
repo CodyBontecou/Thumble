@@ -5,32 +5,13 @@ import org.json.JSONArray
 import org.erdtman.jcs.JsonCanonicalizer
 import org.junit.Assert.*
 import org.junit.Test
-import okhttp3.mockwebserver.MockResponse
-import okhttp3.mockwebserver.MockWebServer
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 
-class SharedBuildTest {
-    private val artifactID="bar_"+"a".repeat(64)
-    private val token="b".repeat(64)
-    private val link="https://${BuilderArtifactShare.HOST}/share/$artifactID#token=$token"
+class PortableProfileArtifactTest {
     private fun fixture()=javaClass.classLoader!!.getResourceAsStream("profile-artifact/v1.json")!!.readBytes()
     private fun signed(raw: JSONObject): ByteArray {
         val content=JSONObject(raw.toString()).apply { remove("exportedAt");remove("contentHash") }
         raw.getJSONObject("contentHash").put("value",packageHash(JsonCanonicalizer(content.toString()).encodedUTF8))
         return raw.toString().toByteArray()
-    }
-    @Test fun strictShareReferenceNeverFormatsAuthorizationOrSendsItsFragment() {
-        val reference=BuilderArtifactShare.parse(link)
-        assertEquals(artifactID,reference.artifactID);assertEquals(BuilderArtifactShare.HOST,reference.sourceHost)
-        assertEquals(link.substringBefore('#'),reference.requestURI.toString());assertNull(reference.requestURI.fragment)
-        assertFalse(reference.toString().contains(token));assertFalse(reference.toString().contains("token="))
-        for(raw in listOf(link.replace("https:","http:"),link.replace("fly.dev","fly.dev.evil"),link.replace("fly.dev","fly.dev:443"),link.replace("/share/","/share/%61"),link+"&extra=1",link.replace("#token=","?token="),link.replace("/share/","/share/../share/"),link.replace("https://","https://user@"),link.replace("thumble-mcp","THUMBLE-mcp")," $link",link.replace("/share/","/share/extra/"))) {
-            assertTrue(raw.substringBefore('#'),runCatching { BuilderArtifactShare.parse(raw) }.isFailure)
-        }
-        assertTrue(BuilderArtifactShare.resembles(link));assertFalse(BuilderArtifactShare.resembles("content://file/skin"))
-        assertTrue(runCatching { BuilderArtifactShare.parse("http://127.0.0.1:1234/share/$artifactID#token=$token") }.isFailure)
-        assertEquals("127.0.0.1",BuilderArtifactShare.parse("http://127.0.0.1:1234/share/$artifactID#token=$token",true).sourceHost)
     }
     @Test fun nativeFixtureHashAndRawBytesAndFutureMetadataAreRetained() {
         val bytes=fixture();val value=PortableProfileArtifact.decode(bytes)
@@ -144,42 +125,5 @@ class SharedBuildTest {
         val raw=JSONObject(fixture().toString(Charsets.UTF_8));val p=raw.getJSONArray("profiles").getJSONObject(0);val id=p.getJSONObject("customization").getJSONArray("elements").getJSONObject(0).getString("id")
         p.getJSONObject("customization").put("buttonCustomizations",JSONArray().put(id.lowercase()).put(JSONObject()).put(id.uppercase()).put(JSONObject()))
         assertTrue(runCatching { PortableProfileArtifact.decode(signed(raw)) }.isFailure)
-    }
-    private fun fetch(server: MockWebServer): Result<ByteArray> {
-        val reference=BuilderArtifactShare.parse(server.url("/share/$artifactID").toString()+"#token=$token",true)
-        val latch=CountDownLatch(1);var value: Result<ByteArray>?=null
-        BuilderArtifactFetcher().fetch(reference) { value=it;latch.countDown() }
-        assertTrue(latch.await(5,TimeUnit.SECONDS));return value!!
-    }
-    @Test fun downloaderSendsHeaderOnlyAndReturnsExactBytesWithoutCookieReuse() {
-        val server=MockWebServer();server.start()
-        try {
-            val bytes=fixture();server.enqueue(MockResponse().setHeader("Content-Type","application/json").setHeader("Set-Cookie","session=forbidden").setBody(okio.Buffer().write(bytes)))
-            assertArrayEquals(bytes,fetch(server).getOrThrow())
-            val first=server.takeRequest();assertEquals("ThumbleShare $token",first.getHeader("Authorization"));assertEquals("/share/$artifactID",first.path);assertNull(first.getHeader("Cookie"))
-            server.enqueue(MockResponse().setHeader("Content-Type","application/json").setBody("{}"));fetch(server)
-            assertNull(server.takeRequest().getHeader("Cookie"))
-        } finally { server.shutdown() }
-    }
-    @Test fun downloaderRejectsRedirectsMimeAndDeclaredAndStreamingOversize() {
-        val server=MockWebServer();server.start()
-        try {
-            server.enqueue(MockResponse().setResponseCode(302).setHeader("Location",server.url("/stolen")))
-            assertEquals("unsafe-response",(fetch(server).exceptionOrNull() as SharedBuildException).code);assertEquals(1,server.requestCount)
-            server.enqueue(MockResponse().setHeader("Content-Type","text/html").setBody("{}"));assertTrue(fetch(server).isFailure)
-            server.enqueue(MockResponse().setHeader("Content-Type","application/json").setHeader("Content-Length",PortableProfileArtifact.MAX_BYTES+1));assertEquals("too-large",(fetch(server).exceptionOrNull() as SharedBuildException).code)
-            server.enqueue(MockResponse().setHeader("Content-Type","application/json").setChunkedBody("a".repeat(PortableProfileArtifact.MAX_BYTES+1),65536));assertEquals("too-large",(fetch(server).exceptionOrNull() as SharedBuildException).code)
-        } finally { server.shutdown() }
-    }
-    @Test fun cancellingAnActiveFetchCompletesWithoutLeakingTheReference() {
-        val server=MockWebServer();server.start()
-        try {
-            server.enqueue(MockResponse().setSocketPolicy(okhttp3.mockwebserver.SocketPolicy.NO_RESPONSE))
-            val reference=BuilderArtifactShare.parse(server.url("/share/$artifactID").toString()+"#token=$token",true)
-            val latch=CountDownLatch(1);var error: Throwable?=null
-            val call=BuilderArtifactFetcher().fetch(reference) { error=it.exceptionOrNull();latch.countDown() }
-            assertNotNull(server.takeRequest(2,TimeUnit.SECONDS));call.cancel();assertTrue(latch.await(2,TimeUnit.SECONDS))
-            assertNotNull(error);assertFalse(error!!.message.orEmpty().contains(token))
-        } finally { server.shutdown() }
     }
 }

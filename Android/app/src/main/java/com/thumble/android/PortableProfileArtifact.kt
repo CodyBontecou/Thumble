@@ -6,6 +6,9 @@ import org.erdtman.jcs.JsonCanonicalizer
 import java.math.BigDecimal
 import java.util.UUID
 
+internal class ProfileArtifactException(val code: String): IllegalArgumentException(
+    if (code == "too-large") "The profile file exceeds the size limit." else "The profile file failed integrity or format checks.")
+
 /** Byte-preserving portable envelope, separate from paired-host profile state. */
 internal class PortableProfileArtifact private constructor(private val bytes: ByteArray,private val envelope: JSONObject,
     val contentHash: String,val activeProfileID: UUID,val defaultProfileID: UUID?,val summaries: List<Summary>) {
@@ -34,7 +37,7 @@ internal class PortableProfileArtifact private constructor(private val bytes: By
             if(!uuid.matches(text)) bad()
             return UUID.fromString(text)
         }
-        private fun bad(): Nothing=throw SharedBuildException("invalid-artifact")
+        private fun bad(): Nothing=throw ProfileArtifactException("invalid-artifact")
         private fun obj(v: Any?)=v as? JSONObject ?: bad()
         private fun text(v: Any?)=v as? String ?: bad()
         private fun integer(v: Any?): Long {
@@ -42,7 +45,7 @@ internal class PortableProfileArtifact private constructor(private val bytes: By
             return try { BigDecimal(n.toString()).longValueExact() } catch(_: ArithmeticException) { bad() }
         }
         fun decode(input: ByteArray): PortableProfileArtifact = try {
-            if(input.size>MAX_BYTES) throw SharedBuildException("too-large")
+            if(input.size>MAX_BYTES) throw ProfileArtifactException("too-large")
             val raw=PackageJSON.objectValue(input,portable=true)
             if(raw.opt("schema")!="com.codybontecou.pocketpad.keypad-configuration" || integer(raw.opt("version"))!=4L || integer(raw.opt("artifactVersion"))!=1L) bad()
             integer(raw.opt("exportedAt"))
@@ -99,7 +102,7 @@ internal class PortableProfileArtifact private constructor(private val bytes: By
             val canonical=JsonCanonicalizer(content.toString()).encodedUTF8
             if(packageHash(canonical)!=digest) bad()
             PortableProfileArtifact(input.copyOf(),raw,digest,active,default,summaries.toList())
-        } catch(error: SharedBuildException) { throw error }
+        } catch(error: ProfileArtifactException) { throw error }
         catch(_: Exception) { bad() }
 
         private fun normalized(key: String)=key.filter { it in 'a'..'z' || it in 'A'..'Z' || it in '0'..'9' }.lowercase()

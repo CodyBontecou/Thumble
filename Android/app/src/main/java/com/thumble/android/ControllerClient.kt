@@ -22,7 +22,6 @@ import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
 
-internal data class SharedBuildPracticePreview(val recordID: UUID,val snapshot: ProfileSnapshot)
 internal data class ClientState(
     val status: String = "Ready to connect",
     val onboardingLoaded: Boolean = false,
@@ -49,8 +48,6 @@ internal data class ClientState(
     val pendingAppearanceChanges: Int = 0,
     val pendingLayoutChanges: Int = 0,
     val layoutEditing: Boolean = false,
-    val sharedBuildPreview: SharedBuildPracticePreview? = null,
-    val artifactAdoption: ArtifactAdoptionState? = null,
     val pairedServerID: String? = null,
     val layoutEditEntry: LayoutSnapshot? = null,
     val layoutEditToken: Long = 0,
@@ -74,9 +71,6 @@ internal class ControllerClient(private val store: SessionStore = MemorySessionS
     private var udp: DatagramSocket? = null
     private var heartbeat: ScheduledFuture<*>? = null
     private var deadline: ScheduledFuture<*>? = null
-    private var adoptionDeadline: ScheduledFuture<*>? = null
-    private var adoptionBytes: ByteArray? = null
-    private var authoritativeProfileIDs: Set<UUID> = emptySet()
     private var inputs: InputSession? = null
     private var target: PairingTarget? = null
     private var addressIndex = 0
@@ -107,7 +101,7 @@ internal class ControllerClient(private val store: SessionStore = MemorySessionS
         analogTasks.values.forEach { it.cancel(false) }
         analogTasks.clear(); pendingAnalog.clear(); lastAnalogAt.clear()
     }
-    private fun acceptsInput(expectedRevision: Long) = expectedRevision == revision && state.paired && !state.practiceMode && !state.layoutEditing && state.sharedBuildPreview==null && state.artifactAdoption?.active!=true
+    private fun acceptsInput(expectedRevision: Long) = expectedRevision == revision && state.paired && !state.practiceMode && !state.layoutEditing
     private fun emitAnalog(value: Analog) {
         when (value) {
             is Analog.Stick -> inputs?.stick(value.target, value.x, value.y)
@@ -327,7 +321,6 @@ internal class ControllerClient(private val store: SessionStore = MemorySessionS
         publishState()
     }
     fun beginLayoutEditing(profileID: UUID, orientation: LayoutOrientation) = enqueue {
-        if(state.sharedBuildPreview!=null || state.artifactAdoption?.active==true) return@enqueue
         if(state.layoutEditing || state.snapshot.selectedID!=profileID || state.snapshot.selected==null || (!state.paired && !state.viewingSaved)) return@enqueue
         if(!pendingLayoutsLoaded || !pendingAppearanceLoaded || !pendingSkinsLoaded) {
             state=state.copy(error="Could not restore pending keypad changes. Your saved data has been kept.");publishState();return@enqueue
@@ -375,7 +368,6 @@ internal class ControllerClient(private val store: SessionStore = MemorySessionS
         flushLayoutEdits();finish(true)
     }
     private fun flushLayoutEdits() {
-        if(state.artifactAdoption?.active==true) return
         if(!state.paired || !pendingLayoutsLoaded || ProfileActions.ORIENTATION_CAPABILITY !in state.capabilities) return
         for(edit in pendingLayouts.sortedWith(compareBy<PendingLayoutEdit> { it.updatedAt }.thenBy { it.key.toString() })) {
             if(edit.serverID==null || edit.serverID!=trusted?.serverID || edit.key !in layoutUploadKeys) continue
@@ -389,7 +381,6 @@ internal class ControllerClient(private val store: SessionStore = MemorySessionS
         }
     }
     fun setAppearancePreference(preference: AppearancePreference) = enqueue {
-        if(state.sharedBuildPreview!=null || state.artifactAdoption?.active==true) return@enqueue
         val profile = state.snapshot.selected ?: return@enqueue
         if(state.layoutEditing) { state=state.copy(error="Finish editing before changing appearance.");publishState();return@enqueue }
         if (!pendingAppearanceLoaded || !pendingSkinsLoaded || !pendingLayoutsLoaded) {
@@ -416,7 +407,6 @@ internal class ControllerClient(private val store: SessionStore = MemorySessionS
         flushAppearancePreferences();publishState()
     }
     private fun flushAppearancePreferences() {
-        if(state.artifactAdoption?.active==true) return
         if(!state.paired || !pendingAppearanceLoaded || ProfileActions.ORIENTATION_CAPABILITY !in state.capabilities) return
         for(edit in pendingAppearance.sortedBy { it.updatedAt }) {
             if(edit.serverID==null || edit.serverID!=trusted?.serverID || edit.profileID !in appearanceUploadIDs) continue
@@ -447,7 +437,6 @@ internal class ControllerClient(private val store: SessionStore = MemorySessionS
         publishState()
     }
     fun setPracticeMode(enabled: Boolean) = enqueue {
-        if(state.sharedBuildPreview!=null || state.artifactAdoption?.active==true) return@enqueue
         if (!state.paired && !enabled) return@enqueue
         if (state.practiceMode == enabled) return@enqueue
         invalidateSurface()
@@ -457,7 +446,6 @@ internal class ControllerClient(private val store: SessionStore = MemorySessionS
         publishState()
     }
     fun viewSavedKeypad() = enqueue {
-        if(state.sharedBuildPreview!=null || state.artifactAdoption?.active==true) return@enqueue
         if (state.snapshot.selected == null) return@enqueue
         wantsConnection = false
         stopDiscovery(); cancelRetry(); closeSession()
@@ -476,7 +464,7 @@ internal class ControllerClient(private val store: SessionStore = MemorySessionS
     fun surfaceChanged() = enqueue { invalidateSurface();if(state.layoutEditing) endLayoutEditing();publishState() }
     fun commitSkinChange(expected: ControllerProfile, replacement: ControllerProfile, reference: SkinReference?, completed: (Boolean) -> Unit = {}) = enqueue {
         fun finish(success: Boolean) { publishState();main.post { completed(success) } }
-        if (!pendingSkinsLoaded || !pendingLayoutsLoaded || !pendingAppearanceLoaded || state.layoutEditing || state.sharedBuildPreview!=null || state.artifactAdoption?.active==true) { finish(false);return@enqueue }
+        if (!pendingSkinsLoaded || !pendingLayoutsLoaded || !pendingAppearanceLoaded || state.layoutEditing) { finish(false);return@enqueue }
         val current=state.snapshot.selected
         if (current?.id!=expected.id || current.source!==expected.source || replacement.id!=expected.id) {
             state=state.copy(error="The keypad changed while preparing the skin. Try again.");finish(false);return@enqueue
@@ -500,7 +488,6 @@ internal class ControllerClient(private val store: SessionStore = MemorySessionS
         finish(true)
     }
     private fun flushSkinSelections() {
-        if(state.artifactAdoption?.active==true) return
         if (!state.paired || "gamepad_profile_skin_selection" !in state.capabilities) return
         for (pending in pendingSkins.sortedBy { it.updatedAt }) {
             if(pending.serverID!=null && pending.serverID!=trusted?.serverID) continue
@@ -537,7 +524,6 @@ internal class ControllerClient(private val store: SessionStore = MemorySessionS
     fun dismissError() = enqueue { state=state.copy(error=null);publishState() }
     fun flushSkinRemovals() = enqueue { flushSkinRemovalsNow();publishState() }
     private fun flushSkinRemovalsNow() {
-        if(state.artifactAdoption?.active==true) return
         if(!state.paired || "skin_packages" !in state.capabilities || !removalsLoaded) return
         val sent=mutableListOf<PendingSkinRemoval>()
         for(item in pendingRemovals.filter { it.serverID==trusted?.serverID && it !in sentRemovals }) {
@@ -602,7 +588,6 @@ internal class ControllerClient(private val store: SessionStore = MemorySessionS
         } else merged to "Connected, but could not save your keypad and pending changes."
     }
     fun setDefaultProfile(id: UUID) = enqueue {
-        if(state.sharedBuildPreview!=null || state.artifactAdoption?.active==true) return@enqueue
         val request=ProfileActions.defaultProfile(state.snapshot,id) ?: return@enqueue
         if (state.paired) sendProfileAction(request)
         else if (state.viewingSaved) {
@@ -613,14 +598,12 @@ internal class ControllerClient(private val store: SessionStore = MemorySessionS
         }
     }
     fun setOrientationPreference(preference: String) = enqueue {
-        if(state.sharedBuildPreview!=null || state.artifactAdoption?.active==true) return@enqueue
         if (!state.paired) return@enqueue
         val request=ProfileActions.orientation(state.snapshot,state.capabilities,preference) ?: return@enqueue
         invalidateSurface()
         sendProfileAction(request)
     }
     fun launchProfileTarget() = enqueue {
-        if(state.sharedBuildPreview!=null || state.artifactAdoption?.active==true) return@enqueue
         if (!state.paired) return@enqueue
         ProfileActions.launch(state.snapshot)?.let(::sendProfileAction)
     }
@@ -629,13 +612,6 @@ internal class ControllerClient(private val store: SessionStore = MemorySessionS
         else { state=state.copy(error=null);publishState() }
     }
     fun selectProfile(id: UUID) = enqueue {
-        if(state.artifactAdoption?.active==true) return@enqueue
-        state.sharedBuildPreview?.let { preview ->
-            if(preview.snapshot.profiles.any { it.id==id }) {
-                invalidateSurface();state=state.copy(sharedBuildPreview=preview.copy(snapshot=preview.snapshot.copy(selectedID=id)));publishState()
-            }
-            return@enqueue
-        }
         if(state.layoutEditing) return@enqueue
         if (state.snapshot.profiles.none { it.id == id }) return@enqueue
         invalidateSurface()
@@ -648,84 +624,6 @@ internal class ControllerClient(private val store: SessionStore = MemorySessionS
         }
         publishState()
     }
-    fun beginSharedBuildPreview(recordID: UUID,snapshot: ProfileSnapshot) = enqueue {
-        if(snapshot.selected==null) return@enqueue
-        invalidateSurface()
-        if(state.layoutEditing) endLayoutEditing()
-        state=state.copy(sharedBuildPreview=SharedBuildPracticePreview(recordID,snapshot),error=null)
-        publishState()
-    }
-    fun endSharedBuildPreview() = enqueue {
-        if(state.sharedBuildPreview!=null) {
-            invalidateSurface();state=state.copy(sharedBuildPreview=null);publishState()
-        }
-    }
-    fun adoptSharedBuild(record: PendingSharedBuild,artifact: PortableProfileArtifact,operationID: UUID,completed: (Boolean)->Unit) = enqueue {
-        fun finish(started: Boolean) { main.post { completed(started) } }
-        val server=state.pairedServerID
-        if(!state.paired || server==null || ArtifactAdoptionMetadata.CAPABILITY !in state.capabilities ||
-            state.artifactAdoption?.active==true || state.layoutEditing || record.intendedServerID!=server || record.operationID!=operationID ||
-            record.rawSHA256!=artifact.rawSHA256 || record.contentHash!=artifact.contentHash || record.bytes!=artifact.byteCount) { finish(false);return@enqueue }
-        val metadata=ArtifactAdoptionMetadata.forRecord(record,server,operationID)
-        if(!metadata.valid()) { finish(false);return@enqueue }
-        invalidateSurface()
-        adoptionBytes=artifact.rawData()
-        state=state.copy(artifactAdoption=ArtifactAdoptionState(metadata,ArtifactAdoptionPhase.UPLOADING,artifact.summaries.size),error=null)
-        val sent=socket?.send(WireCodec.message("profile_artifact_adoption_begin").put("profileArtifactAdoptionMetadata",metadata.json()).toString())==true
-        if(!sent) { adoptionFailed("disconnected");finish(true);return@enqueue }
-        adoptionDeadline?.cancel(false)
-        adoptionDeadline=queue.schedule({ if(state.artifactAdoption?.metadata==metadata && state.artifactAdoption?.active==true) adoptionFailed("upload_expired") },45,TimeUnit.SECONDS)
-        publishState();finish(true)
-    }
-    fun cancelSharedBuildAdoption() = enqueue {
-        val active=state.artifactAdoption?.takeIf { it.active } ?: return@enqueue
-        if(state.paired) socket?.send(WireCodec.message("profile_artifact_adoption_cancel").put("profileArtifactAdoptionOperationID",active.metadata.operationID.toString()).toString())
-        adoptionFailed("disconnected")
-    }
-    private fun adoptionFailed(code: String,notify: Boolean=true) {
-        val active=state.artifactAdoption?.takeIf { it.active } ?: return
-        adoptionDeadline?.cancel(false);adoptionDeadline=null;adoptionBytes=null
-        state=state.copy(artifactAdoption=active.copy(phase=ArtifactAdoptionPhase.FAILED,errorCode=code))
-        if(notify) { invalidateSurface();flushSkinSelections();flushAppearancePreferences();flushLayoutEdits();publishState() }
-    }
-    private fun completeAdoptionIfAuthoritative() {
-        val active=state.artifactAdoption?.takeIf { it.phase==ArtifactAdoptionPhase.AWAITING_SNAPSHOT } ?: return
-        if(!state.paired || state.pairedServerID!=active.metadata.serverID || active.destinationProfileIDs.any { it !in authoritativeProfileIDs }) return
-        adoptionDeadline?.cancel(false);adoptionDeadline=null;adoptionBytes=null
-        state=state.copy(artifactAdoption=active.copy(phase=ArtifactAdoptionPhase.SUCCEEDED),
-            sharedBuildPreview=state.sharedBuildPreview?.takeUnless { it.recordID==active.metadata.recordID })
-        invalidateSurface()
-        flushSkinSelections();flushAppearancePreferences();flushLayoutEdits()
-    }
-    private fun receiveAdoptionResult(message: JSONObject) {
-        val active=state.artifactAdoption?.takeIf { it.active } ?: return
-        if(!state.paired || state.pairedServerID!=active.metadata.serverID) { adoptionFailed("wrong_server");return }
-        val result=try { ArtifactAdoptionResult.parse(message,active.metadata) } catch(_: Exception) { return }
-        when(result.status) {
-            "failed" -> adoptionFailed(result.errorCode ?: "invalid_envelope")
-            "accepted" -> if(active.phase==ArtifactAdoptionPhase.UPLOADING && active.sentChunks==0) {
-                val bytes=adoptionBytes ?: run { adoptionFailed("disconnected");return }
-                for(index in 0 until active.metadata.chunkCount) {
-                    val lower=index*ArtifactAdoptionMetadata.CHUNK_BYTES
-                    val chunk=bytes.copyOfRange(lower,minOf(bytes.size,lower+ArtifactAdoptionMetadata.CHUNK_BYTES))
-                    val message=WireCodec.message("profile_artifact_adoption_chunk").put("profileArtifactAdoptionOperationID",active.metadata.operationID.toString())
-                        .put("profileArtifactAdoptionChunkIndex",index).put("profileArtifactAdoptionChunkData",java.util.Base64.getEncoder().encodeToString(chunk))
-                    if(socket?.send(message.toString())!=true) { adoptionFailed("disconnected");return }
-                    state=state.copy(artifactAdoption=active.copy(sentChunks=index+1))
-                }
-                adoptionBytes=null
-                if(socket?.send(WireCodec.message("profile_artifact_adoption_commit").put("profileArtifactAdoptionOperationID",active.metadata.operationID.toString()).toString())!=true) adoptionFailed("disconnected")
-            }
-            "succeeded","replayed" -> {
-                if(result.destinationIDs.size!=active.sourceProfiles) { adoptionFailed("invalid_envelope");return }
-                state=state.copy(artifactAdoption=active.copy(phase=ArtifactAdoptionPhase.AWAITING_SNAPSHOT,destinationProfileIDs=result.destinationIDs))
-                completeAdoptionIfAuthoritative()
-                if(state.artifactAdoption?.phase==ArtifactAdoptionPhase.AWAITING_SNAPSHOT) socket?.send(WireCodec.message("gamepad_profiles").toString())
-            }
-        }
-        publishState()
-    }
-
     fun disconnect() = enqueue {
         wantsConnection = false
         stopDiscovery()
@@ -810,7 +708,7 @@ internal class ControllerClient(private val store: SessionStore = MemorySessionS
     private fun receive(bytes: ByteArray, url: String) {
         try {
             val message = WireCodec.decode(bytes)
-            if(message.optString("type")=="profile_artifact_adoption_result") { receiveAdoptionResult(message);return }
+            if(message.optString("type")=="profile_artifact_adoption_result") return // Retired phone upload replies never mutate profiles.
             if (state.paired || message.optString("type") in setOf("hello", "pairing_accepted")) {
                 message.optJSONObject("virtualGamepadStatus")?.let { state = state.copy(virtualGamepadStatus = it) }
                 message.optJSONArray("capabilities")?.let { array ->
@@ -854,7 +752,6 @@ internal class ControllerClient(private val store: SessionStore = MemorySessionS
                         store.forgetMac()
                         trusted = null
                     }
-                    authoritativeProfileIDs=snapshot.profiles.map { it.id }.toSet()
                     val saved=saveIncomingSkinState(snapshot,message.optJSONArray("gamepadProfiles")!=null,message.optJSONObject("gamepadCustomization"))
                     snapshot=saved.first
                     saved.second?.let { saveError=it }
@@ -879,12 +776,10 @@ internal class ControllerClient(private val store: SessionStore = MemorySessionS
                         message.has("gamepadProfileID") || message.has("defaultGamepadProfileID")
                     if(hasProfiles) {
                         val snapshot = state.snapshot.applying(message)
-                        if(message.optJSONArray("gamepadProfiles")!=null) authoritativeProfileIDs=snapshot.profiles.map { it.id }.toSet()
                         val saved=saveIncomingSkinState(snapshot,message.optJSONArray("gamepadProfiles")!=null,message.optJSONObject("gamepadCustomization"))
                         invalidateSurface()
                         if(state.layoutEditing && saved.first.selectedID!=editingProfileID) endLayoutEditing()
                         state = state.copy(snapshot = saved.first,error=saved.second)
-                        completeAdoptionIfAuthoritative()
                         flushAppearancePreferences()
                         flushLayoutEdits()
                     } else if(message.optJSONArray("bindingPresentations")!=null) {
@@ -952,8 +847,6 @@ internal class ControllerClient(private val store: SessionStore = MemorySessionS
         state = state.copy(surfaceRevision = revision)
     }
     private fun closeSession() {
-        adoptionFailed("disconnected",notify=false)
-        authoritativeProfileIDs=emptySet()
         sentRemovals.clear()
         endLayoutEditing()
         clearAnalogQueue()

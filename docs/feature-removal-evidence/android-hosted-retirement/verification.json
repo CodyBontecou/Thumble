@@ -1,0 +1,18 @@
+{
+  "platform": "Android API 26 arm64 emulator",
+  "avd": "thumble-parity-api26",
+  "unitTests": 197,
+  "nativeTests": 32,
+  "stackSafety": {
+    "constrainedThreadTests": 34,
+    "macDebugBuild": true,
+    "iosDebugBuild": true,
+    "budgetsRaised": false
+  },
+  "apkRetirementCheck": "read-only recovery present; hosted pickup/adoption and pruning implementation absent",
+  "apks": {
+    "app": "a2416c67b24a53c32c0e4cfe0e4626e402a12f6ad98a927dd8c408939fa42dbd",
+    "tests": "731849e26a6657801f0aa371cfb353562960f0b566afa5c8fe86617b31b20803"
+  },
+  "scope": "Local Android retirement/recovery and retained native controls. No physical haptic, physical latency or live WoW acceptance. iOS hosted removal and deployed service retirement remain outstanding."
+}

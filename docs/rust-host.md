@@ -4,6 +4,8 @@ The Rust host is a standalone macOS receiver for Thumble. Its transport, pairing
 
 For native Windows/Linux keyboard and mouse control, use the separate [`thumble-receiver`](cross-platform-receiver.md) binary. It shares this host's protocol/core and has its own platform input and per-user CLI adapters.
 
+Android hosted shared-build pickup, preview and phone adoption have been retired. Android adoption harness names in historical acceptance sections below refer to removed scripts; the current Android app offers read-only local recovery exports instead. Ordinary local CLI/profile import and paired profile synchronization remain. iOS and receiver-side legacy adoption retirement are tracked in [feature-removal-progress.md](feature-removal-progress.md).
+
 ## Architecture
 
 ```text

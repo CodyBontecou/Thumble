@@ -2,7 +2,7 @@
 """Check the Android executable-setting validation matrix against native Swift.
 
 Uses a read-only transform subprocess with fixture data, never a running receiver
-or the user's profile store. The same cases live in SharedBuildTest.kt.
+or the user's profile store. The retained local codec cases live in PortableProfileArtifactTest.kt; hosted pickup is retired.
 """
 import argparse
 import copy

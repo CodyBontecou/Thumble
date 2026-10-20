@@ -10,7 +10,7 @@ import java.util.UUID
 internal object PortableProfileSemantics {
     private val barItems=setOf("status","profile_menu","launch_target","spacer","edit_layout","settings","home","connection")
     private val settingsFields=listOf("joystickMapping","joystickOutputSettings","triggerSettings","trackpadSettings")
-    private fun bad(): Nothing=throw SharedBuildException("invalid-artifact")
+    private fun bad(): Nothing=throw ProfileArtifactException("invalid-artifact")
     private fun obj(value: Any?)=value as? JSONObject ?: bad()
     private fun array(value: Any?)=value as? JSONArray ?: bad()
     private fun string(value: Any?)=value as? String ?: bad()
