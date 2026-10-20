@@ -12,22 +12,22 @@ import kotlinx.coroutines.withContext
 internal data class SkinRenderProjection(
     val original: ControllerProfile?, val landscape: Boolean, val systemDark: Boolean,
     val profile: ControllerProfile?, val compatibility: SkinCompatibilityResult? = null,
-    val warning: String? = null
+    val warning: String? = null, val actionSet: String = "base"
 ) {
-    fun matches(source: ControllerProfile?, landscape: Boolean, systemDark: Boolean) =
+    fun matches(source: ControllerProfile?, landscape: Boolean, systemDark: Boolean, actionSet: String = "base") =
         // Match Compose request keys: profile equality keeps JSON source identity.
-        original == source && this.landscape == landscape && this.systemDark == systemDark
+        original == source && this.landscape == landscape && this.systemDark == systemDark && this.actionSet == actionSet
 }
 
 /** Call on a worker. One decoded archive and one projection bound memory use. */
 internal class SkinRenderRepository(private val loadPackage: (SkinReference) -> SkinPackage) {
     private val displayGate = Mutex()
     /** Cancel superseded display requests before they enter blocking native-model work. */
-    suspend fun resolveForDisplay(source: ControllerProfile?, landscape: Boolean, systemDark: Boolean): SkinRenderProjection =
+    suspend fun resolveForDisplay(source: ControllerProfile?, landscape: Boolean, systemDark: Boolean, actionSet: String = "base"): SkinRenderProjection =
         displayGate.withLock {
             withContext(Dispatchers.IO) {
                 currentCoroutineContext().ensureActive()
-                resolve(source, landscape, systemDark)
+                resolve(source, landscape, systemDark, actionSet)
             }
         }
     companion object {
@@ -45,14 +45,29 @@ internal class SkinRenderRepository(private val loadPackage: (SkinReference) -> 
     /** Installation/removal owners must invalidate after committing a library change. */
     fun invalidate() { revision.incrementAndGet() }
 
-    @Synchronized fun resolve(source: ControllerProfile?, landscape: Boolean, systemDark: Boolean): SkinRenderProjection {
+    @Synchronized fun resolve(source: ControllerProfile?, landscape: Boolean, systemDark: Boolean, actionSet: String = "base"): SkinRenderProjection {
+        require(actionSet in ProfileAppearanceBank.actions) { "invalid-appearance-state" }
         val currentRevision = revision.get()
         if (cachedRevision != currentRevision) {
             reference = null; packageValue = null; cached = null; cachedRevision = currentRevision
         }
-        cached?.takeIf { it.matches(source, landscape, systemDark) }?.let { return it }
+        cached?.takeIf { it.matches(source, landscape, systemDark, actionSet) }?.let { return it }
         fun finish(profile: ControllerProfile? = source, compatibility: SkinCompatibilityResult? = null, warning: String? = null) =
-            SkinRenderProjection(source, landscape, systemDark, profile, compatibility, warning).also { cached = it }
+            SkinRenderProjection(source, landscape, systemDark, profile, compatibility, warning, actionSet).also { cached = it }
+        if (landscape && source?.source?.optJSONObject("appearanceBank") != null) {
+            return try {
+                val table = ProfileResourceTable.fromProfile(source.source)
+                val input = JSONObject().put("layout", source.layout(true)).put("bank", source.source.getJSONObject("appearanceBank"))
+                val expanded = table?.expanding(input) ?: AppearanceJSON.objectCopy(input)
+                val bank = ProfileAppearanceBank(expanded.getJSONObject("bank"))
+                val layout = bank.resolve(expanded.getJSONObject("layout"), source.skinColorScheme(systemDark), actionSet)
+                layout.put("colorSchemePreference", source.source.getJSONObject("customization").optString("colorSchemePreference", "system"))
+                val projected = AppearanceJSON.objectCopy(source.source).put("landscapeCustomization", layout)
+                finish(ControllerProfile(source.id, source.name, projected))
+            } catch (_: Exception) {
+                finish(warning = "This keypad’s owned appearance needs recovery. Its saved profile has been preserved.")
+            }
+        }
         val raw = source?.source?.optJSONObject("skinReference") ?: return finish()
         val requested = runCatching { SkinReference.parse(raw) }.getOrNull()
             ?: return finish(warning = "This keypad has an invalid skin reference. Showing its saved appearance.")
@@ -71,7 +86,7 @@ internal class SkinRenderRepository(private val loadPackage: (SkinReference) -> 
             val scheme = source.skinColorScheme(systemDark)
             val baseline = source.source.optJSONObject(if (landscape) "landscapeSkinBaselineCustomization" else "portraitSkinBaselineCustomization")
                 ?: source.source.optJSONObject("skinBaselineCustomization")
-            val result = SkinProfileResolver.apply(packageValue!!, local, if (landscape) "landscape" else "portrait", scheme, baseline = baseline)
+            val result = SkinProfileResolver.apply(packageValue!!, local, if (landscape) "landscape" else "portrait", scheme, baseline = baseline, actionSet = actionSet)
             val projected = JSONObject(source.source.toString()).put(if (landscape) "landscapeCustomization" else "portraitCustomization", result.customization)
             return finish(ControllerProfile(source.id, source.name, projected), result.compatibility,
                 if (result.compatibility.status == "compatible") null else "Some skin artwork is unavailable for this layout.")

@@ -16,6 +16,23 @@ internal class ProfileResourceTable private constructor(private val entries: Map
         return ByteBuffer.wrap(bytes).asReadOnlyBuffer()
     }
 
+    /** Worker-only render copy. Repeated references share a single immutable Base64 string.
+     * The saved profile remains compact; containers returned here are independently editable.
+     */
+    fun expanding(value: JSONObject): JSONObject {
+        val encoded = mutableMapOf<String, String>()
+        fun expand(node: Any): Any = when (node) {
+            is JSONObject -> if (node.has(REFERENCE)) {
+                data(node) // Validate exact reference shape, including unknown metadata owners.
+                val digest = node.getString(REFERENCE)
+                encoded.getOrPut(digest) { Base64.getEncoder().encodeToString(entries.getValue(digest)) }
+            } else JSONObject().also { result -> node.keys().forEach { result.put(it, expand(node.get(it))) } }
+            is JSONArray -> JSONArray().also { result -> repeat(node.length()) { result.put(expand(node.get(it))) } }
+            else -> node
+        }
+        return expand(value) as JSONObject
+    }
+
     /** Call after removing local-only fields, so bookmarks/icons cannot remain orphaned. */
     fun pruningUnused(profile: JSONObject): JSONObject {
         val used = referencedIDs(profile)
