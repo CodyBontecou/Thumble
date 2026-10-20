@@ -9,7 +9,7 @@ import androidx.lifecycle.ViewModelProvider
 
 /** Application-context resources only: a recreated screen never owns or abandons a socket. */
 internal class ControllerSession(store: SessionStore, discovery: MacDiscovery, val skinRenderer: SkinRenderRepository, private val skinLibrary: () -> SkinLibrary, private val cacheDirectory: java.io.File,
-    private val thumbStore: ThumbCalibrationStore,val sharedBuilds: SharedBuildSession) : ViewModel() {
+    val sharedBuilds: SharedBuildSession, private val retiredTraceDirectory: java.io.File) : ViewModel() {
     var state by mutableStateOf(ClientState())
         private set
     var skinRevision by mutableStateOf(0L)
@@ -24,65 +24,12 @@ internal class ControllerSession(store: SessionStore, discovery: MacDiscovery, v
     var reviewedSkin by mutableStateOf<SkinPackage?>(null)
         private set
     private val skinWorker = java.util.concurrent.Executors.newSingleThreadExecutor()
+    init {
+        // Accepted calibration suggestions already live in profiles. Only obsolete traces are removed.
+        skinWorker.execute { runCatching { retiredTraceDirectory.deleteRecursively() } }
+    }
     private val main = android.os.Handler(android.os.Looper.getMainLooper())
     private var cleared = false
-    private val thumbWorker=java.util.concurrent.Executors.newSingleThreadExecutor()
-    var thumbCapture by mutableStateOf<ThumbCapture?>(null);private set
-    var thumbBusy by mutableStateOf(false);private set
-    var thumbError by mutableStateOf<String?>(null);private set
-    private var thumbToken=-1L
-    private var thumbKey: ThumbCalibrationKey?=null
-    fun prepareThumbCalibration(token: Long,key: ThumbCalibrationKey,layout: LayoutSnapshot) {
-        if(thumbToken==token) {
-            if(thumbKey!=key) client.finishLayoutEditing()
-            return
-        }
-        thumbToken=token;thumbKey=key;thumbCapture=null;thumbBusy=true;thumbError=null
-        thumbWorker.execute {
-            val previous=runCatching { thumbStore.load(key) }
-            main.post { if(!cleared && thumbToken==token) {
-                thumbCapture=ThumbCapture(previous.getOrNull() ?: ThumbCalibration(key),ThumbCapture.hands(layout.json()))
-                thumbError=if(previous.isFailure) "Saved reach data could not be read. Trace your reach again." else null
-                thumbBusy=false
-            } }
-        }
-    }
-    fun updateThumbCapture(token: Long,change: (ThumbCapture)->ThumbCapture) {
-        if(token!=thumbToken || thumbBusy) return
-        val previous=thumbCapture ?: return
-        val next=change(previous);thumbCapture=next
-        if(!previous.complete && next.complete) saveThumbCalibration(token)
-    }
-    fun saveThumbCalibration(token: Long) {
-        val capture=thumbCapture ?: return
-        if(token!=thumbToken || thumbBusy || !capture.complete) return
-        thumbBusy=true;thumbError=null
-        thumbWorker.execute {
-            val success=runCatching { thumbStore.save(capture.calibration) }.isSuccess
-            main.post { if(!cleared && thumbToken==token) {
-                thumbBusy=false;thumbError=if(success) null else "Could not save thumb reach. Try saving again. Your keypad is unchanged."
-            } }
-        }
-    }
-    fun applyThumbSuggestion(token: Long,layout: LayoutSnapshot,suggestion: ThumbSuggestion,size: SkinCanvas,safe: ThumbRect) {
-        val capture=thumbCapture ?: return
-        if(token!=thumbToken || thumbBusy || !capture.complete || thumbError!=null) return
-        thumbBusy=true
-        thumbWorker.execute {
-            val result=runCatching { ThumbLayout.repair(layout,suggestion,capture.calibration.zones,size,safe) }
-            main.post {
-                if(cleared || thumbToken!=token) return@post
-                if(!state.layoutCalibrating || state.layoutEditToken!=token) { thumbBusy=false;return@post }
-                result.fold({ changed ->
-                    if(changed.samePresentation(layout)) { thumbBusy=false;client.finishLayoutEditing() }
-                    else client.commitLayoutEdit(changed,token) { success ->
-                        thumbBusy=false
-                        if(success) client.showEditorAfterCalibration(token)
-                    }
-                }, { thumbBusy=false;thumbError="Could not prepare that suggestion. Your keypad is unchanged." })
-            }
-        }
-    }
     var skinSyncInFlight by mutableStateOf(0)
         private set
     private val incomingSkinQueue = SkinSyncQueue(skinWorker,
@@ -234,7 +181,7 @@ internal class ControllerSession(store: SessionStore, discovery: MacDiscovery, v
             skinBusy=true;client.commitSkinChange(original,it,null) { skinBusy=false;drainSkinRequests() }
         }
     }
-    override fun onCleared() { cleared=true;incomingSkinQueue.close();skinWorker.shutdownNow();thumbWorker.shutdownNow();sharedBuilds.close();client.dispose() }
+    override fun onCleared() { cleared=true;incomingSkinQueue.close();skinWorker.shutdownNow();sharedBuilds.close();client.dispose() }
 
     class Factory(private val context: Context) : ViewModelProvider.Factory {
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -242,7 +189,7 @@ internal class ControllerSession(store: SessionStore, discovery: MacDiscovery, v
             val library by lazy { SkinLibrary(java.io.File(context.filesDir, "skins")) }
             return modelClass.cast(ControllerSession(ClientDependencies.sessionStore(context), NsdMacDiscovery(context),
                 SkinRenderRepository { library.packageFor(it) }, { library },context.cacheDir,
-                ThumbCalibrationStore(java.io.File(context.noBackupFilesDir,"thumb-calibration")),ClientDependencies.sharedBuildSession(context)))!!
+                ClientDependencies.sharedBuildSession(context),java.io.File(context.noBackupFilesDir,"thumb-calibration")))!!
         }
     }
 }

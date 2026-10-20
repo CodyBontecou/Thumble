@@ -77,7 +77,7 @@ import androidx.compose.ui.unit.dp
                             Text("Create and style full keypads on the Mac. Your phone receives saved setups and supports small freeform layout edits.")
                             GuideCard("Edit on Mac","Add controls, style them, and record shortcuts in the Mac keypad editor.")
                             GuideCard("Switch setups","Tap the keypad name in the top bar to switch synced profiles or choose a default.")
-                            GuideCard("Adjust your reach","Choose Edit layout from keypad options to move, resize, rotate, or delete freeform controls. Thumb calibration helps fit them to your hands.")
+                            GuideCard("Adjust your reach","Choose Edit layout from keypad options to move, resize, rotate, or delete freeform controls.")
                             GuideCard("Practice safely","Practice with a saved keypad while disconnected. Practice mode keeps presses local to your phone.")
                             GuideCard(if(state.paired) "Connected and ready" else "You can pair any time",if(state.paired) "Finish setup to open your synced keypad." else "Finish setup to open QR scanning, manual pairing, and your saved Mac connection.")
                         }

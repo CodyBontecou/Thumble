@@ -8,64 +8,6 @@ public enum ThumbleSkinWorkspaceSchema {
     public static let currentVersion = 3
 }
 
-public struct ThumbleNormalizedRect: Codable, Equatable, Sendable {
-    public var x: CGFloat
-    public var y: CGFloat
-    public var width: CGFloat
-    public var height: CGFloat
-
-    public init(x: CGFloat, y: CGFloat, width: CGFloat, height: CGFloat) {
-        self.x = x
-        self.y = y
-        self.width = width
-        self.height = height
-    }
-
-    public var normalized: ThumbleNormalizedRect {
-        let width = Self.clamp(self.width, 0, 1)
-        let height = Self.clamp(self.height, 0, 1)
-        return ThumbleNormalizedRect(
-            x: Self.clamp(x, 0, 1 - width),
-            y: Self.clamp(y, 0, 1 - height),
-            width: width,
-            height: height
-        )
-    }
-
-    private static func clamp(_ value: CGFloat, _ lower: CGFloat, _ upper: CGFloat) -> CGFloat {
-        guard value.isFinite else { return lower }
-        return min(max(value, lower), max(lower, upper))
-    }
-}
-
-public struct ThumbleNormalizedInsets: Codable, Equatable, Sendable {
-    public var top: CGFloat
-    public var leading: CGFloat
-    public var bottom: CGFloat
-    public var trailing: CGFloat
-
-    public init(top: CGFloat = 0, leading: CGFloat = 0, bottom: CGFloat = 0, trailing: CGFloat = 0) {
-        self.top = top
-        self.leading = leading
-        self.bottom = bottom
-        self.trailing = trailing
-    }
-
-    public var normalized: ThumbleNormalizedInsets {
-        ThumbleNormalizedInsets(
-            top: Self.clamp(top),
-            leading: Self.clamp(leading),
-            bottom: Self.clamp(bottom),
-            trailing: Self.clamp(trailing)
-        )
-    }
-
-    private static func clamp(_ value: CGFloat) -> CGFloat {
-        guard value.isFinite else { return 0 }
-        return min(max(value, 0), 0.45)
-    }
-}
-
 public enum ThumbleSkinMaterialKind: String, Codable, CaseIterable, Identifiable, Sendable {
     case translucentPlastic = "translucent_plastic"
     case opaquePlastic = "opaque_plastic"

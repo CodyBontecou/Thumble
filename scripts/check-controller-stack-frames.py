@@ -27,6 +27,7 @@ IOS_RUNTIME_OBJECT_NAMES = (
     "ControllerProtocol.o",
     "ControllerClient.o",
     "IOSLocalKeypadUX.o",
+    "GamepadAppearance.o",
     "ThumbleSkin.o",
     "ThumbleSkinPackage.o",
     "ThumbleSkinResolver.o",

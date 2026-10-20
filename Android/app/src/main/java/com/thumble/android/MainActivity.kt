@@ -312,7 +312,7 @@ class MainActivity : ComponentActivity() {
         val adopting=state.artifactAdoption?.active==true
         val snapshot=state.sharedBuildPreview?.snapshot ?: state.snapshot
         val profile = snapshot.selected
-        if (state.layoutEditing && !state.layoutCalibrating && profile != null) {
+        if (state.layoutEditing && profile != null) {
             key(state.layoutEditToken) {
                 LayoutEditorScreen(profile, state.layoutEditOrientation ?: if(landscape) LayoutOrientation.LANDSCAPE else LayoutOrientation.PORTRAIT,
                     state.layoutEditToken, client, session.skinRenderer, dark, state.error,state.layoutEditEntry)
@@ -337,7 +337,7 @@ class MainActivity : ComponentActivity() {
         Column(Modifier.fillMaxSize().safeDrawingPadding().semantics { testTagsAsResourceId=true }) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                 Box {
-                    TextButton(enabled=!state.layoutCalibrating,modifier=Modifier.testTag("keypad-options").semantics { contentDescription="Keypad options" },onClick = { surface?.cancelTouches(); menu = true }) { Text(profile?.name ?: "Keypad") }
+                    TextButton(modifier=Modifier.testTag("keypad-options").semantics { contentDescription="Keypad options" },onClick = { surface?.cancelTouches(); menu = true }) { Text(profile?.name ?: "Keypad") }
                     DropdownMenu(expanded = menu, onDismissRequest = { menu = false },containerColor=MaterialTheme.colorScheme.surface) {
                         snapshot.profiles.forEach { item -> DropdownMenuItem(text = { Text(item.name + if (item.id == snapshot.defaultID) " · Default" else "") },
                             onClick = { selectProfile(item.id); menu = false }) }
@@ -372,22 +372,18 @@ class MainActivity : ComponentActivity() {
                             onClick={ menu=false;surface?.cancelTouches();profile?.let {
                                 client.beginLayoutEditing(it.id,if(landscape) LayoutOrientation.LANDSCAPE else LayoutOrientation.PORTRAIT)
                             } })
-                        DropdownMenuItem(text={ Text("Calibrate thumb reach") },enabled=profile!=null && !loadingSkin && !session.skinBusy,
-                            onClick={ menu=false;surface?.cancelTouches();profile?.let {
-                                client.beginLayoutEditing(it.id,if(landscape) LayoutOrientation.LANDSCAPE else LayoutOrientation.PORTRAIT,calibration=true)
-                            } })
                         DropdownMenuItem(text={ Text("Settings") },onClick={ menu=false;openSettings() })
                         }
                     }
                 }
-                TextButton(enabled=!state.layoutCalibrating,onClick = {
+                TextButton(onClick = {
                     surface?.cancelTouches()
                     if(sharedPreview) client.endSharedBuildPreview() else if (state.paired) client.disconnect() else client.showConnection()
                 }) { Text(if(sharedPreview) "Close preview" else if (state.paired) "Disconnect" else "Connection") }
             }
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(if(adopting) "Adding shared build · input off" else if(sharedPreview) "Shared preview · input off" else if (state.practiceMode) "Practice mode · on" else "Practice mode · off", Modifier.padding(top = 14.dp))
-                Switch(checked = state.practiceMode || sharedPreview || adopting, enabled = state.paired && !state.layoutCalibrating && !sharedPreview && !adopting,
+                Switch(checked = state.practiceMode || sharedPreview || adopting, enabled = state.paired && !sharedPreview && !adopting,
                     modifier = Modifier.semantics { contentDescription = "Practice mode" }, onCheckedChange = { surface?.cancelTouches(); client.setPracticeMode(it) })
             }
             if(adopting) TextButton(onClick={ client.cancelSharedBuildAdoption() }) { Text("Cancel adoption") }
@@ -398,10 +394,10 @@ class MainActivity : ComponentActivity() {
                 }
                 Row {
                     Text("UDP", Modifier.padding(top = 14.dp), style = MaterialTheme.typography.labelMedium)
-                    Switch(checked = state.udpEnabled, enabled=!state.layoutCalibrating,modifier = Modifier.semantics { contentDescription = "UDP transport" }, onCheckedChange = { client.setUDPEnabled(it) })
+                    Switch(checked = state.udpEnabled, modifier = Modifier.semantics { contentDescription = "UDP transport" }, onCheckedChange = { client.setUDPEnabled(it) })
                 }
             }
-            state.error?.takeUnless { state.layoutCalibrating }?.let { Text(it, Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.error) }
+            state.error?.let { Text(it, Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.error) }
             if (loadingSkin) Text("Loading keypad appearance…", Modifier.padding(horizontal = 16.dp), style = MaterialTheme.typography.labelSmall)
             session.skinError?.let { Text(it, Modifier.padding(horizontal=16.dp),color=MaterialTheme.colorScheme.error) }
             if(state.pendingSkinChanges>0) Text("${state.pendingSkinChanges} ${if(state.pendingSkinChanges==1) "skin change" else "skin changes"} waiting for Mac sync",Modifier.padding(horizontal=16.dp),style=MaterialTheme.typography.labelSmall)
@@ -413,7 +409,7 @@ class MainActivity : ComponentActivity() {
             Box(Modifier.fillMaxWidth().weight(1f)) {
             AndroidView(factory = { context -> ControllerSurface(context).also { surface = it } },
                 update = { view ->
-                    view.importantForAccessibility=if(state.layoutCalibrating) android.view.View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS else android.view.View.IMPORTANT_FOR_ACCESSIBILITY_AUTO
+                    view.importantForAccessibility=android.view.View.IMPORTANT_FOR_ACCESSIBILITY_AUTO
                     val surfaceRevision = state.surfaceRevision
                     view.onEdge = { id, down, press -> client.edge(id, down, press, surfaceRevision) }
                     view.onPartEdge = { id, part, down, press -> client.elementEdge(id, part, down, press, surfaceRevision) }
@@ -426,8 +422,6 @@ class MainActivity : ComponentActivity() {
                         profile?.skinColorScheme(dark)=="dark")
                     view.showBindingPresentations(snapshot.bindingPresentations,state.showBindingGlyphs)
                 }, modifier = Modifier.fillMaxSize())
-            if(state.layoutCalibrating && profile!=null) ThumbCalibrationOverlay(profile,
-                state.layoutEditOrientation ?: if(landscape) LayoutOrientation.LANDSCAPE else LayoutOrientation.PORTRAIT,state.layoutEditToken,session)
             }
         }
     }

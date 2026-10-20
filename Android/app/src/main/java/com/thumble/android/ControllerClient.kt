@@ -49,7 +49,6 @@ internal data class ClientState(
     val pendingAppearanceChanges: Int = 0,
     val pendingLayoutChanges: Int = 0,
     val layoutEditing: Boolean = false,
-    val layoutCalibrating: Boolean = false,
     val sharedBuildPreview: SharedBuildPracticePreview? = null,
     val artifactAdoption: ArtifactAdoptionState? = null,
     val pairedServerID: String? = null,
@@ -327,7 +326,7 @@ internal class ControllerClient(private val store: SessionStore = MemorySessionS
         state = state.copy(udpEnabled = enabled)
         publishState()
     }
-    fun beginLayoutEditing(profileID: UUID, orientation: LayoutOrientation, calibration: Boolean = false) = enqueue {
+    fun beginLayoutEditing(profileID: UUID, orientation: LayoutOrientation) = enqueue {
         if(state.sharedBuildPreview!=null || state.artifactAdoption?.active==true) return@enqueue
         if(state.layoutEditing || state.snapshot.selectedID!=profileID || state.snapshot.selected==null || (!state.paired && !state.viewingSaved)) return@enqueue
         if(!pendingLayoutsLoaded || !pendingAppearanceLoaded || !pendingSkinsLoaded) {
@@ -335,22 +334,17 @@ internal class ControllerClient(private val store: SessionStore = MemorySessionS
         }
         invalidateSurface()
         editingProfileID=state.snapshot.selectedID
-        state=state.copy(layoutEditing=true,layoutCalibrating=calibration,
+        state=state.copy(layoutEditing=true,
             layoutEditEntry=LayoutSnapshot.resolved(state.snapshot.selected!!,orientation).oriented(orientation),
             layoutEditToken=++nextEditToken,layoutEditOrientation=orientation,error=null)
         publishState()
-    }
-    fun showEditorAfterCalibration(token: Long) = enqueue {
-        if(state.layoutEditing && state.layoutCalibrating && state.layoutEditToken==token) {
-            state=state.copy(layoutCalibrating=false);publishState()
-        }
     }
     fun finishLayoutEditing() = enqueue {
         if(state.layoutEditing) { invalidateSurface();endLayoutEditing();publishState() }
     }
     private fun endLayoutEditing() {
         editingProfileID=null
-        state=state.copy(layoutEditing=false,layoutCalibrating=false,layoutEditEntry=null,layoutEditToken=++nextEditToken,layoutEditOrientation=null)
+        state=state.copy(layoutEditing=false,layoutEditEntry=null,layoutEditToken=++nextEditToken,layoutEditOrientation=null)
     }
     private fun persistProfiles(snapshot: ProfileSnapshot, skins: List<PendingSkinSelection>, appearance: List<PendingAppearancePreference>, layouts: List<PendingLayoutEdit>) {
         if(pendingLayouts.isEmpty() && layouts.isEmpty()) store.saveProfileState(snapshot,skins,appearance)
