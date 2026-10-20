@@ -226,6 +226,7 @@ final class StackSafetyRegressionTests: XCTestCase {
             try encodeWire()
             try decodeWire()
             try verifySavedStartup()
+            try verifyPendingResourceRecovery()
         }
         private func readProfile() throws {
             let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
@@ -243,6 +244,23 @@ final class StackSafetyRegressionTests: XCTestCase {
             let message = try ControllerWireCodec.decode(wire, using: JSONDecoder())
             guard message.gamepadProfiles?.first == profile,
                   message.gamepadProfileID == profile?.id else { throw StackTestError.unexpectedDecodedState }
+        }
+        private func verifyPendingResourceRecovery() throws {
+            let profile = try XCTUnwrap(profile)
+            let edit = PendingKeypadLayoutEdit(profileID: profile.id, orientation: .landscape,
+                customization: profile.customization, serverID: "resource-stack-host", updatedAt: 101, recoveryProfile: profile)
+            let suite = "ThumblePendingResourceStack.\(UUID().uuidString)"
+            let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+            defer { defaults.removePersistentDomain(forName: suite) }
+            PendingKeypadLayoutPersistence.save([edit], defaults: defaults)
+            let reloaded = try PendingKeypadLayoutPersistence.load(defaults: defaults)
+            let result = PendingKeypadLayoutReconciler.reconcile(incomingProfiles: [], pendingEdits: reloaded,
+                authoritativeServerID: "resource-stack-host")
+            guard result.profiles.first?.appearanceBank == profile.appearanceBank,
+                  result.profiles.first?.customization == profile.customization,
+                  result.remainingEdits.count == 1, result.editsToUpload.count == 1 else {
+                throw StackTestError.reconciliationFailed
+            }
         }
         private struct SavedState: Encodable {
             let profiles: [GamepadConfigurationProfile]

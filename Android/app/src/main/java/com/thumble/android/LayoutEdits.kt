@@ -116,19 +116,46 @@ internal data class LayoutEditKey(val serverID: String?, val profileID: UUID, va
 private fun parseLayoutUUID(raw: String): UUID = UUID.fromString(raw).also {
     require(it.toString().equals(raw, ignoreCase = true)) { "Invalid layout UUID" }
 }
+/** Immutable, local-only recovery copy. Resource tables and unknown metadata
+ * survive a host deleting the profile while this phone has pending edits. */
+internal class LayoutRecoveryProfile private constructor(private val bytes: String) {
+    fun profile(): ControllerProfile = ControllerProfile.parse(StrictJSON.objectValue(bytes.toByteArray(Charsets.UTF_8)))
+    fun json(): JSONObject = profile().source
+    companion object {
+        fun capture(raw: JSONObject): LayoutRecoveryProfile {
+            val bytes = raw.toString()
+            require(bytes.toByteArray(Charsets.UTF_8).size <= WireCodec.MAX_PAYLOAD) { "Recovery profile is too large" }
+            val copy = StrictJSON.objectValue(bytes.toByteArray(Charsets.UTF_8))
+            val profile = ControllerProfile.parse(copy)
+            require(copy.opt("appearanceBank") is JSONObject) { "Recovery profile needs owned appearance" }
+            val table = ProfileResourceTable.fromProfile(copy)
+            val payload = JSONObject().put("bank",copy.getJSONObject("appearanceBank")).put("layout",profile.layout(true))
+            val expanded = table?.expanding(payload) ?: payload
+            ProfileAppearanceBank(expanded.getJSONObject("bank")).resolve(expanded.getJSONObject("layout"), "light", "base")
+            return LayoutRecoveryProfile(bytes)
+        }
+    }
+}
+
 internal data class PendingLayoutEdit(val profileID: UUID, val orientation: LayoutOrientation,
-    val customization: LayoutSnapshot, val updatedAt: Long, val serverID: String?) {
+    val customization: LayoutSnapshot, val updatedAt: Long, val serverID: String?,
+    val recoveryProfile: LayoutRecoveryProfile? = null) {
     init {
         require(updatedAt >= 0)
         require(serverID == null || (serverID.isNotBlank() && serverID == serverID.trim() && serverID.length <= 512))
         require(customization.orientation == orientation) { "Layout canvas does not match its orientation" }
+        require(recoveryProfile == null || recoveryProfile.profile().id == profileID) { "Recovery profile owner mismatch" }
     }
     val key get() = LayoutEditKey(serverID, profileID, orientation)
     fun json() = JSONObject().put("profileID", profileID.toString()).put("orientation", orientation.wireValue)
         .put("customization", customization.json()).put("updatedAt", updatedAt).put("serverID", serverID ?: JSONObject.NULL)
+        .also { recoveryProfile?.let { saved -> it.put("recoveryProfile",saved.json()) } }
     companion object {
-        fun create(profileID: UUID, orientation: LayoutOrientation, layout: JSONObject, now: Long, serverID: String?) =
-            PendingLayoutEdit(profileID, orientation, LayoutSnapshot.capture(layout).oriented(orientation).stamped(now), now, serverID?.trim()?.ifEmpty { null })
+        fun create(profileID: UUID, orientation: LayoutOrientation, layout: JSONObject, now: Long, serverID: String?,
+            recoveryProfile: ControllerProfile? = null) =
+            PendingLayoutEdit(profileID, orientation, LayoutSnapshot.capture(layout).oriented(orientation).stamped(now), now,
+                serverID?.trim()?.ifEmpty { null }, recoveryProfile?.takeIf { it.source.opt("appearanceBank") is JSONObject }
+                    ?.let { LayoutRecoveryProfile.capture(it.source) })
     }
 }
 
@@ -152,7 +179,8 @@ internal object LayoutEditJournal {
                 catch (error: ArithmeticException) { throw IllegalArgumentException("Invalid layout timestamp", error) }
             PendingLayoutEdit(parseLayoutUUID(raw.getString("profileID")), LayoutOrientation.parse(raw.getString("orientation")),
                 LayoutSnapshot.capture(raw.getJSONObject("customization")), now,
-                if (!raw.has("serverID") || raw.isNull("serverID")) null else raw.getString("serverID"))
+                if (!raw.has("serverID") || raw.isNull("serverID")) null else raw.getString("serverID"),
+                if (!raw.has("recoveryProfile") || raw.isNull("recoveryProfile")) null else LayoutRecoveryProfile.capture(raw.getJSONObject("recoveryProfile")))
         }
         encode(values)
         return values
@@ -169,9 +197,29 @@ internal object LayoutEditJournal {
         val previousOrientation = LayoutOrientation.of(old)
         if (previousOrientation != edit.orientation && result.optJSONObject(previousOrientation.slot) == null)
             result.put(previousOrientation.slot, JSONObject(old.toString()))
-        result.put("customization", edit.customization.json()).put(edit.orientation.slot, edit.customization.json())
+        var layout = edit.customization.json()
+        val recovery = edit.recoveryProfile?.json()
+        recovery?.optJSONObject("appearanceResources")?.let { retained ->
+            if (result.opt("appearanceBank") is JSONObject) {
+                // The authority may have replaced its resource table while this
+                // edit was offline. Never leave the old layout's references dangling.
+                val merged = result.optJSONObject("appearanceResources") ?: JSONObject()
+                val used = requireNotNull(ProfileResourceTable.fromProfile(recovery)).referencedResourceIDs(layout)
+                used.forEach { digest ->
+                    require(!merged.has(digest) || merged.getString(digest) == retained.getString(digest)) { "Conflicting recovery resource" }
+                    merged.put(digest,retained.getString(digest))
+                }
+                result.put("appearanceResourceVersion",1).put("appearanceResources",merged)
+            } else {
+                // An explicit legacy authority/rollback has no bank envelope.
+                // Keep its format and expand only this canonical layout's bytes.
+                layout = requireNotNull(ProfileResourceTable.fromProfile(recovery)).expanding(layout)
+            }
+        }
+        result.put("customization", layout).put(edit.orientation.slot, JSONObject(layout.toString()))
         result.put("updatedAt", maxOf(result.optLong("updatedAt"), edit.updatedAt))
-        return ControllerProfile.parse(result)
+        val checked = ProfileResourceTable.fromProfile(result)?.pruningUnused(result) ?: result
+        return ControllerProfile.parse(checked)
     }
     fun reconcile(incoming: ProfileSnapshot, values: List<PendingLayoutEdit>, serverID: String?,
         canAcknowledge: Boolean, acknowledgementKeys: Set<LayoutEditKey>? = null): LayoutReconciliation {
@@ -196,7 +244,7 @@ internal object LayoutEditJournal {
                 LayoutSnapshot.resolved(remote, edit.orientation).samePresentation(edit.customization)) continue
             if (index < 0) {
                 require(profiles.size < 256) { "Cannot recover another keypad: profile limit reached" }
-                profiles += ControllerProfile.parse(JSONObject().put("id", edit.profileID.toString())
+                profiles += edit.recoveryProfile?.profile() ?: ControllerProfile.parse(JSONObject().put("id", edit.profileID.toString())
                     .put("name", "Recovered Android Layout").put("customization", edit.customization.json()).put("updatedAt", edit.updatedAt))
                 index = profiles.lastIndex; recovered += edit.profileID
             }

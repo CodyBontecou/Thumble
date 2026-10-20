@@ -1654,7 +1654,8 @@ final class ControllerClient: ObservableObject {
                     profileID: selectedGamepadProfileID,
                     orientation: orientation,
                     customization: stampedCustomization,
-                    serverID: currentKeypadSyncServerID
+                    serverID: currentKeypadSyncServerID,
+                    recoveryProfile: selectedGamepadProfile
                 )
             )
         }
@@ -1677,7 +1678,8 @@ final class ControllerClient: ObservableObject {
             profileID: profileID,
             orientation: orientation,
             customization: customization,
-            serverID: currentKeypadSyncServerID
+            serverID: currentKeypadSyncServerID,
+            recoveryProfile: gamepadProfiles.first { $0.id == profileID }
         )
         pendingKeypadLayoutEdits = PendingKeypadLayoutReconciler.recording(
             edit,

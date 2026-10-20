@@ -47,6 +47,51 @@ final class GamepadAppearanceBankTests: XCTestCase {
             skinPackage: nil, actionSet: variant.actionSet)
     }
 
+    func testOwnedOfflineRecoveryRetainsAllStatesAfterHostDeletesProfile() throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        struct Fixture: Decodable { let pooledProfile: GamepadConfigurationProfile }
+        let fixture = try Data(contentsOf: root.appendingPathComponent("Host/fixtures/profile-resources/v1/fixture.json"))
+        var profile = try JSONDecoder().decodeUnique(Fixture.self, from: fixture).pooledProfile
+        let saved = profile
+        let edit = PendingKeypadLayoutEdit(profileID: profile.id, orientation: .landscape,
+            customization: profile.customization, serverID: "trusted-host", updatedAt: 101, recoveryProfile: profile)
+        let bytes = try JSONEncoder().encode(edit)
+        let restored = try JSONDecoder().decodeUnique(PendingKeypadLayoutEdit.self, from: bytes)
+        profile.name = "Later mutation"
+        profile.appearanceBank = nil
+        XCTAssertEqual(restored.recoveryProfile?.profile, saved)
+        let result = PendingKeypadLayoutReconciler.reconcile(incomingProfiles: [], pendingEdits: [restored], authoritativeServerID: "trusted-host")
+        let recovered = try XCTUnwrap(result.profiles.first)
+        XCTAssertEqual(recovered.id, saved.id)
+        XCTAssertEqual(recovered.name, saved.name)
+        XCTAssertEqual(recovered.updatedAt, max(saved.updatedAt, restored.updatedAt))
+        XCTAssertEqual(recovered.appearanceBank, saved.appearanceBank)
+        for variant in try XCTUnwrap(saved.appearanceBank).variants {
+            XCTAssertEqual(resolve(recovered, variant), resolve(saved, variant))
+        }
+        XCTAssertEqual(result.remainingEdits.count, 1)
+        XCTAssertEqual(result.editsToUpload.count, 1)
+        let unrelated = PendingKeypadLayoutReconciler.reconcile(incomingProfiles: [], pendingEdits: [restored], authoritativeServerID: "different-host")
+        XCTAssertTrue(unrelated.profiles.isEmpty)
+        XCTAssertTrue(unrelated.editsToUpload.isEmpty)
+        XCTAssertEqual(unrelated.remainingEdits, [restored])
+    }
+
+    func testPendingOwnedRecoveryRejectsWrongOwnerAndPreservesJournalBytes() throws {
+        let profile = try makeCandidate()
+        let edit = PendingKeypadLayoutEdit(profileID: profile.id, orientation: .landscape,
+            customization: profile.customization, serverID: "trusted", updatedAt: 1, recoveryProfile: profile)
+        var raw = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(edit)) as? [String: Any])
+        raw["profileID"] = UUID().uuidString
+        let bytes = try JSONSerialization.data(withJSONObject: [raw])
+        let suite = "Thumble-OwnedRecovery-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite)); defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(bytes, forKey: PendingKeypadLayoutPersistence.defaultsKey)
+        XCTAssertThrowsError(try PendingKeypadLayoutPersistence.load(defaults: defaults))
+        PendingKeypadLayoutPersistence.save([], defaults: defaults)
+        XCTAssertEqual(defaults.data(forKey: PendingKeypadLayoutPersistence.defaultsKey), bytes)
+    }
+
     func testProfileCodecAndPackageFreeResolutionKeepAllEightStates() throws {
         let original = try makeCandidate()
         let restored = try roundTrip(original)

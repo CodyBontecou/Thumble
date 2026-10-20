@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-20",
+  "appleFocusedTests": 23,
+  "androidUnitTests": 203,
+  "constrainedStackTests": 36,
+  "pendingEditInlineBytes": 1920,
+  "budgetsRaised": false,
+  "logs": {
+    "appleFocused": {
+      "path": "/tmp/thumble-owned-pending-swift-final.log",
+      "sha256": "b7add25da1d6a1a38905b3429f62c9a138343b69cc430b679054f6234908830a"
+    },
+    "appleStack": {
+      "path": "/tmp/thumble-owned-pending-stack-final.log",
+      "sha256": "bb8a53f808f4484fafb69e5bd043052219e0dda844922d6f02571fb4666047d1"
+    },
+    "androidUnits": {
+      "path": "/tmp/thumble-owned-pending-android-final2.log",
+      "sha256": "167efecf3653b1c0083b43b6b2d8bf78900b4e90e537e7de2cd7ca23f508b393"
+    }
+  }
+}

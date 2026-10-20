@@ -42,6 +42,9 @@ internal class ProfileResourceTable private constructor(private val entries: Map
         return copy
     }
 
+    /** Validated references in a retained layout, including opaque metadata. */
+    fun referencedResourceIDs(value: JSONObject): Set<String> = referencedIDs(value)
+
     private fun referencedIDs(profile: JSONObject): Set<String> {
         val used = mutableSetOf<String>()
         val pending = ArrayDeque<Any>()

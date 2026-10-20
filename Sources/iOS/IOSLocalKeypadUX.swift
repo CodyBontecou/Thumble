@@ -45,6 +45,18 @@ enum ControllerInputSuppressionPolicy {
     }
 }
 
+/// Immutable storage keeps the retained eight-state appearance and binary data
+/// out of pending-edit inline frames. This is local recovery data, never a wire payload.
+final class PendingKeypadLayoutProfileSnapshot: Codable, Equatable {
+    let profile: GamepadConfigurationProfile
+    init(_ profile: GamepadConfigurationProfile) { self.profile = profile }
+    init(from decoder: Decoder) throws { profile = try GamepadConfigurationProfile(from: decoder) }
+    func encode(to encoder: Encoder) throws { try profile.encode(to: encoder) }
+    static func == (lhs: PendingKeypadLayoutProfileSnapshot, rhs: PendingKeypadLayoutProfileSnapshot) -> Bool {
+        lhs === rhs || lhs.profile == rhs.profile
+    }
+}
+
 struct PendingKeypadLayoutEdit: Codable, Equatable, Identifiable {
     var profileID: UUID
     var orientation: GamepadEditorDeviceOrientation
@@ -53,19 +65,43 @@ struct PendingKeypadLayoutEdit: Codable, Equatable, Identifiable {
     /// A nil identity is retained locally but is never uploaded automatically.
     var serverID: String?
     var updatedAt: Int64
+    private(set) var recoveryProfile: PendingKeypadLayoutProfileSnapshot?
 
     init(
         profileID: UUID,
         orientation: GamepadEditorDeviceOrientation,
         customization: GamepadCustomization,
         serverID: String?,
-        updatedAt: Int64 = Date.currentMilliseconds
+        updatedAt: Int64 = Date.currentMilliseconds,
+        recoveryProfile: GamepadConfigurationProfile? = nil
     ) {
         self.profileID = profileID
         self.orientation = orientation
         self.customization = customization.normalized
         self.serverID = serverID?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
         self.updatedAt = updatedAt
+        self.recoveryProfile = recoveryProfile.flatMap {
+            $0.id == profileID && $0.appearanceBank != nil ? PendingKeypadLayoutProfileSnapshot($0) : nil
+        }
+    }
+
+    init(from decoder: Decoder) throws {
+        let fields = try decoder.container(keyedBy: CodingKeys.self)
+        profileID = try fields.decode(UUID.self, forKey: .profileID)
+        orientation = try fields.decode(GamepadEditorDeviceOrientation.self, forKey: .orientation)
+        customization = try fields.decode(GamepadCustomization.self, forKey: .customization)
+        serverID = try fields.decodeIfPresent(String.self, forKey: .serverID)
+        updatedAt = try fields.decode(Int64.self, forKey: .updatedAt)
+        recoveryProfile = try fields.decodeIfPresent(PendingKeypadLayoutProfileSnapshot.self, forKey: .recoveryProfile)
+        if let saved = recoveryProfile?.profile {
+            guard saved.id == profileID, saved.appearanceBank != nil else {
+                throw DecodingError.dataCorruptedError(forKey: .recoveryProfile, in: fields,
+                    debugDescription: "Pending layout recovery profile does not match its owner.")
+            }
+        }
+    }
+    private enum CodingKeys: String, CodingKey {
+        case profileID, orientation, customization, serverID, updatedAt, recoveryProfile
     }
 
     var id: String { "\(serverID ?? "untrusted"):\(profileID.uuidString):\(orientation.rawValue)" }
@@ -163,7 +199,8 @@ enum PendingKeypadLayoutReconciler {
         private func makeRecoveredProfile(
             for edit: PendingKeypadLayoutEdit
         ) -> GamepadConfigurationProfile {
-            GamepadConfigurationProfile(
+            if let saved = edit.recoveryProfile?.profile { return saved }
+            return GamepadConfigurationProfile(
                 id: edit.profileID,
                 name: "Recovered iPhone Layout",
                 primaryCustomization: edit.customization,
@@ -177,6 +214,7 @@ enum PendingKeypadLayoutReconciler {
         ) -> GamepadConfigurationProfile {
             var profile = profile
             profile.setCustomization(edit.customization, for: edit.orientation)
+            profile.updatedAt = max(profile.updatedAt, edit.updatedAt)
             return profile
         }
 

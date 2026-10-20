@@ -351,7 +351,7 @@ internal class ControllerClient(private val store: SessionStore = MemorySessionS
             !pendingLayoutsLoaded || !pendingAppearanceLoaded || !pendingSkinsLoaded) { finish(false);return@enqueue }
         val prepared=runCatching {
             val raw=customization.json().put("colorSchemePreference",profile.source.getJSONObject("customization").optString("colorSchemePreference","system"))
-            val edit=PendingLayoutEdit.create(profile.id,orientation,raw,System.currentTimeMillis(),trusted?.serverID)
+            val edit=PendingLayoutEdit.create(profile.id,orientation,raw,System.currentTimeMillis(),trusted?.serverID,profile)
             val next=LayoutEditJournal.recording(pendingLayouts,edit)
             val changed=LayoutEditJournal.applying(profile,edit)
             Triple(edit,next,state.snapshot.copy(profiles=state.snapshot.profiles.map { if(it.id==profile.id) changed else it }))

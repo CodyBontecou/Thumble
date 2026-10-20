@@ -1,0 +1,27 @@
+Test Case '-[ThumbleCLITests.GamepadAppearanceBankTests testBankRejectsIncompleteDuplicateAndInconsistentStateSets]' passed (0.018 seconds).
+Test Case '-[ThumbleCLITests.GamepadAppearanceBankTests testDesktopPreviewResolvesOwnedAppearanceWithoutLoadingPackage]' passed (0.008 seconds).
+Test Case '-[ThumbleCLITests.GamepadAppearanceBankTests testDirectFillAndIconEditsAreNotHiddenByInheritedInlinePaint]' passed (0.019 seconds).
+Test Case '-[ThumbleCLITests.GamepadAppearanceBankTests testFirstControlBarEditKeepsTheOtherSchemesMaterial]' passed (0.018 seconds).
+Test Case '-[ThumbleCLITests.GamepadAppearanceBankTests testIntentionalStateClearAndReusableStyleSelectionRemainVisible]' passed (0.087 seconds).
+Test Case '-[ThumbleCLITests.GamepadAppearanceBankTests testNestedEditsPreserveOtherStatesIconsAndHapticsAfterReload]' passed (0.089 seconds).
+Test Case '-[ThumbleCLITests.GamepadAppearanceBankTests testNewReusableStyleKeepsItsChosenLibraryPositionAcrossStates]' passed (0.014 seconds).
+Test Case '-[ThumbleCLITests.GamepadAppearanceBankTests testOwnedOfflineRecoveryRetainsAllStatesAfterHostDeletesProfile]' passed (0.084 seconds).
+Test Case '-[ThumbleCLITests.GamepadAppearanceBankTests testPendingOwnedRecoveryRejectsWrongOwnerAndPreservesJournalBytes]' passed (0.103 seconds).
+Test Case '-[ThumbleCLITests.GamepadAppearanceBankTests testPhoneMoveDeleteUndoCancelAndOfflineSnapshotDoNotBakeRenderedBank]' passed (0.032 seconds).
+Test Case '-[ThumbleCLITests.GamepadAppearanceBankTests testPointingPaintEditKeepsUnchangedBankColorsAndAnalogOutputs]' passed (0.028 seconds).
+Test Case '-[ThumbleCLITests.GamepadAppearanceBankTests testProfileCodecAndPackageFreeResolutionKeepAllEightStates]' passed (0.069 seconds).
+Test Case '-[ThumbleCLITests.GamepadAppearanceBankTests testSchemeStorageBookkeepingDoesNotOverwriteTheOtherSchemesPaint]' passed (0.019 seconds).
+Test Case '-[ThumbleCLITests.GamepadAppearanceBankTests testStyleAndArtworkEditsMatchIDsAndRetainVariantOnlyContent]' passed (0.035 seconds).
+Test Case '-[ThumbleCLITests.GamepadAppearanceBankTests testVersionFourEnvelopeCannotSilentlyCarryAppearanceBanks]' passed (0.058 seconds).
+	 Executed 15 tests, with 0 failures (0 unexpected) in 0.680 (0.683) seconds
+Test Case '-[ThumbleCLITests.IOSLocalKeypadUXTests testGlobalHapticScalingClampsAndPreservesRelativeStrength]' passed (0.000 seconds).
+Test Case '-[ThumbleCLITests.IOSLocalKeypadUXTests testPendingExecutableLayoutsRejectAmbiguityWithoutReplacingSavedBytes]' passed (0.004 seconds).
+Test Case '-[ThumbleCLITests.IOSLocalKeypadUXTests testPendingLayoutPersistenceRoundTripAndDeduplication]' passed (0.019 seconds).
+Test Case '-[ThumbleCLITests.IOSLocalKeypadUXTests testPendingLayoutReconciliationNeverUploadsToDifferentMac]' passed (0.005 seconds).
+Test Case '-[ThumbleCLITests.IOSLocalKeypadUXTests testPendingLayoutReconciliationPreservesOfflineEditUntilMacAcknowledges]' passed (0.002 seconds).
+Test Case '-[ThumbleCLITests.IOSLocalKeypadUXTests testPendingLayoutReconciliationRestoresProfileRemovedWhileOffline]' passed (0.002 seconds).
+Test Case '-[ThumbleCLITests.IOSLocalKeypadUXTests testPracticeModeSuppressesEveryInputPath]' passed (0.000 seconds).
+Test Case '-[ThumbleCLITests.IOSLocalKeypadUXTests testRetiredReachCleanupPreservesHapticsProfilesAndOfflineEdits]' passed (0.005 seconds).
+	 Executed 8 tests, with 0 failures (0 unexpected) in 0.038 (0.039) seconds
+	 Executed 23 tests, with 0 failures (0 unexpected) in 0.718 (0.723) seconds
+	 Executed 23 tests, with 0 failures (0 unexpected) in 0.718 (0.723) seconds

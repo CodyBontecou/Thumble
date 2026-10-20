@@ -25,6 +25,70 @@ class ProfileAppearanceBankTest {
     private fun variantStyle(profile: JSONObject, scheme: String, action: String = "base") =
         variant(profile, scheme, action).getJSONObject("controls").getJSONObject(element(layout(profile)).getString("id").lowercase())
 
+    @Test fun pendingRecoverySurvivesDeletedHostProfileWithAllStatesResourcesAndOpaqueMetadata() {
+        val raw = fixture().getJSONObject("pooledProfile").put("futureMetadata",JSONObject().put("keep",true))
+        val profile = ControllerProfile.parse(raw)
+        val edit = PendingLayoutEdit.create(profile.id,LayoutOrientation.LANDSCAPE,layout(raw),101,"trusted",profile)
+        val bytes = LayoutEditJournal.encode(listOf(edit)).toString()
+        raw.put("name","Later mutation").remove("appearanceBank")
+        val loaded = LayoutEditJournal.decode(JSONArray(bytes))
+        val result = LayoutEditJournal.reconcile(ProfileSnapshot(),loaded,"trusted",true)
+        val recovered = result.snapshot.profiles.single()
+        assertTrue(recovered.source.getJSONObject("futureMetadata").getBoolean("keep"))
+        assertJSON(fixture().getJSONObject("pooledProfile").getJSONObject("appearanceBank"),recovered.source.getJSONObject("appearanceBank"))
+        val repository = SkinRenderRepository { error("Recovery must not consult packages") }
+        for (scheme in ProfileAppearanceBank.schemes) for (action in ProfileAppearanceBank.actions) {
+            val projection = repository.resolve(recovered,true,scheme=="dark",action)
+            assertNull(projection.warning)
+            val output = projection.profile!!.layout(true)
+            assertEquals("$scheme/$action",style(output).getJSONObject("icon").getString("value"))
+            assertEquals("Zml4dHVyZS1pbWFnZQ==",output.getJSONObject("assetLibrary").getJSONArray("assets").getJSONObject(0).getString("data"))
+        }
+        assertEquals(loaded,result.remaining)
+        assertEquals(loaded,result.uploads)
+        val unrelated = LayoutEditJournal.reconcile(ProfileSnapshot(),loaded,"other-host",true)
+        assertTrue(unrelated.snapshot.profiles.isEmpty())
+        assertTrue(unrelated.uploads.isEmpty())
+        assertEquals(loaded,unrelated.remaining)
+        // Returned containers cannot mutate the immutable queued backup.
+        recovered.source.remove("appearanceResources")
+        assertNotNull(loaded.single().recoveryProfile!!.json().getJSONObject("appearanceResources"))
+    }
+
+    @Test fun pendingCompactResourcesSurviveAnAuthorityResourceReplacementAndLegacyRollback() {
+        val original = ControllerProfile.parse(fixture().getJSONObject("pooledProfile"))
+        val edit = PendingLayoutEdit.create(original.id,LayoutOrientation.LANDSCAPE,layout(original.source),101,"trusted",original)
+        // Inline authority has the same appearance but no old digest table.
+        val remote = ControllerProfile.parse(fixture().getJSONObject("expandedProfile").put("futureAuthorityField",42))
+        val owned = LayoutEditJournal.reconcile(ProfileSnapshot(listOf(remote),remote.id),listOf(edit),"trusted",false).snapshot.profiles.single()
+        assertEquals(42,owned.source.getInt("futureAuthorityField"))
+        assertNotNull(ProfileResourceTable.fromProfile(owned.source))
+        val projection = SkinRenderRepository { error("Owned resource merge must not load a package") }.resolve(owned,true,true,"both-triggers")
+        assertNull(projection.warning)
+        assertEquals("Zml4dHVyZS1pbWFnZQ==",projection.profile!!.layout(true).getJSONObject("assetLibrary").getJSONArray("assets").getJSONObject(0).getString("data"))
+        val legacyRaw = fixture().getJSONObject("expandedProfile");legacyRaw.remove("appearanceBank")
+        val legacy = LayoutEditJournal.applying(ControllerProfile.parse(legacyRaw),edit)
+        assertFalse(legacy.source.has("appearanceBank"))
+        assertFalse(legacy.source.has("appearanceResources"))
+        assertEquals("Zml4dHVyZS1pbWFnZQ==",layout(legacy.source).getJSONObject("assetLibrary").getJSONArray("assets").getJSONObject(0).getString("data"))
+        assertNotNull(edit.recoveryProfile!!.json().getJSONObject("appearanceResources"))
+    }
+
+    @Test fun pendingRecoveryRejectsWrongOwnerMalformedSnapshotAndMissingResource() {
+        val raw = fixture().getJSONObject("pooledProfile")
+        val profile = ControllerProfile.parse(raw)
+        val edit = PendingLayoutEdit.create(profile.id,LayoutOrientation.LANDSCAPE,layout(raw),101,"trusted",profile)
+        for (mode in 0..2) {
+            val saved = edit.json()
+            when(mode) {
+                0 -> saved.put("profileID",java.util.UUID.randomUUID().toString())
+                1 -> saved.put("recoveryProfile","invalid")
+                2 -> saved.getJSONObject("recoveryProfile").put("appearanceResources",JSONObject())
+            }
+            assertTrue(runCatching { LayoutEditJournal.decode(JSONArray().put(saved)) }.isFailure)
+        }
+    }
+
     @Test fun allEightNativeStatesRenderWithoutPackageLookupAndLeaveBindingsGeometryAndSourceUntouched() {
         val raw = fixture().getJSONObject("pooledProfile")
         val source = ControllerProfile.parse(raw); val before = raw.toString()
