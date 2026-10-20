@@ -28,6 +28,8 @@ IOS_RUNTIME_OBJECT_NAMES = (
     "ControllerClient.o",
     "IOSLocalKeypadUX.o",
     "GamepadAppearance.o",
+    "GamepadAppearanceSnapshot.o",
+    "ThumbleLegacyAppearanceMaterializer.o",
     "ThumbleSkin.o",
     "ThumbleSkinPackage.o",
     "ThumbleSkinResolver.o",
@@ -159,6 +161,15 @@ def is_controller_symbol(name: str) -> bool:
 
 
 def is_shared_runtime_symbol(name: str) -> bool:
+    if any(
+        owner in name
+        for owner in (
+            ".GamepadAppearanceSnapshot.",
+            ".GamepadControlAppearanceSnapshot.",
+            ".ThumbleLegacyAppearanceMaterializer.",
+        )
+    ):
+        return True
     if ".GamepadButtonCustomization." in name:
         return ".normalized.getter" in name or ".(normalize" in name
     if ".GamepadCustomization." in name:

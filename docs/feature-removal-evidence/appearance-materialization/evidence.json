@@ -1,0 +1,39 @@
+{
+  "purpose": "Package-independent appearance materialization evidence; no user profile migration or publication.",
+  "sourceArchive": "Host/fixtures/legacy-skin-packages/solar-sumi-1.0.0-edbecde5b708.pocketpad",
+  "sourceArchiveSHA256": "edbecde5b7085aff6c99d3ce671f61daba1a3db1b04bc3f0ef83b72301501947",
+  "profile": "Arcade Stick with explicit primary_action, secondary_action, utility, and menu roles matching archive compatibility.",
+  "test": "FeatureRemovalBaselineTests.testNativeArchiveAppearanceSurvivesPackageFreeExportAndReload",
+  "comparison": "Each exported/reloaded snapshot produces the same PNG SHA-256 as the original package resolver for the same scheme and state.",
+  "scale": 1,
+  "renders": [
+    {
+      "file": "migrated-solar-sumi-light-normal.png",
+      "colorScheme": "light",
+      "state": "normal",
+      "byteCount": 103594,
+      "sha256": "d136ebbd1509f6e568e26d99938dae646d1da12d867d6a009a143abcd6d1d53c"
+    },
+    {
+      "file": "migrated-solar-sumi-light-pressed.png",
+      "colorScheme": "light",
+      "state": "pressed",
+      "byteCount": 72349,
+      "sha256": "b0b0f40ff6ea61eb8c03baded97fb47da088b485b6a7b10d2426851d5c90d7b0"
+    },
+    {
+      "file": "migrated-solar-sumi-dark-normal.png",
+      "colorScheme": "dark",
+      "state": "normal",
+      "byteCount": 92530,
+      "sha256": "386d646ebd785e6efa6f75dce44f7bcff8fe0a28e3b614914c1d188dd243f89c"
+    },
+    {
+      "file": "migrated-solar-sumi-dark-pressed.png",
+      "colorScheme": "dark",
+      "state": "pressed",
+      "byteCount": 68793,
+      "sha256": "5da905364ec5b8c72cffe0a6e6c7b4989843da9f7b8c58a66a4992f33f2af54f"
+    }
+  ]
+}

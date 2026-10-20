@@ -30,6 +30,8 @@ final class StackSafetyRegressionTests: XCTestCase {
     }
 
     func testCriticalValueTypeInlineSizesStayWithinBudgets() {
+        assertInlineSize(GamepadControlAppearanceSnapshot.self, atMost: 8)
+        assertInlineSize(GamepadAppearanceSnapshot.self, atMost: 8)
         assertInlineSize(ThumblePhoneLayoutBridgeRequest.self, atMost: 512)
         assertInlineSize(ThumblePhoneLayoutBridgeResponse.self, atMost: 512)
         assertInlineSize(ThumbleSkinBridgeRequest.self, atMost: 512)
@@ -94,6 +96,43 @@ final class StackSafetyRegressionTests: XCTestCase {
         assertInlineSize(IOSBuilderArtifactReview.self, atMost: 256)
         assertInlineSize(ThumbleLinkSnapshot.self, atMost: 512)
         assertInlineSize(ThumbleLinkImport.Plan.self, atMost: 1024)
+    }
+
+    func testPackageIndependentAppearanceFitsConstrainedThread() throws {
+        try runOnThread(stackSize: 512 * 1024, timeout: 30) {
+            let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            let fixture = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf:
+                root.appendingPathComponent("Host/fixtures/feature-removal/v1/appearance.json"))) as? [String: Any])
+            let rows = try XCTUnwrap(fixture["cases"] as? [[String: Any]])
+            for row in rows {
+                let data = try JSONSerialization.data(withJSONObject: XCTUnwrap(row["expected"]))
+                let layout = try JSONDecoder().decodeUnique(GamepadCustomization.self, from: data)
+                let snapshot = GamepadAppearanceSnapshot(layout)
+                let encoded = try JSONEncoder().encode(snapshot)
+                let reloaded = try JSONDecoder().decodeUnique(GamepadAppearanceSnapshot.self, from: encoded)
+                guard reloaded.applying(to: layout) == layout else { throw StackTestError.unexpectedDecodedState }
+            }
+        }
+    }
+
+    func testLegacyAppearanceMaterializationFitsConstrainedThread() throws {
+        try runOnThread(stackSize: 512 * 1024, timeout: 30) {
+            let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            let data = try Data(contentsOf: root.appendingPathComponent(
+                "Host/fixtures/legacy-skin-packages/solar-sumi-1.0.0-edbecde5b708.pocketpad"))
+            let package = try ThumbleSkinPackageCodec.decode(data)
+            var profile = GamepadControllerTemplate.arcadeStick.makeProfile()
+            profile.applySkin(package)
+            let variants = try ThumbleLegacyAppearanceMaterializer.materialize(profile, orientation: .landscape, package: package)
+            guard variants.count == 8 else { throw StackTestError.skinApplicationFailed }
+            for variant in variants {
+                let resolved = profile.resolvedCustomization(for: .landscape, colorScheme: variant.colorScheme,
+                    skinPackage: package, actionSet: variant.actionSet)
+                guard variant.appearance.applying(to: profile.customization) == resolved else {
+                    throw StackTestError.unexpectedDecodedState
+                }
+            }
+        }
     }
 
     func testPhoneLayoutReplacementAndRecoveryFitConstrainedThread() throws {
