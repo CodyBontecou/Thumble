@@ -21,3 +21,7 @@ The source distribution no longer installs a relay LaunchAgent. The CLI retains 
 ## Outstanding evidence
 
 A read-only inventory attempt could not access the service because the installed Fly CLI has no access token. Sign in with `flyctl auth login` before collecting actual machine, volume, and credential-name metadata. A sanitized local attempt receipt is at `build/HostedRetirement/live-inventory.json`. No database backup/restore, credential revocation, service shutdown, or remote resource destruction has been performed.
+
+## Local pending-build recovery
+
+Android and iOS no longer fetch or adopt hosted builds. Both offer read-only local export of previously stored pending builds, including expired/interrupted records and raw recovery archives for incomplete records. Neither path deletes the originals. macOS import now accepts ordinary local JSON files; shared portable codecs and paired import transactions remain separate from hosted transport. Apple recovery, packaged-client absence and simulator cancellation evidence are recorded in `docs/feature-removal-evidence/apple-hosted-retirement`; Android evidence remains in `docs/feature-removal-evidence/android-hosted-retirement`. This does not export or back up builds that exist only in the deployed gateway.

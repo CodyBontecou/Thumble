@@ -151,8 +151,7 @@ targets:
       - path: Sources/CLI/ThumbleCLIBackend.swift
       - path: Sources/CLI/ThumbleCLIRuntimeBackend.swift
       - path: Sources/iOS/IOSLocalKeypadUX.swift
-      - path: Sources/iOS/IOSPendingBuilderArtifactStore.swift
-      - path: Sources/iOS/IOSBuilderArtifactPickup.swift
+      - path: Sources/iOS/IOSBuildRecovery.swift
       - path: Tests
     dependencies:
       - package: ZIPFoundation

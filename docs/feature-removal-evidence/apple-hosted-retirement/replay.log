@@ -1,0 +1,65 @@
+Running flow "ios-retired-build-recovery-cancel" on 40D69E56-1F3D-40C0-82FC-8781AD399D93 (25 steps)
+[1] ✓ Start with the legacy fixture seeded in the isolated simulator; recovery must be available before pairing or onboarding completion.
+[2] ✓ launch
+[3] ✓ await-ui-element
+{
+  "success": true,
+  "elapsed": 63
+}
+[4] ✓ idle
+[5] ✓ SwiftUI recovery button exists in AX at (0.73, 0.0955), but the working full UIView tree has no labeled/id-bearing recovery element and a runner text-selector probe fails. Use this documented coordinate fallback; require the recovery sheet identity immediately afterward.
+[6] ✓ tap (0.73, 0.0955)
+[7] ✓ await-ui-element
+{
+  "success": true,
+  "elapsed": 226
+}
+[8] ✓ idle
+[9] ✓ await-ui-element
+{
+  "success": true,
+  "elapsed": 61
+}
+[10] ✓ Save profile file is AX-visible at (0.50, 0.5725). Native label discovery is empty, full native list cells have no action labels/ids, and the runner text assertion fails. Use the coordinate fallback and require the document picker.
+[11] ✓ tap (0.5, 0.5725)
+[12] ✓ await-ui-element
+{
+  "success": true,
+  "elapsed": 2052
+}
+[13] ✓ idle
+[14] ✓ The native document exporter is visible. Dismiss its sheet by a downward swipe from the top navigation area; the remote Cancel tracking view overlaps the visible More control, so do not tap that ambiguous target. Require the filename field to disappear and recovery to remain.
+[15] ✓ swipe to (0.5, 0.86) from (0.5, 0.1)
+[16] ✓ await-ui-element
+{
+  "success": true,
+  "elapsed": 82,
+  "note": "condition met immediately — the selector never matched any element, so it may have already been hidden before the wait, or the selector is wrong"
+}
+[17] ✓ await-ui-element
+{
+  "success": true,
+  "elapsed": 55
+}
+[18] ✓ idle
+[19] ✓ await-ui-element
+{
+  "success": true,
+  "elapsed": 57
+}
+[20] ✓ Back in recovery with both records retained; close using Done and require the recovery explanation to disappear while onboarding remains.
+[21] ✓ tap "Done"
+[22] ✓ await-ui-element
+{
+  "success": true,
+  "elapsed": 65,
+  "note": "condition met immediately — the selector never matched any element, so it may have already been hidden before the wait, or the selector is wrong"
+}
+[23] ✓ idle
+[24] ✓ await-ui-element
+{
+  "success": true,
+  "elapsed": 28
+}
+[25] ✓ idle
+PASS — 20 passed, 0 failed, 0 errored, 0 skipped

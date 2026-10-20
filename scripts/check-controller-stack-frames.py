@@ -21,6 +21,7 @@ MAC_RUNTIME_OBJECT_NAMES = (
     "ControllerProtocol.o",
     "MacControllerServer.o",
     "GamepadProfileResourceCodec.o",
+    "PendingProfileRecovery.o",
 )
 IOS_RUNTIME_OBJECT_NAMES = (
     "GamepadCustomization.o",
@@ -28,11 +29,13 @@ IOS_RUNTIME_OBJECT_NAMES = (
     "ControllerProtocol.o",
     "ControllerClient.o",
     "IOSLocalKeypadUX.o",
+    "IOSBuildRecovery.o",
     "GamepadAppearance.o",
     "GamepadAppearanceSnapshot.o",
     "GamepadAppearanceBank.o",
     "GamepadAppearanceEditMerge.o",
     "GamepadProfileResourceCodec.o",
+    "PendingProfileRecovery.o",
     "ThumbleLegacyAppearanceMaterializer.o",
     "ThumbleSkin.o",
     "ThumbleSkinPackage.o",
@@ -175,6 +178,7 @@ def is_shared_runtime_symbol(name: str) -> bool:
             ".GamepadAppearanceResourceReferences.",
             ".GamepadControlAppearanceSnapshot.",
             ".ThumbleLegacyAppearanceMaterializer.",
+            ".PendingProfileRecovery.",
         )
     ):
         return True
@@ -290,6 +294,8 @@ def is_mac_runtime_symbol(name: str) -> bool:
 
 
 def is_ios_runtime_symbol(name: str) -> bool:
+    if "IOSBuildRecovery" in name or "IOSRecoveryDocument" in name:
+        return True
     if is_shared_runtime_symbol(name):
         return True
     if ".GamepadControlVisualStyle." in name:

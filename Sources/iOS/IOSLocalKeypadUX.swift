@@ -271,48 +271,8 @@ enum PendingKeypadLayoutPersistence {
     }
 }
 
-enum IOSBuilderArtifactAdoptionPhase: Equatable, Sendable {
-    case uploading(sentChunks: Int, totalChunks: Int)
-    case awaitingAuthoritativeSnapshot
-    case succeeded(destinationProfileIDs: [UUID], replayed: Bool)
-    case failed(ProfileArtifactAdoptionErrorCode)
-}
-
-struct IOSBuilderArtifactAdoptionState: Equatable, Sendable {
-    let metadata: ProfileArtifactAdoptionMetadata
-    var phase: IOSBuilderArtifactAdoptionPhase
-    var pendingDestinationProfileIDs: [UUID] = []
-    var replayed = false
-
-    mutating func acceptResult(_ result: ProfileArtifactAdoptionResult) -> Bool {
-        guard result.validates(against: metadata) else { return false }
-        switch result.status {
-        case .accepted:
-            return true
-        case .failed:
-            phase = .failed(result.errorCode ?? .invalidEnvelope)
-            pendingDestinationProfileIDs = []
-        case .succeeded, .replayed:
-            pendingDestinationProfileIDs = result.destinationProfileIDs
-            replayed = result.status == .replayed
-            phase = .awaitingAuthoritativeSnapshot
-        }
-        return true
-    }
-
-    mutating func observeAuthoritativeProfiles(_ profileIDs: Set<UUID>) -> Bool {
-        guard !pendingDestinationProfileIDs.isEmpty,
-              pendingDestinationProfileIDs.allSatisfy(profileIDs.contains)
-        else { return false }
-        phase = .succeeded(
-            destinationProfileIDs: pendingDestinationProfileIDs,
-            replayed: replayed
-        )
-        return true
-    }
-}
-
-enum IOSBuilderArtifactPracticePersistence {
+/// One-time restoration for a previous app version killed during hosted practice preview.
+enum IOSRetiredBuildPracticeRecovery {
     private static let forcedDefaultsKey = "PocketPad.iOS.builderPreview.forcedPractice.v1"
     private static let priorValueDefaultsKey = "PocketPad.iOS.builderPreview.priorPractice.v1"
 
@@ -320,100 +280,16 @@ enum IOSBuilderArtifactPracticePersistence {
         storedValue: Bool,
         defaults: UserDefaults = .standard
     ) -> Bool {
-        guard defaults.bool(forKey: forcedDefaultsKey) else { return storedValue }
-        let priorValue = defaults.bool(forKey: priorValueDefaultsKey)
-        defaults.set(priorValue, forKey: IOSKeypadPreferenceKeys.practiceMode)
+        let wasForced = defaults.bool(forKey: forcedDefaultsKey)
+        let restored = wasForced ? defaults.bool(forKey: priorValueDefaultsKey) : storedValue
+        if wasForced { defaults.set(restored, forKey: IOSKeypadPreferenceKeys.practiceMode) }
         clear(defaults: defaults)
-        return priorValue
-    }
-
-    static func markForced(priorValue: Bool, defaults: UserDefaults = .standard) {
-        defaults.set(priorValue, forKey: priorValueDefaultsKey)
-        defaults.set(true, forKey: forcedDefaultsKey)
+        return restored
     }
 
     static func clear(defaults: UserDefaults = .standard) {
         defaults.removeObject(forKey: forcedDefaultsKey)
         defaults.removeObject(forKey: priorValueDefaultsKey)
-    }
-}
-
-/// Immutable, reference-backed projection used only by the local practice renderer.
-/// It never participates in authoritative profile persistence or synchronization.
-final class IOSBuilderArtifactPracticePreview: @unchecked Sendable {
-    private final class Storage: @unchecked Sendable {
-        let profiles: [GamepadConfigurationProfile]
-        init(profiles: [GamepadConfigurationProfile]) { self.profiles = profiles }
-    }
-
-    let recordID: UUID
-    let selectedProfileID: UUID
-    let priorPracticeModeValue: Bool
-    private let storage: Storage
-
-    var profiles: [GamepadConfigurationProfile] { storage.profiles }
-    var selectedProfile: GamepadConfigurationProfile? {
-        storage.profiles.first(where: { $0.id == selectedProfileID })
-    }
-
-    init(
-        recordID: UUID,
-        profiles: [GamepadConfigurationProfile],
-        selectedProfileID: UUID,
-        priorPracticeModeValue: Bool
-    ) {
-        self.recordID = recordID
-        storage = Storage(profiles: profiles)
-        self.selectedProfileID = selectedProfileID
-        self.priorPracticeModeValue = priorPracticeModeValue
-    }
-
-    private init(
-        recordID: UUID,
-        storage: Storage,
-        selectedProfileID: UUID,
-        priorPracticeModeValue: Bool
-    ) {
-        self.recordID = recordID
-        self.storage = storage
-        self.selectedProfileID = selectedProfileID
-        self.priorPracticeModeValue = priorPracticeModeValue
-    }
-
-    func selecting(_ profileID: UUID) -> IOSBuilderArtifactPracticePreview? {
-        guard storage.profiles.contains(where: { $0.id == profileID }) else { return nil }
-        return IOSBuilderArtifactPracticePreview(
-            recordID: recordID,
-            storage: storage,
-            selectedProfileID: profileID,
-            priorPracticeModeValue: priorPracticeModeValue
-        )
-    }
-}
-
-enum IOSBuilderArtifactPracticeTransition {
-    static func begin(
-        recordID: UUID,
-        artifact: PortableProfileArtifact,
-        currentPreview: IOSBuilderArtifactPracticePreview?,
-        currentPracticeModeValue: Bool
-    ) -> IOSBuilderArtifactPracticePreview? {
-        guard !artifact.profiles.isEmpty else { return nil }
-        let selectedID = artifact.profiles.contains(where: { $0.id == artifact.activeProfileID })
-            ? artifact.activeProfileID
-            : artifact.profiles[0].id
-        return IOSBuilderArtifactPracticePreview(
-            recordID: recordID,
-            profiles: artifact.profiles,
-            selectedProfileID: selectedID,
-            priorPracticeModeValue: currentPreview?.priorPracticeModeValue ?? currentPracticeModeValue
-        )
-    }
-
-    static func restoredPracticeModeValue(
-        after preview: IOSBuilderArtifactPracticePreview
-    ) -> Bool {
-        preview.priorPracticeModeValue
     }
 }
 

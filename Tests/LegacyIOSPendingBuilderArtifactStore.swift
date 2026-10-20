@@ -1,3 +1,4 @@
+// Legacy pruning/writing behavior retained only for pre-retirement fixture tests.
 import CryptoKit
 import Darwin
 import Foundation

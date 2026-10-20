@@ -124,7 +124,7 @@ struct MacContentView: View {
         }
     }
 
-    /// Explicit desktop adoption of a hosted-builder artifact through the same
+    /// Local portable-file import through the same
     /// authority import used by `thumble profile import`. The sheet owns review;
     /// this path registers undo and mutates authority state once.
     private func adoptSharedKeypadArtifact(_ review: MacSharedKeypadReview, appendAsCopies: Bool) throws -> String {
@@ -139,7 +139,7 @@ struct MacContentView: View {
             undoManager: undoManager,
             undoTarget: gamepadEditorUndoTarget,
             server: server,
-            actionName: appendAsCopies ? "Import Shared Keypad as New Setups" : "Import Shared Keypad"
+            actionName: appendAsCopies ? "Import Setup as New Setups" : "Import Setup"
         )
         return summary.message
     }
@@ -196,9 +196,9 @@ struct MacContentView: View {
                     sharedKeypadImportModel.reset()
                     isShowingSharedKeypadImport = true
                 } label: {
-                    Label("Import Shared Keypad…", systemImage: "square.and.arrow.down.on.square")
+                    Label("Import Setup…", systemImage: "square.and.arrow.down.on.square")
                 }
-                .help("Adopt a hosted-builder shared keypad from a link or file")
+                .help("Import a saved setup file")
             }
             ToolbarItem {
                 Button {
@@ -3730,12 +3730,9 @@ private enum QRCodeRenderer {
     }
 }
 
-/// Review-before-import sheet for hosted-builder shared keypads. It accepts a
-/// pasted share link or a local `.json` file, validates through the portable
-/// artifact codec, and requires an explicit adoption mode. The pasted link text
-/// is cleared as soon as parsing succeeds and neither the URL nor token is ever
-/// stored beyond the transient fetch.
+/// Reviews a local setup file and imports it through the existing profile authority.
 private struct MacSharedKeypadImportSheet: View {
+    @Environment(\.dismiss) private var dismiss
     @ObservedObject var model: MacSharedKeypadImportModel
     @Binding var isFileImporterPresented: Bool
     let onAdopt: (MacSharedKeypadReview, _ appendAsCopies: Bool) throws -> String
@@ -3748,14 +3745,14 @@ private struct MacSharedKeypadImportSheet: View {
             Divider()
             Group {
                 switch model.phase {
-                case .idle, .fetching, .readingFile:
+                case .idle, .readingFile:
                     sourcePicker
                 case .reviewing:
                     if let review = model.review {
                         reviewSection(review)
                     }
                 case .importing:
-                    ProgressView("Importing shared keypad…")
+                    ProgressView("Importing setup…")
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 case .succeeded(let message):
                     succeededSection(message)
@@ -3766,16 +3763,17 @@ private struct MacSharedKeypadImportSheet: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(width: 560, height: 520)
-        .onDisappear { model.cancelFetch() }
+        .onDisappear { model.cancelRead() }
     }
 
     private var header: some View {
         HStack {
-            Label("Import Shared Keypad", systemImage: "square.and.arrow.down.on.square")
+            Label("Import Setup", systemImage: "square.and.arrow.down.on.square")
                 .font(.headline)
             Spacer()
             Button("Close") {
                 model.reset()
+                dismiss()
             }
             .keyboardShortcut(.cancelAction)
         }
@@ -3784,36 +3782,12 @@ private struct MacSharedKeypadImportSheet: View {
 
     private var sourcePicker: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Adopt a controller setup built in ChatGPT. Review it here, then import through the Mac’s keypad authority — the same operation as `thumble profile import`.")
+            Text("Choose a saved setup file to review and import on this Mac.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
 
             VStack(alignment: .leading, spacing: 8) {
-                Text("Shared build link")
-                    .font(.subheadline.weight(.semibold))
-                HStack {
-                    TextField("https://thumble-mcp-gateway.fly.dev/share/…#token=…", text: $model.shareURLText)
-                        .textFieldStyle(.roundedBorder)
-                        .disabled(model.isBusy)
-                        .onSubmit { model.startFromShareURL() }
-                    Button(model.phase == .fetching ? "Checking…" : "Check Link") {
-                        model.startFromShareURL()
-                    }
-                    .disabled(model.isBusy || model.shareURLText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                }
-                Text("The link contains an access token. Thumble sends it only to the Thumble share server and never stores it.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            if model.phase == .fetching {
-                ProgressView("Downloading and validating the shared build…")
-            }
-
-            Divider()
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Or choose a saved artifact file")
+                Text("Saved setup file")
                     .font(.subheadline.weight(.semibold))
                 Button("Choose .json File…") {
                     isFileImporterPresented = true
@@ -3830,7 +3804,7 @@ private struct MacSharedKeypadImportSheet: View {
 
     private func reviewSection(_ review: MacSharedKeypadReview) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            LabeledContent("From") { Text(review.sourceHost) }
+            LabeledContent("From") { Text(review.sourceName) }
             LabeledContent("Setups") { Text("\(review.profileNames.count)") }
             LabeledContent("Size") {
                 Text(ByteCountFormatter.string(fromByteCount: Int64(review.byteCount), countStyle: .file))
@@ -3890,6 +3864,7 @@ private struct MacSharedKeypadImportSheet: View {
                 .foregroundStyle(.secondary)
             Button("Done") {
                 model.reset()
+                dismiss()
             }
                 .keyboardShortcut(.defaultAction)
                 .buttonStyle(.borderedProminent)
@@ -3903,7 +3878,7 @@ private struct MacSharedKeypadImportSheet: View {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.system(size: 36))
                 .foregroundStyle(.orange)
-            Text("Couldn’t Import Shared Keypad")
+            Text("Couldn’t Import Setup")
                 .font(.title3.weight(.semibold))
             Text(message)
                 .multilineTextAlignment(.center)
@@ -3914,6 +3889,7 @@ private struct MacSharedKeypadImportSheet: View {
                 }
                 Button("Close") {
                     model.reset()
+                    dismiss()
                 }
                     .keyboardShortcut(.cancelAction)
             }

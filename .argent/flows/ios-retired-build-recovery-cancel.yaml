@@ -1,0 +1,90 @@
+steps:
+  - echo: Start with the legacy fixture seeded in the isolated simulator; recovery
+      must be available before pairing or onboarding completion.
+  - launch: com.codybontecou.PocketPad.iOS
+  - tool: await-ui-element
+    args:
+      bundleId: com.codybontecou.PocketPad.iOS
+      condition: visible
+      selector:
+        text: Recover saved builds
+  - await: { idle: true }
+  - echo: SwiftUI recovery button exists in AX at (0.73, 0.0955), but the working
+      full UIView tree has no labeled/id-bearing recovery element and a runner
+      text-selector probe fails. Use this documented coordinate fallback;
+      require the recovery sheet identity immediately afterward.
+  - tap:
+      x: 0.73
+      y: 0.0955
+  - tool: await-ui-element
+    args:
+      bundleId: com.codybontecou.PocketPad.iOS
+      condition: visible
+      selector:
+        text: Your originals stay on this iPhone.
+  - await: { idle: true }
+  - tool: await-ui-element
+    args:
+      bundleId: com.codybontecou.PocketPad.iOS
+      condition: visible
+      selector:
+        text: Save profile file
+  - echo: Save profile file is AX-visible at (0.50, 0.5725). Native label discovery
+      is empty, full native list cells have no action labels/ids, and the runner
+      text assertion fails. Use the coordinate fallback and require the document
+      picker.
+  - tap:
+      x: 0.5
+      y: 0.5725
+  - tool: await-ui-element
+    args:
+      bundleId: com.codybontecou.PocketPad.iOS
+      condition: visible
+      selector:
+        identifier: DOCPicker.filenameTextField
+  - await: { idle: true }
+  - echo: The native document exporter is visible. Dismiss its sheet by a downward
+      swipe from the top navigation area; the remote Cancel tracking view
+      overlaps the visible More control, so do not tap that ambiguous target.
+      Require the filename field to disappear and recovery to remain.
+  - swipe:
+      from: { x: 0.5, y: 0.1 }
+      to: { x: 0.5, y: 0.86 }
+      duration: 400
+  - tool: await-ui-element
+    args:
+      bundleId: com.codybontecou.PocketPad.iOS
+      condition: hidden
+      selector:
+        identifier: DOCPicker.filenameTextField
+  - tool: await-ui-element
+    args:
+      bundleId: com.codybontecou.PocketPad.iOS
+      condition: visible
+      selector:
+        text: Your originals stay on this iPhone.
+  - await: { idle: true }
+  - tool: await-ui-element
+    args:
+      bundleId: com.codybontecou.PocketPad.iOS
+      condition: visible
+      selector:
+        text: Done
+  - echo: Back in recovery with both records retained; close using Done and require
+      the recovery explanation to disappear while onboarding remains.
+  - tap:
+      text: Done
+  - tool: await-ui-element
+    args:
+      bundleId: com.codybontecou.PocketPad.iOS
+      condition: hidden
+      selector:
+        text: Your originals stay on this iPhone.
+  - await: { idle: true }
+  - tool: await-ui-element
+    args:
+      bundleId: com.codybontecou.PocketPad.iOS
+      condition: visible
+      selector:
+        text: Get Started
+  - await: { idle: true }

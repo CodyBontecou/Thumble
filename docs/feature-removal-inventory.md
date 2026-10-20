@@ -19,3 +19,5 @@ This inventory identifies the first removal boundaries. Follow references at imp
 | Cross-cutting verification | project.yml/generated Xcode project; Host/Cargo.toml/lockfile; .github/workflows; scripts/verify-rust-host.sh; MCP capability ledgers; Android resource fixture source sets | Update with each removal; retain stack, CLI/local-MCP parity, profile interchange, and template/input coverage |
 
 Deployed infrastructure needs a separate live inventory before retirement: service identifiers, routes, shared storage, OAuth credentials, jobs, and backup/retention requirements cannot be proven from source files alone.
+
+Apple hosted transport retirement: `BuilderArtifactFetch.swift`, `BuilderArtifactShare.swift` and `IOSBuilderArtifactPickup.swift` are removed. `PendingProfileRecovery` and `IOSBuildRecovery` provide read-only legacy export; the former pruning store exists only as `Tests/LegacyIOSPendingBuilderArtifactStore.swift`. `MacSharedKeypadImport` retains local file validation/review/import. Shared `PortableProfileArtifact` and paired `ProfileArtifactAdoption` messages remain pending a separate retained-consumer/capability audit.

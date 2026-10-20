@@ -93,10 +93,32 @@ final class StackSafetyRegressionTests: XCTestCase {
         assertInlineSize(PortableProfileArtifact.self, atMost: 64)
         assertInlineSize(ThumbleProfileArtifactBridgeRequest.self, atMost: 128)
         assertInlineSize(ThumbleProfileArtifactBridgeResponse.self, atMost: 256)
-        assertInlineSize(IOSBuilderArtifactPracticePreview.self, atMost: 64)
-        assertInlineSize(IOSBuilderArtifactReview.self, atMost: 256)
+        assertInlineSize(PendingProfileRecovery.Record.self, atMost: 128)
+        assertInlineSize(PendingProfileRecovery.Export.self, atMost: 64)
+        assertInlineSize(PendingProfileRecovery.self, atMost: 64)
         assertInlineSize(ThumbleLinkSnapshot.self, atMost: 512)
         assertInlineSize(ThumbleLinkImport.Plan.self, atMost: 1024)
+    }
+
+    func testReadOnlyBuildRecoveryFitsConstrainedThread() throws {
+        try runOnThread(stackSize: 512 * 1024, timeout: 30) {
+            let fixture = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+                .appendingPathComponent("Host/fixtures/profile-artifact/v1.json")
+            let root = FileManager.default.temporaryDirectory.appendingPathComponent("Thumble-Recovery-Stack-\(UUID().uuidString)")
+            try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: root) }
+            let id = "b2100000-0000-0000-0000-000000000001"
+            let bytes = try Data(contentsOf: fixture)
+            try bytes.write(to: root.appendingPathComponent("\(id).artifact.json"))
+            try Data(#"{"expiresAt":0,"state":"adopting"}"#.utf8).write(to: root.appendingPathComponent("\(id).metadata.json"))
+            let reader = PendingProfileRecovery(rootURL: root)
+            let record = try XCTUnwrap(reader.list().first)
+            XCTAssertEqual(try reader.prepare(record).data, bytes)
+            try Data("incomplete original".utf8).write(to: root.appendingPathComponent("\(id).artifact.json"))
+            let damaged = try XCTUnwrap(reader.list().first)
+            XCTAssertFalse(damaged.isProfileFile)
+            XCTAssertFalse(try reader.prepare(damaged).data.isEmpty)
+        }
     }
 
     func testPackageIndependentAppearanceFitsConstrainedThread() throws {

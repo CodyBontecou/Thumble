@@ -14,8 +14,9 @@ struct IOSContentView: View {
     @AppStorage(IOSKeypadSettings.immersiveModeDefaultsKey) private var prefersImmersiveKeypad = true
     @State private var prefersConnectionView = true
     @State private var isShowingOnboarding = false
-    @State private var bypassesOnboardingForSharedBuild = false
-    @StateObject private var artifactPickup = IOSBuilderArtifactPickupCoordinator()
+    @StateObject private var buildRecovery = IOSBuildRecoveryCoordinator()
+    @State private var isShowingBuildRecovery = false
+    @State private var showsRetiredBuildNotice = false
     @State private var pendingSharedSkinImport: IOSPendingSkinImport?
     @State private var sharedSkinImportError: String?
 
@@ -23,7 +24,6 @@ struct IOSContentView: View {
     private let defaultMacPort = "8765"
 
     private var shouldShowControllerPad: Bool {
-        if client.isBuilderArtifactPracticePreviewActive { return true }
         return ControllerRuntimeChromePolicy.shouldShowControllerPad(
             prefersConnectionView: prefersConnectionView,
             isConnected: client.isConnected,
@@ -32,7 +32,7 @@ struct IOSContentView: View {
     }
 
     private var shouldPresentOnboarding: Bool {
-        (!hasCompletedOnboarding && !bypassesOnboardingForSharedBuild) || isShowingOnboarding
+        !hasCompletedOnboarding || isShowingOnboarding
     }
 
     var body: some View {
@@ -52,24 +52,31 @@ struct IOSContentView: View {
                     .transition(accessibilityReduceMotion ? .identity : .opacity)
             }
         }
-        .environmentObject(artifactPickup)
+
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if (shouldPresentOnboarding || !shouldShowControllerPad),
+               !buildRecovery.records.isEmpty || buildRecovery.error != nil {
+                HStack {
+                    Spacer()
+                    Button("Recover saved builds") {
+                        TouchCaptureUIView.deactivateAllRegisteredTouches()
+                        client.releaseAll()
+                        isShowingBuildRecovery = true
+                    }
+                    .buttonStyle(.bordered)
+                }
+                .padding(.horizontal)
+                .padding(.vertical, 4)
+                .background(.bar)
+            }
+        }
         .animation(accessibilityReduceMotion ? nil : .easeInOut(duration: 0.24), value: shouldPresentOnboarding)
     }
 
     private var presentationContent: some View {
         rootContent
-            .sheet(item: Binding(
-                get: { artifactPickup.pendingReview },
-                set: { if $0 == nil { cancelBuilderArtifactReview() } }
-            )) { review in
-                IOSBuilderArtifactReviewSheet(
-                    review: review,
-                    isKeeping: artifactPickup.isKeepingReview,
-                    onCancel: { cancelBuilderArtifactReview() },
-                    onPreviewAndKeep: { keepBuilderArtifact(review) }
-                )
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
+            .sheet(isPresented: $isShowingBuildRecovery) {
+                IOSBuildRecoverySheet(recovery: buildRecovery)
             }
             .sheet(item: $pendingSharedSkinImport) { pending in
                 IOSSkinImportReviewSheet(
@@ -96,56 +103,28 @@ struct IOSContentView: View {
                 Text(sharedSkinImportError ?? "The .pocketpad file could not be imported.")
             }
             .alert(
-                "Couldn’t Open Shared Build",
-                isPresented: Binding(
-                    get: { artifactPickup.safeErrorMessage != nil },
-                    set: { if !$0 { artifactPickup.safeErrorMessage = nil } }
-                )
+                "Saved Build Recovery",
+                isPresented: $showsRetiredBuildNotice
             ) {
-                Button("OK", role: .cancel) { artifactPickup.safeErrorMessage = nil }
+                Button("OK", role: .cancel) { buildRecovery.error = nil }
             } message: {
-                Text(artifactPickup.safeErrorMessage ?? "The shared build could not be opened.")
+                Text(buildRecovery.error ?? "The saved build could not be exported. Its original files have been kept.")
             }
-            .overlay {
-                if artifactPickup.isFetching {
-                    ProgressView("Checking shared build…")
-                        .geistPanel(padding: Geist.Spacing.s4, radius: Geist.Radius.md)
-                }
-            }
+
     }
 
     private var lifecycleContent: some View {
         presentationContent
             .onOpenURL(perform: routeIncomingURL)
-            .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
-                if let url = activity.webpageURL { routeIncomingURL(url) }
-            }
-            .onChange(of: artifactPickup.pendingReview?.id) { _, reviewID in
-                if reviewID != nil {
-                    bypassesOnboardingForSharedBuild = true
-                    isShowingOnboarding = false
-                }
-            }
             .onAppear(perform: handleAppear)
             .onChange(of: client.isConnected) { _, isConnected in
                 if isConnected { prefersConnectionView = false }
             }
-            .onChange(of: client.builderArtifactAdoptionState) { _, adoption in
-                guard let adoption else { return }
-                Task {
-                    await artifactPickup.applyAdoptionState(adoption)
-                    if case .succeeded = adoption.phase {
-                        if client.builderArtifactPracticePreview?.recordID == adoption.metadata.recordID {
-                            client.endBuilderArtifactPracticePreview()
-                        }
-                        client.clearTerminalProfileArtifactAdoption(recordID: adoption.metadata.recordID)
-                    }
-                }
-            }
+
     }
 
     private func handleAppear() {
-        Task { await artifactPickup.refreshRecords() }
+        Task { await buildRecovery.refresh() }
         if macHost.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             macHost = defaultMacHost
         }
@@ -196,29 +175,13 @@ struct IOSContentView: View {
     }
 
     private func routeIncomingURL(_ url: URL) {
-        if artifactPickup.route(url) == .handled { return }
+        if buildRecovery.routeRetiredURL(url.absoluteString) {
+            showsRetiredBuildNotice = true
+            TouchCaptureUIView.deactivateAllRegisteredTouches()
+            client.releaseAll()
+            return
+        }
         openSharedSkinURL(url)
-    }
-
-    private func cancelBuilderArtifactReview() {
-        artifactPickup.cancelReview()
-        if !hasCompletedOnboarding {
-            bypassesOnboardingForSharedBuild = false
-        }
-    }
-
-    private func keepBuilderArtifact(_ review: IOSBuilderArtifactReview) {
-        Task {
-            do {
-                let (record, artifact) = try await artifactPickup.previewAndKeep(review)
-                client.beginBuilderArtifactPracticePreview(recordID: record.id, artifact: artifact)
-                bypassesOnboardingForSharedBuild = true
-                isShowingOnboarding = false
-                prefersConnectionView = false
-            } catch {
-                artifactPickup.safeErrorMessage = "The shared build could not be kept on this iPhone."
-            }
-        }
     }
 
     private func openSharedSkinURL(_ url: URL) {
@@ -280,189 +243,6 @@ struct IOSContentView: View {
     }
 }
 
-private struct IOSBuilderArtifactReviewSheet: View {
-    let review: IOSBuilderArtifactReview
-    let isKeeping: Bool
-    let onCancel: () -> Void
-    let onPreviewAndKeep: () -> Void
-
-    var body: some View {
-        NavigationStack {
-            List {
-                Section("Shared Build") {
-                    LabeledContent("From", value: review.sourceHost)
-                    LabeledContent("Profiles", value: "\(review.profileNames.count)")
-                    LabeledContent("Size", value: ByteCountFormatter.string(fromByteCount: Int64(review.byteCount), countStyle: .file))
-                    LabeledContent("Integrity", value: review.hashPrefix)
-                }
-                Section("Controller Profiles") {
-                    ForEach(Array(review.profileNames.enumerated()), id: \.offset) { _, name in
-                        Label(name, systemImage: "rectangle.grid.2x2")
-                    }
-                }
-                Section {
-                    Text("Preview runs only in Practice Mode. It will not send input or change profiles on your Mac.")
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .navigationTitle("Preview Shared Build")
-            .navigationBarTitleDisplayMode(.inline)
-            .safeAreaInset(edge: .bottom) {
-                VStack(spacing: Geist.Spacing.s2) {
-                    Button(isKeeping ? "Keeping…" : "Preview & Keep", action: onPreviewAndKeep)
-                        .geistButtonStyle(.primary, size: .large)
-                        .disabled(isKeeping)
-                    Button("Cancel", role: .cancel, action: onCancel)
-                        .disabled(isKeeping)
-                        .geistButtonStyle(.tertiary, size: .medium)
-                }
-                .padding()
-                .background(.ultraThinMaterial)
-            }
-        }
-    }
-}
-
-private struct IOSPendingBuilderArtifactsPanel: View {
-    @EnvironmentObject private var client: ControllerClient
-    @EnvironmentObject private var artifactPickup: IOSBuilderArtifactPickupCoordinator
-    @State private var adoptionConfirmationRecord: IOSPendingBuilderArtifactRecord?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: Geist.Spacing.s3) {
-            VStack(alignment: .leading, spacing: Geist.Spacing.s1) {
-                Text("Pending Shared Builds")
-                    .geistTypography(.heading20)
-                Text("Kept only on this iPhone for Practice Mode. Nothing is installed on your Mac.")
-                    .geistTypography(.copy14)
-                    .foregroundStyle(.secondary)
-            }
-            ForEach(artifactPickup.pendingRecords) { record in
-                VStack(alignment: .leading, spacing: Geist.Spacing.s2) {
-                    Text(record.profiles.first?.name ?? "Shared Controller")
-                        .geistTypography(.copy16)
-                        .lineLimit(1)
-                    Text("\(record.profiles.count) profile\(record.profiles.count == 1 ? "" : "s") • \(ByteCountFormatter.string(fromByteCount: Int64(record.bytes), countStyle: .file))")
-                        .geistTypography(.copy14)
-                        .foregroundStyle(.secondary)
-                    if let status = adoptionStatus(for: record) {
-                        Text(status)
-                            .geistTypography(.copy14)
-                            .foregroundStyle(.secondary)
-                    }
-                    HStack(spacing: Geist.Spacing.s2) {
-                        Button("Preview") { preview(record) }
-                            .geistButtonStyle(.secondary, size: .medium)
-                        if client.supportsProfileArtifactAdoptionV1 {
-                            Button(record.state == .failed ? "Retry on Mac" : "Adopt on Paired Mac") {
-                                adoptionConfirmationRecord = record
-                            }
-                            .geistButtonStyle(.primary, size: .medium)
-                            .disabled(isAnotherAdoptionActive(recordID: record.id))
-                        }
-                        Button("Delete", role: .destructive) { delete(record) }
-                            .geistButtonStyle(.tertiary, size: .medium)
-                            .disabled(record.state == .adopting)
-                    }
-                    if client.isConnected && !client.supportsProfileArtifactAdoptionV1 {
-                        Text("Update Thumble Mac to adopt this shared build.")
-                            .geistTypography(.copy14)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .padding(Geist.Spacing.s3)
-                .background(.quaternary.opacity(0.25), in: RoundedRectangle(cornerRadius: Geist.Radius.sm))
-            }
-        }
-        .geistPanel(padding: Geist.Spacing.s4, radius: Geist.Radius.md)
-        .confirmationDialog(
-            "Adopt Shared Build?",
-            isPresented: Binding(
-                get: { adoptionConfirmationRecord != nil },
-                set: { if !$0 { adoptionConfirmationRecord = nil } }
-            ),
-            titleVisibility: .visible
-        ) {
-            Button("Append Profiles and Select on Mac") {
-                if let record = adoptionConfirmationRecord { adopt(record) }
-                adoptionConfirmationRecord = nil
-            }
-            Button("Cancel", role: .cancel) { adoptionConfirmationRecord = nil }
-        } message: {
-            Text("The paired Mac will validate the artifact, append new profile copies, and select the imported active profile. Existing profiles and the default profile are not replaced.")
-        }
-    }
-
-    private func adoptionStatus(for record: IOSPendingBuilderArtifactRecord) -> String? {
-        guard let state = client.builderArtifactAdoptionState,
-              state.metadata.recordID == record.id
-        else {
-            return record.state == .failed ? "Previous adoption did not finish. The artifact is still on this iPhone." : nil
-        }
-        switch state.phase {
-        case .uploading(let sent, let total): return "Uploading \(sent) of \(total)…"
-        case .awaitingAuthoritativeSnapshot: return "Imported; waiting for the Mac’s authoritative profile update…"
-        case .succeeded: return "Adopted by the paired Mac."
-        case .failed(let code): return "Adoption failed (\(code.rawValue)). The artifact was kept."
-        }
-    }
-
-    private func isAnotherAdoptionActive(recordID _: UUID) -> Bool {
-        guard let state = client.builderArtifactAdoptionState else { return false }
-        switch state.phase {
-        case .uploading, .awaitingAuthoritativeSnapshot:
-            return true
-        case .succeeded, .failed:
-            return false
-        }
-    }
-
-    private func adopt(_ record: IOSPendingBuilderArtifactRecord) {
-        guard let serverID = client.pairedProfileArtifactAdoptionServerID else { return }
-        Task {
-            do {
-                let (updated, artifact, operationID) = try await artifactPickup.prepareAdoption(
-                    id: record.id,
-                    intendedServerID: serverID
-                )
-                guard client.pairedProfileArtifactAdoptionServerID == serverID,
-                      client.beginProfileArtifactAdoption(
-                        record: updated,
-                        artifact: artifact,
-                        operationID: operationID
-                      )
-                else {
-                    await artifactPickup.markAdoptionStartFailed(
-                        recordID: record.id,
-                        operationID: operationID
-                    )
-                    return
-                }
-            } catch {
-                artifactPickup.safeErrorMessage = "The shared build could not be uploaded to the paired Mac."
-            }
-        }
-    }
-
-    private func preview(_ record: IOSPendingBuilderArtifactRecord) {
-        Task {
-            do {
-                let (_, artifact) = try await artifactPickup.loadForPreview(id: record.id)
-                client.beginBuilderArtifactPracticePreview(recordID: record.id, artifact: artifact)
-            } catch {
-                artifactPickup.safeErrorMessage = "The pending shared build could not be opened."
-            }
-        }
-    }
-
-    private func delete(_ record: IOSPendingBuilderArtifactRecord) {
-        if client.builderArtifactPracticePreview?.recordID == record.id {
-            client.endBuilderArtifactPracticePreview()
-        }
-        Task { await artifactPickup.delete(id: record.id) }
-    }
-}
-
 private enum IOSKeypadSettings {
     static let immersiveModeDefaultsKey = "PocketPad.iOS.immersiveKeypad.v1"
 }
@@ -475,7 +255,6 @@ private enum ThumbleSupportLinks {
 
 private struct ConnectionView: View {
     @EnvironmentObject private var client: ControllerClient
-    @EnvironmentObject private var artifactPickup: IOSBuilderArtifactPickupCoordinator
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
     @Binding var macHost: String
@@ -569,9 +348,6 @@ private struct ConnectionView: View {
                 pairingCodePrompt
             } else {
                 form
-            }
-            if !artifactPickup.pendingRecords.isEmpty {
-                IOSPendingBuilderArtifactsPanel()
             }
         }
     }
@@ -752,13 +528,8 @@ private struct ConnectionView: View {
     }
 
     private func handleScannedPairingCode(_ text: String) {
-        if artifactPickup.route(text) == .handled {
-            qrScanError = nil
-            isShowingScanner = false
-            return
-        }
         guard let payload = PairingPayload.decode(from: text) else {
-            qrScanError = "QR code not recognized. Scan a Thumble pairing or shared-build code."
+            qrScanError = "QR code not recognized. Scan a Thumble pairing code."
             isShowingScanner = false
             return
         }
@@ -2144,13 +1915,6 @@ private struct ControllerPadView: View {
         .onChange(of: client.isPracticeModeEnabled) { _, enabled in
             announce(enabled ? "Practice Mode enabled. Input will not be sent." : "Practice Mode disabled. Live input enabled when connected.")
         }
-        .onChange(of: client.builderArtifactPracticePreview?.selectedProfileID) { _, _ in
-            if editRuntime.isEditing { editRuntime.cancel(client: client) }
-            releaseActiveInputs()
-            if client.isBuilderArtifactPracticePreviewActive {
-                announce("Shared Preview. Not saved. \(client.renderedGamepadProfileName). Input is off.")
-            }
-        }
         .onChange(of: client.gamepadCustomization) { _, _ in
             guard !editRuntime.isEditing else { return }
             releaseActiveInputs()
@@ -2462,7 +2226,6 @@ private struct ControllerPadTopChrome: View {
     }
 
     private func toggleEditing() {
-        guard !client.isBuilderArtifactPracticePreviewActive else { return }
         if editRuntime.isEditing {
             editRuntime.finish(client: client)
         } else {
@@ -2490,9 +2253,7 @@ private struct ControllerPadRuntimeBottomChrome: View {
                 )
             }
 
-            if let preview = client.builderArtifactPracticePreview, !editRuntime.isEditing {
-                IOSBuilderArtifactPracticeBanner(preview: preview)
-            } else if !client.isConnected && !client.isPracticeModeEnabled && !editRuntime.isEditing {
+            if !client.isConnected && !client.isPracticeModeEnabled && !editRuntime.isEditing {
                 ControllerPadOfflineBanner(
                     onReconnect: reconnect,
                     onPractice: { client.setPracticeModeEnabled(!client.isPracticeModeEnabled) },
@@ -2507,50 +2268,6 @@ private struct ControllerPadRuntimeBottomChrome: View {
     private func reconnect() {
         editRuntime.releaseInputs(client: client)
         client.startSmartConnect()
-    }
-}
-
-private struct IOSBuilderArtifactPracticeBanner: View {
-    @EnvironmentObject private var client: ControllerClient
-    let preview: IOSBuilderArtifactPracticePreview
-
-    var body: some View {
-        HStack(spacing: Geist.Spacing.s3) {
-            Image(systemName: "hand.tap.fill")
-                .foregroundStyle(.orange)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Shared Preview • Not Saved")
-                    .font(.caption.weight(.semibold))
-                Text(preview.selectedProfile?.name ?? "Shared Controller")
-                    .font(.caption2)
-                    .lineLimit(1)
-            }
-            Spacer(minLength: Geist.Spacing.s2)
-            if preview.profiles.count > 1 {
-                Menu("Profiles") {
-                    ForEach(preview.profiles) { profile in
-                        Button {
-                            client.selectBuilderArtifactPracticeProfile(profile.id)
-                        } label: {
-                            Label(
-                                profile.name,
-                                systemImage: profile.id == preview.selectedProfileID ? "checkmark.circle.fill" : "rectangle.grid.2x2"
-                            )
-                        }
-                    }
-                }
-                .buttonStyle(.bordered)
-            }
-            Button("Close") {
-                client.endBuilderArtifactPracticePreview()
-            }
-            .buttonStyle(.borderedProminent)
-        }
-        .padding(.horizontal, Geist.Spacing.s4)
-        .padding(.vertical, Geist.Spacing.s3)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: Geist.Radius.md))
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Shared Preview. Not saved. \(preview.selectedProfile?.name ?? "Shared Controller"). Input is off.")
     }
 }
 
@@ -3005,7 +2722,7 @@ private struct ControllerPadProfileMenuItem: View {
             ControllerPadProfileMenuLabelRouter(context: context, isCompact: isCompact)
         }
         .gamepadControlBarButtonStyle(customization: context.customization, item: .profileMenu)
-        .disabled(isEditingLayout || client.isBuilderArtifactPracticePreviewActive)
+        .disabled(isEditingLayout)
         .accessibilityLabel(isCompact ? "Keypad setup: \(client.selectedGamepadProfileName)" : "Keypad setup")
         .accessibilityHint(isEditingLayout ? "Finish editing before switching keypad setups." : "Switches, defaults, or exports keypad setups.")
     }
@@ -3039,7 +2756,7 @@ private struct ControllerPadLaunchTargetItem: View {
             ControllerPadLaunchTargetLabelRouter(context: context, isCompact: isCompact)
         }
         .gamepadControlBarButtonStyle(customization: context.customization, item: .launchTarget)
-        .disabled(!client.isConnected || client.isBuilderArtifactPracticePreviewActive)
+        .disabled(!client.isConnected)
         .accessibilityLabel("Launch \(client.selectedGamepadProfile?.launchTarget?.displayName ?? "attached application")")
         .accessibilityHint("Asks the paired Mac to open the application attached to this keypad setup.")
     }
@@ -3088,7 +2805,6 @@ private struct ControllerPadEditLayoutItem: View {
             item: .editLayout,
             variant: isEditingLayout ? .primary : .secondary
         )
-        .disabled(client.isBuilderArtifactPracticePreviewActive)
         .accessibilityLabel(isEditingLayout ? "Done editing layout" : "Edit Layout")
         .accessibilityHint(isEditingLayout ? "Finishes editing and keeps the saved layout." : "Lets you move, resize, rotate, or delete keypad elements.")
     }
@@ -3110,7 +2826,6 @@ private struct ControllerPadSettingsItem: View {
             )
         }
         .gamepadControlBarButtonStyle(customization: context.customization, item: .settings)
-        .disabled(client.isBuilderArtifactPracticePreviewActive)
         .accessibilityLabel("Keypad settings")
         .accessibilityHint("Opens keypad practice, haptic, binding glyph, appearance, and input reset settings.")
     }

@@ -1,0 +1,25 @@
+Test Suite 'Selected tests' started at 2026-10-20 16:47:05.740.
+Test Suite 'ThumbleCLITests.xctest' started at 2026-10-20 16:47:05.740.
+Test Suite 'IOSLocalKeypadUXTests' started at 2026-10-20 16:47:05.740.
+Test Suite 'IOSLocalKeypadUXTests' passed at 2026-10-20 16:47:05.801.
+	 Executed 8 tests, with 0 failures (0 unexpected) in 0.058 (0.061) seconds
+Test Suite 'IOSPendingBuilderArtifactStoreTests' started at 2026-10-20 16:47:05.801.
+Test Suite 'IOSPendingBuilderArtifactStoreTests' passed at 2026-10-20 16:47:05.874.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.071 (0.073) seconds
+Test Suite 'MacSharedKeypadImportTests' started at 2026-10-20 16:47:05.874.
+Test Suite 'MacSharedKeypadImportTests' passed at 2026-10-20 16:47:05.966.
+	 Executed 3 tests, with 0 failures (0 unexpected) in 0.091 (0.092) seconds
+Test Suite 'PendingProfileRecoveryTests' started at 2026-10-20 16:47:05.966.
+Test Suite 'PendingProfileRecoveryTests' passed at 2026-10-20 16:47:06.028.
+	 Executed 7 tests, with 0 failures (0 unexpected) in 0.060 (0.062) seconds
+Test Suite 'PortableProfileArtifactTests' started at 2026-10-20 16:47:06.028.
+Test Suite 'PortableProfileArtifactTests' passed at 2026-10-20 16:47:06.224.
+	 Executed 10 tests, with 0 failures (0 unexpected) in 0.193 (0.195) seconds
+Test Suite 'StackSafetyRegressionTests' started at 2026-10-20 16:47:06.224.
+Test Suite 'StackSafetyRegressionTests' passed at 2026-10-20 16:47:15.881.
+	 Executed 35 tests, with 0 failures (0 unexpected) in 9.649 (9.658) seconds
+Test Suite 'ThumbleCLITests.xctest' passed at 2026-10-20 16:47:15.881.
+	 Executed 68 tests, with 0 failures (0 unexpected) in 10.123 (10.141) seconds
+Test Suite 'Selected tests' passed at 2026-10-20 16:47:15.882.
+	 Executed 68 tests, with 0 failures (0 unexpected) in 10.123 (10.142) seconds
+** TEST SUCCEEDED **

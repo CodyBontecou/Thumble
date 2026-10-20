@@ -1,0 +1,18 @@
+==> Verifying stack-frame parser
+stack-frame parser self-test passed
+Test Suite 'Selected tests' started at 2026-10-20 17:03:18.842.
+Test Suite 'ThumbleCLITests.xctest' started at 2026-10-20 17:03:18.843.
+Test Suite 'StackSafetyRegressionTests' started at 2026-10-20 17:03:18.843.
+Test Suite 'StackSafetyRegressionTests' passed at 2026-10-20 17:03:25.285.
+	 Executed 35 tests, with 0 failures (0 unexpected) in 6.437 (6.442) seconds
+Test Suite 'ThumbleCLITests.xctest' passed at 2026-10-20 17:03:25.285.
+	 Executed 35 tests, with 0 failures (0 unexpected) in 6.437 (6.443) seconds
+Test Suite 'Selected tests' passed at 2026-10-20 17:03:25.285.
+	 Executed 35 tests, with 0 failures (0 unexpected) in 6.437 (6.443) seconds
+** TEST SUCCEEDED **
+mac-network stack-frame check passed: 631 symbols, largest 17584 bytes
+** BUILD SUCCEEDED **
+controller stack-frame check passed: 1370 symbols, largest 11968 bytes
+ios-runtime stack-frame check passed: 1700 symbols, largest 23152 bytes
+** BUILD SUCCEEDED **
+Stack-safety verification passed.

@@ -884,8 +884,6 @@ final class ControllerClient: ObservableObject {
     @Published private(set) var hasSavedKeypadSnapshot = false
     @Published private(set) var smartConnectStatus: String?
     @Published private(set) var isPracticeModeEnabled: Bool
-    @Published private(set) var builderArtifactPracticePreview: IOSBuilderArtifactPracticePreview?
-    @Published private(set) var builderArtifactAdoptionState: IOSBuilderArtifactAdoptionState?
 
     private let networkQueue = DispatchQueue(label: "Thumble.iOS.Network", qos: .userInteractive)
     private let skinStore: ThumbleSkinStore
@@ -952,12 +950,8 @@ final class ControllerClient: ObservableObject {
         selectedGamepadProfile?.name ?? "Keypad"
     }
 
-    var isBuilderArtifactPracticePreviewActive: Bool {
-        builderArtifactPracticePreview != nil
-    }
-
     var renderedGamepadProfile: GamepadConfigurationProfile? {
-        builderArtifactPracticePreview?.selectedProfile ?? selectedGamepadProfile
+        selectedGamepadProfile
     }
 
     var renderedGamepadProfileName: String {
@@ -1003,16 +997,6 @@ final class ControllerClient: ObservableObject {
         isConnected && serverCapabilities.contains(.gamepadProfileOrientationPreferenceMutation)
     }
 
-    var supportsProfileArtifactAdoptionV1: Bool {
-        isConnected
-            && serverCapabilities.contains(.profileArtifactAdoptionV1)
-            && currentKeypadSyncServerID != nil
-    }
-
-    var pairedProfileArtifactAdoptionServerID: String? {
-        supportsProfileArtifactAdoptionV1 ? currentKeypadSyncServerID : nil
-    }
-
     init() throws {
         // Validate configuration before skin/startup work can save any state.
         let savedCustomization = try GamepadCustomizationPersistence.load()
@@ -1029,11 +1013,9 @@ final class ControllerClient: ObservableObject {
         })
         pendingSkinSelectionMutations = Self.loadPendingSkinSelectionMutations()
         pendingSkinRemovals = Self.loadPendingSkinRemovals()
-        isPracticeModeEnabled = IOSBuilderArtifactPracticePersistence.recoverPracticeModeValue(
+        isPracticeModeEnabled = IOSRetiredBuildPracticeRecovery.recoverPracticeModeValue(
             storedValue: UserDefaults.standard.bool(forKey: IOSKeypadPreferenceKeys.practiceMode)
         )
-        builderArtifactPracticePreview = nil
-        builderArtifactAdoptionState = nil
         let savedTrustedMacCredential = Self.loadTrustedMacCredential()
         let startupProfile = loadedProfileState.defaultProfile ?? loadedProfileState.activeProfile ?? loadedProfileState.profiles[0]
         let startupCustomization = startupProfile.customization.normalized
@@ -1067,11 +1049,7 @@ final class ControllerClient: ObservableObject {
         data: Data,
         policy: ThumbleSkinInstallPolicy = .newerOnly
     ) throws -> ThumbleSkinInstallResult {
-        guard !isBuilderArtifactPracticePreviewActive else {
-            throw NSError(domain: "ThumbleBuilderPreview", code: 1, userInfo: [
-                NSLocalizedDescriptionKey: "Close the shared preview before changing skins."
-            ])
-        }
+
         let result = try skinStore.install(data: data, policy: policy)
         reloadInstalledSkins()
         if isConnected, serverCapabilities.contains(.skinPackages) {
@@ -1088,11 +1066,7 @@ final class ControllerClient: ObservableObject {
         _ reference: ThumbleSkinReference,
         colorScheme: ThumbleSkinColorScheme
     ) throws {
-        guard !isBuilderArtifactPracticePreviewActive else {
-            throw NSError(domain: "ThumbleBuilderPreview", code: 2, userInfo: [
-                NSLocalizedDescriptionKey: "Close the shared preview before changing skins."
-            ])
-        }
+
         guard let index = gamepadProfiles.firstIndex(where: { $0.id == selectedGamepadProfileID }),
               let package = skinPackage(for: reference)
         else { throw ThumbleSkinStoreError.skinNotInstalled(reference) }
@@ -1108,7 +1082,6 @@ final class ControllerClient: ObservableObject {
 
     /// Forks the current visual result into the profile, then removes its package dependency.
     func detachSkinFromSelectedProfile(colorScheme: ThumbleSkinColorScheme) {
-        guard !isBuilderArtifactPracticePreviewActive else { return }
         guard let index = gamepadProfiles.firstIndex(where: { $0.id == selectedGamepadProfileID }),
               let reference = gamepadProfiles[index].skinReference
         else { return }
@@ -1125,11 +1098,7 @@ final class ControllerClient: ObservableObject {
     }
 
     func removeSkin(_ reference: ThumbleSkinReference) throws {
-        guard !isBuilderArtifactPracticePreviewActive else {
-            throw NSError(domain: "ThumbleBuilderPreview", code: 3, userInfo: [
-                NSLocalizedDescriptionKey: "Close the shared preview before changing skins."
-            ])
-        }
+
         if let profile = gamepadProfiles.first(where: { $0.skinReference == reference }) {
             throw NSError(
                 domain: "ThumbleSkinStore",
@@ -1404,14 +1373,6 @@ final class ControllerClient: ObservableObject {
         currentAuthToken = nil
         currentExpectedServerID = nil
         serverCapabilities = []
-        if let phase = builderArtifactAdoptionState?.phase {
-            switch phase {
-            case .uploading, .awaitingAuthoritativeSnapshot:
-                builderArtifactAdoptionState?.phase = .failed(.disconnected)
-            case .succeeded, .failed:
-                break
-            }
-        }
         UIApplication.shared.isIdleTimerDisabled = false
     }
 
@@ -1569,136 +1530,9 @@ final class ControllerClient: ObservableObject {
         updateLastSentEvent("release_all", immediately: true)
     }
 
-    @discardableResult
-    func beginProfileArtifactAdoption(
-        record: IOSPendingBuilderArtifactRecord,
-        artifact: PortableProfileArtifact,
-        operationID: UUID
-    ) -> Bool {
-        guard supportsProfileArtifactAdoptionV1,
-              let serverID = currentKeypadSyncServerID,
-              artifact.rawData.count == record.bytes,
-              artifact.contentHash.value == record.contentHash
-        else { return false }
-        let rawHash = ProfileArtifactAdoptionMetadata.sha256(artifact.rawData)
-        guard rawHash == record.rawSHA256 else { return false }
-        if let current = builderArtifactAdoptionState {
-            switch current.phase {
-            case .uploading, .awaitingAuthoritativeSnapshot:
-                return false
-            case .succeeded, .failed:
-                break
-            }
-        }
-        let metadata = ProfileArtifactAdoptionMetadata(
-            operationID: operationID,
-            recordID: record.id,
-            intendedServerID: serverID,
-            contentHash: artifact.contentHash.value,
-            rawSHA256: rawHash,
-            byteCount: artifact.rawData.count,
-            chunkCount: ProfileArtifactAdoptionMetadata.chunkCount(forByteCount: artifact.rawData.count)
-        )
-        guard metadata.validate(expectedServerID: serverID) == nil else { return false }
-        builderArtifactAdoptionState = IOSBuilderArtifactAdoptionState(
-            metadata: metadata,
-            phase: .uploading(sentChunks: 0, totalChunks: metadata.chunkCount)
-        )
-        send(.init(
-            type: .profileArtifactAdoptionBegin,
-            profileArtifactAdoptionMetadata: metadata
-        ))
-        for index in 0..<metadata.chunkCount {
-            guard let expected = metadata.expectedChunkBytes(at: index) else { return false }
-            let lower = index * ProfileArtifactAdoptionConstants.chunkBytes
-            let chunk = artifact.rawData.subdata(in: lower..<(lower + expected))
-            send(.init(
-                type: .profileArtifactAdoptionChunk,
-                profileArtifactAdoptionOperationID: operationID,
-                profileArtifactAdoptionChunkIndex: index,
-                profileArtifactAdoptionChunkData: chunk
-            ))
-            builderArtifactAdoptionState?.phase = .uploading(
-                sentChunks: index + 1,
-                totalChunks: metadata.chunkCount
-            )
-        }
-        send(.init(
-            type: .profileArtifactAdoptionCommit,
-            profileArtifactAdoptionOperationID: operationID
-        ))
-        return true
-    }
-
-    func cancelProfileArtifactAdoption() {
-        guard let state = builderArtifactAdoptionState else { return }
-        if isConnected {
-            send(.init(
-                type: .profileArtifactAdoptionCancel,
-                profileArtifactAdoptionOperationID: state.metadata.operationID
-            ))
-        }
-        builderArtifactAdoptionState?.phase = .failed(.disconnected)
-    }
-
-    func clearTerminalProfileArtifactAdoption(recordID: UUID? = nil) {
-        guard let state = builderArtifactAdoptionState else { return }
-        if let recordID, state.metadata.recordID != recordID { return }
-        switch state.phase {
-        case .succeeded, .failed:
-            builderArtifactAdoptionState = nil
-        case .uploading, .awaitingAuthoritativeSnapshot:
-            break
-        }
-    }
-
-    func beginBuilderArtifactPracticePreview(
-        recordID: UUID,
-        artifact: PortableProfileArtifact
-    ) {
-        guard let nextPreview = IOSBuilderArtifactPracticeTransition.begin(
-            recordID: recordID,
-            artifact: artifact,
-            currentPreview: builderArtifactPracticePreview,
-            currentPracticeModeValue: isPracticeModeEnabled
-        ) else { return }
-        TouchCaptureUIView.deactivateAllRegisteredTouches()
-        releaseAll()
-        if builderArtifactPracticePreview == nil {
-            IOSBuilderArtifactPracticePersistence.markForced(priorValue: isPracticeModeEnabled)
-        }
-        if !isPracticeModeEnabled { setPracticeModeEnabled(true) }
-        builderArtifactPracticePreview = nextPreview
-        updateLastSentEvent("shared preview; input off", immediately: true)
-    }
-
-    func selectBuilderArtifactPracticeProfile(_ profileID: UUID) {
-        guard let preview = builderArtifactPracticePreview,
-              let selected = preview.selecting(profileID)
-        else { return }
-        TouchCaptureUIView.deactivateAllRegisteredTouches()
-        releaseAll()
-        builderArtifactPracticePreview = selected
-        updateLastSentEvent("shared preview: \(selected.selectedProfile?.name ?? "profile")", immediately: true)
-    }
-
-    func endBuilderArtifactPracticePreview() {
-        guard let preview = builderArtifactPracticePreview else { return }
-        TouchCaptureUIView.deactivateAllRegisteredTouches()
-        releaseAll()
-        builderArtifactPracticePreview = nil
-        let restoredPracticeMode = IOSBuilderArtifactPracticeTransition.restoredPracticeModeValue(after: preview)
-        if isPracticeModeEnabled != restoredPracticeMode {
-            setPracticeModeEnabled(restoredPracticeMode)
-        }
-        IOSBuilderArtifactPracticePersistence.clear()
-        updateLastSentEvent("shared preview closed", immediately: true)
-    }
-
     /// Practice Mode is local-only. Active touches and remote state are cleared
     /// before suppression becomes active so no held input can leak through.
     func setPracticeModeEnabled(_ isEnabled: Bool) {
-        guard !(isBuilderArtifactPracticePreviewActive && !isEnabled) else { return }
         guard isEnabled != isPracticeModeEnabled else { return }
         TouchCaptureUIView.deactivateAllRegisteredTouches()
         releaseAll()
@@ -1716,7 +1550,6 @@ final class ControllerClient: ObservableObject {
     }
 
     func selectGamepadProfile(_ profileID: UUID) {
-        guard !isBuilderArtifactPracticePreviewActive else { return }
         guard let profile = gamepadProfiles.first(where: { $0.id == profileID }) else { return }
         releaseAll()
         selectedGamepadProfileID = profile.id
@@ -1727,7 +1560,6 @@ final class ControllerClient: ObservableObject {
     }
 
     func setDefaultGamepadProfile(_ profileID: UUID) {
-        guard !isBuilderArtifactPracticePreviewActive else { return }
         guard gamepadProfiles.contains(where: { $0.id == profileID }) else { return }
         defaultGamepadProfileID = profileID
         persistGamepadProfiles()
@@ -1746,8 +1578,7 @@ final class ControllerClient: ObservableObject {
     func setSelectedGamepadProfileOrientationPreference(
         _ preference: GamepadProfileOrientationPreference
     ) -> Bool {
-        guard !isBuilderArtifactPracticePreviewActive,
-              supportsGamepadProfileOrientationPreferenceMutation,
+        guard supportsGamepadProfileOrientationPreferenceMutation,
               let index = gamepadProfiles.firstIndex(where: { $0.id == selectedGamepadProfileID })
         else { return false }
         guard gamepadProfiles[index].orientationPreference != preference else { return true }
@@ -1770,8 +1601,7 @@ final class ControllerClient: ObservableObject {
     }
 
     func launchSelectedProfileTarget() {
-        guard !isBuilderArtifactPracticePreviewActive,
-              isConnected,
+        guard isConnected,
               let profile = selectedGamepadProfile,
               let launchTarget = profile.launchTarget
         else { return }
@@ -1795,7 +1625,6 @@ final class ControllerClient: ObservableObject {
         orientation: GamepadEditorDeviceOrientation,
         sendsToMac: Bool
     ) {
-        guard !isBuilderArtifactPracticePreviewActive else { return }
         var stampedCustomization = Self.customization(customization, matching: orientation).stampedForLocalUpdate
         stampedCustomization = canonicalKeypadLayoutEdit(stampedCustomization, orientation: orientation)
         if let profile = selectedGamepadProfile,
@@ -1893,7 +1722,6 @@ final class ControllerClient: ObservableObject {
     }
 
     func setKeypadColorSchemePreference(_ preference: GamepadColorSchemePreference) {
-        guard !isBuilderArtifactPracticePreviewActive else { return }
         var nextCustomization = gamepadCustomization
         guard nextCustomization.colorSchemePreference != preference else { return }
         nextCustomization.colorSchemePreference = preference
@@ -2069,7 +1897,6 @@ final class ControllerClient: ObservableObject {
         markSavedKeypadSnapshotAvailable()
         applyActiveCustomization(from: reconciledState, fallback: workspace.incomingCustomization)
         persistGamepadProfiles()
-        observeProfileArtifactAdoptionSnapshot()
         if isConnected, !reconciliation.editsToUpload.isEmpty {
             flushPendingKeypadLayoutEdits()
         }
@@ -2388,7 +2215,7 @@ final class ControllerClient: ObservableObject {
         case .skinPackages:
             applyGamepadProfileStateFromMac(message)
         case .profileArtifactAdoptionResult:
-            handleProfileArtifactAdoptionResult(message)
+            break // Ignore retired phone-upload replies without changing profile state.
         case .skinPackageRemoval, .gamepadProfileSelection, .gamepadProfileSkinSelection,
              .gamepadDefaultProfile, .gamepadProfileOrientationPreferenceMutation:
             break
@@ -2396,24 +2223,6 @@ final class ControllerClient: ObservableObject {
             return false
         }
         return true
-    }
-
-    private func handleProfileArtifactAdoptionResult(_ message: ControllerMessage) {
-        guard ProfileArtifactAdoptionEnvelopeValidator.validate(message) == nil,
-              let result = message.profileArtifactAdoptionResult,
-              var adoption = builderArtifactAdoptionState,
-              adoption.acceptResult(result)
-        else { return }
-        if case .awaitingAuthoritativeSnapshot = adoption.phase {
-            _ = adoption.observeAuthoritativeProfiles(Set(gamepadProfiles.map(\.id)))
-        }
-        builderArtifactAdoptionState = adoption
-    }
-
-    private func observeProfileArtifactAdoptionSnapshot() {
-        guard var adoption = builderArtifactAdoptionState else { return }
-        guard adoption.observeAuthoritativeProfiles(Set(gamepadProfiles.map(\.id))) else { return }
-        builderArtifactAdoptionState = adoption
     }
 
     @discardableResult

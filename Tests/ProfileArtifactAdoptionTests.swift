@@ -227,41 +227,4 @@ final class ProfileArtifactAdoptionTests: XCTestCase {
         XCTAssertThrowsError(try ProfileArtifactAdoptionLedger.decodeSaved(repeated))
     }
 
-    func testPhoneTrackerAcceptsResultAndSnapshotInEitherOrderAndRejectsWrongServer() {
-        let value = metadata(data: Data([1]))
-        let destinations = [UUID(), UUID()]
-        let result = ProfileArtifactAdoptionResult(
-            metadata: value,
-            serverID: serverID,
-            status: .succeeded,
-            destinationProfileIDs: destinations
-        )
-        var resultFirst = IOSBuilderArtifactAdoptionState(
-            metadata: value,
-            phase: .uploading(sentChunks: 1, totalChunks: 1)
-        )
-        XCTAssertTrue(resultFirst.acceptResult(result))
-        XCTAssertEqual(resultFirst.phase, .awaitingAuthoritativeSnapshot)
-        XCTAssertFalse(resultFirst.observeAuthoritativeProfiles(Set([destinations[0]])))
-        XCTAssertTrue(resultFirst.observeAuthoritativeProfiles(Set(destinations)))
-        if case .succeeded(let ids, _) = resultFirst.phase { XCTAssertEqual(ids, destinations) }
-        else { XCTFail("expected success") }
-
-        var snapshotFirst = IOSBuilderArtifactAdoptionState(
-            metadata: value,
-            phase: .uploading(sentChunks: 1, totalChunks: 1)
-        )
-        XCTAssertFalse(snapshotFirst.observeAuthoritativeProfiles(Set(destinations)))
-        XCTAssertTrue(snapshotFirst.acceptResult(result))
-        XCTAssertTrue(snapshotFirst.observeAuthoritativeProfiles(Set(destinations)))
-
-        let wrong = ProfileArtifactAdoptionResult(
-            metadata: value,
-            serverID: "wrong",
-            status: .succeeded,
-            destinationProfileIDs: destinations
-        )
-        var rejected = IOSBuilderArtifactAdoptionState(metadata: value, phase: .uploading(sentChunks: 0, totalChunks: 1))
-        XCTAssertFalse(rejected.acceptResult(wrong))
-    }
 }
