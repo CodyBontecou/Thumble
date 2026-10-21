@@ -39,11 +39,11 @@ jobs:
           swift --version | tee -a reports/mobile-ios-toolchain.txt
       - uses: dtolnay/rust-toolchain@1.88.0
       - name: Build synthetic native TLS witness
-        run: cargo build --locked --manifest-path native/receiver/Cargo.toml --example control_tls_probe
+        run: cargo build --locked --manifest-path native/receiver/Cargo.toml --examples
       - name: Swift native contract and lifecycle tests
         run: |
           set -o pipefail
-          THUMBLE_NATIVE_TLS_PROBE="$PWD/native/receiver/target/debug/examples/control_tls_probe" swift test --package-path native/mobile-input/ios 2>&1 | tee reports/mobile-swift.txt
+          THUMBLE_NATIVE_ENROLLMENT_PROBE="$PWD/native/receiver/target/debug/examples/enrollment_probe" THUMBLE_NATIVE_TLS_PROBE="$PWD/native/receiver/target/debug/examples/control_tls_probe" swift test --package-path native/mobile-input/ios 2>&1 | tee reports/mobile-swift.txt
       - name: Compile native modules directly against both iOS SDKs
         run: |
           bun run mobile:ios:sdk --sdk iphonesimulator
@@ -51,6 +51,16 @@ jobs:
       - name: Build native iOS Simulator module
         working-directory: Rewrite/native/mobile-input/ios
         run: xcodebuild -scheme ThumbleMobileInput -destination 'generic/platform=iOS Simulator' -derivedDataPath '${{ runner.temp }}/rewrite-ios-simulator' CODE_SIGNING_ALLOWED=NO build
+      - name: Execute synthetic Keychain provider test headlessly
+        run: |
+          set -o pipefail
+          python3 tooling/test_native_vault_results.py
+          xcrun simctl list devices available -j > reports/mobile-ios-devices.json
+          device_id="$(python3 -c 'import json; d=json.load(open("reports/mobile-ios-devices.json")); print(next(x["udid"] for runtime,devices in d["devices"].items() if ".iOS-" in runtime for x in devices if x["name"].startswith("iPhone")))')"
+          (cd native/mobile-input/ios && xcodebuild -scheme ThumbleMobileInput -destination "platform=iOS Simulator,id=$device_id" -derivedDataPath "$RUNNER_TEMP/rewrite-keychain-tests" -resultBundlePath "$RUNNER_TEMP/rewrite-keychain-tests.xcresult" test) 2>&1 | tee reports/mobile-ios-keychain.txt
+          xcrun xcresulttool get test-results tests --schema-version 0.1.0 --path "$RUNNER_TEMP/rewrite-keychain-tests.xcresult" > reports/mobile-ios-keychain-tests.json
+          xcrun xcresulttool get test-results summary --schema-version 0.1.0 --path "$RUNNER_TEMP/rewrite-keychain-tests.xcresult" > reports/mobile-ios-keychain-summary.json
+          python3 tooling/check_native_vault_results.py ios reports/mobile-ios-keychain-tests.json reports/mobile-ios-keychain-summary.json | tee reports/mobile-ios-keychain-verification.txt
       - name: Build native iPhone module
         working-directory: Rewrite/native/mobile-input/ios
         run: xcodebuild -scheme ThumbleMobileInput -destination 'generic/platform=iOS' -derivedDataPath '${{ runner.temp }}/rewrite-ios-device' CODE_SIGNING_ALLOWED=NO build
@@ -60,6 +70,7 @@ jobs:
           name: rewrite-mobile-ios-native
           path: |
             Rewrite/reports/mobile-*.txt
+            Rewrite/reports/mobile-*.json
             Rewrite/reports/mobile-ios-*/build.json
           if-no-files-found: error
 
@@ -87,9 +98,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.88.0
       - name: Build synthetic native TLS witness
         working-directory: Rewrite
-        run: cargo build --locked --manifest-path native/receiver/Cargo.toml --example control_tls_probe
+        run: cargo build --locked --manifest-path native/receiver/Cargo.toml --examples
       - name: Build and test native Android module
-        run: THUMBLE_NATIVE_TLS_PROBE="$GITHUB_WORKSPACE/Rewrite/native/receiver/target/debug/examples/control_tls_probe" bash ./gradlew --no-daemon --stacktrace testDebugUnitTest assembleDebug lintDebug
+        run: THUMBLE_NATIVE_ENROLLMENT_PROBE="$GITHUB_WORKSPACE/Rewrite/native/receiver/target/debug/examples/enrollment_probe" THUMBLE_NATIVE_TLS_PROBE="$GITHUB_WORKSPACE/Rewrite/native/receiver/target/debug/examples/control_tls_probe" bash ./gradlew --no-daemon --stacktrace testDebugUnitTest assembleDebug lintDebug
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -98,4 +109,49 @@ jobs:
             Rewrite/native/mobile-input/android/build/test-results/
             Rewrite/native/mobile-input/android/build/reports/
             Rewrite/native/mobile-input/android/build/outputs/aar/
+          if-no-files-found: error
+
+  android-keystore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Install pinned Android SDK
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Enable KVM on the ephemeral runner
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Execute synthetic Keystore provider test headlessly
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
+          script: bash "$GITHUB_WORKSPACE/Rewrite/native/mobile-input/android/gradlew" -p "$GITHUB_WORKSPACE/Rewrite/native/mobile-input/android" --no-daemon connectedDebugAndroidTest
+      - name: Require actual Keystore case execution
+        run: |
+          python3 Rewrite/tooling/test_native_vault_results.py
+          python3 Rewrite/tooling/check_native_vault_results.py android Rewrite/native/mobile-input/android/build/outputs/androidTest-results/connected
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rewrite-android-keystore-provider
+          path: |
+            Rewrite/native/mobile-input/android/build/outputs/androidTest-results/
+            Rewrite/native/mobile-input/android/build/reports/androidTests/
           if-no-files-found: error

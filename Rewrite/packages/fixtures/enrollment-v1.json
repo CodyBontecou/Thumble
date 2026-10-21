@@ -12,7 +12,7 @@
   "hello": {
     "version": 1,
     "command": "hello",
-    "controlVersion": 1,
+    "controlVersion": 2,
     "inputVersion": 1,
     "documentVersion": 1,
     "capabilitiesVersion": 1
@@ -31,5 +31,12 @@
     "command": "enrollment-stored",
     "phoneId": "phone-a",
     "credentialEpoch": "1"
+  },
+  "completion": {
+    "version": 1,
+    "command": "enrollment-complete",
+    "phoneId": "phone-a",
+    "credentialEpoch": "1",
+    "inputEnabled": false
   }
 }

@@ -218,14 +218,14 @@ pub fn enroll(
         let hello: Hello = receive(channel)?;
         if hello.version != 1
             || hello.command != "hello"
-            || hello.control_version != 1
+            || hello.control_version != 2
             || hello.input_version != 1
             || hello.document_version != 1
             || hello.capabilities_version != 1
         {
             return Err("enrollment_version_unsupported");
         }
-        let reply = serde_json::json!({"version":1,"command":"hello","authorityInstanceId":authority,"controlVersion":1,"inputVersion":1,"documentVersion":1,"capabilitiesVersion":1,"inputEnabled":false});
+        let reply = serde_json::json!({"version":1,"command":"hello","authorityInstanceId":authority,"controlVersion":2,"inputVersion":1,"documentVersion":1,"capabilitiesVersion":1,"inputEnabled":false});
         channel
             .send(
                 FrameKind::Control,
@@ -267,6 +267,14 @@ pub fn enroll(
         {
             return Err("phone_credential_delivery_unconfirmed");
         }
+        let completed = serde_json::json!({"version":1,"command":"enrollment-complete","phoneId":issued.phone().phone_id,"credentialEpoch":issued.phone().credential_epoch,"inputEnabled":false});
+        channel
+            .send(
+                FrameKind::Control,
+                &serde_json::to_vec(&completed)
+                    .map_err(|_| "phone_credential_delivery_unconfirmed")?,
+            )
+            .map_err(|_| "phone_credential_delivery_unconfirmed")?;
         Ok(issued.phone().clone())
     })();
     if result.is_err() {
@@ -310,7 +318,7 @@ mod tests {
             .unwrap();
     }
     fn hello() -> serde_json::Value {
-        serde_json::json!({"version":1,"command":"hello","controlVersion":1,"inputVersion":1,"documentVersion":1,"capabilitiesVersion":1})
+        serde_json::json!({"version":1,"command":"hello","controlVersion":2,"inputVersion":1,"documentVersion":1,"capabilitiesVersion":1})
     }
     fn request(offer: &PairingOffer) -> serde_json::Value {
         serde_json::json!({"version":1,"command":"enroll","authorityInstanceId":"authority-a","windowId":offer.window_id,"proof":offer.secret,"phoneId":"phone-a","label":"Controller"})
@@ -456,6 +464,9 @@ mod tests {
                 channel,
                 serde_json::json!({"version":1,"command":"enrollment-stored","phoneId":"phone-a","credentialEpoch":reply["credentialEpoch"]}),
             );
+            let completed: serde_json::Value = receive(channel).unwrap();
+            assert_eq!(completed["command"], "enrollment-complete");
+            assert_eq!(completed["inputEnabled"], false);
         });
         assert_eq!(result.unwrap().credential_epoch, "1");
         assert_eq!(status.attempts_remaining, 0);
@@ -475,7 +486,7 @@ mod tests {
         ] {
             let (root, result, status) = exercise(|channel, _| {
                 let mut value = hello();
-                value[field] = serde_json::json!(2);
+                value[field] = serde_json::json!(if field == "controlVersion" { 3 } else { 2 });
                 send(channel, value);
                 assert!(channel.receive().is_err());
             });
@@ -551,7 +562,7 @@ mod tests {
     }
     #[test]
     fn duplicate_or_unknown_json_fields_fail_before_proof_admission() {
-        for raw in [br#"{"version":1,"version":1,"command":"hello","controlVersion":1,"inputVersion":1,"documentVersion":1,"capabilitiesVersion":1}"#.as_slice(),br#"{"version":1,"command":"hello","controlVersion":1,"inputVersion":1,"documentVersion":1,"capabilitiesVersion":1,"extra":true}"#] {
+        for raw in [br#"{"version":1,"version":1,"command":"hello","controlVersion":2,"inputVersion":1,"documentVersion":1,"capabilitiesVersion":1}"#.as_slice(),br#"{"version":1,"command":"hello","controlVersion":2,"inputVersion":1,"documentVersion":1,"capabilitiesVersion":1,"extra":true}"#] {
             let (_,result,status)=exercise(|channel,_|{channel.send(FrameKind::Control,raw).unwrap();assert!(channel.receive().is_err());});
             assert_eq!(result.err(),Some("enrollment_message_invalid"));assert_eq!(status.attempts_remaining,5);
         }
@@ -677,6 +688,22 @@ mod tests {
         );
         assert_eq!(result.err(), Some("native_clock_failed"));
         assert_eq!(status.attempts_remaining, 0);
+        assert!(PhoneTrustStore::open(&root.0)
+            .unwrap()
+            .list()
+            .unwrap()
+            .is_empty());
+    }
+    #[test]
+    fn earlier_control_version_is_rejected_before_invitation_consumption() {
+        let (root, result, status) = exercise(|channel, _| {
+            let mut value = hello();
+            value["controlVersion"] = serde_json::json!(1);
+            send(channel, value);
+            assert!(channel.receive().is_err());
+        });
+        assert_eq!(result.err(), Some("enrollment_version_unsupported"));
+        assert_eq!(status.attempts_remaining, 5);
         assert!(PhoneTrustStore::open(&root.0)
             .unwrap()
             .list()

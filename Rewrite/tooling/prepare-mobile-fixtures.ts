@@ -10,6 +10,11 @@ for (const [source, name] of [
   ["../Host/fixtures/gamepad/v2.json", "gamepad-v2.json"],
   ["packages/fixtures/mobile-input-v1.json", "mobile-input-v1.json"],
   ["packages/fixtures/input-packet-v1.json", "input-packet-v1.json"],
+  ["packages/fixtures/phone-credential-v1.json", "phone-credential-v1.json"],
+  [
+    "packages/fixtures/enrollment-control-v2.json",
+    "enrollment-control-v2.json",
+  ],
 ]) {
   copyFileSync(resolve(root, source!), resolve(target, name!));
 }

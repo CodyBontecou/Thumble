@@ -5,3 +5,6 @@ reports/
 
 # Kotlin compiler session cache
 .kotlin/
+
+# Native-provider evidence tooling
+__pycache__/

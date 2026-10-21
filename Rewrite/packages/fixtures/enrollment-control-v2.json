@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "description": "Synthetic public native control-v2 fixtures. No real credentials.",
+  "hello": {
+    "version": 1,
+    "command": "hello",
+    "authorityInstanceId": "authority-a",
+    "controlVersion": 2,
+    "inputVersion": 1,
+    "documentVersion": 1,
+    "capabilitiesVersion": 1,
+    "inputEnabled": false
+  },
+  "enrolled": {
+    "version": 1,
+    "command": "enrolled",
+    "phoneId": "phone-a",
+    "credentialEpoch": "7",
+    "expiresAt": 100000,
+    "credential": "2222222222222222222222222222222222222222222222222222222222222222"
+  },
+  "complete": {
+    "version": 1,
+    "command": "enrollment-complete",
+    "phoneId": "phone-a",
+    "credentialEpoch": "7",
+    "inputEnabled": false
+  },
+  "invalidJSON": [
+    "{\"version\":1,\"version\":2}",
+    "{\"version\":1,\"v\\u0065rsion\":2}",
+    "{\"x\":null}",
+    "{\"x\":[]}",
+    "{\"x\":{}}",
+    "{\"x\":1.0}",
+    "{\"x\":1e0}",
+    "{\"x\":-1}",
+    "{\"x\":+1}",
+    "{\"x\":01}",
+    "{\"x\":9223372036854775808}",
+    "{\"x\":true,}",
+    "{\"x\":true}{}",
+    "{\"x\":\"bad\\q\"}",
+    "{\"x\":\"\\uD800\"}",
+    "{\"x\":\"line\nbreak\"}"
+  ],
+  "invalidUTF8Hex": "7b2261223a22ff227d"
+}
