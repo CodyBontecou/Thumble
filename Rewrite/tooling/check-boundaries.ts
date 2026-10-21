@@ -63,7 +63,7 @@ if (import.meta.main) {
     for await (const path of new Bun.Glob(`packages/${name}/src/**/*.ts`).scan({
       cwd: root,
     })) {
-      if (name === "client" && path !== "packages/client/src/index.ts")
+      if (name === "client" && path === "packages/client/src/local.ts")
         continue;
       checkPortableSource(
         path,

@@ -34,6 +34,9 @@ export class NativeReceiver implements ReceiverPort {
     this.child = spawn(executable, ["run", directory, recordingLog], {
       stdio: ["pipe", "pipe", "pipe"],
       windowsHide: true,
+      // The safety owner must survive abrupt Windows service termination.
+      // Keep private pipes, but do not inherit the service process group/job.
+      detached: process.platform === "win32",
     });
     this.child.stderr.resume();
     this.child.on("error", () => this.fail());
