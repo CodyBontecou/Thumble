@@ -1,9 +1,10 @@
 import type { GamepadButton, GamepadState } from "@thumble/contracts";
 
-const buttonBits: Partial<Record<GamepadButton, number>> = {
+const buttonBits: Record<GamepadButton, number | null> = {
   dpadUp: 0, dpadDown: 1, dpadLeft: 2, dpadRight: 3, start: 4, select: 5,
   leftStickPress: 6, rightStickPress: 7, leftShoulder: 8, rightShoulder: 9,
   home: 10, south: 12, east: 13, west: 14, north: 15,
+  leftTriggerButton: null, rightTriggerButton: null,
 };
 const finite = (value: number): number => Number.isFinite(value) ? value : 0;
 const clamp = (value: number, minimum: number): number => Math.min(1, Math.max(minimum, finite(value)));
@@ -16,7 +17,7 @@ export function encodeGamepadReport(state: GamepadState): Uint8Array {
   let mask = 0;
   for (const button of buttons) {
     const bit = buttonBits[button];
-    if (bit !== undefined) mask |= 1 << bit;
+    if (bit !== null) mask |= 1 << bit;
   }
   if (buttons.has("dpadUp") && buttons.has("dpadDown")) mask &= ~3;
   if (buttons.has("dpadLeft") && buttons.has("dpadRight")) mask &= ~12;

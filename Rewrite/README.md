@@ -11,3 +11,5 @@ GitHub Actions runs the same strict/generated/boundary/test checks on Windows, m
 All development is headless. Windows, iOS, Android and required optical live sync remain launch scope. Driver/signing/install, actual game recognition, multitouch/haptics, physical latency and live capture/delivery require eventual beta evidence. Those are release/retirement gates, not prerequisites for writing isolated implementation.
 
 Remaining M2 work: versioned receiver/configuration seam, isolated local IPC/service/CLI lifecycle and lease-expiry integration, native input-module skeletons and mobile build CI, compiled Bun packaging and signed-helper acceptance. No production runtime is routed through this workspace yet; no new network listener or native input path is enabled.
+
+The retained v2 fixture includes the upstream compatibility descriptor; its MIT notice is preserved in `ThirdParty/SteamControllerBridge-LICENSE.txt`.

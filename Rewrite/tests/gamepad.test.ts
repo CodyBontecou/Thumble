@@ -59,3 +59,10 @@ test("decoded state has independent immutable ownership", () => {
   expect(Object.isFrozen(decoded)).toBe(true);
   expect(Object.isFrozen(decoded.buttons)).toBe(true);
 });
+
+test("signed axis ties match Swift/Rust rounding away from zero", () => {
+  const bytes = encodeGamepadReport({ ...neutralGamepadState(), leftStickX: -0.5 / 32768, rightStickX: 0.5 / 32767 });
+  const view = new DataView(bytes.buffer);
+  expect(view.getInt16(6, true)).toBe(-1);
+  expect(view.getInt16(10, true)).toBe(1);
+});
