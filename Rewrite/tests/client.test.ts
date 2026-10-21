@@ -19,7 +19,8 @@ test("typed local client handles repeated success and rejection without leaking 
     for (let n=0;n<30;n++) {
       console.error(`[DEBUG-m2-client] request ${n}`);
       expect((await request(endpoint,{command:"status"})).receiver.snapshot.active).toBe(false);
-      await expect(request(endpoint,{command:"release"})).rejects.toThrow("test_rejection");
+      const code = await request(endpoint,{command:"release"}).then(() => "unexpected_success", (error: unknown) => error instanceof Error ? error.message : "invalid_error");
+      expect(code).toBe("test_rejection");
     }
   } finally {
     await new Promise<void>(resolve => server.close(() => resolve()));

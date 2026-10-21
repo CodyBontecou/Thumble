@@ -152,13 +152,10 @@ export function request(
     const fail = (code: string): void => {
       if (settled) return;
       settled = true;
-      clearTimeout(timeout);
       socket.destroy();
       reject(new Error(code));
     };
-    // Keep the deadline outside node:net: Bun Windows can corrupt socket
-    // teardown when a per-socket timeout is armed during data callbacks.
-    const timeout = setTimeout(() => fail("service_timeout"), 3000);
+    socket.setTimeout(3000, () => fail("service_timeout"));
     socket.on("error", () => fail("service_unavailable"));
     socket.on("end", () => {
       if (!settled) fail("service_disconnected");
@@ -210,8 +207,7 @@ export function request(
         )
           throw new Error("service_identity_mismatch");
         settled = true;
-        clearTimeout(timeout);
-        socket.destroy();
+          socket.destroy();
         resolve(status);
       } catch {
         fail("invalid_service_response");
