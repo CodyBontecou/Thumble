@@ -207,7 +207,7 @@ export function request(
         )
           throw new Error("service_identity_mismatch");
         settled = true;
-          socket.destroy();
+        socket.destroy();
         resolve(status);
       } catch {
         fail("invalid_service_response");

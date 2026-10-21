@@ -1,3 +1,4 @@
+import { expectError } from "./helpers/rejection.ts";
 import { expect, test } from "bun:test";
 import {
   mkdtempSync,
@@ -99,14 +100,10 @@ async function fixture(
 
 test("service survives CLI exit; CAS activation, replay, precision, full-state repair and generation barriers", async () => {
   await fixture(async (directory) => {
-    console.error("[DEBUG-m2] before CLI start");
     const started = await command(directory, "service", "start");
-    console.error("[DEBUG-m2] after CLI start");
     expect(started.code).toBe(0);
     expect(started.value.result.receiver.snapshot.inputEnabled).toBe(false);
-    console.error("[DEBUG-m2] before endpoint read");
     const endpoint = readEndpoint(directory, executable);
-    console.error("[DEBUG-m2] after endpoint read");
     expect(endpoint.servicePid).not.toBe(process.pid);
     if (process.platform !== "win32") {
       expect(statSync(directory).mode & 0o777).toBe(0o700);
@@ -114,27 +111,22 @@ test("service survives CLI exit; CAS activation, replay, precision, full-state r
         0o600,
       );
     }
-    console.error("[DEBUG-m2] before status request");
     const initial = await request(endpoint, { command: "status" });
-    console.error("[DEBUG-m2] after status request");
     expect(initial.receiver.snapshot.active).toBe(false);
-    console.error("[DEBUG-m2] before activation");
     const active = await request(endpoint, {
       command: "activate",
       expectedRevision: "0",
       profileId: "profile-A",
     });
-    console.error("[DEBUG-m2] after activation");
     expect(active.receiver.snapshot.generation).toBe("1");
-    console.error("[DEBUG-m2] before stale activation");
-    await expect(
+    await expectError(
       request(endpoint, {
         command: "activate",
         expectedRevision: "0",
         profileId: "stale",
       }),
-    ).rejects.toThrow("revision_conflict");
-    console.error("[DEBUG-m2] after stale activation; before sample");
+      "revision_conflict",
+    );
     const sample = await request(endpoint, {
       command: "sample",
       expectedGeneration: "1",
@@ -142,10 +134,9 @@ test("service survives CLI exit; CAS activation, replay, precision, full-state r
       state: held,
       allowRecordedInput: true,
     });
-    console.error("[DEBUG-m2] after sample");
     expect(sample.receiver.snapshot.sequence).toBe("9007199254740993");
     expect(sample.receiver.snapshot.reportHex).not.toBe(neutral);
-    await expect(
+    await expectError(
       request(endpoint, {
         command: "sample",
         expectedGeneration: "1",
@@ -153,8 +144,8 @@ test("service survives CLI exit; CAS activation, replay, precision, full-state r
         state: held,
         allowRecordedInput: true,
       }),
-    ).rejects.toThrow("replayed_sample");
-    console.error("[DEBUG-m2] after replay; before repair");
+      "replayed_sample",
+    );
     const repair = await request(endpoint, {
       command: "sample",
       expectedGeneration: "1",
@@ -163,16 +154,14 @@ test("service survives CLI exit; CAS activation, replay, precision, full-state r
       allowRecordedInput: true,
     });
     expect(repair.receiver.snapshot.reportHex).toBe(neutral);
-    console.error("[DEBUG-m2] after repair; before switch");
     const switched = await request(endpoint, {
       command: "activate",
       expectedRevision: "1",
       profileId: "profile-B",
     });
-    console.error("[DEBUG-m2] after switch");
     expect(switched.receiver.snapshot.reportHex).toBe(neutral);
     expect(switched.receiver.snapshot.generation).toBe("2");
-    await expect(
+    await expectError(
       request(endpoint, {
         command: "sample",
         expectedGeneration: "1",
@@ -180,7 +169,8 @@ test("service survives CLI exit; CAS activation, replay, precision, full-state r
         state: held,
         allowRecordedInput: true,
       }),
-    ).rejects.toThrow("inactive_generation");
+      "inactive_generation",
+    );
     await request(endpoint, {
       command: "sample",
       expectedGeneration: "2",
@@ -188,14 +178,10 @@ test("service survives CLI exit; CAS activation, replay, precision, full-state r
       state: held,
       allowRecordedInput: true,
     });
-    console.error("[DEBUG-m2] before release");
     const released = await request(endpoint, { command: "release" });
-    console.error("[DEBUG-m2] after release");
     expect(released.receiver.snapshot.active).toBe(false);
     expect(released.receiver.snapshot.reportHex).toBe(neutral);
-    console.error("[DEBUG-m2] before CLI stop");
     const stopped = await command(directory, "service", "stop");
-    console.error("[DEBUG-m2] after CLI stop");
     expect(stopped.code).toBe(0);
     expect(stopped.value.result.receiver.snapshot.reportHex).toBe(neutral);
     await waitFor(() =>
@@ -203,9 +189,7 @@ test("service survives CLI exit; CAS activation, replay, precision, full-state r
         (event) => event.reason === "process_exit",
       ),
     );
-    console.error("[DEBUG-m2] before CLI restart");
     const restarted = await command(directory, "service", "start");
-    console.error("[DEBUG-m2] after CLI restart");
     expect(restarted.code).toBe(0);
     expect(restarted.value.result.receiver.snapshot.active).toBe(false);
     expect(restarted.value.result.receiver.snapshot.generation).toBe("0");
@@ -248,7 +232,7 @@ test("service death neutralizes the independent receiver within the owner lease"
     const restarted = await command(directory, "service", "start");
     expect(restarted.code).toBe(0);
     expect(restarted.value.result.receiver.snapshot.active).toBe(false);
-    await expect(
+    await expectError(
       request(readEndpoint(directory, executable), {
         command: "sample",
         expectedGeneration: "1",
@@ -256,7 +240,8 @@ test("service death neutralizes the independent receiver within the owner lease"
         state: held,
         allowRecordedInput: true,
       }),
-    ).rejects.toThrow("inactive_generation");
+      "inactive_generation",
+    );
   });
 }, 20000);
 
@@ -317,9 +302,10 @@ test("local auth, input opt-in and duplicate JSON rejection never activate outpu
   await fixture(async (directory, parent) => {
     expect((await command(directory, "service", "start")).code).toBe(0);
     const endpoint = readEndpoint(directory, executable);
-    await expect(
+    await expectError(
       request({ ...endpoint, token: "0".repeat(64) }, { command: "release" }),
-    ).rejects.toThrow("unauthorized");
+      "unauthorized",
+    );
     const file = join(parent, "sample.json");
     writeFileSync(file, JSON.stringify(held));
     const denied = await command(

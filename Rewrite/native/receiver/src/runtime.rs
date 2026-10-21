@@ -309,6 +309,30 @@ mod tests {
         assert_eq!(r.reason, "lease_expired");
     }
     #[test]
+    fn failed_output_retires_session_and_latches_neutral() {
+        struct Failing;
+        impl Output for Failing {
+            fn submit(&mut self, report: [u8; 20], _: &'static str) -> Result<(), &'static str> {
+                if report == NEUTRAL {
+                    Ok(())
+                } else {
+                    Err("device_lost")
+                }
+            }
+        }
+        let mut r = Runtime::default();
+        let mut output = Failing;
+        r.apply(activate(1), 0, &mut output).unwrap();
+        assert_eq!(r.apply(sample(1, 0), 1, &mut output), Err("output_failed"));
+        assert!(!r.snapshot().active);
+        assert_eq!(r.report, NEUTRAL);
+        assert_eq!(r.reason, "output_failed");
+        assert_eq!(
+            r.apply(sample(1, 1), 2, &mut output),
+            Err("inactive_generation")
+        );
+    }
+    #[test]
     fn malformed_requests_and_precise_counter_bounds() {
         assert!(serde_json::from_str::<Request>(
             r#"{"version":1,"requestId":"x","body":{"command":"status","unexpected":true}}"#
