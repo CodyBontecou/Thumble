@@ -169,6 +169,7 @@ test("service survives CLI exit; CAS activation, replay, precision, full-state r
       expectedRevision: "1",
       profileId: "profile-B",
     });
+    console.error("[DEBUG-m2] after switch");
     expect(switched.receiver.snapshot.reportHex).toBe(neutral);
     expect(switched.receiver.snapshot.generation).toBe("2");
     await expect(
@@ -187,10 +188,14 @@ test("service survives CLI exit; CAS activation, replay, precision, full-state r
       state: held,
       allowRecordedInput: true,
     });
+    console.error("[DEBUG-m2] before release");
     const released = await request(endpoint, { command: "release" });
+    console.error("[DEBUG-m2] after release");
     expect(released.receiver.snapshot.active).toBe(false);
     expect(released.receiver.snapshot.reportHex).toBe(neutral);
+    console.error("[DEBUG-m2] before CLI stop");
     const stopped = await command(directory, "service", "stop");
+    console.error("[DEBUG-m2] after CLI stop");
     expect(stopped.code).toBe(0);
     expect(stopped.value.result.receiver.snapshot.reportHex).toBe(neutral);
     await waitFor(() =>
@@ -198,7 +203,9 @@ test("service survives CLI exit; CAS activation, replay, precision, full-state r
         (event) => event.reason === "process_exit",
       ),
     );
+    console.error("[DEBUG-m2] before CLI restart");
     const restarted = await command(directory, "service", "start");
+    console.error("[DEBUG-m2] after CLI restart");
     expect(restarted.code).toBe(0);
     expect(restarted.value.result.receiver.snapshot.active).toBe(false);
     expect(restarted.value.result.receiver.snapshot.generation).toBe("0");

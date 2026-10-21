@@ -66,3 +66,17 @@ jobs:
           name: rewrite-portable-tests-${{ matrix.os }}
           path: Rewrite/reports/*junit.xml
           if-no-files-found: error
+
+  windows-runtime-probe:
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.3
+      - run: bun test tests/net-repro.test.ts
+        working-directory: Rewrite
+        timeout-minutes: 1
