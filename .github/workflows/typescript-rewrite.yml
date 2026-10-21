@@ -45,6 +45,7 @@ jobs:
       - run: bun run native:test
       - run: bun run native:build
       - run: bun run typecheck
+      - run: bun test tests/net-repro.test.ts
       - run: bun run test:ci
       - run: bun run build
       - run: bun run test:package:ci
