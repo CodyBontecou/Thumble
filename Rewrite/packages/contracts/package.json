@@ -7,6 +7,7 @@
     ".": "./src/index.ts",
     "./receiver": "./src/receiver.ts",
     "./mobile-input": "./src/mobile-input.ts",
+    "./host-identity": "./src/host-identity.ts",
     "./pairing": "./src/pairing.ts"
   }
 }

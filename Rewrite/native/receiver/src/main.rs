@@ -1,8 +1,5 @@
-use thumble_rewrite_receiver::{gamepad, runtime};
+use thumble_rewrite_receiver::{gamepad, runtime, security};
 mod clock;
-mod security;
-#[cfg(windows)]
-mod windows_security;
 
 use runtime::{identity, Output, Request, Runtime};
 use serde_json::json;
@@ -164,6 +161,12 @@ fn run(root: &Path, log: Option<&Path>) -> Result<(), &'static str> {
 fn main() {
     let result = args().and_then(|(mode, root, log)| match mode.as_str() {
         "secure-directory" => security::directory(&root),
+        "host-identity-initialize" | "host-identity-show" if log.is_none() => {
+            let operation = if mode == "host-identity-initialize" { thumble_rewrite_receiver::host_identity::load_or_create } else { thumble_rewrite_receiver::host_identity::load_existing };
+            operation(&root).map(|identity| {
+                println!("{}", json!({"version":1,"certificatePin":identity.pin().hex(),"serverName":thumble_rewrite_receiver::control_tls::CONTROL_SERVER_NAME,"networkEnabled":false,"inputEnabled":false}));
+            })
+        }
         "run" => run(&root, log.as_deref()),
         _ => Err("unsupported_mode"),
     });

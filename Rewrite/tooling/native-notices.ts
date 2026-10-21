@@ -65,9 +65,21 @@ for (const pkg of parsed.package) {
         ? ["asn1-rs", "0.7.2"]
         : /^winapi-(i686|x86_64)-pc-windows-gnu$/.test(pkg.name)
           ? ["winapi", "0.3.9"]
-          : undefined;
+          : pkg.name === "rsqlite-vfs"
+            ? ["sqlite-wasm-rs", "0.5.5", "LICENSE"]
+            : undefined;
     if (!fallback) throw new Error(`No license files for ${pkg.name}`);
-    output += `\nLICENSE-MIT (same upstream project: ${fallback.join(" ")})\n${readFileSync(join(source(fallback[0]!, fallback[1]!), "LICENSE-MIT"), "utf8").trimEnd()}\n`;
+    const name = fallback[2] ?? "LICENSE-MIT";
+    output += `\n${name} (same upstream project: ${fallback.slice(0, 2).join(" ")})\n${readFileSync(join(source(fallback[0]!, fallback[1]!), name), "utf8").trimEnd()}\n`;
+  }
+  if (pkg.name === "libsqlite3-sys") {
+    const sqlite = readFileSync(join(directory, "sqlite3/sqlite3.c"), "utf8");
+    const declaration = sqlite.indexOf("The author disclaims copyright");
+    const begin = sqlite.lastIndexOf("/*", declaration);
+    const end = sqlite.indexOf("*/", declaration);
+    if (declaration < 0 || begin < 0 || end < begin)
+      throw new Error("SQLite public-domain declaration missing");
+    output += `\nBundled SQLite (sqlite3/sqlite3.c public-domain declaration)\n${sqlite.slice(begin, end + 2)}\n`;
   }
   for (const path of selected)
     output += `\n${path.replaceAll("\\", "/")}\n${readFileSync(join(directory, path), "utf8").trimEnd()}\n`;

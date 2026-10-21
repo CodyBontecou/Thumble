@@ -36,8 +36,9 @@ packageTest(
           family,
           action,
           ...options,
-          "--runtime-dir",
-          runtime,
+          ...(family === "identity"
+            ? ["--identity-dir", join(directory, "identity")]
+            : ["--runtime-dir", runtime]),
           "--json",
         ],
         {
@@ -63,6 +64,12 @@ packageTest(
       return parseStrictJson(out);
     };
     try {
+      const identity = await invoke("initialize", "identity");
+      expect(identity.result.certificatePin).toMatch(/^[0-9a-f]{64}$/);
+      expect(identity.result.inputEnabled).toBe(false);
+      expect((await invoke("show", "identity")).result).toEqual(
+        identity.result,
+      );
       const started = await invoke("start");
       expect(started.result.receiver.snapshot.backend).toBe("recording");
       expect(started.result.receiver.snapshot.inputEnabled).toBe(false);

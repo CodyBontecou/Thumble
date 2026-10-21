@@ -1,6 +1,7 @@
-import { spawn } from "node:child_process";
+import { decodeHostIdentity } from "@thumble/contracts/host-identity";
+import { spawn, spawnSync } from "node:child_process";
 import { homedir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 
 import {
   readEndpoint,
@@ -29,6 +30,7 @@ function options(values: string[]): Map<string, string | true> {
     }
     if (
       ![
+        "--identity-dir",
         "--runtime-dir",
         "--receiver",
         "--profile-id",
@@ -71,6 +73,29 @@ async function main(): Promise<unknown> {
             dirname(process.execPath),
             `thumble-rewrite-receiver${extension}`,
           );
+  if (family === "identity") {
+    if (action !== "initialize" && action !== "show")
+      throw new Error("unsupported_identity_command");
+    for (const key of opts.keys())
+      if (!["--identity-dir", "--receiver", "--json"].includes(key))
+        throw new Error("invalid_identity_option");
+    const directory = required(opts, "--identity-dir");
+    if (!isAbsolute(directory))
+      throw new Error("identity_directory_must_be_absolute");
+    const child = spawnSync(receiver, [`host-identity-${action}`, directory], {
+      encoding: "utf8",
+      timeout: 5000,
+      maxBuffer: 4096,
+      windowsHide: true,
+    });
+    if (child.error || child.status !== 0) {
+      const code = child.stderr?.trim();
+      throw new Error(
+        code && /^[a-z_]+$/.test(code) ? code : "host_identity_unavailable",
+      );
+    }
+    return decodeHostIdentity(JSON.parse(child.stdout));
+  }
   if (family === "__service" && action === "run") {
     await serve(receiver, root);
     return undefined;

@@ -134,6 +134,10 @@ pub struct ServerIdentity {
 }
 impl ServerIdentity {
     pub fn generate() -> Result<Self, TransportRejected> {
+        let (certificate, key) = Self::generate_material()?;
+        Self::from_der(certificate, key)
+    }
+    pub(crate) fn generate_material() -> Result<(Vec<u8>, Vec<u8>), TransportRejected> {
         let mut params = rcgen::CertificateParams::new(vec![CONTROL_SERVER_NAME.to_string()])
             .map_err(|_| TransportRejected)?;
         let now = time::OffsetDateTime::now_utc();
@@ -142,7 +146,7 @@ impl ServerIdentity {
         params.extended_key_usages = vec![rcgen::ExtendedKeyUsagePurpose::ServerAuth];
         let key = rcgen::KeyPair::generate().map_err(|_| TransportRejected)?;
         let cert = params.self_signed(&key).map_err(|_| TransportRejected)?;
-        Self::from_der(cert.der().to_vec(), key.serialize_der())
+        Ok((cert.der().to_vec(), key.serialize_der()))
     }
     /// Call only with key bytes loaded by the user-private native identity owner.
     pub fn from_der(certificate: Vec<u8>, key: Vec<u8>) -> Result<Self, TransportRejected> {
@@ -167,6 +171,21 @@ impl ServerIdentity {
             config: Arc::new(config),
             pin,
         })
+    }
+    pub(crate) fn validate_current(&self) -> Result<(), TransportRejected> {
+        PinVerifier {
+            pin: self.pin,
+            provider: Arc::new(default_provider()),
+        }
+        .verify_server_cert(
+            &self.certificate,
+            &[],
+            &ServerName::try_from(CONTROL_SERVER_NAME).map_err(|_| TransportRejected)?,
+            &[],
+            UnixTime::now(),
+        )
+        .map(|_| ())
+        .map_err(|_| TransportRejected)
     }
     pub fn certificate_der(&self) -> &[u8] {
         self.certificate.as_ref()
@@ -289,6 +308,7 @@ pub struct ControlFrame {
 /// Blocking IO belongs on a bounded network worker, never the native safety tick owner.
 pub struct ControlChannel {
     stream: Option<Stream>,
+    server_pin: Option<CertificatePin>,
 }
 impl ControlChannel {
     pub fn connect_pinned(
@@ -319,6 +339,7 @@ impl ControlChannel {
         }
         Ok(Self {
             stream: Some(Stream::Client(StreamOwned::new(conn, socket))),
+            server_pin: None,
         })
     }
     pub fn accept_unenrolled(
@@ -341,7 +362,15 @@ impl ControlChannel {
         }
         Ok(Self {
             stream: Some(Stream::Server(StreamOwned::new(conn, socket))),
+            server_pin: Some(identity.pin()),
         })
+    }
+    pub(crate) fn native_server_pin(&self) -> Option<CertificatePin> {
+        if self.stream.is_some() {
+            self.server_pin
+        } else {
+            None
+        }
     }
     pub fn close(&mut self) {
         self.stream = None;

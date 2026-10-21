@@ -7,6 +7,20 @@ use std::{
 };
 
 pub fn directory(path: &Path) -> Result<(), &'static str> {
+    private_directory(path, "rewrite-runtime-v1", b"thumble-rewrite-runtime-v1\n")
+}
+pub(crate) fn identity_directory(path: &Path) -> Result<(), &'static str> {
+    private_directory(
+        path,
+        "rewrite-host-identity-v1",
+        b"thumble-rewrite-host-identity-v1\n",
+    )
+}
+fn private_directory(
+    path: &Path,
+    marker_name: &str,
+    marker_bytes: &[u8],
+) -> Result<(), &'static str> {
     if !path.is_absolute() {
         return Err("runtime_directory_must_be_absolute");
     }
@@ -41,7 +55,7 @@ pub fn directory(path: &Path) -> Result<(), &'static str> {
     if !metadata.is_dir() {
         return Err("unsafe_runtime_directory");
     }
-    let marker = path.join("rewrite-runtime-v1");
+    let marker = path.join(marker_name);
     if !marker.exists()
         && fs::read_dir(path)
             .map_err(|_| "runtime_directory_unavailable")?
@@ -61,11 +75,10 @@ pub fn directory(path: &Path) -> Result<(), &'static str> {
     #[cfg(windows)]
     crate::windows_security::protect(path, true)
         .map_err(|_| "runtime_directory_permissions_failed")?;
-    const MARKER: &[u8] = b"thumble-rewrite-runtime-v1\n";
     if !marker.exists() {
         if let Ok(mut created) = file(&marker, true) {
             created
-                .write_all(MARKER)
+                .write_all(marker_bytes)
                 .map_err(|_| "runtime_marker_failed")?;
         }
     }
@@ -74,7 +87,7 @@ pub fn directory(path: &Path) -> Result<(), &'static str> {
         .take(128)
         .read_to_end(&mut bytes)
         .map_err(|_| "runtime_marker_failed")?;
-    if bytes != MARKER {
+    if bytes != marker_bytes {
         return Err("runtime_marker_invalid");
     }
     Ok(())

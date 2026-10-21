@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "description": "Synthetic public fixture only. No real credentials.",
+  "authorityInstanceId": "authority-a",
+  "offer": {
+    "windowId": "0123456789abcdef0123456789abcdef",
+    "secret": "4242424242424242424242424242424242424242424242424242424242424242",
+    "expiresAt": 120100
+  },
+  "openedAt": 100,
+  "windowVerifier": "1d257d8e84fb4b6209610c6f59aa8dfa235594aa80999702f3180dc8f0eb42ce",
+  "hello": {
+    "version": 1,
+    "command": "hello",
+    "controlVersion": 1,
+    "inputVersion": 1,
+    "documentVersion": 1,
+    "capabilitiesVersion": 1
+  },
+  "enroll": {
+    "version": 1,
+    "command": "enroll",
+    "authorityInstanceId": "authority-a",
+    "windowId": "0123456789abcdef0123456789abcdef",
+    "proof": "4242424242424242424242424242424242424242424242424242424242424242",
+    "phoneId": "phone-a",
+    "label": "Controller"
+  },
+  "acknowledgment": {
+    "version": 1,
+    "command": "enrollment-stored",
+    "phoneId": "phone-a",
+    "credentialEpoch": "1"
+  }
+}

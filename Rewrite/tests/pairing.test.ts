@@ -226,3 +226,40 @@ test("portable pairing client refuses a different authority and secret-bearing s
     "pairing_authority_mismatch",
   );
 });
+
+test("shared native enrollment fixture preserves service proof and public status semantics", async () => {
+  const f = await Bun.file(
+    new URL("../packages/fixtures/enrollment-v1.json", import.meta.url),
+  ).json();
+  const windows = new PairingWindows(f.authorityInstanceId, {
+    now: () => f.openedAt,
+    nextIdentity: () => f.offer.windowId,
+    randomSecret: () => f.offer.secret,
+    digest: (text) => {
+      const hash = createHash("sha256").update(text).digest("hex");
+      expect(hash).toBe(f.windowVerifier);
+      return hash;
+    },
+    constantTimeEqual: (a, b) =>
+      timingSafeEqual(Buffer.from(a, "hex"), Buffer.from(b, "hex")),
+  });
+  expect(windows.open()).toEqual(f.offer);
+  expect(windows.status()).toEqual({
+    state: "open",
+    windowId: f.offer.windowId,
+    expiresAt: f.offer.expiresAt,
+    attemptsRemaining: 5,
+    networkEnabled: false,
+  });
+  expect(windows.admit(f.enroll.windowId, f.enroll.proof)).toEqual({
+    authorityInstanceId: f.authorityInstanceId,
+    windowId: f.offer.windowId,
+  });
+  expect(windows.status()).toEqual({
+    state: "closed",
+    windowId: null,
+    expiresAt: null,
+    attemptsRemaining: 0,
+    networkEnabled: false,
+  });
+});
