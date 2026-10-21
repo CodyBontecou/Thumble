@@ -99,10 +99,14 @@ async function fixture(
 
 test("service survives CLI exit; CAS activation, replay, precision, full-state repair and generation barriers", async () => {
   await fixture(async (directory) => {
+    console.error("[DEBUG-m2] before CLI start");
     const started = await command(directory, "service", "start");
+    console.error("[DEBUG-m2] after CLI start");
     expect(started.code).toBe(0);
     expect(started.value.result.receiver.snapshot.inputEnabled).toBe(false);
+    console.error("[DEBUG-m2] before endpoint read");
     const endpoint = readEndpoint(directory, executable);
+    console.error("[DEBUG-m2] after endpoint read");
     expect(endpoint.servicePid).not.toBe(process.pid);
     if (process.platform !== "win32") {
       expect(statSync(directory).mode & 0o777).toBe(0o700);
@@ -110,7 +114,9 @@ test("service survives CLI exit; CAS activation, replay, precision, full-state r
         0o600,
       );
     }
+    console.error("[DEBUG-m2] before status request");
     const initial = await request(endpoint, { command: "status" });
+    console.error("[DEBUG-m2] after status request");
     expect(initial.receiver.snapshot.active).toBe(false);
     const active = await request(endpoint, {
       command: "activate",
