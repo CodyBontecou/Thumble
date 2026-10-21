@@ -18,7 +18,7 @@
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.portable.json",
     "test": "bun test",
     "verify": "bun run check:generated && bun run check:boundaries && bun run typecheck && bun test",
-    "test:ci": "bun test --reporter=junit --reporter-outfile=reports/junit.xml"
+    "test:ci": "bun tooling/ci-test.ts"
   },
   "devDependencies": {
     "@types/bun": "1.4.3",

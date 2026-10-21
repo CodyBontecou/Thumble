@@ -7,6 +7,10 @@ on:
   pull_request:
     paths: ["Rewrite/**", "Host/fixtures/gamepad/v2.json", ".github/workflows/typescript-rewrite.yml"]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -40,4 +44,4 @@ jobs:
         with:
           name: rewrite-portable-tests-${{ matrix.os }}
           path: Rewrite/reports/junit.xml
-          if-no-files-found: warn
+          if-no-files-found: error
