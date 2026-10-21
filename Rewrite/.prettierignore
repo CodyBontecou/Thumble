@@ -1,0 +1,5 @@
+node_modules/
+dist/
+reports/
+packages/contracts/src/gamepad.generated.ts
+native/

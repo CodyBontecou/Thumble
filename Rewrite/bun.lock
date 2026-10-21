@@ -5,10 +5,46 @@
     "": {
       "name": "thumble-rewrite",
       "devDependencies": {
+        "@thumble/application": "workspace:*",
+        "@thumble/client": "workspace:*",
         "@thumble/contracts": "workspace:*",
         "@thumble/domain": "workspace:*",
+        "@thumble/service": "workspace:*",
         "@types/bun": "1.4.3",
+        "prettier": "3.6.2",
         "typescript": "6.0.3",
+      },
+    },
+    "apps/cli": {
+      "name": "@thumble/cli",
+      "version": "0.0.0",
+      "dependencies": {
+        "@thumble/client": "workspace:*",
+        "@thumble/contracts": "workspace:*",
+        "@thumble/service": "workspace:*",
+      },
+    },
+    "apps/service": {
+      "name": "@thumble/service",
+      "version": "0.0.0",
+      "dependencies": {
+        "@thumble/application": "workspace:*",
+        "@thumble/client": "workspace:*",
+        "@thumble/contracts": "workspace:*",
+      },
+    },
+    "packages/application": {
+      "name": "@thumble/application",
+      "version": "0.0.0",
+      "dependencies": {
+        "@thumble/contracts": "workspace:*",
+      },
+    },
+    "packages/client": {
+      "name": "@thumble/client",
+      "version": "0.0.0",
+      "dependencies": {
+        "@thumble/contracts": "workspace:*",
       },
     },
     "packages/contracts": {
@@ -24,15 +60,25 @@
     },
   },
   "packages": {
+    "@thumble/application": ["@thumble/application@workspace:packages/application"],
+
+    "@thumble/cli": ["@thumble/cli@workspace:apps/cli"],
+
+    "@thumble/client": ["@thumble/client@workspace:packages/client"],
+
     "@thumble/contracts": ["@thumble/contracts@workspace:packages/contracts"],
 
     "@thumble/domain": ["@thumble/domain@workspace:packages/domain"],
+
+    "@thumble/service": ["@thumble/service@workspace:apps/service"],
 
     "@types/bun": ["@types/bun@1.4.3", "", { "dependencies": { "bun-types": "1.4.3" } }, "sha512-N67Pqy8JXbAY/j0tNraS3V5mubGvc6rrrNDmDCtZLlFzccbUJPDb0tvgUBC5q4m8ybkP93Jcn1QB+RYQ6PvBhw=="],
 
     "@types/node": ["@types/node@26.6.5", "", { "dependencies": { "undici-types": "~8.9.0" } }, "sha512-uMzsv9stDdofIZBx4UGh4Z9ZgXnGC9seRDscilBcTHAeOFk67MZg/k9bWVfO+bk4qZmG+l52hRnLwUiH2LnJTg=="],
 
     "bun-types": ["bun-types@1.4.3", "", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-tinRJNGOmUN+tEAsn2y2e942n9JHRHR42iUYzDH75NmhJqVBokGSQkkfSFdNWwsANIdrK6ACH9t01M452YyTwg=="],
+
+    "prettier": ["prettier@3.6.2", "", { "bin": { "prettier": "bin/prettier.cjs" } }, "sha512-I7AIg5boAr5R0FFtJ6rCfD+LFsWHp81dolrFD8S79U9tb8Az2nGrJncnMSnys+bpQJfRUzqs9hnA81OAA3hCuQ=="],
 
     "typescript": ["typescript@6.0.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw=="],
 

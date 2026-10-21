@@ -18,12 +18,22 @@
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.portable.json",
     "test": "bun test",
     "verify": "bun run check:generated && bun run check:boundaries && bun run typecheck && bun test",
-    "test:ci": "bun tooling/ci-test.ts"
+    "test:ci": "bun tooling/ci-test.ts",
+    "native:build": "cargo +1.88.0 build --locked --manifest-path native/receiver/Cargo.toml",
+    "native:test": "cargo +1.88.0 test --locked --manifest-path native/receiver/Cargo.toml",
+    "cli": "bun apps/cli/src/main.ts",
+    "build": "bun tooling/build.ts",
+    "test:package": "THUMBLE_REWRITE_PACKAGE_TEST=1 bun test tests/package.test.ts",
+    "test:package:ci": "bun tooling/ci-test.ts --package"
   },
   "devDependencies": {
-    "@types/bun": "1.4.3",
-    "typescript": "6.0.3",
+    "@thumble/application": "workspace:*",
+    "@thumble/client": "workspace:*",
     "@thumble/contracts": "workspace:*",
-    "@thumble/domain": "workspace:*"
+    "@thumble/domain": "workspace:*",
+    "@thumble/service": "workspace:*",
+    "@types/bun": "1.4.3",
+    "prettier": "3.6.2",
+    "typescript": "6.0.3"
   }
 }
