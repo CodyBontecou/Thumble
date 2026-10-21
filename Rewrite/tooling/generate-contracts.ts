@@ -52,11 +52,37 @@ const mobileMapSchema = {
   $comment:
     "Native and TypeScript validators additionally check u64 bounds, unique IDs, and rectangle sums within the unit viewport. Coordinates are normalized in the native surface bounds, independent of screen density.",
 };
+const rustPacketButtons = `// ${banner}\npub const PACKET_BUTTONS: [GamepadButton; 17] = [\n${buttons.map((button) => `    GamepadButton::${button[0]!.toUpperCase() + button.slice(1)},`).join("\n")}\n];\n`;
+const packetOrder = [
+  "south",
+  "east",
+  "west",
+  "north",
+  "leftShoulder",
+  "rightShoulder",
+  "leftTriggerButton",
+  "rightTriggerButton",
+  "select",
+  "start",
+  "home",
+  "leftStickPress",
+  "rightStickPress",
+  "dpadUp",
+  "dpadDown",
+  "dpadLeft",
+  "dpadRight",
+];
+if (JSON.stringify(buttons) !== JSON.stringify(packetOrder))
+  throw new Error(
+    "Input packet v1 semantics require an explicit version change",
+  );
 const outputs = {
   "packages/contracts/schema/mobile-input-v1.schema.json":
     JSON.stringify(mobileMapSchema, null, 2) + "\n",
   "packages/contracts/src/gamepad.generated.ts": typescript,
   "native/receiver/src/generated.rs": rust,
+  "native/receiver/src/generated-packet.rs":
+    "use crate::generated::GamepadButton;\n" + rustPacketButtons,
   "packages/contracts/generated/swift/GamepadStateV1.swift": swift,
   "packages/contracts/generated/kotlin/GamepadStateV1.kt": kotlin,
 };
@@ -69,3 +95,5 @@ for (const [path, content] of Object.entries(outputs)) {
     await Bun.write(file, content);
   }
 }
+
+await import("./generate-input-packet-fixtures.ts");

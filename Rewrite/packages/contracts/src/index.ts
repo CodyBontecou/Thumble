@@ -60,6 +60,11 @@ export function decodeGamepadState(value: unknown): GamepadState {
   if (
     !Array.isArray(state.buttons) ||
     state.buttons.length > GAMEPAD_BUTTONS.length ||
+    Object.getPrototypeOf(state.buttons) !== Array.prototype ||
+    Reflect.ownKeys(state.buttons).length !== state.buttons.length + 1 ||
+    Array.from({ length: state.buttons.length }, (_, i) =>
+      Object.getOwnPropertyDescriptor(state.buttons, String(i)),
+    ).some((d) => !d || !("value" in d)) ||
     ![...state.buttons].every(isGamepadButton) ||
     new Set(state.buttons).size !== state.buttons.length
   ) {

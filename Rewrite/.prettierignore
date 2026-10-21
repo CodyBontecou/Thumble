@@ -4,3 +4,6 @@ reports/
 packages/contracts/src/gamepad.generated.ts
 native/
 packages/contracts/schema/mobile-input-v1.schema.json
+
+# Generated exact crypto fixtures; checked by generate-contracts.ts.
+packages/fixtures/input-packet-v1.json

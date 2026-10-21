@@ -1,0 +1,644 @@
+{
+  "version": 1,
+  "oracle": "Node crypto aes-256-gcm; deterministic public test keys, not credentials",
+  "keyHex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+  "sessionHex": "00112233445566778899aabbccddeeff",
+  "noncePrefixHex": "a0a1a2a3",
+  "generation": "9007199254740993",
+  "packetBytes": 108,
+  "packetLimit": 1048576,
+  "vectors": [
+    {
+      "name": "neutral",
+      "state": {
+        "buttons": [],
+        "leftStickX": 0,
+        "leftStickY": 0,
+        "rightStickX": 0,
+        "rightStickY": 0,
+        "leftTrigger": 0,
+        "rightTrigger": 0
+      },
+      "reportHex": "0014000000000000000000000000000000000000",
+      "sequence": "0",
+      "payloadHex": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "packetHex": "544849310000000000112233445566778899aabbccddeeff010000000000200000000000000000001cb95c362364b5bcb93bbb3351da65db92901d45f94d95156335c5343b5a4a5ccfd27da8539ea3ec80fbc1ce528a738c7924b96fd098636c6c1fe794885c0b8d94c888a0"
+    },
+    {
+      "name": "south",
+      "state": {
+        "buttons": [
+          "south"
+        ],
+        "leftStickX": 0,
+        "leftStickY": 0,
+        "rightStickX": 0,
+        "rightStickY": 0,
+        "leftTrigger": 0,
+        "rightTrigger": 0
+      },
+      "reportHex": "0014001000000000000000000000000000000000",
+      "sequence": "1",
+      "payloadHex": "01000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "packetHex": "544849310000000000112233445566778899aabbccddeeff0100000000002000010000000000000081bc55375b2a4f9e789807b1a0b151cd9cf353988579b6d821f79da578342c0fd668107aca248c8d917c161e7989de8cd371bcd2917f82d82663bcb7ecf966b1a1882c25"
+    },
+    {
+      "name": "east",
+      "state": {
+        "buttons": [
+          "east"
+        ],
+        "leftStickX": 0,
+        "leftStickY": 0,
+        "rightStickX": 0,
+        "rightStickY": 0,
+        "leftTrigger": 0,
+        "rightTrigger": 0
+      },
+      "reportHex": "0014002000000000000000000000000000000000",
+      "sequence": "2",
+      "payloadHex": "02000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "packetHex": "544849310000000000112233445566778899aabbccddeeff01000000000020000200000000000000c4fcec6021b947cb152b45aea90a61ef6c584be13c2cc71dc21f5ff638d84ac9c1f100fd1eb677e5fc314230c04ba7cdf518e7d6b5110468f18502b8567390659bbb09eb"
+    },
+    {
+      "name": "west",
+      "state": {
+        "buttons": [
+          "west"
+        ],
+        "leftStickX": 0,
+        "leftStickY": 0,
+        "rightStickX": 0,
+        "rightStickY": 0,
+        "leftTrigger": 0,
+        "rightTrigger": 0
+      },
+      "reportHex": "0014004000000000000000000000000000000000",
+      "sequence": "3",
+      "payloadHex": "04000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "packetHex": "544849310000000000112233445566778899aabbccddeeff01000000000020000300000000000000694dea8eedf0b17645d0eae02e9c098c0e0b836cb567c184f18ec48bc4b52975cc4b3806e8bf12858f72a0b6f773a0ed440961d7ea73a0e5bdd58e29c41d8e08895a7547"
+    },
+    {
+      "name": "north",
+      "state": {
+        "buttons": [
+          "north"
+        ],
+        "leftStickX": 0,
+        "leftStickY": 0,
+        "rightStickX": 0,
+        "rightStickY": 0,
+        "leftTrigger": 0,
+        "rightTrigger": 0
+      },
+      "reportHex": "0014008000000000000000000000000000000000",
+      "sequence": "4",
+      "payloadHex": "08000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "packetHex": "544849310000000000112233445566778899aabbccddeeff0100000000002000040000000000000019a668f66e635c13bc86a7754efbc0bfb69b7bb83124ba9172dbb3fa01b96285b636c800420b76d8cfa524bb621efa91c762e5f691b820fb614b11d315fccc78b13545ca"
+    },
+    {
+      "name": "left shoulder",
+      "state": {
+        "buttons": [
+          "leftShoulder"
+        ],
+        "leftStickX": 0,
+        "leftStickY": 0,
+        "rightStickX": 0,
+        "rightStickY": 0,
+        "leftTrigger": 0,
+        "rightTrigger": 0
+      },
+      "reportHex": "0014000100000000000000000000000000000000",
+      "sequence": "5",
+      "payloadHex": "10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "packetHex": "544849310000000000112233445566778899aabbccddeeff0100000000002000050000000000000014d65238a8a327971416930ce79762209109fb7a1261d438651f3416c6e5af198108ba3ac245b19941d4b8eb157ca93ac956db34e82108edebb87317b14fd0086ea7c2a0"
+    },
+    {
+      "name": "right shoulder",
+      "state": {
+        "buttons": [
+          "rightShoulder"
+        ],
+        "leftStickX": 0,
+        "leftStickY": 0,
+        "rightStickX": 0,
+        "rightStickY": 0,
+        "leftTrigger": 0,
+        "rightTrigger": 0
+      },
+      "reportHex": "0014000200000000000000000000000000000000",
+      "sequence": "6",
+      "payloadHex": "20000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "packetHex": "544849310000000000112233445566778899aabbccddeeff01000000000020000600000000000000defc646719fc3d0a054d2109c42610c560cbadc8c0ffe94b558cc9ae88edd0425cf1ac784fc0748bf9f907b9e2af154ba48e02cea81d9f4f5f9dd681d79ae6b9b3286359"
+    },
+    {
+      "name": "digital left trigger also actuates axis",
+      "state": {
+        "buttons": [
+          "leftTriggerButton"
+        ],
+        "leftStickX": 0,
+        "leftStickY": 0,
+        "rightStickX": 0,
+        "rightStickY": 0,
+        "leftTrigger": 0,
+        "rightTrigger": 0
+      },
+      "reportHex": "00140000ff000000000000000000000000000000",
+      "sequence": "7",
+      "payloadHex": "40000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "packetHex": "544849310000000000112233445566778899aabbccddeeff01000000000020000700000000000000cba9807116be4039dda9d82433290457b58b809ce84068654c6b54bc50d777cc60cdb4b2d8f4335a05df88bbf6f0008149c3c06c8bc92be1091504ad86acc6b12abe5462"
+    },
+    {
+      "name": "digital right trigger also actuates axis",
+      "state": {
+        "buttons": [
+          "rightTriggerButton"
+        ],
+        "leftStickX": 0,
+        "leftStickY": 0,
+        "rightStickX": 0,
+        "rightStickY": 0,
+        "leftTrigger": 0,
+        "rightTrigger": 0
+      },
+      "reportHex": "0014000000ff0000000000000000000000000000",
+      "sequence": "8",
+      "payloadHex": "80000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "packetHex": "544849310000000000112233445566778899aabbccddeeff010000000000200008000000000000000e5724592656537aabdedf128b4ef62beee63f3c5c8d71490712dfcfc40dc51dc4b802d3573777b5c49788405b1fe512555ef0d4e7b6a4af6c00aee15c479ba8972d58b7"
+    },
+    {
+      "name": "select",
+      "state": {
+        "buttons": [
+          "select"
+        ],
+        "leftStickX": 0,
+        "leftStickY": 0,
+        "rightStickX": 0,
+        "rightStickY": 0,
+        "leftTrigger": 0,
+        "rightTrigger": 0
+      },
+      "reportHex": "0014200000000000000000000000000000000000",
+      "sequence": "9",
+      "payloadHex": "00010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "packetHex": "544849310000000000112233445566778899aabbccddeeff01000000000020000900000000000000d7d55345c915a35b2e9fa5db4256fcef7aabdc105ad0f3391e080026a81da97c362394809a986928b5fe0b3f9b11ce23744781143abd41f83b43c26b0fac6681e72c891e"
+    },
+    {
+      "name": "start",
+      "state": {
+        "buttons": [
+          "start"
+        ],
+        "leftStickX": 0,
+        "leftStickY": 0,
+        "rightStickX": 0,
+        "rightStickY": 0,
+        "leftTrigger": 0,
+        "rightTrigger": 0
+      },
+      "reportHex": "0014100000000000000000000000000000000000",
+      "sequence": "10",
+      "payloadHex": "00020000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "packetHex": "544849310000000000112233445566778899aabbccddeeff01000000000020000a000000000000000c19fe5d992142574b306ceffd3d5e4e1d61712b24485a670a77782ddd11ed92f469a9048cd97496905043c7c0c48492783cd82083022912d01fed4079ed41dc1e827a68"
+    },
+    {
+      "name": "home",
+      "state": {
+        "buttons": [
+          "home"
+        ],
+        "leftStickX": 0,
+        "leftStickY": 0,
+        "rightStickX": 0,
+        "rightStickY": 0,
+        "leftTrigger": 0,
+        "rightTrigger": 0
+      },
+      "reportHex": "0014000400000000000000000000000000000000",
+      "sequence": "11",
+      "payloadHex": "00040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "packetHex": "544849310000000000112233445566778899aabbccddeeff01000000000020000b0000000000000097a72817472a03f26e2917f1e079b36a80bf24c798f629c8ebcbe6d0a80b7292f7f5add27d1ec13a79aa0c8b492e3313440fe7c49aab0b3088737b99605dfaece4766687"
+    },
+    {
+      "name": "left stick press",
+      "state": {
+        "buttons": [
+          "leftStickPress"
+        ],
+        "leftStickX": 0,
+        "leftStickY": 0,
+        "rightStickX": 0,
+        "rightStickY": 0,
+        "leftTrigger": 0,
+        "rightTrigger": 0
+      },
+      "reportHex": "0014400000000000000000000000000000000000",
+      "sequence": "12",
+      "payloadHex": "00080000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "packetHex": "544849310000000000112233445566778899aabbccddeeff01000000000020000c00000000000000a0844c15ea0dd4a7fa66cad63c11470c08195a0018001480a762c88e09ddc55dc2cc5df811238b6cace066544050986a439c1aba45a50cbee72b60438fdf56d60712dba4"
+    },
+    {
+      "name": "right stick press",
+      "state": {
+        "buttons": [
+          "rightStickPress"
+        ],
+        "leftStickX": 0,
+        "leftStickY": 0,
+        "rightStickX": 0,
+        "rightStickY": 0,
+        "leftTrigger": 0,
+        "rightTrigger": 0
+      },
+      "reportHex": "0014800000000000000000000000000000000000",
+      "sequence": "13",
+      "payloadHex": "00100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "packetHex": "544849310000000000112233445566778899aabbccddeeff01000000000020000d00000000000000eb9b976a11182ca53299c2ac115cceb3ee5c846c505768520137a4100192bec31151f80d7a404dc418d89750eafd9d9c7bb7c45d0776c3a4df5e57854877341d8c279ccb"
+    },
+    {
+      "name": "up",
+      "state": {
+        "buttons": [
+          "dpadUp"
+        ],
+        "leftStickX": 0,
+        "leftStickY": 0,
+        "rightStickX": 0,
+        "rightStickY": 0,
+        "leftTrigger": 0,
+        "rightTrigger": 0
+      },
+      "reportHex": "0014010000000000000000000000000000000000",
+      "sequence": "14",
+      "payloadHex": "00200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "packetHex": "544849310000000000112233445566778899aabbccddeeff01000000000020000e00000000000000c6de84449dc130898f11e32a0ad86bec3f011fb81e5f53e9934cd616cca198fbc38bd2138d24e8ea46ff4277e3092de4c9f11f273e39eb51c66cffc8250033d22dd83d5b"
+    },
+    {
+      "name": "up right",
+      "state": {
+        "buttons": [
+          "dpadUp",
+          "dpadRight"
+        ],
+        "leftStickX": 0,
+        "leftStickY": 0,
+        "rightStickX": 0,
+        "rightStickY": 0,
+        "leftTrigger": 0,
+        "rightTrigger": 0
+      },
+      "reportHex": "0014090000000000000000000000000000000000",
+      "sequence": "15",
+      "payloadHex": "00200100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "packetHex": "544849310000000000112233445566778899aabbccddeeff01000000000020000f0000000000000010febd53145603b7edce2ec25ba81099f3e7b56114da9e44de1793654bf39b4e78c26f0d81ebc6028c9794d8fcc7f80d52bcd96c2c577983245f4013ddc1ea71de6ab66f"
+    },
+    {
+      "name": "right",
+      "state": {
+        "buttons": [
+          "dpadRight"
+        ],
+        "leftStickX": 0,
+        "leftStickY": 0,
+        "rightStickX": 0,
+        "rightStickY": 0,
+        "leftTrigger": 0,
+        "rightTrigger": 0
+      },
+      "reportHex": "0014080000000000000000000000000000000000",
+      "sequence": "16",
+      "payloadHex": "00000100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "packetHex": "544849310000000000112233445566778899aabbccddeeff01000000000020001000000000000000b4ba727cdc1039f9e4c56f114fef6adefb2d70628ecacc9f5c5b1594e8bbacf320b581bc40c708726da7181903ebc4e73a4bd4e3fdf756e6ad97baf8baebec512c253514"
+    },
+    {
+      "name": "down right",
+      "state": {
+        "buttons": [
+          "dpadDown",
+          "dpadRight"
+        ],
+        "leftStickX": 0,
+        "leftStickY": 0,
+        "rightStickX": 0,
+        "rightStickY": 0,
+        "leftTrigger": 0,
+        "rightTrigger": 0
+      },
+      "reportHex": "00140a0000000000000000000000000000000000",
+      "sequence": "17",
+      "payloadHex": "00400100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "packetHex": "544849310000000000112233445566778899aabbccddeeff010000000000200011000000000000009a180097495db0c91e57a5b2b8806d171f614c1c60837df6e57e8c42c5ffd10f911aa6b11f65c4dc8e6d4cd81a4efc52c0c0787dcde1d12420b152f6a8adfbadba734e8b"
+    },
+    {
+      "name": "down",
+      "state": {
+        "buttons": [
+          "dpadDown"
+        ],
+        "leftStickX": 0,
+        "leftStickY": 0,
+        "rightStickX": 0,
+        "rightStickY": 0,
+        "leftTrigger": 0,
+        "rightTrigger": 0
+      },
+      "reportHex": "0014020000000000000000000000000000000000",
+      "sequence": "18",
+      "payloadHex": "00400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "packetHex": "544849310000000000112233445566778899aabbccddeeff010000000000200012000000000000009a2d06e96be0fe56e79565f6356d41311e248d3840235f231ca8fe9b24725d4222fe3e112a0279e0dbf42039ff763924b2a61f868a34e49e62150826efa1e93abcf72db9"
+    },
+    {
+      "name": "down left",
+      "state": {
+        "buttons": [
+          "dpadDown",
+          "dpadLeft"
+        ],
+        "leftStickX": 0,
+        "leftStickY": 0,
+        "rightStickX": 0,
+        "rightStickY": 0,
+        "leftTrigger": 0,
+        "rightTrigger": 0
+      },
+      "reportHex": "0014060000000000000000000000000000000000",
+      "sequence": "19",
+      "payloadHex": "00c00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "packetHex": "544849310000000000112233445566778899aabbccddeeff010000000000200013000000000000001b1a78074b8b25b5a91af95b6474b3414f5af8228e82e22d232496167e422f44d131654376780bd14636ffede0fc17754622d5c21e4c7db97686a80181503a5aa683c2e1"
+    },
+    {
+      "name": "left",
+      "state": {
+        "buttons": [
+          "dpadLeft"
+        ],
+        "leftStickX": 0,
+        "leftStickY": 0,
+        "rightStickX": 0,
+        "rightStickY": 0,
+        "leftTrigger": 0,
+        "rightTrigger": 0
+      },
+      "reportHex": "0014040000000000000000000000000000000000",
+      "sequence": "20",
+      "payloadHex": "00800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "packetHex": "544849310000000000112233445566778899aabbccddeeff010000000000200014000000000000000cd92b7b643c1a5ac99c7eb3cb51f48e572cc8ed5d73f03b0705977263f5254d16c5f34a14072e4533290117f514e0a47e1f27643b4875e8b92bceae11a6ce42f596727b"
+    },
+    {
+      "name": "up left",
+      "state": {
+        "buttons": [
+          "dpadUp",
+          "dpadLeft"
+        ],
+        "leftStickX": 0,
+        "leftStickY": 0,
+        "rightStickX": 0,
+        "rightStickY": 0,
+        "leftTrigger": 0,
+        "rightTrigger": 0
+      },
+      "reportHex": "0014050000000000000000000000000000000000",
+      "sequence": "21",
+      "payloadHex": "00a00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "packetHex": "544849310000000000112233445566778899aabbccddeeff010000000000200015000000000000004cacf3ac9740f8ac01848129fa1ad8c97bac9afd5102ea4d1deab494e73fcdb2e3ef3fd93dcfd0a4d0befb85c9e317d64e2addcba7ec75eff633d08c26ec3f6521fba07c"
+    },
+    {
+      "name": "opposed vertical",
+      "state": {
+        "buttons": [
+          "dpadUp",
+          "dpadDown"
+        ],
+        "leftStickX": 0,
+        "leftStickY": 0,
+        "rightStickX": 0,
+        "rightStickY": 0,
+        "leftTrigger": 0,
+        "rightTrigger": 0
+      },
+      "reportHex": "0014000000000000000000000000000000000000",
+      "sequence": "22",
+      "payloadHex": "00600000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "packetHex": "544849310000000000112233445566778899aabbccddeeff01000000000020001600000000000000cb65e29d2040a95ba1e0e67767c6b24d46a31a64bbc372ae9fd62d55b5a44b94ccf43468e4f119485053296633c41ed0e583058e1a59f4fcf06daa6b5450f405d0520436"
+    },
+    {
+      "name": "opposed horizontal",
+      "state": {
+        "buttons": [
+          "dpadLeft",
+          "dpadRight"
+        ],
+        "leftStickX": 0,
+        "leftStickY": 0,
+        "rightStickX": 0,
+        "rightStickY": 0,
+        "leftTrigger": 0,
+        "rightTrigger": 0
+      },
+      "reportHex": "0014000000000000000000000000000000000000",
+      "sequence": "23",
+      "payloadHex": "00800100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "packetHex": "544849310000000000112233445566778899aabbccddeeff01000000000020001700000000000000d63c32e7ca17777e45c634bb98277bb7630f3e7bc41b540ee8386b74db36dddf892f36c0d59bad7888e7721539459859cce4f46dffd131c0ceb21494e77c59049b894aab"
+    },
+    {
+      "name": "all dpad directions",
+      "state": {
+        "buttons": [
+          "dpadUp",
+          "dpadDown",
+          "dpadLeft",
+          "dpadRight"
+        ],
+        "leftStickX": 0,
+        "leftStickY": 0,
+        "rightStickX": 0,
+        "rightStickY": 0,
+        "leftTrigger": 0,
+        "rightTrigger": 0
+      },
+      "reportHex": "0014000000000000000000000000000000000000",
+      "sequence": "24",
+      "payloadHex": "00e00100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "packetHex": "544849310000000000112233445566778899aabbccddeeff010000000000200018000000000000002f43fb412233f9162023ea61f680297ea2d750f50ca9f7a384ed3004559abdbc9ed00e5e2d21991eea5ff375cf38ddf407e1db8ee3aab3327c9da4c736e28eeffa353394"
+    },
+    {
+      "name": "sticks full scale",
+      "state": {
+        "buttons": [],
+        "leftStickX": -1,
+        "leftStickY": 1,
+        "rightStickX": 1,
+        "rightStickY": -1,
+        "leftTrigger": 0,
+        "rightTrigger": 0
+      },
+      "reportHex": "00140000000000800080ff7fff7f000000000000",
+      "sequence": "25",
+      "payloadHex": "00000000000000000000f0bf000000000000f03f000000000000f03f000000000000f0bf00000000000000000000000000000000",
+      "packetHex": "544849310000000000112233445566778899aabbccddeeff0100000000002000190000000000000082d05cc51f177fe25a970c7d60e220060c46e03d8a6aa1b0635d189863f0a5f77bc71603276858d46508d8fd7cbb4f3affdafd3cc534243b61f9b25a985565a9b9a5e79c"
+    },
+    {
+      "name": "sticks half scale",
+      "state": {
+        "buttons": [],
+        "leftStickX": -0.5,
+        "leftStickY": 0.5,
+        "rightStickX": 0.5,
+        "rightStickY": -0.5,
+        "leftTrigger": 0,
+        "rightTrigger": 0
+      },
+      "reportHex": "00140000000000c000c000400040000000000000",
+      "sequence": "26",
+      "payloadHex": "00000000000000000000e0bf000000000000e03f000000000000e03f000000000000e0bf00000000000000000000000000000000",
+      "packetHex": "544849310000000000112233445566778899aabbccddeeff01000000000020001a0000000000000032df0eee19aa43bb4c5de165ce3ecf9380ace26be8c2b25a1de75f64d8295c54d72b4a3c6ed633afa1a161e263e8b350a2e388257d38e68844b6c627d36b1fe55d8d03ea"
+    },
+    {
+      "name": "left trigger independent",
+      "state": {
+        "buttons": [],
+        "leftStickX": 0,
+        "leftStickY": 0,
+        "rightStickX": 0,
+        "rightStickY": 0,
+        "leftTrigger": 1,
+        "rightTrigger": 0
+      },
+      "reportHex": "00140000ff000000000000000000000000000000",
+      "sequence": "27",
+      "payloadHex": "000000000000000000000000000000000000000000000000000000000000000000000000000000000000f03f0000000000000000",
+      "packetHex": "544849310000000000112233445566778899aabbccddeeff01000000000020001b00000000000000648ee68ae1bb0949dc78fef7c116eaa72f2eb3a30e6f4f287d9afa24503eb4f8893cd15e5e83c4f1956773423632c278d99fe2f09ab1263e6732d45f0fcd65fdc44e0b82"
+    },
+    {
+      "name": "right trigger independent",
+      "state": {
+        "buttons": [],
+        "leftStickX": 0,
+        "leftStickY": 0,
+        "rightStickX": 0,
+        "rightStickY": 0,
+        "leftTrigger": 0,
+        "rightTrigger": 1
+      },
+      "reportHex": "0014000000ff0000000000000000000000000000",
+      "sequence": "28",
+      "payloadHex": "0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000f03f",
+      "packetHex": "544849310000000000112233445566778899aabbccddeeff01000000000020001c00000000000000c1d11ef9c0b0fd097a7e439531a8e278dc92ea82d1dddfe216c3ff41c4776ff9db47c890eefa18a74af74092b07cb37e0d4b75096c0e8bbe54120ca7b3b3bce81e60bf61"
+    },
+    {
+      "name": "triggers together",
+      "state": {
+        "buttons": [],
+        "leftStickX": 0,
+        "leftStickY": 0,
+        "rightStickX": 0,
+        "rightStickY": 0,
+        "leftTrigger": 1,
+        "rightTrigger": 1
+      },
+      "reportHex": "00140000ffff0000000000000000000000000000",
+      "sequence": "29",
+      "payloadHex": "000000000000000000000000000000000000000000000000000000000000000000000000000000000000f03f000000000000f03f",
+      "packetHex": "544849310000000000112233445566778899aabbccddeeff01000000000020001d0000000000000023bd5d5da2b7f3f29a1eb7e9e2c50fadec090f255884923f03e85bf761c238d5df58ffccbe73056d7289f12b51fe7bc3d80157377e9fd2d8b847f999b5f1935463380cc9"
+    },
+    {
+      "name": "trigger midpoint rounds away from zero",
+      "state": {
+        "buttons": [],
+        "leftStickX": 0,
+        "leftStickY": 0,
+        "rightStickX": 0,
+        "rightStickY": 0,
+        "leftTrigger": 0.5,
+        "rightTrigger": 0.5
+      },
+      "reportHex": "0014000080800000000000000000000000000000",
+      "sequence": "30",
+      "payloadHex": "000000000000000000000000000000000000000000000000000000000000000000000000000000000000e03f000000000000e03f",
+      "packetHex": "544849310000000000112233445566778899aabbccddeeff01000000000020001e00000000000000747c483b82f2388d3255f6fe5945c2e043a673387231facb66d5e88cfd637acb337dd6d390ece1376838edc429480f957ce60e33625abe6c599595412a298c89d004b0a1"
+    },
+    {
+      "name": "mixed state",
+      "state": {
+        "buttons": [
+          "south",
+          "start",
+          "dpadUp",
+          "dpadRight"
+        ],
+        "leftStickX": -1,
+        "leftStickY": 0.5,
+        "rightStickX": 1,
+        "rightStickY": -0.5,
+        "leftTrigger": 0.25,
+        "rightTrigger": 0.75
+      },
+      "reportHex": "0014191040bf008000c0ff7f0040000000000000",
+      "sequence": "31",
+      "payloadHex": "01220100000000000000f0bf000000000000e03f000000000000f03f000000000000e0bf000000000000d03f000000000000e83f",
+      "packetHex": "544849310000000000112233445566778899aabbccddeeff01000000000020001f000000000000009236437eee6dd9d02e70adf327b04b3ce608a2c34ae4935f724996ecdcb59b2a8e707d988ce21516c8a548d59421ad35884c1e8894dddd19a236d2e100d705d029f97325"
+    },
+    {
+      "name": "all semantic bits and fractional axes",
+      "state": {
+        "buttons": [
+          "south",
+          "east",
+          "west",
+          "north",
+          "leftShoulder",
+          "rightShoulder",
+          "leftTriggerButton",
+          "rightTriggerButton",
+          "select",
+          "start",
+          "home",
+          "leftStickPress",
+          "rightStickPress",
+          "dpadUp",
+          "dpadDown",
+          "dpadLeft",
+          "dpadRight"
+        ],
+        "leftStickX": -0.125,
+        "leftStickY": 0.375,
+        "rightStickX": 0.625,
+        "rightStickY": -0.875,
+        "leftTrigger": 0.25,
+        "rightTrigger": 0.75
+      },
+      "reportHex": "0014f0f7ffff00f000d0ff4fff6f000000000000",
+      "sequence": "32",
+      "payloadHex": "ffff0100000000000000c0bf000000000000d83f000000000000e43f000000000000ecbf000000000000d03f000000000000e83f",
+      "packetHex": "544849310000000000112233445566778899aabbccddeeff0100000000002000200000000000000023c91434797cbf4f4041281e1e59926cc8f2b72ca39b7ad9b210a2b9bab884e7ce3651083b22fda8682855ae53c03643e6a803ca37c32d90df029900cc6c87c20fa2a0ae"
+    }
+  ],
+  "invalidAuthenticated": [
+    {
+      "name": "unknown button bit",
+      "packetHex": "544849310000000000112233445566778899aabbccddeeff0100000000002000c80000000000000050aae5ddf7b43b865bf3029cdcc21c5a4ce4a61a4273e1101cc4eb8c6d77394ab1d3d8ad5d4259663d26e9cc5e24b42090821acdb727efc1d20fff82b16fb98bf51101d1"
+    },
+    {
+      "name": "nonfinite axis",
+      "packetHex": "544849310000000000112233445566778899aabbccddeeff0100000000002000c900000000000000d268eb5aa719e35bbba87bd38a5e870b40780fff83fee140c1991bec2889b5b5f8299c25ba65bef09f8e551658389f51495a4868bf43b7911c7556ac8fe19d3b4e9252db"
+    },
+    {
+      "name": "axis out of range",
+      "packetHex": "544849310000000000112233445566778899aabbccddeeff0100000000002000ca00000000000000a5dbfbf54763d2389742b4275e4055ed431c363cff650a664caa9a1953938becc231f3ba52548fb0e21f7479fea0f2faf6471a8825abb89955e350c9f00c751464fed678"
+    },
+    {
+      "name": "negative trigger",
+      "packetHex": "544849310000000000112233445566778899aabbccddeeff0100000000002000cb000000000000001e8b6e4d37fedf5fcd757767f615553fb53132f1f28a1f6a3aaaee476c5bdeb05900f5390e0c54585ff9eb582f8e69e4edce1cf6f9cabf3a9b06c4301f0947e8b5419b5e"
+    },
+    {
+      "name": "short payload",
+      "packetHex": "544849310000000000112233445566778899aabbccddeeff0100000000002000cc000000000000006a12fccdc95fe8072d3287c519fc8e5624663da799744a9fb183ce7a5787b9b0931e0ba98ee66daa4a83fcb5641d2a0c47c4eba04786e0386d068d3881e4441b564c56"
+    }
+  ],
+  "maximumSequencePacketHex": "544849310000000000112233445566778899aabbccddeeff0100000000002000ffff0f000000000014412b0e133f77072f204167efb489246e68a53864300f1a45497819880a9b720720b5ec269727c58465b4fd2e3413593686d80268e99394cba2c82786cf018d7dc53be9",
+  "overLimitPacketHex": "544849310000000000112233445566778899aabbccddeeff010000000000200000001000000000000cbbf0956dce59abcca8d214857e06cdea0d61572c5a76988dff502bd9b8aa332b1ac7a5973d38a74ccc7927ce83d0af673744087c23265bf259f6998fab32ae5a2140f3"
+}

@@ -104,6 +104,9 @@ impl Default for Runtime {
     }
 }
 impl Runtime {
+    pub fn is_active(&self) -> bool {
+        self.active.is_some()
+    }
     pub fn snapshot(&self) -> Snapshot {
         Snapshot {
             backend: "recording",

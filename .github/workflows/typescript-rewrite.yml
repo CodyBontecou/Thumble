@@ -39,6 +39,8 @@ jobs:
         with:
           workspaces: Rewrite/native/receiver
       - run: bun install --frozen-lockfile
+      - name: Verify independent Node AES-GCM packet oracle
+        run: node tooling/verify-input-packet-oracle.mjs
       - run: bun run check:generated
       - run: bun run check:boundaries
       - run: bun x --no-install prettier --check .

@@ -1,8 +1,23 @@
-import { copyFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 const root = resolve(import.meta.dir, ".."),
   extension = process.platform === "win32" ? ".exe" : "";
 mkdirSync(resolve(root, "dist"), { recursive: true });
+const noticePath = resolve(root, "native/receiver/THIRD-PARTY-NOTICES.txt");
+const lockHash = createHash("sha256")
+  .update(readFileSync(resolve(root, "native/receiver/Cargo.lock")))
+  .digest("hex");
+if (
+  !readFileSync(noticePath, "utf8").includes(
+    `Cargo.lock SHA-256: ${lockHash}\n`,
+  )
+)
+  throw new Error(
+    "Native dependency notices must be refreshed for the current lockfile",
+  );
+copyFileSync(noticePath, resolve(root, "dist/Native-THIRD-PARTY-NOTICES.txt"));
+
 for (const command of [
   [
     "cargo",

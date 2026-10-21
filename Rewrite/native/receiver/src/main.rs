@@ -1,7 +1,5 @@
+use thumble_rewrite_receiver::{gamepad, runtime};
 mod clock;
-mod gamepad;
-mod generated;
-mod runtime;
 mod security;
 #[cfg(windows)]
 mod windows_security;
