@@ -37,10 +37,13 @@ jobs:
           mkdir -p reports
           xcodebuild -version | tee reports/mobile-ios-toolchain.txt
           swift --version | tee -a reports/mobile-ios-toolchain.txt
+      - uses: dtolnay/rust-toolchain@1.88.0
+      - name: Build synthetic native TLS witness
+        run: cargo build --locked --manifest-path native/receiver/Cargo.toml --example control_tls_probe
       - name: Swift native contract and lifecycle tests
         run: |
           set -o pipefail
-          swift test --package-path native/mobile-input/ios 2>&1 | tee reports/mobile-swift.txt
+          THUMBLE_NATIVE_TLS_PROBE="$PWD/native/receiver/target/debug/examples/control_tls_probe" swift test --package-path native/mobile-input/ios 2>&1 | tee reports/mobile-swift.txt
       - name: Compile native modules directly against both iOS SDKs
         run: |
           bun run mobile:ios:sdk --sdk iphonesimulator
@@ -81,8 +84,12 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - name: Install pinned Android SDK
         run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - uses: dtolnay/rust-toolchain@1.88.0
+      - name: Build synthetic native TLS witness
+        working-directory: Rewrite
+        run: cargo build --locked --manifest-path native/receiver/Cargo.toml --example control_tls_probe
       - name: Build and test native Android module
-        run: bash ./gradlew --no-daemon --stacktrace testDebugUnitTest assembleDebug lintDebug
+        run: THUMBLE_NATIVE_TLS_PROBE="$GITHUB_WORKSPACE/Rewrite/native/receiver/target/debug/examples/control_tls_probe" bash ./gradlew --no-daemon --stacktrace testDebugUnitTest assembleDebug lintDebug
       - uses: actions/upload-artifact@v4
         if: always()
         with:

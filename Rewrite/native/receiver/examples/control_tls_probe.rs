@@ -26,7 +26,36 @@ fn bytes(value: &Value) -> Vec<u8> {
         .collect()
 }
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let identity = ServerIdentity::generate().map_err(|_| "identity_failed")?;
+    let mode = std::env::args().nth(1).unwrap_or_else(|| "valid".into());
+    let identity = if mode == "valid" {
+        ServerIdentity::generate().map_err(|_| "identity_failed")?
+    } else {
+        let mut params = rcgen::CertificateParams::new(vec![if mode == "wrong-name" {
+            "wrong.local"
+        } else {
+            "thumble-rewrite.local"
+        }
+        .into()])?;
+        match mode.as_str() {
+            "expired" => {
+                params.not_before = rcgen::date_time_ymd(2000, 1, 1);
+                params.not_after = rcgen::date_time_ymd(2001, 1, 1);
+            }
+            "future" => {
+                params.not_before = rcgen::date_time_ymd(3000, 1, 1);
+                params.not_after = rcgen::date_time_ymd(3001, 1, 1);
+            }
+            "client-usage" => {
+                params.extended_key_usages = vec![rcgen::ExtendedKeyUsagePurpose::ClientAuth];
+            }
+            "wrong-name" => {}
+            _ => return Err("invalid_synthetic_certificate_mode".into()),
+        }
+        let key = rcgen::KeyPair::generate()?;
+        let cert = params.self_signed(&key)?;
+        ServerIdentity::from_der(cert.der().to_vec(), key.serialize_der())
+            .map_err(|_| "identity_failed")?
+    };
     let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0))?;
     listener.set_nonblocking(true)?;
     println!(
