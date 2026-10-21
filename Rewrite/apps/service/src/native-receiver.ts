@@ -35,7 +35,7 @@ export class NativeReceiver implements ReceiverPort {
       stdio: ["pipe", "pipe", "pipe"],
       windowsHide: true,
       // The safety owner must survive abrupt Windows service termination.
-      // Keep private pipes, but do not inherit the service process group/job.
+      // Preserve private pipes with an independent native process lifetime.
       detached: process.platform === "win32",
     });
     this.child.stderr.resume();

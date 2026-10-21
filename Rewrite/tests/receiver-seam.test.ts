@@ -215,16 +215,13 @@ test("service death neutralizes the independent receiver within the owner lease"
     });
     const killedAt = performance.now();
     process.kill(endpoint.servicePid, "SIGKILL");
-    try {
-      await waitFor(
-        () => events(endpoint.recordingLog).some(event => event.reason === "owner_disconnected"),
-        1500,
-      );
-    } catch (error) {
-      const alive = (pid: number): boolean => { try { process.kill(pid, 0); return true; } catch { return false; } };
-      console.error("[DEBUG-m2-owner] " + JSON.stringify({ serviceAlive: alive(endpoint.servicePid), receiverAlive: alive(endpoint.receiverPid), events: events(endpoint.recordingLog) }));
-      throw error;
-    }
+    await waitFor(
+      () =>
+        events(endpoint.recordingLog).some(
+          (event) => event.reason === "owner_disconnected",
+        ),
+      1500,
+    );
     expect(performance.now() - killedAt).toBeLessThan(1000);
     expect(events(endpoint.recordingLog).at(-1)?.reportHex).toBe(neutral);
     await waitFor(() =>
