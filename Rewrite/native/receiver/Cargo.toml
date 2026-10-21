@@ -11,8 +11,15 @@ publish = false
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.151"
 aes-gcm = "=0.10.3"
+rustls = { version = "=0.23.46", default-features = false, features = ["std", "ring"] }
+rcgen = { version = "=0.14.10", default-features = false, features = ["crypto", "ring"] }
+ring = "=0.17.14"
+time = "=0.3.55"
 fs2 = "=0.4.3"
 libc = "=0.2.175"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_System_Threading", "Win32_System_Memory", "Win32_System_SystemInformation"] }
+
+[dev-dependencies]
+rustls = { version = "=0.23.46", default-features = false, features = ["std", "ring", "tls12"] }

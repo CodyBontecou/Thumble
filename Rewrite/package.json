@@ -19,6 +19,7 @@
     "test": "bun test",
     "verify": "bun run check:generated && bun run check:boundaries && bun run typecheck && bun test",
     "test:ci": "bun tooling/ci-test.ts",
+    "native:notices": "bun tooling/native-notices.ts",
     "native:build": "cargo +1.88.0 build --locked --manifest-path native/receiver/Cargo.toml",
     "native:test": "cargo +1.88.0 test --locked --manifest-path native/receiver/Cargo.toml",
     "cli": "bun apps/cli/src/main.ts",
