@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://thumble.local/contracts/gamepad-state-v1.schema.json",
+  "title": "GamepadStateV1",
+  "description": "Normalized semantic state, not an authenticated network envelope. Semantic Y grows downwards. All numbers must be finite.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "buttons",
+    "leftStickX",
+    "leftStickY",
+    "rightStickX",
+    "rightStickY",
+    "leftTrigger",
+    "rightTrigger"
+  ],
+  "properties": {
+    "buttons": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "south",
+          "east",
+          "west",
+          "north",
+          "leftShoulder",
+          "rightShoulder",
+          "leftTriggerButton",
+          "rightTriggerButton",
+          "select",
+          "start",
+          "home",
+          "leftStickPress",
+          "rightStickPress",
+          "dpadUp",
+          "dpadDown",
+          "dpadLeft",
+          "dpadRight"
+        ]
+      },
+      "uniqueItems": true,
+      "maxItems": 17
+    },
+    "leftStickX": {
+      "type": "number",
+      "minimum": -1,
+      "maximum": 1
+    },
+    "leftStickY": {
+      "type": "number",
+      "minimum": -1,
+      "maximum": 1
+    },
+    "rightStickX": {
+      "type": "number",
+      "minimum": -1,
+      "maximum": 1
+    },
+    "rightStickY": {
+      "type": "number",
+      "minimum": -1,
+      "maximum": 1
+    },
+    "leftTrigger": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "rightTrigger": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    }
+  }
+}

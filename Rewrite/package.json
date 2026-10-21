@@ -1,0 +1,29 @@
+{
+  "name": "thumble-rewrite",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "packageManager": "bun@1.4.3",
+  "engines": {
+    "bun": "1.4.3"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "generate": "bun tooling/generate-contracts.ts",
+    "check:generated": "bun tooling/generate-contracts.ts --check",
+    "check:boundaries": "bun tooling/check-boundaries.ts",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.portable.json",
+    "test": "bun test",
+    "verify": "bun run check:generated && bun run check:boundaries && bun run typecheck && bun test",
+    "test:ci": "bun test --reporter=junit --reporter-outfile=reports/junit.xml"
+  },
+  "devDependencies": {
+    "@types/bun": "1.4.3",
+    "typescript": "6.0.3",
+    "@thumble/contracts": "workspace:*",
+    "@thumble/domain": "workspace:*"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "name": "@thumble/domain",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": "./src/gamepad-report.ts",
+  "dependencies": { "@thumble/contracts": "workspace:*" }
+}

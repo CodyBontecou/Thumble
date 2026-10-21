@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "types": [], "lib": ["ES2023"] },
+  "include": ["packages/contracts/src/**/*.ts", "packages/domain/src/**/*.ts"]
+}

@@ -1,0 +1,43 @@
+name: TypeScript rewrite (headless)
+
+on:
+  workflow_dispatch:
+  push:
+    paths: ["Rewrite/**", "Host/fixtures/gamepad/v2.json", ".github/workflows/typescript-rewrite.yml"]
+  pull_request:
+    paths: ["Rewrite/**", "Host/fixtures/gamepad/v2.json", ".github/workflows/typescript-rewrite.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  portable:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: Rewrite
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.3
+      - run: bun install --frozen-lockfile
+      - run: bun run check:generated
+      - run: bun run check:boundaries
+      - run: bun run typecheck
+      - run: bun run test:ci
+      - name: Typecheck generated Swift DTOs
+        if: runner.os == 'macOS'
+        run: swiftc -typecheck packages/contracts/generated/swift/GamepadStateV1.swift
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rewrite-portable-tests-${{ matrix.os }}
+          path: Rewrite/reports/junit.xml
+          if-no-files-found: warn
