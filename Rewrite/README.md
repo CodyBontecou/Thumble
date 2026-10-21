@@ -16,7 +16,7 @@ Contracts, domain, application and the default client entry compile without Bun/
 
 ## Headless receiver seam
 
-The CLI starts a detached local service. The service owns ephemeral activation configuration, serializes operations, and talks to a separate Rust receiver over bounded NDJSON pipes. The receiver owns generation/sequence validation, held-state expiry, owner leases and neutralization. It never imports the profile catalog. Stopping the service releases first; owner pipe closure or a stalled JavaScript runtime independently expires the native session.
+The CLI starts a detached local service. The service owns ephemeral activation configuration, serializes operations, and talks to a separate Rust receiver over bounded NDJSON pipes. The receiver owns generation/sequence validation, held-state expiry, owner leases and neutralization. It never imports the profile catalog. On Windows the receiver has a detached process lifetime so it can perform cleanup after abrupt service termination. Stopping the service releases first; owner pipe closure or a stalled JavaScript runtime independently expires the native session.
 
 The control channel binds only to loopback and authenticates each request with a random credential in a user-restricted runtime directory. Unix modes are 0700/0600; the native helper applies Windows owner/SYSTEM ACLs and rejects reparse paths. Credentials are never returned in CLI JSON or recorded controller reports. Native exclusive locking prevents two receivers from owning one directory. Nonempty directories belonging to another owner are refused before permission changes.
 
