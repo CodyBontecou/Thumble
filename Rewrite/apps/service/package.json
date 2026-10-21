@@ -1,1 +1,12 @@
-{"name":"@thumble/service","private":true,"version":"0.0.0","type":"module","exports":"./src/service.ts","dependencies":{"@thumble/contracts":"workspace:*","@thumble/application":"workspace:*","@thumble/client":"workspace:*"}}
+{
+  "name": "@thumble/service",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": "./src/service.ts",
+  "dependencies": {
+    "@thumble/contracts": "workspace:*",
+    "@thumble/application": "workspace:*",
+    "@thumble/client": "workspace:*"
+  }
+}

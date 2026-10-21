@@ -21,6 +21,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: Rewrite
@@ -47,8 +48,10 @@ jobs:
       - run: bun run typecheck
       - run: bun test tests/net-repro.test.ts
       - run: bun run test:ci
+        timeout-minutes: 2
       - run: bun run build
       - run: bun run test:package:ci
+        timeout-minutes: 2
       - uses: actions/upload-artifact@v4
         with:
           name: rewrite-m2-recording-${{ matrix.os }}
