@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./receiver": "./src/receiver.ts"
+    "./receiver": "./src/receiver.ts",
+    "./mobile-input": "./src/mobile-input.ts"
   }
 }

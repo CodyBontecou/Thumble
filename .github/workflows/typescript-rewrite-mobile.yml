@@ -1,0 +1,91 @@
+name: TypeScript rewrite native mobile
+
+on:
+  workflow_dispatch:
+  push:
+    paths: ["Rewrite/**", "Host/fixtures/gamepad/v2.json", ".github/workflows/typescript-rewrite-mobile.yml"]
+  pull_request:
+    paths: ["Rewrite/**", "Host/fixtures/gamepad/v2.json", ".github/workflows/typescript-rewrite-mobile.yml"]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+
+jobs:
+  ios-native:
+    runs-on: macos-15
+    timeout-minutes: 20
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+    defaults:
+      run:
+        working-directory: Rewrite
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.3
+      - run: bun install --frozen-lockfile
+      - run: bun run check:generated
+      - run: bun run mobile:prepare
+      - name: Record native toolchain
+        run: |
+          mkdir -p reports
+          xcodebuild -version | tee reports/mobile-ios-toolchain.txt
+          swift --version | tee -a reports/mobile-ios-toolchain.txt
+      - name: Swift native contract and lifecycle tests
+        run: |
+          set -o pipefail
+          swift test --package-path native/mobile-input/ios 2>&1 | tee reports/mobile-swift.txt
+      - name: Compile native modules directly against both iOS SDKs
+        run: |
+          bun run mobile:ios:sdk --sdk iphonesimulator
+          bun run mobile:ios:sdk --sdk iphoneos
+      - name: Build native iOS Simulator module
+        working-directory: Rewrite/native/mobile-input/ios
+        run: xcodebuild -scheme ThumbleMobileInput -destination 'generic/platform=iOS Simulator' -derivedDataPath '${{ runner.temp }}/rewrite-ios-simulator' CODE_SIGNING_ALLOWED=NO build
+      - name: Build native iPhone module
+        working-directory: Rewrite/native/mobile-input/ios
+        run: xcodebuild -scheme ThumbleMobileInput -destination 'generic/platform=iOS' -derivedDataPath '${{ runner.temp }}/rewrite-ios-device' CODE_SIGNING_ALLOWED=NO build
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rewrite-mobile-ios-native
+          path: |
+            Rewrite/reports/mobile-*.txt
+            Rewrite/reports/mobile-ios-*/build.json
+          if-no-files-found: error
+
+  android-native:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: Rewrite/native/mobile-input/android
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Install pinned Android SDK
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Build and test native Android module
+        run: bash ./gradlew --no-daemon --stacktrace testDebugUnitTest assembleDebug lintDebug
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rewrite-mobile-android-native
+          path: |
+            Rewrite/native/mobile-input/android/build/test-results/
+            Rewrite/native/mobile-input/android/build/reports/
+            Rewrite/native/mobile-input/android/build/outputs/aar/
+          if-no-files-found: error

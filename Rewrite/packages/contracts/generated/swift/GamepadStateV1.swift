@@ -1,7 +1,7 @@
 // Generated from gamepad-state-v1.schema.json; do not edit. DTO only: validate before activation.
 import Foundation
 
-public enum GamepadButtonV1: String, Codable, Sendable {
+public enum GamepadButtonV1: String, Codable, CaseIterable, Sendable {
     case south
     case east
     case west
@@ -29,4 +29,14 @@ public struct GamepadStateV1: Codable, Sendable {
     public let rightStickY: Double
     public let leftTrigger: Double
     public let rightTrigger: Double
+
+    public init(buttons: [GamepadButtonV1], leftStickX: Double, leftStickY: Double, rightStickX: Double, rightStickY: Double, leftTrigger: Double, rightTrigger: Double) {
+        self.buttons = buttons
+        self.leftStickX = leftStickX
+        self.leftStickY = leftStickY
+        self.rightStickX = rightStickX
+        self.rightStickY = rightStickY
+        self.leftTrigger = leftTrigger
+        self.rightTrigger = rightTrigger
+    }
 }

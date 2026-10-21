@@ -3,3 +3,4 @@ dist/
 reports/
 packages/contracts/src/gamepad.generated.ts
 native/
+packages/contracts/schema/mobile-input-v1.schema.json

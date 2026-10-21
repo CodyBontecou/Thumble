@@ -8,6 +8,7 @@
     "packages/contracts/src/**/*.ts",
     "packages/domain/src/**/*.ts",
     "packages/application/src/**/*.ts",
-    "packages/client/src/index.ts"
+    "packages/client/src/index.ts",
+    "packages/client/src/mobile-input.ts"
   ]
 }

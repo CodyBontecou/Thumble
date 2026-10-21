@@ -24,7 +24,9 @@
     "cli": "bun apps/cli/src/main.ts",
     "build": "bun tooling/build.ts",
     "test:package": "THUMBLE_REWRITE_PACKAGE_TEST=1 bun test tests/package.test.ts",
-    "test:package:ci": "bun tooling/ci-test.ts --package"
+    "test:package:ci": "bun tooling/ci-test.ts --package",
+    "mobile:prepare": "bun tooling/prepare-mobile-fixtures.ts",
+    "mobile:ios:sdk": "bun tooling/check-mobile-ios.ts"
   },
   "devDependencies": {
     "@thumble/application": "workspace:*",

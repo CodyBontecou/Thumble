@@ -9,10 +9,52 @@ const fields = Object.keys(schema.properties).filter(
 const banner =
   "Generated from gamepad-state-v1.schema.json; do not edit. DTO only: validate before activation.";
 const typescript = `// ${banner}\nexport const GAMEPAD_BUTTONS = ${JSON.stringify(buttons)} as const;\nexport type GamepadButton = (typeof GAMEPAD_BUTTONS)[number];\nexport interface GamepadState {\n  readonly buttons: readonly GamepadButton[];\n${fields.map((field) => `  readonly ${field}: number;`).join("\n")}\n}\n`;
-const swift = `// ${banner}\nimport Foundation\n\npublic enum GamepadButtonV1: String, Codable, Sendable {\n${buttons.map((button) => `    case ${button}`).join("\n")}\n}\n\npublic struct GamepadStateV1: Codable, Sendable {\n    public let buttons: [GamepadButtonV1]\n${fields.map((field) => `    public let ${field}: Double`).join("\n")}\n}\n`;
+const swift = `// ${banner}\nimport Foundation\n\npublic enum GamepadButtonV1: String, Codable, CaseIterable, Sendable {\n${buttons.map((button) => `    case ${button}`).join("\n")}\n}\n\npublic struct GamepadStateV1: Codable, Sendable {\n    public let buttons: [GamepadButtonV1]\n${fields.map((field) => `    public let ${field}: Double`).join("\n")}\n\n    public init(buttons: [GamepadButtonV1], ${fields.map((field) => `${field}: Double`).join(", ")}) {\n        self.buttons = buttons\n${fields.map((field) => `        self.${field} = ${field}`).join("\n")}\n    }\n}\n`;
 const kotlin = `// ${banner}\npackage com.thumble.rewrite.contracts\n\nenum class GamepadButtonV1 {\n    ${buttons.join(", ")}\n}\n\ndata class GamepadStateV1(\n    val buttons: List<GamepadButtonV1>,\n${fields.map((field) => `    val ${field}: Double,`).join("\n")}\n)\n`;
 const rust = `// ${banner}\nuse serde::{Deserialize, Serialize};\n\n#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]\n#[serde(rename_all = "camelCase")]\npub enum GamepadButton {\n${buttons.map((button) => `    ${button[0]!.toUpperCase() + button.slice(1)},`).join("\n")}\n}\n\n#[derive(Debug, Clone, Serialize, Deserialize)]\n#[serde(rename_all = "camelCase", deny_unknown_fields)]\npub struct GamepadState {\n    pub buttons: Vec<GamepadButton>,\n${fields.map((field) => `    pub ${field.replace(/[A-Z]/g, (letter) => "_" + letter.toLowerCase())}: f64,`).join("\n")}\n}\n`;
+const mobileMapSchema = {
+  $schema: "https://json-schema.org/draft/2020-12/schema",
+  title: "Thumble native control map v1",
+  type: "object",
+  additionalProperties: false,
+  required: ["version", "generation", "revision", "controls"],
+  properties: {
+    version: { const: 1 },
+    generation: { type: "string", pattern: "^[1-9][0-9]{0,19}$" },
+    revision: { type: "string", pattern: "^(0|[1-9][0-9]{0,19})$" },
+    controls: {
+      type: "array",
+      minItems: 1,
+      maxItems: 64,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["id", "action", "x", "y", "width", "height"],
+        properties: {
+          id: { type: "string", pattern: "^[A-Za-z0-9-]{1,64}$" },
+          action: {
+            enum: [
+              ...buttons,
+              "leftStick",
+              "rightStick",
+              "leftTrigger",
+              "rightTrigger",
+            ],
+          },
+          x: { type: "number", minimum: 0, maximum: 1 },
+          y: { type: "number", minimum: 0, maximum: 1 },
+          width: { type: "number", minimum: 0.001, maximum: 1 },
+          height: { type: "number", minimum: 0.001, maximum: 1 },
+        },
+      },
+    },
+  },
+  $comment:
+    "Native and TypeScript validators additionally check u64 bounds, unique IDs, and rectangle sums within the unit viewport. Coordinates are normalized in the native surface bounds, independent of screen density.",
+};
 const outputs = {
+  "packages/contracts/schema/mobile-input-v1.schema.json":
+    JSON.stringify(mobileMapSchema, null, 2) + "\n",
   "packages/contracts/src/gamepad.generated.ts": typescript,
   "native/receiver/src/generated.rs": rust,
   "packages/contracts/generated/swift/GamepadStateV1.swift": swift,
