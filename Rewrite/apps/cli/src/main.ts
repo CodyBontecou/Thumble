@@ -6,6 +6,7 @@ import {
   readEndpoint,
   readStateFile,
   request,
+  requestPairing,
   runtimeDirectory,
 } from "@thumble/client/local";
 import {
@@ -22,7 +23,7 @@ function options(values: string[]): Map<string, string | true> {
     const key = values[i]!;
     if (!key.startsWith("--") || result.has(key))
       throw new Error("invalid_arguments");
-    if (["--json", "--allow-recorded-input"].includes(key)) {
+    if (["--json", "--allow-recorded-input", "--reveal-secret"].includes(key)) {
       result.set(key, true);
       continue;
     }
@@ -111,6 +112,15 @@ async function main(): Promise<unknown> {
       await Bun.sleep(50);
     } while (Date.now() < deadline);
     throw new Error("service_start_failed");
+  }
+  if (family === "pairing") {
+    if (action !== "open" && action !== "status" && action !== "cancel")
+      throw new Error("unsupported_pairing_command");
+    if (action === "open" && opts.get("--reveal-secret") !== true)
+      throw new Error("pairing_secret_output_opt_in_required");
+    return requestPairing(readEndpoint(root, receiver), {
+      command: `pairing-${action}`,
+    });
   }
   let command: LocalCommand;
   if ((family === "service" || family === "receiver") && action === "status")

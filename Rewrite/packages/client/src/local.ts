@@ -1,3 +1,9 @@
+import { decodePairingResponse } from "./pairing.ts";
+import {
+  decodePairingCommand,
+  type PairingCommand,
+  type PairingReply,
+} from "@thumble/contracts/pairing";
 import { spawnSync } from "node:child_process";
 import { decodeServiceStatus } from "./index.ts";
 import { createConnection } from "node:net";
@@ -143,7 +149,31 @@ export function request(
   endpoint: Endpoint,
   body: LocalCommand,
 ): Promise<ServiceStatus> {
-  body = decodeLocalCommand(body);
+  return exchange(endpoint, decodeLocalCommand(body), (value) => {
+    const status = decodeServiceStatus(value);
+    if (
+      status.service.instanceId !== endpoint.instanceId ||
+      status.service.pid !== endpoint.servicePid ||
+      status.receiver.pid !== endpoint.receiverPid
+    )
+      throw new Error("service_identity_mismatch");
+    return status;
+  });
+}
+export function requestPairing(
+  endpoint: Endpoint,
+  body: PairingCommand,
+): Promise<PairingReply> {
+  body = decodePairingCommand(body);
+  return exchange(endpoint, body, (value) => {
+    return decodePairingResponse(value, endpoint.instanceId, body);
+  });
+}
+function exchange<Result>(
+  endpoint: Endpoint,
+  body: LocalCommand | PairingCommand,
+  decode: (value: unknown) => Result,
+): Promise<Result> {
   const requestId = randomUUID();
   return new Promise((resolve, reject) => {
     const socket = createConnection({ host: "127.0.0.1", port: endpoint.port });
@@ -199,16 +229,10 @@ export function request(
           return fail(response.error);
         }
         exact(response, ["version", "requestId", "ok", "result"]);
-        const status = decodeServiceStatus(response.result);
-        if (
-          status.service.instanceId !== endpoint.instanceId ||
-          status.service.pid !== endpoint.servicePid ||
-          status.receiver.pid !== endpoint.receiverPid
-        )
-          throw new Error("service_identity_mismatch");
+        const result = decode(response.result);
         settled = true;
         socket.destroy();
-        resolve(status);
+        resolve(result);
       } catch {
         fail("invalid_service_response");
       }

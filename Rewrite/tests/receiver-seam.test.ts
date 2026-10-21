@@ -352,3 +352,67 @@ test("strict JSON rejects escaped duplicate keys, excessive nesting and malforme
     parseStrictJson('{"text":"\\\" bracket }","values":[null,true,1.25e2]}'),
   ).toEqual({ text: '" bracket }', values: [null, true, 125] });
 });
+
+test("pairing CLI requires secret opt-in, authenticated IPC, private status and neutral restart", async () => {
+  const { requestPairing } = await import("@thumble/client/local");
+  await fixture(async (directory) => {
+    expect((await command(directory, "service", "start")).code).toBe(0);
+    const denied = await command(directory, "pairing", "open");
+    expect(denied.code).toBe(1);
+    expect(denied.value.error).toBe("pairing_secret_output_opt_in_required");
+    const endpoint = readEndpoint(directory, executable);
+    await expectError(
+      requestPairing(
+        { ...endpoint, token: "f".repeat(64) },
+        { command: "pairing-open" },
+      ),
+      "unauthorized",
+    );
+    expect(
+      (await requestPairing(endpoint, { command: "pairing-status" })).pairing
+        .state,
+    ).toBe("closed");
+    const opened = await command(
+      directory,
+      "pairing",
+      "open",
+      "--reveal-secret",
+    );
+    expect(opened.code).toBe(0);
+    const secret = opened.value.result.offer.secret;
+    expect(secret).toMatch(/^[0-9a-f]{64}$/);
+    expect(opened.value.result.pairing.networkEnabled).toBe(false);
+    const status = await command(directory, "pairing", "status");
+    expect(status.value.result.pairing.state).toBe("open");
+    expect(status.value.result.offer).toBe(null);
+    expect(JSON.stringify(status.value)).not.toContain(secret);
+    const receiverStatus = await request(endpoint, { command: "status" });
+    expect(JSON.stringify(receiverStatus)).not.toContain(secret);
+    expect(receiverStatus.receiver.snapshot.active).toBe(false);
+    expect(
+      readFileSync(join(directory, "endpoint.json"), "utf8"),
+    ).not.toContain(secret);
+    expect(readFileSync(endpoint.recordingLog, "utf8")).not.toContain(secret);
+    expect(
+      (await command(directory, "pairing", "cancel")).value.result.pairing
+        .state,
+    ).toBe("closed");
+    expect(
+      (await command(directory, "pairing", "open", "--reveal-secret")).code,
+    ).toBe(0);
+    expect((await command(directory, "service", "stop")).code).toBe(0);
+    await waitFor(() => {
+      try {
+        readEndpoint(directory, executable);
+        return false;
+      } catch {
+        return true;
+      }
+    });
+    expect((await command(directory, "service", "start")).code).toBe(0);
+    expect(
+      (await command(directory, "pairing", "status")).value.result.pairing
+        .state,
+    ).toBe("closed");
+  });
+}, 15000);

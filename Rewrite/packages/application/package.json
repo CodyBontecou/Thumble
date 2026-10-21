@@ -3,7 +3,10 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "exports": "./src/runtime-controller.ts",
+  "exports": {
+    ".": "./src/runtime-controller.ts",
+    "./pairing": "./src/pairing.ts"
+  },
   "dependencies": {
     "@thumble/contracts": "workspace:*"
   }

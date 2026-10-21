@@ -1,5 +1,15 @@
+import { PairingWindows } from "@thumble/application/pairing";
+import {
+  decodePairingCommand,
+  type PairingReply,
+} from "@thumble/contracts/pairing";
 import { createServer, type Socket } from "node:net";
-import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
+import {
+  createHash,
+  randomBytes,
+  randomUUID,
+  timingSafeEqual,
+} from "node:crypto";
 import {
   lstatSync,
   readFileSync,
@@ -41,6 +51,14 @@ export async function serve(executable: string, path: string): Promise<void> {
   const native = new NativeReceiver(executable, directory, recordingLog);
   await native.ready;
   const controller = new RuntimeController(native, randomUUID);
+  const pairing = new PairingWindows(instanceId, {
+    now: Date.now,
+    nextIdentity: randomUUID,
+    randomSecret: () => randomBytes(32).toString("hex"),
+    digest: (text) => createHash("sha256").update(text, "utf8").digest("hex"),
+    constantTimeEqual: (a, b) =>
+      timingSafeEqual(Buffer.from(a, "hex"), Buffer.from(b, "hex")),
+  });
   const sockets = new Set<Socket>();
   let stopping = false;
   const status = (
@@ -105,18 +123,36 @@ export async function serve(executable: string, path: string): Promise<void> {
             )
           )
             throw new Error("unauthorized");
-          const command = decodeLocalCommand(envelope.body);
-          const snapshot = await controller.execute(
-            command.command === "stop" ? { command: "release" } : command,
-          );
-          if (command.command === "stop")
-            socket.once("finish", () => void stop());
+          let result: ServiceStatus | PairingReply;
+          const operation = record(envelope.body).command;
+          if (
+            typeof operation === "string" &&
+            operation.startsWith("pairing-")
+          ) {
+            const command = decodePairingCommand(envelope.body);
+            if (command.command === "pairing-cancel") pairing.cancel();
+            const offer =
+              command.command === "pairing-open" ? pairing.open() : null;
+            result = {
+              authorityInstanceId: instanceId,
+              pairing: pairing.status(),
+              offer,
+            };
+          } else {
+            const command = decodeLocalCommand(envelope.body);
+            const snapshot = await controller.execute(
+              command.command === "stop" ? { command: "release" } : command,
+            );
+            result = status(snapshot);
+            if (command.command === "stop")
+              socket.once("finish", () => void stop());
+          }
           socket.end(
             JSON.stringify({
               version: 1,
               requestId,
               ok: true,
-              result: status(snapshot),
+              result,
             }) + "\n",
           );
         } catch (error) {
@@ -168,6 +204,7 @@ export async function serve(executable: string, path: string): Promise<void> {
   async function stop(): Promise<void> {
     if (stopping) return;
     stopping = true;
+    pairing.cancel();
     clearInterval(heartbeat);
     try {
       await controller.execute({ command: "stop" });

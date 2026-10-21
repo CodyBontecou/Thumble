@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./receiver": "./src/receiver.ts",
-    "./mobile-input": "./src/mobile-input.ts"
+    "./mobile-input": "./src/mobile-input.ts",
+    "./pairing": "./src/pairing.ts"
   }
 }

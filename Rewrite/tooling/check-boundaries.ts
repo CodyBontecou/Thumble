@@ -16,7 +16,9 @@ export function checkPortableSource(
     } else if (
       !(
         name !== "contracts" &&
-        /^@thumble\/contracts(?:\/(?:receiver|mobile-input))?$/.test(module)
+        /^@thumble\/contracts(?:\/(?:receiver|mobile-input|pairing))?$/.test(
+          module,
+        )
       )
     ) {
       throw new Error(`Nonportable dependency ${module} in ${path}`);

@@ -25,12 +25,17 @@ packageTest(
         resolve(root, `dist/${name}${extension}`),
         join(directory, `${name}${extension}`),
       );
-    const invoke = async (action: string): Promise<any> => {
+    const invoke = async (
+      action: string,
+      family = "service",
+      ...options: string[]
+    ): Promise<any> => {
       const child = Bun.spawn(
         [
           join(directory, `thumble-rewrite${extension}`),
-          "service",
+          family,
           action,
+          ...options,
           "--runtime-dir",
           runtime,
           "--json",
@@ -64,6 +69,17 @@ packageTest(
       const status = await invoke("status");
       expect(status.result.service.instanceId).toBe(
         started.result.service.instanceId,
+      );
+      const pairing = await invoke("open", "pairing", "--reveal-secret");
+      expect(pairing.result.offer.secret).toMatch(/^[0-9a-f]{64}$/);
+      const pairingStatus = await invoke("status", "pairing");
+      expect(pairingStatus.result.pairing.state).toBe("open");
+      expect(pairingStatus.result.offer).toBe(null);
+      expect(JSON.stringify(pairingStatus)).not.toContain(
+        pairing.result.offer.secret,
+      );
+      expect((await invoke("cancel", "pairing")).result.pairing.state).toBe(
+        "closed",
       );
       const stopped = await invoke("stop");
       expect(stopped.result.receiver.snapshot.active).toBe(false);
