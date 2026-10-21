@@ -118,12 +118,15 @@ test("service survives CLI exit; CAS activation, replay, precision, full-state r
     const initial = await request(endpoint, { command: "status" });
     console.error("[DEBUG-m2] after status request");
     expect(initial.receiver.snapshot.active).toBe(false);
+    console.error("[DEBUG-m2] before activation");
     const active = await request(endpoint, {
       command: "activate",
       expectedRevision: "0",
       profileId: "profile-A",
     });
+    console.error("[DEBUG-m2] after activation");
     expect(active.receiver.snapshot.generation).toBe("1");
+    console.error("[DEBUG-m2] before stale activation");
     await expect(
       request(endpoint, {
         command: "activate",
@@ -131,6 +134,7 @@ test("service survives CLI exit; CAS activation, replay, precision, full-state r
         profileId: "stale",
       }),
     ).rejects.toThrow("revision_conflict");
+    console.error("[DEBUG-m2] after stale activation; before sample");
     const sample = await request(endpoint, {
       command: "sample",
       expectedGeneration: "1",
@@ -138,6 +142,7 @@ test("service survives CLI exit; CAS activation, replay, precision, full-state r
       state: held,
       allowRecordedInput: true,
     });
+    console.error("[DEBUG-m2] after sample");
     expect(sample.receiver.snapshot.sequence).toBe("9007199254740993");
     expect(sample.receiver.snapshot.reportHex).not.toBe(neutral);
     await expect(
@@ -149,6 +154,7 @@ test("service survives CLI exit; CAS activation, replay, precision, full-state r
         allowRecordedInput: true,
       }),
     ).rejects.toThrow("replayed_sample");
+    console.error("[DEBUG-m2] after replay; before repair");
     const repair = await request(endpoint, {
       command: "sample",
       expectedGeneration: "1",
@@ -157,6 +163,7 @@ test("service survives CLI exit; CAS activation, replay, precision, full-state r
       allowRecordedInput: true,
     });
     expect(repair.receiver.snapshot.reportHex).toBe(neutral);
+    console.error("[DEBUG-m2] after repair; before switch");
     const switched = await request(endpoint, {
       command: "activate",
       expectedRevision: "1",
