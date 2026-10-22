@@ -7,6 +7,7 @@
   "dependencies": {
     "@thumble/contracts": "workspace:*",
     "@thumble/application": "workspace:*",
-    "@thumble/client": "workspace:*"
+    "@thumble/client": "workspace:*",
+    "@thumble/storage": "workspace:*"
   }
 }

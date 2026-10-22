@@ -38,6 +38,7 @@
     "@thumble/service": "workspace:*",
     "@types/bun": "1.4.3",
     "prettier": "3.6.2",
-    "typescript": "6.0.3"
+    "typescript": "6.0.3",
+    "@thumble/storage": "workspace:*"
   }
 }

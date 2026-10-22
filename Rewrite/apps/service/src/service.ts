@@ -1,3 +1,4 @@
+import { SqliteConfigurationRepository } from "@thumble/storage";
 import { NativePairingHost } from "./native-pairing.ts";
 import {
   decodePairingCommand,
@@ -69,6 +70,13 @@ export async function serve(
   const recordingLog = join(directory, `receiver-${instanceId}.jsonl`);
   const native = new NativeReceiver(executable, directory, recordingLog);
   await native.ready;
+  let configuration: SqliteConfigurationRepository;
+  try {
+    configuration = new SqliteConfigurationRepository(directory, executable);
+  } catch (error) {
+    native.disconnect();
+    throw error;
+  }
   const controller = new RuntimeController(native, randomUUID);
   const pairing = new NativePairingHost(
     executable,
@@ -76,7 +84,14 @@ export async function serve(
     instanceId,
     identityDirectory,
   );
-  await pairing.ready;
+  try {
+    await pairing.ready;
+  } catch (error) {
+    configuration.close();
+    pairing.disconnect();
+    native.disconnect();
+    throw error;
+  }
   const sockets = new Set<Socket>();
   let stopping = false;
   const status = (
@@ -223,6 +238,11 @@ export async function serve(
       await controller.execute({ command: "stop" });
     } catch {}
     native.disconnect();
+    try {
+      configuration.close();
+    } catch {
+      process.exit(1);
+    }
     for (const socket of sockets) socket.destroy();
     server.close();
     try {

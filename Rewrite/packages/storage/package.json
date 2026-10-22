@@ -1,0 +1,11 @@
+{
+  "name": "@thumble/storage",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": "./src/configuration-sqlite.ts",
+  "dependencies": {
+    "@thumble/application": "workspace:*",
+    "@thumble/contracts": "workspace:*"
+  }
+}

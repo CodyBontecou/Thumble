@@ -42,6 +42,21 @@ fn args() -> Result<(String, PathBuf, Option<PathBuf>), &'static str> {
     }
     Ok((mode, root, log))
 }
+fn secure_configuration(root: &Path) -> Result<(), &'static str> {
+    security::directory(root)?;
+    security::file(&root.join("configuration-v1.sqlite3"), false)?;
+    // A valid rollback journal can survive a crash; protect it before SQLite
+    // recovery. WAL/SHM are outside this schema's supported journal mode.
+    let journal = root.join("configuration-v1.sqlite3-journal");
+    match std::fs::symlink_metadata(&journal) {
+        Ok(_) => {
+            security::file(&journal, false)?;
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(_) => return Err("runtime_file_open_failed"),
+    }
+    Ok(())
+}
 fn run(root: &Path, log: Option<&Path>) -> Result<(), &'static str> {
     security::directory(root)?;
     let lock = security::file(&root.join("receiver.lock"), false)?;
@@ -182,6 +197,7 @@ fn main() {
     } else {
         args().and_then(|(mode, root, log)| match mode.as_str() {
         "secure-directory" => security::directory(&root),
+        "secure-configuration" if log.is_none() => secure_configuration(&root),
         "host-identity-initialize" | "host-identity-show" if log.is_none() => {
             let operation = if mode == "host-identity-initialize" { thumble_rewrite_receiver::host_identity::load_or_create } else { thumble_rewrite_receiver::host_identity::load_existing };
             operation(&root).map(|identity| {

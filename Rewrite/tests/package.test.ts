@@ -97,6 +97,7 @@ packageTest(
         "--identity-dir",
         join(directory, "identity"),
       );
+      expect(existsSync(join(runtime, "configuration-v1.sqlite3"))).toBe(true);
       expect(started.result.receiver.snapshot.backend).toBe("recording");
       expect(started.result.receiver.snapshot.inputEnabled).toBe(false);
       const status = await invoke("status");

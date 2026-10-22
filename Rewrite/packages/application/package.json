@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./src/runtime-controller.ts",
-    "./pairing": "./src/pairing.ts"
+    "./pairing": "./src/pairing.ts",
+    "./configuration-store": "./src/configuration-store.ts"
   },
   "dependencies": {
     "@thumble/contracts": "workspace:*"

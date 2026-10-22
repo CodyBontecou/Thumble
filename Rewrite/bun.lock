@@ -10,6 +10,7 @@
         "@thumble/contracts": "workspace:*",
         "@thumble/domain": "workspace:*",
         "@thumble/service": "workspace:*",
+        "@thumble/storage": "workspace:*",
         "@types/bun": "1.4.3",
         "prettier": "3.6.2",
         "typescript": "6.0.3",
@@ -31,6 +32,7 @@
         "@thumble/application": "workspace:*",
         "@thumble/client": "workspace:*",
         "@thumble/contracts": "workspace:*",
+        "@thumble/storage": "workspace:*",
       },
     },
     "packages/application": {
@@ -58,6 +60,14 @@
         "@thumble/contracts": "workspace:*",
       },
     },
+    "packages/storage": {
+      "name": "@thumble/storage",
+      "version": "0.0.0",
+      "dependencies": {
+        "@thumble/application": "workspace:*",
+        "@thumble/contracts": "workspace:*",
+      },
+    },
   },
   "packages": {
     "@thumble/application": ["@thumble/application@workspace:packages/application"],
@@ -71,6 +81,8 @@
     "@thumble/domain": ["@thumble/domain@workspace:packages/domain"],
 
     "@thumble/service": ["@thumble/service@workspace:apps/service"],
+
+    "@thumble/storage": ["@thumble/storage@workspace:packages/storage"],
 
     "@types/bun": ["@types/bun@1.4.3", "", { "dependencies": { "bun-types": "1.4.3" } }, "sha512-N67Pqy8JXbAY/j0tNraS3V5mubGvc6rrrNDmDCtZLlFzccbUJPDb0tvgUBC5q4m8ybkP93Jcn1QB+RYQ6PvBhw=="],
 

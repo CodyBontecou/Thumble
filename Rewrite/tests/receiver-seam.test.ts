@@ -1,3 +1,5 @@
+import { SqliteConfigurationRepository } from "@thumble/storage";
+import { LosslessJson } from "@thumble/contracts/json";
 import { expectError } from "./helpers/rejection.ts";
 import { expect, test } from "bun:test";
 import {
@@ -768,3 +770,54 @@ test("service death closes enrollment listener and neutralizes receiver despite 
     }
   });
 }, 20000);
+
+test("service owns durable source storage and releases its lease before endpoint disappearance", async () => {
+  await fixture(async (directory) => {
+    expect((await command(directory, "service", "start")).code).toBe(0);
+    expect(
+      () => new SqliteConfigurationRepository(directory, executable),
+    ).toThrow("configuration_owner_exists");
+    async function stop() {
+      expect((await command(directory, "service", "stop")).code).toBe(0);
+      await waitFor(() => {
+        try {
+          readEndpoint(directory, executable);
+          return false;
+        } catch {
+          return true;
+        }
+      });
+    }
+    await stop();
+    let store = new SqliteConfigurationRepository(directory, executable);
+    try {
+      store.commit({
+        operationId: "service-persistence",
+        payloadHash: "a".repeat(64),
+        expectedRevision: "0",
+        source: LosslessJson.parse('{"opaque":18446744073709551615}'),
+        affectedEntities: [],
+      });
+    } finally {
+      store.close();
+    }
+    expect((await command(directory, "service", "start")).code).toBe(0);
+    expect(
+      (
+        await request(readEndpoint(directory, executable), {
+          command: "status",
+        })
+      ).receiver.snapshot.active,
+    ).toBe(false);
+    await stop();
+    store = new SqliteConfigurationRepository(directory, executable);
+    try {
+      expect(store.current()?.revision).toBe("1");
+      expect(store.current()?.source.get("/opaque")?.numberToken).toBe(
+        "18446744073709551615",
+      );
+    } finally {
+      store.close();
+    }
+  });
+}, 15000);
