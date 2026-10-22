@@ -12,7 +12,7 @@ public final class ThumbleInputModule: Module {
     // contract before entering the Swift UI actor; only typed Sendable metadata
     // leaves the actor, with bridge dictionaries assembled afterwards.
     View(ThumbleInputView.self) {
-      Events("onAdmission")
+      Events("onAdmission", "onCatalog")
       Prop("practiceMap") { (view: ThumbleInputView, value: [String: Any]) in
         view.pendingPractice = value
       }
@@ -47,6 +47,7 @@ public final class ThumbleInputModule: Module {
 
 @MainActor final class ThumbleInputView: ExpoView {
   let onAdmission = EventDispatcher()
+  let onCatalog = EventDispatcher()
   fileprivate var pendingConnection: [String: Any]?
   fileprivate var pendingPractice: [String: Any]?
   private var practiceAdmitted = false
@@ -74,7 +75,8 @@ public final class ThumbleInputModule: Module {
       self?.feedbackState = state
       self?.setNeedsDisplay()
     })
-  lazy var surface = InputSurface(engine: engine)
+  var touchHaptics = TouchHapticPlayer()
+  lazy var surface = InputSurface(engine: engine, haptics: touchHaptics)
   private var liveOwned = false
   private var liveMode = false
   private var connectionAttempted = false
@@ -97,7 +99,8 @@ public final class ThumbleInputModule: Module {
         },
         status: { [weak self] status in
           self?.onAdmission(["admission": ["version": 1, "status": status]])
-        })
+        },
+        catalogResult: { [weak self] catalog in self?.onCatalog(["catalog": catalog]) })
       connection = flow
       flow.start(template: template)
     } catch {
@@ -110,7 +113,7 @@ public final class ThumbleInputModule: Module {
   }
   func adoptConnectedEngine(_ next: InputEngine) throws {
     guard !disposed, window != nil else { throw InputError.unavailable }
-    let nextSurface = try InputSurface(connectedEngine: next)
+    let nextSurface = try InputSurface(connectedEngine: next, haptics: touchHaptics)
     guard let map = nextSurface.configuration else { throw InputError.unavailable }
     portal?.removeFromSuperview()
     portal = nil
@@ -253,6 +256,8 @@ public final class ThumbleInputModule: Module {
       && zip(a.controls, b.controls).allSatisfy {
         $0.id == $1.id && $0.action == $1.action && $0.x == $1.x && $0.y == $1.y
           && $0.width == $1.width && $0.height == $1.height
+          && ($0.hapticFeedback ?? TouchHapticFeedback()).normalized
+            == ($1.hapticFeedback ?? TouchHapticFeedback()).normalized
       }
   }
   fileprivate nonisolated static func decodeMap(_ value: [String: Any]) throws -> ControlMap {
@@ -274,13 +279,23 @@ public final class ThumbleInputModule: Module {
     return try ControlMap(
       generation: generation, revision: revision,
       controls: controls.map { control in
-        try exact(control, ["id", "action", "x", "y", "width", "height"])
+        try exact(
+          control,
+          ["id", "action", "x", "y", "width", "height"]
+            + (control.keys.contains("hapticFeedback") ? ["hapticFeedback"] : []))
+        let hapticFeedback: TouchHapticFeedback? =
+          try control.keys.contains("hapticFeedback")
+          ? JSONDecoder().decode(
+            TouchHapticFeedback.self,
+            from: JSONSerialization.data(withJSONObject: control["hapticFeedback"] as Any)
+          ).normalized : nil
         guard let id = control["id"] as? String, id.utf8.count <= 64,
           let action = control["action"] as? String, action.utf8.count <= 64
         else { throw InputError.invalidMap }
         return try ControlRegion(
           id: id, action: action, x: number(control["x"]), y: number(control["y"]),
-          width: number(control["width"]), height: number(control["height"]))
+          width: number(control["width"]), height: number(control["height"]),
+          hapticFeedback: hapticFeedback)
       })
   }
 }

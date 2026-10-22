@@ -13,6 +13,8 @@ import android.text.InputType
 import android.view.View
 import android.view.WindowManager
 import android.widget.EditText
+import android.widget.LinearLayout
+import android.widget.Switch
 import com.thumble.rewrite.contracts.GamepadStateV1
 import com.thumble.rewrite.input.*
 import java.io.Closeable
@@ -26,6 +28,7 @@ internal class PhoneConnection(
     private val feedback: (GamepadStateV1) -> Unit,
     private val install: (InputEngine) -> Unit,
     private val status: (String) -> Unit,
+    private val catalogResult: (Map<String, Any?>) -> Unit = {},
 ) : Closeable {
     private val gate = Any()
     @Volatile private var closed = false
@@ -33,6 +36,10 @@ internal class PhoneConnection(
     private var field: EditText? = null
     private var enrollment: PhoneEnrollmentClient? = null
     private var control: PhoneControlClient? = null
+    private var catalogClient: PhoneCatalogClient? = null
+    private val catalogWorker = Executors.newSingleThreadExecutor { task ->
+        Thread(task, "ThumblePhoneCatalog").apply { isDaemon = true }
+    }
     private val main = Handler(Looper.getMainLooper())
     private val worker = Executors.newSingleThreadExecutor { task ->
         Thread(task, "ThumblePhoneBootstrap").apply { isDaemon = true }
@@ -91,11 +98,27 @@ internal class PhoneConnection(
                 isSaveEnabled = false
             }
         field = input
+        val touchFeedback =
+            Switch(activity).apply {
+                text = "Touch feedback"
+                minimumHeight = (48 * resources.displayMetrics.density).toInt()
+                contentDescription = "Touch feedback"
+                isChecked = TouchHapticPreferences.intensity(activity) > 0
+                setOnCheckedChangeListener { _, enabled ->
+                    TouchHapticPreferences.setEnabled(activity, enabled)
+                }
+            }
+        val content =
+            LinearLayout(activity).apply {
+                orientation = LinearLayout.VERTICAL
+                addView(input)
+                addView(touchFeedback)
+            }
         val builder =
             AlertDialog.Builder(activity)
                 .setTitle("Connect to your computer")
                 .setMessage("Paste the pairing invitation from your agent. It stays on this phone.")
-                .setView(input)
+                .setView(content)
                 .setNegativeButton("Cancel") { _, _ ->
                     close()
                     status("cancelled")
@@ -213,6 +236,7 @@ internal class PhoneConnection(
                     } else
                         try {
                             install(admission.bind(feedback))
+                            readCatalog(endpoint)
                         } catch (_: Exception) {
                             admission.close()
                             fail()
@@ -220,6 +244,33 @@ internal class PhoneConnection(
                 }
             } catch (_: Exception) {
                 main.post { fail() }
+            }
+        }
+    }
+
+    private fun readCatalog(endpoint: TrustedHostEndpoint) {
+        // Metadata has its own worker/socket; a slow read cannot queue touch input.
+        if (closed) return
+        catalogWorker.execute {
+            val result =
+                try {
+                    val client = PhoneCatalogClient(endpoint, anchor.context.applicationContext)
+                    synchronized(gate) {
+                        if (closed) {
+                            client.close()
+                            return@execute
+                        }
+                        catalogClient = client
+                    }
+                    client.read().bridgeMetadata()
+                } catch (_: Exception) {
+                    mapOf("kind" to "error", "error" to "phone_catalog_unavailable")
+                } finally {
+                    synchronized(gate) { catalogClient = null }
+                }
+            main.post {
+                if (!closed && anchor.isAttachedToWindow && anchor.hasWindowFocus())
+                    catalogResult(result)
             }
         }
     }
@@ -235,12 +286,15 @@ internal class PhoneConnection(
         synchronized(gate) {
             if (closed) return
             closed = true
+            catalogClient?.close()
+            catalogClient = null
             enrollment?.close()
             enrollment = null
             control?.close()
             control = null
         }
         application.unregisterActivityLifecycleCallbacks(lifecycle)
+        catalogWorker.shutdownNow()
         worker.shutdownNow()
         field?.text?.clear()
         field = null

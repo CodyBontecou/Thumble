@@ -203,3 +203,45 @@ test("native connection admission accepts only metadata and exact live receipts"
     decodeConnectionAdmission({ version: 1, status: "starting" }),
   ).toThrow();
 });
+
+test("native maps preserve canonical optional haptics and reject unsafe feedback metadata", () => {
+  const feedback = {
+    style: "rigid",
+    pattern: "buzz",
+    intensity: 0.7,
+    sharpness: 0.92,
+    duration: 0.3,
+  } as const;
+  const make = (value: unknown) => ({
+    ...fixture.map,
+    controls: fixture.map.controls.map((control, index) =>
+      index === 0 ? { ...control, hapticFeedback: value } : control,
+    ),
+  });
+  const result = decodeControlMap(make(feedback));
+  expect(result.controls[0]!.hapticFeedback).toEqual(feedback);
+  expect(Object.isFrozen(result.controls[0]!.hapticFeedback)).toBe(true);
+  for (const value of [
+    null,
+    undefined,
+    {},
+    { ...feedback, extra: true },
+    { ...feedback, intensity: NaN },
+    { ...feedback, sharpness: Infinity },
+    { ...feedback, duration: 0.301 },
+    { ...feedback, intensity: true },
+    { ...feedback, style: "invalid" },
+    { ...feedback, pattern: "invalid" },
+  ])
+    expect(() => decodeControlMap(make(value))).toThrow();
+  expect(
+    decodeControlMap(make({ ...feedback, style: "none" })).controls[0]!
+      .hapticFeedback,
+  ).toEqual({
+    ...feedback,
+    style: "none",
+    pattern: "single",
+    intensity: 0,
+    sharpness: 0,
+  });
+});

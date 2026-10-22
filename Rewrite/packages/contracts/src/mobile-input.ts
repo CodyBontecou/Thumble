@@ -10,6 +10,43 @@ export type ControlAction =
   | "rightStick"
   | "leftTrigger"
   | "rightTrigger";
+export type TouchHapticFeedback = Readonly<{
+  style: "none" | "light" | "medium" | "heavy" | "soft" | "rigid";
+  pattern: "single" | "double" | "pulse" | "buzz";
+  intensity: number;
+  sharpness: number;
+  duration: number;
+}>;
+export function decodeTouchHapticFeedback(value: unknown): TouchHapticFeedback {
+  const v = dataObject(value, [
+    "style",
+    "pattern",
+    "intensity",
+    "sharpness",
+    "duration",
+  ]);
+  if (
+    typeof v.style !== "string" ||
+    !["none", "light", "medium", "heavy", "soft", "rigid"].includes(v.style) ||
+    typeof v.pattern !== "string" ||
+    !["single", "double", "pulse", "buzz"].includes(v.pattern) ||
+    [v.intensity, v.sharpness, v.duration].some(
+      (n) => typeof n !== "number" || !Number.isFinite(n),
+    ) ||
+    Number(v.intensity) < 0 ||
+    Number(v.intensity) > 1 ||
+    Number(v.sharpness) < 0 ||
+    Number(v.sharpness) > 1 ||
+    Number(v.duration) < 0.02 ||
+    Number(v.duration) > 0.3
+  )
+    throw new Error("invalid_control_map");
+  return Object.freeze(
+    v.style === "none"
+      ? { ...v, pattern: "single", intensity: 0, sharpness: 0 }
+      : v,
+  ) as TouchHapticFeedback;
+}
 export type ControlRegion = Readonly<{
   id: string;
   action: ControlAction;
@@ -17,6 +54,7 @@ export type ControlRegion = Readonly<{
   y: number;
   width: number;
   height: number;
+  hapticFeedback?: TouchHapticFeedback;
 }>;
 export type ControlMap = Readonly<{
   version: 1;
@@ -226,7 +264,20 @@ export function decodeControlMap(value: unknown): ControlMap {
       if (!descriptor || !("value" in descriptor))
         throw new Error("invalid_control_map");
       const raw: unknown = descriptor.value;
-      const c = dataObject(raw, ["id", "action", "x", "y", "width", "height"]);
+      const c = dataObject(raw, [
+        "id",
+        "action",
+        "x",
+        "y",
+        "width",
+        "height",
+        ...(Object.hasOwn(record(raw), "hapticFeedback")
+          ? ["hapticFeedback"]
+          : []),
+      ]);
+      const hapticFeedback = Object.hasOwn(c, "hapticFeedback")
+        ? decodeTouchHapticFeedback(c.hapticFeedback)
+        : undefined;
       const id = identity(c.id);
       if (
         ids.has(id) ||
@@ -258,6 +309,7 @@ export function decodeControlMap(value: unknown): ControlMap {
         y,
         width,
         height,
+        ...(hapticFeedback === undefined ? {} : { hapticFeedback }),
       });
     },
   );

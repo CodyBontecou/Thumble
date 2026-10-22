@@ -11,12 +11,14 @@ data class ControlRegion(
     val y: Double,
     val width: Double,
     val height: Double,
+    val hapticFeedback: TouchHapticFeedback? = null,
 ) {
     internal fun contains(x: Double, y: Double) =
         x >= this.x && y >= this.y && x < this.x + width && y < this.y + height
 
     internal fun valid(): Boolean =
         Regex("[A-Za-z0-9-]{1,64}").matches(id) &&
+            (hapticFeedback?.valid() ?: true) &&
             action in
                 GamepadButtonV1.entries.map { it.name } +
                     listOf("leftStick", "rightStick", "leftTrigger", "rightTrigger") &&

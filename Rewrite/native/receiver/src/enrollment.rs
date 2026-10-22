@@ -167,6 +167,11 @@ struct Hello {
     input_version: u8,
     document_version: u8,
     capabilities_version: u8,
+    #[serde(default, deserialize_with = "non_null_role")]
+    role: Option<String>,
+}
+fn non_null_role<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<String>, D::Error> {
+    String::deserialize(d).map(Some)
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -223,13 +228,20 @@ pub(crate) fn serve(
     store: &Mutex<PhoneTrustStore>,
     policy_mutation: &Mutex<()>,
     input: crate::input_broker::ControlInput<'_>,
+    catalog: &crate::authenticated_control::catalog::Bridge,
     mut now: impl FnMut() -> Result<u64, &'static str>,
 ) -> Result<(), &'static str> {
     let result = (|| match begin(
         channel,
         windows,
         store,
-        if input.datagram_port.is_some() { 6 } else { 4 },
+        if catalog.enabled() {
+            7
+        } else if input.datagram_port.is_some() {
+            6
+        } else {
+            4
+        },
     )? {
         2 => complete(
             channel,
@@ -240,7 +252,8 @@ pub(crate) fn serve(
             &mut now,
         )
         .map(|_| ()),
-        version @ 3..=6 => {
+        5 | 6 if input.datagram_port.is_none() => Err("enrollment_version_unsupported"),
+        version @ 3..=7 => {
             let authority = windows
                 .lock()
                 .map_err(|_| "pairing_owner_unavailable")?
@@ -251,7 +264,7 @@ pub(crate) fn serve(
                 &authority,
                 store,
                 policy_mutation,
-                if version >= 4 {
+                if (4..=6).contains(&version) {
                     Some(crate::input_broker::ControlInput {
                         root: input.root,
                         registry: input.registry,
@@ -265,6 +278,7 @@ pub(crate) fn serve(
                 } else {
                     None
                 },
+                if version == 7 { Some(catalog) } else { None },
                 &mut now,
             )
         }
@@ -296,13 +310,21 @@ fn begin(
     if hello.version != 1
         || hello.command != "hello"
         || !(2..=max_version).contains(&hello.control_version)
+        || (if hello.control_version == 7 {
+            hello.role.as_deref() != Some("management")
+        } else {
+            hello.role.is_some()
+        })
         || hello.input_version != 1
         || hello.document_version != 1
         || hello.capabilities_version != 1
     {
         return Err("enrollment_version_unsupported");
     }
-    let reply = serde_json::json!({"version":1,"command":"hello","authorityInstanceId":authority,"controlVersion":hello.control_version,"inputVersion":1,"documentVersion":1,"capabilitiesVersion":1,"inputEnabled":false});
+    let mut reply = serde_json::json!({"version":1,"command":"hello","authorityInstanceId":authority,"controlVersion":hello.control_version,"inputVersion":1,"documentVersion":1,"capabilitiesVersion":1,"inputEnabled":false});
+    if hello.control_version == 7 {
+        reply["role"] = serde_json::json!("management");
+    }
     channel
         .send(
             FrameKind::Control,
@@ -324,7 +346,7 @@ fn complete(
         return Err("enrollment_message_invalid");
     }
     crate::phone_trust::validate_phone(&request.phone_id, &request.label)?;
-    let issued = {
+    let (issued, retired) = {
         let _mutation = policy_mutation
             .lock()
             .map_err(|_| "phone_trust_owner_unavailable")?;
@@ -348,12 +370,20 @@ fn complete(
                 proof_time,
             )?;
         let mut store = store.lock().map_err(|_| "phone_trust_owner_unavailable")?;
-        store.invalidate_scope(&request.phone_id)?;
-        if let Some(grants) = input_grants {
-            grants.retire_phone(&request.phone_id)?;
-        }
-        store.enroll_now(&request.phone_id, &request.label, now)?
+        let retired = store.detach_scope(&request.phone_id)?;
+        let result = (|| {
+            if let Some(grants) = input_grants {
+                grants.retire_phone(&request.phone_id)?;
+            }
+            store.enroll_now(&request.phone_id, &request.label, now)
+        })();
+        (result, retired)
     };
+    // No global store/policy lock covers a backpressured old management send.
+    if let Some(retired) = retired {
+        retired.wait_management_delivery()?;
+    }
+    let issued = issued?;
     issued.send_enrollment(channel)?;
     let ack: Acknowledgment =
         receive(channel).map_err(|_| "phone_credential_delivery_unconfirmed")?;
@@ -841,6 +871,56 @@ mod tests {
                 }
             });
             assert!(store.lock().unwrap().list().unwrap().is_empty());
+        }
+    }
+    #[test]
+    fn management_role_cannot_downgrade_into_any_legacy_input_version() {
+        for version in 2..=7 {
+            for role in [
+                None,
+                Some(serde_json::json!(null)),
+                Some(serde_json::json!("input")),
+                Some(serde_json::json!("management")),
+            ] {
+                let root = Root::new();
+                let identity = host_identity::load_existing(&root.0).unwrap();
+                let windows =
+                    Mutex::new(PairingWindows::new("authority-a", identity.pin()).unwrap());
+                let store = Mutex::new(PhoneTrustStore::open(&root.0).unwrap());
+                let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+                let address = listener.local_addr().unwrap();
+                let accepted = (version == 7 && role == Some(serde_json::json!("management")))
+                    || (version < 7 && role.is_none());
+                thread::scope(|scope| {
+                    let worker = scope.spawn(|| {
+                        let mut channel = ControlChannel::accept_unenrolled(
+                            listener.accept().unwrap().0,
+                            &identity,
+                        )
+                        .unwrap();
+                        begin(&mut channel, &windows, &store, 7)
+                    });
+                    let mut channel =
+                        ControlChannel::connect_pinned(address, identity.pin()).unwrap();
+                    let mut value = hello();
+                    value["controlVersion"] = serde_json::json!(version);
+                    if let Some(role) = role {
+                        value["role"] = role;
+                    }
+                    send(&mut channel, value);
+                    if accepted {
+                        let reply: serde_json::Value = receive(&mut channel).unwrap();
+                        assert_eq!(
+                            reply.get("role"),
+                            (version == 7).then_some(&serde_json::json!("management"))
+                        );
+                        assert_eq!(worker.join().unwrap(), Ok(version));
+                    } else {
+                        assert!(channel.receive().is_err());
+                        assert!(worker.join().unwrap().is_err());
+                    }
+                });
+            }
         }
     }
 }

@@ -165,6 +165,23 @@ class PracticeInputTest {
 
     @Test
     fun connectedEngineSurvivesInstallationCapturesTouchesAndReleasesOnRemoval() {
+        var impacts = 0
+        var feedbackEnded = 0
+        val feedback =
+            object : com.thumble.rewrite.input.TouchHapticSink {
+                override fun accepted(
+                    id: Long,
+                    feedback: com.thumble.rewrite.input.TouchHapticFeedback,
+                ) {
+                    impacts++
+                }
+
+                override fun ended(id: Long) {
+                    feedbackEnded++
+                }
+
+                override fun cancel() {}
+            }
         val surface = ui {
             val activity =
                 ActivityLifecycleMonitorRegistry.getInstance()
@@ -189,7 +206,7 @@ class PracticeInputTest {
                 )
             engine.activate(map)
             engine.connect("7")
-            val view = com.thumble.rewrite.input.InputSurface.connected(activity, engine)
+            val view = com.thumble.rewrite.input.InputSurface.connected(activity, engine, feedback)
             assertEquals(map, view.configuration)
             assertTrue(engine.connected)
             try {
@@ -219,9 +236,18 @@ class PracticeInputTest {
             send(down, MotionEvent.ACTION_DOWN, listOf(center))
             ui {
                 assertEquals(setOf("south"), surface.engine.state.buttons.map { it.name }.toSet())
+                assertEquals(1, impacts)
+                surface.engine.tick()
+                assertEquals(1, impacts)
             }
+            send(down, MotionEvent.ACTION_MOVE, listOf(center))
+            ui { assertEquals(1, impacts) }
             send(down, MotionEvent.ACTION_UP, listOf(center))
-            ui { assertEquals(GamepadReport.neutral(), surface.engine.state) }
+            ui {
+                assertEquals(GamepadReport.neutral(), surface.engine.state)
+                assertEquals(1, impacts)
+                assertEquals(1, feedbackEnded)
+            }
             ui {
                 (surface.parent as ViewGroup).removeView(surface)
                 assertFalse(surface.engine.connected)

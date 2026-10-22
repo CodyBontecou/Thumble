@@ -7,7 +7,12 @@ const input = createInterface({ input: process.stdin, crlfDelay: Infinity });
 const commands = input[Symbol.asyncIterator]();
 const first = await commands.next();
 assert(!first.done);
-const { invitation, transport, pause = false } = JSON.parse(first.value);
+const {
+  invitation,
+  transport,
+  pause = false,
+  catalog = null,
+} = JSON.parse(first.value);
 const der = Buffer.from(transport.certificateDER, "hex");
 assert.equal(
   createHash("sha256").update(der).digest("hex"),
@@ -135,13 +140,15 @@ try {
     send({
       version: 1,
       command: "hello",
-      controlVersion: 3,
+      controlVersion: catalog ? 7 : 3,
+      ...(catalog ? { role: "management" } : {}),
       inputVersion: 1,
       documentVersion: 1,
       capabilitiesVersion: 1,
     });
     const controlHello = await receive();
-    assert.equal(controlHello.controlVersion, 3);
+    assert.equal(controlHello.controlVersion, catalog ? 7 : 3);
+    if (catalog) assert.equal(controlHello.role, "management");
     assert.equal(
       controlHello.authorityInstanceId,
       invitation.authorityInstanceId,
@@ -162,27 +169,53 @@ try {
     assert.equal(authorized.inputSessionAvailable, false);
     assert(/^[0-9a-f]{32}$/.test(authorized.connectionId));
     assert(!JSON.stringify(authorized).includes(reply.credential));
-    send({
-      version: 1,
-      command: "control-status",
-      connectionId: authorized.connectionId,
-    });
-    assert.equal((await receive()).command, "control-status");
-    send({
-      version: 1,
-      command: "disconnect",
-      connectionId: authorized.connectionId,
-    });
-    assert.equal((await receive()).command, "disconnected");
-    console.log(
-      JSON.stringify({
-        authenticated: true,
-        completed: true,
-        phoneId: complete.phoneId,
-        credentialEpoch: complete.credentialEpoch,
-        inputEnabled: false,
-      }),
-    );
+    if (catalog) {
+      assert.equal(authorized.role, "management");
+      send({
+        version: 1,
+        command: "configuration-list",
+        connectionId: authorized.connectionId,
+        expectedRevision: catalog.expectedRevision,
+        offset: catalog.offset,
+      });
+      const result = await receive();
+      assert.equal(result.version, 1);
+      assert.equal(result.command, "configuration-result");
+      assert.equal(result.connectionId, authorized.connectionId);
+      const { version, command, connectionId, ...metadata } = result;
+      assert.deepEqual(metadata, catalog.expected);
+      assert(!JSON.stringify(result).includes(reply.credential));
+      console.log(
+        JSON.stringify({
+          authenticated: true,
+          completed: true,
+          inputEnabled: false,
+          catalog: metadata,
+        }),
+      );
+    } else {
+      send({
+        version: 1,
+        command: "control-status",
+        connectionId: authorized.connectionId,
+      });
+      assert.equal((await receive()).command, "control-status");
+      send({
+        version: 1,
+        command: "disconnect",
+        connectionId: authorized.connectionId,
+      });
+      assert.equal((await receive()).command, "disconnected");
+      console.log(
+        JSON.stringify({
+          authenticated: true,
+          completed: true,
+          phoneId: complete.phoneId,
+          credentialEpoch: complete.credentialEpoch,
+          inputEnabled: false,
+        }),
+      );
+    }
   }
 } finally {
   clearTimeout(deadline);

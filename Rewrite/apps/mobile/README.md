@@ -3,7 +3,9 @@
 Expo native development/Release builds for iOS and Android. The app includes local
 practice and a native connection flow: pinned TLS enrollment, credential-provider
 storage, UDP/TLS input, renewal, release and neutral reconnect. Input currently
-reaches a recording receiver; no OS input is emitted. Profile editing, haptics,
+reaches a recording receiver; no OS input is emitted. Native touch haptics include local opt-out and lifecycle cancellation. A separate
+management-only TLS connection reads saved profile metadata without activating a
+layout or blocking input. Profile editing, physical haptic acceptance,
 WoW presentation and launch acceptance remain open. Hosted iOS bundled-app
 reliability is under investigation; local passes do not close it.
 
@@ -37,6 +39,8 @@ through. Native layout/visibility checks follow the presentation anchor, releasi
 on hiding, detachment, focus loss, background, cancellation and rotation. Native
 sampling and feedback continue while JavaScript is blocked. Practice never admits
 host output, and released touches are never reconstructed on reopening.
+
+See the [native feedback contract](../../../docs/rewrite-native-haptics-v1.md) for metadata, defaults and platform approximations, and the [phone catalog contract](../../../docs/rewrite-phone-catalog-v1.md) for role negotiation, bounded authority reads and revocation ordering.
 
 ## Headless witnesses
 

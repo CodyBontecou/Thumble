@@ -17,6 +17,7 @@ private actor InputTestStorage: ControlCredentialSource {
   var replies: [[String: Any]]
   var frames: [ControlTLSFrame] = []
   var closed = false
+  private let closedSignal = AsyncStream<Void>.makeStream()
   var receiving = 0
   var beforeReceive: (Int) -> Void = { _ in }
   var paused: CheckedContinuation<Void, Never>?
@@ -50,7 +51,13 @@ private actor InputTestStorage: ControlCredentialSource {
     paused?.resume()
     paused = nil
   }
-  func close() { closed = true }
+  func close() {
+    closed = true
+    closedSignal.continuation.finish()
+  }
+  func waitForClose() async {
+    for await _ in closedSignal.stream {}
+  }
   var inputs: [Data] { frames.filter { $0.kind == .input }.map(\.payload) }
   var commands: [String] {
     frames.filter { $0.kind == .control }.compactMap {
@@ -288,6 +295,15 @@ extension String {
     #expect(io.inputs.isEmpty && io.closed)
   }
 }
+@Test @MainActor private func cancelledCloseBarrierDoesNotCloseTheInputChannel() async {
+  let io = InputControlIO([])
+  let waiter = Task { await io.waitForClose() }
+  await Task.yield()
+  waiter.cancel()
+  await waiter.value
+  #expect(!io.closed)
+  io.close()
+}
 @Test @MainActor private func heartbeatRejectsChangedReceiptAndRetiresTheNativeTouchOwner()
   async throws
 {
@@ -302,7 +318,21 @@ extension String {
   let engine = try await client.bindInput(inputMap())
   defer { client.close() }
   #expect(engine.begin(id: 1, generation: "1", x: 0.2, y: 0.2))
-  try await Task.sleep(for: .milliseconds(1150))
+  let processed = await withTaskGroup(of: Bool.self) { group in
+    group.addTask {
+      await io.waitForClose()
+      return await io.closed
+    }
+    group.addTask {
+      do { try await Task.sleep(for: .seconds(5)) } catch {}
+      return false
+    }
+    let result = await group.next() ?? false
+    group.cancelAll()
+    return result
+  }
+  #expect(processed, "native heartbeat did not finish processing the invalid receipt")
+  #expect(io.receiving == 5 && io.replies.isEmpty && io.commands.contains("control-status"))
   #expect(
     io.closed && !engine.connected && GamepadReport.hex(engine.state) == GamepadReport.hex(.neutral)
   )

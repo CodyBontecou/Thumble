@@ -442,11 +442,12 @@ class PhoneInputTest {
         var enrollment: PhoneEnrollmentClient? = null
         var control: PhoneControlClient? = null
         try {
-            fun line() =
+            fun line(sample: () -> Unit = {}) =
                 JSONObject(
-                    reads
-                        .submit<String> { reader.readLine() ?: error("probe closed") }
-                        .get(5, TimeUnit.SECONDS)
+                    awaitNativeProbeReply(
+                        reads.submit<String> { reader.readLine() ?: error("probe closed") },
+                        sample,
+                    )
                 )
             fun command(value: Int) {
                 process.outputStream.write(value)
@@ -564,7 +565,7 @@ class PhoneInputTest {
                         assertTrue(engine.connected)
                     }
                     command(118)
-                    val verified = line()
+                    val verified = line { engine.tick() }
                     assertTrue(verified.getBoolean("continuousHeld"))
                     assertTrue(verified.getInt("rotations") >= 2)
                     assertTrue(verified.getLong("durationMs") >= 75_000)
@@ -580,7 +581,7 @@ class PhoneInputTest {
                         engine.tick()
                     }
                 command(104)
-                val held = line()
+                val held = line { engine.tick() }
                 assertTrue(held.getBoolean("held"))
                 assertFalse(held.getBoolean("inputEnabled"))
                 if (generation == "1") engine.cancel(ReleaseReason.background)

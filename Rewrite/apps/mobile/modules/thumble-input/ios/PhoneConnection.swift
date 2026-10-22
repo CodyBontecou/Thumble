@@ -1,5 +1,6 @@
 import Foundation
 import MobileInputCore
+import MobileInputUIKit
 import ThumbleContracts
 import UIKit
 
@@ -29,21 +30,26 @@ import UIKit
   private var prompt: UIAlertController?
   private var task: Task<Void, Never>?
   private var enrollment: PhoneEnrollmentClient?
+  private var catalogClient: PhoneCatalogClient?
+  private var catalogTask: Task<Void, Never>?
   private var control: PhoneControlClient?
   private let storage = PhoneCredentialWorker()
   private var closed = false
   private let feedback: (GamepadStateV1) -> Void
   private let install: (InputEngine) throws -> Void
   private let status: (String) -> Void
+  private let catalogResult: ([String: Any]) -> Void
   private static let endpointKey = "rewrite.phone.endpoint.v1"
   init(
     anchor: UIView, feedback: @escaping (GamepadStateV1) -> Void,
-    install: @escaping (InputEngine) throws -> Void, status: @escaping (String) -> Void
+    install: @escaping (InputEngine) throws -> Void, status: @escaping (String) -> Void,
+    catalogResult: @escaping ([String: Any]) -> Void = { _ in }
   ) {
     self.anchor = anchor
     self.feedback = feedback
     self.install = install
     self.status = status
+    self.catalogResult = catalogResult
     super.init()
     NotificationCenter.default.addObserver(
       self, selector: #selector(background),
@@ -61,6 +67,7 @@ import UIKit
       preferredStyle: .alert)
     alert.addTextField { field in
       field.placeholder = "Pairing invitation"
+      field.isEnabled = false
       field.accessibilityIdentifier = "pairing-invitation"
       field.delegate = self
       field.isSecureTextEntry = true
@@ -83,12 +90,25 @@ import UIKit
         })
     }
     alert.addAction(
+      UIAlertAction(
+        title: TouchHapticPreferences.intensity() > 0
+          ? "Turn touch feedback off" : "Turn touch feedback on", style: .default
+      ) { [weak self, weak alert] _ in
+        alert?.textFields?.first?.text = nil
+        TouchHapticPreferences.setEnabled(TouchHapticPreferences.intensity() == 0)
+        self?.afterPrompt { [weak self] in self?.start(template: template) }
+      })
+    alert.addAction(
       UIAlertAction(title: "Pair", style: .default) { [weak self, weak alert] _ in
         self?.submitInvitation(alert?.textFields?.first?.text ?? "", template: template)
       })
     prompt = alert
     status("waiting")
-    presenter.present(alert, animated: true)
+    presenter.present(alert, animated: true) { [weak alert] in
+      // Keep native actions visible in landscape; invitation entry remains tap-to-edit.
+      alert?.textFields?.first?.isEnabled = true
+      alert?.textFields?.first?.resignFirstResponder()
+    }
   }
   // Native camera/manual entry points have no secret-bearing React representation.
   func submitInvitation(_ text: String, template: ControlMap) {
@@ -194,6 +214,28 @@ import UIKit
     }
     try install(engine)
     diagnosticPhase = .connected
+    readCatalog(endpoint)
+  }
+  private func readCatalog(_ endpoint: TrustedHostEndpoint) {
+    // Independent TLS connection and task: metadata never owns input lifetime.
+    catalogTask = Task { [weak self] in
+      guard let self, !closed else { return }
+      do {
+        let client = try PhoneCatalogClient(endpoint: endpoint, storage: storage)
+        catalogClient = client
+        let result = try await client.read()
+        try Task.checkCancellation()
+        guard !closed, anchor?.window?.isKeyWindow == true,
+          UIApplication.shared.applicationState == .active
+        else { return }
+        catalogResult(result.bridgeMetadata)
+      } catch {
+        if !closed && !Task.isCancelled {
+          catalogResult(["kind": "error", "error": "phone_catalog_unavailable"])
+        }
+      }
+      catalogClient = nil
+    }
   }
   private func fail() {
     guard !closed else { return }
@@ -219,6 +261,10 @@ import UIKit
     guard !closed else { return }
     closed = true
     NotificationCenter.default.removeObserver(self)
+    catalogTask?.cancel()
+    catalogTask = nil
+    catalogClient?.close()
+    catalogClient = nil
     task?.cancel()
     task = nil
     enrollment?.close()

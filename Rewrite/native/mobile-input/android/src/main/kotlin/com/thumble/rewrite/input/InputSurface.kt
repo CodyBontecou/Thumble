@@ -14,8 +14,10 @@ import android.view.MotionEvent
 import android.view.View
 
 /** Transparent native overlay for the React renderer; stable pointer IDs, never indices. */
-class InputSurface(context: Context, val engine: InputEngine) :
+class InputSurface(context: Context, val engine: InputEngine, haptics: TouchHapticSink? = null) :
     View(context), Choreographer.FrameCallback {
+    private val touchHaptics =
+        haptics ?: AndroidTouchHaptics(this) { engine.connected || engine.practice }
     var configuration: ControlMap? = null
         private set
 
@@ -52,6 +54,10 @@ class InputSurface(context: Context, val engine: InputEngine) :
             }
         }
 
+    private fun cancelHaptics() {
+        runCatching { touchHaptics.cancel() }
+    }
+
     private fun belongsTo(activity: Activity): Boolean {
         var owner: Context = context
         while (owner is android.content.ContextWrapper) {
@@ -66,6 +72,7 @@ class InputSurface(context: Context, val engine: InputEngine) :
     fun configure(map: ControlMap): ActivationReceipt {
         val receipt = engine.activate(map)
         configuration = map
+        cancelHaptics()
         generations.clear()
         installedAt = SystemClock.uptimeMillis()
         return receipt
@@ -73,11 +80,13 @@ class InputSurface(context: Context, val engine: InputEngine) :
 
     fun setPractice(enabled: Boolean) {
         if (enabled == engine.practice) return
+        cancelHaptics()
         generations.clear()
         engine.setPractice(enabled)
     }
 
     fun release(reason: ReleaseReason) {
+        cancelHaptics()
         generations.clear()
         installedAt = SystemClock.uptimeMillis()
         engine.cancel(reason)
@@ -137,6 +146,7 @@ class InputSurface(context: Context, val engine: InputEngine) :
     override fun doFrame(frameTimeNanos: Long) {
         if (!isAttachedToWindow || disposed) return
         engine.tick()
+        if (!engine.connected && !engine.practice) cancelHaptics()
         Choreographer.getInstance().postFrameCallback(this)
     }
 
@@ -156,8 +166,28 @@ class InputSurface(context: Context, val engine: InputEngine) :
                         event.getX(i).toDouble() / width,
                         event.getY(i).toDouble() / height,
                     )
-                )
+                ) {
                     generations[id] = generation
+                    if (engine.connected || engine.practice) {
+                        configuration
+                            ?.controls
+                            ?.asReversed()
+                            ?.firstOrNull {
+                                it.contains(
+                                    event.getX(i).toDouble() / width,
+                                    event.getY(i).toDouble() / height,
+                                )
+                            }
+                            ?.let { region ->
+                                runCatching {
+                                    touchHaptics.accepted(
+                                        id.toLong(),
+                                        region.hapticFeedback ?: TouchHapticFeedback(),
+                                    )
+                                }
+                            }
+                    }
+                }
             }
             MotionEvent.ACTION_MOVE ->
                 for (i in 0 until event.pointerCount) {
@@ -173,7 +203,10 @@ class InputSurface(context: Context, val engine: InputEngine) :
             MotionEvent.ACTION_UP,
             MotionEvent.ACTION_POINTER_UP -> {
                 val id = event.getPointerId(event.actionIndex)
-                generations.remove(id)?.let { engine.end(id.toLong(), it) }
+                generations.remove(id)?.let {
+                    runCatching { touchHaptics.ended(id.toLong()) }
+                    engine.end(id.toLong(), it)
+                }
                 if (event.actionMasked == MotionEvent.ACTION_UP) performClick()
             }
             MotionEvent.ACTION_CANCEL -> release(ReleaseReason.touchCancelled)
@@ -188,9 +221,13 @@ class InputSurface(context: Context, val engine: InputEngine) :
 
     companion object {
         /** Attach an already authenticated engine; its admitted map remains authoritative. */
-        fun connected(context: Context, engine: InputEngine): InputSurface {
+        fun connected(
+            context: Context,
+            engine: InputEngine,
+            haptics: TouchHapticSink? = null,
+        ): InputSurface {
             val map = engine.claimTouchSurface()
-            return InputSurface(context, engine).apply {
+            return InputSurface(context, engine, haptics).apply {
                 configuration = map
                 installedAt = SystemClock.uptimeMillis()
             }

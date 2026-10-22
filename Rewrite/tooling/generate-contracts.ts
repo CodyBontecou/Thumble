@@ -31,6 +31,26 @@ const mobileMapSchema = {
         additionalProperties: false,
         required: ["id", "action", "x", "y", "width", "height"],
         properties: {
+          hapticFeedback: {
+            type: "object",
+            additionalProperties: false,
+            required: [
+              "style",
+              "pattern",
+              "intensity",
+              "sharpness",
+              "duration",
+            ],
+            properties: {
+              style: {
+                enum: ["none", "light", "medium", "heavy", "soft", "rigid"],
+              },
+              pattern: { enum: ["single", "double", "pulse", "buzz"] },
+              intensity: { type: "number", minimum: 0, maximum: 1 },
+              sharpness: { type: "number", minimum: 0, maximum: 1 },
+              duration: { type: "number", minimum: 0.02, maximum: 0.3 },
+            },
+          },
           id: { type: "string", pattern: "^[A-Za-z0-9-]{1,64}$" },
           action: {
             enum: [

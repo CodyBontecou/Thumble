@@ -1,3 +1,5 @@
+import { decodePhoneCatalogEvent } from "@thumble/contracts/phone-catalog";
+import { PhoneCatalogBridge } from "./phone-catalog-bridge.ts";
 import {
   decodePairingCommand,
   decodePairingReply,
@@ -7,20 +9,26 @@ import {
 import { exact } from "@thumble/contracts/receiver";
 import { NativePipe } from "./native-pipe.ts";
 export class NativePairingHost {
-  private readonly pipe: NativePipe<void, PairingReply>;
+  private readonly pipe: NativePipe<
+    void,
+    PairingReply | { kind: "phone-catalog-enabled" }
+  >;
   get child() {
     return this.pipe.child;
   }
-  get ready() {
-    return this.pipe.ready;
-  }
+  readonly ready: Promise<void>;
   constructor(
     executable: string,
     directory: string,
     private readonly authority: string,
     identityDirectory?: string,
+    catalog?: PhoneCatalogBridge,
   ) {
-    this.pipe = new NativePipe(
+    let lastEvent = 0n;
+    this.pipe = new NativePipe<
+      void,
+      PairingReply | { kind: "phone-catalog-enabled" }
+    >(
       executable,
       [
         "pairing-host",
@@ -39,8 +47,39 @@ export class NativePairingHost {
           )
             throw new Error("invalid_pairing_ready");
         },
+        event: (value) => {
+          if (!catalog) throw new Error("unexpected_phone_catalog_event");
+          const event = decodePhoneCatalogEvent(value, authority);
+          if (BigInt(event.eventId) <= lastEvent)
+            throw new Error("phone_catalog_event_replayed");
+          lastEvent = BigInt(event.eventId);
+          void catalog
+            .execute(event)
+            .then((outcome) => {
+              this.pipe.writeEvent({
+                version: 1,
+                event: "phone-catalog-reply",
+                eventId: event.eventId,
+                authorityInstanceId: authority,
+                ...outcome,
+              });
+            })
+            .catch(() => {
+              this.pipe.disconnect();
+            });
+        },
         reply(value) {
           exact(value, ["version", "requestId", "ok", "result"]);
+          if (
+            catalog &&
+            value.result &&
+            typeof value.result === "object" &&
+            "kind" in value.result &&
+            value.result.kind === "phone-catalog-enabled"
+          ) {
+            exact(value.result as Record<string, unknown>, ["kind"]);
+            return { kind: "phone-catalog-enabled" };
+          }
           const reply = decodePairingReply(value.result);
           if (reply.authorityInstanceId !== authority)
             throw new Error("pairing_authority_mismatch");
@@ -49,9 +88,26 @@ export class NativePairingHost {
       },
       "pairing_host_unavailable",
     );
+    this.ready = this.pipe.ready.then(async () => {
+      if (catalog) {
+        const reply = await this.pipe.request({
+          command: "phone-catalog-enable",
+        });
+        if (!("kind" in reply) || reply.kind !== "phone-catalog-enabled") {
+          this.pipe.disconnect();
+          throw new Error("phone_catalog_enable_invalid");
+        }
+      }
+    });
   }
-  request(command: PairingCommand): Promise<PairingReply> {
-    return this.pipe.request(decodePairingCommand(command));
+  async request(command: PairingCommand): Promise<PairingReply> {
+    await this.ready;
+    const reply = await this.pipe.request(decodePairingCommand(command));
+    if ("kind" in reply) {
+      this.pipe.disconnect();
+      throw new Error("invalid_pairing_response");
+    }
+    return reply;
   }
   disconnect(): void {
     this.pipe.disconnect();

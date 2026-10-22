@@ -39,9 +39,12 @@ import XCTest
     return try JSONDecoder().decode(
       ControlMap.self, from: JSONSerialization.data(withJSONObject: try XCTUnwrap(root["map"])))
   }
-  private func install(in window: UIWindow) throws -> ThumbleInputView {
+  private func install(in window: UIWindow, haptics: TouchHapticPlayer? = nil) throws
+    -> ThumbleInputView
+  {
     let root = try XCTUnwrap(findReactRoot(try XCTUnwrap(window.rootViewController?.view)))
     let view = ThumbleInputView(appContext: nil)
+    if let haptics { view.touchHaptics = haptics }
     view.frame = root.bounds.insetBy(dx: 20, dy: 30)
     root.addSubview(view)
     _ = try view.configure(fixtureMap())
@@ -80,6 +83,49 @@ import XCTest
     XCTAssertFalse(
       window.hitTest(view.convert(CGPoint(x: view.bounds.width - 1, y: 1), to: window), with: nil)
         === view.surface)
+    try await verifyNativeAcceptedTouchFeedback(in: window)
+  }
+  private final class CallbackTouch: UITouch {
+    let point: CGPoint
+    init(point: CGPoint) {
+      self.point = point
+      super.init()
+    }
+    override var timestamp: TimeInterval { ProcessInfo.processInfo.systemUptime + 1 }
+    override func location(in view: UIView?) -> CGPoint { point }
+  }
+  private func verifyNativeAcceptedTouchFeedback(in window: UIWindow) async throws {
+    var impacts = 0
+    let haptics = TouchHapticPlayer(intensityScale: { 1 }, sink: { _, _ in impacts += 1 })
+    let view = try install(in: window, haptics: haptics)
+    defer {
+      view.release(.disposed)
+      view.removeFromSuperview()
+    }
+    let region = try XCTUnwrap(try fixtureMap().controls.first { $0.action == "south" })
+    let point = CGPoint(
+      x: (region.x + region.width / 2) * view.surface.bounds.width,
+      y: (region.y + region.height / 2) * view.surface.bounds.height)
+    let touch = CallbackTouch(point: point)
+    XCTAssertTrue(
+      window.hitTest(view.surface.convert(point, to: window), with: nil) === view.surface)
+    view.surface.touchesBegan([touch], with: nil)
+    XCTAssertEqual(impacts, 1)
+    XCTAssertTrue(view.engine.state.buttons.contains(.south))
+    view.surface.touchesBegan([touch], with: nil)
+    view.surface.touchesMoved([touch], with: nil)
+    view.engine.tick()
+    XCTAssertEqual(impacts, 1)
+    view.surface.touchesCancelled([touch], with: nil)
+    XCTAssertEqual(GamepadReport.hex(view.engine.state), GamepadReport.hex(.neutral))
+    let cancelled = TouchHapticPlayer(intensityScale: { 1 }, sink: { _, _ in impacts += 1 })
+    cancelled.accepted(id: 1, feedback: TouchHapticFeedback(pattern: .double, duration: 0.045))
+    cancelled.cancel()
+    try await Task.sleep(for: .milliseconds(100))
+    XCTAssertEqual(impacts, 2)
+    let muted = TouchHapticPlayer(intensityScale: { 0 }, sink: { _, _ in impacts += 1 })
+    muted.accepted(id: 2, feedback: TouchHapticFeedback())
+    XCTAssertEqual(impacts, 2)
   }
   func testHiddenAndRemovedAnchorsReleaseAndStopIntercepting() async throws {
     let window = try await applicationWindow()
@@ -313,12 +359,22 @@ import XCTest
       }
       let template = try fixtureMap()
       flow.start(template: template)
-      try await Task.sleep(for: .milliseconds(400))
-      var top = window.rootViewController
-      while let next = top?.presentedViewController { top = next }
+      var top: UIViewController?
+      for _ in 0..<200 {
+        top = window.rootViewController
+        while let next = top?.presentedViewController { top = next }
+        if let alert = top as? UIAlertController,
+          alert.textFields?.first?.isEnabled == true, !alert.isBeingPresented
+        {
+          break
+        }
+        try await Task.sleep(for: .milliseconds(16))
+      }
       let alert = try XCTUnwrap(top as? UIAlertController)
       let field = try XCTUnwrap(alert.textFields?.first)
       XCTAssertTrue(field.isSecureTextEntry)
+      XCTAssertFalse(field.isFirstResponder)
+      XCTAssertTrue(field.canBecomeFirstResponder)
       field.text = nil
       XCTAssertTrue(
         flow.textField(

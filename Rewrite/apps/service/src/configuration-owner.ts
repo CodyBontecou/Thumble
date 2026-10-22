@@ -16,6 +16,8 @@ export class ConfigurationOwner {
     string,
     { fingerprint: string; reply: ConfigurationReply }
   >();
+  private phoneRead = false;
+  private ordinaryReads = 0;
   private activeJob: string | undefined;
   constructor(
     executable: string,
@@ -106,7 +108,7 @@ export class ConfigurationOwner {
             : previous.reply;
         return decodeConfigurationReply(reply, command);
       }
-      if (this.activeJob !== undefined)
+      if (this.activeJob !== undefined || this.phoneRead)
         throw new Error("configuration_owner_busy");
       if (this.jobs.size >= 32 && !previous) {
         const oldest = this.jobs.keys().next().value;
@@ -166,14 +168,59 @@ export class ConfigurationOwner {
         });
       return pending;
     }
-    if (this.activeJob !== undefined)
+    if (this.activeJob !== undefined || this.phoneRead)
       throw new Error("configuration_owner_busy");
-    const value = await this.pipe.request(command);
+    this.ordinaryReads++;
     try {
-      return decodeConfigurationReply(value, command);
-    } catch {
-      this.pipe.disconnect();
-      throw new Error("configuration_response_invalid");
+      const value = await this.pipe.request(command);
+      try {
+        return decodeConfigurationReply(value, command);
+      } catch {
+        this.pipe.disconnect();
+        throw new Error("configuration_response_invalid");
+      }
+    } finally {
+      this.ordinaryReads--;
+    }
+  }
+  /** The phone abandons after 2s; this single underlying read retains its 30s owner health budget. */
+  async readCatalogForPhone(
+    input: Extract<ConfigurationCommand, { command: "configuration-list" }>,
+  ): Promise<ConfigurationReply> {
+    const command = decodeConfigurationCommand(input);
+    if (command.command !== "configuration-list")
+      throw new Error("invalid_phone_catalog_command");
+    await this.ready;
+    if (
+      this.phoneRead ||
+      this.activeJob !== undefined ||
+      this.ordinaryReads !== 0
+    )
+      throw new Error("configuration_owner_busy");
+    this.phoneRead = true;
+    try {
+      const value = await this.pipe.request(command, 30000);
+      try {
+        const reply = decodeConfigurationReply(value, command);
+        if (reply.kind !== "catalog" && reply.kind !== "conflict")
+          throw new Error("configuration_response_invalid");
+        return reply;
+      } catch {
+        this.pipe.disconnect();
+        this.child.kill("SIGKILL");
+        throw new Error("configuration_response_invalid");
+      }
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        error.message === "configuration_owner_unavailable"
+      ) {
+        this.pipe.disconnect();
+        this.child.kill("SIGKILL");
+      }
+      throw error;
+    } finally {
+      this.phoneRead = false;
     }
   }
   disconnect(): void {

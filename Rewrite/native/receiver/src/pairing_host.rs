@@ -39,6 +39,7 @@ struct Request {
     deny_unknown_fields
 )]
 pub enum Command {
+    PhoneCatalogEnable {},
     PairingOpen {},
     PairingStatus {},
     PairingList {},
@@ -107,6 +108,7 @@ pub struct Host {
     input_grants: Arc<Registry>,
     jobs: Option<mpsc::SyncSender<Job>>,
     workers: Vec<thread::JoinHandle<()>>,
+    catalog: Arc<crate::authenticated_control::catalog::Bridge>,
     reservation_owner: Option<crate::trust_reservation::Owner>,
     _lease: File,
 }
@@ -137,6 +139,9 @@ impl Host {
         let windows = Arc::new(Mutex::new(PairingWindows::new(authority, identity.pin())?));
         let policy_mutation = Arc::new(Mutex::new(()));
         let input_grants = Arc::new(Registry::default());
+        let catalog = Arc::new(crate::authenticated_control::catalog::Bridge::new(
+            authority,
+        ));
         let (jobs, incoming) = mpsc::sync_channel::<Job>(4);
         let incoming = Arc::new(Mutex::new(incoming));
         let mut workers = Vec::new();
@@ -149,6 +154,7 @@ impl Host {
                 let policy_mutation = policy_mutation.clone();
                 let input_grants = input_grants.clone();
                 let runtime_directory = root.to_path_buf();
+                let catalog = catalog.clone();
                 workers.push(thread::spawn(move || loop {
                     let job = match incoming.lock() {
                         Ok(receiver) => match receiver.recv() {
@@ -173,6 +179,7 @@ impl Host {
                                         root: &runtime_directory,
                                         datagram_port: Some(job.datagram_port),
                                     },
+                                    &catalog,
                                     || {
                                         if job.stop.load(Ordering::SeqCst) {
                                             Err("pairing_closed")
@@ -202,6 +209,7 @@ impl Host {
             jobs: Some(jobs),
             workers,
             reservation_owner,
+            catalog,
             _lease: lease,
         })
     }
@@ -354,7 +362,14 @@ impl Host {
         {
             self.stop()?;
         }
+        if matches!(command, Command::PhoneCatalogEnable {}) {
+            if !self.catalog.enabled() {
+                return Err("phone_catalog_unavailable");
+            }
+            return Ok(json!({"kind":"phone-catalog-enabled"}));
+        }
         let offer = match command {
+            Command::PhoneCatalogEnable {} => unreachable!(),
             Command::PairingOpen {} => Some(
                 self.windows
                     .lock()
@@ -382,11 +397,18 @@ impl Host {
                         .ok_or("pairing_persistent_identity_required")?
                         .lock()
                         .map_err(|_| "phone_trust_owner_unavailable")?;
-                    store.invalidate_scope(&phone_id)?;
-                    self.input_grants.retire_phone(&phone_id)?;
-                    store.revoke_now(&phone_id, &mut now)
+                    let retired = store.detach_scope(&phone_id)?;
+                    let result = (|| {
+                        self.input_grants.retire_phone(&phone_id)?;
+                        store.revoke_now(&phone_id, &mut now)
+                    })();
+                    Ok((result, retired))
                 })();
                 self.close_peers();
+                let (result, retired) = result?;
+                if let Some(retired) = retired {
+                    retired.wait_management_delivery()?;
+                }
                 result?;
                 None
             }
@@ -489,11 +511,23 @@ pub fn run(
             Ok(None) | Err(mpsc::RecvTimeoutError::Disconnected) => break,
             Err(mpsc::RecvTimeoutError::Timeout) => continue,
         };
+        if serde_json::from_slice::<Value>(&bytes)
+            .ok()
+            .is_some_and(|v| v.get("event").is_some())
+        {
+            host.catalog.deliver(&bytes)?;
+            continue;
+        }
         let parsed = serde_json::from_slice::<Request>(&bytes)
             .ok()
             .filter(|request| request.version == 1 && runtime::identity(&request.request_id));
         let (id, result) = match parsed {
-            Some(request) => (Some(request.request_id), host.execute(request.body)),
+            Some(request) => {
+                if matches!(request.body, Command::PhoneCatalogEnable {}) {
+                    host.catalog.attach(outgoing.clone())?;
+                }
+                (Some(request.request_id), host.execute(request.body))
+            }
             None => (None, Err("invalid_request")),
         };
         let reply = match result {

@@ -21,7 +21,7 @@ class ThumbleInputModule : Module() {
     override fun definition() = ModuleDefinition {
         Name("ThumbleNativeInput")
         View(ThumbleInputView::class) {
-            Events("onAdmission")
+            Events("onAdmission", "onCatalog")
             Prop("practiceMap") { view: ThumbleInputView, value: Map<String, Any?> ->
                 view.pendingPractice = value
             }
@@ -49,6 +49,7 @@ class ThumbleInputModule : Module() {
 
 class ThumbleInputView(context: Context, appContext: AppContext) : ExpoView(context, appContext) {
     val onAdmission by EventDispatcher()
+    val onCatalog by EventDispatcher()
     internal var pendingConnection: Map<String, Any?>? = null
     internal var pendingPractice: Map<String, Any?>? = null
     private var practiceAdmitted = false
@@ -108,9 +109,15 @@ class ThumbleInputView(context: Context, appContext: AppContext) : ExpoView(cont
             val template = decode(raw)
             configure(raw)
             val flow =
-                PhoneConnection(this, ::publishFeedback, ::adoptConnectedEngine) { status ->
-                    onAdmission(mapOf("admission" to mapOf("version" to 1, "status" to status)))
-                }
+                PhoneConnection(
+                    this,
+                    ::publishFeedback,
+                    ::adoptConnectedEngine,
+                    status = { status ->
+                        onAdmission(mapOf("admission" to mapOf("version" to 1, "status" to status)))
+                    },
+                    catalogResult = { catalog -> onCatalog(mapOf("catalog" to catalog)) },
+                )
             connection = flow
             flow.start(template)
         } catch (_: Exception) {
@@ -343,7 +350,16 @@ class ThumbleInputView(context: Context, appContext: AppContext) : ExpoView(cont
             previous == null ||
                 previous.generation != next.generation ||
                 previous.revision != next.revision ||
-                previous.controls != next.controls
+                previous.controls.map {
+                    it.copy(
+                        hapticFeedback = (it.hapticFeedback ?: TouchHapticFeedback()).normalized
+                    )
+                } !=
+                    next.controls.map {
+                        it.copy(
+                            hapticFeedback = (it.hapticFeedback ?: TouchHapticFeedback()).normalized
+                        )
+                    }
         ) {
             surface.configure(next)
             configured = next
@@ -444,7 +460,12 @@ class ThumbleInputView(context: Context, appContext: AppContext) : ExpoView(cont
             controls =
                 controls.map { value ->
                     val c = value as? Map<*, *> ?: error("invalid_control_map")
-                    require(c.keys == setOf("id", "action", "x", "y", "width", "height")) {
+                    require(
+                        c.keys ==
+                            setOf("id", "action", "x", "y", "width", "height") +
+                                if (c.containsKey("hapticFeedback")) setOf("hapticFeedback")
+                                else emptySet()
+                    ) {
                         "invalid_control_map"
                     }
                     ControlRegion(
@@ -454,6 +475,14 @@ class ThumbleInputView(context: Context, appContext: AppContext) : ExpoView(cont
                         number(c["y"]),
                         number(c["width"]),
                         number(c["height"]),
+                        if (c.containsKey("hapticFeedback"))
+                            TouchHapticFeedback.decode(
+                                org.json.JSONObject(
+                                    c["hapticFeedback"] as? Map<*, *>
+                                        ?: error("invalid_haptic_feedback")
+                                )
+                            )
+                        else null,
                     )
                 },
         )

@@ -1,3 +1,4 @@
+import { decodePhoneCatalogNotification } from "@thumble/contracts/phone-catalog";
 import { useCallback, useState } from "react";
 import { Text, View, type ViewProps } from "react-native";
 import { requireNativeViewManager } from "expo-modules-core";
@@ -11,6 +12,7 @@ import {
 
 const NativeView = requireNativeViewManager<
   ViewProps & {
+    onCatalog: (event: { nativeEvent: { catalog: unknown } }) => void;
     practiceMap?: ControlMap;
     connectionMap?: ControlMap;
     onAdmission: (event: { nativeEvent: { admission: unknown } }) => void;
@@ -43,6 +45,29 @@ export function NativeController({
 }: {
   connected?: boolean;
 }) {
+  const [catalogSummary, setCatalogSummary] = useState<string | null>(null);
+  const receiveCatalog = useCallback(
+    (event: { nativeEvent: { catalog: unknown } }) => {
+      try {
+        const catalog = decodePhoneCatalogNotification(
+          event.nativeEvent.catalog,
+        );
+        if (catalog.kind === "error") {
+          setCatalogSummary("Saved profiles unavailable");
+          return;
+        }
+        const count = catalog.profileCount;
+        setCatalogSummary(
+          count === 0
+            ? "No saved profiles"
+            : `${count} saved profile${count === 1 ? "" : "s"}${catalog.nextOffset === null ? "" : " · More available"}`,
+        );
+      } catch {
+        setCatalogSummary("Saved profiles unavailable");
+      }
+    },
+    [],
+  );
   const [phase, setPhase] = useState<string>("starting");
   const admit = useCallback(
     (event: { nativeEvent: { admission: unknown } }) => {
@@ -109,6 +134,7 @@ export function NativeController({
       <NativeView
         {...(connected ? { connectionMap: map } : { practiceMap: map })}
         onAdmission={admit}
+        onCatalog={receiveCatalog}
         testID="controller-surface"
         pointerEvents={phase === "ready" ? "auto" : "none"}
         accessibilityLabel={
@@ -149,6 +175,25 @@ export function NativeController({
             : phase === "ready"
               ? "Practice ready"
               : "Starting practice…"}
+        </Text>
+      )}
+      {connected && phase === "ready" && catalogSummary !== null && (
+        <Text
+          testID="saved-profile-summary"
+          pointerEvents="none"
+          maxFontSizeMultiplier={1.3}
+          numberOfLines={2}
+          style={{
+            position: "absolute",
+            bottom: 8,
+            left: "25%",
+            right: "25%",
+            textAlign: "center",
+            fontSize: 13,
+            color: colors.secondaryLabel,
+          }}
+        >
+          {catalogSummary}
         </Text>
       )}
       {["error", "unavailable", "cancelled", "disconnected"].includes(

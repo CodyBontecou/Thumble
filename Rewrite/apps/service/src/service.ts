@@ -1,3 +1,4 @@
+import { PhoneCatalogBridge } from "./phone-catalog-bridge.ts";
 import { ConfigurationOwner } from "./configuration-owner.ts";
 import {
   decodeConfigurationCommand,
@@ -97,6 +98,9 @@ export async function serve(
     directory,
     instanceId,
     identityDirectory,
+    new PhoneCatalogBridge((command) =>
+      configuration.readCatalogForPhone(command),
+    ),
   );
   try {
     await pairing.ready;

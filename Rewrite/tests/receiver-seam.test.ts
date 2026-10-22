@@ -1,3 +1,5 @@
+import { catalogFixtureSource } from "./helpers/configuration-fixture.ts";
+import { projectPhoneCatalog } from "@thumble/contracts/phone-catalog";
 import { SqliteConfigurationRepository } from "@thumble/storage";
 import { LosslessJson } from "@thumble/contracts/json";
 import { expectError } from "./helpers/rejection.ts";
@@ -13,7 +15,11 @@ import {
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { createConnection } from "node:net";
-import { readEndpoint, request } from "@thumble/client/local";
+import {
+  readEndpoint,
+  request,
+  requestConfiguration,
+} from "@thumble/client/local";
 import { neutralGamepadState, type GamepadState } from "@thumble/contracts";
 import { parseStrictJson } from "@thumble/contracts/receiver";
 import { secureDirectory } from "../apps/service/src/service.ts";
@@ -441,12 +447,19 @@ async function* peerLines(
     reader.releaseLock();
   }
 }
-function listenerPeer(invitation: unknown, transport: unknown, pause = false) {
+function listenerPeer(
+  invitation: unknown,
+  transport: unknown,
+  pause = false,
+  catalog: unknown = null,
+) {
   const child = Bun.spawn(
     ["node", resolve(root, "tooling/check-pairing-listener.mjs")],
     { stdin: "pipe", stdout: "pipe", stderr: "pipe" },
   );
-  child.stdin.write(JSON.stringify({ invitation, transport, pause }) + "\n");
+  child.stdin.write(
+    JSON.stringify({ invitation, transport, pause, catalog }) + "\n",
+  );
   if (!pause) child.stdin.end();
   return { child, lines: peerLines(child.stdout) };
 }
@@ -821,3 +834,91 @@ test("service owns durable source storage and releases its lease before endpoint
     }
   });
 }, 15000);
+
+test("paired management TLS reads the sole saved catalog through the real service without activating input", async () => {
+  await fixture(async (directory, parent) => {
+    const seed = new SqliteConfigurationRepository(directory, executable);
+    seed.commit({
+      operationId: "catalog-seed",
+      payloadHash: "a".repeat(64),
+      expectedRevision: "0",
+      source: catalogFixtureSource(),
+      affectedEntities: [],
+    });
+    seed.close();
+    const identityDirectory = join(parent, "identity");
+    expect(
+      (
+        await command(
+          directory,
+          "identity",
+          "initialize",
+          "--identity-dir",
+          identityDirectory,
+        )
+      ).code,
+    ).toBe(0);
+    expect(
+      (
+        await command(
+          directory,
+          "service",
+          "start",
+          "--identity-dir",
+          identityDirectory,
+        )
+      ).code,
+    ).toBe(0);
+    const endpoint = readEndpoint(directory, executable);
+    const list = {
+      command: "configuration-list",
+      expectedRevision: null,
+      offset: 0,
+    } as const;
+    const expected = projectPhoneCatalog(
+      await requestConfiguration(endpoint, list),
+      list,
+    );
+    expect(expected.kind).toBe("catalog");
+    expect(expected).toHaveProperty("profileCount", 2);
+    for (const request of [
+      { expectedRevision: null, offset: 0, expected },
+      {
+        expectedRevision: "0",
+        offset: 0,
+        expected: { kind: "conflict", currentRevision: "1" },
+      },
+    ]) {
+      const opened = await command(
+        directory,
+        "pairing",
+        "listen",
+        "--bind-address",
+        "127.0.0.1:0",
+        "--advertise-host",
+        "127.0.0.1",
+        "--reveal-secret",
+      );
+      expect(opened.code).toBe(0);
+      const { offer, transport } = opened.value.result;
+      const peer = listenerPeer(offer, transport, false, request);
+      try {
+        const result = (await peer.lines.next()).value;
+        expect(result.authenticated).toBe(true);
+        expect(result.catalog).toEqual(request.expected);
+        expect(await peer.child.exited).toBe(0);
+        expect(await new Response(peer.child.stderr).text()).toBe("");
+        expect(JSON.stringify(result)).not.toContain(endpoint.token);
+        expect(JSON.stringify(result)).not.toContain(directory);
+      } finally {
+        if (peer.child.exitCode === null) peer.child.kill();
+      }
+      expect((await command(directory, "pairing", "stop-listening")).code).toBe(
+        0,
+      );
+    }
+    expect(
+      (await request(endpoint, { command: "status" })).receiver.snapshot.active,
+    ).toBe(false);
+  });
+}, 20000);

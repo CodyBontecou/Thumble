@@ -10,6 +10,7 @@
     "./host-identity": "./src/host-identity.ts",
     "./pairing": "./src/pairing.ts",
     "./json": "./src/lossless-json.ts",
-    "./configuration": "./src/configuration.ts"
+    "./configuration": "./src/configuration.ts",
+    "./phone-catalog": "./src/phone-catalog.ts"
   }
 }

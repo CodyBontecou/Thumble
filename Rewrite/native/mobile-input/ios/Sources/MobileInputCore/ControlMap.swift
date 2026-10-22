@@ -11,13 +11,32 @@ public struct ControlRegion: Sendable, Decodable {
   public let y: Double
   public let width: Double
   public let height: Double
-  public init(id: String, action: String, x: Double, y: Double, width: Double, height: Double) {
+  public let hapticFeedback: TouchHapticFeedback?
+  public init(
+    id: String, action: String, x: Double, y: Double, width: Double, height: Double,
+    hapticFeedback: TouchHapticFeedback? = nil
+  ) {
     self.id = id
     self.action = action
     self.x = x
     self.y = y
     self.width = width
     self.height = height
+    self.hapticFeedback = hapticFeedback
+  }
+  private enum CodingKeys: String, CodingKey {
+    case id, action, x, y, width, height, hapticFeedback
+  }
+  public init(from decoder: any Decoder) throws {
+    let c = try decoder.container(keyedBy: CodingKeys.self)
+    self.init(
+      id: try c.decode(String.self, forKey: .id),
+      action: try c.decode(String.self, forKey: .action),
+      x: try c.decode(Double.self, forKey: .x), y: try c.decode(Double.self, forKey: .y),
+      width: try c.decode(Double.self, forKey: .width),
+      height: try c.decode(Double.self, forKey: .height),
+      hapticFeedback: try c.contains(.hapticFeedback)
+        ? c.decode(TouchHapticFeedback.self, forKey: .hapticFeedback).normalized : nil)
   }
   func contains(_ x: Double, _ y: Double) -> Bool {
     x >= self.x && y >= self.y && x < self.x + width && y < self.y + height
@@ -31,7 +50,8 @@ public struct ControlRegion: Sendable, Decodable {
       && id.utf8.allSatisfy {
         (48...57).contains($0) || (65...90).contains($0) || (97...122).contains($0) || $0 == 45
       }
-      && actions.contains(action) && [x, y, width, height].allSatisfy(\.isFinite)
+      && (hapticFeedback?.valid ?? true) && actions.contains(action)
+      && [x, y, width, height].allSatisfy(\.isFinite)
       && x >= 0 && y >= 0 && width >= 0.001 && height >= 0.001
       && x + width <= 1 && y + height <= 1
   }

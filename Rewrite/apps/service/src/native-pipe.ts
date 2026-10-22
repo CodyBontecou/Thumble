@@ -30,6 +30,7 @@ export class NativePipe<Ready, Reply> {
     private readonly codec: {
       ready: (value: Record<string, unknown>, pid: number | undefined) => Ready;
       reply: (value: Record<string, unknown>) => Reply;
+      event?: (value: Record<string, unknown>) => void;
     },
     private readonly unavailable: string,
   ) {
@@ -75,6 +76,11 @@ export class NativePipe<Ready, Reply> {
       const ready = this.codec.ready(value, this.child.pid);
       this.readySeen = true;
       this.readyResolve(ready);
+      return;
+    }
+    if (Object.hasOwn(value, "event")) {
+      if (!this.codec.event) throw new Error("unexpected_native_event");
+      this.codec.event(value);
       return;
     }
     if (
@@ -125,6 +131,17 @@ export class NativePipe<Ready, Reply> {
       this.pending.set(requestId, { resolve, reject, timer });
       this.child.stdin.write(line);
     });
+  }
+  /** Private, bounded event response; no request timer or pending RPC slot. */
+  writeEvent(value: unknown): void {
+    if (!this.readySeen || this.failed) throw new Error(this.unavailable);
+    const line = JSON.stringify(value) + "\n";
+    if (
+      Buffer.byteLength(line) > 32768 ||
+      this.child.stdin.writableLength > FRAME_BYTES
+    )
+      throw new Error("native_event_backpressure");
+    this.child.stdin.write(line);
   }
   disconnect(): void {
     this.fail();

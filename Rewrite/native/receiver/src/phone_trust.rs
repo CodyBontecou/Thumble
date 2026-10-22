@@ -310,9 +310,27 @@ impl PhoneTrustStore {
         );
         Ok(CachedAuthorization::new(scope, self.clock.clone()))
     }
+    /// The caller holds this store lock through its durable policy mutation,
+    /// then waits on the returned scope only after dropping global locks.
+    /// Removing the mapping makes internal invalidation nonblocking and prevents
+    /// any same-epoch scope replacement from interleaving with the transaction.
+    pub(crate) fn detach_scope(&mut self, id: &str) -> Result<Option<Arc<Scope>>, &'static str> {
+        let scope = self
+            .scopes
+            .remove(id)
+            .and_then(|(_, scope)| scope.upgrade());
+        if let Some(scope) = &scope {
+            scope.retire()?;
+        }
+        Ok(scope)
+    }
+    // In-memory retirement only: this method is called under the store lock and
+    // must never wait on management IO. Online coordinators must detach first
+    // and drain that captured scope after releasing store and policy locks,
+    // before emitting either success or error acknowledgement.
     pub(crate) fn invalidate_scope(&self, id: &str) -> Result<(), &'static str> {
         if let Some(scope) = self.scopes.get(id).and_then(|(_, scope)| scope.upgrade()) {
-            scope.invalidate()?;
+            scope.retire()?;
         }
         Ok(())
     }
