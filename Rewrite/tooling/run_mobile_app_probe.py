@@ -49,7 +49,7 @@ def decode_checkpoint(value):
     return {key: value[key] for key in sorted(value)}
 
 
-GET_PHASES = frozenset({"/health", "/begin", "/held", "/renewal-start", "/renewal-verified", "/fresh", "/neutral", "/next", "/finish"})
+GET_PHASES = frozenset({"/health", "/begin", "/held", "/renewal-start", "/renewal-verified", "/fresh", "/neutral", "/next", "/finish", "/saved-start", "/saved-held"})
 
 
 def check_probe_health(port):
@@ -66,7 +66,9 @@ def check_probe_health(port):
 
 
 class Probe:
-    def __init__(self):
+    def __init__(self, saved_controller=None):
+        assert saved_controller in (None, "corner", "unsupported"), "app_probe_mode_invalid"
+        self.saved_controller = saved_controller
         self.process = None
         self.begin_requests = 0
         self.health_requests = 0
@@ -100,9 +102,10 @@ class Probe:
         with self.lock:
             if path == "/begin":
                 assert self.process is None, "app_probe_already_started"
-                executable = ROOT / "native/receiver/target/debug/examples/phone_input_probe"
-                assert executable.is_file(), "build native phone_input_probe before app tests"
-                self.process = subprocess.Popen([str(executable), "--renewal-watch"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                executable = ROOT / ("tooling/real-service-phone-probe.ts" if self.saved_controller else "native/receiver/target/debug/examples/phone_input_probe")
+                assert executable.is_file(), "app_probe_executable_missing"
+                arguments = ["--saved-controller-" + self.saved_controller] if self.saved_controller else ["--renewal-watch"]
+                self.process = subprocess.Popen([str(executable), *arguments], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                 def read():
                     for line in self.process.stdout:
                         self.lines.put(line)
@@ -124,6 +127,8 @@ class Probe:
                 failure_reader.start()
                 offer = self.line()
                 assert offer.pop("scope") == "synthetic-loopback-recording-only"
+                if self.saved_controller:
+                    assert offer["backend"] == "real-bun-service" and offer["profileCount"] == 2, "app_probe_service_required"
                 assert self.command("a")["active"] is True
                 return {"host": "127.0.0.1", "port": offer["port"], "certificatePin": offer["pin"],
                         "authorityInstanceId": offer["authorityInstanceId"], "windowId": offer["windowId"],
@@ -132,6 +137,17 @@ class Probe:
                 result = self.command("h")
                 assert result["held"] is True and result["inputEnabled"] is False
                 self.counts["held"] += 1
+            elif path == "/saved-start":
+                assert self.saved_controller == "corner", "app_probe_mode_invalid"
+                result = self.command("q")
+                assert result["watching"] is True and result["inputTtlMs"] == 350
+                self.counts["savedStarts"] = self.counts.get("savedStarts", 0) + 1
+            elif path == "/saved-held":
+                assert self.saved_controller == "corner", "app_probe_mode_invalid"
+                result = self.command("j")
+                assert result["catalogHeld"] is True and result["durationMs"] >= 1500
+                assert result["neutralPulses"] == 0 and result["inputTtlMs"] == 350 and result["inputEnabled"] is False
+                self.counts["savedVerified"] = self.counts.get("savedVerified", 0) + 1
             elif path == "/renewal-start":
                 result = self.command("b")
                 assert result["watching"] is True and result["inputTtlMs"] == 350
@@ -157,7 +173,12 @@ class Probe:
                 result = self.command("f")
                 assert result["completed"] is True and result["inputEnabled"] is False
                 assert self.process.wait(timeout=5) == 0
-                assert self.counts == {"held": 2, "fresh": 2, "neutral": 2, "renewalStarts": 1, "renewalVerified": 1}, "missing native app receiver witnesses"
+                expected = {"held": 2, "fresh": 2, "neutral": 2, "renewalStarts": 1, "renewalVerified": 1}
+                if self.saved_controller == "corner":
+                    expected = {"held": 1, "fresh": 1, "neutral": 1, "renewalStarts": 0, "renewalVerified": 0, "savedStarts": 1, "savedVerified": 1}
+                elif self.saved_controller == "unsupported":
+                    expected = {"held": 0, "fresh": 0, "neutral": 0, "renewalStarts": 0, "renewalVerified": 0}
+                assert self.counts == expected, "missing native app receiver witnesses"
                 self.completed = True
             else:
                 raise ValueError("app_probe_unknown_command")
@@ -187,13 +208,14 @@ class Probe:
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--platform", choices=["ios", "android"], required=True)
+    parser.add_argument("--saved-controller", choices=["corner", "unsupported"])
     parser.add_argument("command", nargs=argparse.REMAINDER)
     args = parser.parse_args()
     command = args.command
     if command[:1] == ["--"]:
         command = command[1:]
     assert command, "missing app test command"
-    probe = Probe()
+    probe = Probe(args.saved_controller)
     reverse_ports = set()
     class Handler(BaseHTTPRequestHandler):
         def do_POST(self):
@@ -269,13 +291,22 @@ def main():
         reverse = [str(adb), "-s", os.environ["ANDROID_SERIAL"], "reverse", f"tcp:{port}"]
         subprocess.run(reverse + [f"tcp:{port}"], check=True, stdout=subprocess.DEVNULL)
         command.append(f"-Pandroid.testInstrumentationRunnerArguments.thumbleProbePort={port}")
+        if args.saved_controller:
+            command.append(f"-Pandroid.testInstrumentationRunnerArguments.thumbleSavedControllerMode={args.saved_controller}")
     else:
-        (ROOT / "apps/mobile/tests/ios/AppProbeConfig.json").write_text(json.dumps({"port": port}))
+        name = "SavedControllerAppProbeConfig.json" if args.saved_controller else "AppProbeConfig.json"
+        value = {"port": port, "mode": args.saved_controller} if args.saved_controller else {"port": port}
+        (ROOT / "apps/mobile/tests/ios" / name).write_text(json.dumps(value))
     try:
         healthy = check_probe_health(port)
         health.update({"attempts": 1, "passed": int(healthy), "failed": int(not healthy)})
         assert healthy, "app_probe_http_server_not_ready"
-        result = subprocess.call(command)
+        try:
+            # Saved-map app commands use precompiled QA targets in CI. Bound test
+            # runner launch too: XCTest's per-case watchdog starts only after launch.
+            result = subprocess.call(command, timeout=300) if args.saved_controller else subprocess.call(command)
+        except subprocess.TimeoutExpired:
+            raise AssertionError("app_saved_command_timeout") from None
         assert result == 0, "app_test_command_failed"
         assert probe.completed, "native app pairing/reconnect witness did not finish"
         print("Verified app native pairing/reconnect against recording-only receiver: " + json.dumps(probe.counts), flush=True)

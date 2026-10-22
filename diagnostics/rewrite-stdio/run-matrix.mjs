@@ -35,6 +35,17 @@ rows.push({
   writer: "stdout",
   child: "node",
 });
+// Keep original cell1..13 identities and assertions for exact hosted comparison.
+for (const parent of ["node-spawn", "bun-spawn"])
+  for (const writer of ["stdout", "bun-write"])
+    rows.push({ context: "bun-test-await", parent, writer, child: "bun" });
+for (const parent of ["node-spawn", "bun-spawn"])
+  rows.push({
+    context: "bun-test-await",
+    parent,
+    writer: "stdout",
+    child: "node",
+  });
 const started = Date.now(),
   results = [];
 for (let index = 0; index < rows.length; index++) {
@@ -55,7 +66,7 @@ for (let index = 0; index < rows.length; index++) {
   else {
     const command = spec.context === "node-script" ? process.execPath : bun;
     const args =
-      spec.context === "bun-test"
+      spec.context === "bun-test" || spec.context === "bun-test-await"
         ? ["test", join(directory, "bun-matcher.test.mjs")]
         : [join(directory, "harness.mjs"), "--row"];
     const child = spawnSync(command, args, {
@@ -92,6 +103,10 @@ for (let index = 0; index < rows.length; index++) {
   writeFileSync(join(evidence, `${spec.id}.json`), data);
   results.push({
     id: spec.id,
+    context: spec.context,
+    parent: spec.parent,
+    child: spec.child,
+    writer: spec.writer,
     passed: result.passed,
     failure: result.failure,
     replyOnlyAfterEof: result.replyOnlyAfterEof ?? false,
@@ -107,6 +122,16 @@ const summary = {
   bun: bunVersion.stdout.trim(),
   cells: results,
   passed: results.every((row) => row.passed),
+  originalCellsPassed: results.slice(0, 13).every((row) => row.passed),
+  nativeAwaitControlsPassed: results.slice(13).every((row) => row.passed),
+  // Original async-matcher cells are retained known-red observations, not a
+  // required product assertion. Script baselines and ALL six repair controls
+  // must still pass; a diagnostic red remains red in every stored row.
+  requiredControlsPassed:
+    results.length === 19 &&
+    results
+      .filter((row) => row.context !== "bun-test")
+      .every((row) => row.passed),
   noRetries: true,
   productChanged: false,
 };
@@ -114,4 +139,4 @@ writeFileSync(
   join(evidence, "summary.json"),
   JSON.stringify(summary, null, 2) + "\n",
 );
-if (!summary.passed) process.exitCode = 1;
+if (!summary.requiredControlsPassed) process.exitCode = 1;

@@ -78,6 +78,7 @@ jobs:
           swift --version | tee -a reports/mobile-ios-toolchain.txt
       - uses: dtolnay/rust-toolchain@1.88.0
       - name: Build synthetic native TLS witness
+        id: native-probes
         run: cargo build --locked --manifest-path native/receiver/Cargo.toml --bins --examples
       - name: Swift native contract and lifecycle tests
         run: |
@@ -108,9 +109,18 @@ jobs:
             python3 tooling/check_real_service_swift_witness.py "$events" "$test_filter" "$expected_cases" "$status" "reports/mobile-real-service-swift-$witness.json"
           done
       - name: Compile native modules directly against both iOS SDKs
+        id: ios-sdk-build
+        if: always() && steps.native-probes.outcome == 'success'
         run: |
           bun run mobile:ios:sdk --sdk iphonesimulator
           bun run mobile:ios:sdk --sdk iphoneos
+      - name: Exercise production iOS TLS runtime without the React build
+        if: always() && steps.ios-sdk-build.outcome == 'success'
+        timeout-minutes: 8
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s tooling -p test_ios_tls_runtime.py -v
+          python3 tooling/run_mobile_app_probe.py --platform ios -- python3 tooling/check_ios_tls_runtime.py --report reports/mobile-ios-tls-runtime.json > "$RUNNER_TEMP/ios-tls-runtime-private.txt" 2>&1
       - name: Build native iOS Simulator module
         working-directory: Rewrite/native/mobile-input/ios
         run: xcodebuild -scheme ThumbleMobileInput -destination 'generic/platform=iOS Simulator' -derivedDataPath '${{ runner.temp }}/rewrite-ios-simulator' CODE_SIGNING_ALLOWED=NO build

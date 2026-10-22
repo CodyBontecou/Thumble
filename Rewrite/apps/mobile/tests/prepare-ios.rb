@@ -60,3 +60,40 @@ unless contents.include?(marker)
   podfile.write(contents)
 end
 puts 'Prepared hosted native portal test target'
+
+# A separate UI target drives the actual React route; old UIKit witnesses stay separate.
+ui_name = 'SavedControllerUITests'
+ui = project.targets.find { |t| t.name == ui_name }
+unless ui
+  ui = project.new_target(:ui_test_bundle, ui_name, :ios, '17.0')
+  ui.add_dependency(app)
+  group = project.main_group.new_group(ui_name, '../tests/ios')
+  ui.source_build_phase.add_file_reference(group.new_file('SavedControllerUITests.swift'))
+end
+ui_probe = root.join('tests/ios/SavedControllerAppProbeConfig.json')
+ui_probe.write('{"port":0,"mode":"none"}') unless ui_probe.exist?
+unless ui.resources_build_phase.files.any? { |f| f.file_ref&.path&.end_with?('SavedControllerAppProbeConfig.json') }
+  ui.resources_build_phase.add_file_reference(project.main_group.new_file('../tests/ios/SavedControllerAppProbeConfig.json'))
+end
+ui.build_configurations.each do |configuration|
+  configuration.build_settings.merge!({
+    'PRODUCT_NAME' => ui_name,
+    'PRODUCT_BUNDLE_IDENTIFIER' => 'com.codybontecou.thumble.rewrite.saved-ui-tests',
+    'GENERATE_INFOPLIST_FILE' => 'YES',
+    'SWIFT_VERSION' => '6.0',
+    'TEST_TARGET_NAME' => app.name,
+    'CODE_SIGN_STYLE[sdk=iphonesimulator*]' => 'Manual',
+    'CODE_SIGN_IDENTITY[sdk=iphonesimulator*]' => '-',
+    'LD_RUNPATH_SEARCH_PATHS' => ['$(inherited)', '@executable_path/Frameworks', '@loader_path/Frameworks']
+  })
+end
+project.root_object.attributes['TargetAttributes'] ||= {}
+project.root_object.attributes['TargetAttributes'][ui.uuid] = { 'TestTargetID' => app.uuid }
+project.save
+ui_scheme = Xcodeproj::XCScheme.new
+ui_scheme.add_build_target(app)
+ui_scheme.add_test_target(ui)
+ui_scheme.set_launch_target(app)
+ui_scheme.test_action.build_configuration = 'Release'
+ui_scheme.save_as(project_path, ui_name, true)
+puts 'Prepared actual React saved-controller UI test target'

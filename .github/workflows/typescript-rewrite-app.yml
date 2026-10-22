@@ -6,6 +6,10 @@ on:
     branches: [main]
     paths:
       - "Rewrite/apps/mobile/**"
+      - "Rewrite/apps/cli/**"
+      - "Rewrite/apps/service/**"
+      - "Rewrite/packages/application/**"
+      - "Rewrite/tooling/real-service-phone-probe.ts"
       - "Rewrite/native/mobile-input/android/src/main/**"
       - "Rewrite/native/mobile-input/ios/Sources/**"
       - "Rewrite/packages/client/**"
@@ -18,8 +22,13 @@ on:
       - "Rewrite/bunfig.toml"
       - "Rewrite/tsconfig*.json"
       - "Rewrite/tooling/check_mobile_app_results.py"
+      - "Rewrite/tooling/check_saved_app_results.py"
+      - "Rewrite/tooling/test_saved_app_results.py"
+      - "Rewrite/tooling/run_saved_android_app.py"
       - "Rewrite/tooling/run_mobile_app_probe.py"
       - "Rewrite/tooling/test_mobile_app_probe.py"
+      - "Rewrite/tooling/native_hold_diagnostic.py"
+      - "Rewrite/tooling/test_native_hold_diagnostic.py"
       - "Rewrite/tooling/collect_ios_http_diagnostic.py"
       - "Rewrite/tooling/test_ios_http_diagnostic.py"
       - "Rewrite/native/receiver/**"
@@ -29,6 +38,10 @@ on:
   pull_request:
     paths:
       - "Rewrite/apps/mobile/**"
+      - "Rewrite/apps/cli/**"
+      - "Rewrite/apps/service/**"
+      - "Rewrite/packages/application/**"
+      - "Rewrite/tooling/real-service-phone-probe.ts"
       - "Rewrite/native/mobile-input/android/src/main/**"
       - "Rewrite/native/mobile-input/ios/Sources/**"
       - "Rewrite/packages/client/**"
@@ -41,8 +54,13 @@ on:
       - "Rewrite/bunfig.toml"
       - "Rewrite/tsconfig*.json"
       - "Rewrite/tooling/check_mobile_app_results.py"
+      - "Rewrite/tooling/check_saved_app_results.py"
+      - "Rewrite/tooling/test_saved_app_results.py"
+      - "Rewrite/tooling/run_saved_android_app.py"
       - "Rewrite/tooling/run_mobile_app_probe.py"
       - "Rewrite/tooling/test_mobile_app_probe.py"
+      - "Rewrite/tooling/native_hold_diagnostic.py"
+      - "Rewrite/tooling/test_native_hold_diagnostic.py"
       - "Rewrite/tooling/collect_ios_http_diagnostic.py"
       - "Rewrite/tooling/test_ios_http_diagnostic.py"
       - "Rewrite/native/receiver/**"
@@ -95,12 +113,15 @@ jobs:
         run: |
           python3 -m unittest discover -s tooling -p test_mobile_app_probe.py -v
           python3 -m unittest discover -s tooling -p test_ios_http_diagnostic.py -v
+          python3 -m unittest discover -s tooling -p test_saved_app_results.py -v
+          python3 -m unittest discover -s tooling -p test_native_hold_diagnostic.py -v
       - name: Generate native Android app
         working-directory: Rewrite/apps/mobile
         run: bun run prebuild --platform android
       - name: Install app build SDK
         run: sdkmanager 'platforms;android-37.0' 'build-tools;37.0.0'
       - name: Build bundled test APKs before booting the emulator
+        id: android-apks
         working-directory: Rewrite/apps/mobile/android
         run: bash ./gradlew --no-daemon :app:assembleNativeQa :app:assembleNativeQaAndroidTest -PreactNativeArchitectures=x86_64
       - name: Enable KVM on the ephemeral runner
@@ -116,9 +137,25 @@ jobs:
           target: google_apis
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
-          script: ANDROID_SERIAL=emulator-5554 python3 "$GITHUB_WORKSPACE/Rewrite/tooling/run_mobile_app_probe.py" --platform android -- bash "$GITHUB_WORKSPACE/Rewrite/apps/mobile/android/gradlew" -p "$GITHUB_WORKSPACE/Rewrite/apps/mobile/android" --no-daemon :app:connectedNativeQaAndroidTest -PreactNativeArchitectures=x86_64
+          script: ANDROID_SERIAL=emulator-5554 python3 "$GITHUB_WORKSPACE/Rewrite/tooling/run_mobile_app_probe.py" --platform android -- bash "$GITHUB_WORKSPACE/Rewrite/apps/mobile/android/gradlew" -p "$GITHUB_WORKSPACE/Rewrite/apps/mobile/android" --no-daemon :app:connectedNativeQaAndroidTest -PreactNativeArchitectures=x86_64 -Pandroid.testInstrumentationRunnerArguments.class=com.thumble.rewrite.qa.PracticeInputTest
       - name: Require every native app witness to execute
         run: python3 tooling/check_mobile_app_results.py android apps/mobile/android/app/build/outputs/androidTest-results/connected/nativeQa
+      - name: Preserve original native app reports before actual saved-map tests
+        if: always() && steps.android-apks.outcome == 'success'
+        run: |
+          mkdir -p "$RUNNER_TEMP/legacy-android-results" "$RUNNER_TEMP/legacy-android-reports"
+          if [[ -d apps/mobile/android/app/build/outputs/androidTest-results ]]; then cp -R apps/mobile/android/app/build/outputs/androidTest-results/. "$RUNNER_TEMP/legacy-android-results/"; fi
+          if [[ -d apps/mobile/android/app/build/reports/androidTests ]]; then cp -R apps/mobile/android/app/build/reports/androidTests/. "$RUNNER_TEMP/legacy-android-reports/"; fi
+      - name: Exercise actual saved-map React routes independently of legacy test outcomes
+        if: always() && steps.android-apks.outcome == 'success'
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
+          script: ANDROID_SERIAL=emulator-5554 python3 "$GITHUB_WORKSPACE/Rewrite/tooling/run_saved_android_app.py"
       - name: Build production-shaped Android app
         working-directory: Rewrite/apps/mobile/android
         run: bash ./gradlew --no-daemon :app:assembleRelease -PreactNativeArchitectures=x86_64
@@ -127,8 +164,9 @@ jobs:
         with:
           name: rewrite-android-app-tests
           path: |
-            Rewrite/apps/mobile/android/app/build/outputs/androidTest-results/
-            Rewrite/apps/mobile/android/app/build/reports/androidTests/
+            ${{ runner.temp }}/legacy-android-results/
+            ${{ runner.temp }}/legacy-android-reports/
+            Rewrite/reports/mobile-app-android-saved-*.json
           if-no-files-found: error
 
   ios-app:
@@ -165,6 +203,8 @@ jobs:
         run: |
           python3 -m unittest discover -s tooling -p test_mobile_app_probe.py -v
           python3 -m unittest discover -s tooling -p test_ios_http_diagnostic.py -v
+          python3 -m unittest discover -s tooling -p test_saved_app_results.py -v
+          python3 -m unittest discover -s tooling -p test_native_hold_diagnostic.py -v
       - name: Identify the exact iOS compiler cache scope
         id: ios-toolchain
         run: |
@@ -189,7 +229,13 @@ jobs:
           ruby tests/prepare-ios.rb
           cd ios
           pod install
-      - name: Exercise bundled app's native UIKit portal headlessly
+      - name: Compile both app QA targets before simulator execution
+        id: ios-app-build
+        run: |
+          xcodebuild -quiet -workspace apps/mobile/ios/ThumbleRewrite.xcworkspace -scheme NativePortalTests -configuration Release -destination 'generic/platform=iOS Simulator' -derivedDataPath "$RUNNER_TEMP/rewrite-mobile-app" ONLY_ACTIVE_ARCH=YES ENABLE_TESTABILITY=YES build-for-testing > "$RUNNER_TEMP/native-portal-app-build.log" 2>&1
+          xcodebuild -quiet -workspace apps/mobile/ios/ThumbleRewrite.xcworkspace -scheme SavedControllerUITests -configuration Release -destination 'generic/platform=iOS Simulator' -derivedDataPath "$RUNNER_TEMP/rewrite-mobile-app" ONLY_ACTIVE_ARCH=YES ENABLE_TESTABILITY=YES build-for-testing > "$RUNNER_TEMP/saved-controller-app-build.log" 2>&1
+      - name: Exercise bundled app's native UIKit portal and actual saved-map routes headlessly
+        if: always() && steps.ios-app-build.outcome == 'success'
         run: |
           set -o pipefail
           mkdir -p reports
@@ -200,16 +246,36 @@ jobs:
           xcrun simctl bootstatus "$device_id" -b
           status=0
           python3 tooling/run_mobile_app_probe.py --platform ios -- xcodebuild -quiet -workspace apps/mobile/ios/ThumbleRewrite.xcworkspace -scheme NativePortalTests -configuration Release -destination "platform=iOS Simulator,id=$device_id" -derivedDataPath "$RUNNER_TEMP/rewrite-mobile-app" -resultBundlePath "$RUNNER_TEMP/rewrite-mobile-app.xcresult" -parallel-testing-enabled NO -test-timeouts-enabled YES -default-test-execution-time-allowance 180 -maximum-test-execution-time-allowance 240 -collect-test-diagnostics never ONLY_ACTIVE_ARCH=YES ENABLE_TESTABILITY=YES test 2>&1 | tee reports/mobile-app-ios.txt || status=$?
-          xcrun xcresulttool get test-results summary --schema-version 0.1.0 --path "$RUNNER_TEMP/rewrite-mobile-app.xcresult" > reports/mobile-app-ios-summary.json
-          xcrun xcresulttool get test-results tests --schema-version 0.1.0 --path "$RUNNER_TEMP/rewrite-mobile-app.xcresult" > reports/mobile-app-ios-tests.json
-          xcrun xcresulttool get test-results test-details --schema-version 0.1.0 --path "$RUNNER_TEMP/rewrite-mobile-app.xcresult" --test-id 'NativePortalTests/testNativePairingVaultBindingAndReconnectReachRecordingReceiver()' > reports/mobile-app-ios-renewal-details.json
+          xcrun xcresulttool get test-results summary --schema-version 0.1.0 --path "$RUNNER_TEMP/rewrite-mobile-app.xcresult" > reports/mobile-app-ios-summary.json || status=1
+          xcrun xcresulttool get test-results tests --schema-version 0.1.0 --path "$RUNNER_TEMP/rewrite-mobile-app.xcresult" > reports/mobile-app-ios-tests.json || status=1
+          xcrun xcresulttool get test-results test-details --schema-version 0.1.0 --path "$RUNNER_TEMP/rewrite-mobile-app.xcresult" --test-id 'NativePortalTests/testNativePairingVaultBindingAndReconnectReachRecordingReceiver()' > reports/mobile-app-ios-renewal-details.json || status=1
           if [ "$status" -ne 0 ]; then
             diagnostic_export="$RUNNER_TEMP/rewrite-ios-http-export"
             if xcrun xcresulttool export attachments --schema-version 0.1.0 --path "$RUNNER_TEMP/rewrite-mobile-app.xcresult" --output-path "$diagnostic_export" --test-id 'NativePortalTests/testNativePairingVaultBindingAndReconnectReachRecordingReceiver()'; then
-              python3 tooling/collect_ios_http_diagnostic.py --export "$diagnostic_export" --output reports/mobile-app-ios-http-diagnostic.json
+              python3 tooling/collect_ios_http_diagnostic.py --export "$diagnostic_export" --output reports/mobile-app-ios-http-diagnostic.json || status=1
             fi
           fi
-          python3 tooling/check_mobile_app_results.py ios reports/mobile-app-ios-summary.json reports/mobile-app-ios-tests.json
+          python3 tooling/check_mobile_app_results.py ios reports/mobile-app-ios-summary.json reports/mobile-app-ios-tests.json || status=1
+          # Keep raw UI typing logs, XML and xcresult attachments private: they can
+          # contain the synthetic invitation. Publish only validated fixed outcomes.
+          for mode in corner unsupported; do
+            saved_status=0
+            saved_result="$RUNNER_TEMP/rewrite-saved-$mode.xcresult"
+            python3 tooling/run_mobile_app_probe.py --platform ios --saved-controller "$mode" -- xcodebuild -quiet -workspace apps/mobile/ios/ThumbleRewrite.xcworkspace -scheme SavedControllerUITests -configuration Release -destination "platform=iOS Simulator,id=$device_id" -derivedDataPath "$RUNNER_TEMP/rewrite-mobile-app" -resultBundlePath "$saved_result" -parallel-testing-enabled NO -test-timeouts-enabled YES -default-test-execution-time-allowance 180 -maximum-test-execution-time-allowance 240 -collect-test-diagnostics never ONLY_ACTIVE_ARCH=YES ENABLE_TESTABILITY=YES test > "$RUNNER_TEMP/saved-app-ios-$mode.log" 2>&1 || saved_status=$?
+            xcrun xcresulttool get test-results summary --schema-version 0.1.0 --path "$saved_result" > "$RUNNER_TEMP/saved-ios-$mode-summary.json" || saved_status=1
+            xcrun xcresulttool get test-results tests --schema-version 0.1.0 --path "$saved_result" > "$RUNNER_TEMP/saved-ios-$mode-cases.json" || saved_status=1
+            if [[ "$saved_status" == 0 ]]; then
+              python3 tooling/check_saved_app_results.py ios "$mode" "reports/mobile-app-ios-saved-$mode.json" "$RUNNER_TEMP/saved-ios-$mode-summary.json" "$RUNNER_TEMP/saved-ios-$mode-cases.json" || saved_status=1
+            else
+              python3 - "$mode" "reports/mobile-app-ios-saved-$mode.json" <<'PYCODE'
+          import json, pathlib, sys
+          mode, destination = sys.argv[1:]
+          assert mode in ("corner", "unsupported")
+          pathlib.Path(destination).write_text(json.dumps({"platform": "ios", "mode": mode, "scope": "actual-react-saved-map", "status": "failed"}, sort_keys=True) + "\n")
+          PYCODE
+            fi
+            if [[ "$saved_status" != 0 ]]; then status=1; fi
+          done
           exit "$status"
       - uses: actions/upload-artifact@v4
         if: always()
@@ -221,4 +287,5 @@ jobs:
             Rewrite/reports/mobile-app-ios-tests.json
             Rewrite/reports/mobile-app-ios-renewal-details.json
             Rewrite/reports/mobile-app-ios-http-diagnostic.json
+            Rewrite/reports/mobile-app-ios-saved-*.json
           if-no-files-found: error

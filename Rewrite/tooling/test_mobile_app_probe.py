@@ -116,3 +116,40 @@ class HttpLivenessTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SavedAppModeTests(unittest.TestCase):
+    def test_corner_requires_exact_saved_witness_counts_and_preserves_default_counts(self):
+        probe = Probe("corner")
+        probe.process = type("Process", (), {"wait": lambda self, timeout: 0})()
+        replies = {"c": {"freshNeutral": True, "firstSampleNeutral": True}, "q": {"watching": True, "inputTtlMs": 350}, "j": {"catalogHeld": True, "durationMs": 1500, "neutralPulses": 0, "inputTtlMs": 350, "inputEnabled": False}, "h": {"held": True, "inputEnabled": False}, "n": {"neutral": True, "reason": "native_input_released", "inputEnabled": False}, "f": {"completed": True, "inputEnabled": False}}
+        probe.command = lambda command: replies[command]
+        for path in ("/fresh", "/saved-start", "/saved-held", "/held", "/neutral", "/finish"):
+            self.assertEqual(probe.request(path), {"ok": True})
+        self.assertTrue(probe.completed)
+        original = Probe()
+        with self.assertRaisesRegex(AssertionError, "mode_invalid"):
+            original.request("/saved-start")
+        self.assertEqual(original.counts, {"held": 0, "fresh": 0, "neutral": 0, "renewalStarts": 0, "renewalVerified": 0})
+
+    def test_unsupported_mode_cannot_finish_after_input_witness_or_skip_corner_hold(self):
+        for mode in ("unsupported", "corner"):
+            probe = Probe(mode)
+            probe.process = type("Process", (), {"wait": lambda self, timeout: 0})()
+            probe.command = lambda command: {"completed": True, "inputEnabled": False}
+            if mode == "unsupported": probe.counts["held"] = 1
+            with self.assertRaisesRegex(AssertionError, "missing native app receiver witnesses"):
+                probe.request("/finish")
+        with self.assertRaisesRegex(AssertionError, "mode_invalid"):
+            Probe("private-arbitrary-mode")
+
+
+class SavedAppWatchdogTests(unittest.TestCase):
+    def test_saved_runner_launch_timeout_is_bounded_without_relaxing_test_result(self):
+        with tempfile.TemporaryDirectory(prefix="thumble-saved-command-") as directory:
+            root = Path(directory)
+            (root / "apps/mobile/tests/ios").mkdir(parents=True)
+            with contextlib.redirect_stdout(io.StringIO()), patch.object(run_mobile_app_probe, "ROOT", root), patch.object(run_mobile_app_probe.sys, "argv", ["probe", "--platform", "ios", "--saved-controller", "corner", "--", "synthetic-app"]), patch.object(run_mobile_app_probe.subprocess, "call", side_effect=run_mobile_app_probe.subprocess.TimeoutExpired("synthetic-app", 300)) as command:
+                with self.assertRaisesRegex(AssertionError, "app_saved_command_timeout"):
+                    run_mobile_app_probe.main()
+                command.assert_called_once_with(["synthetic-app"], timeout=300)

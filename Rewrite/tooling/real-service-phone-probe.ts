@@ -63,6 +63,34 @@ function records(path: string, offset: number) {
     offset: offset + last + 1,
   };
 }
+/** Fixed synthetic failure code only; never expose native report bytes or arbitrary reasons. */
+export function neutralWaitFailure(
+  phase: "fresh" | "packet_zero",
+  snapshot:
+    | Pick<Snapshot, "active" | "reportHex" | "lastReleaseReason">
+    | undefined,
+): string {
+  assert(
+    phase === "fresh" || phase === "packet_zero",
+    "probe_diagnostic_phase",
+  );
+  const reasons = [
+    "input_expired",
+    "lease_expired",
+    "native_input_released",
+    "packet_source_barrier",
+    "activation_barrier",
+    "output_failed",
+    "explicit_release",
+    "shutdown",
+  ];
+  const reason =
+    snapshot && reasons.includes(snapshot.lastReleaseReason)
+      ? snapshot.lastReleaseReason
+      : "other";
+  return `probe_${phase}_timeout_${snapshot?.active === true ? "active" : "inactive"}_${snapshot?.reportHex === NEUTRAL ? "neutral" : "changed"}_${reason}`;
+}
+
 export class RealServicePhoneProbe {
   private readonly analogController =
     process.argv.includes("--saved-controller-analog") ||
@@ -541,18 +569,34 @@ export class RealServicePhoneProbe {
       };
     }
     if (byte === "c" || byte === "z") {
-      await this.until(async () => {
-        const current = await this.snapshot();
-        if (!current.active || current.reportHex !== NEUTRAL) return false;
-        if (byte === "z") return current.sequence === "0";
-        const first = records(
-          this.local.recordingLog,
-          this.activationOffset,
-        ).rows.find((row) => row.reason === "sample");
-        if (!first) return false;
-        assert(first.reportHex === NEUTRAL, "probe_first_sample_not_neutral");
-        return true;
-      });
+      let observed: Snapshot | undefined;
+      try {
+        await this.until(async () => {
+          const current = await this.snapshot();
+          observed = current;
+          if (!current.active || current.reportHex !== NEUTRAL) return false;
+          if (byte === "z") return current.sequence === "0";
+          const first = records(
+            this.local.recordingLog,
+            this.activationOffset,
+          ).rows.find((row) => row.reason === "sample");
+          if (!first) return false;
+          assert(first.reportHex === NEUTRAL, "probe_first_sample_not_neutral");
+          return true;
+        });
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          error.message === "probe_condition_timeout"
+        )
+          throw new Error(
+            neutralWaitFailure(
+              byte === "c" ? "fresh" : "packet_zero",
+              observed,
+            ),
+          );
+        throw error;
+      }
       return {
         freshNeutral: true,
         ...(byte === "c" ? { firstSampleNeutral: true } : {}),

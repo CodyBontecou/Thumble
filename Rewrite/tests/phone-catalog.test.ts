@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { expectError } from "./helpers/rejection.ts";
 import {
   decodePhoneCatalogEvent,
   decodePhoneCatalogNotification,
@@ -245,13 +246,14 @@ test("malformed phone catalog child result terminates its poisoned owner", async
   try {
     await owner.ready;
     phase = "request";
-    await expect(
+    await expectError(
       bounded(
         owner.readCatalogForPhone(command),
         4000,
         "test_catalog_reply_not_observed",
       ),
-    ).rejects.toThrow("configuration_response_invalid");
+      "configuration_response_invalid",
+    );
     phase = "exit";
     await bounded(exited, 1000, "poisoned_owner_not_terminated");
     expect(

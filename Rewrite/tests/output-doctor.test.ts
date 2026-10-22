@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { expectError } from "./helpers/rejection.ts";
 import {
   copyFileSync,
   existsSync,
@@ -239,13 +240,13 @@ test("doctor adapter bounds native output, rejects duplicate JSON and sanitizes 
       ["stderr", "output_doctor_unavailable"],
       ["invalid", "output_doctor_response_invalid"],
       ["timeout", "output_doctor_timeout"],
-    ]) {
+    ] as const) {
       const path = join(
         parent,
         `doctor-${mode}${process.platform === "win32" ? ".exe" : ""}`,
       );
       copyFileSync(fixture, path);
-      await expect(inspectOutputCapabilities(path)).rejects.toThrow(error);
+      await expectError(inspectOutputCapabilities(path), error);
     }
   } finally {
     rmSync(parent, { recursive: true, force: true });
