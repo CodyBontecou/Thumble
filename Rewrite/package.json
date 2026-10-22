@@ -17,7 +17,7 @@
     "check:boundaries": "bun tooling/check-boundaries.ts",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.portable.json && tsc --noEmit -p apps/mobile/tsconfig.json",
     "test": "bun test",
-    "verify": "bun run check:generated && bun run check:boundaries && bun run format:check && bun run typecheck && bun test",
+    "verify": "bun run check:generated && bun run check:boundaries && bun tooling/check-cli-notices.ts && bun run format:check && bun run typecheck && bun test",
     "test:ci": "bun tooling/ci-test.ts",
     "native:notices": "bun tooling/native-notices.ts",
     "native:build": "cargo +1.88.0 build --locked --manifest-path native/receiver/Cargo.toml",
@@ -39,6 +39,7 @@
     "@types/bun": "1.4.3",
     "prettier": "3.6.2",
     "typescript": "6.0.3",
-    "@thumble/storage": "workspace:*"
+    "@thumble/storage": "workspace:*",
+    "@modelcontextprotocol/client": "2.3.1"
   }
 }

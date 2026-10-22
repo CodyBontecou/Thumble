@@ -53,6 +53,7 @@ jobs:
         run: node tooling/verify-input-packet-oracle.mjs
       - run: bun run check:generated
       - run: bun run check:boundaries
+      - run: bun tooling/check-cli-notices.ts
       - run: bun x --no-install prettier --check .
       - run: cargo fmt --manifest-path native/receiver/Cargo.toml -- --check
       - run: cargo clippy --locked --manifest-path native/receiver/Cargo.toml --all-targets -- -D warnings
@@ -61,7 +62,11 @@ jobs:
         env:
           RUST_BACKTRACE: "1"
         run: cargo test --locked --manifest-path native/receiver/Cargo.toml --test native_ingress_process stale_grant_receipts_and_old_generation_packets_cannot_replace_or_release_new_configuration -- --exact --nocapture
+      # Bound concurrent fixture processes on hosted runners. Concurrency within
+      # each native scenario and all safety deadlines remain unchanged.
       - run: bun run native:test
+        env:
+          RUST_TEST_THREADS: "2"
       - run: bun run native:build
       - name: Verify native TLS with independent Node/OpenSSL client
         run: |

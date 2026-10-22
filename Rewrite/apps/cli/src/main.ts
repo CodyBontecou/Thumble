@@ -1,3 +1,4 @@
+import { startMcp } from "./mcp.ts";
 import { decodeHostIdentity } from "@thumble/contracts/host-identity";
 import { spawn, spawnSync } from "node:child_process";
 import { homedir } from "node:os";
@@ -101,6 +102,16 @@ async function main(): Promise<unknown> {
             dirname(process.execPath),
             `thumble-rewrite-receiver${extension}`,
           );
+  if (family === "mcp") {
+    if (action !== "serve") throw new Error("unsupported_mcp_command");
+    for (const key of opts.keys())
+      if (
+        !["--runtime-dir", "--receiver", "--allow-recorded-input"].includes(key)
+      )
+        throw new Error("invalid_mcp_option");
+    startMcp(root, receiver, opts.get("--allow-recorded-input") === true);
+    return undefined;
+  }
   if (family === "identity") {
     if (action !== "initialize" && action !== "show")
       throw new Error("unsupported_identity_command");
@@ -275,6 +286,7 @@ try {
 } catch (error) {
   const message = error instanceof Error ? error.message : "command_failed";
   const code = /^[a-z_]+$/.test(message) ? message : "command_failed";
-  console.log(JSON.stringify({ version: 1, ok: false, error: code }));
+  if (arguments_[0] === "mcp") console.error(code);
+  else console.log(JSON.stringify({ version: 1, ok: false, error: code }));
   process.exit(1);
 }

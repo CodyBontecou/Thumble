@@ -1,6 +1,8 @@
+import { checkCliNotices } from "./check-cli-notices.ts";
 import { createHash } from "node:crypto";
 import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
+checkCliNotices();
 const root = resolve(import.meta.dir, ".."),
   extension = process.platform === "win32" ? ".exe" : "";
 mkdirSync(resolve(root, "dist"), { recursive: true });
@@ -17,6 +19,11 @@ if (
     "Native dependency notices must be refreshed for the current lockfile",
   );
 copyFileSync(noticePath, resolve(root, "dist/Native-THIRD-PARTY-NOTICES.txt"));
+
+copyFileSync(
+  resolve(root, "apps/cli/THIRD-PARTY-NOTICES.txt"),
+  resolve(root, "dist/CLI-THIRD-PARTY-NOTICES.txt"),
+);
 
 for (const command of [
   [
