@@ -1,0 +1,52 @@
+name: TypeScript rewrite Windows stdio diagnostic
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      [
+        "diagnostics/rewrite-stdio/**",
+        ".github/workflows/typescript-rewrite-windows-stdio.yml",
+      ]
+  pull_request:
+    paths:
+      [
+        "diagnostics/rewrite-stdio/**",
+        ".github/workflows/typescript-rewrite-windows-stdio.yml",
+      ]
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+jobs:
+  synthetic-pipe-matrix:
+    runs-on: windows-2022
+    timeout-minutes: 8
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26.8.1
+      - name: Observe each fixed synthetic pipe combination once
+        run: |
+          $env:THUMBLE_DIAG_BUN = (Get-Command bun).Source
+          node diagnostics/rewrite-stdio/run-matrix.mjs (Join-Path $env:RUNNER_TEMP 'stdio-diagnostic-evidence')
+          exit $LASTEXITCODE
+      - name: Upload bounded fixed-phase evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rewrite-windows-stdio-diagnostic
+          path: ${{ runner.temp }}/stdio-diagnostic-evidence/*.json
+          if-no-files-found: warn
+          retention-days: 7

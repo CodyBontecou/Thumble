@@ -16,12 +16,40 @@ data class ControlRegion(
     internal fun contains(x: Double, y: Double) =
         x >= this.x && y >= this.y && x < this.x + width && y < this.y + height
 
+    /** One native owner per output, including distinct maps using legacy/new aliases. */
+    internal val analogTarget: String?
+        get() =
+            when (action) {
+                "leftStick",
+                "leftStandardStick" -> "leftStick"
+                "rightStick",
+                "rightStandardStick" -> "rightStick"
+                "leftTrigger",
+                "leftVerticalTrigger",
+                "leftHorizontalTrigger" -> "leftTrigger"
+                "rightTrigger",
+                "rightVerticalTrigger",
+                "rightHorizontalTrigger" -> "rightTrigger"
+                else -> null
+            }
+
     internal fun valid(): Boolean =
         Regex("[A-Za-z0-9-]{1,64}").matches(id) &&
             (hapticFeedback?.valid() ?: true) &&
             action in
                 GamepadButtonV1.entries.map { it.name } +
-                    listOf("leftStick", "rightStick", "leftTrigger", "rightTrigger") &&
+                    listOf(
+                        "leftStick",
+                        "rightStick",
+                        "leftTrigger",
+                        "rightTrigger",
+                        "leftStandardStick",
+                        "rightStandardStick",
+                        "leftVerticalTrigger",
+                        "rightVerticalTrigger",
+                        "leftHorizontalTrigger",
+                        "rightHorizontalTrigger",
+                    ) &&
             listOf(x, y, width, height).all { it.isFinite() } &&
             x >= 0 &&
             y >= 0 &&

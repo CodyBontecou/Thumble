@@ -77,8 +77,8 @@ import ThumbleContracts
     guard let region = map?.controls.reversed().first(where: { $0.contains(x, y) }) else {
       return false
     }
-    if region.action.hasSuffix("Stick")
-      && captures.values.contains(where: { $0.region.action == region.action })
+    if let target = region.analogTarget,
+      captures.values.contains(where: { $0.region.analogTarget == target })
     {
       return false
     }
@@ -143,7 +143,7 @@ import ThumbleContracts
     var rt = 0.0
     for capture in captures.values {
       let r = capture.region
-      if r.action == "leftStick" || r.action == "rightStick" {
+      if r.analogTarget == "leftStick" || r.analogTarget == "rightStick" {
         var x = ((capture.x - r.x) / r.width - 0.5) * 2
         var y = ((capture.y - r.y) / r.height - 0.5) * 2
         let length = hypot(x, y)
@@ -151,13 +151,33 @@ import ThumbleContracts
           x /= length
           y /= length
         }
-        if r.action == "leftStick" {
+        if r.action == "leftStandardStick" || r.action == "rightStandardStick" {
+          // Retained pad semantics: radial clamp, .12 radial deadzone, sensitivity 1.
+          let radius = hypot(x, y)
+          if radius <= 0.12 {
+            x = 0
+            y = 0
+          } else {
+            let scaled = min(1, max(0, (radius - 0.12) / 0.88))
+            x = x / radius * scaled
+            y = y / radius * scaled
+          }
+        }
+        if r.analogTarget == "leftStick" {
           lx = x
           ly = y
         } else {
           rx = x
           ry = y
         }
+      } else if r.action.hasSuffix("VerticalTrigger") || r.action.hasSuffix("HorizontalTrigger") {
+        // A captured retained slider continues outside its original hit rectangle.
+        let raw =
+          r.action.hasSuffix("VerticalTrigger")
+          ? 1 - (capture.y - r.y) / r.height : (capture.x - r.x) / r.width
+        let bounded = min(1, max(0, raw))
+        let amount = bounded <= 0.03 ? 0 : min(1, max(0, (bounded - 0.03) / 0.97))
+        if r.analogTarget == "leftTrigger" { lt = amount } else { rt = amount }
       } else if r.contains(capture.x, capture.y) {
         if r.action == "leftTrigger" {
           lt = 1

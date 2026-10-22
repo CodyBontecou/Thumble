@@ -13,9 +13,9 @@ class PhoneCatalogTest {
 
     private fun endpoint() = TrustedHostEndpoint("127.0.0.1", 1234, "11".repeat(32), "authority-a")
 
-    private fun credential() =
+    private fun credential(expires: Long = 100000) =
         PhoneCredential(
-            PhoneCredentialMetadata("11".repeat(32), "phone-a", 1, 100000),
+            PhoneCredentialMetadata("11".repeat(32), "phone-a", 1, expires),
             ByteArray(32) { 34 },
         )
 
@@ -60,7 +60,8 @@ class PhoneCatalogTest {
             .put("profile0Name", "Synthetic 😀")
             .put("profile0UpdatedAt", "9223372036854775807")
 
-    private class IO(fields: List<JSONObject>) : NativeFrameIO {
+    private class IO(fields: List<JSONObject>, val beforeReceive: (Int) -> Unit = {}) :
+        NativeFrameIO {
         val frames =
             ArrayDeque(
                 fields.map {
@@ -80,6 +81,7 @@ class PhoneCatalogTest {
 
         override fun receive(): ControlTLSFrame {
             check(!closed)
+            beforeReceive(frames.size)
             return frames.removeFirst()
         }
 
@@ -93,6 +95,51 @@ class PhoneCatalogTest {
             action()
             fail("catalog accepted")
         } catch (_: PhoneCatalogRejected) {}
+    }
+
+    @Test
+    fun hostClockAheadDoesNotRejectValidBoundedManagementLease() {
+        val io = IO(listOf(hello(), admission().put("expiresAt", 61100), page()))
+        val result =
+            PhoneCatalogClient(endpoint(), { io }, { _, _ -> credential() }, { 100 }).read()
+        assertTrue(result is PhoneCatalogResult.Catalog)
+        assertTrue(io.closed)
+    }
+
+    @Test
+    fun localCapRollbackAndCredentialUpperBoundRemainFailClosed() {
+        for (finalTime in listOf(60100L, 99L)) {
+            var time = 100L
+            val io =
+                IO(listOf(hello(), admission().put("expiresAt", 61100), page())) {
+                    if (it == 1) time = finalTime
+                }
+            rejects {
+                PhoneCatalogClient(endpoint(), { io }, { _, _ -> credential() }, { time }).read()
+            }
+            assertEquals(3, io.sent.size)
+            assertTrue(io.closed)
+        }
+        val overflow = IO(listOf(hello(), admission().put("expiresAt", Long.MAX_VALUE - 1), page()))
+        rejects {
+            PhoneCatalogClient(
+                    endpoint(),
+                    { overflow },
+                    { _, _ -> credential(Long.MAX_VALUE) },
+                    { Long.MAX_VALUE - 1000 },
+                )
+                .read()
+        }
+        assertEquals(2, overflow.sent.size)
+        assertTrue(overflow.closed)
+        for (end in listOf(100L, 100001L)) {
+            val io = IO(listOf(hello(), admission().put("expiresAt", end), page()))
+            rejects {
+                PhoneCatalogClient(endpoint(), { io }, { _, _ -> credential() }, { 100 }).read()
+            }
+            assertEquals(2, io.sent.size)
+            assertTrue(io.closed)
+        }
     }
 
     @Test

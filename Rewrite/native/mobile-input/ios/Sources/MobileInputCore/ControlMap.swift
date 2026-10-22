@@ -41,10 +41,22 @@ public struct ControlRegion: Sendable, Decodable {
   func contains(_ x: Double, _ y: Double) -> Bool {
     x >= self.x && y >= self.y && x < self.x + width && y < self.y + height
   }
+  /// Aliases share one native capture owner for their physical output.
+  var analogTarget: String? {
+    switch action {
+    case "leftStick", "leftStandardStick": "leftStick"
+    case "rightStick", "rightStandardStick": "rightStick"
+    case "leftTrigger", "leftVerticalTrigger", "leftHorizontalTrigger": "leftTrigger"
+    case "rightTrigger", "rightVerticalTrigger", "rightHorizontalTrigger": "rightTrigger"
+    default: nil
+    }
+  }
   var valid: Bool {
     let actions =
       GamepadButtonV1.allCases.map(\.rawValue) + [
         "leftStick", "rightStick", "leftTrigger", "rightTrigger",
+        "leftStandardStick", "rightStandardStick", "leftVerticalTrigger", "rightVerticalTrigger",
+        "leftHorizontalTrigger", "rightHorizontalTrigger",
       ]
     return !id.isEmpty && id.utf8.count <= 64
       && id.utf8.allSatisfy {

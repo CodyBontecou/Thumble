@@ -97,9 +97,10 @@ import Foundation
         case .string(let connection)? = admission["connectionId"],
         PhoneCatalogClient.hex(connection, count: 32),
         case .integer(let end)? = admission["expiresAt"], end > last,
-        end <= credential.metadata.expiresAt, end - last <= 60000
+        let localDeadline = ManagementReadDeadline.admitted(
+          hostExpiry: end, credentialExpiry: credential.metadata.expiresAt, now: last)
       else { throw SavedControllerError.rejected }
-      expires = end
+      expires = localDeadline
       try send(request.fields(connection: connection))
       return try SavedControllerWire.decode(
         try await receive(), request: request, authority: endpoint.authorityInstanceID,

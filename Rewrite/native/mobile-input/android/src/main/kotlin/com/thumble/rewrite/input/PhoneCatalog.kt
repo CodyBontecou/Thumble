@@ -210,11 +210,18 @@ internal constructor(
                     admission["role"] != EnrollmentJSON.Value.Text("management") ||
                     !hex(connection, 32) ||
                     end <= last ||
-                    end > credential.metadata.expiresAt ||
-                    end - last > 60000
+                    end > credential.metadata.expiresAt
             )
                 throw PhoneCatalogRejected()
-            expires = end
+            // Host absolute expiry and local wall time are different clock domains.
+            // The host still enforces its lease; independently cap our local operation.
+            val localLimit =
+                try {
+                    Math.addExact(last, 60_000L)
+                } catch (_: ArithmeticException) {
+                    throw PhoneCatalogRejected()
+                }
+            expires = minOf(end, localLimit)
             send(
                 JSONObject()
                     .put("version", 1)

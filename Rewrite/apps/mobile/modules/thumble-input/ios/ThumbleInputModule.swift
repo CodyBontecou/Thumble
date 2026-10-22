@@ -235,16 +235,32 @@ public final class ThumbleInputModule: Module {
       let frame = CGRect(
         x: control.x * bounds.width, y: control.y * bounds.height,
         width: control.width * bounds.width, height: control.height * bounds.height)
-      let active =
-        state.buttons.contains { $0.rawValue == control.action }
-        || (control.action == "leftTrigger" && state.leftTrigger > 0)
-        || (control.action == "rightTrigger" && state.rightTrigger > 0)
-      if active {
+      let vertical = control.action.hasSuffix("VerticalTrigger")
+      let horizontal = control.action.hasSuffix("HorizontalTrigger")
+      if vertical || horizontal {
+        let amount = control.action.hasPrefix("left") ? state.leftTrigger : state.rightTrigger
         UIColor.systemBlue.withAlphaComponent(0.3).setFill()
-        UIBezierPath(roundedRect: frame, cornerRadius: 12).fill()
+        let fill =
+          vertical
+          ? CGRect(
+            x: frame.minX, y: frame.maxY - frame.height * amount, width: frame.width,
+            height: frame.height * amount)
+          : CGRect(x: frame.minX, y: frame.minY, width: frame.width * amount, height: frame.height)
+        UIBezierPath(rect: fill).fill()
+      } else {
+        let active =
+          state.buttons.contains { $0.rawValue == control.action }
+          || (control.action == "leftTrigger" && state.leftTrigger > 0)
+          || (control.action == "rightTrigger" && state.rightTrigger > 0)
+        if active {
+          UIColor.systemBlue.withAlphaComponent(0.3).setFill()
+          UIBezierPath(roundedRect: frame, cornerRadius: 12).fill()
+        }
       }
-      if control.action == "leftStick" || control.action == "rightStick" {
-        let left = control.action == "leftStick"
+      if ["leftStick", "rightStick", "leftStandardStick", "rightStandardStick"].contains(
+        control.action)
+      {
+        let left = control.action.hasPrefix("left")
         let x = left ? state.leftStickX : state.rightStickX
         let y = left ? state.leftStickY : state.rightStickY
         let radius = min(frame.width, frame.height) * 0.18

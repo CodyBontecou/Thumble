@@ -27,6 +27,8 @@ test("clean mobile fixture preparation installs exact shared saved-map vectors i
     for (const name of [
       "saved-controller-control-v8.json",
       "saved-controller-v1.json",
+      "saved-controller-analog-control-v8.json",
+      "saved-controller-analog-v1.json",
     ])
       sources.push(`packages/fixtures/${name}`);
     for (const source of sources) {
@@ -45,6 +47,8 @@ test("clean mobile fixture preparation installs exact shared saved-map vectors i
     for (const name of [
       "saved-controller-control-v8.json",
       "saved-controller-v1.json",
+      "saved-controller-analog-control-v8.json",
+      "saved-controller-analog-v1.json",
     ]) {
       const expected = readFileSync(
         join(root, "packages/fixtures", name),

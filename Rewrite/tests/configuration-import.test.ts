@@ -353,8 +353,8 @@ test.skipIf(process.platform === "win32")(
         } while (performance.now() - started < 2300);
         expect(owner.child.kill("SIGCONT")).toBe(true);
         suspended = false;
-        // Keep the input owner renewed while the resumed configuration child
-        // finishes disk work, just as the service heartbeat does in production.
+        // Owner heartbeats do not refresh the independent input TTL. Continue
+        // both while the resumed child finishes disk work, as a held phone does.
         let finished = false;
         const completion = completed(owner, command).finally(() => {
           finished = true;
@@ -362,6 +362,17 @@ test.skipIf(process.platform === "win32")(
         void completion.catch(() => {});
         do {
           await controller.renew();
+          expect(
+            (
+              await controller.execute({
+                command: "sample",
+                expectedGeneration: "1",
+                sequence: String(sequence++),
+                state: { ...neutralGamepadState(), buttons: ["south"] },
+                allowRecordedInput: true,
+              })
+            ).active,
+          ).toBe(true);
           await Bun.sleep(100);
         } while (!finished);
         expect((await completion).kind).toBe("import-committed");

@@ -1,12 +1,25 @@
 import { resolve } from "node:path";
 import { standardControllerMap } from "@thumble/domain/controller-layout";
 import { encodeGamepadReport } from "@thumble/domain";
-import { neutralGamepadState, type GamepadState } from "@thumble/contracts";
+import {
+  GAMEPAD_BUTTONS,
+  neutralGamepadState,
+  type GamepadState,
+  type GamepadButton,
+} from "@thumble/contracts";
 
 const map = standardControllerMap("1", "0");
 const probes = map.controls.map((control) => {
   const stick =
     control.action === "leftStick" || control.action === "rightStick";
+  // This fixture intentionally probes the unchanged standard template only.
+  if (
+    !stick &&
+    control.action !== "leftTrigger" &&
+    control.action !== "rightTrigger" &&
+    !(GAMEPAD_BUTTONS as readonly string[]).includes(control.action)
+  )
+    throw new Error("unsupported_standard_fixture_action");
   const state: GamepadState = {
     ...neutralGamepadState(),
     ...(control.action === "leftStick"
@@ -17,7 +30,7 @@ const probes = map.controls.map((control) => {
           ? { leftTrigger: 1 }
           : control.action === "rightTrigger"
             ? { rightTrigger: 1 }
-            : { buttons: [control.action] }),
+            : { buttons: [control.action as GamepadButton] }),
   };
   return {
     id: control.id,

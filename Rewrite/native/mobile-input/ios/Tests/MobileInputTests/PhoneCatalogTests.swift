@@ -18,6 +18,8 @@ private actor CatalogStorage: ControlCredentialSource {
   var closed = false
   var pauseConnect = false
   var enteredConnect = false
+  var receiveCount = 0
+  var beforeReceive: ((Int) -> Void)?
   init(_ fields: [[String: Any]]) throws {
     frames = try fields.map {
       try ControlTLSFrame(kind: .control, payload: JSONSerialization.data(withJSONObject: $0))
@@ -36,6 +38,8 @@ private actor CatalogStorage: ControlCredentialSource {
   }
   func receive() async throws -> ControlTLSFrame {
     guard !closed, !frames.isEmpty else { throw PhoneCatalogError.rejected }
+    receiveCount += 1
+    beforeReceive?(receiveCount)
     return frames.removeFirst()
   }
   func close() { closed = true }
@@ -51,13 +55,15 @@ private func catalogFields() -> [String: Any] {
   ]
 }
 @MainActor private func catalogSetup(
-  _ result: [String: Any] = catalogFields(), input: Bool = false, role: String = "management"
+  _ result: [String: Any] = catalogFields(), input: Bool = false, role: String = "management",
+  hostExpiry: UInt64 = 60100, credentialExpiry: UInt64 = 100000,
+  clock: @escaping () -> UInt64 = { 100 }
 ) throws -> (PhoneCatalogClient, CatalogIO, CatalogStorage) {
   let endpoint = try TrustedHostEndpoint(
     host: "127.0.0.1", port: 1234, certificatePin: String(repeating: "1", count: 64),
     authorityInstanceID: "authority-a")
   let credential = try PhoneCredential(
-    hostPin: endpoint.certificatePin, phoneID: "phone-a", epoch: 1, expiresAt: 100000,
+    hostPin: endpoint.certificatePin, phoneID: "phone-a", epoch: 1, expiresAt: credentialExpiry,
     token: Data(repeating: 34, count: 32))
   let hello: [String: Any] = [
     "version": 1, "command": "hello", "authorityInstanceId": "authority-a", "controlVersion": 7,
@@ -67,12 +73,13 @@ private func catalogFields() -> [String: Any] {
   let admission: [String: Any] = [
     "version": 1, "command": "authenticated", "authorityInstanceId": "authority-a",
     "phoneId": "phone-a", "credentialEpoch": "1", "connectionId": catalogConnection,
-    "expiresAt": 60100, "role": "management", "inputSessionAvailable": input, "inputEnabled": false,
+    "expiresAt": hostExpiry, "role": "management", "inputSessionAvailable": input,
+    "inputEnabled": false,
   ]
   let io = try CatalogIO([hello, admission, result])
   let storage = CatalogStorage(credential)
   return (
-    PhoneCatalogClient(endpoint: endpoint, io: io, storage: storage, now: { 100 }), io, storage
+    PhoneCatalogClient(endpoint: endpoint, io: io, storage: storage, now: clock), io, storage
   )
 }
 @Test @MainActor func catalogReadUsesDedicatedManagementAndOnlyPublicMetadataLeavesClient()
@@ -199,4 +206,32 @@ private func catalogFields() -> [String: Any] {
   #expect(io.closed)
   #expect(io.sent.isEmpty)
   #expect(await storage.calls == 0)
+}
+
+@MainActor private final class CatalogClock { var now: UInt64 = 100 }
+@Test(arguments: ["host-ahead", "local-cap", "rollback", "beyond-credential", "overflow"])
+@MainActor func catalogClockSkewUsesBoundedLocalLifetimeAndPreservesTerminalGuards(_ mode: String)
+  async throws
+{
+  let clock = CatalogClock()
+  let overflow = mode == "overflow"
+  if overflow { clock.now = UInt64(Int64.max) - 100 }
+  let (client, io, _) = try catalogSetup(
+    hostExpiry: overflow ? UInt64(Int64.max) : mode == "beyond-credential" ? 100001 : 61100,
+    credentialExpiry: overflow ? UInt64(Int64.max) : 100000, clock: { clock.now })
+  io.beforeReceive = { index in
+    if index == 3 && mode == "local-cap" { clock.now = 60100 }
+    if index == 3 && mode == "rollback" { clock.now = 99 }
+  }
+  if mode == "host-ahead" {
+    guard case .catalog = try await client.read() else {
+      Issue.record("catalog missing")
+      return
+    }
+    #expect(io.sent.count == 3)
+  } else {
+    await #expect(throws: PhoneCatalogError.self) { try await client.read() }
+    #expect(io.sent.count == (mode == "local-cap" || mode == "rollback" ? 3 : 2))
+  }
+  #expect(io.closed)
 }

@@ -201,7 +201,16 @@ pub(super) fn result(value: &Value, request: &Request, authority: &str) -> bool 
         };
         if !matches!(
             action,
-            "leftStick" | "rightStick" | "leftTrigger" | "rightTrigger"
+            "leftStick"
+                | "rightStick"
+                | "leftTrigger"
+                | "rightTrigger"
+                | "leftStandardStick"
+                | "rightStandardStick"
+                | "leftVerticalTrigger"
+                | "rightVerticalTrigger"
+                | "leftHorizontalTrigger"
+                | "rightHorizontalTrigger"
         ) && serde_json::from_value::<crate::generated::GamepadButton>(Value::String(
             action.into(),
         ))
@@ -338,6 +347,51 @@ mod tests {
             r#"{"null":null}"#,
         ] {
             assert!(serde_json::from_str::<Scalars>(raw).is_err());
+        }
+    }
+    #[test]
+    fn named_analog_actions_are_explicit_and_do_not_accept_parameters_or_coercion() {
+        let request = request();
+        let base = reply();
+        for action in [
+            "leftStick",
+            "rightStick",
+            "leftTrigger",
+            "rightTrigger",
+            "leftStandardStick",
+            "rightStandardStick",
+            "leftVerticalTrigger",
+            "rightVerticalTrigger",
+            "leftHorizontalTrigger",
+            "rightHorizontalTrigger",
+        ] {
+            let mut value = base.clone();
+            value["control0Action"] = Value::from(action);
+            assert!(result(&value, &request, "synthetic-authority"), "{action}");
+            // Semantics are fixed by the action name, never supplied parameters.
+            value["control0Deadzone"] = Value::from("0.12");
+            assert!(!result(&value, &request, "synthetic-authority"), "{action}");
+        }
+        for action in [
+            "leftstandardstick",
+            "LeftStandardStick",
+            "leftStandardStick ",
+            "leftVerticalTrigger:0.03",
+            "rightHorizontalTriggerDigital",
+            "leftStickCustom",
+        ] {
+            let mut value = base.clone();
+            value["control0Action"] = Value::from(action);
+            assert!(!result(&value, &request, "synthetic-authority"), "{action}");
+        }
+        for action in [
+            serde_json::json!(["leftStandardStick"]),
+            serde_json::json!({"action":"leftVerticalTrigger"}),
+            Value::Null,
+        ] {
+            let mut value = base.clone();
+            value["control0Action"] = action;
+            assert!(!result(&value, &request, "synthetic-authority"));
         }
     }
     #[test]

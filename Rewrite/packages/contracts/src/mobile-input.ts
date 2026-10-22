@@ -9,7 +9,13 @@ export type ControlAction =
   | "leftStick"
   | "rightStick"
   | "leftTrigger"
-  | "rightTrigger";
+  | "rightTrigger"
+  | "leftStandardStick"
+  | "rightStandardStick"
+  | "leftVerticalTrigger"
+  | "rightVerticalTrigger"
+  | "leftHorizontalTrigger"
+  | "rightHorizontalTrigger";
 export type TouchHapticFeedback = Readonly<{
   style: "none" | "light" | "medium" | "heavy" | "soft" | "rigid";
   pattern: "single" | "double" | "pulse" | "buzz";
@@ -252,6 +258,12 @@ export function decodeControlMap(value: unknown): ControlMap {
     "rightStick",
     "leftTrigger",
     "rightTrigger",
+    "leftStandardStick",
+    "rightStandardStick",
+    "leftVerticalTrigger",
+    "rightVerticalTrigger",
+    "leftHorizontalTrigger",
+    "rightHorizontalTrigger",
   ];
   const sourceControls = map.controls;
   const controls = Array.from(

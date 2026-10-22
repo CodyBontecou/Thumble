@@ -1,0 +1,104 @@
+{
+  "request": {
+    "version": 1,
+    "command": "configuration-controls",
+    "connectionId": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+    "expectedConfigurationRevision": "3",
+    "expectedSourceHash": "0a909f421997de7ba06083ff9397556a334992c51967d3f9b0e414bcee49fde3",
+    "profileId": "bbbbbbbb-0000-0000-0000-000000000002",
+    "generation": "7",
+    "revision": "2",
+    "viewportWidth": "874",
+    "viewportHeight": "393"
+  },
+  "reply": {
+    "version": 1,
+    "command": "configuration-controls-result",
+    "connectionId": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+    "kind": "controls",
+    "authorityInstanceId": "synthetic-authority",
+    "configurationRevision": "3",
+    "sourceHash": "0a909f421997de7ba06083ff9397556a334992c51967d3f9b0e414bcee49fde3",
+    "configurationSha256": "8c9ad8273e1fa6679876f21324c26c8090d1a057a0acf1039f892b847397d3cf",
+    "profileId": "bbbbbbbb-0000-0000-0000-000000000002",
+    "generation": "7",
+    "revision": "2",
+    "viewportWidth": "874",
+    "viewportHeight": "393",
+    "controlCount": 5,
+    "control0Id": "de000000-0000-0000-0000-000000000001",
+    "control0Action": "leftStandardStick",
+    "control0X": "0.13255148741418768",
+    "control0Y": "0.45",
+    "control0Width": "0.1348970251716247",
+    "control0Height": "0.3",
+    "control1Id": "de000000-0000-0000-0000-000000000002",
+    "control1Action": "rightStandardStick",
+    "control1X": "0.7325514874141876",
+    "control1Y": "0.45",
+    "control1Width": "0.1348970251716247",
+    "control1Height": "0.3",
+    "control2Id": "de000000-0000-0000-0000-000000000003",
+    "control2Action": "leftVerticalTrigger",
+    "control2X": "0.2825514874141876",
+    "control2Y": "0.09499999999999999",
+    "control2Width": "0.1348970251716247",
+    "control2Height": "0.10999999999999999",
+    "control3Id": "de000000-0000-0000-0000-000000000004",
+    "control3Action": "rightHorizontalTrigger",
+    "control3X": "0.5825514874141877",
+    "control3Y": "0.09499999999999999",
+    "control3Width": "0.1348970251716247",
+    "control3Height": "0.10999999999999999",
+    "control4Id": "db000000-0000-0000-0000-000000000002",
+    "control4Action": "south",
+    "control4X": "0.45080091533180777",
+    "control4Y": "0.7105852417302799",
+    "control4Width": "0.09839816933638444",
+    "control4Height": "0.21882951653944022"
+  },
+  "errors": [
+    {
+      "version": 1,
+      "command": "configuration-controls-result",
+      "connectionId": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+      "kind": "error",
+      "error": "saved_map_busy"
+    },
+    {
+      "version": 1,
+      "command": "configuration-controls-result",
+      "connectionId": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+      "kind": "error",
+      "error": "saved_map_timeout"
+    },
+    {
+      "version": 1,
+      "command": "configuration-controls-result",
+      "connectionId": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+      "kind": "error",
+      "error": "saved_map_unavailable"
+    },
+    {
+      "version": 1,
+      "command": "configuration-controls-result",
+      "connectionId": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+      "kind": "error",
+      "error": "saved_map_reactivation_required"
+    },
+    {
+      "version": 1,
+      "command": "configuration-controls-result",
+      "connectionId": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+      "kind": "error",
+      "error": "saved_map_unsupported_profile"
+    },
+    {
+      "version": 1,
+      "command": "configuration-controls-result",
+      "connectionId": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+      "kind": "error",
+      "error": "saved_map_response_too_large"
+    }
+  ]
+}

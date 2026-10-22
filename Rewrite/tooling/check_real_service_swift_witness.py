@@ -7,6 +7,7 @@ WITNESSES = {
     "actualRealServiceCatalogReadPreservesNativePhoneHeldInput": 2,
     "actualPhoneTouchCrossesTlsAndNativeIpcThenRetiresAndReconnectsNeutral": 5,
     "actualSavedControllerServiceMapDeliversNativeInputAndRejectsUnsupportedProfile": 3,
+    "actualSavedAnalogServiceMapDeliversCombinedNativeInputAndRejectsUnsupportedProfile": 3,
 }
 MODES = {"tls", "udp", "udp-blackhole", "renewal-udp", "renewal-tls-fallback", "tls-fallback", "unsupported"}
 EVENTS = {"runStarted", "runEnded", "testStarted", "testEnded", "testCaseStarted", "testCaseEnded"}
@@ -50,8 +51,8 @@ def summarize(source, name, count, status):
                 for message in event.get("messages", []):
                     text = message.get("text", "")
                     # Equality only: never copy arbitrary XCTest errors, paths or arguments.
-                    if text == "Caught error: closed": known_errors.add("probe_closed")
-                    elif text == "Caught error: rejected": known_errors.add("rejected")
+                    if text in ("Caught error: closed", "Caught error: .closed"): known_errors.add("probe_closed")
+                    elif text in ("Caught error: rejected", "Caught error: .rejected"): known_errors.add("rejected")
                     elif type(text) is str and text.startswith("Expectation failed:"):
                         known_errors.add("expectation_failed")
             if failed_modes: result["failedModes"] = sorted(failed_modes)

@@ -109,7 +109,13 @@
               "leftStick",
               "rightStick",
               "leftTrigger",
-              "rightTrigger"
+              "rightTrigger",
+              "leftStandardStick",
+              "rightStandardStick",
+              "leftVerticalTrigger",
+              "rightVerticalTrigger",
+              "leftHorizontalTrigger",
+              "rightHorizontalTrigger"
             ]
           },
           "x": {

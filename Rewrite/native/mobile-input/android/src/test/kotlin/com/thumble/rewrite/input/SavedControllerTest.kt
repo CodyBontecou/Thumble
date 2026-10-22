@@ -130,7 +130,8 @@ class SavedControllerTest {
         }
     }
 
-    private class IO(fields: List<JSONObject>) : NativeFrameIO {
+    private class IO(fields: List<JSONObject>, val beforeReceive: (Int) -> Unit = {}) :
+        NativeFrameIO {
         val frames =
             ArrayDeque(
                 fields.map {
@@ -147,6 +148,7 @@ class SavedControllerTest {
 
         override fun receive(): ControlTLSFrame {
             check(!closed)
+            beforeReceive(frames.size)
             return frames.removeFirst()
         }
 
@@ -155,12 +157,18 @@ class SavedControllerTest {
         }
     }
 
-    private fun setup(version: Int = 8): Pair<SavedControllerClient, IO> {
+    private fun setup(
+        version: Int = 8,
+        expiry: Long = 60100,
+        now: () -> Long = { 100 },
+        credentialExpiry: Long = 100000,
+        beforeReceive: (Int) -> Unit = {},
+    ): Pair<SavedControllerClient, IO> {
         val authority = "synthetic-authority"
         val endpoint = TrustedHostEndpoint("127.0.0.1", 1234, "11".repeat(32), authority)
         val credential =
             PhoneCredential(
-                PhoneCredentialMetadata(endpoint.certificatePin, "phone-a", 1, 100000),
+                PhoneCredentialMetadata(endpoint.certificatePin, "phone-a", 1, credentialExpiry),
                 ByteArray(32) { 34 },
             )
         val io =
@@ -183,14 +191,51 @@ class SavedControllerTest {
                         .put("phoneId", "phone-a")
                         .put("credentialEpoch", "1")
                         .put("connectionId", "cd".repeat(16))
-                        .put("expiresAt", 60100)
+                        .put("expiresAt", expiry)
                         .put("role", "management")
                         .put("inputSessionAvailable", false)
                         .put("inputEnabled", false),
                     fixture().getJSONObject("reply"),
-                )
+                ),
+                beforeReceive,
             )
-        return SavedControllerClient(endpoint, { io }, { _, _ -> credential }, { 100 }) to io
+        return SavedControllerClient(endpoint, { io }, { _, _ -> credential }, now) to io
+    }
+
+    @Test
+    fun hostClockAheadDoesNotRejectValidBoundedManagementLease() {
+        val (client, io) = setup(expiry = 61100)
+        assertEquals(2, client.read(request()).map.controls.size)
+        assertTrue(io.closed)
+    }
+
+    @Test
+    fun localCapRollbackAndCredentialUpperBoundRemainFailClosed() {
+        for (finalTime in listOf(60100L, 99L)) {
+            var time = 100L
+            val (client, io) =
+                setup(expiry = 61100, now = { time }) {
+                    if (it == 1) time = finalTime
+                }
+            rejected { client.read(request()) }
+            assertEquals(3, io.sent.size)
+            assertTrue(io.closed)
+        }
+        val (overflow, overflowIO) =
+            setup(
+                expiry = Long.MAX_VALUE - 1,
+                now = { Long.MAX_VALUE - 1000 },
+                credentialExpiry = Long.MAX_VALUE,
+            )
+        rejected { overflow.read(request()) }
+        assertEquals(2, overflowIO.sent.size)
+        assertTrue(overflowIO.closed)
+        for (end in listOf(100L, 100001L)) {
+            val (client, io) = setup(expiry = end)
+            rejected { client.read(request()) }
+            assertEquals(2, io.sent.size)
+            assertTrue(io.closed)
+        }
     }
 
     @Test

@@ -3,6 +3,7 @@ import { counter } from "@thumble/contracts/receiver";
 import {
   decodeControlMap,
   decodeTouchHapticFeedback,
+  type ControlAction,
   type ControlMap,
   type ControlRegion,
 } from "@thumble/contracts/mobile-input";
@@ -33,21 +34,65 @@ function fail(code: string): never {
   throw new Error(`saved_controller_${code}`);
 }
 function number(source: LosslessJson, key: string, fallback?: number): number {
-  const value = field(source, key);
+  const value = source.get("/" + key);
   if (!value && fallback !== undefined) return fallback;
   const token = value?.numberToken;
   if (token === undefined || !Number.isFinite(Number(token)))
     return fail("unsupported_geometry");
   return Number(token);
 }
+/** Retained landscape starter-grid fallback; only declared starter IDs use it. */
+function starterCenter(
+  id: string,
+  width: number,
+  height: number,
+  viewport: SafeControllerViewport,
+  mode: "standard" | "southpaw",
+) {
+  if (!/^00000000-0000-0000-0000-00000000010[1-9a]$/.test(id)) return undefined;
+  const xStep = Math.min(0.18, Math.max(0.08, (width * 1.12) / viewport.width));
+  const yStep = Math.min(
+    0.26,
+    Math.max(0.1, (height * 1.12) / viewport.height),
+  );
+  const dpad = mode === "standard" ? 0.18 : 0.82;
+  const action = mode === "standard" ? 0.82 : 0.18;
+  switch (id.slice(-1)) {
+    case "1":
+      return { x: dpad, y: 0.56 - yStep };
+    case "2":
+      return { x: dpad, y: 0.56 + yStep };
+    case "3":
+      return { x: dpad - xStep, y: 0.56 };
+    case "4":
+      return { x: dpad + xStep, y: 0.56 };
+    case "8":
+      return { x: action - xStep * 0.55, y: 0.56 - yStep * 0.55 };
+    case "7":
+      return { x: action + xStep * 0.55, y: 0.56 - yStep * 0.55 };
+    case "6":
+      return { x: action - xStep * 0.55, y: 0.56 + yStep * 0.55 };
+    case "5":
+      return { x: action + xStep * 0.55, y: 0.56 + yStep * 0.55 };
+    case "9":
+      return { x: 0.43, y: 0.56 };
+    case "a":
+      return { x: 0.57, y: 0.56 };
+  }
+  return undefined;
+}
 function rectangle(
   layout: LosslessJson,
   id: string,
   scale: number,
   viewport: SafeControllerViewport,
+  layoutMode: "standard" | "southpaw",
+  kind: "button" | "joystick" | "trigger",
 ) {
   if (
-    field(layout, "shape")?.stringValue !== "rectangle" ||
+    (kind === "joystick"
+      ? field(layout, "shape")?.stringValue !== "circle"
+      : field(layout, "shape")?.stringValue !== "rectangle") ||
     number(layout, "rotationDegrees", 0) !== 0
   )
     fail("unsupported_transform");
@@ -66,15 +111,9 @@ function rectangle(
     })
   )
     fail("unsupported_hit_insets");
-  const centerX = number(layout, "centerX"),
-    centerY = number(layout, "centerY"),
-    widthScale = number(layout, "widthScale", 1),
+  const widthScale = number(layout, "widthScale", 1),
     heightScale = number(layout, "heightScale", 1);
   if (
-    centerX < 0 ||
-    centerX > 1 ||
-    centerY < 0 ||
-    centerY > 1 ||
     widthScale < 0.001 ||
     widthScale > 12 ||
     heightScale < 0.001 ||
@@ -89,18 +128,49 @@ function rectangle(
     ),
   );
   // Retained starter 9/10 use distinct base dimensions; custom UUIDs use a square.
+  const baseWidth =
+    kind === "joystick"
+      ? Math.min(
+          128 * scale,
+          Math.max(82 * scale, viewport.height * 0.3 * scale),
+        )
+      : kind === "trigger"
+        ? Math.min(
+            148 * scale,
+            Math.max(86 * scale, viewport.height * 0.3 * scale),
+          )
+        : side;
+  const baseHeight =
+    kind === "trigger"
+      ? Math.min(
+          58 * scale,
+          Math.max(34 * scale, viewport.height * 0.11 * scale),
+        )
+      : baseWidth;
   const width =
-    side *
+    baseWidth *
     widthScale *
-    (id === "00000000-0000-0000-0000-000000000109"
+    (kind === "button" && id === "00000000-0000-0000-0000-000000000109"
       ? 1.48
-      : id === "00000000-0000-0000-0000-00000000010a"
+      : kind === "button" && id === "00000000-0000-0000-0000-00000000010a"
         ? 1.66
         : 1);
   const height =
-    side *
+    baseHeight *
     heightScale *
-    (/^00000000-0000-0000-0000-00000000010[9a]$/.test(id) ? 0.72 : 1);
+    (kind === "button" && /^00000000-0000-0000-0000-00000000010[9a]$/.test(id)
+      ? 0.72
+      : 1);
+  if (kind !== "button" && (width < 2 || height < 2))
+    fail("unsupported_geometry");
+  const fallback =
+    kind === "button"
+      ? starterCenter(id, width, height, viewport, layoutMode)
+      : undefined;
+  const centerX = number(layout, "centerX", fallback?.x),
+    centerY = number(layout, "centerY", fallback?.y);
+  if (centerX < 0 || centerX > 1 || centerY < 0 || centerY > 1)
+    fail("unsupported_geometry");
   if (width > viewport.width || height > viewport.height)
     fail("unsupported_geometry");
   const halfWidth = Math.max(width / 2, 1),
@@ -134,6 +204,89 @@ function action(binding: LosslessJson | undefined): GamepadButton {
   )
     fail("unsupported_binding");
   return output.gamepadButtons[0] as GamepadButton;
+}
+function emptyOutput(
+  output: ReturnType<typeof readOwnedOutput> | null,
+): boolean {
+  return (
+    output === null ||
+    (output.keyboard === null && output.gamepadButtons.length === 0)
+  );
+}
+/** Semantic action names encode only the exact supported retained settings. */
+function analogAction(
+  element: OwnedElement,
+  binding: LosslessJson | undefined,
+  keyboard: LosslessJson | undefined,
+  geometry: LosslessJson,
+): ControlAction {
+  if (
+    !emptyOutput(element.output) ||
+    !emptyOutput(element.defaultOutput) ||
+    (binding && !emptyOutput(readOwnedOutput(binding))) ||
+    keyboard ||
+    element.partOutputs.length ||
+    element.joystickMapping
+  )
+    fail("unsupported_binding");
+  const defaultParts = field(element.source, "defaultPartOutputs");
+  if (
+    defaultParts &&
+    !(
+      (defaultParts.kind === "object" && defaultParts.keys.length === 0) ||
+      (defaultParts.kind === "array" && defaultParts.length === 0)
+    )
+  )
+    fail("unsupported_binding");
+  const settings = element.inputSettings;
+  if (settings?.kind === "joystick") {
+    const style = field(geometry, "joystickVisualStyle");
+    if (style && style.stringValue !== "pad")
+      fail("unsupported_analog_settings");
+    if (
+      settings.deadZone !== 0.12 ||
+      settings.sensitivity !== 1 ||
+      settings.invertX ||
+      settings.invertY ||
+      settings.snapToCardinal ||
+      settings.sendsDigitalDirections
+    )
+      fail("unsupported_analog_settings");
+    if (settings.analogTarget === "left_stick") return "leftStandardStick";
+    if (settings.analogTarget === "right_stick") return "rightStandardStick";
+  } else if (settings?.kind === "trigger") {
+    if (
+      settings.deadZone !== 0.03 ||
+      settings.sensitivity !== 1 ||
+      settings.sendsDigitalButton ||
+      settings.digitalThreshold !== 0.5
+    )
+      fail("unsupported_analog_settings");
+    if (settings.orientation === "vertical")
+      return settings.target === "left"
+        ? "leftVerticalTrigger"
+        : "rightVerticalTrigger";
+    return settings.target === "left"
+      ? "leftHorizontalTrigger"
+      : "rightHorizontalTrigger";
+  }
+  return fail("unsupported_analog_settings");
+}
+function analogTarget(action: ControlAction): string | undefined {
+  switch (action) {
+    case "leftStandardStick":
+      return "leftStick";
+    case "rightStandardStick":
+      return "rightStick";
+    case "leftVerticalTrigger":
+    case "leftHorizontalTrigger":
+      return "leftTrigger";
+    case "rightVerticalTrigger":
+    case "rightHorizontalTrigger":
+      return "rightTrigger";
+    default:
+      return undefined;
+  }
 }
 function haptic(layout: LosslessJson): Pick<ControlRegion, "hapticFeedback"> {
   const feedback = field(layout, "hapticFeedback"),
@@ -232,6 +385,11 @@ export function projectSavedController(
         : scaleName === "large"
           ? 1.14
           : fail("unsupported_geometry");
+  const modeValue = layout.get("/layoutMode");
+  const layoutMode =
+    modeValue === undefined ? "standard" : modeValue.stringValue;
+  if (layoutMode !== "standard" && layoutMode !== "southpaw")
+    fail("unsupported_geometry");
   const index = document.catalog.profiles.findIndex(
     (p) => p.id === document.catalog.activeProfileID,
   );
@@ -246,6 +404,12 @@ export function projectSavedController(
       value,
     ]),
   );
+  const keyboards = new Map(
+    entries(resolved.get("/keyBindings")).map(([id, value]) => [
+      uuid(id),
+      value,
+    ]),
+  );
   const overrides = uuidPairs(field(layout, "buttonCustomizations"));
   const mirrors = layout.get("/customButtons");
   if (mirrors?.kind === "array")
@@ -255,6 +419,7 @@ export function projectSavedController(
         fail("unsupported_layout_mirror");
     }
   const controls: ControlRegion[] = [];
+  const analogTargets = new Set<string>();
   for (const element of profile.elements) {
     if (element.kind === "text" || element.kind === "decoration") continue;
     const geometry = layoutFor(element, overrides);
@@ -262,14 +427,38 @@ export function projectSavedController(
     if (hidden && hidden.booleanValue === undefined)
       fail("unsupported_geometry");
     if (hidden?.booleanValue === true) continue;
-    if (element.kind !== "button") fail("unsupported_control_kind");
+    if (
+      element.kind !== "button" &&
+      element.kind !== "joystick" &&
+      element.kind !== "trigger"
+    )
+      fail("unsupported_control_kind");
     if (number(geometry, "zIndex", 0) !== 0) fail("unsupported_transform");
     if (element.partOutputs.length || element.joystickMapping)
       fail("unsupported_binding");
+    const controlAction =
+      element.kind === "button"
+        ? action(bindings.get(element.id))
+        : analogAction(
+            element,
+            bindings.get(element.id),
+            keyboards.get(element.id),
+            geometry,
+          );
+    const target = analogTarget(controlAction);
+    if (target && analogTargets.has(target)) fail("duplicate_analog_target");
+    if (target) analogTargets.add(target);
     controls.push({
       id: element.id,
-      action: action(bindings.get(element.id)),
-      ...rectangle(geometry, element.id, scale, viewport),
+      action: controlAction,
+      ...rectangle(
+        geometry,
+        element.id,
+        scale,
+        viewport,
+        layoutMode,
+        element.kind,
+      ),
       ...haptic(geometry),
     });
     if (controls.length > 64) fail("control_limit");

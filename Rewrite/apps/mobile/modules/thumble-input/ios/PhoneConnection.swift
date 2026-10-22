@@ -86,6 +86,7 @@ import UIKit
       field.accessibilityIdentifier = "pairing-invitation"
       field.delegate = self
       field.isSecureTextEntry = true
+      field.returnKeyType = .done
       field.autocorrectionType = .no
       field.autocapitalizationType = .none
       field.smartQuotesType = .no
@@ -312,6 +313,10 @@ import UIKit
     guard !closed else { return }
     close()
     status("disconnected")
+  }
+  func textFieldShouldReturn(_ textField: UITextField) -> Bool {
+    textField.resignFirstResponder()
+    return true
   }
   func textField(
     _ textField: UITextField, shouldChangeCharactersIn range: NSRange,

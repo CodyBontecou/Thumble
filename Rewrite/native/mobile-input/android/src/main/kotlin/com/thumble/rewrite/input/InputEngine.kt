@@ -99,8 +99,8 @@ class InputEngine(
         }
         val region = map?.controls?.asReversed()?.firstOrNull { it.contains(x, y) } ?: return false
         if (
-            region.action.endsWith("Stick") &&
-                captures.values.any { it.region.action == region.action }
+            region.analogTarget != null &&
+                captures.values.any { it.region.analogTarget == region.analogTarget }
         )
             return false
         captures[id] = Capture(region, x, y)
@@ -167,7 +167,7 @@ class InputEngine(
         var rt = 0.0
         for (capture in captures.values) {
             val r = capture.region
-            if (r.action == "leftStick" || r.action == "rightStick") {
+            if (r.analogTarget == "leftStick" || r.analogTarget == "rightStick") {
                 var x = ((capture.x - r.x) / r.width - 0.5) * 2
                 var y = ((capture.y - r.y) / r.height - 0.5) * 2
                 val length = hypot(x, y)
@@ -175,13 +175,43 @@ class InputEngine(
                     x /= length
                     y /= length
                 }
-                if (r.action == "leftStick") {
+                if (r.action == "leftStandardStick" || r.action == "rightStandardStick") {
+                    // Retained pad vector: clamp radius, then radial .12 deadzone,
+                    // sensitivity 1, no inversion/cardinal snapping/digital directions.
+                    val radius = hypot(x, y)
+                    if (radius <= 0.12) {
+                        x = 0.0
+                        y = 0.0
+                    } else {
+                        val scaled = ((radius - 0.12) / 0.88).coerceIn(0.0, 1.0)
+                        x = x / radius * scaled
+                        y = y / radius * scaled
+                    }
+                }
+                if (r.analogTarget == "leftStick") {
                     lx = x
                     ly = y
                 } else {
                     rx = x
                     ry = y
                 }
+            } else if (
+                r.action == "leftVerticalTrigger" ||
+                    r.action == "rightVerticalTrigger" ||
+                    r.action == "leftHorizontalTrigger" ||
+                    r.action == "rightHorizontalTrigger"
+            ) {
+                // Captured triggers retain ownership while dragged outside the pad.
+                val raw =
+                    if (r.action.endsWith("VerticalTrigger")) {
+                        1.0 - (capture.y - r.y) / r.height
+                    } else {
+                        (capture.x - r.x) / r.width
+                    }
+                val clamped = raw.coerceIn(0.0, 1.0)
+                val value =
+                    if (clamped <= 0.03) 0.0 else ((clamped - 0.03) / 0.97).coerceIn(0.0, 1.0)
+                if (r.analogTarget == "leftTrigger") lt = value else rt = value
             } else if (r.contains(capture.x, capture.y)) {
                 when (r.action) {
                     "leftTrigger" -> lt = 1.0

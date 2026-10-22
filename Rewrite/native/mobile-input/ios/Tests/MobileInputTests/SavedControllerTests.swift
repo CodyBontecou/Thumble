@@ -95,6 +95,8 @@ private actor SavedStorage: ControlCredentialSource {
   var frames: [ControlTLSFrame]
   var sent: [[String: EnrollmentJSON.Value]] = []
   var closed = false, paused = false, entered = false
+  var receiveCount = 0
+  var beforeReceive: ((Int) -> Void)?
   init(_ fields: [[String: Any]]) throws {
     frames = try fields.map {
       try ControlTLSFrame(kind: .control, payload: JSONSerialization.data(withJSONObject: $0))
@@ -111,17 +113,22 @@ private actor SavedStorage: ControlCredentialSource {
   }
   func receive() async throws -> ControlTLSFrame {
     guard !closed, !frames.isEmpty else { throw SavedControllerError.rejected }
+    receiveCount += 1
+    beforeReceive?(receiveCount)
     return frames.removeFirst()
   }
   func close() { closed = true }
 }
-@MainActor private func savedSetup(version: Int = 8) throws -> (SavedControllerClient, SavedIO) {
+@MainActor private func savedSetup(
+  version: Int = 8, hostExpiry: UInt64 = 60100, credentialExpiry: UInt64 = 100000,
+  clock: @escaping () -> UInt64 = { 100 }
+) throws -> (SavedControllerClient, SavedIO) {
   let endpoint = try TrustedHostEndpoint(
     host: "127.0.0.1", port: 1234,
     certificatePin: String(repeating: "1", count: 64), authorityInstanceID: "synthetic-authority")
   let credential = try PhoneCredential(
     hostPin: endpoint.certificatePin, phoneID: "phone-a", epoch: 1,
-    expiresAt: 100000, token: Data(repeating: 34, count: 32))
+    expiresAt: credentialExpiry, token: Data(repeating: 34, count: 32))
   let io = try SavedIO([
     [
       "version": 1, "command": "hello", "authorityInstanceId": endpoint.authorityInstanceID,
@@ -132,14 +139,14 @@ private actor SavedStorage: ControlCredentialSource {
       "version": 1, "command": "authenticated", "authorityInstanceId": endpoint.authorityInstanceID,
       "phoneId": "phone-a", "credentialEpoch": "1",
       "connectionId": String(repeating: "cd", count: 16),
-      "expiresAt": 60100, "role": "management", "inputSessionAvailable": false,
+      "expiresAt": hostExpiry, "role": "management", "inputSessionAvailable": false,
       "inputEnabled": false,
     ],
     try #require(savedFixture()["reply"] as? [String: Any]),
   ])
   return (
     SavedControllerClient(
-      endpoint: endpoint, io: io, storage: SavedStorage(credential), now: { 100 }), io
+      endpoint: endpoint, io: io, storage: SavedStorage(credential), now: clock), io
   )
 }
 @Test @MainActor func savedControllerClientUsesSeparateReadOnlyV8AndClosesAfterOneRead()
@@ -239,4 +246,29 @@ private final class SavedStackResult: @unchecked Sendable {
   thread.start()
   #expect(done.wait(timeout: .now() + 10) == .success)
   #expect(result.read() == nil)
+}
+
+@MainActor private final class SavedMapClock { var now: UInt64 = 100 }
+@Test(arguments: ["host-ahead", "local-cap", "rollback", "beyond-credential", "overflow"])
+@MainActor func savedMapClockSkewUsesBoundedLocalLifetimeAndPreservesTerminalGuards(_ mode: String)
+  async throws
+{
+  let clock = SavedMapClock()
+  let overflow = mode == "overflow"
+  if overflow { clock.now = UInt64(Int64.max) - 100 }
+  let (client, io) = try savedSetup(
+    hostExpiry: overflow ? UInt64(Int64.max) : mode == "beyond-credential" ? 100001 : 61100,
+    credentialExpiry: overflow ? UInt64(Int64.max) : 100000, clock: { clock.now })
+  io.beforeReceive = { index in
+    if index == 3 && mode == "local-cap" { clock.now = 60100 }
+    if index == 3 && mode == "rollback" { clock.now = 99 }
+  }
+  if mode == "host-ahead" {
+    #expect(try await client.read(savedRequest()).map.controls.count == 2)
+    #expect(io.sent.count == 3)
+  } else {
+    await #expect(throws: SavedControllerError.self) { try await client.read(savedRequest()) }
+    #expect(io.sent.count == (mode == "local-cap" || mode == "rollback" ? 3 : 2))
+  }
+  #expect(io.closed)
 }

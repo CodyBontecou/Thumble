@@ -88,15 +88,18 @@ jobs:
           set -euo pipefail
           export THUMBLE_REAL_SERVICE_PHONE_PROBE="$PWD/tooling/real-service-phone-probe.ts"
           export THUMBLE_NATIVE_INPUT_PROBE="$THUMBLE_REAL_SERVICE_PHONE_PROBE"
-          for witness in catalog input saved-map; do
+          for witness in catalog input saved-map analog; do
             if [[ "$witness" == catalog ]]; then
               test_filter=actualRealServiceCatalogReadPreservesNativePhoneHeldInput
               expected_cases=2
             elif [[ "$witness" == input ]]; then
               test_filter=actualPhoneTouchCrossesTlsAndNativeIpcThenRetiresAndReconnectsNeutral
               expected_cases=5
-            else
+            elif [[ "$witness" == saved-map ]]; then
               test_filter=actualSavedControllerServiceMapDeliversNativeInputAndRejectsUnsupportedProfile
+              expected_cases=3
+            else
+              test_filter=actualSavedAnalogServiceMapDeliversCombinedNativeInputAndRejectsUnsupportedProfile
               expected_cases=3
             fi
             events="$RUNNER_TEMP/real-service-swift-$witness.jsonl"
@@ -188,16 +191,19 @@ jobs:
           export THUMBLE_REAL_SERVICE_PHONE_PROBE="$GITHUB_WORKSPACE/Rewrite/tooling/real-service-phone-probe.ts"
           export THUMBLE_NATIVE_INPUT_PROBE="$THUMBLE_REAL_SERVICE_PHONE_PROBE"
           mkdir -p "$GITHUB_WORKSPACE/Rewrite/reports"
-          for witness in catalog input saved-map; do
+          for witness in catalog input saved-map analog; do
             if [[ "$witness" == catalog ]]; then
               filters=(--tests 'com.thumble.rewrite.input.RealServicePhoneTest.actualRealServiceCatalogReadPreservesNativePhoneHeldInput')
               result_file=TEST-com.thumble.rewrite.input.RealServicePhoneTest.xml
             elif [[ "$witness" == input ]]; then
               filters=(--tests 'com.thumble.rewrite.input.PhoneInputTest.actualNativeTouchCrossesTlsAndIpcWithFreshNeutralReconnect' --tests 'com.thumble.rewrite.input.PhoneInputTest.actualAutomaticRenewalHoldsBeyondInitialExpiryAcrossUdpAndTlsFallback')
               result_file=TEST-com.thumble.rewrite.input.PhoneInputTest.xml
-            else
+            elif [[ "$witness" == saved-map ]]; then
               filters=(--tests 'com.thumble.rewrite.input.SavedControllerServiceTest.actualSavedControllerServiceMapDeliversNativeInputAndRejectsUnsupportedProfile')
               result_file=TEST-com.thumble.rewrite.input.SavedControllerServiceTest.xml
+            else
+              filters=(--tests 'com.thumble.rewrite.input.SavedAnalogServiceTest.actualSavedAnalogMapDrivesBothSticksAndTriggersOverUdpAndFallback')
+              result_file=TEST-com.thumble.rewrite.input.SavedAnalogServiceTest.xml
             fi
             status=0
             bash ./gradlew --no-daemon testDebugUnitTest "${filters[@]}" --rerun > "$RUNNER_TEMP/real-service-kotlin-$witness.log" 2>&1 || status=$?
@@ -208,6 +214,7 @@ jobs:
               "catalog": {"actualRealServiceCatalogReadPreservesNativePhoneHeldInput"},
               "input": {"actualNativeTouchCrossesTlsAndIpcWithFreshNeutralReconnect", "actualAutomaticRenewalHoldsBeyondInitialExpiryAcrossUdpAndTlsFallback"},
               "saved-map": {"actualSavedControllerServiceMapDeliversNativeInputAndRejectsUnsupportedProfile"},
+              "analog": {"actualSavedAnalogMapDrivesBothSticksAndTriggersOverUdpAndFallback"},
           }[witness]
           result = {"platform": "kotlin", "witness": witness, "status": "failed"}
           try:
@@ -220,7 +227,7 @@ jobs:
               assert int(suite.attrib["tests"]) == len(expected)
               assert all(int(suite.attrib[k]) == 0 for k in ("skipped", "failures", "errors"))
               assert all(len(c) == 0 for c in cases)
-              result.update(status="passed", cases=len(cases), modes={"catalog": 2, "input": 5, "saved-map": 3}[witness], skipped=0, failures=0)
+              result.update(status="passed", cases=len(cases), modes={"catalog": 2, "input": 5, "saved-map": 3, "analog": 3}[witness], skipped=0, failures=0)
           except (AssertionError, OSError, ValueError, KeyError, TypeError, ET.ParseError):
               pass
           pathlib.Path(destination).write_text(json.dumps(result, sort_keys=True) + "\n")

@@ -28,7 +28,8 @@ export const FIRST = "aaaaaaaa-0000-0000-0000-000000000001",
   SECOND = "bbbbbbbb-0000-0000-0000-000000000002";
 const NEUTRAL = "0014000000000000000000000000000000000000",
   SOUTH = "0014001000000000000000000000000000000000",
-  TRIGGER = "00140010ff000000000000000000000000000000";
+  TRIGGER = "00140010ff000000000000000000000000000000",
+  ANALOG = "0014001066663333000000003333000000000000";
 const ROOT = resolve(import.meta.dir, "..");
 function object(value: unknown): Record<string, unknown> {
   assert(
@@ -63,7 +64,11 @@ function records(path: string, offset: number) {
   };
 }
 export class RealServicePhoneProbe {
+  private readonly analogController =
+    process.argv.includes("--saved-controller-analog") ||
+    process.argv.includes("--saved-controller-analog-unsupported");
   private readonly savedController =
+    this.analogController ||
     process.argv.includes("--saved-controller") ||
     process.argv.includes("--saved-controller-unsupported") ||
     process.argv.includes("--saved-controller-corner");
@@ -71,11 +76,30 @@ export class RealServicePhoneProbe {
     const seed = object(
       parseStrictJson(
         readFileSync(
-          resolve(ROOT, "packages/fixtures/saved-controller-v1.json"),
+          resolve(
+            ROOT,
+            "packages/fixtures",
+            this.analogController
+              ? "saved-controller-analog-v1.json"
+              : "saved-controller-v1.json",
+          ),
           "utf8",
         ),
       ),
     );
+    if (process.argv.includes("--saved-controller-analog-unsupported")) {
+      assert(
+        Array.isArray(seed.profiles) && seed.profiles.length === 2,
+        "probe_seed_profiles",
+      );
+      const customization = object(object(seed.profiles[1]).customization);
+      assert(
+        Array.isArray(customization.elements) &&
+          customization.elements.length === 5,
+        "probe_seed_controls",
+      );
+      object(object(customization.elements[0]).layout).rotationDegrees = 45;
+    }
     if (
       process.argv.includes("--saved-controller-unsupported") ||
       process.argv.includes("--saved-controller-corner")
@@ -121,7 +145,7 @@ export class RealServicePhoneProbe {
         samples: number;
         rotations: number;
         expected: string;
-        kind: "renewal" | "catalog";
+        kind: "renewal" | "catalog" | "analog";
       }
     | undefined;
   private closed = false;
@@ -340,9 +364,9 @@ export class RealServicePhoneProbe {
   }
   async command(byte: string): Promise<Record<string, unknown>> {
     return this.gate.command(async () => {
-      if (/^[abvczhnfqje]$/.test(byte)) this.diagnose(`phase_${byte}`);
+      if (/^[abvczhnfqjeko]$/.test(byte)) this.diagnose(`phase_${byte}`);
       const result = await this.handleCommand(byte);
-      if (/^[abvczhnfqje]$/.test(byte)) this.diagnose(`done_${byte}`);
+      if (/^[abvczhnfqjeko]$/.test(byte)) this.diagnose(`done_${byte}`);
       return result;
     });
   }
@@ -433,8 +457,12 @@ export class RealServicePhoneProbe {
         inputEnabled: false,
       };
     }
-    if (byte === "b" || byte === "q") {
-      const expected = byte === "b" ? TRIGGER : SOUTH;
+    if (byte === "b" || byte === "q" || byte === "k") {
+      assert(
+        byte !== "k" || this.analogController,
+        "probe_analog_mode_required",
+      );
+      const expected = byte === "b" ? TRIGGER : byte === "k" ? ANALOG : SOUTH;
       assert(!this.watch, "probe_watch_exists");
       await this.until(async () => {
         const s = await this.snapshot();
@@ -459,7 +487,7 @@ export class RealServicePhoneProbe {
         samples: 0,
         rotations: 0,
         expected,
-        kind: byte === "b" ? "renewal" : "catalog",
+        kind: byte === "b" ? "renewal" : byte === "k" ? "analog" : "catalog",
       };
       return {
         watching: true,
@@ -467,14 +495,15 @@ export class RealServicePhoneProbe {
         minimumMs: byte === "b" ? 75000 : 1500,
       };
     }
-    if (byte === "v" || byte === "j") {
+    if (byte === "v" || byte === "j" || byte === "o") {
       assert(this.watch, "probe_watch_missing");
       await this.observe();
       const watch = this.watch;
       this.watch = undefined;
       const durationMs = Math.floor(performance.now() - watch.started);
       assert(
-        watch.kind === (byte === "v" ? "renewal" : "catalog"),
+        watch.kind ===
+          (byte === "v" ? "renewal" : byte === "o" ? "analog" : "catalog"),
         "probe_watch_kind",
       );
       assert(
@@ -483,6 +512,15 @@ export class RealServicePhoneProbe {
           watch.samples > 0,
         "probe_hold_insufficient",
       );
+      if (byte === "o")
+        return {
+          analogHeld: true,
+          durationMs,
+          samples: watch.samples,
+          neutralPulses: 0,
+          inputTtlMs: 350,
+          inputEnabled: false,
+        };
       if (byte === "j")
         return {
           catalogHeld: true,
@@ -600,6 +638,8 @@ if (import.meta.main) {
               "--saved-controller",
               "--saved-controller-unsupported",
               "--saved-controller-corner",
+              "--saved-controller-analog",
+              "--saved-controller-analog-unsupported",
             ].includes(arg),
           ),
       "probe_arguments",
@@ -616,7 +656,15 @@ if (import.meta.main) {
     const code =
       error instanceof Error && /^probe_[a-z_]{1,96}$/.test(error.message)
         ? error.message
-        : "probe_real_service_failed";
+        : error instanceof Error &&
+            [
+              "service_timeout",
+              "service_unavailable",
+              "service_disconnected",
+              "invalid_service_response",
+            ].includes(error.message)
+          ? `probe_${error.message}`
+          : "probe_real_service_failed";
     process.stderr.write(`Error: "${code}"\n`);
     process.exitCode = 1;
   } finally {

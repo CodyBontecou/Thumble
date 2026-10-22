@@ -37,6 +37,16 @@ public enum PhoneCatalogResult: Sendable, Equatable {
     }
   }
 }
+/// Host and phone wall clocks need not agree. The host enforces its receipt expiry;
+/// the phone independently caps this one-shot read to sixty local seconds.
+enum ManagementReadDeadline {
+  static func admitted(hostExpiry: UInt64, credentialExpiry: UInt64, now: UInt64) -> UInt64? {
+    guard hostExpiry > now, hostExpiry <= credentialExpiry,
+      now <= UInt64(Int64.max) - 60000
+    else { return nil }
+    return min(hostExpiry, now + 60000)
+  }
+}
 /// A one-page, dedicated MANAGEMENT connection. It cannot create or access input sessions.
 @MainActor public final class PhoneCatalogClient {
   private let endpoint: TrustedHostEndpoint
@@ -136,9 +146,10 @@ public enum PhoneCatalogResult: Sendable, Equatable {
         admission["inputEnabled"] == .boolean(false), admission["role"] == .string("management"),
         case .string(let connection)? = admission["connectionId"], Self.hex(connection, count: 32),
         case .integer(let end)? = admission["expiresAt"], end > last,
-        end <= credential.metadata.expiresAt, end - last <= 60000
+        let localDeadline = ManagementReadDeadline.admitted(
+          hostExpiry: end, credentialExpiry: credential.metadata.expiresAt, now: last)
       else { throw PhoneCatalogError.rejected }
-      expires = end
+      expires = localDeadline
       try send([
         "version": 1, "command": "configuration-list", "connectionId": connection,
         "expectedRevision": expectedRevision as Any? ?? NSNull(), "offset": offset,

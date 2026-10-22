@@ -416,24 +416,42 @@ class ThumbleInputView(context: Context, appContext: AppContext) : ExpoView(cont
             val top = (control.y * height).toFloat()
             val right = ((control.x + control.width) * width).toFloat()
             val bottom = ((control.y + control.height) * height).toFloat()
-            val active =
-                state.buttons.any { it.name == control.action } ||
-                    (control.action == "leftTrigger" && state.leftTrigger > 0) ||
-                    (control.action == "rightTrigger" && state.rightTrigger > 0)
-            if (active) {
+            val vertical = control.action.endsWith("VerticalTrigger")
+            val horizontal = control.action.endsWith("HorizontalTrigger")
+            if (vertical || horizontal) {
+                val amount =
+                    if (control.action.startsWith("left")) state.leftTrigger else state.rightTrigger
                 paint.color = 0x4d007aff
-                canvas.drawRoundRect(
+                canvas.drawRect(
                     left,
-                    top,
-                    right,
+                    if (vertical) (bottom - (bottom - top) * amount).toFloat() else top,
+                    if (horizontal) (left + (right - left) * amount).toFloat() else right,
                     bottom,
-                    12f * resources.displayMetrics.density,
-                    12f * resources.displayMetrics.density,
                     paint,
                 )
+            } else {
+                val active =
+                    state.buttons.any { it.name == control.action } ||
+                        (control.action == "leftTrigger" && state.leftTrigger > 0) ||
+                        (control.action == "rightTrigger" && state.rightTrigger > 0)
+                if (active) {
+                    paint.color = 0x4d007aff
+                    canvas.drawRoundRect(
+                        left,
+                        top,
+                        right,
+                        bottom,
+                        12f * resources.displayMetrics.density,
+                        12f * resources.displayMetrics.density,
+                        paint,
+                    )
+                }
             }
-            if (control.action == "leftStick" || control.action == "rightStick") {
-                val isLeft = control.action == "leftStick"
+            if (
+                control.action in
+                    listOf("leftStick", "rightStick", "leftStandardStick", "rightStandardStick")
+            ) {
+                val isLeft = control.action.startsWith("left")
                 val x = if (isLeft) state.leftStickX else state.rightStickX
                 val y = if (isLeft) state.leftStickY else state.rightStickY
                 paint.color = 0xa6007aff.toInt()

@@ -172,7 +172,7 @@ test("unsupported interactive semantics/geometry fail without standard-map subst
     ["/profiles/0/outputMode", '"keyboard"', "unsupported_output_mode"],
     [
       "/profiles/0/customization/elements/0/kind",
-      '"joystick"',
+      '"trackpad"',
       "unsupported_control_kind",
     ],
     [geometry + "/shape", '"circle"', "unsupported_transform"],
@@ -323,4 +323,88 @@ test("one-rectangle maps require explicit zero retained hit insets and never ign
   expect(input.get(path)!.text()).toBe(
     '{"top":0,"leading":0,"bottom":0,"trailing":0}',
   );
+});
+
+test("declared starter controls use retained landscape grid centers per axis without inventing controls or bindings", () => {
+  const geometry = "/profiles/0/customization/buttonCustomizations/1";
+  const input = source()
+    .remove(geometry + "/centerX")
+    .remove(geometry + "/centerY");
+  const starter = project(input).map.controls[0]!;
+  expect(starter.id).toBe(id);
+  expect(starter.action).toBe("select");
+  expect(starter.x + starter.width / 2).toBeCloseTo(0.43, 12);
+  expect(starter.y + starter.height / 2).toBeCloseTo(0.56, 12);
+  expect(project(input).map.controls).toHaveLength(1);
+  const xOnly = project(input.set(geometry + "/centerX", "0.72")).map
+    .controls[0]!;
+  expect(xOnly.x + xOnly.width / 2).toBeCloseTo(0.72, 12);
+  expect(xOnly.y + xOnly.height / 2).toBeCloseTo(0.56, 12);
+  expect(input.get("/futureExactNumber")!.text()).toBe("9007199254740993.0000");
+  const expected = [
+    [0.18, 0.56 - (86 * 1.12) / 390],
+    [0.18, 0.56 + (86 * 1.12) / 390],
+    [0.18 - (86 * 1.12) / 844, 0.56],
+    [0.18 + (86 * 1.12) / 844, 0.56],
+    [0.82 + ((86 * 1.12) / 844) * 0.55, 0.56 + ((86 * 1.12) / 390) * 0.55],
+    [0.82 - ((86 * 1.12) / 844) * 0.55, 0.56 + ((86 * 1.12) / 390) * 0.55],
+    [0.82 + ((86 * 1.12) / 844) * 0.55, 0.56 - ((86 * 1.12) / 390) * 0.55],
+    [0.82 - ((86 * 1.12) / 844) * 0.55, 0.56 - ((86 * 1.12) / 390) * 0.55],
+    [0.43, 0.56],
+    [0.57, 0.56],
+  ];
+  for (let n = 1; n <= 10; n++) {
+    const controlId = "00000000-0000-0000-0000-00000000010" + n.toString(16);
+    const control = {
+      id: controlId,
+      kind: "button",
+      layout: {
+        shape: "rectangle",
+        hitInsets: { top: 0, leading: 0, bottom: 0, trailing: 0 },
+      },
+    };
+    const single = source()
+      .set("/profiles/0/customization/controlScale", '"standard"')
+      .set("/profiles/0/customization/elements", JSON.stringify([control]))
+      .set("/profiles/0/customization/buttonCustomizations", "[]")
+      .set("/profiles/0/customization/labelOverrides", "[]")
+      .set("/keyBindings", "{}")
+      .set("/outputBindings", "{}")
+      .set("/profileKeyBindings/EA000000-0000-0000-0000-000000000001", "{}")
+      .set(
+        "/profileOutputBindings/EA000000-0000-0000-0000-000000000001",
+        JSON.stringify({ [controlId]: { gamepadButtons: ["south"] } }),
+      );
+    for (const southpaw of [false, true]) {
+      const map = project(
+        southpaw
+          ? single.set("/profiles/0/customization/layoutMode", '"southpaw"')
+          : single,
+      ).map;
+      const actual = map.controls[0]!,
+        target = expected[n - 1]!;
+      // Retained southpaw swaps group centers, preserving each button's offset.
+      const x =
+        n <= 4
+          ? target[0]! + (southpaw ? 0.64 : 0)
+          : n <= 8
+            ? target[0]! - (southpaw ? 0.64 : 0)
+            : target[0]!;
+      expect(actual.x + actual.width / 2).toBeCloseTo(x, 12);
+      expect(actual.y + actual.height / 2).toBeCloseTo(target[1]!, 12);
+      expect(map.controls).toHaveLength(1);
+    }
+  }
+  for (const mode of ['"future"', "null", "1"])
+    expect(() =>
+      project(input.set("/profiles/0/customization/layoutMode", mode)),
+    ).toThrow("saved_controller_unsupported_geometry");
+  expect(() =>
+    project(
+      input.set(
+        "/profileOutputBindings/EA000000-0000-0000-0000-000000000001",
+        "{}",
+      ),
+    ),
+  ).toThrow("saved_controller_unbound_control");
 });

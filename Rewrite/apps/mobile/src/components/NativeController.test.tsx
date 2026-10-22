@@ -288,3 +288,45 @@ test("actual practice screen retains existing navigation and standard map", asyn
   expect(native().props.practiceMap.controls.length).toBeGreaterThan(1);
   expect(native().props.connect).toBeUndefined();
 });
+
+test("saved analog controls display familiar labels and pad visuals after native installation", async () => {
+  await mount();
+  const actions = [
+    "leftStandardStick",
+    "rightStandardStick",
+    "leftVerticalTrigger",
+    "rightVerticalTrigger",
+    "leftHorizontalTrigger",
+    "rightHorizontalTrigger",
+  ];
+  const controls = actions.map((action, index) => ({
+    id: `analog-${index}`,
+    action,
+    x: index * 0.15,
+    y: 0.2,
+    width: 0.1,
+    height: 0.2,
+  }));
+  await layout({ ...deliveredMap, controls });
+  await admission("ready");
+  expect(
+    controllerLabels().filter((label) =>
+      ["L", "R", "LT", "RT"].includes(String(label)),
+    ),
+  ).toEqual(["L", "R", "LT", "RT", "LT", "RT"]);
+  expect(
+    controllerLabels().some((label) => actions.includes(String(label))),
+  ).toBe(false);
+  const outlines =
+    renderer?.root.findAll(
+      (node) =>
+        String(node.type) === "View" && node.props.style?.borderWidth === 1,
+    ) ?? [];
+  expect(outlines.map((node) => node.props.style.borderRadius)).toEqual([
+    999, 999, 12, 12, 12, 12,
+  ]);
+  expect(outlines.map((node) => node.props.style.width)).toEqual(
+    Array(6).fill("10%"),
+  );
+  expect(native().props.pointerEvents).toBe("auto");
+});
