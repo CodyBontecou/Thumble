@@ -304,6 +304,49 @@ export class OwnedAuthorityDocument {
       digest,
     );
   }
+  duplicateProfile(
+    profileID: string,
+    newProfileID: string,
+    name: string,
+    updatedAt: string,
+    select: boolean,
+  ): OwnedAuthorityDocument {
+    const id = profileID.toLowerCase(),
+      index = this.catalog.profiles.findIndex((profile) => profile.id === id);
+    if (index < 0) throw new Error("profile_not_found");
+    const candidate = this.catalog.duplicateProfile(
+        profileID,
+        newProfileID,
+        name,
+        updatedAt,
+        select,
+      ),
+      prefix = `/profiles/${index}/`,
+      target = `/profiles/${this.catalog.profiles.length}/`;
+    const records = rows(this.source.get("/resources"), 8192).map((value) => ({
+      path: value.get("/path")!.stringValue!,
+      value,
+    }));
+    for (const record of [...records])
+      if (record.path.startsWith(prefix)) {
+        const path = target + record.path.slice(prefix.length);
+        records.push({
+          path,
+          value: record.value.set("/path", JSON.stringify(path)),
+        });
+      }
+    records.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+    // Existing descriptors retain their raw numeric/string source. Aliases share
+    // immutable hashes; the reader rechecks slot coverage and materialized size.
+    return OwnedAuthorityDocument.read(
+      this.source
+        .set("/document", candidate.source.text())
+        .set(
+          "/resources",
+          `[${records.map((record) => record.value.text()).join(",")}]`,
+        ),
+    );
+  }
   selectProfiles(
     activeProfileID: string,
     defaultProfileID: string | null,

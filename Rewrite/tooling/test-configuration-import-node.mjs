@@ -1,4 +1,4 @@
-// Independent modern/legacy MCP and CLI import parity, synthetic local fixture only.
+// Independent modern/legacy MCP and CLI saved-configuration parity; synthetic fixture only.
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { copyFileSync, existsSync, readFileSync, rmSync } from "node:fs";
@@ -57,7 +57,8 @@ const flags = (args) => [
 let scenarios = 0,
   last,
   lastExport,
-  lastSelection;
+  lastSelection,
+  lastDuplicate;
 try {
   await invoke("service", "start");
   const inspection = await invoke("configuration", "validate-file", [
@@ -106,6 +107,7 @@ try {
           "configuration_export_file",
           "configuration_export_status",
           "configuration_select_profiles",
+          "configuration_duplicate_profile",
         ])
           assert.equal(names.includes(name), writable);
         const catalog = await invoke("configuration", "list");
@@ -132,6 +134,17 @@ try {
                 catalog.profiles[0]?.id ??
                 "aaaaaaaa-0000-0000-0000-000000000001",
               defaultProfileId: null,
+            }),
+            /tool_unavailable/,
+          );
+          await assert.rejects(
+            call("configuration_duplicate_profile", {
+              operationId: "denied-copy",
+              expectedRevision: catalog.revision,
+              profileId: "aaaaaaaa-0000-0000-0000-000000000001",
+              newProfileId: "fa000000-0000-0000-0000-000000000001",
+              name: "Copy",
+              select: false,
             }),
             /tool_unavailable/,
           );
@@ -213,6 +226,115 @@ try {
             (await invoke("configuration", "list")).revision,
             result.receipt.resultingRevision,
           );
+          const copies = [];
+          for (const selectCopy of [false, true]) {
+            const beforeCopy = await invoke("configuration", "list"),
+              sourceIndex = selectCopy ? 1 : 0;
+            const duplicate = {
+              operationId: `copy-${legacy ? "legacy" : "modern"}-${selectCopy ? "select" : "keep"}`,
+              expectedRevision: beforeCopy.revision,
+              profileId: beforeCopy.profiles[sourceIndex].id,
+              newProfileId: `fb000000-0000-0000-0000-${String(100 + scenarios * 2 + (selectCopy ? 1 : 0)).padStart(12, "0")}`,
+              name: `  Copy ${sourceIndex} 🦊  `,
+              select: selectCopy,
+            };
+            const duplicateFlags = [
+              "--operation-id",
+              duplicate.operationId,
+              "--expected-revision",
+              duplicate.expectedRevision,
+              "--profile-id",
+              duplicate.profileId.toUpperCase(),
+              "--new-profile-id",
+              duplicate.newProfileId.toUpperCase(),
+              "--name",
+              duplicate.name,
+              selectCopy ? "--select" : "--keep-selection",
+            ];
+            const noSelection = duplicateFlags.slice(0, -1);
+            for (const invalidFlags of [
+              noSelection,
+              [...noSelection, "--select", "--keep-selection"],
+            ])
+              await assert.rejects(
+                execute(
+                  launcher[0],
+                  [
+                    ...launcher.slice(1),
+                    "configuration",
+                    "duplicate-profile",
+                    ...common,
+                    ...invalidFlags,
+                  ],
+                  { timeout: 5000, maxBuffer: 65536, windowsHide: true, env },
+                ),
+                (error) =>
+                  JSON.parse(error.stdout).error ===
+                  "configuration_selection_required",
+              );
+            const missingSelect = { ...duplicate };
+            delete missingSelect.select;
+            assert.equal(
+              (await call("configuration_duplicate_profile", missingSelect))
+                .isError,
+              true,
+            );
+            const [copiedMcp, copiedCli] = await Promise.all([
+              call("configuration_duplicate_profile", duplicate),
+              invoke("configuration", "duplicate-profile", duplicateFlags),
+            ]);
+            assert.notEqual(copiedMcp.isError, true);
+            const copied = copiedMcp.structuredContent.result;
+            assert.equal(copied.kind, "committed");
+            assert.deepEqual(copied.receipt, copiedCli.receipt);
+            assert.notEqual(copied.replayed, copiedCli.replayed);
+            assert.deepEqual(copied.receipt.affectedEntities, [
+              "configuration",
+              duplicate.newProfileId,
+            ]);
+            const afterCopy = await invoke("configuration", "list");
+            assert.equal(
+              afterCopy.profiles.length,
+              beforeCopy.profiles.length + 1,
+            );
+            assert.equal(
+              afterCopy.profiles.find(
+                (profile) => profile.id === duplicate.newProfileId,
+              ).name,
+              duplicate.name.trim(),
+            );
+            assert.equal(
+              afterCopy.activeProfileId,
+              selectCopy ? duplicate.newProfileId : beforeCopy.activeProfileId,
+            );
+            assert.equal(
+              afterCopy.defaultProfileId,
+              beforeCopy.defaultProfileId,
+            );
+            const changedCopy = await call("configuration_duplicate_profile", {
+              ...duplicate,
+              select: !selectCopy,
+            });
+            assert.equal(
+              changedCopy.structuredContent.error,
+              "operation_id_reused",
+            );
+            const staleCopy = await call("configuration_duplicate_profile", {
+              ...duplicate,
+              operationId: `stale-${duplicate.operationId}`,
+            });
+            assert.deepEqual(staleCopy.structuredContent.result, {
+              version: 1,
+              kind: "conflict",
+              currentRevision: afterCopy.revision,
+            });
+            copies.push({ args: duplicate, sourceIndex });
+            lastDuplicate = {
+              args: duplicate,
+              result: copied,
+              flags: duplicateFlags,
+            };
+          }
           const beforeSelection = await invoke("configuration", "list");
           const selection = {
             operationId: `select-${legacy ? "legacy" : "modern"}`,
@@ -364,9 +486,31 @@ try {
                 "outputBindings",
                 "profileKeyBindings",
                 "profileOutputBindings",
+                "profiles",
               ].includes(key)
             )
               assert.deepEqual(restoredDocument[key], originalDocument[key]);
+          assert.deepEqual(
+            restoredDocument.profiles.slice(
+              0,
+              originalDocument.profiles.length,
+            ),
+            originalDocument.profiles,
+          );
+          assert.equal(
+            restoredDocument.profiles.length,
+            originalDocument.profiles.length + copies.length,
+          );
+          for (const copy of copies) {
+            const actual = restoredDocument.profiles.find(
+                (profile) => profile.id === copy.args.newProfileId,
+              ),
+              original = originalDocument.profiles[copy.sourceIndex];
+            assert.equal(actual.name, copy.args.name.trim());
+            for (const key of Object.keys(original))
+              if (!["id", "name", "updatedAt"].includes(key))
+                assert.deepEqual(actual[key], original[key]);
+          }
           for (const [root, map] of [
             ["keyBindings", "profileKeyBindings"],
             ["outputBindings", "profileOutputBindings"],
@@ -443,6 +587,15 @@ try {
     replayed: true,
   });
 
+  const recoveredDuplicate = await invoke(
+    "configuration",
+    "duplicate-profile",
+    lastDuplicate.flags,
+  );
+  assert.deepEqual(recoveredDuplicate, {
+    ...lastDuplicate.result,
+    replayed: true,
+  });
   const exportPending = await invoke(
     "configuration",
     "export-file",

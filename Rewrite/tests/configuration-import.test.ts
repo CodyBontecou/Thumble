@@ -353,7 +353,18 @@ test.skipIf(process.platform === "win32")(
         } while (performance.now() - started < 2300);
         expect(owner.child.kill("SIGCONT")).toBe(true);
         suspended = false;
-        expect((await completed(owner, command)).kind).toBe("import-committed");
+        // Keep the input owner renewed while the resumed configuration child
+        // finishes disk work, just as the service heartbeat does in production.
+        let finished = false;
+        const completion = completed(owner, command).finally(() => {
+          finished = true;
+        });
+        void completion.catch(() => {});
+        do {
+          await controller.renew();
+          await Bun.sleep(100);
+        } while (!finished);
+        expect((await completion).kind).toBe("import-committed");
         expect((await controller.execute({ command: "status" })).active).toBe(
           true,
         );

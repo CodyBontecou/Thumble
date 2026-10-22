@@ -35,6 +35,8 @@ function options(values: string[]): Map<string, string | true> {
         "--allow-recorded-input",
         "--reveal-secret",
         "--allow-configuration-write",
+        "--select",
+        "--keep-selection",
       ].includes(key)
     ) {
       result.set(key, true);
@@ -54,6 +56,7 @@ function options(values: string[]): Map<string, string | true> {
         "--runtime-dir",
         "--receiver",
         "--profile-id",
+        "--new-profile-id",
         "--active-profile-id",
         "--default-profile-id",
         "--expected-revision",
@@ -329,6 +332,35 @@ async function main(): Promise<unknown> {
         ...(action !== "import-status"
           ? { path: required(opts, "--file") }
           : {}),
+      });
+      return requestConfiguration(readEndpoint(root, receiver), command);
+    }
+    if (action === "duplicate-profile") {
+      const allowed = [
+        "--runtime-dir",
+        "--receiver",
+        "--json",
+        "--operation-id",
+        "--expected-revision",
+        "--profile-id",
+        "--new-profile-id",
+        "--name",
+        "--select",
+        "--keep-selection",
+      ];
+      for (const key of opts.keys())
+        if (!allowed.includes(key))
+          throw new Error("invalid_configuration_option");
+      if (opts.has("--select") === opts.has("--keep-selection"))
+        throw new Error("configuration_selection_required");
+      const command = decodeConfigurationCommand({
+        command: "configuration-duplicate-profile",
+        operationId: required(opts, "--operation-id"),
+        expectedRevision: required(opts, "--expected-revision"),
+        profileId: required(opts, "--profile-id"),
+        newProfileId: required(opts, "--new-profile-id"),
+        name: required(opts, "--name"),
+        select: opts.has("--select"),
       });
       return requestConfiguration(readEndpoint(root, receiver), command);
     }

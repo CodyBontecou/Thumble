@@ -52,28 +52,27 @@ function initialMaps(
     LosslessJson.parse(JSON.stringify(outputs)),
   ];
 }
-/** Source-only selected binding synchronization; no asset materialization or
- * runtime publication. Existing map values retain every opaque source member. */
-export function synchronizeOwnedActiveBindings(
+/** Resolve the two known profile maps independently, sharing the exact retained
+ * fallback and owner checks between selection and duplication. */
+function profileBindingMaps(
   source: LosslessJson,
   profileIndex: number,
   profileIds: ReadonlySet<string>,
-): LosslessJson {
+) {
   const profile = source.get(`/profiles/${profileIndex}`)!,
-    idToken = profile.get("/id")!,
-    storedId = idToken.stringValue!,
+    storedId = profile.get("/id")!.stringValue!,
     selectedId = uuid(storedId);
-  // A metadata catalog is insufficient for binding fallback or owner checking.
   const controls = readOwnedProfileControls(profile),
     owners = new Set(controls.map((control) => control.id));
-  let fallbacks: readonly [LosslessJson, LosslessJson] | undefined,
-    result = source;
-  for (const [perProfile, root, keyboard, fallbackIndex] of [
-    ["profileKeyBindings", "keyBindings", true, 0],
-    ["profileOutputBindings", "outputBindings", false, 1],
-  ] as const) {
-    let map = source.get("/" + perProfile) ?? LosslessJson.parse("{}");
-    const seen = new Set<string>();
+  let fallbacks: readonly [LosslessJson, LosslessJson] | undefined;
+  return (
+    [
+      ["profileKeyBindings", "keyBindings", true, 0],
+      ["profileOutputBindings", "outputBindings", false, 1],
+    ] as const
+  ).map(([perProfile, root, keyboard, fallbackIndex]) => {
+    const map = source.get("/" + perProfile) ?? LosslessJson.parse("{}"),
+      seen = new Set<string>();
     let found: readonly [string, LosslessJson] | undefined;
     for (const [key, value] of entries(map, 512)) {
       const id = uuid(key);
@@ -84,9 +83,45 @@ export function synchronizeOwnedActiveBindings(
     if (!found && !fallbacks) fallbacks = initialMaps(controls);
     const chosen = found ? found[1] : fallbacks![fallbackIndex];
     validateOwnedBindingMap(chosen, owners, keyboard);
-    if (found && found[0] !== storedId)
-      map = map.remove("/" + segment(found[0]));
-    if (!found || found[0] !== storedId)
+    return { map, chosen, foundKey: found?.[0], storedId, perProfile, root };
+  });
+}
+/** Copy source-profile bindings into a new profile identity without changing the
+ * source aliases, direct root mirrors, or active/default selectors. */
+export function cloneOwnedProfileBindings(
+  source: LosslessJson,
+  profileIndex: number,
+  newProfileId: string,
+  profileIds: ReadonlySet<string>,
+): LosslessJson {
+  const id = uuid(newProfileId);
+  if (profileIds.has(id)) throw new Error("duplicate_profile_id");
+  let result = source;
+  for (const { map, chosen, perProfile } of profileBindingMaps(
+    source,
+    profileIndex,
+    profileIds,
+  ))
+    result = result.set(
+      "/" + perProfile,
+      map.set("/" + segment(id), chosen.text()).text(),
+    );
+  return result;
+}
+/** Source-only selected binding synchronization; no asset materialization or
+ * runtime publication. Existing map values retain every opaque source member. */
+export function synchronizeOwnedActiveBindings(
+  source: LosslessJson,
+  profileIndex: number,
+  profileIds: ReadonlySet<string>,
+): LosslessJson {
+  let result = source;
+  for (const resolved of profileBindingMaps(source, profileIndex, profileIds)) {
+    const { chosen, foundKey, storedId, perProfile, root } = resolved;
+    let map = resolved.map;
+    if (foundKey !== undefined && foundKey !== storedId)
+      map = map.remove("/" + segment(foundKey));
+    if (foundKey === undefined || foundKey !== storedId)
       map = map.set("/" + segment(storedId), chosen.text());
     for (const [path, value] of [
       ["/" + perProfile, map],

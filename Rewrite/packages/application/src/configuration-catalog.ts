@@ -74,7 +74,14 @@ export class ConfigurationCatalogOperations {
               command.expectedRevision,
               ...(command.command === "configuration-rename-profile"
                 ? [command.profileId, command.name]
-                : [command.activeProfileId, command.defaultProfileId]),
+                : command.command === "configuration-select-profiles"
+                  ? [command.activeProfileId, command.defaultProfileId]
+                  : [
+                      command.profileId,
+                      command.newProfileId,
+                      command.name,
+                      command.select,
+                    ]),
             ]),
           );
     if (command.command !== "configuration-list") {
@@ -160,13 +167,31 @@ export class ConfigurationCatalogOperations {
       const clock = counter(this.now());
       if (BigInt(clock) > 9223372036854775807n)
         throw new Error("configuration_clock_invalid");
-      const updatedAt =
-        BigInt(clock) > BigInt(profile.updatedAt) ? clock : profile.updatedAt;
-      candidate = authority
-        ? authority.renameProfile(command.profileId, command.name, updatedAt)
-            .source
-        : catalog.renameProfile(command.profileId, command.name, updatedAt)
-            .source;
+      if (command.command === "configuration-duplicate-profile") {
+        candidate = authority
+          ? authority.duplicateProfile(
+              command.profileId,
+              command.newProfileId,
+              command.name,
+              clock,
+              command.select,
+            ).source
+          : catalog.duplicateProfile(
+              command.profileId,
+              command.newProfileId,
+              command.name,
+              clock,
+              command.select,
+            ).source;
+      } else {
+        const updatedAt =
+          BigInt(clock) > BigInt(profile.updatedAt) ? clock : profile.updatedAt;
+        candidate = authority
+          ? authority.renameProfile(command.profileId, command.name, updatedAt)
+              .source
+          : catalog.renameProfile(command.profileId, command.name, updatedAt)
+              .source;
+      }
     }
     // Even a no-op commits a receipt/revision: retry semantics do not depend
     // on current names/selections, clocks or intervening configuration edits.
@@ -175,11 +200,12 @@ export class ConfigurationCatalogOperations {
       payloadHash: payloadHash!,
       expectedRevision: command.expectedRevision,
       source: candidate,
-      affectedEntities: [
+      affectedEntities:
         command.command === "configuration-select-profiles"
-          ? "configuration"
-          : command.profileId,
-      ],
+          ? ["configuration"]
+          : command.command === "configuration-duplicate-profile"
+            ? ["configuration", command.newProfileId]
+            : [command.profileId],
     });
     return Object.freeze({ version: 1, kind: "committed", ...result });
   }

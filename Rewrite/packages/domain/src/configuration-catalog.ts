@@ -1,5 +1,8 @@
 import { LosslessJson } from "@thumble/contracts/json";
-import { synchronizeOwnedActiveBindings } from "./owned-selection.ts";
+import {
+  cloneOwnedProfileBindings,
+  synchronizeOwnedActiveBindings,
+} from "./owned-selection.ts";
 
 const schema = "com.codybontecou.pocketpad.keypad-configuration";
 const rootFields = [
@@ -214,6 +217,46 @@ export class ConfigurationCatalog {
     return synchronized === this.source
       ? this
       : ConfigurationCatalog.read(synchronized);
+  }
+  /** Clone exact saved profile data under a fresh profile-scoped identity. */
+  duplicateProfile(
+    profileID: string,
+    newProfileID: string,
+    newName: string,
+    updatedAt: string,
+    select: boolean,
+  ): ConfigurationCatalog {
+    const id = uuid(profileID),
+      newId = uuid(newProfileID),
+      index = this.#indices.get(id);
+    if (index === undefined) throw new Error("profile_not_found");
+    if (this.#indices.has(newId)) throw new Error("duplicate_profile_id");
+    if (this.profiles.length >= 256)
+      throw new Error("configuration_profile_limit");
+    name(newName);
+    if (
+      typeof select !== "boolean" ||
+      !/^(?:0|[1-9][0-9]{0,18})$/.test(updatedAt)
+    )
+      invalid();
+    configurationTimestamp(LosslessJson.parse(updatedAt));
+    const profile = this.source
+      .get(`/profiles/${index}`)!
+      .set("/id", JSON.stringify(newId))
+      .set("/name", JSON.stringify(newName))
+      .set("/updatedAt", updatedAt);
+    const withBindings = cloneOwnedProfileBindings(
+      this.source,
+      index,
+      newId,
+      new Set(this.#indices.keys()),
+    );
+    const candidate = ConfigurationCatalog.read(
+      withBindings.set("/profiles/-", profile.text()),
+    );
+    return select
+      ? candidate.selectProfiles(newId, this.defaultProfileID)
+      : candidate;
   }
   /** Pure source edit addressed by stable profile ID, never current selection.
    * No persistence, receipt, clock, runtime activation or capability side effect. */

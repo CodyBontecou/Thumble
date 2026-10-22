@@ -35,6 +35,7 @@ export function startMcp(
       ? [
           "configuration_rename_profile",
           "configuration_select_profiles",
+          "configuration_duplicate_profile",
           "configuration_import_file",
           "configuration_import_status",
           "configuration_export_file",
@@ -193,6 +194,43 @@ export function startMcp(
                 await readEndpointAsync(root, receiver),
                 decodeConfigurationCommand({
                   command: "configuration-rename-profile",
+                  ...args,
+                }),
+              ),
+            ),
+        );
+      if (allowConfigurationWrite)
+        server.registerTool(
+          "configuration_duplicate_profile",
+          {
+            description:
+              "Duplicate an explicit saved profile into a caller-selected fresh UUID/name at expectedRevision. Copies profile-scoped control IDs, opaque metadata, all saved states/resources and known profile binding maps. select is required: true selects the copy and synchronizes its saved binding mirrors atomically; false retains current selectors/root mirrors. Default remains unchanged. New name is trimmed. Retry the exact intent for the original durable receipt. No runtime publication or receiver input activation.",
+            inputSchema: z
+              .object({
+                operationId: z.string().regex(/^[A-Za-z0-9-]{1,64}$/),
+                expectedRevision: epoch,
+                profileId: z
+                  .string()
+                  .regex(
+                    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+                  ),
+                newProfileId: z
+                  .string()
+                  .regex(
+                    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+                  ),
+                name: z.string().min(1).max(512),
+                select: z.boolean(),
+              })
+              .strict(),
+            annotations: annotations(false),
+          },
+          (args) =>
+            receipt(async () =>
+              requestConfiguration(
+                await readEndpointAsync(root, receiver),
+                decodeConfigurationCommand({
+                  command: "configuration-duplicate-profile",
                   ...args,
                 }),
               ),

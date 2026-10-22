@@ -45,7 +45,17 @@ export type ConfigurationSelectProfilesCommand = Readonly<{
   activeProfileId: string;
   defaultProfileId: string | null;
 }>;
+export type ConfigurationDuplicateProfileCommand = Readonly<{
+  command: "configuration-duplicate-profile";
+  operationId: string;
+  expectedRevision: string;
+  profileId: string;
+  newProfileId: string;
+  name: string;
+  select: boolean;
+}>;
 export type ConfigurationCommand =
+  | ConfigurationDuplicateProfileCommand
   | ConfigurationSelectProfilesCommand
   | ConfigurationExportCommand
   | ConfigurationImportCommand
@@ -189,6 +199,27 @@ export function decodeConfigurationCommand(
       expectedRevision:
         v.expectedRevision === null ? null : counter(v.expectedRevision),
       offset: offset(v.offset),
+    });
+  }
+  if (kind === "configuration-duplicate-profile") {
+    const v = object(value, [
+      "command",
+      "operationId",
+      "expectedRevision",
+      "profileId",
+      "newProfileId",
+      "name",
+      "select",
+    ]);
+    if (typeof v.select !== "boolean" || typeof v.name !== "string") invalid();
+    return Object.freeze({
+      command: kind,
+      operationId: identity(v.operationId),
+      expectedRevision: counter(v.expectedRevision),
+      profileId: configurationProfileId(v.profileId),
+      newProfileId: configurationProfileId(v.newProfileId),
+      name: configurationProfileName(v.name.trim()),
+      select: v.select,
     });
   }
   if (kind === "configuration-select-profiles") {
@@ -411,7 +442,8 @@ export function decodeConfigurationReply(
   if (
     kind === "committed" &&
     (command.command === "configuration-rename-profile" ||
-      command.command === "configuration-select-profiles")
+      command.command === "configuration-select-profiles" ||
+      command.command === "configuration-duplicate-profile")
   ) {
     const v = object(value, ["version", "kind", "receipt", "replayed"]);
     const r = object(v.receipt, [
@@ -422,10 +454,12 @@ export function decodeConfigurationReply(
       "affectedEntities",
     ]);
     const affected = r.affectedEntities;
-    const affectedEntity =
+    const expectedEntities =
       command.command === "configuration-rename-profile"
-        ? command.profileId
-        : "configuration";
+        ? [command.profileId]
+        : command.command === "configuration-select-profiles"
+          ? ["configuration"]
+          : ["configuration", command.newProfileId];
     if (
       v.version !== 1 ||
       r.version !== 1 ||
@@ -434,8 +468,12 @@ export function decodeConfigurationReply(
       r.resultingRevision !==
         (BigInt(command.expectedRevision) + 1n).toString() ||
       !Array.isArray(affected) ||
-      affected.length !== 1 ||
-      Object.getOwnPropertyDescriptor(affected, "0")?.value !== affectedEntity
+      affected.length !== expectedEntities.length ||
+      expectedEntities.some(
+        (entity, index) =>
+          Object.getOwnPropertyDescriptor(affected, String(index))?.value !==
+          entity,
+      )
     )
       invalid();
     return Object.freeze({
@@ -447,7 +485,7 @@ export function decodeConfigurationReply(
         operationId: command.operationId,
         resultingRevision: counter(r.resultingRevision),
         contentHash: hash(r.contentHash),
-        affectedEntities: Object.freeze([affectedEntity]),
+        affectedEntities: Object.freeze(expectedEntities),
       }),
     });
   }
