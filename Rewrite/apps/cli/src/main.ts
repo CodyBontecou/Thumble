@@ -54,6 +54,8 @@ function options(values: string[]): Map<string, string | true> {
         "--runtime-dir",
         "--receiver",
         "--profile-id",
+        "--active-profile-id",
+        "--default-profile-id",
         "--expected-revision",
         "--expected-generation",
         "--sequence",
@@ -327,6 +329,29 @@ async function main(): Promise<unknown> {
         ...(action !== "import-status"
           ? { path: required(opts, "--file") }
           : {}),
+      });
+      return requestConfiguration(readEndpoint(root, receiver), command);
+    }
+    if (action === "select-profiles") {
+      const allowed = [
+        "--runtime-dir",
+        "--receiver",
+        "--json",
+        "--operation-id",
+        "--expected-revision",
+        "--active-profile-id",
+        "--default-profile-id",
+      ];
+      for (const key of opts.keys())
+        if (!allowed.includes(key))
+          throw new Error("invalid_configuration_option");
+      const defaultId = required(opts, "--default-profile-id");
+      const command = decodeConfigurationCommand({
+        command: "configuration-select-profiles",
+        operationId: required(opts, "--operation-id"),
+        expectedRevision: required(opts, "--expected-revision"),
+        activeProfileId: required(opts, "--active-profile-id"),
+        defaultProfileId: defaultId === "none" ? null : defaultId,
       });
       return requestConfiguration(readEndpoint(root, receiver), command);
     }

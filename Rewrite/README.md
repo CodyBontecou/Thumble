@@ -20,13 +20,13 @@ Development checks use Node for independent MCP SDK and TLS protocol clients. Th
 
 ## Implemented paths
 
-| Path              | Current behavior                                                                                                                                                                                           |
-| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| CLI and stdio MCP | Shared local service operations, explicit configuration-write and recording-input capabilities, bounded typed replies                                                                                      |
-| Configuration     | Separate SQLite owner process; durable CAS receipts; lossless owned-v5 inspection; profile catalog listing/rename; reviewed-file import/export jobs; immutable content-addressed assets and crash recovery |
-| Pairing and trust | Explicit native host identity, manual listener/invitation, pinned TLS enrollment, native Keychain/Keystore credential storage and revocation                                                               |
-| Phone input       | Native iOS/Android touch ownership outside the React root; encrypted UDP with TLS fallback; neutral reconnect; lifecycle release; bounded grant renewal                                                    |
-| Receiver          | Independent generation/sequence checks, owner leases, input expiry and release acknowledgment; recording backend only                                                                                      |
+| Path              | Current behavior                                                                                                                                                                                                     |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| CLI and stdio MCP | Shared local service operations, explicit configuration-write and recording-input capabilities, bounded typed replies                                                                                                |
+| Configuration     | Separate SQLite owner process; durable CAS receipts; lossless owned-v5 inspection; profile catalog listing/rename/selection; reviewed-file import/export jobs; immutable content-addressed assets and crash recovery |
+| Pairing and trust | Explicit native host identity, manual listener/invitation, pinned TLS enrollment, native Keychain/Keystore credential storage and revocation                                                                         |
+| Phone input       | Native iOS/Android touch ownership outside the React root; encrypted UDP with TLS fallback; neutral reconnect; lifecycle release; bounded grant renewal                                                              |
+| Receiver          | Independent generation/sequence checks, owner leases, input expiry and release acknowledgment; recording backend only                                                                                                |
 
 Structural file inspection does not establish image decoding, platform output support or activation compatibility. Saved configuration is separate from ephemeral recording activation. No retained authority is automatically migrated or retired.
 
@@ -48,6 +48,8 @@ bun run cli configuration validate-file --file /absolute/path/configuration.json
 ```
 
 To initialize or replace saved configuration, inspect a local owned-v5 file first, then use the revision/hash-bound `configuration import-file` job and poll `configuration import-status`. See [the import contract](../docs/rewrite-configuration-import-v1.md). This admits saved data structurally and does not activate input or establish image/runtime compatibility.
+
+Saved active/default selection uses `configuration select-profiles` with both selectors and an expected revision. It synchronizes saved binding mirrors and leaves input activation separate. See [the selection contract](../docs/rewrite-profile-selection-v1.md).
 
 Export the pinned current saved configuration with `configuration export-file` and poll `configuration export-status`; the destination is never overwritten, and external resources are verified before materialization. See [the export contract](../docs/rewrite-configuration-export-v1.md). The portable [optical observation core](../docs/rewrite-wow-live-v1.md) decodes bounded pages and tracks observation freshness; capture and phone delivery remain open.
 

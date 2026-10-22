@@ -34,6 +34,7 @@ export function startMcp(
     ...(allowConfigurationWrite
       ? [
           "configuration_rename_profile",
+          "configuration_select_profiles",
           "configuration_import_file",
           "configuration_import_status",
           "configuration_export_file",
@@ -192,6 +193,42 @@ export function startMcp(
                 await readEndpointAsync(root, receiver),
                 decodeConfigurationCommand({
                   command: "configuration-rename-profile",
+                  ...args,
+                }),
+              ),
+            ),
+        );
+      if (allowConfigurationWrite)
+        server.registerTool(
+          "configuration_select_profiles",
+          {
+            description:
+              "Atomically select explicit saved active/default profile IDs at expectedRevision and synchronize their saved active binding mirrors. Both profiles must exist; null clears the saved default. Existing selected per-profile maps win, including empty maps; absent entries use that profile's verified control defaults/configured outputs. Preserves profile contents/resources and unrelated maps, and commits a durable retry receipt even for unchanged selectors. Does not publish runtime configuration, enable receiver input, or establish activation compatibility.",
+            inputSchema: z
+              .object({
+                operationId: z.string().regex(/^[A-Za-z0-9-]{1,64}$/),
+                expectedRevision: epoch,
+                activeProfileId: z
+                  .string()
+                  .regex(
+                    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+                  ),
+                defaultProfileId: z
+                  .string()
+                  .regex(
+                    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+                  )
+                  .nullable(),
+              })
+              .strict(),
+            annotations: annotations(false),
+          },
+          (args) =>
+            receipt(async () =>
+              requestConfiguration(
+                await readEndpointAsync(root, receiver),
+                decodeConfigurationCommand({
+                  command: "configuration-select-profiles",
                   ...args,
                 }),
               ),

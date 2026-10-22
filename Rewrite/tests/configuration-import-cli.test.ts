@@ -3,7 +3,7 @@ import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 const root = resolve(import.meta.dir, "..");
-test("CLI and both MCP SDK eras import/export, poll, enforce scoped files and recover safe retries", async () => {
+test("CLI and both MCP SDK eras import/export/select profiles with scoped IO and durable retries", async () => {
   const parent = realpathSync(
     mkdtempSync(join(tmpdir(), "thumble-import-cli-")),
   );

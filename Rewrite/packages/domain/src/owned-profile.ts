@@ -578,10 +578,9 @@ function appearanceBank(
 }
 /** Structural owned-v5/interchange admission, preserving exact opaque source.
  * Image decoding, platform output support and activation require separate gates. */
-export function readOwnedProfile(
+export function readOwnedProfileControls(
   source: LosslessJson,
-  digest: ResourceDigest,
-): OwnedProfile {
+): readonly OwnedElement[] {
   const layout = object(source.get("/customization"));
   canvas(layout.get("/deviceCanvas/frameID"));
   const mode = field(source, "outputMode");
@@ -637,6 +636,14 @@ export function readOwnedProfile(
     }
   }
   design(field(layout, "designMetadata"), elements);
+  return Object.freeze(elements);
+}
+export function readOwnedProfile(
+  source: LosslessJson,
+  digest: ResourceDigest,
+): OwnedProfile {
+  const layout = object(source.get("/customization")),
+    elements = readOwnedProfileControls(source);
   const resources = OwnedResourceTable.read(source, digest);
   const states = appearanceBank(field(source, "appearanceBank"), resources);
   canonicalPaint(layout, elements, resources);

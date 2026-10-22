@@ -38,7 +38,15 @@ export type ConfigurationExported = Readonly<{
   byteCount: number;
   replayed: boolean;
 }>;
+export type ConfigurationSelectProfilesCommand = Readonly<{
+  command: "configuration-select-profiles";
+  operationId: string;
+  expectedRevision: string;
+  activeProfileId: string;
+  defaultProfileId: string | null;
+}>;
 export type ConfigurationCommand =
+  | ConfigurationSelectProfilesCommand
   | ConfigurationExportCommand
   | ConfigurationImportCommand
   | Readonly<{
@@ -181,6 +189,25 @@ export function decodeConfigurationCommand(
       expectedRevision:
         v.expectedRevision === null ? null : counter(v.expectedRevision),
       offset: offset(v.offset),
+    });
+  }
+  if (kind === "configuration-select-profiles") {
+    const v = object(value, [
+      "command",
+      "operationId",
+      "expectedRevision",
+      "activeProfileId",
+      "defaultProfileId",
+    ]);
+    return Object.freeze({
+      command: kind,
+      operationId: identity(v.operationId),
+      expectedRevision: counter(v.expectedRevision),
+      activeProfileId: configurationProfileId(v.activeProfileId),
+      defaultProfileId:
+        v.defaultProfileId === null
+          ? null
+          : configurationProfileId(v.defaultProfileId),
     });
   }
   if (kind === "configuration-rename-profile") {
@@ -383,7 +410,8 @@ export function decodeConfigurationReply(
   }
   if (
     kind === "committed" &&
-    command.command === "configuration-rename-profile"
+    (command.command === "configuration-rename-profile" ||
+      command.command === "configuration-select-profiles")
   ) {
     const v = object(value, ["version", "kind", "receipt", "replayed"]);
     const r = object(v.receipt, [
@@ -394,6 +422,10 @@ export function decodeConfigurationReply(
       "affectedEntities",
     ]);
     const affected = r.affectedEntities;
+    const affectedEntity =
+      command.command === "configuration-rename-profile"
+        ? command.profileId
+        : "configuration";
     if (
       v.version !== 1 ||
       r.version !== 1 ||
@@ -403,8 +435,7 @@ export function decodeConfigurationReply(
         (BigInt(command.expectedRevision) + 1n).toString() ||
       !Array.isArray(affected) ||
       affected.length !== 1 ||
-      Object.getOwnPropertyDescriptor(affected, "0")?.value !==
-        command.profileId
+      Object.getOwnPropertyDescriptor(affected, "0")?.value !== affectedEntity
     )
       invalid();
     return Object.freeze({
@@ -416,7 +447,7 @@ export function decodeConfigurationReply(
         operationId: command.operationId,
         resultingRevision: counter(r.resultingRevision),
         contentHash: hash(r.contentHash),
-        affectedEntities: Object.freeze([command.profileId]),
+        affectedEntities: Object.freeze([affectedEntity]),
       }),
     });
   }

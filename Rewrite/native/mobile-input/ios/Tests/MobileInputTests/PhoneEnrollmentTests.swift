@@ -246,48 +246,41 @@ private func invitation() throws -> EnrollmentInvitation {
   @MainActor private func actualNativePhoneClientEnrollsThroughPinnedTLSToRustLedger() async throws
   {
     let path = try #require(ProcessInfo.processInfo.environment["THUMBLE_NATIVE_ENROLLMENT_PROBE"])
-    let process = Process()
-    let output = Pipe()
-    process.executableURL = URL(fileURLWithPath: path)
-    process.standardOutput = output
-    try process.run()
-    defer { if process.isRunning { process.terminate() } }
-    func line() throws -> [String: Any] {
-      var data = Data()
-      while data.count < 65_536 {
-        let byte = try #require(try output.fileHandleForReading.read(upToCount: 1))
-        guard !byte.isEmpty else { throw PhoneEnrollmentError.rejected }
-        if byte[0] == 10 {
-          return try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        }
-        data.append(byte)
+    let process = NativeProbeProcess(path: path)
+    do {
+      try await process.start()
+      func line() async throws -> [String: Any] {
+        let data = try await process.line()
+        return try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
       }
-      throw PhoneEnrollmentError.rejected
+      let offer = try await line()
+      let target = try EnrollmentInvitation(
+        host: "127.0.0.1", port: UInt16(try #require(offer["port"] as? Int)),
+        certificatePin: try #require(offer["pin"] as? String),
+        authorityInstanceID: try #require(offer["authorityInstanceId"] as? String),
+        windowID: try #require(offer["windowId"] as? String),
+        secret: try #require(offer["secret"] as? String),
+        expiresAt: UInt64(try #require(offer["expiresAt"] as? Int)))
+      let events = EnrollmentEvents()
+      let sink = EnrollmentTestSink(events)
+      let client = PhoneEnrollmentClient(
+        invitation: target,
+        io: try ControlTLSClient(
+          host: target.host, port: target.port, certificatePin: target.certificatePin), sink: sink,
+        now: { UInt64(Date().timeIntervalSince1970 * 1000) })
+      let metadata = try await client.enroll(phoneID: "phone-a", label: "Native controller")
+      let saved = await sink.saved?.metadata
+      #expect(metadata == saved)
+      let result = try await line()
+      #expect(result["completed"] as? Bool == true)
+      #expect(result["inputEnabled"] as? Bool == false)
+      client.close()
+      #expect(await process.wait() == 0)
+      await process.stop()
+    } catch {
+      await process.stop()
+      throw error
     }
-    let offer = try line()
-    let target = try EnrollmentInvitation(
-      host: "127.0.0.1", port: UInt16(try #require(offer["port"] as? Int)),
-      certificatePin: try #require(offer["pin"] as? String),
-      authorityInstanceID: try #require(offer["authorityInstanceId"] as? String),
-      windowID: try #require(offer["windowId"] as? String),
-      secret: try #require(offer["secret"] as? String),
-      expiresAt: UInt64(try #require(offer["expiresAt"] as? Int)))
-    let events = EnrollmentEvents()
-    let sink = EnrollmentTestSink(events)
-    let client = PhoneEnrollmentClient(
-      invitation: target,
-      io: try ControlTLSClient(
-        host: target.host, port: target.port, certificatePin: target.certificatePin), sink: sink,
-      now: { UInt64(Date().timeIntervalSince1970 * 1000) })
-    let metadata = try await client.enroll(phoneID: "phone-a", label: "Native controller")
-    let saved = await sink.saved?.metadata
-    #expect(metadata == saved)
-    let result = try line()
-    #expect(result["completed"] as? Bool == true)
-    #expect(result["inputEnabled"] as? Bool == false)
-    client.close()
-    process.waitUntilExit()
-    #expect(process.terminationStatus == 0)
   }
 #endif
 

@@ -56,7 +56,8 @@ const flags = (args) => [
 ];
 let scenarios = 0,
   last,
-  lastExport;
+  lastExport,
+  lastSelection;
 try {
   await invoke("service", "start");
   const inspection = await invoke("configuration", "validate-file", [
@@ -104,6 +105,7 @@ try {
           "configuration_import_status",
           "configuration_export_file",
           "configuration_export_status",
+          "configuration_select_profiles",
         ])
           assert.equal(names.includes(name), writable);
         const catalog = await invoke("configuration", "list");
@@ -120,6 +122,17 @@ try {
           );
           await assert.rejects(
             call("configuration_export_file", args),
+            /tool_unavailable/,
+          );
+          await assert.rejects(
+            call("configuration_select_profiles", {
+              operationId: "denied-selection",
+              expectedRevision: catalog.revision,
+              activeProfileId:
+                catalog.profiles[0]?.id ??
+                "aaaaaaaa-0000-0000-0000-000000000001",
+              defaultProfileId: null,
+            }),
             /tool_unavailable/,
           );
         } else {
@@ -200,6 +213,98 @@ try {
             (await invoke("configuration", "list")).revision,
             result.receipt.resultingRevision,
           );
+          const beforeSelection = await invoke("configuration", "list");
+          const selection = {
+            operationId: `select-${legacy ? "legacy" : "modern"}`,
+            expectedRevision: beforeSelection.revision,
+            activeProfileId: beforeSelection.profiles[1].id,
+            defaultProfileId: beforeSelection.profiles[0].id,
+          };
+          const selectionFlags = (args) => [
+            "--operation-id",
+            args.operationId,
+            "--expected-revision",
+            args.expectedRevision,
+            "--active-profile-id",
+            args.activeProfileId.toUpperCase(),
+            "--default-profile-id",
+            args.defaultProfileId === null
+              ? "none"
+              : args.defaultProfileId.toUpperCase(),
+          ];
+          const [selectedMcp, selectedCli] = await Promise.all([
+            call("configuration_select_profiles", selection),
+            invoke(
+              "configuration",
+              "select-profiles",
+              selectionFlags(selection),
+            ),
+          ]);
+          assert.notEqual(selectedMcp.isError, true);
+          const selected = selectedMcp.structuredContent.result;
+          assert.equal(selected.kind, "committed");
+          assert.deepEqual(selected.receipt, selectedCli.receipt);
+          assert.notEqual(selected.replayed, selectedCli.replayed);
+          assert.deepEqual(selected.receipt.affectedEntities, [
+            "configuration",
+          ]);
+          const afterSelection = await invoke("configuration", "list");
+          assert.equal(
+            afterSelection.activeProfileId,
+            selection.activeProfileId,
+          );
+          assert.equal(
+            afterSelection.defaultProfileId,
+            selection.defaultProfileId,
+          );
+          assert.equal(
+            afterSelection.revision,
+            selected.receipt.resultingRevision,
+          );
+          const staleSelection = await call("configuration_select_profiles", {
+            ...selection,
+            operationId: `stale-selection-${scenarios}`,
+          });
+          assert.deepEqual(staleSelection.structuredContent.result, {
+            version: 1,
+            kind: "conflict",
+            currentRevision: afterSelection.revision,
+          });
+          const alteredSelection = await call("configuration_select_profiles", {
+            ...selection,
+            defaultProfileId: null,
+          });
+          assert.equal(
+            alteredSelection.structuredContent.error,
+            "operation_id_reused",
+          );
+          const missingSelection = await call("configuration_select_profiles", {
+            ...selection,
+            operationId: `missing-selection-${scenarios}`,
+            expectedRevision: afterSelection.revision,
+            defaultProfileId: "cccccccc-0000-0000-0000-000000000003",
+          });
+          assert.equal(
+            missingSelection.structuredContent.error,
+            "profile_not_found",
+          );
+          const clearSelection = {
+            ...selection,
+            operationId: `clear-selection-${scenarios}`,
+            expectedRevision: afterSelection.revision,
+            defaultProfileId: null,
+          };
+          const cleared = await invoke(
+            "configuration",
+            "select-profiles",
+            selectionFlags(clearSelection),
+          );
+          assert.equal(cleared.kind, "committed");
+          lastSelection = {
+            args: selection,
+            result: selected,
+            flags: selectionFlags(selection),
+          };
           const authority = await invoke("configuration", "list");
           const exportArgs = {
             operationId: `export-${legacy ? "legacy" : "modern"}`,
@@ -241,10 +346,39 @@ try {
             JSON.stringify(exported).includes(exportArgs.path),
             false,
           );
-          assert.deepEqual(
-            JSON.parse(readFileSync(exportArgs.path, "utf8")),
-            JSON.parse(readFileSync(file, "utf8")),
-          );
+          const restoredDocument = JSON.parse(
+              readFileSync(exportArgs.path, "utf8"),
+            ),
+            originalDocument = JSON.parse(readFileSync(file, "utf8"));
+          const storedActiveId = originalDocument.profiles.find(
+            (profile) => profile.id.toLowerCase() === selection.activeProfileId,
+          ).id;
+          assert.equal(restoredDocument.activeProfileID, storedActiveId);
+          assert.equal(restoredDocument.defaultProfileID, null);
+          for (const key of Object.keys(originalDocument))
+            if (
+              ![
+                "activeProfileID",
+                "defaultProfileID",
+                "keyBindings",
+                "outputBindings",
+                "profileKeyBindings",
+                "profileOutputBindings",
+              ].includes(key)
+            )
+              assert.deepEqual(restoredDocument[key], originalDocument[key]);
+          for (const [root, map] of [
+            ["keyBindings", "profileKeyBindings"],
+            ["outputBindings", "profileOutputBindings"],
+          ]) {
+            assert.deepEqual(
+              restoredDocument[root],
+              restoredDocument[map][storedActiveId],
+            );
+            for (const [id, value] of Object.entries(originalDocument[map]))
+              if (id.toLowerCase() !== selection.activeProfileId)
+                assert.deepEqual(restoredDocument[map][id], value);
+          }
           const cliExportStatus = await invoke(
             "configuration",
             "export-status",
@@ -299,6 +433,16 @@ try {
     if (recovered.kind === "import-pending") await sleep(20);
   } while (recovered.kind === "import-pending" && performance.now() < deadline);
   assert.deepEqual(recovered, { ...last.result, replayed: true });
+  const recoveredSelection = await invoke(
+    "configuration",
+    "select-profiles",
+    lastSelection.flags,
+  );
+  assert.deepEqual(recoveredSelection, {
+    ...lastSelection.result,
+    replayed: true,
+  });
+
   const exportPending = await invoke(
     "configuration",
     "export-file",

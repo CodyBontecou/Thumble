@@ -20,6 +20,8 @@ The [portable optical core](../docs/rewrite-wow-live-v1.md) preserves the retain
 
 The [native clock reservation design](../docs/rewrite-native-clock-reservations-v2.md) removes packet-time durable trust writes while preserving epoch invalidation, rollback and fail-closed expiry. Review its bounded restart cooldown and latched storage-failure recovery.
 
+[Saved selection](../docs/rewrite-profile-selection-v1.md) atomically updates active/default identities and the selected binding mirrors. Inspect its disjoint-control, explicit-empty, independent fallback, source-preservation and export/re-import tests. Canonical v5 continues to reject retired orientation fields; legacy preservation belongs to migration.
+
 The source paths above are relative to `Rewrite/`, except the root workflow directory. The retained product remains in place while these seams are implemented.
 
 ## Reproduce the host checks

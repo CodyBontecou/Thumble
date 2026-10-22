@@ -143,6 +143,14 @@ impl Clock {
         self.demand.fetch_sub(1, Ordering::AcqRel);
     }
     #[cfg(test)]
+    pub fn remaining(&self) -> Duration {
+        self.state
+            .lock()
+            .unwrap()
+            .deadline
+            .saturating_duration_since(Instant::now())
+    }
+    #[cfg(test)]
     pub fn ceiling(&self) -> u64 {
         self.state.lock().unwrap().reserved
     }

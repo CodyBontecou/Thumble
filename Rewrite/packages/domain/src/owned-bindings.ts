@@ -49,31 +49,36 @@ export function readOwnedOutput(value: LosslessJson): OwnedOutput {
     gamepadButtons: Object.freeze([...buttons].sort()),
   });
 }
+export function validateOwnedBindingMap(
+  value: LosslessJson,
+  owners: ReadonlySet<string>,
+  keyboard: boolean,
+): void {
+  const seen = new Set<string>();
+  for (const [raw, binding] of entries(value, 384)) {
+    const id = uuid(raw);
+    if (seen.has(id) || !owners.has(id)) invalidOwned();
+    seen.add(id);
+    if (keyboard) readOwnedKeyboard(binding);
+    else readOwnedOutput(binding);
+  }
+}
 export function validateOwnedBindingMaps(
   source: LosslessJson,
   declarations: ReadonlyMap<string, ReadonlySet<string>>,
   activeProfileId: string,
 ): void {
-  function bindings(
-    value: LosslessJson,
-    owners: ReadonlySet<string>,
-    keyboard: boolean,
-  ): void {
-    const seen = new Set<string>();
-    for (const [raw, binding] of entries(value, 384)) {
-      const id = uuid(raw);
-      if (seen.has(id) || !owners.has(id)) invalidOwned();
-      seen.add(id);
-      if (keyboard) readOwnedKeyboard(binding);
-      else readOwnedOutput(binding);
-    }
-  }
   for (const [direct, perProfile, keyboard] of [
     ["keyBindings", "profileKeyBindings", true],
     ["outputBindings", "profileOutputBindings", false],
   ] as const) {
     const root = source.get("/" + direct);
-    if (root) bindings(root, declarations.get(activeProfileId)!, keyboard);
+    if (root)
+      validateOwnedBindingMap(
+        root,
+        declarations.get(activeProfileId)!,
+        keyboard,
+      );
     const profiles = source.get("/" + perProfile);
     if (!profiles) continue;
     const seen = new Set<string>();
@@ -82,7 +87,7 @@ export function validateOwnedBindingMaps(
         owners = declarations.get(id);
       if (seen.has(id) || !owners) invalidOwned();
       seen.add(id);
-      bindings(value, owners, keyboard);
+      validateOwnedBindingMap(value, owners, keyboard);
     }
   }
 }

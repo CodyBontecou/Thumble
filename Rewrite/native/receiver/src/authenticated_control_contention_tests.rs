@@ -36,6 +36,8 @@ fn reserved_input_and_status_bypass_stalled_storage_then_fail_closed_without_res
         .unwrap()
         .phone()
         .clone();
+    let clock = trust.clock();
+    let control_result = Mutex::new(None);
     let store = Mutex::new(trust);
     let mutation = Mutex::new(());
     let registry = Registry::default();
@@ -111,7 +113,7 @@ fn reserved_input_and_status_bypass_stalled_storage_then_fail_closed_without_res
         let control = scope.spawn(|| {
             let mut broker =
                 Broker::connect(&receiver_root, &registry, auth.binding, Some(42424)).unwrap();
-            serve_input(
+            let result = serve_input(
                 &mut server,
                 "authority-a",
                 &mut auth,
@@ -119,7 +121,12 @@ fn reserved_input_and_status_bypass_stalled_storage_then_fail_closed_without_res
                 &store,
                 &mutation,
                 &mut || Ok(100),
-            )
+            );
+            *control_result.lock().unwrap() = Some(result);
+            // Match the real host worker: an authorization failure closes TLS
+            // immediately instead of making the client wait for a read timeout.
+            server.close();
+            result
         });
         send(&mut client, json!({"version":1,"command":"input-grant","connectionId":connection,"generation":"1","revision":"1"})).unwrap();
         let grant: Value = receive(&mut client).unwrap();
@@ -145,6 +152,12 @@ fn reserved_input_and_status_bypass_stalled_storage_then_fail_closed_without_res
         let renewal_count = renewals.load(Ordering::SeqCst);
         let gate = mutation.lock().unwrap();
         let storage = store.lock().unwrap();
+        let contention_started = Instant::now();
+        eprintln!(
+            "contention phase=begin remainingMs={} snapshot={:?}",
+            clock.remaining().as_millis(),
+            snapshot.lock().unwrap()
+        );
         let (sent, queued) = mpsc::sync_channel(1);
         let (resume, resumed) = mpsc::sync_channel(1);
         let sent_held = held.clone();
@@ -152,29 +165,62 @@ fn reserved_input_and_status_bypass_stalled_storage_then_fail_closed_without_res
             let held = sent_held;
             // The first held packet arrives while the other operation owns the
             // durable store: neutral admission does not defer it behind fsync.
-            for _ in 0..20 {
-                client
-                    .send(FrameKind::Input, &sender.seal(&held).unwrap())
-                    .unwrap();
-                send(
-                    &mut client,
-                    json!({"version":1,"command":"control-status","connectionId":connection}),
-                )
-                .unwrap();
-                assert_eq!(
-                    receive::<Value>(&mut client).unwrap()["command"],
-                    "control-status"
-                );
-                thread::sleep(Duration::from_millis(20));
-            }
-            sent.send(()).unwrap();
+            // Measure the hold in real elapsed time. Fixed round-trip counts
+            // plus sleeps can exceed the 1000ms reservation under runner load.
+            // The final acknowledged sample occurs at/after 400ms, without
+            // renewing the reservation or changing native safety deadlines.
+            let started = Instant::now();
+            let phase = (|| -> Result<(u32, u128), &'static str> {
+                let mut iteration = 0;
+                loop {
+                    let cycle = Instant::now();
+                    let packet = sender.seal(&held).map_err(|_| "contention_seal_failed")?;
+                    client
+                        .send(FrameKind::Input, &packet)
+                        .map_err(|_| "contention_input_transport_failed")?;
+                    send(
+                        &mut client,
+                        json!({"version":1,"command":"control-status","connectionId":connection}),
+                    )?;
+                    let reply: Value = receive(&mut client)?;
+                    if reply["command"] != "control-status" {
+                        return Err("contention_status_mismatch");
+                    }
+                    iteration += 1;
+                    eprintln!(
+                        "contention phase=ack iteration={} elapsedMs={} cycleMs={}",
+                        iteration,
+                        started.elapsed().as_millis(),
+                        cycle.elapsed().as_millis()
+                    );
+                    let remaining = Duration::from_millis(400).saturating_sub(started.elapsed());
+                    if remaining.is_zero() {
+                        break;
+                    }
+                    thread::sleep(remaining.min(Duration::from_millis(20)));
+                }
+                Ok((iteration, started.elapsed().as_millis()))
+            })();
+            sent.send(phase).unwrap();
+            phase?;
             resumed.recv_timeout(Duration::from_secs(2)).unwrap();
             client
                 .send(FrameKind::Input, &sender.seal(&held).unwrap())
                 .unwrap();
             receive::<Value>(&mut client)
         });
-        queued.recv_timeout(Duration::from_secs(2)).unwrap();
+        let phase = queued.recv_timeout(Duration::from_secs(2));
+        eprintln!("contention phase=held result={phase:?} elapsedMs={} remainingMs={} control={:?} snapshot={:?}",contention_started.elapsed().as_millis(),clock.remaining().as_millis(),control_result.lock().unwrap(),snapshot.lock().unwrap());
+        assert!(
+            matches!(phase, Ok(Ok(_))),
+            "held phase failed: {phase:?}, control={:?}, snapshot={:?}",
+            control_result.lock().unwrap(),
+            snapshot.lock().unwrap()
+        );
+        assert!(
+            phase.unwrap().unwrap().1 >= 400,
+            "contention must outlast the 350ms input TTL"
+        );
         let state = snapshot.lock().unwrap().clone().unwrap();
         assert!(
             state.active,

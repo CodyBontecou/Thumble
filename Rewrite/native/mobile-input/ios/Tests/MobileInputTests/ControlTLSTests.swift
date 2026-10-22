@@ -66,32 +66,17 @@ import Testing
     async throws
   {
     let path = try #require(ProcessInfo.processInfo.environment["THUMBLE_NATIVE_TLS_PROBE"])
-    let process = Process()
-    let output = Pipe()
-    let errors = Pipe()
-    process.executableURL = URL(fileURLWithPath: path)
-    process.arguments = [mode]
-    process.standardOutput = output
-    process.standardError = errors
-    let timeout = DispatchWorkItem { if process.isRunning { process.terminate() } }
-    DispatchQueue.global().asyncAfter(deadline: .now() + 15, execute: timeout)
-    defer {
-      timeout.cancel()
-      if process.isRunning { process.terminate() }
-      process.waitUntilExit()
+    let probe = NativeProbeProcess(path: path, arguments: [mode])
+    do {
+      try await probe.start()
+      let info = try JSONDecoder().decode(ProbeInfo.self, from: await probe.line(maximum: 16_384))
+      #expect(!info.inputEnabled && info.scope == "synthetic-loopback-only")
+      try await run(info)
+      await probe.stop()
+    } catch {
+      await probe.stop()
+      throw error
     }
-    try process.run()
-    var line = Data()
-    while line.count < 16_384 {
-      guard let byte = try output.fileHandleForReading.read(upToCount: 1), !byte.isEmpty else {
-        throw ControlTLSError.rejected
-      }
-      if byte == Data([10]) { break }
-      line.append(byte)
-    }
-    let info = try JSONDecoder().decode(ProbeInfo.self, from: line)
-    #expect(!info.inputEnabled && info.scope == "synthetic-loopback-only")
-    try await run(info)
   }
   @Test(.enabled(if: ProcessInfo.processInfo.environment["THUMBLE_NATIVE_TLS_PROBE"] != nil))
   @MainActor private func actualNetworkFrameworkTLSExchangesControlAndEncryptedInputWithRust()

@@ -1,4 +1,5 @@
 import { LosslessJson } from "@thumble/contracts/json";
+import { synchronizeOwnedActiveBindings } from "./owned-selection.ts";
 
 const schema = "com.codybontecou.pocketpad.keypad-configuration";
 const rootFields = [
@@ -173,6 +174,46 @@ export class ConfigurationCatalog {
   }
   static read(source: LosslessJson): ConfigurationCatalog {
     return new ConfigurationCatalog(source);
+  }
+  /** Saved selection and its selected-profile binding mirrors. Profile content,
+   * timestamps and unrelated source remain untouched; no runtime publication. */
+  selectProfiles(
+    activeProfileID: string,
+    defaultProfileID: string | null,
+  ): ConfigurationCatalog {
+    const active = uuid(activeProfileID),
+      selectedDefault =
+        defaultProfileID === null ? null : uuid(defaultProfileID);
+    if (
+      !this.#indices.has(active) ||
+      (selectedDefault !== null && !this.#indices.has(selectedDefault))
+    )
+      throw new Error("profile_not_found");
+    const edits = new Map<string, LosslessJson>();
+    if (active !== this.activeProfileID)
+      edits.set(
+        "/activeProfileID",
+        this.source.get(`/profiles/${this.#indices.get(active)!}/id`)!,
+      );
+    if (selectedDefault !== this.defaultProfileID)
+      edits.set(
+        "/defaultProfileID",
+        selectedDefault === null
+          ? LosslessJson.parse("null")
+          : this.source.get(
+              `/profiles/${this.#indices.get(selectedDefault)!}/id`,
+            )!,
+      );
+    const selected =
+      edits.size === 0 ? this.source : this.source.replaceValues(edits);
+    const synchronized = synchronizeOwnedActiveBindings(
+      selected,
+      this.#indices.get(active)!,
+      new Set(this.#indices.keys()),
+    );
+    return synchronized === this.source
+      ? this
+      : ConfigurationCatalog.read(synchronized);
   }
   /** Pure source edit addressed by stable profile ID, never current selection.
    * No persistence, receipt, clock, runtime activation or capability side effect. */

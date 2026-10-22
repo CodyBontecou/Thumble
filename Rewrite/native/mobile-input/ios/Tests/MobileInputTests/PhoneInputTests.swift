@@ -348,152 +348,133 @@ private func everyNativeLifecycleCancellationClosesTheGrantChannel(_ reason: Rel
     async throws
   {
     let renewing = mode.hasPrefix("renewal-")
-    let process = Process()
-    if renewing { process.arguments = ["--renewal-watch"] }
-    let output = Pipe()
-    let input = Pipe()
-    process.executableURL = URL(
-      fileURLWithPath: try #require(
-        ProcessInfo.processInfo.environment["THUMBLE_NATIVE_INPUT_PROBE"]))
-    process.standardOutput = output
-    process.standardInput = input
-    try process.run()
-    defer { if process.isRunning { process.terminate() } }
-    func command(_ value: UInt8) throws {
-      try input.fileHandleForWriting.write(contentsOf: Data([value]))
-    }
-    let reader = InputProbeReader(output.fileHandleForReading)
-    func line() async throws -> [String: Any] {
-      let data = try await reader.line()
-      return try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
-    }
-    let offer = try await line()
-    let invitation = try EnrollmentInvitation(
-      host: "127.0.0.1", port: UInt16(try #require(offer["port"] as? Int)),
-      certificatePin: try #require(offer["pin"] as? String),
-      authorityInstanceID: try #require(offer["authorityInstanceId"] as? String),
-      windowID: try #require(offer["windowId"] as? String),
-      secret: try #require(offer["secret"] as? String),
-      expiresAt: UInt64(try #require(offer["expiresAt"] as? Int)))
-    let storage = ActualInputStorage()
-    let enrollment = PhoneEnrollmentClient(
-      invitation: invitation,
-      io: try ControlTLSClient(
-        host: invitation.host,
-        port: invitation.port, certificatePin: invitation.certificatePin), sink: storage,
-      now: { UInt64(Date().timeIntervalSince1970 * 1000) })
-    _ = try await enrollment.enroll(phoneID: "phone-a", label: "Native touch witness")
-    enrollment.close()
-    let endpoint = try TrustedHostEndpoint(
-      host: invitation.host, port: invitation.port,
-      certificatePin: invitation.certificatePin, authorityInstanceID: invitation.authorityInstanceID
-    )
-    for generation in ["1", "2"] {
-      let control = PhoneControlClient(
-        endpoint: endpoint,
-        io: try ControlTLSClient(
-          host: endpoint.host,
-          port: endpoint.port, certificatePin: endpoint.certificatePin), storage: storage,
-        now: { UInt64(Date().timeIntervalSince1970 * 1000) },
-        controlVersion: renewing ? 6 : (mode == "tls" ? 4 : 5),
-        datagramFactory: { host, port in
-          if mode == "udp-blackhole" || mode == "renewal-tls-fallback" {
-            return BlackholeDatagram()
-          }
-          return try NativeDatagramClient(host: host, port: port)
-        })
-      defer { control.close() }
-      #expect(try await control.authenticate().inputSessionAvailable)
-      try command(97)
-      let configuration = try await line()
-      #expect(configuration["generation"] as? String == generation)
-      let metadata = try await control.inputConfiguration()
-      #expect(
-        metadata.active && metadata.generation == generation && metadata.revision == generation)
-      #expect(!metadata.inputEnabled)
-      let map = ControlMap(
-        generation: generation, revision: generation,
-        controls: renewing
-          ? [
-            ControlRegion(id: "south", action: "south", x: 0, y: 0, width: 0.4, height: 1),
-            ControlRegion(
-              id: "trigger", action: "leftTrigger", x: 0.5, y: 0, width: 0.4, height: 1),
-          ] : inputMap().controls)
-      let engine = try await control.bindInput(map)
-      let adopted = try engine.claimTouchSurface()
-      #expect(adopted.generation == generation && adopted.revision == generation)
-      #expect(engine.connected)
-      try command(122)
-      #expect(try await line()["freshNeutral"] as? Bool == true)
-      #expect(engine.begin(id: 1, generation: generation, x: 0.2, y: 0.2))
-      if renewing && generation == "1" {
-        #expect(engine.begin(id: 2, generation: generation, x: 0.6, y: 0.2))
-        // Native frames keep flowing while the initial UDP loss detector selects fallback.
-        for _ in 0..<16 {
-          try await Task.sleep(for: .milliseconds(16))
-          engine.tick()
-        }
-        try command(98)
-        #expect(try await line()["watching"] as? Bool == true)
-        let until = ContinuousClock.now.advanced(by: .seconds(75))
-        while ContinuousClock.now < until {
-          try await Task.sleep(for: .milliseconds(16))
-          engine.tick()
-          try #require(engine.connected)
-        }
-        try command(118)
-        let verified = try await line()
-        #expect(verified["continuousHeld"] as? Bool == true)
-        #expect((verified["rotations"] as? Int ?? 0) >= 2)
-        #expect((verified["durationMs"] as? Int ?? 0) >= 75_000)
-        #expect(verified["neutralPulses"] as? Int == 0)
-        #expect(verified["inputTtlMs"] as? Int == 350)
-        print(
-          "native-renewal-witness platform=swift mode=\(mode) durationMs=\(verified["durationMs"] ?? 0) rotations=\(verified["rotations"] ?? 0) samples=\(verified["samples"] ?? 0)"
-        )
-        engine.end(id: 2, generation: generation)
-      } else if generation == "1" || mode != "tls" {
-        for _ in 0..<(generation == "1" ? 62 : 5) {
-          try await Task.sleep(for: .milliseconds(50))
-          engine.tick()
-        }
+    let process = NativeProbeProcess(
+      path: try #require(ProcessInfo.processInfo.environment["THUMBLE_NATIVE_INPUT_PROBE"]),
+      arguments: renewing ? ["--renewal-watch"] : [], timeout: .seconds(120))
+    do {
+      try await process.start()
+      func command(_ value: UInt8) async throws { try await process.send(value) }
+      func line() async throws -> [String: Any] {
+        let data = try await process.line()
+        return try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
       }
-      try command(104)
-      let held = try await line()
-      #expect(held["held"] as? Bool == true && held["inputEnabled"] as? Bool == false)
-      if generation == "1" { engine.cancel(.background) } else { control.close() }
-      try command(110)
-      let neutral = try await line()
-      #expect(
-        neutral["neutral"] as? Bool == true
-          && neutral["reason"] as? String == "native_input_released")
-      #expect(!engine.connected && GamepadReport.hex(engine.state) == GamepadReport.hex(.neutral))
+      let offer = try await line()
+      let invitation = try EnrollmentInvitation(
+        host: "127.0.0.1", port: UInt16(try #require(offer["port"] as? Int)),
+        certificatePin: try #require(offer["pin"] as? String),
+        authorityInstanceID: try #require(offer["authorityInstanceId"] as? String),
+        windowID: try #require(offer["windowId"] as? String),
+        secret: try #require(offer["secret"] as? String),
+        expiresAt: UInt64(try #require(offer["expiresAt"] as? Int)))
+      let storage = ActualInputStorage()
+      let enrollment = PhoneEnrollmentClient(
+        invitation: invitation,
+        io: try ControlTLSClient(
+          host: invitation.host,
+          port: invitation.port, certificatePin: invitation.certificatePin), sink: storage,
+        now: { UInt64(Date().timeIntervalSince1970 * 1000) })
+      _ = try await enrollment.enroll(phoneID: "phone-a", label: "Native touch witness")
+      enrollment.close()
+      let endpoint = try TrustedHostEndpoint(
+        host: invitation.host, port: invitation.port,
+        certificatePin: invitation.certificatePin,
+        authorityInstanceID: invitation.authorityInstanceID
+      )
+      for generation in ["1", "2"] {
+        let control = PhoneControlClient(
+          endpoint: endpoint,
+          io: try ControlTLSClient(
+            host: endpoint.host,
+            port: endpoint.port, certificatePin: endpoint.certificatePin), storage: storage,
+          now: { UInt64(Date().timeIntervalSince1970 * 1000) },
+          controlVersion: renewing ? 6 : (mode == "tls" ? 4 : 5),
+          datagramFactory: { host, port in
+            if mode == "udp-blackhole" || mode == "renewal-tls-fallback" {
+              return BlackholeDatagram()
+            }
+            return try NativeDatagramClient(host: host, port: port)
+          })
+        defer { control.close() }
+        #expect(try await control.authenticate().inputSessionAvailable)
+        try await command(97)
+        let configuration = try await line()
+        #expect(configuration["generation"] as? String == generation)
+        let metadata = try await control.inputConfiguration()
+        #expect(
+          metadata.active && metadata.generation == generation && metadata.revision == generation)
+        #expect(!metadata.inputEnabled)
+        let map = ControlMap(
+          generation: generation, revision: generation,
+          controls: renewing
+            ? [
+              ControlRegion(id: "south", action: "south", x: 0, y: 0, width: 0.4, height: 1),
+              ControlRegion(
+                id: "trigger", action: "leftTrigger", x: 0.5, y: 0, width: 0.4, height: 1),
+            ] : inputMap().controls)
+        let engine = try await control.bindInput(map)
+        let adopted = try engine.claimTouchSurface()
+        #expect(adopted.generation == generation && adopted.revision == generation)
+        #expect(engine.connected)
+        try await command(122)
+        #expect(try await line()["freshNeutral"] as? Bool == true)
+        #expect(engine.begin(id: 1, generation: generation, x: 0.2, y: 0.2))
+        if renewing && generation == "1" {
+          #expect(engine.begin(id: 2, generation: generation, x: 0.6, y: 0.2))
+          // Native frames keep flowing while the initial UDP loss detector selects fallback.
+          for _ in 0..<16 {
+            try await Task.sleep(for: .milliseconds(16))
+            engine.tick()
+          }
+          try await command(98)
+          #expect(try await line()["watching"] as? Bool == true)
+          let until = ContinuousClock.now.advanced(by: .seconds(75))
+          while ContinuousClock.now < until {
+            try await Task.sleep(for: .milliseconds(16))
+            engine.tick()
+            try #require(engine.connected)
+          }
+          try await command(118)
+          let verified = try await line()
+          #expect(verified["continuousHeld"] as? Bool == true)
+          #expect((verified["rotations"] as? Int ?? 0) >= 2)
+          #expect((verified["durationMs"] as? Int ?? 0) >= 75_000)
+          #expect(verified["neutralPulses"] as? Int == 0)
+          #expect(verified["inputTtlMs"] as? Int == 350)
+          print(
+            "native-renewal-witness platform=swift mode=\(mode) durationMs=\(verified["durationMs"] ?? 0) rotations=\(verified["rotations"] ?? 0) samples=\(verified["samples"] ?? 0)"
+          )
+          engine.end(id: 2, generation: generation)
+        } else if generation == "1" || mode != "tls" {
+          for _ in 0..<(generation == "1" ? 62 : 5) {
+            try await Task.sleep(for: .milliseconds(50))
+            engine.tick()
+          }
+        }
+        try await command(104)
+        let held = try await line()
+        #expect(held["held"] as? Bool == true && held["inputEnabled"] as? Bool == false)
+        if generation == "1" { engine.cancel(.background) } else { control.close() }
+        try await command(110)
+        let neutral = try await line()
+        #expect(
+          neutral["neutral"] as? Bool == true
+            && neutral["reason"] as? String == "native_input_released")
+        #expect(!engine.connected && GamepadReport.hex(engine.state) == GamepadReport.hex(.neutral))
+      }
+      try await command(102)
+      #expect(try await line()["completed"] as? Bool == true)
+      #expect(await process.wait() == 0)
+      await process.stop()
+    } catch {
+      await process.stop()
+      throw error
     }
-    try command(102)
-    #expect(try await line()["completed"] as? Bool == true)
-    process.waitUntilExit()
-    #expect(process.terminationStatus == 0)
   }
   @MainActor private final class BlackholeDatagram: NativeDatagramIO {
     private var closed = false
     func connect() async throws {}
     func offer(_ packet: Data) -> Bool { !closed }
     func close() { closed = true }
-  }
-  private actor InputProbeReader {
-    let handle: FileHandle
-    init(_ handle: FileHandle) { self.handle = handle }
-    func line() throws -> Data {
-      var data = Data()
-      while data.count < 65536 {
-        guard let byte = try handle.read(upToCount: 1), !byte.isEmpty else {
-          throw PhoneControlError.rejected
-        }
-        if byte[0] == 10 { return data }
-        data.append(byte)
-      }
-      throw PhoneControlError.rejected
-    }
   }
   private actor ActualInputStorage: ControlCredentialSource, EnrollmentCredentialSink {
     var credential: PhoneCredential?

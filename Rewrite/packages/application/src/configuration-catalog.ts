@@ -65,18 +65,19 @@ export class ConfigurationCatalogOperations {
     // A replay precedes both current-source decoding and the clock. The receipt
     // belongs to the original operation even after other edits or a restart.
     const payloadHash =
-      command.command === "configuration-rename-profile"
-        ? this.digest(
+      command.command === "configuration-list"
+        ? undefined
+        : this.digest(
             JSON.stringify([
               "thumble-catalog-operation-v1",
               command.command,
               command.expectedRevision,
-              command.profileId,
-              command.name,
+              ...(command.command === "configuration-rename-profile"
+                ? [command.profileId, command.name]
+                : [command.activeProfileId, command.defaultProfileId]),
             ]),
-          )
-        : undefined;
-    if (command.command === "configuration-rename-profile") {
+          );
+    if (command.command !== "configuration-list") {
       const previous = this.repository.receipt(
         command.operationId,
         payloadHash!,
@@ -142,26 +143,43 @@ export class ConfigurationCatalogOperations {
       : undefined;
     const catalog =
       authority?.catalog ?? ConfigurationCatalog.read(current.source);
-    const profile = catalog.profiles.find((p) => p.id === command.profileId);
-    if (!profile) throw new Error("profile_not_found");
-    const clock = counter(this.now());
-    if (BigInt(clock) > 9223372036854775807n)
-      throw new Error("configuration_clock_invalid");
-    const updatedAt =
-      BigInt(clock) > BigInt(profile.updatedAt) ? clock : profile.updatedAt;
-    const candidate = authority
-      ? authority.renameProfile(command.profileId, command.name, updatedAt)
-          .source
-      : catalog.renameProfile(command.profileId, command.name, updatedAt)
-          .source;
-    // Even a same-name operation commits a receipt/revision: retry semantics do
-    // not depend on the current name, clock or intervening configuration edits.
+    let candidate;
+    if (command.command === "configuration-select-profiles") {
+      candidate = authority
+        ? authority.selectProfiles(
+            command.activeProfileId,
+            command.defaultProfileId,
+          ).source
+        : catalog.selectProfiles(
+            command.activeProfileId,
+            command.defaultProfileId,
+          ).source;
+    } else {
+      const profile = catalog.profiles.find((p) => p.id === command.profileId);
+      if (!profile) throw new Error("profile_not_found");
+      const clock = counter(this.now());
+      if (BigInt(clock) > 9223372036854775807n)
+        throw new Error("configuration_clock_invalid");
+      const updatedAt =
+        BigInt(clock) > BigInt(profile.updatedAt) ? clock : profile.updatedAt;
+      candidate = authority
+        ? authority.renameProfile(command.profileId, command.name, updatedAt)
+            .source
+        : catalog.renameProfile(command.profileId, command.name, updatedAt)
+            .source;
+    }
+    // Even a no-op commits a receipt/revision: retry semantics do not depend
+    // on current names/selections, clocks or intervening configuration edits.
     const result = this.repository.commit({
       operationId: command.operationId,
       payloadHash: payloadHash!,
       expectedRevision: command.expectedRevision,
       source: candidate,
-      affectedEntities: [command.profileId],
+      affectedEntities: [
+        command.command === "configuration-select-profiles"
+          ? "configuration"
+          : command.profileId,
+      ],
     });
     return Object.freeze({ version: 1, kind: "committed", ...result });
   }

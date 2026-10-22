@@ -304,6 +304,20 @@ export class OwnedAuthorityDocument {
       digest,
     );
   }
+  selectProfiles(
+    activeProfileID: string,
+    defaultProfileID: string | null,
+  ): OwnedAuthorityDocument {
+    const candidate = this.catalog.selectProfiles(
+      activeProfileID,
+      defaultProfileID,
+    );
+    return candidate === this.catalog
+      ? this
+      : OwnedAuthorityDocument.read(
+          this.source.set("/document", candidate.source.text()),
+        );
+  }
   renameProfile(
     id: string,
     name: string,

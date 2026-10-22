@@ -247,61 +247,51 @@ private func controlCredential(
   private func actualNativePhoneEnrollsAndAuthenticatesOverPinnedTLSWithoutExportingBearer()
     async throws
   {
-    let process = Process()
-    let output = Pipe()
-    let input = Pipe()
-    process.executableURL = URL(
-      fileURLWithPath: try #require(
-        ProcessInfo.processInfo.environment["THUMBLE_NATIVE_AUTH_PROBE"]))
-    process.standardOutput = output
-    process.standardInput = input
-    try process.run()
-    defer { if process.isRunning { process.terminate() } }
-    func line() throws -> [String: Any] {
-      var data = Data()
-      while data.count < 65536 {
-        let byte = try #require(try output.fileHandleForReading.read(upToCount: 1))
-        guard !byte.isEmpty else { throw PhoneControlError.rejected }
-        if byte[0] == 10 {
-          return try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        }
-        data.append(byte)
+    let path = try #require(ProcessInfo.processInfo.environment["THUMBLE_NATIVE_AUTH_PROBE"])
+    let process = NativeProbeProcess(path: path)
+    do {
+      try await process.start()
+      func line() async throws -> [String: Any] {
+        let data = try await process.line()
+        return try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
       }
-      throw PhoneControlError.rejected
+      let offer = try await line()
+      let invitation = try EnrollmentInvitation(
+        host: "127.0.0.1", port: UInt16(try #require(offer["port"] as? Int)),
+        certificatePin: try #require(offer["pin"] as? String),
+        authorityInstanceID: try #require(offer["authorityInstanceId"] as? String),
+        windowID: try #require(offer["windowId"] as? String),
+        secret: try #require(offer["secret"] as? String),
+        expiresAt: UInt64(try #require(offer["expiresAt"] as? Int)))
+      let storage = ControlTestStorage()
+      let enrollment = PhoneEnrollmentClient(
+        invitation: invitation,
+        io: try ControlTLSClient(
+          host: invitation.host, port: invitation.port, certificatePin: invitation.certificatePin),
+        sink: storage, now: { UInt64(Date().timeIntervalSince1970 * 1000) })
+      let saved = try await enrollment.enroll(phoneID: "phone-a", label: "Native control")
+      enrollment.close()
+      let endpoint = try TrustedHostEndpoint(
+        host: invitation.host, port: invitation.port, certificatePin: invitation.certificatePin,
+        authorityInstanceID: invitation.authorityInstanceID)
+      let control = PhoneControlClient(
+        endpoint: endpoint,
+        io: try ControlTLSClient(
+          host: endpoint.host, port: endpoint.port, certificatePin: endpoint.certificatePin),
+        storage: storage, now: { UInt64(Date().timeIntervalSince1970 * 1000) })
+      defer { control.close() }
+      let receipt = try await control.authenticate()
+      #expect(receipt.phoneID == saved.phoneID)
+      #expect(receipt.credentialEpoch == saved.epoch)
+      #expect(try await control.status() == receipt)
+      try await control.disconnect()
+      try await process.send(102)
+      #expect(try await line()["completed"] as? Bool == true)
+      #expect(await process.wait() == 0)
+      await process.stop()
+    } catch {
+      await process.stop()
+      throw error
     }
-    let offer = try line()
-    let invitation = try EnrollmentInvitation(
-      host: "127.0.0.1", port: UInt16(try #require(offer["port"] as? Int)),
-      certificatePin: try #require(offer["pin"] as? String),
-      authorityInstanceID: try #require(offer["authorityInstanceId"] as? String),
-      windowID: try #require(offer["windowId"] as? String),
-      secret: try #require(offer["secret"] as? String),
-      expiresAt: UInt64(try #require(offer["expiresAt"] as? Int)))
-    let storage = ControlTestStorage()
-    let enrollment = PhoneEnrollmentClient(
-      invitation: invitation,
-      io: try ControlTLSClient(
-        host: invitation.host, port: invitation.port, certificatePin: invitation.certificatePin),
-      sink: storage, now: { UInt64(Date().timeIntervalSince1970 * 1000) })
-    let saved = try await enrollment.enroll(phoneID: "phone-a", label: "Native control")
-    enrollment.close()
-    let endpoint = try TrustedHostEndpoint(
-      host: invitation.host, port: invitation.port, certificatePin: invitation.certificatePin,
-      authorityInstanceID: invitation.authorityInstanceID)
-    let control = PhoneControlClient(
-      endpoint: endpoint,
-      io: try ControlTLSClient(
-        host: endpoint.host, port: endpoint.port, certificatePin: endpoint.certificatePin),
-      storage: storage, now: { UInt64(Date().timeIntervalSince1970 * 1000) })
-    defer { control.close() }
-    let receipt = try await control.authenticate()
-    #expect(receipt.phoneID == saved.phoneID)
-    #expect(receipt.credentialEpoch == saved.epoch)
-    #expect(try await control.status() == receipt)
-    try await control.disconnect()
-    try input.fileHandleForWriting.write(contentsOf: Data([102]))
-    #expect(try line()["completed"] as? Bool == true)
-    process.waitUntilExit()
-    #expect(process.terminationStatus == 0)
   }
 #endif
