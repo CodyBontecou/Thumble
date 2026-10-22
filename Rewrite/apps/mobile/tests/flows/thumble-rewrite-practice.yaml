@@ -1,0 +1,50 @@
+steps:
+  - echo: Restart Thumble Rewrite and establish portrait Home.
+  - launch: com.codybontecou.thumble.rewrite
+  - tool: rotate
+    args:
+      orientation: Portrait
+  - await:
+      visible:
+        id: home-practice
+  - await:
+      idle: true
+  - echo: Open practice. Expect the portrait orientation prompt.
+  - tap:
+      id: home-practice
+  - await:
+      visible:
+        id: practice-orientation-message
+  - await:
+      idle: true
+  - echo: Rotate to landscape. Readiness requires the native practice admission receipt.
+  - tool: rotate
+    args:
+      orientation: LandscapeLeft
+  - await:
+      visible:
+        id: practice-ready
+  - await:
+      idle: true
+  - echo: Rotate back to portrait and close practice. Expect Home and no remaining practice action.
+  - tool: rotate
+    args:
+      orientation: Portrait
+  - await:
+      visible:
+        id: practice-orientation-message
+  - await:
+      idle: true
+  - assert:
+      visible:
+        id: practice-done
+  - tap:
+      id: practice-done
+  - await:
+      visible:
+        id: home-practice
+  - await:
+      hidden:
+        id: practice-done
+  - await:
+      idle: true

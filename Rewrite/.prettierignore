@@ -7,3 +7,11 @@ packages/contracts/schema/mobile-input-v1.schema.json
 
 # Generated exact crypto fixtures; checked by generate-contracts.ts.
 packages/fixtures/input-packet-v1.json
+
+# Generated Expo native projects and SDK state; module sources stay checked.
+apps/mobile/ios/
+apps/mobile/android/
+apps/mobile/.expo/
+apps/mobile/expo-env.d.ts
+apps/mobile/modules/**/build/
+apps/mobile/modules/**/.gradle/

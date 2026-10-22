@@ -57,6 +57,52 @@ export interface NativeInputModule {
   release(reason: ReleaseReason): Promise<void>;
   snapshot(): Promise<NativeInputSnapshot>;
 }
+/** One acknowledgement per mounted practice view, never per-sample feedback. */
+export type PracticeAdmission =
+  | Readonly<{
+      version: 1;
+      status: "ready";
+      generation: string;
+      revision: string;
+      practice: true;
+      connected: false;
+    }>
+  | Readonly<{ version: 1; status: "unavailable" }>;
+export function decodePracticeAdmission(value: unknown): PracticeAdmission {
+  const status = Object.getOwnPropertyDescriptor(
+    record(value),
+    "status",
+  )?.value;
+  if (status === "unavailable") {
+    const v = dataObject(value, ["version", "status"]);
+    if (v.version !== 1) throw new Error("invalid_practice_admission");
+    return Object.freeze({ version: 1, status });
+  }
+  const v = dataObject(value, [
+    "version",
+    "status",
+    "generation",
+    "revision",
+    "practice",
+    "connected",
+  ]);
+  if (
+    v.version !== 1 ||
+    status !== "ready" ||
+    v.practice !== true ||
+    v.connected !== false ||
+    v.generation === "0"
+  )
+    throw new Error("invalid_practice_admission");
+  return Object.freeze({
+    version: 1,
+    status: "ready",
+    generation: counter(v.generation),
+    revision: counter(v.revision),
+    practice: true,
+    connected: false,
+  });
+}
 function dataObject(
   value: unknown,
   fields: readonly string[],

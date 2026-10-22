@@ -1,0 +1,14 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+group = 'com.thumble.rewrite.bridge'
+version = '0.0.0'
+android {
+  namespace 'com.thumble.rewrite.bridge'
+  defaultConfig { minSdk 29 }
+  sourceSets.main.java.srcDirs += [
+    '../../../../../native/mobile-input/android/src/main/kotlin',
+    '../../../../../packages/contracts/generated/kotlin'
+  ]
+}

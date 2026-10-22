@@ -35,6 +35,11 @@
       identities.removeAll()
       engine.setPractice(enabled)
     }
+    public func release(_ reason: ReleaseReason) {
+      identities.removeAll()
+      installedAt = ProcessInfo.processInfo.systemUptime
+      engine.cancel(reason)
+    }
     public func dispose() {
       identities.removeAll()
       displayLink?.invalidate()

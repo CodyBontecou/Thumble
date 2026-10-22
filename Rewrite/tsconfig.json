@@ -22,5 +22,6 @@
     "apps/**/*.ts",
     "tests/**/*.ts",
     "tooling/**/*.ts"
-  ]
+  ],
+  "exclude": ["apps/mobile/**"]
 }

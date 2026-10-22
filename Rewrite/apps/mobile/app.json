@@ -1,0 +1,38 @@
+{
+  "expo": {
+    "name": "Thumble Rewrite",
+    "slug": "thumble-rewrite",
+    "version": "0.0.0",
+    "scheme": "thumble-rewrite",
+    "userInterfaceStyle": "automatic",
+    "orientation": "default",
+    "ios": {
+      "bundleIdentifier": "com.codybontecou.thumble.rewrite",
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSLocalNetworkUsageDescription": "Connect to your Thumble receiver on your local network."
+      }
+    },
+    "android": {
+      "package": "com.codybontecou.thumble.rewrite",
+      "allowBackup": false
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "deploymentTarget": "17.0"
+          },
+          "android": {
+            "minSdkVersion": 29
+          }
+        }
+      ],
+      "./plugins/with-native-input.cjs",
+      "./plugins/with-native-qa.cjs"
+    ],
+    "platforms": ["ios", "android"]
+  }
+}

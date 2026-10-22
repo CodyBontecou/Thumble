@@ -1,6 +1,9 @@
 import { expect, test } from "bun:test";
 import fixture from "../packages/fixtures/mobile-input-v1.json";
-import { decodeControlMap } from "@thumble/contracts/mobile-input";
+import {
+  decodeControlMap,
+  decodePracticeAdmission,
+} from "@thumble/contracts/mobile-input";
 import { decodeGamepadState } from "@thumble/contracts";
 import { encodeGamepadReport } from "@thumble/domain";
 test("mobile control maps are bounded, immutable and share native semantic fixtures", () => {
@@ -111,4 +114,37 @@ test("native control lists reject holes and accessor elements without executing 
   });
   expect(() => decodeControlMap({ ...fixture.map, controls })).toThrow();
   expect(reads).toBe(0);
+});
+
+test("practice admission requires a native neutral-output receipt and rejects malformed metadata", () => {
+  const ready: import("@thumble/contracts/mobile-input").PracticeAdmission = {
+    version: 1,
+    status: "ready",
+    generation: "1",
+    revision: "0",
+    practice: true,
+    connected: false,
+  };
+  expect(decodePracticeAdmission(ready)).toEqual(ready);
+  expect(
+    decodePracticeAdmission({ version: 1, status: "unavailable" }),
+  ).toEqual({ version: 1, status: "unavailable" });
+  for (const change of [
+    { generation: "0" },
+    { generation: "01" },
+    { revision: 0 },
+    { practice: false },
+    { connected: true },
+    { extra: true },
+    { status: "starting" },
+    { version: 2 },
+  ])
+    expect(() => decodePracticeAdmission({ ...ready, ...change })).toThrow();
+  expect(() =>
+    decodePracticeAdmission({
+      version: 1,
+      status: "unavailable",
+      generation: "1",
+    }),
+  ).toThrow();
 });

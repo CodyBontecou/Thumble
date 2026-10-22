@@ -73,8 +73,9 @@ class InputSurface(context: Context, val engine: InputEngine) :
         engine.setPractice(enabled)
     }
 
-    private fun release(reason: ReleaseReason) {
+    fun release(reason: ReleaseReason) {
         generations.clear()
+        installedAt = SystemClock.uptimeMillis()
         engine.cancel(reason)
     }
 

@@ -15,7 +15,7 @@
     "generate": "bun tooling/generate-contracts.ts",
     "check:generated": "bun tooling/generate-contracts.ts --check",
     "check:boundaries": "bun tooling/check-boundaries.ts",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.portable.json",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.portable.json && tsc --noEmit -p apps/mobile/tsconfig.json",
     "test": "bun test",
     "verify": "bun run check:generated && bun run check:boundaries && bun run format:check && bun run typecheck && bun test",
     "test:ci": "bun tooling/ci-test.ts",
