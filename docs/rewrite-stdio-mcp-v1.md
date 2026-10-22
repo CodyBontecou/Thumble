@@ -32,7 +32,9 @@ backend; no physical input is emitted.
 | `receiver_activate` | Launch with `--allow-recorded-input` | CAS activation of an ephemeral runtime profile   |
 | `receiver_sample`   | Launch with `--allow-recorded-input` | One validated full-state recording sample        |
 
-The launching user's flag controls the tool catalog. A tool argument cannot
+The launching user's flag controls the tool catalog and the outer dispatch gate.
+Unavailable tool calls receive JSON-RPC `-32602` with `tool_unavailable` before
+SDK dispatch, without reflecting caller-controlled names. A tool argument cannot
 expand capabilities. Both recording operations use the existing contract decoders
 and epoch/replay barriers; emergency release remains available without opt-in.
 Tools have strict schemas and local-operation annotations. Receipts use structured
@@ -54,7 +56,9 @@ closes the protocol connection; clients must keep input open while awaiting
 responses. Existing in-flight authority work is not rolled back by disconnect.
 
 Headless tests use actual SDK clients for both eras against the independent
-native receiver/service. They cover catalog opt-in, malformed arguments, authority
+native receiver/service. A separate Node SDK client probe checks all four
+era/capability combinations against the Bun server, including invalid arguments
+and unavailable tools. They cover catalog opt-in, malformed arguments, authority
 parity, recording, release and service survival. The standalone packaging test
 also connects both client eras to the compiled binary in a temporary directory
 with no checkout or Bun on PATH. Frame and output-budget tests cover fragmented

@@ -21,6 +21,7 @@ export class BoundedStdioTransport implements Transport {
     private input: Readable,
     private output: Writable,
     private trace: (phase: string) => void = () => {},
+    private allowedTools?: ReadonlySet<string>,
   ) {}
   async start(): Promise<void> {
     if (this.started || this.closed)
@@ -74,6 +75,23 @@ export class BoundedStdioTransport implements Transport {
           )
             throw new Error();
           this.pending.add(message.id);
+        }
+        if (
+          "method" in message &&
+          message.method === "tools/call" &&
+          "id" in message &&
+          this.allowedTools &&
+          (typeof message.params?.name !== "string" ||
+            !this.allowedTools.has(message.params.name))
+        ) {
+          this.trace("tool-denied");
+          void this.send({
+            jsonrpc: "2.0",
+            id: message.id,
+            error: { code: -32602, message: "tool_unavailable" },
+          }).catch(this.error);
+          start = end + 1;
+          continue;
         }
         stage = "dispatch";
         this.trace("incoming");

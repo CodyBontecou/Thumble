@@ -20,10 +20,18 @@ export function startMcp(
     if (process.env.THUMBLE_REWRITE_MCP_TRACE === "1" && traces++ < 128)
       console.error(`MCP transport phase=${phase}`);
   };
+  const allowedTools = new Set([
+    "receiver_status",
+    "receiver_release",
+    "pairing_status",
+    "pairing_list",
+    ...(allowRecordedInput ? ["receiver_activate", "receiver_sample"] : []),
+  ]);
   const transport = new BoundedStdioTransport(
     process.stdin,
     process.stdout,
     trace,
+    allowedTools,
   );
   serveStdio(
     () => {

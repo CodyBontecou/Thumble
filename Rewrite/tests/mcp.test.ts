@@ -253,7 +253,7 @@ test("SDK modern and legacy clients share CLI authority, preserve input opt-in a
                 name: "receiver_activate",
                 arguments: { expectedRevision: "0", profileId: "mcp-profile" },
               }),
-            ).rejects.toThrow("Tool receiver_activate not found");
+            ).rejects.toThrow("tool_unavailable");
           }
           expect(
             (await call({ name: "receiver_release", arguments: {} })).isError,
@@ -299,3 +299,48 @@ test("SDK modern and legacy clients share CLI authority, preserve input opt-in a
     }
   }
 }, 30000);
+
+test("MCP rejects unavailable tools before dispatch without reflecting caller data", async () => {
+  const input = new PassThrough(),
+    output = new PassThrough();
+  const transport = new BoundedStdioTransport(
+    input,
+    output,
+    () => {},
+    new Set(["receiver_status"]),
+  );
+  let response = "",
+    calls = 0;
+  output.on("data", (chunk) => {
+    response += chunk.toString();
+  });
+  transport.onmessage = () => {
+    calls++;
+  };
+  await transport.start();
+  input.write(
+    JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/call",
+      params: { name: "private-caller-data", arguments: {} },
+    }) + "\n",
+  );
+  expect(calls).toBe(0);
+  expect(JSON.parse(response)).toEqual({
+    jsonrpc: "2.0",
+    id: 1,
+    error: { code: -32602, message: "tool_unavailable" },
+  });
+  expect(response).not.toContain("private-caller-data");
+  input.write(
+    JSON.stringify({
+      jsonrpc: "2.0",
+      id: 2,
+      method: "tools/call",
+      params: { name: "receiver_status", arguments: {} },
+    }) + "\n",
+  );
+  expect(calls).toBe(1);
+  await transport.close();
+});
