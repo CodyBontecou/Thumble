@@ -33,6 +33,30 @@ const PACKET: u8 = 3;
 const RELEASE: u8 = 4;
 const ROTATE: u8 = 5;
 const SAVED_STATUS: u8 = 6;
+const OUTPUT_STATUS: u8 = 7;
+const PHYSICAL_GRANT: u8 = 8;
+const PHYSICAL_PACKET: u8 = 9;
+const PHYSICAL_RELEASE: u8 = 10;
+const PHYSICAL_ROTATE: u8 = 11;
+fn canonical_op(op: u8) -> u8 {
+    match op {
+        PHYSICAL_GRANT => GRANT,
+        PHYSICAL_PACKET => PACKET,
+        PHYSICAL_RELEASE => RELEASE,
+        PHYSICAL_ROTATE => ROTATE,
+        _ => op,
+    }
+}
+fn physical_op(op: u8) -> u8 {
+    match op {
+        GRANT => PHYSICAL_GRANT,
+        PACKET => PHYSICAL_PACKET,
+        RELEASE => PHYSICAL_RELEASE,
+        ROTATE => PHYSICAL_ROTATE,
+        _ => op,
+    }
+}
+
 fn random<const N: usize>() -> Result<[u8; N], &'static str> {
     let mut bytes = [0; N];
     SystemRandom::new()
@@ -140,6 +164,7 @@ pub struct NativeGrant {
     revision: u64,
     lifetime_ms: u32,
     binding: GrantRef,
+    physical: bool,
 }
 impl NativeGrant {
     pub fn binding(&self) -> GrantRef {
@@ -185,7 +210,24 @@ impl NativeGrant {
         if channel.native_binding() != Some(self.binding.connection) {
             return Err("native_grant_delivery_unconfirmed");
         }
+        let value = self.control_reply(udp_port, renewal)?;
+        channel
+            .send(
+                crate::control_tls::FrameKind::Control,
+                &serde_json::to_vec(&value).map_err(|_| "native_grant_delivery_unconfirmed")?,
+            )
+            .map_err(|_| "native_grant_delivery_unconfirmed")
+    }
+    fn control_reply(
+        &self,
+        udp_port: Option<u16>,
+        renewal: Option<(&str, u64)>,
+    ) -> Result<serde_json::Value, &'static str> {
         let mut value = serde_json::json!({"version":1,"command":"input-granted","connectionId":crate::gamepad::hex(&self.binding.connection),"generation":self.generation.to_string(),"revision":self.revision.to_string(),"sessionId":crate::gamepad::hex(&self.session),"key":crate::gamepad::hex(&self.key),"noncePrefix":crate::gamepad::hex(&self.prefix),"lifetimeMs":self.lifetime_ms,"packetVersion":1,"packetBytes":PACKET_BYTES,"packetLimit":PACKET_LIMIT.to_string(),"transport":"tls","inputEnabled":false});
+        if self.physical {
+            value["inputEnabled"] = serde_json::json!(true);
+            value["outputBackend"] = serde_json::json!("macos-hid");
+        }
         if let Some(port) = udp_port {
             if port == 0 {
                 return Err("native_grant_delivery_unconfirmed");
@@ -205,12 +247,7 @@ impl NativeGrant {
             value["replacesSessionId"] = serde_json::json!(previous);
             value["authorizationExpiresAt"] = serde_json::json!(expires);
         }
-        channel
-            .send(
-                crate::control_tls::FrameKind::Control,
-                &serde_json::to_vec(&value).map_err(|_| "native_grant_delivery_unconfirmed")?,
-            )
-            .map_err(|_| "native_grant_delivery_unconfirmed")
+        Ok(value)
     }
     /// Native fixture/delivery owner only. Consumes the material so callers cannot reset its sender.
     pub fn into_sender(self) -> Result<PacketSender, &'static str> {
@@ -227,11 +264,14 @@ pub struct Configuration {
     pub active: bool,
     pub generation: u64,
     pub revision: u64,
+    pub backend: &'static str,
+    pub input_enabled: bool,
 }
 /// One serialized native worker connection. Never put this blocking API on the safety/input/UI loop.
 pub struct Client {
     stream: TcpStream,
     token: [u8; 32],
+    physical: bool,
 }
 impl Client {
     pub fn connect(root: &Path) -> Result<Self, &'static str> {
@@ -270,12 +310,20 @@ impl Client {
         {
             return Err("native_input_server_rejected");
         }
-        Ok(Self { stream, token })
+        Ok(Self {
+            stream,
+            token,
+            physical: false,
+        })
+    }
+    pub(crate) fn physical_output(&self) -> bool {
+        self.physical
     }
     pub(crate) fn close(&mut self) {
         let _ = self.stream.shutdown(Shutdown::Both);
     }
     fn request(&mut self, op: u8, payload: &[u8]) -> Result<Vec<u8>, &'static str> {
+        let op = if self.physical { physical_op(op) } else { op };
         let mut bytes = vec![1];
         bytes.extend_from_slice(&self.token);
         bytes.push(op);
@@ -320,6 +368,9 @@ impl Client {
         Ok(reply[2..].to_vec())
     }
     pub fn configuration(&mut self) -> Result<Configuration, &'static str> {
+        if self.physical {
+            return Ok(self.output_configuration()?.0);
+        }
         let b = self.request(STATUS, &[])?;
         if b.len() != 17 || b[0] > 1 {
             return Err("native_input_frame_invalid");
@@ -328,6 +379,8 @@ impl Client {
             active: b[0] == 1,
             generation: number(&b, 1),
             revision: number(&b, 9),
+            backend: "recording",
+            input_enabled: false,
         })
     }
     /// Read-only saved source pin. No grant, input packet, or owner renewal.
@@ -335,13 +388,20 @@ impl Client {
         &mut self,
     ) -> Result<(Configuration, Option<crate::packet_runtime::SavedBinding>), &'static str> {
         let bytes = self.request(SAVED_STATUS, &[])?;
+        Self::decode_saved_configuration(&bytes)
+    }
+    fn decode_saved_configuration(
+        bytes: &[u8],
+    ) -> Result<(Configuration, Option<crate::packet_runtime::SavedBinding>), &'static str> {
         if bytes.len() < 18 || bytes[0] > 1 || bytes[17] > 1 {
             return Err("native_input_frame_invalid");
         }
         let configuration = Configuration {
             active: bytes[0] == 1,
-            generation: number(&bytes, 1),
-            revision: number(&bytes, 9),
+            generation: number(bytes, 1),
+            revision: number(bytes, 9),
+            backend: "recording",
+            input_enabled: false,
         };
         let pin = if bytes[17] == 0 {
             if bytes.len() != 18 {
@@ -352,7 +412,7 @@ impl Client {
             if bytes.len() != 126
                 || !configuration.active
                 || configuration.generation == 0
-                || number(&bytes, 18) == 0
+                || number(bytes, 18) == 0
             {
                 return Err("native_input_frame_invalid");
             }
@@ -368,7 +428,7 @@ impl Client {
                 return Err("native_input_frame_invalid");
             }
             Some(crate::packet_runtime::SavedBinding {
-                configuration_revision: number(&bytes, 18).to_string(),
+                configuration_revision: number(bytes, 18).to_string(),
                 source_hash: source_hash.into(),
                 profile_id: profile_id.into(),
                 generation: configuration.generation.to_string(),
@@ -376,6 +436,41 @@ impl Client {
             })
         };
         Ok((configuration, pin))
+    }
+    /// Output-aware read-only status, separate from the unchanged recording-only opcodes.
+    pub fn output_configuration(
+        &mut self,
+    ) -> Result<(Configuration, Option<crate::packet_runtime::SavedBinding>), &'static str> {
+        let bytes = self.request(OUTPUT_STATUS, &[])?;
+        if !matches!(bytes.len(), 20 | 128) {
+            return Err("native_input_frame_invalid");
+        }
+        let at = bytes.len() - 2;
+        let (mut configuration, pin) = Self::decode_saved_configuration(&bytes[..at])?;
+        configuration.backend = match bytes[at] {
+            0 => "recording",
+            1 => "macos-hid",
+            _ => return Err("native_input_frame_invalid"),
+        };
+        if bytes[at + 1] > 1
+            || (bytes[at] == 0 && bytes[at + 1] != 0)
+            || (!configuration.active && bytes[at + 1] != 0)
+        {
+            return Err("native_input_frame_invalid");
+        }
+        configuration.input_enabled = bytes[at + 1] == 1;
+        if self.physical && configuration.backend != "macos-hid" {
+            return Err("native_input_backend_not_supported");
+        }
+        Ok((configuration, pin))
+    }
+    pub(crate) fn require_physical_output(&mut self) -> Result<Configuration, &'static str> {
+        let c = self.output_configuration()?.0;
+        if c.backend != "macos-hid" {
+            return Err("native_input_backend_not_supported");
+        }
+        self.physical = true;
+        Ok(c)
     }
     /// Caller must hold a current authenticated connection capability and trust mutation fence.
     pub fn grant(
@@ -402,6 +497,7 @@ impl Client {
         }
         let session = b[32..48].try_into().unwrap();
         Ok(NativeGrant {
+            physical: self.physical,
             key: b[..32].try_into().unwrap(),
             session,
             prefix: b[48..52].try_into().unwrap(),
@@ -440,6 +536,7 @@ impl Client {
             return Err("native_input_grant_invalid");
         }
         Ok(NativeGrant {
+            physical: self.physical,
             key: b[..32].try_into().unwrap(),
             session,
             prefix: b[48..52].try_into().unwrap(),
@@ -567,6 +664,7 @@ impl Server {
                     send(&mut stream, &proof, OP_WAIT)
                 })()
                 .is_ok();
+                let mut owned_physical = false;
                 while authenticated_server && !stop.load(Ordering::SeqCst) {
                     let b = match receive(&mut stream, FRAME_WAIT) {
                         Ok(b) => b,
@@ -576,10 +674,11 @@ impl Server {
                         break;
                     }
                     let op = b[33];
+                    let canonical = canonical_op(op);
                     let payload = b[34..].to_vec();
                     if !matches!(
-                        (op, payload.len()),
-                        (STATUS | SAVED_STATUS, 0)
+                        (canonical, payload.len()),
+                        (STATUS | SAVED_STATUS | OUTPUT_STATUS, 0)
                             | (GRANT, 36)
                             | (PACKET, 140)
                             | (RELEASE, 32)
@@ -587,7 +686,7 @@ impl Server {
                     ) {
                         break;
                     }
-                    let old_reference = if matches!(op, ROTATE | PACKET | RELEASE) {
+                    let old_reference = if matches!(canonical, ROTATE | PACKET | RELEASE) {
                         Some(GrantRef {
                             connection: payload[..16].try_into().unwrap(),
                             session: payload[16..32].try_into().unwrap(),
@@ -595,7 +694,7 @@ impl Server {
                     } else {
                         None
                     };
-                    let grant_connection = if matches!(op, GRANT | ROTATE) {
+                    let grant_connection = if matches!(canonical, GRANT | ROTATE) {
                         Some(<[u8; 16]>::try_from(&payload[..16]).unwrap())
                     } else {
                         None
@@ -620,7 +719,8 @@ impl Server {
                     let reply = match result.recv_timeout(OP_WAIT) {
                         Ok(Ok(payload)) => {
                             if let Some(connection) = grant_connection {
-                                if op == GRANT {
+                                owned_physical = op == PHYSICAL_GRANT || op == PHYSICAL_ROTATE;
+                                if canonical == GRANT {
                                     owned.clear();
                                 } else {
                                     owned.retain(|r| Some(*r) == old_reference);
@@ -629,9 +729,9 @@ impl Server {
                                     connection,
                                     session: payload[32..48].try_into().unwrap(),
                                 });
-                            } else if op == RELEASE {
+                            } else if canonical == RELEASE {
                                 owned.retain(|r| Some(*r) != old_reference);
-                            } else if op == PACKET
+                            } else if canonical == PACKET
                                 && owned.last().copied() == old_reference
                                 && owned.len() == 2
                             {
@@ -683,7 +783,11 @@ impl Server {
                         queue_span: crate::input_io_diagnostics::Span::start(
                             crate::input_io_diagnostics::Metric::NativeServerQueue,
                         ),
-                        op: RELEASE,
+                        op: if owned_physical {
+                            PHYSICAL_RELEASE
+                        } else {
+                            RELEASE
+                        },
                         payload,
                         deadline: Instant::now() + OP_WAIT,
                         response,
@@ -779,7 +883,7 @@ impl Server {
                     self.apply(request.op, &request.payload, runtime, now, output)
                 }
             };
-            let issued = matches!(request.op, GRANT | ROTATE) && result.is_ok();
+            let issued = matches!(canonical_op(request.op), GRANT | ROTATE) && result.is_ok();
             if request.response.try_send(result).is_err() && issued {
                 self.binding = None;
                 self.staged = None;
@@ -797,11 +901,24 @@ impl Server {
         output: &mut impl Output,
     ) -> Result<Vec<u8>, &'static str> {
         let snapshot = runtime.snapshot();
-        // This wire explicitly promises recording-only inputEnabled:false. A
-        // physical backend needs separate capability/status negotiation first.
-        if snapshot.backend != "recording" {
-            return Err("native_input_backend_not_supported");
+        let physical = matches!(
+            op,
+            PHYSICAL_GRANT | PHYSICAL_PACKET | PHYSICAL_RELEASE | PHYSICAL_ROTATE
+        );
+        let canonical = canonical_op(op);
+        if op != OUTPUT_STATUS {
+            if physical {
+                if snapshot.backend != "macos-hid" {
+                    return Err("native_input_backend_not_supported");
+                }
+                if canonical != RELEASE && !snapshot.input_enabled {
+                    return Err("native_physical_output_not_admitted");
+                }
+            } else if snapshot.backend != "recording" {
+                return Err("native_input_backend_not_supported");
+            }
         }
+        let op = canonical;
         if self
             .binding
             .as_ref()
@@ -818,7 +935,7 @@ impl Server {
             self.staged = None;
         }
         match op {
-            SAVED_STATUS => {
+            SAVED_STATUS | OUTPUT_STATUS => {
                 let mut reply = vec![u8::from(snapshot.active)];
                 reply.extend_from_slice(&decimal(&snapshot.generation)?.to_le_bytes());
                 reply.extend_from_slice(&decimal(&snapshot.revision)?.to_le_bytes());
@@ -829,6 +946,14 @@ impl Server {
                     reply.extend_from_slice(pin.profile_id.as_bytes());
                 } else {
                     reply.push(0);
+                }
+                if op == OUTPUT_STATUS {
+                    reply.push(match snapshot.backend {
+                        "recording" => 0,
+                        "macos-hid" => 1,
+                        _ => return Err("native_input_backend_not_supported"),
+                    });
+                    reply.push(u8::from(snapshot.input_enabled));
                 }
                 Ok(reply)
             }
@@ -1316,3 +1441,7 @@ mod tests {
         assert_eq!(fs::read(&target).unwrap(), b"preserve");
     }
 }
+
+#[cfg(test)]
+#[path = "physical_input_tests.rs"]
+mod physical_tests;

@@ -306,10 +306,20 @@ impl InputRequest {
         }
     }
 }
-fn input_reply(authorized: &AuthorizedConnection, command: &str, authority: &str) -> Value {
+fn input_reply(
+    authorized: &AuthorizedConnection,
+    command: &str,
+    authority: &str,
+    broker: &mut crate::input_broker::Broker<'_>,
+) -> Result<Value, &'static str> {
     let mut value = authorized.reply(command, authority);
     value["inputSessionAvailable"] = json!(true);
-    value
+    if broker.physical {
+        let c = broker.configuration()?;
+        value["outputBackend"] = json!("macos-hid");
+        value["inputEnabled"] = json!(c.input_enabled);
+    }
+    Ok(value)
 }
 fn grant_lifetime(expires: u64, now: u64) -> Result<u32, &'static str> {
     expires
@@ -361,6 +371,9 @@ pub(crate) fn serve_after_hello(
             input.datagram_port,
         )?;
         broker.renewal = input.renewal;
+        if input.physical {
+            broker.require_physical_output()?;
+        }
         // Handshake may have waited on local IPC; recheck trust before returning admission metadata.
         {
             let _gate = mutation
@@ -374,7 +387,7 @@ pub(crate) fn serve_after_hello(
         }
         send(
             channel,
-            input_reply(&authorized, "authenticated", authority),
+            input_reply(&authorized, "authenticated", authority, &mut broker)?,
         )?;
         return serve_input(
             channel,
@@ -586,12 +599,26 @@ fn serve_input(
             }
             InputRequest::InputConfiguration { .. } => {
                 let c = broker.configuration()?;
-                json!({"version":1,"command":"input-configuration","connectionId":hex(&authorized.binding),"active":c.active,"generation":c.generation.to_string(),"revision":c.revision.to_string(),"inputEnabled":false})
+                {
+                    let mut value = json!({"version":1,"command":"input-configuration","connectionId":hex(&authorized.binding),"active":c.active,"generation":c.generation.to_string(),"revision":c.revision.to_string(),"inputEnabled":false});
+                    if broker.physical {
+                        value["outputBackend"] = json!("macos-hid");
+                        value["inputEnabled"] = json!(c.input_enabled);
+                    }
+                    value
+                }
             }
             InputRequest::InputStatus { session_id, .. } => {
                 let status = broker.datagram_status(&session_id, time)?;
-                json!({"version":1,"command":"input-status","connectionId":hex(&authorized.binding),"sessionId":session_id,"active":status.active,
-                    "generation":status.generation.to_string(),"revision":status.revision.to_string(),"lastAcceptedSequence":status.last.map(|s|s.to_string()),"inputEnabled":false})
+                {
+                    let mut value = json!({"version":1,"command":"input-status","connectionId":hex(&authorized.binding),"sessionId":session_id,"active":status.active,
+                    "generation":status.generation.to_string(),"revision":status.revision.to_string(),"lastAcceptedSequence":status.last.map(|s|s.to_string()),"inputEnabled":false});
+                    if broker.physical {
+                        value["outputBackend"] = json!("macos-hid");
+                        value["inputEnabled"] = json!(status.input_enabled);
+                    }
+                    value
+                }
             }
             InputRequest::InputRelease { session_id, .. } => {
                 if session_id.len() != 32
@@ -602,7 +629,13 @@ fn serve_input(
                     return Err("authenticated_control_message_invalid");
                 }
                 broker.release_scope(&session_id)?;
-                json!({"version":1,"command":"input-released","connectionId":hex(&authorized.binding),"sessionId":session_id,"inputEnabled":false})
+                {
+                    let mut value = json!({"version":1,"command":"input-released","connectionId":hex(&authorized.binding),"sessionId":session_id,"inputEnabled":false});
+                    if broker.physical {
+                        value["outputBackend"] = json!("macos-hid");
+                    }
+                    value
+                }
             }
             InputRequest::Disconnect { .. } => {
                 broker.release()?;
@@ -610,10 +643,13 @@ fn serve_input(
                 drop(held);
                 drop(scope);
                 drop(gate);
-                return send(channel, input_reply(authorized, "disconnected", authority));
+                return send(
+                    channel,
+                    input_reply(authorized, "disconnected", authority, broker)?,
+                );
             }
             InputRequest::ControlStatus { .. } => {
-                input_reply(authorized, "control-status", authority)
+                input_reply(authorized, "control-status", authority, broker)?
             }
         };
         #[cfg(debug_assertions)]

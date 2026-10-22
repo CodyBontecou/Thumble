@@ -22,6 +22,7 @@ pub(crate) struct ControlInput<'a> {
     pub registry: &'a Registry,
     pub datagram_port: Option<u16>,
     pub renewal: bool,
+    pub physical: bool,
 }
 pub(crate) struct DatagramPolicy {
     pub epoch: String,
@@ -142,14 +143,19 @@ pub(crate) struct DatagramStatus {
     pub generation: u64,
     pub revision: u64,
     pub last: Option<u64>,
+    pub input_enabled: bool,
 }
 fn retire(client: &Mutex<Client>, root: &Path, reference: GrantRef) -> Result<(), &'static str> {
     let mut client = client.lock().map_err(|_| "input_broker_unavailable")?;
     if client.release(reference).is_ok() {
         return Ok(());
     }
+    let physical = client.physical_output();
     client.close();
     let mut replacement = Client::connect(root)?;
+    if physical {
+        replacement.require_physical_output()?;
+    }
     replacement.release(reference)?;
     *client = replacement;
     Ok(())
@@ -318,6 +324,7 @@ pub(crate) struct Broker<'a> {
     entry: Option<Entry>,
     datagram_port: Option<u16>,
     pub(crate) renewal: bool,
+    pub(crate) physical: bool,
 }
 impl<'a> Broker<'a> {
     pub(crate) fn connect(
@@ -334,7 +341,16 @@ impl<'a> Broker<'a> {
             entry: None,
             datagram_port,
             renewal: false,
+            physical: false,
         })
+    }
+    pub(crate) fn require_physical_output(&mut self) -> Result<(), &'static str> {
+        self.client
+            .lock()
+            .map_err(|_| "input_broker_unavailable")?
+            .require_physical_output()?;
+        self.physical = true;
+        Ok(())
     }
     pub(crate) fn configuration(&mut self) -> Result<Configuration, &'static str> {
         self.client
@@ -477,6 +493,12 @@ impl<'a> Broker<'a> {
             generation: source.generation,
             revision: source.revision,
             last: source.progress.last,
+            input_enabled: configuration.input_enabled
+                && commit_live
+                && configuration.active
+                && configuration.generation == source.generation
+                && configuration.revision == source.revision
+                && source.live(now),
         })
     }
     pub(crate) fn release_scope(&mut self, session: &str) -> Result<(), &'static str> {

@@ -38,8 +38,12 @@ fn management_is_explicit_never_input_capable_and_rechecks_revoke_after_parent_w
                         registry: &registry,
                         datagram_port: Some(42424),
                         renewal: false,
+                        physical: false,
                     },
-                    ManagementBridges {catalog:&bridge,controls:None},
+                    ManagementBridges {
+                        catalog: &bridge,
+                        controls: None,
+                    },
                     || Ok(100),
                 )
             });

@@ -20,6 +20,26 @@ public struct TrustedHostEndpoint: Sendable {
 public struct PhoneControlMetadata: Sendable, Equatable {
   public let phoneID: String, credentialEpoch: UInt64, connectionID: String, expiresAt: UInt64
   public let inputSessionAvailable: Bool
+  public let outputMode: PhoneOutputMode
+  public let inputEnabled: Bool
+  init(
+    phoneID: String, credentialEpoch: UInt64, connectionID: String, expiresAt: UInt64,
+    inputSessionAvailable: Bool, outputMode: PhoneOutputMode = .recording,
+    inputEnabled: Bool = false
+  ) {
+    self.phoneID = phoneID
+    self.credentialEpoch = credentialEpoch
+    self.connectionID = connectionID
+    self.expiresAt = expiresAt
+    self.inputSessionAvailable = inputSessionAvailable
+    self.outputMode = outputMode
+    self.inputEnabled = inputEnabled
+  }
+  func sameScope(as other: Self) -> Bool {
+    phoneID == other.phoneID && credentialEpoch == other.credentialEpoch
+      && connectionID == other.connectionID && expiresAt == other.expiresAt
+      && inputSessionAvailable == other.inputSessionAvailable && outputMode == other.outputMode
+  }
 }
 protocol ControlCredentialSource: Sendable {
   func load(hostPin: String, now: UInt64) async throws -> PhoneCredential?
@@ -54,6 +74,7 @@ public enum PhoneControlFailureStage: String, Sendable {
   private var inputContinuousLast: ContinuousClock.Instant?
   private let continuousNow: () -> ContinuousClock.Instant
   private let controlVersion: Int
+  private let outputMode: PhoneOutputMode
   private var inputAttempted = false
   private var inputChannel: InputPacketChannel?
   private var inputEngine: InputEngine?
@@ -71,9 +92,11 @@ public enum PhoneControlFailureStage: String, Sendable {
   private let now: () -> UInt64
   public convenience init(
     endpoint: TrustedHostEndpoint, storage: PhoneCredentialWorker, inputSessions: Bool = false,
-    datagrams: Bool = false, renewals: Bool = false
+    datagrams: Bool = false, renewals: Bool = false, outputMode: PhoneOutputMode = .recording
   ) throws {
-    guard !datagrams || inputSessions, !renewals || datagrams else {
+    guard !datagrams || inputSessions, !renewals || datagrams,
+      outputMode == .recording || (inputSessions && datagrams && renewals)
+    else {
       throw PhoneControlError.rejected
     }
     try self.init(
@@ -84,11 +107,13 @@ public enum PhoneControlFailureStage: String, Sendable {
       now: {
         let time = Date().timeIntervalSince1970 * 1000
         return time.isFinite && time >= 0 && time < Double(Int64.max) ? UInt64(time) : UInt64.max
-      }, controlVersion: renewals ? 6 : (inputSessions ? (datagrams ? 5 : 4) : 3))
+      },
+      controlVersion: outputMode == .macosHID
+        ? 9 : renewals ? 6 : (inputSessions ? (datagrams ? 5 : 4) : 3), outputMode: outputMode)
   }
   init(
     endpoint: TrustedHostEndpoint, io: any EnrollmentFrameIO, storage: any ControlCredentialSource,
-    now: @escaping () -> UInt64, controlVersion: Int = 3,
+    now: @escaping () -> UInt64, controlVersion: Int = 3, outputMode: PhoneOutputMode = .recording,
     datagramFactory: @escaping (String, UInt16) throws -> any NativeDatagramIO = {
       try NativeDatagramClient(host: $0, port: $1)
     }, routeNow: @escaping () -> UInt64 = { DispatchTime.now().uptimeNanoseconds / 1_000_000 },
@@ -98,6 +123,7 @@ public enum PhoneControlFailureStage: String, Sendable {
     self.datagramFactory = datagramFactory
     self.routeNow = routeNow
     self.controlVersion = controlVersion
+    self.outputMode = outputMode
     self.endpoint = endpoint
     self.io = io
     self.storage = storage
@@ -126,7 +152,9 @@ public enum PhoneControlFailureStage: String, Sendable {
     return try EnrollmentJSON.parse(frame.payload, allowNull: controlVersion >= 5)
   }
   public func authenticate() async throws -> PhoneControlMetadata {
-    guard (3...6).contains(controlVersion), state == .idle, !busy else {
+    guard (3...6).contains(controlVersion) || controlVersion == 9,
+      (controlVersion == 9) == (outputMode == .macosHID), state == .idle, !busy
+    else {
       throw PhoneControlError.rejected
     }
     state = .authenticating
@@ -137,20 +165,27 @@ public enum PhoneControlFailureStage: String, Sendable {
         try checkpoint()
         try await io.connect()
         try checkpoint()
-        try send([
+        var request: [String: Any] = [
           "version": 1, "command": "hello", "controlVersion": controlVersion, "inputVersion": 1,
           "documentVersion": 1, "capabilitiesVersion": 1,
-        ])
+        ]
+        var expected: [String: EnrollmentJSON.Value] = [
+          "version": .integer(1), "command": .string("hello"),
+          "authorityInstanceId": .string(endpoint.authorityInstanceID),
+          "controlVersion": .integer(UInt64(controlVersion)), "inputVersion": .integer(1),
+          "documentVersion": .integer(1), "capabilitiesVersion": .integer(1),
+        ]
+        if outputMode == .macosHID {
+          request["role"] = "physical-input"
+          request["requiredOutputBackend"] = "macos-hid"
+          expected["role"] = .string("physical-input")
+          expected["requiredOutputBackend"] = .string("macos-hid")
+        } else {
+          expected["inputEnabled"] = .boolean(false)
+        }
+        try send(request)
         let hello = try await receive()
-        guard
-          hello == [
-            "version": .integer(1), "command": .string("hello"),
-            "authorityInstanceId": .string(endpoint.authorityInstanceID),
-            "controlVersion": .integer(UInt64(controlVersion)), "inputVersion": .integer(1),
-            "documentVersion": .integer(1), "capabilitiesVersion": .integer(1),
-            "inputEnabled": .boolean(false),
-          ]
-        else { throw PhoneControlError.rejected }
+        guard hello == expected else { throw PhoneControlError.rejected }
         let credential = try await storage.load(hostPin: endpoint.certificatePin, now: checkpoint())
         try checkpoint()
         guard let credential, credential.metadata.hostPin == endpoint.certificatePin,
@@ -178,13 +213,14 @@ public enum PhoneControlFailureStage: String, Sendable {
   ) throws -> PhoneControlMetadata {
     guard
       Set(value.keys)
-        == Set([
-          "version", "command", "authorityInstanceId", "phoneId", "credentialEpoch", "connectionId",
-          "expiresAt", "inputSessionAvailable", "inputEnabled",
-        ]),
+        == outputMode.fields(
+          Set([
+            "version", "command", "authorityInstanceId", "phoneId", "credentialEpoch",
+            "connectionId",
+            "expiresAt", "inputSessionAvailable", "inputEnabled",
+          ])),
       value["version"] == .integer(1), value["command"] == .string(command),
       value["authorityInstanceId"] == .string(endpoint.authorityInstanceID),
-      value["inputEnabled"] == .boolean(false),
       value["inputSessionAvailable"] == .boolean(controlVersion >= 4),
       case .string(let phone)? = value["phoneId"], EnrollmentInvitation.identity(phone),
       case .string(let epochText)? = value["credentialEpoch"], let epoch = UInt64(epochText),
@@ -195,10 +231,13 @@ public enum PhoneControlFailureStage: String, Sendable {
       credential.map({ $0.phoneID == phone && $0.epoch == epoch && expires <= $0.expiresAt })
         ?? true
     else { throw PhoneControlError.rejected }
+    let enabled = try outputMode.validate(value)
     let receipt = PhoneControlMetadata(
       phoneID: phone, credentialEpoch: epoch, connectionID: connection, expiresAt: expires,
-      inputSessionAvailable: controlVersion >= 4)
-    guard admitted.map({ $0 == receipt }) ?? true else { throw PhoneControlError.rejected }
+      inputSessionAvailable: controlVersion >= 4, outputMode: outputMode, inputEnabled: enabled)
+    guard admitted.map({ $0.sameScope(as: receipt) }) ?? true else {
+      throw PhoneControlError.rejected
+    }
     return receipt
   }
   public func status() async throws -> PhoneControlMetadata {
@@ -239,7 +278,8 @@ public enum PhoneControlFailureStage: String, Sendable {
         try send([
           "version": 1, "command": "input-configuration", "connectionId": admitted.connectionID,
         ])
-        return try PhoneInputConfiguration(try await receive(), connection: admitted.connectionID)
+        return try PhoneInputConfiguration(
+          try await receive(), connection: admitted.connectionID, outputMode: outputMode)
       } catch {
         close()
         throw PhoneControlError.rejected
@@ -266,7 +306,7 @@ public enum PhoneControlFailureStage: String, Sendable {
           "version": 1, "command": "input-configuration", "connectionId": admitted.connectionID,
         ])
         try PhoneInputGrant.configuration(
-          try await receive(), connection: admitted.connectionID, map: map)
+          try await receive(), connection: admitted.connectionID, map: map, outputMode: outputMode)
         let requested = try checkpoint()
         let continuous = continuousNow()
         try send([
@@ -275,7 +315,7 @@ public enum PhoneControlFailureStage: String, Sendable {
         ])
         let grant = try PhoneInputGrant(
           try await receive(), connection: admitted.connectionID, map: map,
-          datagrams: controlVersion >= 5)
+          datagrams: controlVersion >= 5, outputMode: outputMode)
         inputDeadline = min(deadline ?? 0, requested + grant.lifetime)
         inputContinuousDeadline = continuous.advanced(by: .milliseconds(Int64(grant.lifetime)))
         inputContinuousLast = continuous
@@ -375,11 +415,12 @@ public enum PhoneControlFailureStage: String, Sendable {
     }
   }
   private var renewalDue: Bool {
-    controlVersion == 6 && inputRenewalDue.map { continuousNow() >= $0 } == true
+    (controlVersion == 6 || controlVersion == 9)
+      && inputRenewalDue.map { continuousNow() >= $0 } == true
       && (credentialExpiresAt ?? 0) > (admitted?.expiresAt ?? UInt64.max)
   }
   private func renewInput(map: ControlMap) async throws {
-    guard controlVersion == 6, !busy, let admitted, let credentialExpiresAt,
+    guard controlVersion == 6 || controlVersion == 9, !busy, let admitted, let credentialExpiresAt,
       let session = inputSessionID, let port = inputUDPPort, let inputChannel,
       let engine = inputEngine, engine.connected
     else { throw PhoneControlError.rejected }
@@ -403,7 +444,7 @@ public enum PhoneControlFailureStage: String, Sendable {
       scope: PhoneInputRenewalScope(
         sessionID: session, udpPort: port,
         authorizationExpiresAt: admitted.expiresAt, credentialExpiresAt: credentialExpiresAt),
-      now: last)
+      now: last, outputMode: outputMode)
     let grant = renewal.grant
     let successor = try inputChannel.continued(grant: grant.packet) { [weak self] in
       self?.offerInput($0) ?? false
@@ -411,7 +452,8 @@ public enum PhoneControlFailureStage: String, Sendable {
     self.admitted = PhoneControlMetadata(
       phoneID: admitted.phoneID, credentialEpoch: admitted.credentialEpoch,
       connectionID: admitted.connectionID, expiresAt: renewal.authorizationExpiresAt,
-      inputSessionAvailable: admitted.inputSessionAvailable)
+      inputSessionAvailable: admitted.inputSessionAvailable, outputMode: outputMode,
+      inputEnabled: outputMode == .macosHID)
     deadline = min(renewal.authorizationExpiresAt, requested + 60_000)
     inputDeadline = min(deadline ?? 0, requested + grant.lifetime)
     inputContinuousDeadline = continuous.advanced(by: .milliseconds(Int64(grant.lifetime)))
@@ -445,7 +487,8 @@ public enum PhoneControlFailureStage: String, Sendable {
     try inputCheckpoint()
     let progress = try PhoneInputProgress(
       value, connection: admitted.connectionID, session: session,
-      map: map, lastOffered: route.lastOffered, previous: route.acknowledged)
+      map: map, lastOffered: route.lastOffered, previous: route.acknowledged, outputMode: outputMode
+    )
     guard route.observe(progress) else { throw PhoneControlError.rejected }
   }
   private func inputCheckpoint() throws {

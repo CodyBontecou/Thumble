@@ -10,7 +10,8 @@
       "bundleIdentifier": "com.codybontecou.thumble.rewrite",
       "supportsTablet": true,
       "infoPlist": {
-        "NSLocalNetworkUsageDescription": "Connect to your Thumble receiver on your local network."
+        "NSLocalNetworkUsageDescription": "Connect to your Thumble receiver on your local network.",
+        "NSCameraUsageDescription": "Scan your Mac’s pairing code to connect securely."
       }
     },
     "android": {
@@ -31,7 +32,8 @@
         }
       ],
       "./plugins/with-native-input.cjs",
-      "./plugins/with-native-qa.cjs"
+      "./plugins/with-native-qa.cjs",
+      "./plugins/with-semantic-colors.cjs"
     ],
     "platforms": ["ios", "android"]
   }

@@ -109,6 +109,16 @@ mod tests {
         assert_eq!(v["windows"]["sdkLinked"], false);
         assert_eq!(v["windows"]["backendAvailable"], false);
     }
+    #[cfg(all(target_os = "macos", feature = "output-macos"))]
+    #[test]
+    fn macos_output_build_reports_its_compiled_adapter_without_activation() {
+        let value = capabilities();
+        assert!(value.macos.dormant_adapter_compiled);
+        assert_ne!(value.macos.signed_claim, "not-compiled");
+        assert!(!value.physical_output_enabled);
+        assert!(!value.runtime_integrated);
+        assert!(!value.gameplay_verified);
+    }
     #[test]
     fn arguments_do_not_accept_directories_or_activation_flags() {
         assert_eq!(

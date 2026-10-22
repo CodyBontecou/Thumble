@@ -54,7 +54,15 @@ export type ConfigurationDuplicateProfileCommand = Readonly<{
   name: string;
   select: boolean;
 }>;
+export type ConfigurationInitializeStarterCommand = Readonly<{
+  command: "configuration-initialize-starter";
+  operationId: string;
+  expectedRevision: "0";
+  profileId: string;
+  name: string;
+}>;
 export type ConfigurationCommand =
+  | ConfigurationInitializeStarterCommand
   | ConfigurationDuplicateProfileCommand
   | ConfigurationSelectProfilesCommand
   | ConfigurationExportCommand
@@ -199,6 +207,23 @@ export function decodeConfigurationCommand(
       expectedRevision:
         v.expectedRevision === null ? null : counter(v.expectedRevision),
       offset: offset(v.offset),
+    });
+  }
+  if (kind === "configuration-initialize-starter") {
+    const v = object(value, [
+      "command",
+      "operationId",
+      "expectedRevision",
+      "profileId",
+      "name",
+    ]);
+    if (v.expectedRevision !== "0") invalid();
+    return Object.freeze({
+      command: kind,
+      operationId: identity(v.operationId),
+      expectedRevision: "0",
+      profileId: configurationProfileId(v.profileId),
+      name: configurationProfileName(v.name),
     });
   }
   if (kind === "configuration-duplicate-profile") {
@@ -443,7 +468,8 @@ export function decodeConfigurationReply(
     kind === "committed" &&
     (command.command === "configuration-rename-profile" ||
       command.command === "configuration-select-profiles" ||
-      command.command === "configuration-duplicate-profile")
+      command.command === "configuration-duplicate-profile" ||
+      command.command === "configuration-initialize-starter")
   ) {
     const v = object(value, ["version", "kind", "receipt", "replayed"]);
     const r = object(v.receipt, [
@@ -459,7 +485,12 @@ export function decodeConfigurationReply(
         ? [command.profileId]
         : command.command === "configuration-select-profiles"
           ? ["configuration"]
-          : ["configuration", command.newProfileId];
+          : [
+              "configuration",
+              command.command === "configuration-initialize-starter"
+                ? command.profileId
+                : command.newProfileId,
+            ];
     if (
       v.version !== 1 ||
       r.version !== 1 ||

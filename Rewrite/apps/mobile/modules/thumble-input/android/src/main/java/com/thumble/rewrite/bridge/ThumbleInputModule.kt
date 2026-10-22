@@ -25,6 +25,9 @@ class ThumbleInputModule : Module() {
             Prop("practiceMap") { view: ThumbleInputView, value: Map<String, Any?> ->
                 view.pendingPractice = value
             }
+            Prop("outputMode") { view: ThumbleInputView, value: String ->
+                view.connectionOutputMode = value
+            }
             Prop("connect") { view: ThumbleInputView, value: Boolean ->
                 view.connectionRequested = value
             }
@@ -55,6 +58,16 @@ class ThumbleInputView(context: Context, appContext: AppContext) : ExpoView(cont
     val onCatalog by EventDispatcher()
     val onControlMap by EventDispatcher()
     internal var connectionRequested = false
+    // A different output intent requires a new native view, never an in-place fallback.
+    internal var connectionOutputMode = "recording"
+        set(value) {
+            if (connectionAttempted && value != field) {
+                release(ReleaseReason.disposed)
+                onAdmission(mapOf("admission" to mapOf("version" to 1, "status" to "unavailable")))
+            }
+            field = value
+        }
+
     internal var pendingConnection: Map<String, Any?>? = null
     internal var pendingPractice: Map<String, Any?>? = null
     private var practiceAdmitted = false
@@ -111,6 +124,12 @@ class ThumbleInputView(context: Context, appContext: AppContext) : ExpoView(cont
         connectionAttempted = true
         try {
             check(pendingPractice == null)
+            val outputMode =
+                when (connectionOutputMode) {
+                    "recording" -> PhoneOutputMode.RECORDING
+                    "macos-hid" -> PhoneOutputMode.MACOS_HID
+                    else -> error("invalid_output_mode")
+                }
             val flow =
                 PhoneConnection(
                     this,
@@ -122,6 +141,7 @@ class ThumbleInputView(context: Context, appContext: AppContext) : ExpoView(cont
                     catalogResult = { catalog -> onCatalog(mapOf("catalog" to catalog)) },
                     installedMap = { map -> onControlMap(mapOf("map" to map)) },
                     testOnlyMapProvider = NativeInputTestHost.current(),
+                    outputMode = outputMode,
                 )
             connection = flow
             flow.start()

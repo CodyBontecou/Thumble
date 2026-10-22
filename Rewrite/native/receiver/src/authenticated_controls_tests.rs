@@ -126,6 +126,7 @@ fn controls_v8_is_management_only_and_fences_revocation_and_native_replacement_a
                         registry: &registry,
                         datagram_port: Some(42424),
                         renewal: false,
+                        physical: false,
                     },
                     ManagementBridges {
                         catalog: &catalog,

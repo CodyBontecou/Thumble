@@ -12,9 +12,9 @@ export const colors = Object.freeze(
       }
     : {
         background: PlatformColor("?android:attr/colorBackground"),
-        label: PlatformColor("?android:attr/textColorPrimary"),
-        secondaryLabel: PlatformColor("?android:attr/textColorSecondary"),
-        separator: PlatformColor("?android:attr/textColorHint"),
+        label: PlatformColor("@color/thumble_label"),
+        secondaryLabel: PlatformColor("@color/thumble_secondary_label"),
+        separator: PlatformColor("@color/thumble_separator"),
         accent: "#007aff",
         error: "#d32f2f",
       },

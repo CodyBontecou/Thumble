@@ -78,6 +78,7 @@ internal class PhoneInputGrant(
     connection: String,
     map: ControlMap,
     datagrams: Boolean = false,
+    outputMode: PhoneOutputMode = PhoneOutputMode.RECORDING,
 ) {
     val packet: InputPacketGrant
     val lifetime: Long
@@ -90,22 +91,24 @@ internal class PhoneInputGrant(
                 ?: throw PhoneControlRejected()
         if (
             value.keys !=
-                setOf(
-                    "version",
-                    "command",
-                    "connectionId",
-                    "generation",
-                    "revision",
-                    "sessionId",
-                    "key",
-                    "noncePrefix",
-                    "lifetimeMs",
-                    "packetVersion",
-                    "packetBytes",
-                    "packetLimit",
-                    "transport",
-                    "inputEnabled",
-                ) + (if (datagrams) setOf("udpPort") else emptySet()) ||
+                outputMode.fields(
+                    setOf(
+                        "version",
+                        "command",
+                        "connectionId",
+                        "generation",
+                        "revision",
+                        "sessionId",
+                        "key",
+                        "noncePrefix",
+                        "lifetimeMs",
+                        "packetVersion",
+                        "packetBytes",
+                        "packetLimit",
+                        "transport",
+                        "inputEnabled",
+                    ) + (if (datagrams) setOf("udpPort") else emptySet())
+                ) ||
                 value["version"] != EnrollmentJSON.Value.Integer(1) ||
                 value["command"] != EnrollmentJSON.Value.Text("input-granted") ||
                 value["connectionId"] != EnrollmentJSON.Value.Text(connection) ||
@@ -116,10 +119,10 @@ internal class PhoneInputGrant(
                 value["packetLimit"] != EnrollmentJSON.Value.Text("1048576") ||
                 value["transport"] !=
                     EnrollmentJSON.Value.Text(if (datagrams) "udp+tls" else "tls") ||
-                value["inputEnabled"] != EnrollmentJSON.Value.BooleanValue(false) ||
                 duration !in 100..60_000
         )
             throw PhoneControlRejected()
+        outputMode.validate(value, true)
         val generation = map.generation.toULongOrNull() ?: throw PhoneControlRejected()
         if (generation == 0uL || generation.toString() != map.generation)
             throw PhoneControlRejected()
@@ -147,8 +150,9 @@ internal class PhoneInputGrant(
             value: Map<String, EnrollmentJSON.Value>,
             connection: String,
             map: ControlMap,
+            outputMode: PhoneOutputMode = PhoneOutputMode.RECORDING,
         ) {
-            val metadata = PhoneInputConfiguration.decode(value, connection)
+            val metadata = PhoneInputConfiguration.decode(value, connection, outputMode)
             if (
                 !metadata.active ||
                     metadata.generation != map.generation ||

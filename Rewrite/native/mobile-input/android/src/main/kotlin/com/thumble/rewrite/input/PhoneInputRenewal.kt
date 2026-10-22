@@ -15,6 +15,7 @@ internal class PhoneInputRenewal(
     map: ControlMap,
     scope: PhoneInputRenewalScope,
     now: Long,
+    outputMode: PhoneOutputMode = PhoneOutputMode.RECORDING,
 ) {
     val grant: PhoneInputGrant
     val authorizationExpiresAt: Long
@@ -41,6 +42,7 @@ internal class PhoneInputRenewal(
                 connection,
                 map,
                 datagrams = true,
+                outputMode = outputMode,
             )
         if (grant.udpPort != scope.udpPort) throw PhoneControlRejected()
         authorizationExpiresAt = expires

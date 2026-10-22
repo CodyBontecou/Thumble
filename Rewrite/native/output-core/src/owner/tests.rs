@@ -893,6 +893,7 @@ fn clock_failure_between_deadline_install_and_native_submission_prevents_held_re
         shared,
         Arc::new(AtomicBool::new(false)),
         Arc::new(move || clock.lock().unwrap().pop_front().unwrap_or(Ok(1000))),
+        Arc::new(Mutex::new(())),
     );
     let (reply, result) = mpsc::sync_channel(1);
     worker.apply(Command {
@@ -1011,4 +1012,124 @@ fn startup_clock_fault_cannot_be_recovered_by_replaying_the_failed_activation_ge
     .unwrap();
     assert_eq!(owner.snapshot().clock_fault, None);
     stop(&owner);
+}
+
+#[test]
+fn shutdown_publication_is_handed_off_before_terminal_drain() {
+    let state = State::new();
+    let (sender, receiver) = mpsc::sync_channel(QUEUE);
+    let shared = Arc::new(Mutex::new(Snapshot::default()));
+    let closing = Arc::new(AtomicBool::new(false));
+    let handoff = Arc::new(Mutex::new(()));
+    let (entered_tx, entered_rx) = mpsc::sync_channel(1);
+    let (resume_tx, resume_rx) = mpsc::sync_channel(1);
+    let owner = Arc::new(OutputOwner {
+        sender: Some(sender),
+        closing: closing.clone(),
+        shared: shared.clone(),
+        next: AtomicU64::new(1),
+        shutdown_handoff: handoff.clone(),
+        before_shutdown_enqueue: Mutex::new(Some(Box::new(move || {
+            entered_tx.send(()).unwrap();
+            resume_rx.recv_timeout(Duration::from_secs(2)).unwrap();
+        }))),
+    });
+    let (terminal_tx, terminal_rx) = mpsc::sync_channel(1);
+    let (finished_tx, finished_rx) = mpsc::sync_channel(1);
+    let factory_state = state.clone();
+    let worker = thread::spawn(move || {
+        let mut worker = Worker::new(
+            FakeFactory(factory_state),
+            receiver,
+            shared,
+            closing,
+            Arc::new(|| Ok(1000)),
+            handoff,
+        );
+        worker.before_terminal_drain = Some(terminal_tx);
+        worker.run();
+        finished_tx.send(()).unwrap();
+    });
+    let requester = owner.clone();
+    let request = thread::spawn(move || requester.request(Operation::Shutdown));
+    entered_rx.recv_timeout(Duration::from_secs(1)).unwrap();
+    terminal_rx.recv_timeout(Duration::from_secs(1)).unwrap();
+    // Stretch exactly the flag-to-enqueue race. Authority time is fixed; this
+    // wait only proves that the worker cannot pass the handoff fence.
+    assert_eq!(
+        finished_rx.recv_timeout(Duration::from_millis(50)),
+        Err(mpsc::RecvTimeoutError::Timeout)
+    );
+    assert_ne!(owner.snapshot().phase, Phase::Stopped);
+    assert!(matches!(
+        owner.request(Operation::Submit {
+            scope: scope(1),
+            report: report()
+        }),
+        Err(Error::Closed)
+    ));
+    resume_tx.send(()).unwrap();
+    assert_eq!(
+        done(request.join().unwrap().unwrap()).unwrap().phase,
+        Phase::Stopped
+    );
+    finished_rx.recv_timeout(Duration::from_secs(1)).unwrap();
+    worker.join().unwrap();
+    assert!(state.events.lock().unwrap().is_empty());
+}
+
+#[test]
+fn queue_full_shutdown_closes_admission_and_retires_without_a_receipt() {
+    let (owner, state, time) = owner();
+    start(&owner, &time, 1);
+    *state.held.lock().unwrap() = true;
+    let in_flight = owner
+        .request(Operation::Submit {
+            scope: scope(1),
+            report: report(),
+        })
+        .unwrap();
+    state.await_event("nonneutral");
+    let mut queued = Vec::new();
+    for _ in 0..QUEUE {
+        queued.push(
+            owner
+                .request(Operation::Submit {
+                    scope: scope(1),
+                    report: report(),
+                })
+                .unwrap(),
+        );
+    }
+    assert!(matches!(
+        owner.request(Operation::Shutdown),
+        Err(Error::Busy)
+    ));
+    assert!(!owner.snapshot().admits_at(now(&time)));
+    assert!(matches!(
+        owner.request(Operation::Submit {
+            scope: scope(1),
+            report: report()
+        }),
+        Err(Error::Closed)
+    ));
+    state.unblock();
+    state.await_event("drop");
+    // Already executing IO may complete, but closing has synchronously removed
+    // admission and queued work cannot submit another held report.
+    assert_eq!(done(in_flight).unwrap().phase, Phase::Ready);
+    for pending in queued {
+        assert_eq!(done(pending), Err(Error::Closed));
+    }
+    assert_eq!(owner.snapshot().phase, Phase::Stopped);
+    assert_eq!(
+        state
+            .events
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(e, _)| *e == "nonneutral")
+            .count(),
+        1
+    );
 }

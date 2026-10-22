@@ -1,0 +1,3 @@
+# Negotiate physical phone output separately from recording
+
+Physical phone input requires explicit control-v9 intent, exact backend and output-admission metadata, and separate native operations; existing recording-only versions retain their false-output assertions. This avoids silently authorizing OS input through clients that promised recording, while retaining the existing encrypted packets, epoch checks, source ownership, and expiry rules. A successful negotiation describes current receiver admission and never substitutes for host launch authorization, device creation, or physical gameplay acceptance.

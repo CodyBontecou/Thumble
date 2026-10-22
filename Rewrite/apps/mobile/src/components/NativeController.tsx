@@ -16,6 +16,7 @@ const NativeView = requireNativeViewManager<
     onCatalog: (event: { nativeEvent: { catalog: unknown } }) => void;
     practiceMap?: ControlMap;
     connect?: boolean;
+    outputMode?: "recording" | "macos-hid";
     onControlMap: (event: { nativeEvent: { map: unknown } }) => void;
     onAdmission: (event: { nativeEvent: { admission: unknown } }) => void;
   }
@@ -50,8 +51,10 @@ const labels: Record<string, string> = {
 const map = standardControllerMap("1", "0");
 export function NativeController({
   connected = false,
+  outputMode = "recording",
 }: {
   connected?: boolean;
+  outputMode?: "recording" | "macos-hid";
 }) {
   const admittedSession = useRef<string | null>(null);
   const [admissionEpoch, setAdmissionEpoch] = useState<string | null>(null);
@@ -182,6 +185,7 @@ export function NativeController({
         ))}
       </View>
       <NativeView
+        {...(connected ? { outputMode } : {})}
         {...(connected ? { connect: true } : { practiceMap: map })}
         onAdmission={admit}
         onCatalog={receiveCatalog}

@@ -32,6 +32,7 @@ internal class PhoneConnection(
     private val installedMap: (Map<String, Any>) -> Unit = {},
     private val testOnlyMapProvider: ((PhoneInputConfiguration, Double, Double) -> ControlMap)? =
         null,
+    private val outputMode: PhoneOutputMode = PhoneOutputMode.RECORDING,
 ) : Closeable {
     private val gate = Any()
     @Volatile private var closed = false
@@ -117,7 +118,10 @@ internal class PhoneConnection(
             }
         val builder =
             AlertDialog.Builder(activity)
-                .setTitle("Connect to your computer")
+                .setTitle(
+                    if (outputMode == PhoneOutputMode.MACOS_HID) "Connect to Mac"
+                    else "Test your connection"
+                )
                 .setMessage("Paste the pairing invitation from your agent. It stays on this phone.")
                 .setView(content)
                 .setNegativeButton("Cancel") { _, _ ->
@@ -217,6 +221,7 @@ internal class PhoneConnection(
                         inputSessions = true,
                         datagrams = true,
                         renewals = true,
+                        outputMode = outputMode,
                     )
                 synchronized(gate) {
                     check(!closed)

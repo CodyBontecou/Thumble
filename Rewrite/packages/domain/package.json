@@ -13,7 +13,8 @@
     "./wow-live": "./src/wow-live.ts",
     "./wow-optical-panel": "./src/wow-optical-panel.ts",
     "./saved-controller-map": "./src/saved-controller-map.ts",
-    "./wow-capture-receipt": "./src/wow-capture-receipt.ts"
+    "./wow-capture-receipt": "./src/wow-capture-receipt.ts",
+    "./starter-configuration": "./src/starter-configuration.ts"
   },
   "dependencies": {
     "@thumble/contracts": "workspace:*"

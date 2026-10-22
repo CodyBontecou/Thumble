@@ -15,7 +15,7 @@ struct PhoneInputRenewal {
 
   init(
     _ value: [String: EnrollmentJSON.Value], connection: String, map: ControlMap,
-    scope: PhoneInputRenewalScope, now: UInt64
+    scope: PhoneInputRenewalScope, now: UInt64, outputMode: PhoneOutputMode = .recording
   ) throws {
     guard value["command"] == .string("input-renewed"),
       value["replacesSessionId"] == .string(scope.sessionID),
@@ -29,7 +29,8 @@ struct PhoneInputRenewal {
     base.removeValue(forKey: "replacesSessionId")
     base.removeValue(forKey: "authorizationExpiresAt")
     base["command"] = .string("input-granted")
-    grant = try PhoneInputGrant(base, connection: connection, map: map, datagrams: true)
+    grant = try PhoneInputGrant(
+      base, connection: connection, map: map, datagrams: true, outputMode: outputMode)
     guard grant.udpPort == scope.udpPort else { throw PhoneControlError.rejected }
     authorizationExpiresAt = expires
   }

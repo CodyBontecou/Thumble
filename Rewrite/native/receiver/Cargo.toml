@@ -10,7 +10,7 @@ publish = false
 [features]
 default = []
 output-bridge = ["dep:thumble-rewrite-output-core"]
-output-macos = ["output-bridge", "thumble-rewrite-output-core/macos-hid"]
+output-macos = ["output-bridge", "output-doctor-macos", "thumble-rewrite-output-core/macos-hid"]
 output-doctor-macos = ["dep:thumble-rewrite-output-core", "thumble-rewrite-output-core/macos-hid"]
 
 [dependencies]

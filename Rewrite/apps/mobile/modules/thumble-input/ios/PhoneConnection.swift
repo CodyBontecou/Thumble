@@ -48,6 +48,7 @@ import UIKit
   private let status: (String) -> Void
   private let catalogResult: ([String: Any]) -> Void
   private let installedMap: ([String: Any]) -> Void
+  private let outputMode: PhoneOutputMode
   // Native test-host injection only. The product view never supplies this port.
   private let testOnlyMapProvider: ((PhoneInputConfiguration, CGSize) throws -> ControlMap)?
   private static let endpointKey = "rewrite.phone.endpoint.v1"
@@ -56,7 +57,8 @@ import UIKit
     install: @escaping (InputEngine) throws -> Void, status: @escaping (String) -> Void,
     catalogResult: @escaping ([String: Any]) -> Void = { _ in },
     installedMap: @escaping ([String: Any]) -> Void = { _ in },
-    testOnlyMapProvider: ((PhoneInputConfiguration, CGSize) throws -> ControlMap)? = nil
+    testOnlyMapProvider: ((PhoneInputConfiguration, CGSize) throws -> ControlMap)? = nil,
+    outputMode: PhoneOutputMode = .recording
   ) {
     self.anchor = anchor
     self.feedback = feedback
@@ -64,6 +66,7 @@ import UIKit
     self.status = status
     self.catalogResult = catalogResult
     self.installedMap = installedMap
+    self.outputMode = outputMode
     self.testOnlyMapProvider = testOnlyMapProvider
     super.init()
     NotificationCenter.default.addObserver(
@@ -77,7 +80,7 @@ import UIKit
     var presenter = root
     while let next = presenter.presentedViewController { presenter = next }
     let alert = UIAlertController(
-      title: "Connect to your computer",
+      title: outputMode == .macosHID ? "Connect to Mac" : "Test your connection",
       message: "Paste the pairing invitation from your agent. It stays on this phone.",
       preferredStyle: .alert)
     alert.addTextField { field in
@@ -205,7 +208,7 @@ import UIKit
     status("connecting")
     let client = try PhoneControlClient(
       endpoint: endpoint, storage: storage,
-      inputSessions: true, datagrams: true, renewals: true)
+      inputSessions: true, datagrams: true, renewals: true, outputMode: outputMode)
     control = client
     diagnosticPhase = .authenticating
     guard try await client.authenticate().inputSessionAvailable else {

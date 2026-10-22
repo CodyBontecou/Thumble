@@ -1,14 +1,17 @@
 import { useRouter } from "expo-router";
 import { Pressable, Text, View, useWindowDimensions } from "react-native";
 import { StatusBar } from "expo-status-bar";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { NativeController } from "../components/NativeController";
 import { colors } from "../theme/colors";
 export function ControllerScreen({
   connected = false,
+  outputMode = "recording",
 }: {
   connected?: boolean;
+  outputMode?: "recording" | "macos-hid";
 }) {
+  const insets = useSafeAreaInsets();
   const router = useRouter(),
     { width, height } = useWindowDimensions();
   const done = (
@@ -34,22 +37,45 @@ export function ControllerScreen({
     </Pressable>
   );
   return (
-    <SafeAreaView
+    <View
       testID={connected ? "connection-screen" : "practice-screen"}
-      style={{ flex: 1, backgroundColor: colors.background }}
+      style={{
+        flex: 1,
+        backgroundColor: colors.background,
+        paddingTop: insets.top,
+        paddingRight: insets.right,
+        paddingBottom: insets.bottom,
+        paddingLeft: insets.left,
+      }}
     >
       <StatusBar hidden={width > height} />
       {connected && (
         <View
           testID="connection-header"
-          style={{ minHeight: 44, alignItems: "flex-end" }}
+          style={{
+            minHeight: 44,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            paddingLeft: 16,
+          }}
         >
+          <Text
+            testID="connection-mode"
+            style={{ fontSize: 17, fontWeight: "600", color: colors.label }}
+          >
+            {outputMode === "macos-hid" ? "Mac input" : "Test mode"}
+          </Text>
           {done}
         </View>
       )}
       <View style={{ flex: 1 }}>
         {width > height ? (
-          <NativeController connected={connected} />
+          <NativeController
+            key={connected ? outputMode : "practice"}
+            connected={connected}
+            outputMode={outputMode}
+          />
         ) : (
           <View
             testID="practice-orientation"
@@ -82,7 +108,7 @@ export function ControllerScreen({
         )}
         {!connected && done}
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
 

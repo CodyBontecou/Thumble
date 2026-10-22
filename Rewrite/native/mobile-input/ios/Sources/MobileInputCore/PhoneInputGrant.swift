@@ -7,16 +7,18 @@ struct PhoneInputGrant {
   let sessionID: String
   let udpPort: UInt16?
   static func configuration(
-    _ value: [String: EnrollmentJSON.Value], connection: String, map: ControlMap
+    _ value: [String: EnrollmentJSON.Value], connection: String, map: ControlMap,
+    outputMode: PhoneOutputMode = .recording
   ) throws {
-    let metadata = try PhoneInputConfiguration(value, connection: connection)
+    let metadata = try PhoneInputConfiguration(
+      value, connection: connection, outputMode: outputMode)
     guard metadata.active, metadata.generation == map.generation, metadata.revision == map.revision
     else { throw PhoneControlError.rejected }
   }
 
   init(
     _ value: [String: EnrollmentJSON.Value], connection: String, map: ControlMap,
-    datagrams: Bool = false
+    datagrams: Bool = false, outputMode: PhoneOutputMode = .recording
   ) throws {
     let fields = Set([
       "version", "command", "connectionId", "generation", "revision",
@@ -24,16 +26,16 @@ struct PhoneInputGrant {
       "packetLimit", "transport", "inputEnabled",
     ])
     guard
-      Set(value.keys) == (datagrams ? fields.union(["udpPort"]) : fields),
+      Set(value.keys) == outputMode.fields(datagrams ? fields.union(["udpPort"]) : fields),
       value["version"] == .integer(1), value["command"] == .string("input-granted"),
       value["connectionId"] == .string(connection), value["generation"] == .string(map.generation),
       value["revision"] == .string(map.revision), value["packetVersion"] == .integer(1),
       value["packetBytes"] == .integer(108), value["packetLimit"] == .string("1048576"),
       value["transport"] == .string(datagrams ? "udp+tls" : "tls"),
-      value["inputEnabled"] == .boolean(false),
       case .integer(let duration)? = value["lifetimeMs"], (100...60_000).contains(duration),
       let generation = ControlMap.counter(map.generation), generation > 0
     else { throw PhoneControlError.rejected }
+    _ = try outputMode.validate(value, enabled: true)
     packet = try InputPacketGrant(
       key: Self.hex(value["key"], bytes: 32),
       session: Self.hex(value["sessionId"], bytes: 16),

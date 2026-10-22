@@ -6,18 +6,21 @@ struct PhoneInputProgress {
   let lastAccepted: UInt64?
   init(
     _ value: [String: EnrollmentJSON.Value], connection: String, session: String,
-    map: ControlMap, lastOffered: UInt64?, previous: UInt64?
+    map: ControlMap, lastOffered: UInt64?, previous: UInt64?,
+    outputMode: PhoneOutputMode = .recording
   ) throws {
     guard
       Set(value.keys)
-        == Set([
-          "version", "command", "connectionId", "sessionId", "active", "generation", "revision",
-          "lastAcceptedSequence", "inputEnabled",
-        ]), value["version"] == .integer(1), value["command"] == .string("input-status"),
+        == outputMode.fields(
+          Set([
+            "version", "command", "connectionId", "sessionId", "active", "generation", "revision",
+            "lastAcceptedSequence", "inputEnabled",
+          ])), value["version"] == .integer(1), value["command"] == .string("input-status"),
       value["connectionId"] == .string(connection), value["sessionId"] == .string(session),
       value["generation"] == .string(map.generation), value["revision"] == .string(map.revision),
-      value["inputEnabled"] == .boolean(false), case .boolean(let active)? = value["active"]
+      case .boolean(let active)? = value["active"]
     else { throw PhoneControlError.rejected }
+    _ = try outputMode.validate(value, enabled: active)
     self.active = active
     switch value["lastAcceptedSequence"] {
     case .null?:

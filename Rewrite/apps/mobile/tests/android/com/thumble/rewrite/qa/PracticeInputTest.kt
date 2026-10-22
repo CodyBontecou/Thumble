@@ -389,7 +389,7 @@ class PracticeInputTest {
             if (generation == "2") probe("/next")
             checkNotNull(device.wait(Until.findObject(By.res("home-connect")), 10_000)).click()
             assertNotNull(
-                device.wait(Until.findObject(By.text("Connect to your computer")), 10_000)
+                device.wait(Until.findObject(By.text("Test your connection")), 10_000)
             )
             if (generation == "1") {
                 val field = checkNotNull(device.findObject(By.desc("Pairing invitation")))

@@ -8,6 +8,7 @@ mock.module("react-native", () => ({
   View: "View",
   Text: "Text",
   Pressable: "Pressable",
+  ScrollView: "ScrollView",
   useWindowDimensions: () => ({ width: 874, height: 393 }),
   Platform: { OS: "ios" },
   PlatformColor: (name: string) => name,
@@ -16,8 +17,13 @@ mock.module("expo-modules-core", () => ({
   requireNativeViewManager: (name: string) => name,
 }));
 let navigationBacks = 0;
+let navigation: unknown[] = [];
+let routeMode: unknown;
 mock.module("expo-router", () => ({
+  useLocalSearchParams: () => ({ outputMode: routeMode }),
   useRouter: () => ({
+    navigate: (value: unknown) => navigation.push(value),
+    replace: (value: unknown) => navigation.push(value),
     back: () => {
       navigationBacks++;
     },
@@ -26,9 +32,12 @@ mock.module("expo-router", () => ({
 mock.module("expo-status-bar", () => ({ StatusBar: "StatusBar" }));
 mock.module("react-native-safe-area-context", () => ({
   SafeAreaView: "SafeAreaView",
+  useSafeAreaInsets: () => ({ top: 12, right: 7, bottom: 18, left: 9 }),
 }));
 const { NativeController } = await import("./NativeController.tsx");
 const { ControllerScreen } = await import("../app/practice.tsx");
+const { default: Home } = await import("../app/index.tsx");
+const { default: Connect } = await import("../app/connect.tsx");
 let renderer: ReactTestRenderer | undefined;
 beforeAll(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
@@ -36,6 +45,8 @@ beforeAll(() => {
 afterEach(async () => {
   await act(() => renderer?.unmount());
   renderer = undefined;
+  routeMode = undefined;
+  navigation = [];
 });
 async function mount(connected = true) {
   await act(() => {
@@ -283,6 +294,14 @@ test("actual practice screen retains existing navigation and standard map", asyn
   expect(
     renderer?.root.findAllByProps({ testID: "connection-header" }),
   ).toHaveLength(0);
+  expect(
+    renderer?.root.findByProps({ testID: "practice-screen" }).props.style
+      .paddingTop,
+  ).toBe(12);
+  expect(
+    renderer?.root.findByProps({ testID: "practice-screen" }).props.style
+      .paddingLeft,
+  ).toBe(9);
   const done = renderer?.root.findByProps({ testID: "practice-done" });
   expect(done?.props.style({ pressed: false }).position).toBe("absolute");
   expect(native().props.practiceMap.controls.length).toBeGreaterThan(1);
@@ -329,4 +348,76 @@ test("saved analog controls display familiar labels and pad visuals after native
     Array(6).fill("10%"),
   );
   expect(native().props.pointerEvents).toBe("auto");
+});
+
+test("Home explicitly distinguishes Mac input, diagnostic connection and practice", async () => {
+  await act(() => {
+    renderer = create(createElement(Home));
+  });
+  for (const id of ["home-connect-mac", "home-connect", "home-practice"]) {
+    await act(() => renderer?.root.findByProps({ testID: id }).props.onPress());
+  }
+  expect(navigation).toEqual([
+    { pathname: "/connect", params: { outputMode: "macos-hid" } },
+    { pathname: "/connect", params: { outputMode: "recording" } },
+    "/practice",
+  ]);
+});
+
+test("intent changes remount native ownership and clear the preceding map and catalog", async () => {
+  await act(() => {
+    renderer = create(
+      createElement(ControllerScreen, {
+        connected: true,
+        outputMode: "macos-hid",
+      }),
+    );
+  });
+  expect(native().props.outputMode).toBe("macos-hid");
+  expect(
+    renderer?.root.findByProps({ testID: "connection-mode" }).props.children,
+  ).toBe("Mac input");
+  await layout(deliveredMap);
+  await admission("ready");
+  await catalog(page(2));
+  expect(controllerLabels()).toContain("B");
+  await act(() =>
+    renderer?.update(
+      createElement(ControllerScreen, {
+        connected: true,
+        outputMode: "recording",
+      }),
+    ),
+  );
+  expect(native().props.outputMode).toBe("recording");
+  expect(controllerLabels()).not.toContain("B");
+  expect(summary()).toHaveLength(0);
+  expect(
+    renderer?.root.findByProps({ testID: "connection-mode" }).props.children,
+  ).toBe("Test mode");
+});
+
+test("malformed route intents never construct a native owner and legacy route is honest Test mode", async () => {
+  for (const mode of ["unknown", "", ["macos-hid", "recording"]]) {
+    routeMode = mode;
+    await act(() => {
+      renderer = create(createElement(Connect));
+    });
+    expect(
+      renderer?.root.findAllByProps({ testID: "controller-surface" }),
+    ).toHaveLength(0);
+    expect(
+      renderer?.root.findByProps({ testID: "connection-invalid-intent" }),
+    ).toBeDefined();
+    await act(() => renderer?.unmount());
+    renderer = undefined;
+  }
+  routeMode = undefined;
+  await act(() => {
+    renderer = create(createElement(Connect));
+  });
+  expect(native().props.outputMode).toBe("recording");
+  expect(
+    renderer?.root.findByProps({ testID: "connection-mode" }).props.children,
+  ).toBe("Test mode");
 });

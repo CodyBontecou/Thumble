@@ -171,7 +171,7 @@ class SavedControllerAppTest {
             checkNotNull(device.wait(Until.findObject(By.res("home-connect")), 15000)).click()
             assertTrue(
                 "saved_controller_pairing_dialog_missing",
-                device.wait(Until.hasObject(By.text("Connect to your computer")), 10000),
+                device.wait(Until.hasObject(By.text("Test your connection")), 10000),
             )
             val field = checkNotNull(device.findObject(By.desc("Pairing invitation")))
             field.text = invitation
@@ -287,7 +287,7 @@ class SavedControllerAppTest {
         } catch (failure: Throwable) {
             val phase =
                 when {
-                    device.hasObject(By.text("Connect to your computer")) -> "pairing-dialog"
+                    device.hasObject(By.text("Test your connection")) -> "pairing-dialog"
                     device.hasObject(By.text("Connected to receiver")) -> "connected"
                     device.hasObject(
                         By.text(

@@ -16,13 +16,18 @@ export default function Home() {
       <Text
         style={{ fontSize: 17, lineHeight: 25, color: colors.secondaryLabel }}
       >
-        Connect to your computer, or practice the controls first.
+        Connect to your Mac to play, or try the controls first.
       </Text>
       <Pressable
-        onPress={() => router.navigate("/connect")}
-        testID="home-connect"
+        onPress={() =>
+          router.navigate({
+            pathname: "/connect",
+            params: { outputMode: "macos-hid" },
+          })
+        }
+        testID="home-connect-mac"
         accessibilityRole="button"
-        accessibilityLabel="Connect to computer"
+        accessibilityLabel="Connect to Mac"
         style={({ pressed }) => ({
           minHeight: 52,
           justifyContent: "center",
@@ -36,7 +41,32 @@ export default function Home() {
         <Text
           style={{ fontSize: 17, fontWeight: "600", color: colors.background }}
         >
-          Connect to computer
+          Connect to Mac
+        </Text>
+      </Pressable>
+      <Pressable
+        onPress={() =>
+          router.navigate({
+            pathname: "/connect",
+            params: { outputMode: "recording" },
+          })
+        }
+        testID="home-connect"
+        accessibilityRole="button"
+        accessibilityLabel="Test a connection"
+        style={({ pressed }) => ({
+          minHeight: 52,
+          justifyContent: "center",
+          alignItems: "center",
+          borderRadius: 12,
+          borderCurve: "continuous",
+          borderWidth: 1,
+          borderColor: colors.separator,
+          opacity: pressed ? 0.65 : 1,
+        })}
+      >
+        <Text style={{ fontSize: 17, fontWeight: "600", color: colors.accent }}>
+          Test a connection
         </Text>
       </Pressable>
       <Pressable

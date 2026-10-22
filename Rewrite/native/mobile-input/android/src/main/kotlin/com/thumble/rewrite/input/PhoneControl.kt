@@ -36,6 +36,8 @@ data class PhoneControlMetadata(
     val connectionID: String,
     val expiresAt: Long,
     val inputSessionAvailable: Boolean,
+    val outputMode: PhoneOutputMode = PhoneOutputMode.RECORDING,
+    val inputEnabled: Boolean = false,
 )
 
 /** Native worker API. Each reconnect is a new owner; credentials and touches are never replayed. */
@@ -51,6 +53,7 @@ internal constructor(
     private val datagramFactory: (String, Int) -> NativeDatagramIO = { host, port ->
         NativeDatagramDelivery(InetSocketAddress(host, port))
     },
+    private val outputMode: PhoneOutputMode = PhoneOutputMode.RECORDING,
 ) : Closeable {
     private val started = AtomicBoolean(false)
     private val closed = AtomicBoolean(false)
@@ -91,6 +94,7 @@ internal constructor(
         inputSessions: Boolean = false,
         datagrams: Boolean = false,
         renewals: Boolean = false,
+        outputMode: PhoneOutputMode = PhoneOutputMode.RECORDING,
     ) : this(
         endpoint,
         {
@@ -110,7 +114,10 @@ internal constructor(
         PhoneCredentialVault(context)::load,
         System::currentTimeMillis,
         true,
-        if (renewals) {
+        if (outputMode == PhoneOutputMode.MACOS_HID) {
+            if (!inputSessions || !datagrams || !renewals) throw PhoneControlRejected()
+            9
+        } else if (renewals) {
             if (!inputSessions || !datagrams) throw PhoneControlRejected()
             6
         } else if (datagrams) {
@@ -118,6 +125,7 @@ internal constructor(
             5
         } else if (inputSessions) 4 else 3,
         android.os.SystemClock::elapsedRealtimeNanos,
+        outputMode = outputMode,
     )
 
     private fun worker() {
@@ -165,7 +173,8 @@ internal constructor(
     fun authenticate(): PhoneControlMetadata {
         worker()
         if (
-            controlVersion !in 3..6 ||
+            (controlVersion !in 3..6 && controlVersion != 9) ||
+                ((controlVersion == 9) != (outputMode == PhoneOutputMode.MACOS_HID)) ||
                 !started.compareAndSet(false, true) ||
                 !busy.compareAndSet(false, true)
         )
@@ -186,7 +195,7 @@ internal constructor(
                 throw PhoneControlRejected()
             }
             checkpoint()
-            send(
+            val request =
                 JSONObject()
                     .put("version", 1)
                     .put("command", "hello")
@@ -194,9 +203,8 @@ internal constructor(
                     .put("inputVersion", 1)
                     .put("documentVersion", 1)
                     .put("capabilitiesVersion", 1)
-            )
             val hello =
-                mapOf(
+                mutableMapOf<String, EnrollmentJSON.Value>(
                     "version" to EnrollmentJSON.Value.Integer(1),
                     "command" to EnrollmentJSON.Value.Text("hello"),
                     "authorityInstanceId" to
@@ -205,8 +213,15 @@ internal constructor(
                     "inputVersion" to EnrollmentJSON.Value.Integer(1),
                     "documentVersion" to EnrollmentJSON.Value.Integer(1),
                     "capabilitiesVersion" to EnrollmentJSON.Value.Integer(1),
-                    "inputEnabled" to EnrollmentJSON.Value.BooleanValue(false),
                 )
+            if (outputMode == PhoneOutputMode.MACOS_HID) {
+                request.put("role", "physical-input").put("requiredOutputBackend", "macos-hid")
+                hello["role"] = EnrollmentJSON.Value.Text("physical-input")
+                hello["requiredOutputBackend"] = EnrollmentJSON.Value.Text("macos-hid")
+            } else {
+                hello["inputEnabled"] = EnrollmentJSON.Value.BooleanValue(false)
+            }
+            send(request)
             if (receive() != hello) throw PhoneControlRejected()
             val credential =
                 load(endpoint.certificatePin, checkpoint()) ?: throw PhoneControlRejected()
@@ -246,16 +261,18 @@ internal constructor(
                 ?: throw PhoneControlRejected()
         if (
             value.keys !=
-                setOf(
-                    "version",
-                    "command",
-                    "authorityInstanceId",
-                    "phoneId",
-                    "credentialEpoch",
-                    "connectionId",
-                    "expiresAt",
-                    "inputSessionAvailable",
-                    "inputEnabled",
+                outputMode.fields(
+                    setOf(
+                        "version",
+                        "command",
+                        "authorityInstanceId",
+                        "phoneId",
+                        "credentialEpoch",
+                        "connectionId",
+                        "expiresAt",
+                        "inputSessionAvailable",
+                        "inputEnabled",
+                    )
                 ) ||
                 value["version"] != EnrollmentJSON.Value.Integer(1) ||
                 text("command") != command ||
@@ -265,7 +282,6 @@ internal constructor(
                 epoch.toString() != epochText ||
                 !connection.matches(Regex("[0-9a-f]{32}")) ||
                 expires <= last ||
-                value["inputEnabled"] != EnrollmentJSON.Value.BooleanValue(false) ||
                 value["inputSessionAvailable"] !=
                     EnrollmentJSON.Value.BooleanValue(controlVersion >= 4) ||
                 credential?.let {
@@ -273,8 +289,18 @@ internal constructor(
                 } == true
         )
             throw PhoneControlRejected()
-        val receipt = PhoneControlMetadata(phone, epoch, connection, expires, controlVersion >= 4)
-        if (admitted?.let { it != receipt } == true) throw PhoneControlRejected()
+        val receipt =
+            PhoneControlMetadata(
+                phone,
+                epoch,
+                connection,
+                expires,
+                controlVersion >= 4,
+                outputMode,
+                outputMode.validate(value),
+            )
+        if (admitted?.let { it.copy(inputEnabled = receipt.inputEnabled) != receipt } == true)
+            throw PhoneControlRejected()
         return receipt
     }
 
@@ -314,7 +340,7 @@ internal constructor(
     fun inputConfiguration(): PhoneInputConfiguration {
         worker()
         if (
-            controlVersion !in 4..6 ||
+            (controlVersion !in 4..6 && controlVersion != 9) ||
                 admitted == null ||
                 inputAttempted.get() ||
                 !busy.compareAndSet(false, true)
@@ -329,7 +355,7 @@ internal constructor(
                     .put("command", "input-configuration")
                     .put("connectionId", connection)
             )
-            return PhoneInputConfiguration.decode(receive(), connection)
+            return PhoneInputConfiguration.decode(receive(), connection, outputMode)
         } catch (_: Exception) {
             close()
             throw PhoneControlRejected()
@@ -342,7 +368,7 @@ internal constructor(
     fun prepareInput(map: ControlMap): PhoneInputAdmission {
         worker()
         if (
-            controlVersion !in 4..6 ||
+            (controlVersion !in 4..6 && controlVersion != 9) ||
                 admitted == null ||
                 inputAttempted.get() ||
                 !busy.compareAndSet(false, true)
@@ -358,7 +384,7 @@ internal constructor(
                     .put("command", "input-configuration")
                     .put("connectionId", connection)
             )
-            PhoneInputGrant.configuration(receive(), connection, map)
+            PhoneInputGrant.configuration(receive(), connection, map, outputMode)
             val requested = checkpoint()
             val startedAt = elapsed()
             send(
@@ -369,7 +395,14 @@ internal constructor(
                     .put("generation", map.generation)
                     .put("revision", map.revision)
             )
-            val grant = PhoneInputGrant(receive(), connection, map, datagrams = controlVersion >= 5)
+            val grant =
+                PhoneInputGrant(
+                    receive(),
+                    connection,
+                    map,
+                    datagrams = controlVersion >= 5,
+                    outputMode = outputMode,
+                )
             inputDeadline = minOf(deadline ?: 0, Math.addExact(requested, grant.lifetime))
             inputElapsedDeadline =
                 Math.addExact(startedAt, Math.multiplyExact(grant.lifetime, 1_000_000))
@@ -466,7 +499,7 @@ internal constructor(
     }
 
     private fun renewalDue(): Boolean =
-        controlVersion == 6 &&
+        (controlVersion == 6 || controlVersion == 9) &&
             inputRenewalDue?.let { elapsed() >= it } == true &&
             (credentialExpiresAt ?: 0) > (admitted?.expiresAt ?: Long.MAX_VALUE)
 
@@ -498,6 +531,7 @@ internal constructor(
                     map,
                     PhoneInputRenewalScope(session, port, receipt.expiresAt, credentialExpiry),
                     checkpoint(),
+                    outputMode,
                 )
             val pending = PendingRenewal(renewal, session, requested, startedAt)
             synchronized(owner) {
@@ -546,6 +580,8 @@ internal constructor(
                                     receipt.connectionID,
                                     renewed.authorizationExpiresAt,
                                     receipt.inputSessionAvailable,
+                                    outputMode,
+                                    outputMode == PhoneOutputMode.MACOS_HID,
                                 )
                             deadline =
                                 minOf(
@@ -629,7 +665,8 @@ internal constructor(
         )
         val value = receive()
         inputCheckpoint()
-        if (route?.observe(value, connection, session, map) != true) throw PhoneControlRejected()
+        if (route?.observe(value, connection, session, map, outputMode) != true)
+            throw PhoneControlRejected()
     }
 
     internal fun inputThread() {

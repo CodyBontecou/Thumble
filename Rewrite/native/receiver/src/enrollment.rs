@@ -169,6 +169,8 @@ struct Hello {
     capabilities_version: u8,
     #[serde(default, deserialize_with = "non_null_role")]
     role: Option<String>,
+    #[serde(default, deserialize_with = "non_null_role")]
+    required_output_backend: Option<String>,
 }
 fn non_null_role<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<String>, D::Error> {
     String::deserialize(d).map(Some)
@@ -236,7 +238,9 @@ pub(crate) fn serve(
         channel,
         windows,
         store,
-        if controls.is_some_and(|bridge| bridge.enabled()) {
+        if input.datagram_port.is_some() {
+            9
+        } else if controls.is_some_and(|bridge| bridge.enabled()) {
             8
         } else if catalog.enabled() {
             7
@@ -255,12 +259,12 @@ pub(crate) fn serve(
             &mut now,
         )
         .map(|_| ()),
-        5 | 6 if input.datagram_port.is_none() => Err("enrollment_version_unsupported"),
+        5 | 6 | 9 if input.datagram_port.is_none() => Err("enrollment_version_unsupported"),
         7 if !catalog.enabled() => Err("enrollment_version_unsupported"),
         8 if !controls.is_some_and(|bridge| bridge.enabled()) => {
             Err("enrollment_version_unsupported")
         }
-        version @ 3..=8 => {
+        version @ 3..=9 => {
             let authority = windows
                 .lock()
                 .map_err(|_| "pairing_owner_unavailable")?
@@ -271,11 +275,12 @@ pub(crate) fn serve(
                 &authority,
                 store,
                 policy_mutation,
-                if (4..=6).contains(&version) {
+                if (4..=6).contains(&version) || version == 9 {
                     Some(crate::input_broker::ControlInput {
                         root: input.root,
                         registry: input.registry,
-                        renewal: version == 6,
+                        renewal: matches!(version, 6 | 9),
+                        physical: version == 9,
                         datagram_port: if version >= 5 {
                             input.datagram_port
                         } else {
@@ -327,10 +332,13 @@ fn begin(
     if hello.version != 1
         || hello.command != "hello"
         || !(2..=max_version).contains(&hello.control_version)
-        || (if matches!(hello.control_version, 7 | 8) {
-            hello.role.as_deref() != Some("management")
+        || (if hello.control_version == 9 {
+            hello.role.as_deref() != Some("physical-input")
+                || hello.required_output_backend.as_deref() != Some("macos-hid")
+        } else if matches!(hello.control_version, 7 | 8) {
+            hello.role.as_deref() != Some("management") || hello.required_output_backend.is_some()
         } else {
-            hello.role.is_some()
+            hello.role.is_some() || hello.required_output_backend.is_some()
         })
         || hello.input_version != 1
         || hello.document_version != 1
@@ -339,7 +347,11 @@ fn begin(
         return Err("enrollment_version_unsupported");
     }
     let mut reply = serde_json::json!({"version":1,"command":"hello","authorityInstanceId":authority,"controlVersion":hello.control_version,"inputVersion":1,"documentVersion":1,"capabilitiesVersion":1,"inputEnabled":false});
-    if matches!(hello.control_version, 7 | 8) {
+    if hello.control_version == 9 {
+        reply.as_object_mut().unwrap().remove("inputEnabled");
+        reply["role"] = serde_json::json!("physical-input");
+        reply["requiredOutputBackend"] = serde_json::json!("macos-hid");
+    } else if matches!(hello.control_version, 7 | 8) {
         reply["role"] = serde_json::json!("management");
     }
     channel
@@ -938,6 +950,61 @@ mod tests {
                     }
                 });
             }
+        }
+    }
+    #[test]
+    fn physical_v9_requires_exact_intent_and_never_reuses_legacy_false_hello() {
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../packages/fixtures/physical-input-control-v9.json"
+        ))
+        .unwrap();
+        for outcome in [
+            "accepted",
+            "missing-role",
+            "wrong-backend",
+            "old-version",
+            "null-backend",
+            "unknown-field",
+        ] {
+            let root = Root::new();
+            let identity = host_identity::load_existing(&root.0).unwrap();
+            let pin = identity.pin();
+            let windows = Mutex::new(PairingWindows::new("authority-a", pin).unwrap());
+            let store = Mutex::new(PhoneTrustStore::open(&root.0).unwrap());
+            let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+            let address = listener.local_addr().unwrap();
+            thread::scope(|scope| {
+                let worker = scope.spawn(|| {
+                    let mut channel =
+                        ControlChannel::accept_unenrolled(listener.accept().unwrap().0, &identity)
+                            .unwrap();
+                    begin(&mut channel, &windows, &store, 9)
+                });
+                let mut channel = ControlChannel::connect_pinned(address, pin).unwrap();
+                let mut request = fixture["request"].clone();
+                match outcome {
+                    "accepted" => {}
+                    "missing-role" => {
+                        request.as_object_mut().unwrap().remove("role");
+                    }
+                    "wrong-backend" => {
+                        request["requiredOutputBackend"] = serde_json::json!("recording")
+                    }
+                    "old-version" => request["controlVersion"] = serde_json::json!(6),
+                    "null-backend" => request["requiredOutputBackend"] = serde_json::Value::Null,
+                    _ => request["extra"] = serde_json::json!(true),
+                }
+                send(&mut channel, request);
+                if outcome == "accepted" {
+                    let reply: serde_json::Value = receive(&mut channel).unwrap();
+                    assert_eq!(reply, fixture["hello"]);
+                    assert_eq!(worker.join().unwrap(), Ok(9));
+                } else {
+                    assert!(channel.receive().is_err());
+                    assert!(worker.join().unwrap().is_err());
+                }
+            });
+            assert!(store.lock().unwrap().list().unwrap().is_empty());
         }
     }
 }

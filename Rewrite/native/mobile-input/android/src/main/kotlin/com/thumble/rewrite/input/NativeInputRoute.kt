@@ -88,9 +88,20 @@ internal class NativeInputRoute(
         connection: String,
         session: String,
         map: ControlMap,
+        outputMode: PhoneOutputMode = PhoneOutputMode.RECORDING,
     ): Boolean =
         try {
-            observe(PhoneInputProgress(value, connection, session, map, lastOffered, acknowledged))
+            observe(
+                PhoneInputProgress(
+                    value,
+                    connection,
+                    session,
+                    map,
+                    lastOffered,
+                    acknowledged,
+                    outputMode,
+                )
+            )
         } catch (_: Exception) {
             close()
             false

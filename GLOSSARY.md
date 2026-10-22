@@ -36,3 +36,9 @@ A temporary conversation in which a trusted phone has proved its current credent
 
 **Grant rotation**:
 Replacement of an input session's cryptographic grant while retaining the same live controller interaction. It cannot revive an ended input session.
+
+**Physical output intent**:
+A phone's explicit request to control a physical input device. It does not establish device authorization or an input grant.
+
+**Output admission**:
+The receiver's confirmation that the active controller configuration can currently send input to its selected physical device.

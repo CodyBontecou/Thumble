@@ -1,16 +1,13 @@
+import { buildOptions } from "./build-options.ts";
+import { packageCapture } from "./package-capture.ts";
 import { checkCliNotices } from "./check-cli-notices.ts";
 import { createHash } from "node:crypto";
 import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
-const arguments_ = process.argv.slice(2);
-if (
-  arguments_.length > 1 ||
-  (arguments_.length === 1 && arguments_[0] !== "--with-macos-output")
-)
-  throw new Error("unsupported_build_option");
-const withMacOutput = arguments_[0] === "--with-macos-output";
-if (withMacOutput && process.platform !== "darwin")
-  throw new Error("macos_output_build_requires_macos");
+const { withMacOutput, capture } = buildOptions(
+  process.argv.slice(2),
+  process.platform,
+);
 checkCliNotices();
 const root = resolve(import.meta.dir, ".."),
   extension = process.platform === "win32" ? ".exe" : "";
@@ -45,6 +42,10 @@ for (const command of [
     "--manifest-path",
     "native/receiver/Cargo.toml",
   ],
+  ...(capture?.platform === "win32"
+    ? [[process.execPath, "tooling/windows-capture-notices.ts", "--check"]]
+    : []),
+  ...(capture ? [[...capture.command]] : []),
   [
     process.execPath,
     "build",
@@ -73,6 +74,7 @@ copyFileSync(
   resolve(root, "dist/SteamControllerBridge-LICENSE.txt"),
 );
 copyFileSync(resolve(root, "REVIEWING.md"), resolve(root, "dist/REVIEWING.md"));
+packageCapture(root, capture);
 writeFileSync(
   resolve(root, "dist/README.txt"),
   [
@@ -82,6 +84,14 @@ writeFileSync(
     ...(withMacOutput
       ? [
           "Physical output requires explicit service selection and --allow-physical-output, and an appropriately authorized native helper. This build does not sign or provision that helper.",
+        ]
+      : []),
+    ...(capture
+      ? [
+          `Optional optical helper: ${capture.name}. Build does not run it or enable capture. Verify WOW-CAPTURE-MANIFEST.json and retain Optical-THIRD-PARTY-NOTICES.txt.`,
+          `Explicit launch: thumble-rewrite service start --runtime-dir ABSOLUTE_PRIVATE_PATH --capture-helper ABSOLUTE_PACKAGE_DIRECTORY/${capture.name} --json`,
+          "Then request one frame: thumble-rewrite wow capture-start --source world-of-warcraft --runtime-dir ABSOLUTE_PRIVATE_PATH --json",
+          "Capture status exposes receipt metadata only; automatic live sync, real capture compatibility and signing remain unverified.",
         ]
       : []),
     "Keep thumble-rewrite and thumble-rewrite-receiver (with .exe on Windows) together.",
@@ -96,7 +106,9 @@ writeFileSync(
   ].join("\n"),
 );
 console.log(
-  withMacOutput
-    ? "Built standalone CLI and receiver with optional macOS output; no signing or physical activation performed"
-    : "Built standalone CLI and recording receiver; no repository checkout is needed at runtime",
+  capture
+    ? "Built standalone CLI, receiver and optional optical helper; no helper execution, signing or capture performed"
+    : withMacOutput
+      ? "Built standalone CLI and receiver with optional macOS output; no signing or physical activation performed"
+      : "Built standalone CLI and recording receiver; no repository checkout is needed at runtime",
 );

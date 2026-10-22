@@ -8,6 +8,7 @@ internal class PhoneInputProgress(
     map: ControlMap,
     lastOffered: ULong?,
     previous: ULong?,
+    outputMode: PhoneOutputMode = PhoneOutputMode.RECORDING,
 ) {
     val active: Boolean
     val lastAccepted: ULong?
@@ -15,29 +16,31 @@ internal class PhoneInputProgress(
     init {
         if (
             value.keys !=
-                setOf(
-                    "version",
-                    "command",
-                    "connectionId",
-                    "sessionId",
-                    "active",
-                    "generation",
-                    "revision",
-                    "lastAcceptedSequence",
-                    "inputEnabled",
+                outputMode.fields(
+                    setOf(
+                        "version",
+                        "command",
+                        "connectionId",
+                        "sessionId",
+                        "active",
+                        "generation",
+                        "revision",
+                        "lastAcceptedSequence",
+                        "inputEnabled",
+                    )
                 ) ||
                 value["version"] != EnrollmentJSON.Value.Integer(1) ||
                 value["command"] != EnrollmentJSON.Value.Text("input-status") ||
                 value["connectionId"] != EnrollmentJSON.Value.Text(connection) ||
                 value["sessionId"] != EnrollmentJSON.Value.Text(session) ||
                 value["generation"] != EnrollmentJSON.Value.Text(map.generation) ||
-                value["revision"] != EnrollmentJSON.Value.Text(map.revision) ||
-                value["inputEnabled"] != EnrollmentJSON.Value.BooleanValue(false)
+                value["revision"] != EnrollmentJSON.Value.Text(map.revision)
         )
             throw PhoneControlRejected()
         active =
             (value["active"] as? EnrollmentJSON.Value.BooleanValue)?.value
                 ?: throw PhoneControlRejected()
+        outputMode.validate(value, active)
         lastAccepted =
             when (val sequence = value["lastAcceptedSequence"]) {
                 EnrollmentJSON.Value.Null -> {

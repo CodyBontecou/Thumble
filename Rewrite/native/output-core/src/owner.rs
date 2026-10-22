@@ -173,6 +173,11 @@ pub struct OutputOwner {
     closing: Arc<AtomicBool>,
     shared: Arc<Mutex<Snapshot>>,
     next: AtomicU64,
+    // Serializes only shutdown publication with the terminal drain. No device
+    // operation or receipt wait may hold this fence.
+    shutdown_handoff: Arc<Mutex<()>>,
+    #[cfg(test)]
+    before_shutdown_enqueue: Mutex<Option<Box<dyn FnOnce() + Send>>>,
 }
 impl OutputOwner {
     /// The caller supplies the receiver's absolute sleep-inclusive clock domain.
@@ -182,15 +187,20 @@ impl OutputOwner {
         let closing = Arc::new(AtomicBool::new(false));
         let state = shared.clone();
         let stopped = closing.clone();
+        let shutdown_handoff = Arc::new(Mutex::new(()));
+        let handoff = shutdown_handoff.clone();
         thread::Builder::new()
             .name("thumble-output-owner".into())
-            .spawn(move || Worker::new(factory, receiver, state, stopped, clock).run())
+            .spawn(move || Worker::new(factory, receiver, state, stopped, clock, handoff).run())
             .map_err(|_| Error::Closed)?;
         Ok(Self {
             sender: Some(sender),
             closing,
             shared,
             next: AtomicU64::new(1),
+            shutdown_handoff,
+            #[cfg(test)]
+            before_shutdown_enqueue: Mutex::new(None),
         })
     }
     pub fn request(&self, operation: Operation) -> Result<Pending, Error> {
@@ -201,8 +211,20 @@ impl OutputOwner {
             .next
             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| n.checked_add(1))
             .map_err(|_| Error::ReceiptExhausted)?;
-        if matches!(operation, Operation::Shutdown) {
+        let shutdown = matches!(operation, Operation::Shutdown);
+        let _handoff = shutdown.then(|| {
+            self.shutdown_handoff
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+        });
+        if shutdown {
+            // Admission closes synchronously even if the bounded queue is full.
+            // The worker cannot finish its terminal drain before this enqueue.
             self.closing.store(true, Ordering::Release);
+            #[cfg(test)]
+            if let Some(pause) = self.before_shutdown_enqueue.lock().unwrap().take() {
+                pause();
+            }
         }
         let (reply, receiver) = mpsc::sync_channel(1);
         self.sender
@@ -264,6 +286,9 @@ struct Worker<F> {
     device: Option<Box<dyn Device>>,
     retirement: Option<Retirement>,
     shutdown: Option<Command>,
+    shutdown_handoff: Arc<Mutex<()>>,
+    #[cfg(test)]
+    before_terminal_drain: Option<mpsc::SyncSender<()>>,
 }
 impl<F: Factory> Worker<F> {
     fn new(
@@ -272,6 +297,7 @@ impl<F: Factory> Worker<F> {
         shared: Arc<Mutex<Snapshot>>,
         closing: Arc<AtomicBool>,
         clock: Arc<dyn ClockDomain>,
+        shutdown_handoff: Arc<Mutex<()>>,
     ) -> Self {
         Self {
             factory,
@@ -285,6 +311,9 @@ impl<F: Factory> Worker<F> {
             device: None,
             retirement: None,
             shutdown: None,
+            shutdown_handoff,
+            #[cfg(test)]
+            before_terminal_drain: None,
         }
     }
     fn publish(&self) {
@@ -649,6 +678,14 @@ impl<F: Factory> Worker<F> {
                 if self.device.is_some() {
                     self.retire(After::Expired, None);
                 } else {
+                    #[cfg(test)]
+                    if let Some(observed) = self.before_terminal_drain.take() {
+                        let _ = observed.try_send(());
+                    }
+                    let handoff = self.shutdown_handoff.clone();
+                    // No device or retirement remains here. Waiting for a
+                    // nonblocking command publication cannot delay native IO.
+                    let _handoff = handoff.lock().unwrap_or_else(|p| p.into_inner());
                     self.state.phase = Phase::Stopped;
                     self.state.scope = None;
                     self.state.valid_until = None;

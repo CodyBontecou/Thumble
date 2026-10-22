@@ -8,6 +8,11 @@ on:
       - "Rewrite/tooling/test-windows-optical-parity.ts"
       - "Rewrite/tooling/test-windows-capture-interop.ts"
       - "Rewrite/tooling/windows-capture-notices.ts"
+      - "Rewrite/tooling/build.ts"
+      - "Rewrite/tooling/build-options.ts"
+      - "Rewrite/tooling/package-capture.ts"
+      - "Rewrite/tests/build-capture.test.ts"
+      - "Rewrite/tests/capture-package.test.ts"
       - "Rewrite/packages/fixtures/wow-live-v1.json"
       - "Rewrite/packages/contracts/src/wow-capture.ts"
       - "Rewrite/packages/domain/src/wow-capture-receipt.ts"
@@ -21,6 +26,11 @@ on:
       - "Rewrite/tooling/test-windows-optical-parity.ts"
       - "Rewrite/tooling/test-windows-capture-interop.ts"
       - "Rewrite/tooling/windows-capture-notices.ts"
+      - "Rewrite/tooling/build.ts"
+      - "Rewrite/tooling/build-options.ts"
+      - "Rewrite/tooling/package-capture.ts"
+      - "Rewrite/tests/build-capture.test.ts"
+      - "Rewrite/tests/capture-package.test.ts"
       - "Rewrite/packages/fixtures/wow-live-v1.json"
       - "Rewrite/packages/contracts/src/wow-capture.ts"
       - "Rewrite/packages/domain/src/wow-capture-receipt.ts"
@@ -72,3 +82,12 @@ jobs:
         run: |
           bun Rewrite/tooling/test-windows-optical-parity.ts
           bun Rewrite/tooling/test-windows-capture-interop.ts
+
+      - name: Test pure opt-in packaging policy with owned fake files
+        run: bun test Rewrite/tests/build-capture.test.ts
+      - name: Compile optional standalone capture package without executing native helper
+        if: runner.os != 'Linux'
+        run: bun Rewrite/tooling/build.ts --with-wow-capture
+      - name: Verify relocated compiled CLI with synthetic helper only
+        if: runner.os != 'Linux'
+        run: THUMBLE_REWRITE_CAPTURE_PACKAGE_TEST=1 bun test Rewrite/tests/capture-package.test.ts

@@ -426,6 +426,28 @@ async function main(): Promise<unknown> {
       });
       return requestConfiguration(readEndpoint(root, receiver), command);
     }
+    if (action === "initialize-starter") {
+      const allowed = [
+        "--runtime-dir",
+        "--receiver",
+        "--json",
+        "--operation-id",
+        "--expected-revision",
+        "--profile-id",
+        "--name",
+      ];
+      for (const key of opts.keys())
+        if (!allowed.includes(key))
+          throw new Error("invalid_configuration_option");
+      const command = decodeConfigurationCommand({
+        command: "configuration-initialize-starter",
+        operationId: required(opts, "--operation-id"),
+        expectedRevision: required(opts, "--expected-revision"),
+        profileId: required(opts, "--profile-id"),
+        name: required(opts, "--name"),
+      });
+      return requestConfiguration(readEndpoint(root, receiver), command);
+    }
     if (action === "duplicate-profile") {
       const allowed = [
         "--runtime-dir",

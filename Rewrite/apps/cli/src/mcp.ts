@@ -47,6 +47,7 @@ export function startMcp(
           "configuration_rename_profile",
           "configuration_select_profiles",
           "configuration_duplicate_profile",
+          "configuration_initialize_starter",
           "configuration_import_file",
           "configuration_import_status",
           "configuration_export_file",
@@ -275,6 +276,37 @@ export function startMcp(
                 await readEndpointAsync(root, receiver),
                 decodeConfigurationCommand({
                   command: "configuration-rename-profile",
+                  ...args,
+                }),
+              ),
+            ),
+        );
+      if (allowConfigurationWrite)
+        server.registerTool(
+          "configuration_initialize_starter",
+          {
+            description:
+              "Initialize an EMPTY saved configuration authority with one production starter gamepad profile (14 buttons, two analog sticks, independent analog triggers). expectedRevision must be 0. Selects saved active/default only; never pairs, activates receiver input or creates OS devices. Refuses existing configuration; retry exact intent for original durable receipt.",
+            inputSchema: z
+              .object({
+                operationId: z.string().regex(/^[A-Za-z0-9-]{1,64}$/),
+                expectedRevision: z.literal("0"),
+                profileId: z
+                  .string()
+                  .regex(
+                    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+                  ),
+                name: z.string().min(1).max(512),
+              })
+              .strict(),
+            annotations: annotations(false),
+          },
+          (args) =>
+            receipt(async () =>
+              requestConfiguration(
+                await readEndpointAsync(root, receiver),
+                decodeConfigurationCommand({
+                  command: "configuration-initialize-starter",
                   ...args,
                 }),
               ),

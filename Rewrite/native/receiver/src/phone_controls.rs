@@ -62,7 +62,7 @@ impl Bridge {
     fn pin(&self, request: &Request) -> Result<(), &'static str> {
         let mut client = Client::connect(&self.root).map_err(|_| "saved_map_unavailable")?;
         let (configuration, pin) = client
-            .saved_configuration()
+            .output_configuration()
             .map_err(|_| "saved_map_unavailable")?;
         // This ephemeral read-only connection closes before parent/TLS waits.
         let pin = pin

@@ -1,3 +1,4 @@
+import { starterConfiguration } from "@thumble/domain/starter-configuration";
 import { OwnedAuthorityDocument } from "@thumble/domain/owned-authority";
 import {
   CONFIGURATION_PAGE_SIZE,
@@ -13,7 +14,8 @@ import {
 } from "./configuration-store.ts";
 
 export type ConfigurationAccess = Readonly<{ read: boolean; write: boolean }>;
-/** Metadata-only operations. Catalog admission never grants document/runtime validity.
+/** Saved catalog operations and explicit empty-authority initialization.
+ * Catalog admission never grants document/runtime validity.
  * Capabilities and ports come from the authenticated owner, never command fields. */
 export class ConfigurationCatalogOperations {
   constructor(
@@ -74,14 +76,16 @@ export class ConfigurationCatalogOperations {
               command.expectedRevision,
               ...(command.command === "configuration-rename-profile"
                 ? [command.profileId, command.name]
-                : command.command === "configuration-select-profiles"
-                  ? [command.activeProfileId, command.defaultProfileId]
-                  : [
-                      command.profileId,
-                      command.newProfileId,
-                      command.name,
-                      command.select,
-                    ]),
+                : command.command === "configuration-initialize-starter"
+                  ? ["starter-v1", command.profileId, command.name]
+                  : command.command === "configuration-select-profiles"
+                    ? [command.activeProfileId, command.defaultProfileId]
+                    : [
+                        command.profileId,
+                        command.newProfileId,
+                        command.name,
+                        command.select,
+                      ]),
             ]),
           );
     if (command.command !== "configuration-list") {
@@ -143,6 +147,27 @@ export class ConfigurationCatalogOperations {
         defaultProfileId: catalog.defaultProfileID,
         nextOffset: next < catalog.profiles.length ? next : null,
       });
+    }
+    if (command.command === "configuration-initialize-starter") {
+      // Revision zero is accepted only without a current source. Generic commit
+      // still performs the durable CAS, so a concurrent writer cannot be replaced.
+      if (current) throw new ConfigurationRevisionConflict(revision);
+      const source = starterConfiguration(
+        command.profileId,
+        command.name,
+        this.now(),
+      );
+      const prepared = OwnedAuthorityDocument.prepare(source, () => {
+        throw new Error("configuration_starter_invalid");
+      });
+      const result = this.repository.commit({
+        operationId: command.operationId,
+        payloadHash: payloadHash!,
+        expectedRevision: "0",
+        source: prepared.document.source,
+        affectedEntities: ["configuration", command.profileId],
+      });
+      return Object.freeze({ version: 1, kind: "committed", ...result });
     }
     if (!current) throw new Error("configuration_not_initialized");
     const authority = OwnedAuthorityDocument.isAuthority(current.source)

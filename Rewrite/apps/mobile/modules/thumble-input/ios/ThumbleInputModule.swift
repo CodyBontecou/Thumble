@@ -16,6 +16,9 @@ public final class ThumbleInputModule: Module {
       Prop("practiceMap") { (view: ThumbleInputView, value: [String: Any]) in
         view.pendingPractice = value
       }
+      Prop("outputMode") { (view: ThumbleInputView, value: String) in
+        view.connectionOutputMode = value
+      }
       Prop("connect") { (view: ThumbleInputView, value: Bool) in
         view.connectionRequested = value
       }
@@ -53,6 +56,15 @@ public final class ThumbleInputModule: Module {
   let onCatalog = EventDispatcher()
   let onControlMap = EventDispatcher()
   fileprivate var connectionRequested = false
+  // Caller intent is immutable once native bootstrap starts; changing it requires a new view.
+  fileprivate var connectionOutputMode = "recording" {
+    didSet {
+      if connectionAttempted && connectionOutputMode != oldValue {
+        release(.disposed)
+        onAdmission(["admission": ["version": 1, "status": "unavailable"]])
+      }
+    }
+  }
   fileprivate var pendingConnection: [String: Any]?
   fileprivate var pendingPractice: [String: Any]?
   private var practiceAdmitted = false
@@ -95,6 +107,12 @@ public final class ThumbleInputModule: Module {
     connectionAttempted = true
     do {
       guard pendingPractice == nil else { throw InputError.invalidMap }
+      let outputMode: PhoneOutputMode
+      switch connectionOutputMode {
+      case "recording": outputMode = .recording
+      case "macos-hid": outputMode = .macosHID
+      default: throw InputError.invalidMap
+      }
       let flow = PhoneConnection(
         anchor: self,
         feedback: { [weak self] state in self?.publishFeedback(state) },
@@ -106,7 +124,8 @@ public final class ThumbleInputModule: Module {
           self?.onAdmission(["admission": ["version": 1, "status": status]])
         },
         catalogResult: { [weak self] catalog in self?.onCatalog(["catalog": catalog]) },
-        installedMap: { [weak self] map in self?.onControlMap(["map": map]) })
+        installedMap: { [weak self] map in self?.onControlMap(["map": map]) },
+        outputMode: outputMode)
       connection = flow
       flow.start()
     } catch {
