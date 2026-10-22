@@ -1,0 +1,9 @@
+# Portable configuration catalog projection
+
+`@thumble/domain/configuration-catalog` reads the v5 owned configuration envelope into immutable profile summaries. The original `LosslessJson` remains authoritative. Summaries contain normalized case-insensitive UUID identities, display names and exact nonnegative Int64 timestamps as decimal strings. They are never used to reserialize a document.
+
+The catalog checks schema/version, one to 256 profiles, explicit active/default references, duplicate identities, name bounds, exact timestamps, reserved aliases, credential/authority fields and retired profile fields. It preserves opaque fields and number spellings. A pure rename addresses an explicit stable profile ID regardless of active selection, replaces only its name/timestamp, refuses timestamp regression and leaves same-name edits unchanged. The supplied clock must be canonical decimal Int64 milliseconds. The application will own clock assignment, authorization, CAS and receipt fingerprints.
+
+This module validates only the envelope and catalog metadata. It deliberately accepts opaque or absent customization, bindings and appearance content. It is **not** an owned document import validator, asset verifier or runtime configuration builder. No CLI/MCP write, service mutation, retained authority migration or runtime activation is exposed by this change. Those boundaries require complete semantic validation and capability checks first. Unknown source metadata stays intact for those subsequent validators and operations.
+
+Six tests cover exact full-width timestamps, opaque numeric/subtree preservation, explicit targeting across a different active profile, immutable summaries, case-insensitive duplicate IDs, dangling references, reserved aliases, retired fields, mathematically nonintegral timestamps, overflow, Unicode scalar name bounds, no-op identity and failed edits. No retained Swift or real user data is changed.

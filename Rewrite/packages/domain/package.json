@@ -3,7 +3,10 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "exports": "./src/gamepad-report.ts",
+  "exports": {
+    ".": "./src/gamepad-report.ts",
+    "./configuration-catalog": "./src/configuration-catalog.ts"
+  },
   "dependencies": {
     "@thumble/contracts": "workspace:*"
   }
