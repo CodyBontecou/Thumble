@@ -583,11 +583,28 @@ fn stale_grant_receipts_and_old_generation_packets_cannot_replace_or_release_new
     let (sample_ready, first_sample) = mpsc::sync_channel(1);
     let sampling = thread::spawn(move || {
         let mut ready = Some(sample_ready);
+        #[cfg(debug_assertions)]
+        let mut previous = Instant::now();
         while !stopped.load(Ordering::SeqCst) {
+            #[cfg(debug_assertions)]
+            thumble_rewrite_receiver::input_io_diagnostics::record(
+                thumble_rewrite_receiver::input_io_diagnostics::Metric::SampleGap,
+                previous.elapsed(),
+            );
+            #[cfg(debug_assertions)]
+            {
+                previous = Instant::now();
+            }
+            #[cfg(debug_assertions)]
+            let cycle = thumble_rewrite_receiver::input_io_diagnostics::Span::start(
+                thumble_rewrite_receiver::input_io_diagnostics::Metric::SampleCycle,
+            );
             phone_held(&mut channel, &sampling_receipt, &mut sender);
             if let Some(ready) = ready.take() {
                 ready.send(()).unwrap();
             }
+            #[cfg(debug_assertions)]
+            drop(cycle);
             thread::sleep(Duration::from_millis(30));
         }
         (channel, sender)
@@ -602,6 +619,11 @@ fn stale_grant_receipts_and_old_generation_packets_cannot_replace_or_release_new
     );
     assert!(stale.receive().is_err());
     phase("stale-rejected");
+    #[cfg(debug_assertions)]
+    eprintln!(
+        "[DEBUG-native-io] {}",
+        thumble_rewrite_receiver::input_io_diagnostics::snapshot()
+    );
     let observed = receiver.status();
     assert_ne!(observed["reportHex"], hex(&NEUTRAL), "{observed}");
     stop.store(true, Ordering::SeqCst);

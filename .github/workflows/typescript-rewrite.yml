@@ -58,9 +58,11 @@ jobs:
       - run: cargo fmt --manifest-path native/receiver/Cargo.toml -- --check
       - run: cargo clippy --locked --manifest-path native/receiver/Cargo.toml --all-targets -- -D warnings
       - name: Isolate Windows stale-grant regression with phase diagnostics
+        shell: pwsh
         if: runner.os == 'Windows'
         env:
           RUST_BACKTRACE: "1"
+          THUMBLE_REWRITE_INPUT_IO_PROBE: "1"
         run: |
           cargo test --locked --manifest-path native/receiver/Cargo.toml --lib phone_trust::tests::durable_authorization_observations_remain_monotonic_across_journal_recovery -- --exact --nocapture
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

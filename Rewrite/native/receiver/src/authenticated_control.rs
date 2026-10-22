@@ -351,9 +351,19 @@ fn serve_input(
             if packets > 65_536 {
                 return Err("authenticated_control_budget_exhausted");
             }
+            #[cfg(debug_assertions)]
+            let waiting = crate::input_io_diagnostics::Span::start(
+                crate::input_io_diagnostics::Metric::InputWait,
+            );
             let _gate = mutation
                 .lock()
                 .map_err(|_| "phone_trust_owner_unavailable")?;
+            #[cfg(debug_assertions)]
+            drop(waiting);
+            #[cfg(debug_assertions)]
+            let _held = crate::input_io_diagnostics::Span::start(
+                crate::input_io_diagnostics::Metric::InputHeld,
+            );
             let time = now()?;
             authorized.validate(
                 channel,
@@ -380,9 +390,19 @@ fn serve_input(
             return Err("authenticated_control_message_invalid");
         }
         // Only native IPC and native trust checks run while this fence is held, never TLS I/O.
+        #[cfg(debug_assertions)]
+        let waiting = crate::input_io_diagnostics::Span::start(
+            crate::input_io_diagnostics::Metric::ControlWait,
+        );
         let gate = mutation
             .lock()
             .map_err(|_| "phone_trust_owner_unavailable")?;
+        #[cfg(debug_assertions)]
+        drop(waiting);
+        #[cfg(debug_assertions)]
+        let held = crate::input_io_diagnostics::Span::start(
+            crate::input_io_diagnostics::Metric::ControlHeld,
+        );
         let time = now()?;
         authorized.validate(
             channel,
@@ -413,6 +433,8 @@ fn serve_input(
                     &mut *store.lock().map_err(|_| "phone_trust_owner_unavailable")?,
                     now()?,
                 )?;
+                #[cfg(debug_assertions)]
+                drop(held);
                 drop(gate);
                 crate::input_broker::deliver(&grant, channel, broker.datagram_port())?;
                 continue;
@@ -447,6 +469,8 @@ fn serve_input(
                     &mut *store.lock().map_err(|_| "phone_trust_owner_unavailable")?,
                     now()?,
                 )?;
+                #[cfg(debug_assertions)]
+                drop(held);
                 drop(gate);
                 grant.send_renewal_to(
                     channel,
@@ -478,6 +502,8 @@ fn serve_input(
             }
             InputRequest::Disconnect { .. } => {
                 broker.release()?;
+                #[cfg(debug_assertions)]
+                drop(held);
                 drop(gate);
                 return send(channel, input_reply(authorized, "disconnected", authority));
             }
@@ -485,6 +511,8 @@ fn serve_input(
                 input_reply(authorized, "control-status", authority)
             }
         };
+        #[cfg(debug_assertions)]
+        drop(held);
         drop(gate);
         send(channel, reply)?;
     }

@@ -31,3 +31,7 @@ mod input_broker;
 mod input_datagram;
 
 pub mod asset_files;
+
+#[cfg(debug_assertions)]
+#[doc(hidden)]
+pub mod input_io_diagnostics;

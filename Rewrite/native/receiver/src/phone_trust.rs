@@ -309,6 +309,10 @@ impl PhoneTrustStore {
         token: &[u8],
         now: u64,
     ) -> Result<TrustedPhone, &'static str> {
+        #[cfg(debug_assertions)]
+        let _io_probe = crate::input_io_diagnostics::Span::start(
+            crate::input_io_diagnostics::Metric::TrustAuthenticate,
+        );
         if !runtime::identity(id) || token.len() != 32 {
             return Err("phone_authentication_rejected");
         }
@@ -340,6 +344,10 @@ impl PhoneTrustStore {
         epoch: &str,
         now: u64,
     ) -> Result<TrustedPhone, &'static str> {
+        #[cfg(debug_assertions)]
+        let _io_probe = crate::input_io_diagnostics::Span::start(
+            crate::input_io_diagnostics::Metric::TrustAuthorize,
+        );
         let tx = self
             .connection
             .transaction_with_behavior(TransactionBehavior::Immediate)
