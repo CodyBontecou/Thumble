@@ -228,14 +228,17 @@ pub(crate) fn serve(
     store: &Mutex<PhoneTrustStore>,
     policy_mutation: &Mutex<()>,
     input: crate::input_broker::ControlInput<'_>,
-    catalog: &crate::authenticated_control::catalog::Bridge,
+    management: crate::authenticated_control::ManagementBridges<'_>,
     mut now: impl FnMut() -> Result<u64, &'static str>,
 ) -> Result<(), &'static str> {
+    let crate::authenticated_control::ManagementBridges { catalog, controls } = management;
     let result = (|| match begin(
         channel,
         windows,
         store,
-        if catalog.enabled() {
+        if controls.is_some_and(|bridge| bridge.enabled()) {
+            8
+        } else if catalog.enabled() {
             7
         } else if input.datagram_port.is_some() {
             6
@@ -253,7 +256,11 @@ pub(crate) fn serve(
         )
         .map(|_| ()),
         5 | 6 if input.datagram_port.is_none() => Err("enrollment_version_unsupported"),
-        version @ 3..=7 => {
+        7 if !catalog.enabled() => Err("enrollment_version_unsupported"),
+        8 if !controls.is_some_and(|bridge| bridge.enabled()) => {
+            Err("enrollment_version_unsupported")
+        }
+        version @ 3..=8 => {
             let authority = windows
                 .lock()
                 .map_err(|_| "pairing_owner_unavailable")?
@@ -278,7 +285,13 @@ pub(crate) fn serve(
                 } else {
                     None
                 },
-                if version == 7 { Some(catalog) } else { None },
+                match version {
+                    7 => Some(crate::authenticated_control::ManagementRole::Catalog(
+                        catalog,
+                    )),
+                    8 => controls.map(crate::authenticated_control::ManagementRole::Controls),
+                    _ => None,
+                },
                 &mut now,
             )
         }
@@ -314,7 +327,7 @@ fn begin(
     if hello.version != 1
         || hello.command != "hello"
         || !(2..=max_version).contains(&hello.control_version)
-        || (if hello.control_version == 7 {
+        || (if matches!(hello.control_version, 7 | 8) {
             hello.role.as_deref() != Some("management")
         } else {
             hello.role.is_some()
@@ -326,7 +339,7 @@ fn begin(
         return Err("enrollment_version_unsupported");
     }
     let mut reply = serde_json::json!({"version":1,"command":"hello","authorityInstanceId":authority,"controlVersion":hello.control_version,"inputVersion":1,"documentVersion":1,"capabilitiesVersion":1,"inputEnabled":false});
-    if hello.control_version == 7 {
+    if matches!(hello.control_version, 7 | 8) {
         reply["role"] = serde_json::json!("management");
     }
     channel

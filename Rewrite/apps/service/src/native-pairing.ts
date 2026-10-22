@@ -1,3 +1,5 @@
+import { decodePhoneControlsEvent } from "@thumble/contracts/phone-controls";
+import { PhoneControlsBridge } from "./phone-controls-bridge.ts";
 import { decodePhoneCatalogEvent } from "@thumble/contracts/phone-catalog";
 import { PhoneCatalogBridge } from "./phone-catalog-bridge.ts";
 import {
@@ -11,7 +13,7 @@ import { NativePipe } from "./native-pipe.ts";
 export class NativePairingHost {
   private readonly pipe: NativePipe<
     void,
-    PairingReply | { kind: "phone-catalog-enabled" }
+    PairingReply | { kind: "phone-catalog-enabled" | "phone-controls-enabled" }
   >;
   get child() {
     return this.pipe.child;
@@ -23,11 +25,14 @@ export class NativePairingHost {
     private readonly authority: string,
     identityDirectory?: string,
     catalog?: PhoneCatalogBridge,
+    controls?: PhoneControlsBridge,
   ) {
-    let lastEvent = 0n;
+    let lastEvent = 0n,
+      lastControlsEvent = 0n;
     this.pipe = new NativePipe<
       void,
-      PairingReply | { kind: "phone-catalog-enabled" }
+      | PairingReply
+      | { kind: "phone-catalog-enabled" | "phone-controls-enabled" }
     >(
       executable,
       [
@@ -48,6 +53,26 @@ export class NativePairingHost {
             throw new Error("invalid_pairing_ready");
         },
         event: (value) => {
+          if (value.event === "phone-controls") {
+            if (!controls) throw new Error("unexpected_phone_controls_event");
+            const event = decodePhoneControlsEvent(value, authority);
+            if (BigInt(event.eventId) <= lastControlsEvent)
+              throw new Error("phone_controls_event_replayed");
+            lastControlsEvent = BigInt(event.eventId);
+            void controls
+              .execute(event)
+              .then((outcome) => {
+                this.pipe.writeEvent({
+                  version: 1,
+                  event: "phone-controls-reply",
+                  eventId: event.eventId,
+                  authorityInstanceId: authority,
+                  ...outcome,
+                });
+              })
+              .catch(() => this.pipe.disconnect());
+            return;
+          }
           if (!catalog) throw new Error("unexpected_phone_catalog_event");
           const event = decodePhoneCatalogEvent(value, authority);
           if (BigInt(event.eventId) <= lastEvent)
@@ -80,6 +105,16 @@ export class NativePairingHost {
             exact(value.result as Record<string, unknown>, ["kind"]);
             return { kind: "phone-catalog-enabled" };
           }
+          if (
+            controls &&
+            value.result &&
+            typeof value.result === "object" &&
+            "kind" in value.result &&
+            value.result.kind === "phone-controls-enabled"
+          ) {
+            exact(value.result as Record<string, unknown>, ["kind"]);
+            return { kind: "phone-controls-enabled" };
+          }
           const reply = decodePairingReply(value.result);
           if (reply.authorityInstanceId !== authority)
             throw new Error("pairing_authority_mismatch");
@@ -96,6 +131,15 @@ export class NativePairingHost {
         if (!("kind" in reply) || reply.kind !== "phone-catalog-enabled") {
           this.pipe.disconnect();
           throw new Error("phone_catalog_enable_invalid");
+        }
+      }
+      if (controls) {
+        const reply = await this.pipe.request({
+          command: "phone-controls-enable",
+        });
+        if (!("kind" in reply) || reply.kind !== "phone-controls-enabled") {
+          this.pipe.disconnect();
+          throw new Error("phone_controls_enable_invalid");
         }
       }
     });

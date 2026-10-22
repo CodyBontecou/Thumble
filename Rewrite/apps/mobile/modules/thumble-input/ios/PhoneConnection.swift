@@ -31,7 +31,7 @@ import UIKit
   private var task: Task<Void, Never>?
   private var enrollment: PhoneEnrollmentClient?
   private var catalogClient: PhoneCatalogClient?
-  private var catalogTask: Task<Void, Never>?
+  private var savedMapClient: SavedControllerClient?
   private var control: PhoneControlClient?
   private let storage = PhoneCredentialWorker()
   private var closed = false
@@ -39,23 +39,30 @@ import UIKit
   private let install: (InputEngine) throws -> Void
   private let status: (String) -> Void
   private let catalogResult: ([String: Any]) -> Void
+  private let installedMap: ([String: Any]) -> Void
+  // Native test-host injection only. The product view never supplies this port.
+  private let testOnlyMapProvider: ((PhoneInputConfiguration, CGSize) throws -> ControlMap)?
   private static let endpointKey = "rewrite.phone.endpoint.v1"
   init(
     anchor: UIView, feedback: @escaping (GamepadStateV1) -> Void,
     install: @escaping (InputEngine) throws -> Void, status: @escaping (String) -> Void,
-    catalogResult: @escaping ([String: Any]) -> Void = { _ in }
+    catalogResult: @escaping ([String: Any]) -> Void = { _ in },
+    installedMap: @escaping ([String: Any]) -> Void = { _ in },
+    testOnlyMapProvider: ((PhoneInputConfiguration, CGSize) throws -> ControlMap)? = nil
   ) {
     self.anchor = anchor
     self.feedback = feedback
     self.install = install
     self.status = status
     self.catalogResult = catalogResult
+    self.installedMap = installedMap
+    self.testOnlyMapProvider = testOnlyMapProvider
     super.init()
     NotificationCenter.default.addObserver(
       self, selector: #selector(background),
       name: UIApplication.willResignActiveNotification, object: nil)
   }
-  func start(template: ControlMap) {
+  func start(template: ControlMap? = nil) {
     guard !closed, prompt == nil, task == nil, let anchor,
       let root = anchor.window?.rootViewController
     else { return }
@@ -111,7 +118,7 @@ import UIKit
     }
   }
   // Native camera/manual entry points have no secret-bearing React representation.
-  func submitInvitation(_ text: String, template: ControlMap) {
+  func submitInvitation(_ text: String, template: ControlMap? = nil) {
     guard !closed else { return }
     prompt?.textFields?.first?.text = nil
     guard text.utf8.count <= 4096,
@@ -122,7 +129,7 @@ import UIKit
     }
     afterPrompt { [weak self] in self?.pair(invitation, template: template) }
   }
-  func reconnect(template: ControlMap) {
+  func reconnect(template: ControlMap? = nil) {
     guard !closed, let endpoint = Self.savedEndpoint() else {
       fail()
       return
@@ -135,7 +142,7 @@ import UIKit
     prompt = nil
     if let previous { previous.dismiss(animated: true, completion: action) } else { action() }
   }
-  private func pair(_ invitation: EnrollmentInvitation, template: ControlMap) {
+  private func pair(_ invitation: EnrollmentInvitation, template: ControlMap? = nil) {
     diagnosticPhase = .pairRequested
     guard !closed, anchor?.window?.isKeyWindow == true,
       UIApplication.shared.applicationState == .active
@@ -171,7 +178,7 @@ import UIKit
       }
     }
   }
-  private func connect(_ endpoint: TrustedHostEndpoint, template: ControlMap) {
+  private func connect(_ endpoint: TrustedHostEndpoint, template: ControlMap? = nil) {
     guard !closed, anchor?.window?.isKeyWindow == true,
       UIApplication.shared.applicationState == .active
     else { return }
@@ -180,7 +187,7 @@ import UIKit
       do { try await bind(endpoint, template: template) } catch { fail() }
     }
   }
-  private func bind(_ endpoint: TrustedHostEndpoint, template: ControlMap) async throws {
+  private func bind(_ endpoint: TrustedHostEndpoint, template: ControlMap? = nil) async throws {
     diagnosticPhase = .controlRequested
     try Task.checkCancellation()
     guard !closed, anchor?.window?.isKeyWindow == true,
@@ -200,42 +207,56 @@ import UIKit
     guard metadata.active else {
       throw InputError.unavailable
     }
-    let map = ControlMap(
-      generation: metadata.generation, revision: metadata.revision, controls: template.controls)
+    guard let anchor else { throw InputError.unavailable }
+    let viewport = anchor.bounds.size
+    let map: ControlMap
+    var delivered: SavedControllerMap?
+    var catalogPage: PhoneCatalogResult?
+    if let testOnlyMapProvider {
+      map = try testOnlyMapProvider(metadata, viewport)
+      guard map.generation == metadata.generation, map.revision == metadata.revision else {
+        throw InputError.invalidMap
+      }
+      // bindInput below performs the same full map validation before any grant.
+    } else {
+      let catalog = try PhoneCatalogClient(endpoint: endpoint, storage: storage)
+      catalogClient = catalog
+      let result = try await catalog.read()
+      catalogClient = nil
+      try Task.checkCancellation()
+      guard case .catalog(let page) = result else { throw SavedControllerError.rejected }
+      catalogPage = result
+      let request = try SavedControllerRequest(
+        catalog: page, configuration: metadata, width: viewport.width, height: viewport.height)
+      let maps = try SavedControllerClient(endpoint: endpoint, storage: storage)
+      savedMapClient = maps
+      let resultMap = try await maps.read(request)
+      savedMapClient = nil
+      try Task.checkCancellation()
+      delivered = resultMap
+      map = resultMap.map
+    }
+    guard !closed, anchor.bounds.size == viewport, anchor.window?.isKeyWindow == true,
+      UIApplication.shared.applicationState == .active
+    else { throw InputError.unavailable }
     diagnosticPhase = .input
     let engine = try await client.bindInput(map, feedback: feedback)
     diagnosticPhase = .installing
     try Task.checkCancellation()
-    guard !closed, anchor?.window?.isKeyWindow == true,
+    guard !closed, anchor.window?.isKeyWindow == true,
       UIApplication.shared.applicationState == .active
     else {
       engine.cancel(.disconnected)
       throw InputError.unavailable
     }
-    try install(engine)
-    diagnosticPhase = .connected
-    readCatalog(endpoint)
-  }
-  private func readCatalog(_ endpoint: TrustedHostEndpoint) {
-    // Independent TLS connection and task: metadata never owns input lifetime.
-    catalogTask = Task { [weak self] in
-      guard let self, !closed else { return }
-      do {
-        let client = try PhoneCatalogClient(endpoint: endpoint, storage: storage)
-        catalogClient = client
-        let result = try await client.read()
-        try Task.checkCancellation()
-        guard !closed, anchor?.window?.isKeyWindow == true,
-          UIApplication.shared.applicationState == .active
-        else { return }
-        catalogResult(result.bridgeMetadata)
-      } catch {
-        if !closed && !Task.isCancelled {
-          catalogResult(["kind": "error", "error": "phone_catalog_unavailable"])
-        }
-      }
-      catalogClient = nil
+    guard anchor.bounds.size == viewport else {
+      engine.cancel(.rotation)
+      throw InputError.unavailable
     }
+    try install(engine)
+    if let delivered { installedMap(delivered.bridgeMap) }
+    if let catalogPage { catalogResult(catalogPage.bridgeMetadata) }
+    diagnosticPhase = .connected
   }
   private func fail() {
     guard !closed else { return }
@@ -261,10 +282,10 @@ import UIKit
     guard !closed else { return }
     closed = true
     NotificationCenter.default.removeObserver(self)
-    catalogTask?.cancel()
-    catalogTask = nil
     catalogClient?.close()
     catalogClient = nil
+    savedMapClient?.close()
+    savedMapClient = nil
     task?.cancel()
     task = nil
     enrollment?.close()

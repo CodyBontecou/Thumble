@@ -1,3 +1,9 @@
+import {
+  decodeSavedRuntimeCommand,
+  decodeSavedRuntimeStatus,
+  type SavedRuntimeCommand,
+  type SavedRuntimeStatus,
+} from "@thumble/contracts/saved-runtime";
 import { LosslessJson, LOSSLESS_JSON_LIMITS } from "@thumble/contracts/json";
 import {
   decodeConfigurationCommand,
@@ -239,6 +245,31 @@ export function request(
     return status;
   });
 }
+export function requestSavedRuntime(
+  endpoint: Endpoint,
+  input: SavedRuntimeCommand,
+): Promise<SavedRuntimeStatus> {
+  const command = decodeSavedRuntimeCommand(input);
+  return exchange(endpoint, command, (value) => {
+    const status = decodeSavedRuntimeStatus(value);
+    if (
+      status.serviceInstanceId !== endpoint.instanceId ||
+      status.servicePid !== endpoint.servicePid ||
+      status.receiverPid !== endpoint.receiverPid
+    )
+      throw new Error("service_identity_mismatch");
+    if (
+      command.command === "activate-saved" &&
+      (!status.savedBinding ||
+        status.savedBinding.configurationRevision !==
+          command.expectedConfigurationRevision ||
+        status.savedBinding.sourceHash !== command.expectedSourceHash ||
+        status.savedBinding.profileId !== command.profileId)
+    )
+      throw new Error("saved_activation_unconfirmed");
+    return status;
+  });
+}
 export function requestPairing(
   endpoint: Endpoint,
   body: PairingCommand,
@@ -259,7 +290,11 @@ export function requestConfiguration(
 }
 function exchange<Result>(
   endpoint: Endpoint,
-  body: LocalCommand | PairingCommand | ConfigurationCommand,
+  body:
+    | LocalCommand
+    | PairingCommand
+    | ConfigurationCommand
+    | SavedRuntimeCommand,
   decode: (value: unknown) => Result,
 ): Promise<Result> {
   const requestId = randomUUID();

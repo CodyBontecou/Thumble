@@ -4,6 +4,26 @@ use crate::{
     input_packet::{PacketGrant, PacketReceiver},
     runtime::{Command, Output, Runtime, Snapshot},
 };
+/// Public source pin only; no source document, credentials or output capability.
+#[derive(Debug, Clone, serde::Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SavedBinding {
+    pub configuration_revision: String,
+    pub source_hash: String,
+    pub profile_id: String,
+    pub generation: String,
+    pub revision: String,
+}
+pub(crate) fn saved_profile(value: &str) -> bool {
+    value.len() == 36
+        && value.bytes().enumerate().all(|(i, b)| {
+            if matches!(i, 8 | 13 | 18 | 23) {
+                b == b'-'
+            } else {
+                b.is_ascii_digit() || (b'a'..=b'f').contains(&b)
+            }
+        })
+}
 const GRANT_LIFETIME_MS: u64 = 600_000;
 const ROTATION_WAIT_MS: u64 = 2000;
 struct Admission {
@@ -22,6 +42,7 @@ struct Rotation {
 #[derive(Default)]
 pub struct PacketRuntime {
     core: Runtime,
+    saved_binding: Option<SavedBinding>,
     admission: Option<Admission>,
     rotation: Option<Rotation>,
     last_time: Option<u64>,
@@ -30,6 +51,15 @@ pub struct PacketRuntime {
 impl PacketRuntime {
     pub fn snapshot(&self) -> Snapshot {
         self.core.snapshot()
+    }
+    pub fn saved_binding(&self) -> Option<&SavedBinding> {
+        let snapshot = self.core.snapshot();
+        self.saved_binding.as_ref().filter(|pin| {
+            snapshot.active
+                && snapshot.generation == pin.generation
+                && snapshot.revision == pin.revision
+                && snapshot.profile_id.as_deref() == Some(pin.profile_id.as_str())
+        })
     }
     /// Trusted configuration operation only; the caller must have authenticated the grant owner.
     pub fn activate(
@@ -64,6 +94,50 @@ impl PacketRuntime {
         output: &mut impl Output,
     ) -> Result<bool, &'static str> {
         self.tick(now, output)?;
+        if matches!(&command, Command::SavedBindingStatus {}) {
+            return Ok(true);
+        }
+        let (command, saved) = match command {
+            Command::ActivateSaved {
+                generation,
+                revision,
+                profile_id,
+                session_id,
+                lease_ms,
+                input_ttl_ms,
+                configuration_revision,
+                source_hash,
+            } => {
+                if crate::runtime::decimal(&configuration_revision).map_or(true, |n| n == 0)
+                    || source_hash.len() != 64
+                    || !source_hash
+                        .bytes()
+                        .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+                    || !saved_profile(&profile_id)
+                {
+                    return Err("invalid_saved_activation");
+                }
+                let saved = SavedBinding {
+                    configuration_revision,
+                    source_hash,
+                    profile_id: profile_id.clone(),
+                    generation: generation.clone(),
+                    revision: revision.clone(),
+                };
+                (
+                    Command::Activate {
+                        generation,
+                        revision,
+                        profile_id,
+                        session_id,
+                        lease_ms,
+                        input_ttl_ms,
+                    },
+                    Some(saved),
+                )
+            }
+            command => (command, None),
+        };
         if matches!(&command, Command::Sample { .. }) && self.admission.is_some() {
             return Err("packet_session_owns_input");
         }
@@ -74,9 +148,13 @@ impl PacketRuntime {
         );
         let result = self.core.apply(command, now, output);
         if activates && result.is_ok() {
+            self.saved_binding = saved;
             self.used_sessions.clear();
         }
         if (retires && result.is_ok()) || !self.core.is_active() {
+            if !activates || result.is_err() {
+                self.saved_binding = None;
+            }
             self.admission = None;
             self.rotation = None;
         }
@@ -109,6 +187,7 @@ impl PacketRuntime {
             .core
             .switch_packet_source(generation, revision, now, output);
         if owner.is_err() && !self.core.is_active() {
+            self.saved_binding = None;
             self.admission = None;
             self.rotation = None;
         }
@@ -177,6 +256,7 @@ impl PacketRuntime {
     }
     pub fn tick(&mut self, now: u64, output: &mut impl Output) -> Result<(), &'static str> {
         if self.last_time.is_some_and(|last| now < last) {
+            self.saved_binding = None;
             self.admission = None;
             self.rotation = None;
             self.core.release(output, "clock_rollback")?;
@@ -184,11 +264,13 @@ impl PacketRuntime {
         }
         self.last_time = Some(now);
         if self.admission.as_ref().is_some_and(|a| now >= a.expires) {
+            self.saved_binding = None;
             self.admission = None;
             self.core.release(output, "grant_expired")?;
         }
         let result = self.core.tick(now, output);
         if !self.core.is_active() {
+            self.saved_binding = None;
             self.admission = None;
         }
         if self.admission.is_none()
@@ -233,6 +315,7 @@ impl PacketRuntime {
                 .continue_packet_source(generation, revision, &owner, state, now, output);
             if result.is_err() {
                 if !self.core.is_active() {
+                    self.saved_binding = None;
                     self.admission = None;
                 }
                 return result;
@@ -263,6 +346,9 @@ impl PacketRuntime {
             output,
         );
         if result.is_err() {
+            if !self.core.is_active() {
+                self.saved_binding = None;
+            }
             self.admission = None;
             self.rotation = None;
         }
@@ -306,6 +392,7 @@ impl PacketRuntime {
         output: &mut impl Output,
         reason: &'static str,
     ) -> Result<(), &'static str> {
+        self.saved_binding = None;
         self.admission = None;
         self.rotation = None;
         self.core.release(output, reason)
@@ -987,3 +1074,7 @@ mod activation_failure_tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "saved_binding_tests.rs"]
+mod saved_binding_tests;

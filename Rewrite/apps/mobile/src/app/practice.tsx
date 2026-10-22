@@ -11,12 +11,42 @@ export function ControllerScreen({
 }) {
   const router = useRouter(),
     { width, height } = useWindowDimensions();
+  const done = (
+    <Pressable
+      testID={connected ? "connection-done" : "practice-done"}
+      accessibilityRole="button"
+      accessibilityLabel="Done"
+      onPress={() => router.back()}
+      style={({ pressed }) => ({
+        ...(connected
+          ? {}
+          : { position: "absolute" as const, top: 0, right: 0 }),
+        minWidth: 60,
+        minHeight: 44,
+        alignItems: "center",
+        justifyContent: "center",
+        opacity: pressed ? 0.65 : 1,
+      })}
+    >
+      <Text style={{ fontSize: 17, fontWeight: "600", color: colors.accent }}>
+        Done
+      </Text>
+    </Pressable>
+  );
   return (
     <SafeAreaView
       testID={connected ? "connection-screen" : "practice-screen"}
       style={{ flex: 1, backgroundColor: colors.background }}
     >
       <StatusBar hidden={width > height} />
+      {connected && (
+        <View
+          testID="connection-header"
+          style={{ minHeight: 44, alignItems: "flex-end" }}
+        >
+          {done}
+        </View>
+      )}
       <View style={{ flex: 1 }}>
         {width > height ? (
           <NativeController connected={connected} />
@@ -50,28 +80,7 @@ export function ControllerScreen({
             </Text>
           </View>
         )}
-        <Pressable
-          testID={connected ? "connection-done" : "practice-done"}
-          accessibilityRole="button"
-          accessibilityLabel="Done"
-          onPress={() => router.back()}
-          style={({ pressed }) => ({
-            position: "absolute",
-            top: 0,
-            right: 0,
-            minWidth: 60,
-            minHeight: 44,
-            alignItems: "center",
-            justifyContent: "center",
-            opacity: pressed ? 0.65 : 1,
-          })}
-        >
-          <Text
-            style={{ fontSize: 17, fontWeight: "600", color: colors.accent }}
-          >
-            Done
-          </Text>
-        </Pressable>
+        {!connected && done}
       </View>
     </SafeAreaView>
   );

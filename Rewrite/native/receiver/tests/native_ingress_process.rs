@@ -96,7 +96,7 @@ impl Receiver {
         }
     }
     fn command(&mut self, body: Value) -> Value {
-        let generation = if body["command"] == "activate" {
+        let generation = if matches!(body["command"].as_str(), Some("activate" | "activateSaved")) {
             body["generation"].as_str().and_then(|s| s.parse().ok())
         } else {
             None
@@ -1032,4 +1032,31 @@ fn cancelling_staged_native_material_preserves_current_input_and_disconnect_reti
         receiver.status()["lastReleaseReason"],
         "native_input_released"
     );
+}
+
+#[test]
+fn saved_binding_private_status_preserves_snapshot_shape_and_clears_after_release() {
+    let mut receiver = Receiver::new();
+    let status = receiver.command(json!({"command":"savedBindingStatus"}));
+    assert_eq!(status["ok"], true);
+    assert_eq!(status["savedBinding"], Value::Null);
+    let heartbeat = receiver.maintain_owner();
+    let activated=receiver.command(json!({"command":"activateSaved","generation":"1","revision":"1","profileId":"11111111-1111-1111-1111-111111111111","sessionId":"service-owner","leaseMs":750,"inputTtlMs":350,"configurationRevision":"9","sourceHash":"a".repeat(64)}));
+    assert_eq!(activated["ok"], true, "{activated}");
+    assert!(activated.get("savedBinding").is_none());
+    let status = receiver.command(json!({"command":"savedBindingStatus"}));
+    assert_eq!(status["savedBinding"]["configurationRevision"], "9");
+    assert_eq!(status["savedBinding"]["sourceHash"], "a".repeat(64));
+    assert_eq!(status["savedBinding"]["generation"], "1");
+    assert_eq!(status["savedBinding"]["revision"], "1");
+    assert_eq!(status["snapshot"]["backend"], "recording");
+    assert_eq!(status["snapshot"]["inputEnabled"], false);
+    assert!(status["snapshot"].get("savedBinding").is_none());
+    let ordinary = receiver.status();
+    assert!(ordinary.get("savedBinding").is_none());
+    receiver.command(json!({"command":"release"}));
+    let status = receiver.command(json!({"command":"savedBindingStatus"}));
+    assert_eq!(status["savedBinding"], Value::Null);
+    assert_eq!(status["snapshot"]["active"], false);
+    drop(heartbeat);
 }

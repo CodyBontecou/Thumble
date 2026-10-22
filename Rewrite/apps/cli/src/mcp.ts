@@ -1,3 +1,4 @@
+import { decodeSavedRuntimeCommand } from "@thumble/contracts/saved-runtime";
 import { inspectOutputCapabilities } from "./output-doctor.ts";
 import { inspectConfigurationFile } from "@thumble/service/configuration-files";
 import { decodeConfigurationCommand } from "@thumble/contracts/configuration";
@@ -8,6 +9,7 @@ import {
   request,
   requestPairing,
   requestConfiguration,
+  requestSavedRuntime,
 } from "@thumble/client/local";
 import { decodeLocalCommand } from "@thumble/contracts/receiver";
 import { GAMEPAD_BUTTONS } from "@thumble/contracts";
@@ -28,6 +30,7 @@ export function startMcp(
   const allowedTools = new Set([
     "output_doctor",
     "receiver_status",
+    "receiver_saved_status",
     "receiver_release",
     "pairing_status",
     "pairing_list",
@@ -44,7 +47,9 @@ export function startMcp(
           "configuration_export_status",
         ]
       : []),
-    ...(allowRecordedInput ? ["receiver_activate", "receiver_sample"] : []),
+    ...(allowRecordedInput
+      ? ["receiver_activate", "receiver_activate_saved", "receiver_sample"]
+      : []),
   ]);
   const transport = new BoundedStdioTransport(
     process.stdin,
@@ -99,6 +104,21 @@ export function startMcp(
           annotations: annotations(true),
         },
         () => receipt(() => inspectOutputCapabilities(receiver)),
+      );
+      server.registerTool(
+        "receiver_saved_status",
+        {
+          description:
+            "Inspect current native saved-source binding without activating or renewing input.",
+          inputSchema: empty,
+          annotations: annotations(true),
+        },
+        () =>
+          receipt(async () =>
+            requestSavedRuntime(await readEndpointAsync(root, receiver), {
+              command: "saved-binding-status",
+            }),
+          ),
       );
       server.registerTool(
         "receiver_status",
@@ -356,6 +376,32 @@ export function startMcp(
       }
       // Capability comes only from the launching user's flag, never tool arguments.
       if (allowRecordedInput) {
+        server.registerTool(
+          "receiver_activate_saved",
+          {
+            description:
+              "Explicitly activate the selected saved snapshot in the recording receiver with independent source and native revision guards. No physical output.",
+            inputSchema: z
+              .object({
+                expectedReceiverRevision: epoch,
+                expectedConfigurationRevision: epoch,
+                expectedSourceHash: z.string().regex(/^[0-9a-f]{64}$/),
+                profileId: z.string().regex(/^[0-9a-f-]{36}$/i),
+              })
+              .strict(),
+            annotations: { ...annotations(false), idempotentHint: false },
+          },
+          (args) =>
+            receipt(async () =>
+              requestSavedRuntime(
+                await readEndpointAsync(root, receiver),
+                decodeSavedRuntimeCommand({
+                  command: "activate-saved",
+                  ...args,
+                }),
+              ),
+            ),
+        );
         server.registerTool(
           "receiver_activate",
           {

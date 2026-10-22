@@ -90,28 +90,37 @@ foreach ($name in @('HM_STAMP_TIME', 'HM_ARM64_COMPILER_DIR', 'HM_ARM64_CRT_DIR'
 $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
 $vs = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
 if ($LASTEXITCODE -ne 0 -or -not $vs -or @($vs).Count -ne 1) { throw 'Unique C++ Visual Studio installation required' }
+if ($vs -match '[!%&|<>^"\r\n]') { throw 'Unsupported shell metacharacter in Visual Studio path' }
 $env:VSINSTALLDIR = $vs
 $vcvars = Join-Path $vs 'VC/Auxiliary/Build/vcvarsall.bat'
-# Record the actual compiler and ambient CRT chosen by vcvarsall; neither is claimed pinned.
-$compilerLog = Join-Path $EvidenceRoot 'compiler.txt'
-& $env:ComSpec /d /s /c "`"`"$vcvars`" x64 >nul && where cl.exe && (cl.exe /Bv & set VCToolsVersion & set VCToolsInstallDir & set UniversalCRTSdkDir & set UCRTVersion)`"" 2>&1 | Out-File $compilerLog
-# cl /Bv without input can return nonzero; environment metadata follows regardless.
-if ((Get-Item $compilerLog).Length -gt 128KB) {
-    $file = [IO.File]::OpenWrite($compilerLog); try { $file.SetLength(128KB) } finally { $file.Dispose() }
-    throw 'Compiler evidence limit'
+# Avoid PowerShell's legacy cmd.exe nested-quote rewriting: /c starts with
+# the literal CALL token, and the generated wrapper owns all batch quoting.
+function Invoke-BatchWrapper([string]$Wrapper, [string]$Log, [long]$Limit) {
+    & $env:ComSpec /d /c call $Wrapper 2>&1 | Out-File $Log
+    $code = $LASTEXITCODE
+    if ((Get-Item $Log).Length -gt $Limit) {
+        $file = [IO.File]::OpenWrite($Log); try { $file.SetLength($Limit) } finally { $file.Dispose() }
+        throw 'Compile evidence log limit'
+    }
+    return $code
 }
+# Explicit initialization plus a compiler lookup is required before either
+# build, not merely a successful native_env return. No compiled output runs.
+$setup = @('@echo off', ('call "' + $vcvars + '" x64'), 'if errorlevel 1 exit /b 1', 'where cl.exe', 'if errorlevel 1 exit /b 1')
+$compilerWrapper = Join-Path $WorkRoot 'compiler-metadata.cmd'
+($setup + @('cl.exe /Bv', 'set VCToolsVersion', 'set VCToolsInstallDir', 'set UniversalCRTSdkDir', 'set UCRTVersion', 'exit /b 0')) | Set-Content -Encoding ascii $compilerWrapper
+$compilerLog = Join-Path $EvidenceRoot 'compiler.txt'
+# cl /Bv without input can return nonzero; wrapper records environment then exits.
+if ((Invoke-BatchWrapper $compilerWrapper $compilerLog 128KB) -ne 0) { throw 'Compiler environment unavailable; inspect compiler.txt' }
 Assert-Source
 $buildLogs = @()
 foreach ($entrypoint in @('build.cmd', 'build_companion.cmd')) {
     Assert-Source
     $log = Join-Path $EvidenceRoot ($entrypoint + '.log')
     $script = Join-Path $SourceRoot "scripts/$entrypoint"
-    & $env:ComSpec /d /s /c "`"`"$script`" x64`"" 2>&1 | Out-File $log
-    if ((Get-Item $log).Length -gt 2MB) {
-        $file = [IO.File]::OpenWrite($log); try { $file.SetLength(2MB) } finally { $file.Dispose() }
-        throw 'Build log exceeded evidence limit'
-    }
-    if ($LASTEXITCODE -ne 0) { throw "Unsigned native compile failed: $entrypoint" }
+    $wrapper = Join-Path $WorkRoot ($entrypoint + '-wrapper.cmd')
+    ($setup + @(('call "' + $script + '" x64'), 'exit /b %errorlevel%')) | Set-Content -Encoding ascii $wrapper
+    if ((Invoke-BatchWrapper $wrapper $log 2MB) -ne 0) { throw "Unsigned native compile failed: $entrypoint" }
     $buildLogs += $entrypoint + '.log'
 }
 $outputRoot = Join-Path $SourceRoot 'build'

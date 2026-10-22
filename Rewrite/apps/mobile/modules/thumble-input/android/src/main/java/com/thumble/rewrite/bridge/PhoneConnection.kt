@@ -29,6 +29,9 @@ internal class PhoneConnection(
     private val install: (InputEngine) -> Unit,
     private val status: (String) -> Unit,
     private val catalogResult: (Map<String, Any?>) -> Unit = {},
+    private val installedMap: (Map<String, Any>) -> Unit = {},
+    private val testOnlyMapProvider: ((PhoneInputConfiguration, Double, Double) -> ControlMap)? =
+        null,
 ) : Closeable {
     private val gate = Any()
     @Volatile private var closed = false
@@ -37,9 +40,7 @@ internal class PhoneConnection(
     private var enrollment: PhoneEnrollmentClient? = null
     private var control: PhoneControlClient? = null
     private var catalogClient: PhoneCatalogClient? = null
-    private val catalogWorker = Executors.newSingleThreadExecutor { task ->
-        Thread(task, "ThumblePhoneCatalog").apply { isDaemon = true }
-    }
+    private var savedMapClient: SavedControllerClient? = null
     private val main = Handler(Looper.getMainLooper())
     private val worker = Executors.newSingleThreadExecutor { task ->
         Thread(task, "ThumblePhoneBootstrap").apply { isDaemon = true }
@@ -80,7 +81,7 @@ internal class PhoneConnection(
         application.registerActivityLifecycleCallbacks(lifecycle)
     }
 
-    fun start(template: ControlMap) {
+    fun start(template: ControlMap? = null) {
         check(Looper.myLooper() == Looper.getMainLooper())
         if (closed || !anchor.isAttachedToWindow) return
         var context: Context = anchor.context
@@ -158,12 +159,15 @@ internal class PhoneConnection(
     }
 
     private fun launch(
-        template: ControlMap,
+        template: ControlMap?,
         invitation: EnrollmentInvitation?,
         saved: TrustedHostEndpoint?,
     ) {
         if (closed || !anchor.isAttachedToWindow) return
         status(if (invitation != null) "pairing" else "connecting")
+        val viewportWidth = anchor.width
+        val viewportHeight = anchor.height
+        val density = anchor.resources.displayMetrics.density.toDouble()
         worker.execute {
             try {
                 val endpoint =
@@ -222,21 +226,75 @@ internal class PhoneConnection(
                 check(client.authenticate().inputSessionAvailable)
                 val metadata = client.inputConfiguration()
                 check(metadata.active)
-                val map =
-                    ControlMap(
-                        generation = checkNotNull(metadata.generation),
-                        revision = checkNotNull(metadata.revision),
-                        controls = template.controls,
+                val map: ControlMap
+                var delivered: SavedControllerMap? = null
+                var catalogMetadata: Map<String, Any?>? = null
+                if (testOnlyMapProvider != null) {
+                    map =
+                        testOnlyMapProvider.invoke(
+                            metadata,
+                            viewportWidth / density,
+                            viewportHeight / density,
+                        )
+                    check(
+                        map.generation == metadata.generation && map.revision == metadata.revision
                     )
+                    // prepareInput below validates the full map before granting ownership.
+                } else {
+                    val catalog = PhoneCatalogClient(endpoint, anchor.context.applicationContext)
+                    synchronized(gate) {
+                        check(!closed)
+                        catalogClient = catalog
+                    }
+                    val pageResult = catalog.read()
+                    synchronized(gate) {
+                        catalogClient = null
+                        check(!closed)
+                    }
+                    val page =
+                        (pageResult as? PhoneCatalogResult.Catalog)?.page
+                            ?: throw SavedControllerRejected()
+                    val request =
+                        SavedControllerRequest(
+                            page.revision,
+                            page.contentHash ?: throw SavedControllerRejected(),
+                            page.activeProfileID ?: throw SavedControllerRejected(),
+                            metadata.generation,
+                            metadata.revision,
+                            (viewportWidth / density).toString(),
+                            (viewportHeight / density).toString(),
+                        )
+                    val maps = SavedControllerClient(endpoint, anchor.context.applicationContext)
+                    synchronized(gate) {
+                        check(!closed)
+                        savedMapClient = maps
+                    }
+                    val resultMap = maps.read(request)
+                    synchronized(gate) {
+                        savedMapClient = null
+                        check(!closed)
+                    }
+                    delivered = resultMap
+                    map = resultMap.map
+                    catalogMetadata = pageResult.bridgeMetadata()
+                }
                 val admission = client.prepareInput(map)
                 main.post {
-                    if (closed || !anchor.isAttachedToWindow || !anchor.hasWindowFocus()) {
+                    if (
+                        closed ||
+                            !anchor.isAttachedToWindow ||
+                            !anchor.hasWindowFocus() ||
+                            anchor.width != viewportWidth ||
+                            anchor.height != viewportHeight ||
+                            anchor.resources.displayMetrics.density.toDouble() != density
+                    ) {
                         admission.close()
                         fail()
                     } else
                         try {
                             install(admission.bind(feedback))
-                            readCatalog(endpoint)
+                            delivered?.let { installedMap(it.bridgeMap) }
+                            catalogMetadata?.let(catalogResult)
                         } catch (_: Exception) {
                             admission.close()
                             fail()
@@ -244,33 +302,6 @@ internal class PhoneConnection(
                 }
             } catch (_: Exception) {
                 main.post { fail() }
-            }
-        }
-    }
-
-    private fun readCatalog(endpoint: TrustedHostEndpoint) {
-        // Metadata has its own worker/socket; a slow read cannot queue touch input.
-        if (closed) return
-        catalogWorker.execute {
-            val result =
-                try {
-                    val client = PhoneCatalogClient(endpoint, anchor.context.applicationContext)
-                    synchronized(gate) {
-                        if (closed) {
-                            client.close()
-                            return@execute
-                        }
-                        catalogClient = client
-                    }
-                    client.read().bridgeMetadata()
-                } catch (_: Exception) {
-                    mapOf("kind" to "error", "error" to "phone_catalog_unavailable")
-                } finally {
-                    synchronized(gate) { catalogClient = null }
-                }
-            main.post {
-                if (!closed && anchor.isAttachedToWindow && anchor.hasWindowFocus())
-                    catalogResult(result)
             }
         }
     }
@@ -288,13 +319,14 @@ internal class PhoneConnection(
             closed = true
             catalogClient?.close()
             catalogClient = null
+            savedMapClient?.close()
+            savedMapClient = null
             enrollment?.close()
             enrollment = null
             control?.close()
             control = null
         }
         application.unregisterActivityLifecycleCallbacks(lifecycle)
-        catalogWorker.shutdownNow()
         worker.shutdownNow()
         field?.text?.clear()
         field = null

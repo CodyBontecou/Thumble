@@ -12,6 +12,8 @@
     "./json": "./src/lossless-json.ts",
     "./configuration": "./src/configuration.ts",
     "./phone-catalog": "./src/phone-catalog.ts",
-    "./output-capabilities": "./src/output-capabilities.ts"
+    "./output-capabilities": "./src/output-capabilities.ts",
+    "./saved-runtime": "./src/saved-runtime.ts",
+    "./phone-controls": "./src/phone-controls.ts"
   }
 }

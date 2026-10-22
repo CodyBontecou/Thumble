@@ -351,7 +351,13 @@ import XCTest
         install: { [weak view] engine in
           guard let view else { throw InputError.unavailable }
           try view.adoptConnectedEngine(engine)
-        }, status: { phases.append($0) })
+        }, status: { phases.append($0) },
+        testOnlyMapProvider: { [self] metadata, _ in
+          // Explicit-map analog/75s witness; production defaults to saved-map delivery.
+          ControlMap(
+            generation: metadata.generation, revision: metadata.revision,
+            controls: try fixtureMap().controls)
+        })
       defer {
         flow.close()
         view.release(.disposed)

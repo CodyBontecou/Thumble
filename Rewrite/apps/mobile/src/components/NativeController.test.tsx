@@ -7,13 +7,28 @@ import { act, create, type ReactTestRenderer } from "react-test-renderer";
 mock.module("react-native", () => ({
   View: "View",
   Text: "Text",
+  Pressable: "Pressable",
+  useWindowDimensions: () => ({ width: 874, height: 393 }),
   Platform: { OS: "ios" },
   PlatformColor: (name: string) => name,
 }));
 mock.module("expo-modules-core", () => ({
   requireNativeViewManager: (name: string) => name,
 }));
+let navigationBacks = 0;
+mock.module("expo-router", () => ({
+  useRouter: () => ({
+    back: () => {
+      navigationBacks++;
+    },
+  }),
+}));
+mock.module("expo-status-bar", () => ({ StatusBar: "StatusBar" }));
+mock.module("react-native-safe-area-context", () => ({
+  SafeAreaView: "SafeAreaView",
+}));
 const { NativeController } = await import("./NativeController.tsx");
+const { ControllerScreen } = await import("../app/practice.tsx");
 let renderer: ReactTestRenderer | undefined;
 beforeAll(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
@@ -173,4 +188,103 @@ test("new admission identity clears stale metadata while ordinary ready events p
     renderer?.update(createElement(NativeController, { connected: true })),
   );
   expect(summary()[0]?.props.children).toBe("1 saved profile");
+});
+
+const deliveredMap = {
+  version: 1,
+  generation: "1",
+  revision: "0",
+  controls: [
+    {
+      id: "saved-only-east",
+      action: "east",
+      x: 0.1,
+      y: 0.2,
+      width: 0.3,
+      height: 0.4,
+    },
+  ],
+};
+async function layout(value: unknown) {
+  await act(() => native().props.onControlMap({ nativeEvent: { map: value } }));
+}
+function controllerLabels() {
+  return (
+    renderer?.root
+      .findAll((node) => String(node.type) === "Text")
+      .map((node) => node.props.children) ?? []
+  );
+}
+
+test("connected controller renders only native-installed epoch-matched map without standard template", async () => {
+  await mount();
+  expect(native().props.connect).toBe(true);
+  expect(native().props.connectionMap).toBeUndefined();
+  expect(native().props.practiceMap).toBeUndefined();
+  expect(controllerLabels()).not.toContain("B");
+  await layout(deliveredMap);
+  expect(controllerLabels()).not.toContain("B");
+  await admission("ready");
+  expect(controllerLabels()).toContain("B");
+  expect(controllerLabels()).not.toContain("A");
+  const button = renderer?.root.findAll(
+    (node) => node.props.style?.left === "10%",
+  )[0];
+  expect(button?.props.style.width).toBe("30%");
+  await admission("ready");
+  expect(controllerLabels()).toContain("B");
+  await admission("ready", "2");
+  expect(controllerLabels()).not.toContain("B");
+});
+
+test("malformed or stale delivered maps never render fallback controls and disconnect clears map", async () => {
+  await mount();
+  await admission("ready");
+  for (const value of [
+    null,
+    { ...deliveredMap, generation: "2" },
+    { ...deliveredMap, secret: "invalid" },
+  ]) {
+    await layout(value);
+    expect(controllerLabels()).not.toContain("B");
+    expect(controllerLabels()).not.toContain("A");
+    expect(native().props.pointerEvents).toBe("auto");
+  }
+  await layout(deliveredMap);
+  expect(controllerLabels()).toContain("B");
+  await admission("disconnected");
+  await admission("ready");
+  expect(controllerLabels()).not.toContain("B");
+});
+
+test("actual connected screen reserves navigation outside native saved-map viewport", async () => {
+  navigationBacks = 0;
+  await act(() => {
+    renderer = create(createElement(ControllerScreen, { connected: true }));
+  });
+  const header = renderer?.root.findByProps({ testID: "connection-header" });
+  const done = renderer?.root.findByProps({ testID: "connection-done" });
+  expect(header?.props.style.minHeight).toBe(44);
+  expect(header?.findAllByProps({ testID: "controller-surface" })).toHaveLength(
+    0,
+  );
+  expect(header?.findByProps({ testID: "connection-done" })).toBe(done);
+  expect(done?.props.style({ pressed: false }).position).toBeUndefined();
+  await layout(deliveredMap);
+  await admission("ready");
+  await act(() => done?.props.onPress());
+  expect(navigationBacks).toBe(1);
+});
+
+test("actual practice screen retains existing navigation and standard map", async () => {
+  await act(() => {
+    renderer = create(createElement(ControllerScreen, { connected: false }));
+  });
+  expect(
+    renderer?.root.findAllByProps({ testID: "connection-header" }),
+  ).toHaveLength(0);
+  const done = renderer?.root.findByProps({ testID: "practice-done" });
+  expect(done?.props.style({ pressed: false }).position).toBe("absolute");
+  expect(native().props.practiceMap.controls.length).toBeGreaterThan(1);
+  expect(native().props.connect).toBeUndefined();
 });

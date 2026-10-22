@@ -1,3 +1,4 @@
+import { decodeSavedRuntimeCommand } from "@thumble/contracts/saved-runtime";
 import { inspectOutputCapabilities } from "./output-doctor.ts";
 import { runConfigurationOwner } from "@thumble/service/configuration-owner-process";
 import { inspectConfigurationFile } from "@thumble/service/configuration-files";
@@ -14,6 +15,7 @@ import {
   request,
   requestPairing,
   requestConfiguration,
+  requestSavedRuntime,
   runtimeDirectory,
 } from "@thumble/client/local";
 import {
@@ -61,6 +63,8 @@ function options(values: string[]): Map<string, string | true> {
         "--active-profile-id",
         "--default-profile-id",
         "--expected-revision",
+        "--expected-receiver-revision",
+        "--expected-configuration-revision",
         "--expected-generation",
         "--sequence",
         "--state-file",
@@ -318,6 +322,8 @@ async function main(): Promise<unknown> {
         "--json",
         "--operation-id",
         "--expected-revision",
+        "--expected-receiver-revision",
+        "--expected-configuration-revision",
         "--expected-source-hash",
         ...(action !== "import-status" ? ["--file"] : []),
       ];
@@ -349,6 +355,8 @@ async function main(): Promise<unknown> {
         "--json",
         "--operation-id",
         "--expected-revision",
+        "--expected-receiver-revision",
+        "--expected-configuration-revision",
         "--profile-id",
         "--new-profile-id",
         "--name",
@@ -378,6 +386,8 @@ async function main(): Promise<unknown> {
         "--json",
         "--operation-id",
         "--expected-revision",
+        "--expected-receiver-revision",
+        "--expected-configuration-revision",
         "--active-profile-id",
         "--default-profile-id",
       ];
@@ -403,6 +413,8 @@ async function main(): Promise<unknown> {
             "--receiver",
             "--json",
             "--expected-revision",
+            "--expected-receiver-revision",
+            "--expected-configuration-revision",
             "--offset",
           ]
         : [
@@ -410,6 +422,8 @@ async function main(): Promise<unknown> {
             "--receiver",
             "--json",
             "--expected-revision",
+            "--expected-receiver-revision",
+            "--expected-configuration-revision",
             "--file",
             "--operation-id",
             "--profile-id",
@@ -441,6 +455,44 @@ async function main(): Promise<unknown> {
           },
     );
     return requestConfiguration(readEndpoint(root, receiver), command);
+  }
+  if (
+    family === "receiver" &&
+    (action === "activate-saved" || action === "saved-status")
+  ) {
+    const allowed = new Set([
+      "--runtime-dir",
+      "--receiver",
+      "--json",
+      ...(action === "activate-saved"
+        ? [
+            "--expected-receiver-revision",
+            "--expected-configuration-revision",
+            "--expected-source-hash",
+            "--profile-id",
+          ]
+        : []),
+    ]);
+    for (const key of opts.keys())
+      if (!allowed.has(key)) throw new Error("invalid_saved_runtime_option");
+    const command = decodeSavedRuntimeCommand(
+      action === "saved-status"
+        ? { command: "saved-binding-status" }
+        : {
+            command: "activate-saved",
+            expectedReceiverRevision: required(
+              opts,
+              "--expected-receiver-revision",
+            ),
+            expectedConfigurationRevision: required(
+              opts,
+              "--expected-configuration-revision",
+            ),
+            expectedSourceHash: required(opts, "--expected-source-hash"),
+            profileId: required(opts, "--profile-id"),
+          },
+    );
+    return requestSavedRuntime(readEndpoint(root, receiver), command);
   }
   let command: LocalCommand;
   if ((family === "service" || family === "receiver") && action === "status")

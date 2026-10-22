@@ -40,6 +40,7 @@ struct Request {
 )]
 pub enum Command {
     PhoneCatalogEnable {},
+    PhoneControlsEnable {},
     PairingOpen {},
     PairingStatus {},
     PairingList {},
@@ -109,6 +110,7 @@ pub struct Host {
     jobs: Option<mpsc::SyncSender<Job>>,
     workers: Vec<thread::JoinHandle<()>>,
     catalog: Arc<crate::authenticated_control::catalog::Bridge>,
+    controls: Arc<crate::authenticated_control::controls::Bridge>,
     reservation_owner: Option<crate::trust_reservation::Owner>,
     _lease: File,
 }
@@ -142,6 +144,9 @@ impl Host {
         let catalog = Arc::new(crate::authenticated_control::catalog::Bridge::new(
             authority,
         ));
+        let controls = Arc::new(crate::authenticated_control::controls::Bridge::new(
+            authority, root,
+        ));
         let (jobs, incoming) = mpsc::sync_channel::<Job>(4);
         let incoming = Arc::new(Mutex::new(incoming));
         let mut workers = Vec::new();
@@ -155,6 +160,7 @@ impl Host {
                 let input_grants = input_grants.clone();
                 let runtime_directory = root.to_path_buf();
                 let catalog = catalog.clone();
+                let controls = controls.clone();
                 workers.push(thread::spawn(move || loop {
                     let job = match incoming.lock() {
                         Ok(receiver) => match receiver.recv() {
@@ -179,7 +185,10 @@ impl Host {
                                         root: &runtime_directory,
                                         datagram_port: Some(job.datagram_port),
                                     },
-                                    &catalog,
+                                    crate::authenticated_control::ManagementBridges {
+                                        catalog: &catalog,
+                                        controls: Some(&controls),
+                                    },
                                     || {
                                         if job.stop.load(Ordering::SeqCst) {
                                             Err("pairing_closed")
@@ -210,6 +219,7 @@ impl Host {
             workers,
             reservation_owner,
             catalog,
+            controls,
             _lease: lease,
         })
     }
@@ -362,6 +372,12 @@ impl Host {
         {
             self.stop()?;
         }
+        if matches!(command, Command::PhoneControlsEnable {}) {
+            if !self.controls.enabled() {
+                return Err("saved_map_unavailable");
+            }
+            return Ok(json!({"kind":"phone-controls-enabled"}));
+        }
         if matches!(command, Command::PhoneCatalogEnable {}) {
             if !self.catalog.enabled() {
                 return Err("phone_catalog_unavailable");
@@ -369,7 +385,7 @@ impl Host {
             return Ok(json!({"kind":"phone-catalog-enabled"}));
         }
         let offer = match command {
-            Command::PhoneCatalogEnable {} => unreachable!(),
+            Command::PhoneCatalogEnable {} | Command::PhoneControlsEnable {} => unreachable!(),
             Command::PairingOpen {} => Some(
                 self.windows
                     .lock()
@@ -515,7 +531,15 @@ pub fn run(
             .ok()
             .is_some_and(|v| v.get("event").is_some())
         {
-            host.catalog.deliver(&bytes)?;
+            match serde_json::from_slice::<Value>(&bytes)
+                .ok()
+                .and_then(|v| v.get("event").and_then(Value::as_str).map(str::to_owned))
+                .as_deref()
+            {
+                Some("phone-catalog-reply") => host.catalog.deliver(&bytes)?,
+                Some("phone-controls-reply") => host.controls.deliver(&bytes)?,
+                _ => return Err("pairing_parent_event_invalid"),
+            }
             continue;
         }
         let parsed = serde_json::from_slice::<Request>(&bytes)
@@ -525,6 +549,9 @@ pub fn run(
             Some(request) => {
                 if matches!(request.body, Command::PhoneCatalogEnable {}) {
                     host.catalog.attach(outgoing.clone())?;
+                }
+                if matches!(request.body, Command::PhoneControlsEnable {}) {
+                    host.controls.attach(outgoing.clone())?;
                 }
                 (Some(request.request_id), host.execute(request.body))
             }

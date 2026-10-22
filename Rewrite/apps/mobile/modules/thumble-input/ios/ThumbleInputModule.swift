@@ -12,9 +12,12 @@ public final class ThumbleInputModule: Module {
     // contract before entering the Swift UI actor; only typed Sendable metadata
     // leaves the actor, with bridge dictionaries assembled afterwards.
     View(ThumbleInputView.self) {
-      Events("onAdmission", "onCatalog")
+      Events("onAdmission", "onCatalog", "onControlMap")
       Prop("practiceMap") { (view: ThumbleInputView, value: [String: Any]) in
         view.pendingPractice = value
+      }
+      Prop("connect") { (view: ThumbleInputView, value: Bool) in
+        view.connectionRequested = value
       }
       Prop("connectionMap") { (view: ThumbleInputView, value: [String: Any]) in
         view.pendingConnection = value
@@ -48,11 +51,14 @@ public final class ThumbleInputModule: Module {
 @MainActor final class ThumbleInputView: ExpoView {
   let onAdmission = EventDispatcher()
   let onCatalog = EventDispatcher()
+  let onControlMap = EventDispatcher()
+  fileprivate var connectionRequested = false
   fileprivate var pendingConnection: [String: Any]?
   fileprivate var pendingPractice: [String: Any]?
   private var practiceAdmitted = false
   fileprivate func admitPractice() {
-    guard pendingConnection == nil, let pendingPractice, !practiceAdmitted else { return }
+    guard !connectionRequested, pendingConnection == nil, let pendingPractice, !practiceAdmitted
+    else { return }
     practiceAdmitted = true
     do {
       let receipt = try configure(Self.decodeMap(pendingPractice))
@@ -82,14 +88,13 @@ public final class ThumbleInputModule: Module {
   private var connectionAttempted = false
   private var connection: PhoneConnection?
   fileprivate func admitConnection() {
-    guard !disposed, !connectionAttempted, let pendingConnection, window != nil,
+    guard !disposed, !connectionAttempted, connectionRequested || pendingConnection != nil,
+      window != nil,
       bounds.width > 0, bounds.height > 0
     else { return }
     connectionAttempted = true
     do {
       guard pendingPractice == nil else { throw InputError.invalidMap }
-      let template = try Self.decodeMap(pendingConnection)
-      _ = try configure(template)
       let flow = PhoneConnection(
         anchor: self,
         feedback: { [weak self] state in self?.publishFeedback(state) },
@@ -100,9 +105,10 @@ public final class ThumbleInputModule: Module {
         status: { [weak self] status in
           self?.onAdmission(["admission": ["version": 1, "status": status]])
         },
-        catalogResult: { [weak self] catalog in self?.onCatalog(["catalog": catalog]) })
+        catalogResult: { [weak self] catalog in self?.onCatalog(["catalog": catalog]) },
+        installedMap: { [weak self] map in self?.onControlMap(["map": map]) })
       connection = flow
-      flow.start(template: template)
+      flow.start()
     } catch {
       onAdmission(["admission": ["version": 1, "status": "unavailable"]])
     }

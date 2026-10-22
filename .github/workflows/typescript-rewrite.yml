@@ -65,6 +65,19 @@ jobs:
         if: runner.os == 'macOS'
         run: cargo test --locked --manifest-path native/receiver/Cargo.toml --features output-doctor-macos --lib output_doctor
 
+      - name: Isolate Windows malformed catalog-child response
+        shell: pwsh
+        if: runner.os == 'Windows'
+        env:
+          THUMBLE_REWRITE_PIPE_PROBE: "1"
+        run: |
+          New-Item -ItemType Directory -Force reports | Out-Null
+          foreach ($attempt in 1..8) {
+            "catalog-child iteration=$attempt" | Tee-Object -FilePath reports/private-pipe-probe.log -Append
+            bun test tests/phone-catalog.test.ts -t "malformed phone catalog child result terminates its poisoned owner" 2>&1 | Tee-Object -FilePath reports/private-pipe-probe.log -Append
+            $testExit = $LASTEXITCODE
+            if ($testExit -ne 0) { exit $testExit }
+          }
       - name: Isolate Windows stale-grant regression with phase diagnostics
         shell: pwsh
         if: runner.os == 'Windows'
@@ -87,6 +100,7 @@ jobs:
       - run: bun run native:test
         env:
           RUST_TEST_THREADS: "2"
+          THUMBLE_REWRITE_INPUT_IO_PROBE: ${{ runner.os == 'Windows' && '1' || '0' }}
       - run: bun run native:build
       - name: Verify native TLS with independent Node/OpenSSL client
         run: |
@@ -108,6 +122,12 @@ jobs:
       - name: Typecheck generated Swift DTOs
         if: runner.os == 'macOS'
         run: swiftc -typecheck packages/contracts/generated/swift/GamepadStateV1.swift
+      - uses: actions/upload-artifact@v4
+        if: always() && runner.os == 'Windows' && hashFiles('Rewrite/reports/private-pipe-probe.log') != ''
+        with:
+          name: rewrite-private-pipe-${{ matrix.os }}
+          path: Rewrite/reports/private-pipe-probe.log
+          if-no-files-found: error
       - uses: actions/upload-artifact@v4
         if: always() && runner.os == 'Windows' && hashFiles('Rewrite/reports/native-stale-grant.log') != ''
         with:

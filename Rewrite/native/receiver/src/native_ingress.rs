@@ -32,6 +32,7 @@ const GRANT: u8 = 2;
 const PACKET: u8 = 3;
 const RELEASE: u8 = 4;
 const ROTATE: u8 = 5;
+const SAVED_STATUS: u8 = 6;
 fn random<const N: usize>() -> Result<[u8; N], &'static str> {
     let mut bytes = [0; N];
     SystemRandom::new()
@@ -329,6 +330,53 @@ impl Client {
             revision: number(&b, 9),
         })
     }
+    /// Read-only saved source pin. No grant, input packet, or owner renewal.
+    pub fn saved_configuration(
+        &mut self,
+    ) -> Result<(Configuration, Option<crate::packet_runtime::SavedBinding>), &'static str> {
+        let bytes = self.request(SAVED_STATUS, &[])?;
+        if bytes.len() < 18 || bytes[0] > 1 || bytes[17] > 1 {
+            return Err("native_input_frame_invalid");
+        }
+        let configuration = Configuration {
+            active: bytes[0] == 1,
+            generation: number(&bytes, 1),
+            revision: number(&bytes, 9),
+        };
+        let pin = if bytes[17] == 0 {
+            if bytes.len() != 18 {
+                return Err("native_input_frame_invalid");
+            }
+            None
+        } else {
+            if bytes.len() != 126
+                || !configuration.active
+                || configuration.generation == 0
+                || number(&bytes, 18) == 0
+            {
+                return Err("native_input_frame_invalid");
+            }
+            let source_hash =
+                std::str::from_utf8(&bytes[26..90]).map_err(|_| "native_input_frame_invalid")?;
+            let profile_id =
+                std::str::from_utf8(&bytes[90..126]).map_err(|_| "native_input_frame_invalid")?;
+            if !source_hash
+                .bytes()
+                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+                || !crate::packet_runtime::saved_profile(profile_id)
+            {
+                return Err("native_input_frame_invalid");
+            }
+            Some(crate::packet_runtime::SavedBinding {
+                configuration_revision: number(&bytes, 18).to_string(),
+                source_hash: source_hash.into(),
+                profile_id: profile_id.into(),
+                generation: configuration.generation.to_string(),
+                revision: configuration.revision.to_string(),
+            })
+        };
+        Ok((configuration, pin))
+    }
     /// Caller must hold a current authenticated connection capability and trust mutation fence.
     pub fn grant(
         &mut self,
@@ -531,7 +579,11 @@ impl Server {
                     let payload = b[34..].to_vec();
                     if !matches!(
                         (op, payload.len()),
-                        (STATUS, 0) | (GRANT, 36) | (PACKET, 140) | (RELEASE, 32) | (ROTATE, 52)
+                        (STATUS | SAVED_STATUS, 0)
+                            | (GRANT, 36)
+                            | (PACKET, 140)
+                            | (RELEASE, 32)
+                            | (ROTATE, 52)
                     ) {
                         break;
                     }
@@ -761,6 +813,20 @@ impl Server {
             self.staged = None;
         }
         match op {
+            SAVED_STATUS => {
+                let mut reply = vec![u8::from(snapshot.active)];
+                reply.extend_from_slice(&decimal(&snapshot.generation)?.to_le_bytes());
+                reply.extend_from_slice(&decimal(&snapshot.revision)?.to_le_bytes());
+                if let Some(pin) = runtime.saved_binding() {
+                    reply.push(1);
+                    reply.extend_from_slice(&decimal(&pin.configuration_revision)?.to_le_bytes());
+                    reply.extend_from_slice(pin.source_hash.as_bytes());
+                    reply.extend_from_slice(pin.profile_id.as_bytes());
+                } else {
+                    reply.push(0);
+                }
+                Ok(reply)
+            }
             STATUS => {
                 let mut r = vec![u8::from(snapshot.active)];
                 r.extend_from_slice(&decimal(&snapshot.generation)?.to_le_bytes());

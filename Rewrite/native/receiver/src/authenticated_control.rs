@@ -5,6 +5,16 @@ use crate::{
 };
 #[path = "phone_catalog.rs"]
 pub(crate) mod catalog;
+#[path = "phone_controls.rs"]
+pub(crate) mod controls;
+pub(crate) struct ManagementBridges<'a> {
+    pub catalog: &'a catalog::Bridge,
+    pub controls: Option<&'a controls::Bridge>,
+}
+pub(crate) enum ManagementRole<'a> {
+    Catalog(&'a catalog::Bridge),
+    Controls(&'a controls::Bridge),
+}
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::sync::Mutex;
@@ -317,7 +327,7 @@ pub(crate) fn serve_after_hello(
     store: &Mutex<PhoneTrustStore>,
     mutation: &Mutex<()>,
     input: Option<crate::input_broker::ControlInput<'_>>,
-    catalog: Option<&catalog::Bridge>,
+    management: Option<ManagementRole<'_>>,
     now: &mut impl FnMut() -> Result<u64, &'static str>,
 ) -> Result<(), &'static str> {
     let request = receive(channel)?;
@@ -333,8 +343,15 @@ pub(crate) fn serve_after_hello(
             now,
         )?
     };
-    if let Some(catalog) = catalog {
-        return catalog::serve(channel, authority, &mut authorized, catalog, now);
+    if let Some(management) = management {
+        return match management {
+            ManagementRole::Controls(controls) => {
+                controls::serve(channel, authority, &mut authorized, controls, now)
+            }
+            ManagementRole::Catalog(catalog) => {
+                catalog::serve(channel, authority, &mut authorized, catalog, now)
+            }
+        };
     }
     if let Some(input) = input {
         let mut broker = crate::input_broker::Broker::connect(
@@ -713,6 +730,7 @@ mod tests {
         }
     }
     include!("authenticated_catalog_tests.rs");
+    include!("authenticated_controls_tests.rs");
     include!("authenticated_control_renewal_tests.rs");
     include!("authenticated_control_contention_tests.rs");
 }

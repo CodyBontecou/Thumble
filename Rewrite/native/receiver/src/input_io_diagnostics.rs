@@ -133,7 +133,7 @@ pub fn terminal(context: &'static str, operation: u8, error: &'static str) {
             } else {
                 "unclassified"
             };
-        let operation = if operation <= 5 { operation } else { 0 };
+        let operation = if operation <= 6 { operation } else { 0 };
         eprintln!(
             "[DEBUG-native-io-terminal] context={context} op={operation} error={error} metrics={}",
             snapshot()

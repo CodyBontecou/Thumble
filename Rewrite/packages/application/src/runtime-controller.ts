@@ -1,3 +1,7 @@
+import type {
+  SavedConfigurationPin,
+  SavedActivateCommand,
+} from "@thumble/contracts/saved-runtime";
 import {
   counter,
   type LocalCommand,
@@ -17,6 +21,40 @@ export class RuntimeController {
     readonly leaseMs = 750,
     readonly inputTtlMs = 350,
   ) {}
+  activateSaved(
+    command: SavedActivateCommand,
+    pin: SavedConfigurationPin,
+  ): Promise<Snapshot> {
+    const operation = this.tail.then(async () => {
+      const status = await this.receiver.request({ command: "status" });
+      if (status.revision !== command.expectedReceiverRevision)
+        throw new Error("revision_conflict");
+      if (
+        pin.configurationRevision !== command.expectedConfigurationRevision ||
+        pin.sourceHash !== command.expectedSourceHash ||
+        pin.profileId !== command.profileId
+      )
+        throw new Error("saved_configuration_pin_mismatch");
+      const generation = counter((BigInt(status.generation) + 1n).toString()),
+        revision = counter((BigInt(status.revision) + 1n).toString()),
+        sessionId = this.nextIdentity();
+      const activated = await this.receiver.request({
+        command: "activateSaved",
+        generation,
+        revision,
+        profileId: pin.profileId,
+        sessionId,
+        leaseMs: this.leaseMs,
+        inputTtlMs: this.inputTtlMs,
+        configurationRevision: pin.configurationRevision,
+        sourceHash: pin.sourceHash,
+      });
+      this.sessionId = sessionId;
+      return activated;
+    });
+    this.tail = operation.catch(() => {});
+    return operation;
+  }
   execute(command: LocalCommand): Promise<Snapshot> {
     const operation = this.tail.then(() => this.apply(command));
     this.tail = operation.catch(() => {});

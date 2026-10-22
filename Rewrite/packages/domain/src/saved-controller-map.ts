@@ -51,6 +51,21 @@ function rectangle(
     number(layout, "rotationDegrees", 0) !== 0
   )
     fail("unsupported_transform");
+  // Retained omission means10pt padding on each edge. This map carries one
+  // rectangle, so admit only explicit zero insets rather than silently treating
+  // the visual rectangle as the larger retained interaction region.
+  const insets = layout.get("/hitInsets"),
+    sides = ["top", "leading", "bottom", "trailing"];
+  if (
+    insets?.kind !== "object" ||
+    insets.keys.length !== sides.length ||
+    insets.keys.some((key) => !sides.includes(key)) ||
+    sides.some((key) => {
+      const token = insets.get("/" + key)?.numberToken;
+      return token === undefined || Number(token) !== 0;
+    })
+  )
+    fail("unsupported_hit_insets");
   const centerX = number(layout, "centerX"),
     centerY = number(layout, "centerY"),
     widthScale = number(layout, "widthScale", 1),

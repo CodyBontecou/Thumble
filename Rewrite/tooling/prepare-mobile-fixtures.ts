@@ -35,3 +35,20 @@ for (const [source, name] of [
 ]) {
   copyFileSync(resolve(root, source!), resolve(target, name!));
 }
+
+// Both SDK test bundles receive the exact shared saved-map contract/source vectors.
+for (const name of [
+  "saved-controller-control-v8.json",
+  "saved-controller-v1.json",
+]) {
+  copyFileSync(resolve(root, "packages/fixtures", name), resolve(target, name));
+  const androidTarget = resolve(
+    root,
+    "native/mobile-input/android/src/test/resources/Fixtures",
+  );
+  mkdirSync(androidTarget, { recursive: true });
+  copyFileSync(
+    resolve(root, "packages/fixtures", name),
+    resolve(androidTarget, name),
+  );
+}

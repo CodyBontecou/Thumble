@@ -105,12 +105,19 @@ try {
           [
             "output_doctor",
             "receiver_status",
+            "receiver_saved_status",
             "receiver_release",
             "pairing_status",
             "pairing_list",
             "configuration_list",
             "configuration_validate_file",
-            ...(recording ? ["receiver_activate", "receiver_sample"] : []),
+            ...(recording
+              ? [
+                  "receiver_activate",
+                  "receiver_activate_saved",
+                  "receiver_sample",
+                ]
+              : []),
           ].sort(),
         );
         phase = "output-doctor";

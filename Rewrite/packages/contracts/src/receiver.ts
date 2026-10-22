@@ -25,6 +25,17 @@ export type ReceiverCommand =
       leaseMs: number;
       inputTtlMs: number;
     }
+  | {
+      command: "activateSaved";
+      generation: string;
+      revision: string;
+      profileId: string;
+      sessionId: string;
+      leaseMs: number;
+      inputTtlMs: number;
+      configurationRevision: string;
+      sourceHash: string;
+    }
   | { command: "renew"; generation: string; sessionId: string }
   | {
       command: "sample";

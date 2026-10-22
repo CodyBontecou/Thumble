@@ -153,6 +153,9 @@ fn run(root: &Path, log: Option<&Path>) -> Result<(), &'static str> {
         let parsed = serde_json::from_slice::<Request>(&bytes)
             .ok()
             .filter(|r| r.version == 1 && identity(&r.request_id));
+        let saved_binding_status = parsed
+            .as_ref()
+            .is_some_and(|request| matches!(request.body, runtime::Command::SavedBindingStatus {}));
         let (request_id, result) = match parsed {
             Some(request) => {
                 let id = Some(request.request_id);
@@ -165,6 +168,9 @@ fn run(root: &Path, log: Option<&Path>) -> Result<(), &'static str> {
         };
         let stopping = matches!(result, Ok(false));
         let reply = match result {
+            Ok(_) if saved_binding_status => {
+                json!({"version":1,"requestId":request_id,"ok":true,"snapshot":runtime.snapshot(),"savedBinding":runtime.saved_binding()})
+            }
             Ok(_) => {
                 json!({"version":1,"requestId":request_id,"ok":true,"snapshot":runtime.snapshot()})
             }

@@ -21,9 +21,12 @@ class ThumbleInputModule : Module() {
     override fun definition() = ModuleDefinition {
         Name("ThumbleNativeInput")
         View(ThumbleInputView::class) {
-            Events("onAdmission", "onCatalog")
+            Events("onAdmission", "onCatalog", "onControlMap")
             Prop("practiceMap") { view: ThumbleInputView, value: Map<String, Any?> ->
                 view.pendingPractice = value
+            }
+            Prop("connect") { view: ThumbleInputView, value: Boolean ->
+                view.connectionRequested = value
             }
             Prop("connectionMap") { view: ThumbleInputView, value: Map<String, Any?> ->
                 view.pendingConnection = value
@@ -50,13 +53,15 @@ class ThumbleInputModule : Module() {
 class ThumbleInputView(context: Context, appContext: AppContext) : ExpoView(context, appContext) {
     val onAdmission by EventDispatcher()
     val onCatalog by EventDispatcher()
+    val onControlMap by EventDispatcher()
+    internal var connectionRequested = false
     internal var pendingConnection: Map<String, Any?>? = null
     internal var pendingPractice: Map<String, Any?>? = null
     private var practiceAdmitted = false
 
     internal fun admitPractice() {
         val map = pendingPractice ?: return
-        if (practiceAdmitted || pendingConnection != null) return
+        if (practiceAdmitted || connectionRequested || pendingConnection != null) return
         practiceAdmitted = true
         try {
             val receipt = configure(map)
@@ -100,14 +105,12 @@ class ThumbleInputView(context: Context, appContext: AppContext) : ExpoView(cont
     private var connection: PhoneConnection? = null
 
     internal fun admitConnection() {
-        val raw = pendingConnection ?: return
+        if (!connectionRequested && pendingConnection == null) return
         if (disposed || connectionAttempted || !isAttachedToWindow || width <= 0 || height <= 0)
             return
         connectionAttempted = true
         try {
             check(pendingPractice == null)
-            val template = decode(raw)
-            configure(raw)
             val flow =
                 PhoneConnection(
                     this,
@@ -117,9 +120,11 @@ class ThumbleInputView(context: Context, appContext: AppContext) : ExpoView(cont
                         onAdmission(mapOf("admission" to mapOf("version" to 1, "status" to status)))
                     },
                     catalogResult = { catalog -> onCatalog(mapOf("catalog" to catalog)) },
+                    installedMap = { map -> onControlMap(mapOf("map" to map)) },
+                    testOnlyMapProvider = NativeInputTestHost.current(),
                 )
             connection = flow
-            flow.start(template)
+            flow.start()
         } catch (_: Exception) {
             onAdmission(mapOf("admission" to mapOf("version" to 1, "status" to "unavailable")))
         }

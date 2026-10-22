@@ -209,6 +209,25 @@ impl HoldWatch {
             for line in text[..last].lines() {
                 let value: Value = serde_json::from_str(line)?;
                 if value["reportHex"] != self.expected || value["reason"] != "sample" {
+                    // Fixed categories only: never print reports, credentials or endpoint data.
+                    let reason = match value["reason"].as_str() {
+                        Some("sample") => "sample_changed",
+                        Some("input_expired") => "input_expired",
+                        Some("lease_expired") => "lease_expired",
+                        Some("native_input_released") => "native_input_released",
+                        Some("packet_source_barrier") => "packet_source_barrier",
+                        Some("activation_barrier") => "activation_barrier",
+                        Some("output_failed") => "output_failed",
+                        Some("explicit_release") => "explicit_release",
+                        Some("shutdown") => "shutdown",
+                        _ => "other",
+                    };
+                    eprintln!(
+                        "probe_hold_diagnostic reason={reason} elapsed_ms={} samples={} report_matches={}",
+                        self.started.elapsed().as_millis(),
+                        self.samples,
+                        value["reportHex"] == self.expected
+                    );
                     return Err("probe_continuous_hold_interrupted".into());
                 }
                 self.samples += 1;

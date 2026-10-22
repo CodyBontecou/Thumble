@@ -28,6 +28,17 @@ pub enum Command {
         lease_ms: u64,
         input_ttl_ms: u64,
     },
+    ActivateSaved {
+        generation: String,
+        revision: String,
+        profile_id: String,
+        session_id: String,
+        lease_ms: u64,
+        input_ttl_ms: u64,
+        configuration_revision: String,
+        source_hash: String,
+    },
+    SavedBindingStatus {},
     Renew {
         generation: String,
         session_id: String,
@@ -229,6 +240,9 @@ impl Runtime {
         self.tick(now, output)?;
         match command {
             Command::Status {} => (),
+            Command::ActivateSaved { .. } | Command::SavedBindingStatus {} => {
+                return Err("saved_binding_owner_required");
+            }
             Command::Activate {
                 generation,
                 revision,

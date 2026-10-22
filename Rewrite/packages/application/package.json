@@ -11,7 +11,9 @@
     "./configuration-validation": "./src/configuration-validation.ts",
     "./configuration-import": "./src/configuration-import.ts",
     "./configuration-export": "./src/configuration-export.ts",
-    "./wow-live-observer": "./src/wow-live-observer.ts"
+    "./wow-live-observer": "./src/wow-live-observer.ts",
+    "./configuration-saved-pin": "./src/configuration-saved-pin.ts",
+    "./configuration-phone-controls": "./src/configuration-phone-controls.ts"
   },
   "dependencies": {
     "@thumble/contracts": "workspace:*",

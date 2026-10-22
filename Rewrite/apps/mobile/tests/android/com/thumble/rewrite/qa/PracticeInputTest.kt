@@ -106,8 +106,50 @@ class PracticeInputTest {
         }
     }
 
+    private fun installExplicitMapProvider(enabled: Boolean) {
+        val provider:
+            ((
+                com.thumble.rewrite.input.PhoneInputConfiguration, Double, Double,
+            ) -> com.thumble.rewrite.input.ControlMap)? =
+            if (!enabled) null
+            else
+                { metadata, _, _ ->
+                    val controls = fixture.getJSONObject("map").getJSONArray("controls")
+                    com.thumble.rewrite.input.ControlMap(
+                        generation = metadata.generation,
+                        revision = metadata.revision,
+                        controls =
+                            (0 until controls.length()).map { index ->
+                                val control = controls.getJSONObject(index)
+                                com.thumble.rewrite.input.ControlRegion(
+                                    control.getString("id"),
+                                    control.getString("action"),
+                                    control.getDouble("x"),
+                                    control.getDouble("y"),
+                                    control.getDouble("width"),
+                                    control.getDouble("height"),
+                                    control
+                                        .optJSONObject("hapticFeedback")
+                                        ?.let(
+                                            com.thumble.rewrite.input.TouchHapticFeedback::decode
+                                        ),
+                                )
+                            },
+                    )
+                }
+        // Test APK owns registration; the production route has no setter.
+        Class.forName("com.thumble.rewrite.bridge.NativeInputTestHost")
+            .getMethod(
+                "install",
+                android.app.Instrumentation::class.java,
+                Class.forName("kotlin.jvm.functions.Function3"),
+            )
+            .invoke(null, instrumentation, provider)
+    }
+
     @Before
     fun openPractice() {
+        installExplicitMapProvider(true)
         wakeTestDevice()
         val launch =
             checkNotNull(target.packageManager.getLaunchIntentForPackage(target.packageName))
@@ -140,6 +182,7 @@ class PracticeInputTest {
     }
 
     private fun cleanup() {
+        installExplicitMapProvider(false)
         if (!opened) {
             device.setOrientationNatural()
             device.unfreezeRotation()

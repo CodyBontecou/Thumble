@@ -39,7 +39,7 @@ fn management_is_explicit_never_input_capable_and_rechecks_revoke_after_parent_w
                         datagram_port: Some(42424),
                         renewal: false,
                     },
-                    &bridge,
+                    ManagementBridges {catalog:&bridge,controls:None},
                     || Ok(100),
                 )
             });
@@ -258,10 +258,20 @@ fn management_timeout_preserves_held_input_and_native_owner_lease() {
                 json!({"version":1,"command":"control-status","connectionId":connection}),
             )
             .unwrap();
-            assert_eq!(
-                receive::<Value>(&mut client).unwrap()["command"],
-                "control-status"
-            );
+            let response = receive::<Value>(&mut client);
+            #[cfg(debug_assertions)]
+            if response.is_err() {
+                let state = snapshot.lock().ok().and_then(|v| v.clone());
+                let control = control_result.lock().ok().and_then(|v| *v);
+                eprintln!(
+                    "[DEBUG-catalog-held-status] samples={samples} elapsedMs={} controlResult={control:?} stateActive={:?} stateReason={:?} metrics={}",
+                    started.elapsed().as_millis(),
+                    state.as_ref().map(|v| v.active),
+                    state.as_ref().map(|v| v.last_release_reason),
+                    crate::input_io_diagnostics::snapshot(),
+                );
+            }
+            assert_eq!(response.unwrap()["command"], "control-status");
             let state = snapshot.lock().unwrap().clone().unwrap();
             assert!(
                 state.active,

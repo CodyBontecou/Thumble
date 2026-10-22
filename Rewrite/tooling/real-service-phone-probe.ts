@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import {
   mkdtempSync,
+  readFileSync,
   realpathSync,
   writeFileSync,
   rmSync,
@@ -17,6 +18,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import {
   readEndpoint,
+  requestSavedRuntime,
   request,
   requestConfiguration,
   requestPairing,
@@ -61,6 +63,44 @@ function records(path: string, offset: number) {
   };
 }
 export class RealServicePhoneProbe {
+  private readonly savedController =
+    process.argv.includes("--saved-controller") ||
+    process.argv.includes("--saved-controller-unsupported") ||
+    process.argv.includes("--saved-controller-corner");
+  private savedSeed(): Record<string, unknown> {
+    const seed = object(
+      parseStrictJson(
+        readFileSync(
+          resolve(ROOT, "packages/fixtures/saved-controller-v1.json"),
+          "utf8",
+        ),
+      ),
+    );
+    if (
+      process.argv.includes("--saved-controller-unsupported") ||
+      process.argv.includes("--saved-controller-corner")
+    ) {
+      assert(
+        Array.isArray(seed.profiles) && seed.profiles.length === 2,
+        "probe_seed_profiles",
+      );
+      const customization = object(object(seed.profiles[1]).customization);
+      assert(
+        Array.isArray(customization.elements) &&
+          customization.elements.length === 1,
+        "probe_seed_controls",
+      );
+      const layout = object(object(customization.elements[0]).layout);
+      if (process.argv.includes("--saved-controller-unsupported"))
+        layout.rotationDegrees = 45;
+      if (process.argv.includes("--saved-controller-corner")) {
+        layout.centerX = 1;
+        layout.centerY = 0;
+      }
+    }
+    return seed;
+  }
+
   readonly parent = realpathSync(
     mkdtempSync(join(tmpdir(), "thumble-real-phone-")),
   );
@@ -162,34 +202,38 @@ export class RealServicePhoneProbe {
     const source = join(this.parent, "synthetic-profiles.json");
     writeFileSync(
       source,
-      JSON.stringify({
-        schema: "com.codybontecou.pocketpad.keypad-configuration",
-        version: 5,
-        profiles: [
-          {
-            id: FIRST,
-            name: "First",
-            updatedAt: 0,
-            profileFormatVersion: 5,
-            customization: {
-              deviceCanvas: { frameID: "iphone-17-pro-landscape" },
-              elements: [],
+      JSON.stringify(
+        this.savedController
+          ? this.savedSeed()
+          : {
+              schema: "com.codybontecou.pocketpad.keypad-configuration",
+              version: 5,
+              profiles: [
+                {
+                  id: FIRST,
+                  name: "First",
+                  updatedAt: 0,
+                  profileFormatVersion: 5,
+                  customization: {
+                    deviceCanvas: { frameID: "iphone-17-pro-landscape" },
+                    elements: [],
+                  },
+                },
+                {
+                  id: SECOND,
+                  name: "Second",
+                  updatedAt: 0,
+                  profileFormatVersion: 5,
+                  customization: {
+                    deviceCanvas: { frameID: "iphone-17-pro-landscape" },
+                    elements: [],
+                  },
+                },
+              ],
+              activeProfileID: SECOND,
+              defaultProfileID: null,
             },
-          },
-          {
-            id: SECOND,
-            name: "Second",
-            updatedAt: 0,
-            profileFormatVersion: 5,
-            customization: {
-              deviceCanvas: { frameID: "iphone-17-pro-landscape" },
-              elements: [],
-            },
-          },
-        ],
-        activeProfileID: SECOND,
-        defaultProfileID: null,
-      }),
+      ),
       { mode: 0o600 },
     );
     const inspection = this.invoke("configuration", "validate-file", [
@@ -296,9 +340,9 @@ export class RealServicePhoneProbe {
   }
   async command(byte: string): Promise<Record<string, unknown>> {
     return this.gate.command(async () => {
-      if (/^[abvczhnfqj]$/.test(byte)) this.diagnose(`phase_${byte}`);
+      if (/^[abvczhnfqje]$/.test(byte)) this.diagnose(`phase_${byte}`);
       const result = await this.handleCommand(byte);
-      if (/^[abvczhnfqj]$/.test(byte)) this.diagnose(`done_${byte}`);
+      if (/^[abvczhnfqje]$/.test(byte)) this.diagnose(`done_${byte}`);
       return result;
     });
   }
@@ -309,16 +353,83 @@ export class RealServicePhoneProbe {
     );
     if (byte === "a") {
       const current = await this.snapshot();
-      const result = await request(this.local, {
-        command: "activate",
-        expectedRevision: current.revision,
-        profileId: SECOND,
-      });
+      let snapshot: Snapshot;
+      if (this.savedController) {
+        const catalog = object(
+          await requestConfiguration(this.local, {
+            command: "configuration-list",
+            expectedRevision: null,
+            offset: 0,
+          }),
+        );
+        assert(
+          typeof catalog.revision === "string" &&
+            typeof catalog.contentHash === "string" &&
+            catalog.activeProfileId === SECOND,
+          "probe_saved_pin",
+        );
+        const result = await requestSavedRuntime(this.local, {
+          command: "activate-saved",
+          expectedReceiverRevision: current.revision,
+          expectedConfigurationRevision: catalog.revision,
+          expectedSourceHash: catalog.contentHash,
+          profileId: SECOND,
+        });
+        assert(
+          result.savedBinding?.sourceHash === catalog.contentHash &&
+            result.savedBinding.profileId === SECOND,
+          "probe_saved_activation",
+        );
+        snapshot = result.snapshot;
+      } else {
+        const result = await request(this.local, {
+          command: "activate",
+          expectedRevision: current.revision,
+          profileId: SECOND,
+        });
+        snapshot = result.receiver.snapshot;
+      }
       this.activationOffset = statSync(this.local.recordingLog).size;
       return {
         active: true,
-        generation: result.receiver.snapshot.generation,
-        revision: result.receiver.snapshot.revision,
+        generation: snapshot.generation,
+        revision: snapshot.revision,
+        inputEnabled: false,
+      };
+    }
+    if (byte === "e") {
+      assert(this.savedController, "probe_saved_mode_required");
+      const catalog = object(
+        await requestConfiguration(this.local, {
+          command: "configuration-list",
+          expectedRevision: null,
+          offset: 0,
+        }),
+      );
+      assert(typeof catalog.revision === "string", "probe_saved_revision");
+      const mutation = object(
+        await requestConfiguration(this.local, {
+          command: "configuration-rename-profile",
+          operationId: "synthetic-saved-map-storage-edit",
+          expectedRevision: catalog.revision,
+          profileId: SECOND,
+          name: "Edited storage only",
+        }),
+      );
+      const receipt = object(mutation.receipt);
+      const bound = await requestSavedRuntime(this.local, {
+        command: "saved-binding-status",
+      });
+      assert(
+        bound.savedBinding && bound.snapshot.active,
+        "probe_saved_binding_lost",
+      );
+      return {
+        storageEdited: true,
+        configurationRevision: receipt.resultingRevision,
+        savedConfigurationRevision: bound.savedBinding.configurationRevision,
+        generation: bound.snapshot.generation,
+        revision: bound.snapshot.revision,
         inputEnabled: false,
       };
     }
@@ -481,7 +592,16 @@ if (import.meta.main) {
   try {
     assert(
       process.argv.length <= 3 &&
-        process.argv.slice(2).every((arg) => arg === "--renewal-watch"),
+        process.argv
+          .slice(2)
+          .every((arg) =>
+            [
+              "--renewal-watch",
+              "--saved-controller",
+              "--saved-controller-unsupported",
+              "--saved-controller-corner",
+            ].includes(arg),
+          ),
       "probe_arguments",
     );
     emit(await probe.start());

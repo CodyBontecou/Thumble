@@ -27,6 +27,10 @@ function source() {
   )
     .set("/profiles/0/outputMode", '"controller"')
     .set(
+      "/profiles/0/customization/buttonCustomizations/1/hitInsets",
+      JSON.stringify({ top: 0, leading: 0, bottom: 0, trailing: 0 }),
+    )
+    .set(
       "/profiles/0/customization/buttonCustomizations/1/shape",
       '"rectangle"',
     )
@@ -245,6 +249,7 @@ test("control bounds, overlap, legacy layout mirrors and explicit safe viewport 
     id,
     kind: "button",
     layout: {
+      hitInsets: { top: 0, leading: 0, bottom: 0, trailing: 0 },
       centerX: 0.05 + (i % 10) * 0.1,
       centerY: 0.05 + Math.floor(i / 10) * 0.13,
       widthScale: 0.02,
@@ -295,5 +300,27 @@ test("control bounds, overlap, legacy layout mirrors and explicit safe viewport 
   );
   expect(() => project(mirror)).toThrow(
     "saved_controller_unsupported_layout_mirror",
+  );
+});
+test("one-rectangle maps require explicit zero retained hit insets and never ignore implicit/default padding", () => {
+  const input = source(),
+    path = "/profiles/0/customization/buttonCustomizations/1/hitInsets";
+  expect(project(input).map.controls).toHaveLength(1);
+  for (const value of [
+    null,
+    { top: 10, leading: 10, bottom: 10, trailing: 10 },
+    { top: 0, leading: 1, bottom: 0, trailing: 0 },
+    { top: 0, leading: 0, bottom: 0 },
+    { top: "0", leading: 0, bottom: 0, trailing: 0 },
+    { top: 0, leading: 0, bottom: 0, trailing: 0, futureEdge: 1 },
+  ])
+    expect(() => project(input.set(path, JSON.stringify(value)))).toThrow(
+      "saved_controller_unsupported_hit_insets",
+    );
+  expect(() => project(input.remove(path))).toThrow(
+    "saved_controller_unsupported_hit_insets",
+  );
+  expect(input.get(path)!.text()).toBe(
+    '{"top":0,"leading":0,"bottom":0,"trailing":0}',
   );
 });

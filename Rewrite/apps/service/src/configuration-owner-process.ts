@@ -1,3 +1,7 @@
+import { ConfigurationPhoneControlsOperations } from "@thumble/application/configuration-phone-controls";
+import { decodePhoneControlsCommand } from "@thumble/contracts/phone-controls";
+import { ConfigurationSavedPinOperations } from "@thumble/application/configuration-saved-pin";
+import { decodeSavedPinCommand } from "@thumble/contracts/saved-runtime";
 import { ConfigurationExportOperations } from "@thumble/application/configuration-export";
 import { FileAssetStore } from "@thumble/storage/asset-files";
 import { publishConfigurationFile } from "./configuration-export-files.ts";
@@ -23,6 +27,10 @@ export async function runConfigurationOwner(
   executable: string,
 ): Promise<void> {
   const repository = new SqliteConfigurationRepository(directory, executable);
+  const savedPins = new ConfigurationSavedPinOperations(
+    repository,
+    configurationSourceHash,
+  );
   const operations = new ConfigurationCatalogOperations(
     repository,
     (text) => createHash("sha256").update(text, "utf8").digest("hex"),
@@ -35,6 +43,13 @@ export async function runConfigurationOwner(
     resourceHash: (bytes) => createHash("sha256").update(bytes).digest("hex"),
   });
   const assets = new FileAssetStore(directory, executable);
+  const phoneControls = new ConfigurationPhoneControlsOperations(repository, {
+    sourceHash: configurationSourceHash,
+    documentHash: (text) =>
+      createHash("sha256").update(text, "utf8").digest("hex"),
+    resourceHash: (bytes) => createHash("sha256").update(bytes).digest("hex"),
+    readAsset: (hash) => assets.read(hash),
+  });
   const exports = new ConfigurationExportOperations(repository, {
     encode: (text) => Buffer.from(text, "utf8"),
     readAsset: (hash) => assets.read(hash),
@@ -132,6 +147,18 @@ export async function runConfigurationOwner(
             return;
           }
           try {
+            if (record(body).command === "configuration-phone-controls") {
+              const result = phoneControls.execute(
+                decodePhoneControlsCommand(body),
+              );
+              write({ version: 1, requestId, ok: true, result });
+              continue;
+            }
+            if (record(body).command === "configuration-saved-pin") {
+              const result = savedPins.execute(decodeSavedPinCommand(body));
+              write({ version: 1, requestId, ok: true, result });
+              continue;
+            }
             const command = decodeConfigurationCommand(body);
             const result =
               command.command === "configuration-import-file"

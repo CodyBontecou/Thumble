@@ -1,3 +1,15 @@
+import {
+  decodePhoneControlsCommand,
+  decodePhoneControlsResult,
+  type PhoneControlsCommand,
+  type PhoneControlsResult,
+} from "@thumble/contracts/phone-controls";
+import {
+  decodeSavedPinCommand,
+  decodeSavedConfigurationPin,
+  type SavedPinCommand,
+  type SavedConfigurationPin,
+} from "@thumble/contracts/saved-runtime";
 import { configurationExportIntent } from "@thumble/application/configuration-export";
 import { configurationImportIntent } from "@thumble/application/configuration-import";
 import { NativePipe } from "./native-pipe.ts";
@@ -205,6 +217,66 @@ export class ConfigurationOwner {
         if (reply.kind !== "catalog" && reply.kind !== "conflict")
           throw new Error("configuration_response_invalid");
         return reply;
+      } catch {
+        this.pipe.disconnect();
+        this.child.kill("SIGKILL");
+        throw new Error("configuration_response_invalid");
+      }
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        error.message === "configuration_owner_unavailable"
+      ) {
+        this.pipe.disconnect();
+        this.child.kill("SIGKILL");
+      }
+      throw error;
+    } finally {
+      this.phoneRead = false;
+    }
+  }
+  async readSavedPin(input: SavedPinCommand): Promise<SavedConfigurationPin> {
+    const command = decodeSavedPinCommand(input);
+    await this.ready;
+    if (this.activeJob !== undefined || this.phoneRead)
+      throw new Error("configuration_owner_busy");
+    this.ordinaryReads++;
+    try {
+      const value = await this.pipe.request(command);
+      try {
+        const pin = decodeSavedConfigurationPin(value);
+        if (
+          pin.configurationRevision !== command.expectedRevision ||
+          pin.sourceHash !== command.expectedSourceHash ||
+          pin.profileId !== command.profileId
+        )
+          throw new Error("configuration_response_invalid");
+        return pin;
+      } catch {
+        this.pipe.disconnect();
+        this.child.kill("SIGKILL");
+        throw new Error("configuration_response_invalid");
+      }
+    } finally {
+      this.ordinaryReads--;
+    }
+  }
+  async readControlsForPhone(
+    input: PhoneControlsCommand,
+  ): Promise<PhoneControlsResult> {
+    const command = decodePhoneControlsCommand(input);
+    await this.ready;
+    if (
+      this.phoneRead ||
+      this.activeJob !== undefined ||
+      this.ordinaryReads !== 0
+    )
+      throw new Error("configuration_owner_busy");
+    this.phoneRead = true;
+    try {
+      const value = await this.pipe.request(command, 30000);
+      try {
+        return decodePhoneControlsResult(value, command);
       } catch {
         this.pipe.disconnect();
         this.child.kill("SIGKILL");

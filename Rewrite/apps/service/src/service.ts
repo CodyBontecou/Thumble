@@ -1,3 +1,8 @@
+import { PhoneControlsBridge } from "./phone-controls-bridge.ts";
+import {
+  decodeSavedRuntimeCommand,
+  type SavedRuntimeStatus,
+} from "@thumble/contracts/saved-runtime";
 import { PhoneCatalogBridge } from "./phone-catalog-bridge.ts";
 import { ConfigurationOwner } from "./configuration-owner.ts";
 import {
@@ -23,6 +28,7 @@ import { join } from "node:path";
 import { RuntimeController } from "@thumble/application";
 import {
   decodeLocalCommand,
+  type Snapshot,
   exact,
   FRAME_BYTES,
   identity,
@@ -100,6 +106,9 @@ export async function serve(
     identityDirectory,
     new PhoneCatalogBridge((command) =>
       configuration.readCatalogForPhone(command),
+    ),
+    new PhoneControlsBridge((command) =>
+      configuration.readControlsForPhone(command),
     ),
   );
   try {
@@ -179,9 +188,43 @@ export async function serve(
             )
           )
             throw new Error("unauthorized");
-          let result: ServiceStatus | PairingReply | ConfigurationReply;
+          let result:
+            | ServiceStatus
+            | PairingReply
+            | ConfigurationReply
+            | SavedRuntimeStatus;
           const operation = record(envelope.body).command;
           if (
+            operation === "activate-saved" ||
+            operation === "saved-binding-status"
+          ) {
+            const command = decodeSavedRuntimeCommand(envelope.body);
+            let activated: Snapshot | undefined;
+            if (command.command === "activate-saved") {
+              const pin = await configuration.readSavedPin({
+                command: "configuration-saved-pin",
+                expectedRevision: command.expectedConfigurationRevision,
+                expectedSourceHash: command.expectedSourceHash,
+                profileId: command.profileId,
+              });
+              activated = await controller.activateSaved(command, pin);
+            }
+            const bound = await native.savedStatus();
+            if (
+              activated &&
+              (!bound.savedBinding ||
+                activated.generation !== bound.snapshot.generation ||
+                activated.revision !== bound.snapshot.revision)
+            )
+              throw new Error("saved_activation_unconfirmed");
+            result = {
+              kind: "saved-runtime",
+              serviceInstanceId: instanceId,
+              servicePid: process.pid,
+              receiverPid: native.child.pid!,
+              ...bound,
+            };
+          } else if (
             typeof operation === "string" &&
             operation.startsWith("configuration-")
           ) {

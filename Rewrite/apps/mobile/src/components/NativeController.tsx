@@ -6,6 +6,7 @@ import { standardControllerMap } from "@thumble/domain/controller-layout";
 import { colors } from "../theme/colors";
 import {
   decodePracticeAdmission,
+  decodeControlMap,
   decodeConnectionAdmission,
   type ControlMap,
 } from "@thumble/contracts/mobile-input";
@@ -14,7 +15,8 @@ const NativeView = requireNativeViewManager<
   ViewProps & {
     onCatalog: (event: { nativeEvent: { catalog: unknown } }) => void;
     practiceMap?: ControlMap;
-    connectionMap?: ControlMap;
+    connect?: boolean;
+    onControlMap: (event: { nativeEvent: { map: unknown } }) => void;
     onAdmission: (event: { nativeEvent: { admission: unknown } }) => void;
   }
 >("ThumbleNativeInput");
@@ -46,6 +48,15 @@ export function NativeController({
   connected?: boolean;
 }) {
   const admittedSession = useRef<string | null>(null);
+  const [admissionEpoch, setAdmissionEpoch] = useState<string | null>(null);
+  const [installedMap, setInstalledMap] = useState<ControlMap | null>(null);
+  const receiveMap = useCallback((event: { nativeEvent: { map: unknown } }) => {
+    try {
+      setInstalledMap(decodeControlMap(event.nativeEvent.map));
+    } catch {
+      setInstalledMap(null);
+    }
+  }, []);
   const [catalogSummary, setCatalogSummary] = useState<string | null>(null);
   const receiveCatalog = useCallback(
     (event: { nativeEvent: { catalog: unknown } }) => {
@@ -83,8 +94,17 @@ export function NativeController({
             )
               setCatalogSummary(null);
             admittedSession.current = session;
+            setAdmissionEpoch(session);
+            setInstalledMap((previous) =>
+              previous &&
+              `${previous.generation}:${previous.revision}` === session
+                ? previous
+                : null,
+            );
           } else {
             admittedSession.current = null;
+            setAdmissionEpoch(null);
+            setInstalledMap(null);
             setCatalogSummary(null);
           }
           setPhase(ack.status);
@@ -100,12 +120,21 @@ export function NativeController({
         setPhase("ready");
       } catch {
         admittedSession.current = null;
+        setAdmissionEpoch(null);
+        setInstalledMap(null);
         setCatalogSummary(null);
         setPhase("error");
       }
     },
     [connected],
   );
+  const renderMap = connected
+    ? phase === "ready" &&
+      installedMap &&
+      `${installedMap.generation}:${installedMap.revision}` === admissionEpoch
+      ? installedMap
+      : null
+    : map;
   return (
     <View style={{ flex: 1 }}>
       <View
@@ -113,7 +142,7 @@ export function NativeController({
         accessible={false}
         style={{ position: "absolute", inset: 0 }}
       >
-        {map.controls.map((control) => (
+        {renderMap?.controls.map((control) => (
           <View
             key={control.id}
             style={{
@@ -147,9 +176,10 @@ export function NativeController({
         ))}
       </View>
       <NativeView
-        {...(connected ? { connectionMap: map } : { practiceMap: map })}
+        {...(connected ? { connect: true } : { practiceMap: map })}
         onAdmission={admit}
         onCatalog={receiveCatalog}
+        onControlMap={receiveMap}
         testID="controller-surface"
         pointerEvents={phase === "ready" ? "auto" : "none"}
         accessibilityLabel={
