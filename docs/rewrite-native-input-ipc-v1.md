@@ -1,0 +1,32 @@
+# Private native input IPC version 1
+
+The actual headless recording receiver now exposes a native-only loopback endpoint alongside its existing private Bun configuration pipe. The control owner can inspect the acknowledged active configuration, install a fresh packet source against its exact generation/revision, forward sealed packets and release that source. Native control version 4 now uses this transport for authenticated grant dispatch and reliable sealed packet relay. Native phone grant consumers/input-engine binding and UDP are still pending. Version 3 continues to report input unavailable, and real OS output remains disabled.
+
+## Local ownership and authentication
+
+`native-input.lock` elects one ingress owner. `native-input.endpoint` is a 42-byte private binary descriptor: five-byte `THNI1` magic, three zero bytes, a little-endian port and a fresh 32-byte capability. Publication uses a private staged file and atomic rename. Runtime ownership, regular-file/link checks and Unix 0700/0600 or Windows owner/SYSTEM protections use the existing native security helpers. A receiver restart rotates the capability and endpoint; normal shutdown removes the descriptor. This state is ephemeral and separate from persistent TLS identity, phone credentials and canonical profiles.
+
+The listener binds only IPv4 loopback; descriptor readers cannot choose another interface/host. Before sending the capability, a client sends a fresh 16-byte challenge prefixed by byte zero. The server replies with byte zero and HMAC-SHA-256 of `thumble-rewrite/native-input-server/v1` plus a zero byte and that challenge, keyed by the capability. The client verifies the exact proof first. Thus a process occupying a stale endpoint port cannot extract the local capability from a connecting native owner. Subsequent requests authenticate the capability with a constant-time comparison. The native channel is not exposed as HTTP/WebSocket, CLI/MCP or React operations. Capability and grant values have no public Debug/Serialize implementation or raw key getter, and no secret is added to the Bun ready/status/reply schemas.
+
+Every frame uses a two-byte big-endian length with a maximum 192-byte body. Native counters within payloads use little-endian fixed widths. An operation request body contains version byte 1, capability bytes and an operation byte. Exact payload lengths are required:
+
+| Operation | Request payload | Successful reply payload |
+| --- | --- | --- |
+| Configuration (1) | Empty | Active byte, generation u64, revision u64 |
+| Grant (2) | Connection ID 16 bytes, generation u64, revision u64, lifetime u32 | Fresh key 32 bytes, session 16 bytes, nonce prefix 4 bytes, generation u64, revision u64, lifetime u32 |
+| Packet (3) | Connection ID and session (16 bytes each), sealed 108-byte packet | Empty |
+| Release (4) | Connection ID and session (16 bytes each) | Empty |
+
+Successful replies prefix byte zero and the operation; a semantic rejection prefixes byte one and the operation with no payload. Individual rejected packets do not renew input TTL and do not destroy a valid channel/source. Invalid authentication, malformed framing, unsupported shapes, timeout and transport failure close the socket. Client grant material is opaque and can be consumed into a native packet sender; it is never returned to TypeScript. The grant caller must hold a current authenticated native phone connection and the trust mutation fence before installing a source. The control-v4 broker now holds this fence, validates the phone epoch and registers the receiver reference before native TLS key delivery.
+
+## Safety and failure behavior
+
+Four fixed workers and a four-connection queue register at most eight sockets. Workers perform bounded framing/server proof and enqueue at most 16 native operations. The existing safety loop drains at most four operations per iteration, then services the configuration pipe; networking never mutates output or renews the configuration lease. Frames have absolute two-second deadlines, and native operations/replies have 250ms deadlines. Work expired in the queue cannot install a grant. A grant whose response channel was abandoned is immediately retired before another request can run. Current-source disconnect queues retirement; stale disconnect cleanup carries both connection and random session IDs and cannot release a replacement. If cleanup cannot be enqueued during failure/backpressure, independent input TTL/configuration lease/grant expiry still bound held output. Control-v4 revocation now uses acknowledged release and the existing independent service receiver fence.
+
+The receiver generates fresh key/session/nonce-prefix material at installation and enforces the existing 100ms–10min grant lifetime bound, exact configuration receipt, neutral source barrier, replay rules and 64-source budget. The requested lifetime starts at receiver installation; future control admission must cap it by the authenticated owner and retire on owner/epoch loss. Packet traffic cannot renew the service's 750ms lease or replayed input's 350ms TTL. Owner pipe loss, backpressure, clock failure, source release and configuration replacement retire the packet admission through the same packet-aware runtime. See [the activation handoff](rewrite-receiver-session-handoff.md).
+
+## Evidence and open work
+
+Rust unit tests cover one-owner election, descriptor rotation, malformed endpoint data, symlink refusal, wrong capabilities, bad framing/shapes, stale-port server impersonation, expired work, abandoned delivery and bounded draining. Cross-process tests launch the actual receiver executable, request a grant through native IPC, seal/forward input with the native Rust sender and inspect the existing owner/status/recording output. They cover replay, exact generation/revision, recorded-sample exclusion, separate owner renewal, replacement and stale cleanup, disconnect neutralization, continuous native traffic with a lost owner, and stalled sockets while input expires. The CLI/service and standalone package retain their existing bounded safety coverage with the new endpoint enabled.
+
+These checks are local and newer than public snapshot 07da0e0; no hosted/Windows result is claimed for this source. Native phone grant delivery/input binding, UDP, physical output/signing, real phone networking, optical sync and launch acceptance remain pending. No retained desktop functionality is retired.

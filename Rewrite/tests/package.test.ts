@@ -70,7 +70,12 @@ packageTest(
       expect((await invoke("show", "identity")).result).toEqual(
         identity.result,
       );
-      const started = await invoke("start");
+      const started = await invoke(
+        "start",
+        "service",
+        "--identity-dir",
+        join(directory, "identity"),
+      );
       expect(started.result.receiver.snapshot.backend).toBe("recording");
       expect(started.result.receiver.snapshot.inputEnabled).toBe(false);
       const status = await invoke("status");
@@ -88,6 +93,60 @@ packageTest(
       expect((await invoke("cancel", "pairing")).result.pairing.state).toBe(
         "closed",
       );
+      const listening = await invoke(
+        "listen",
+        "pairing",
+        "--bind-address",
+        "127.0.0.1:0",
+        "--advertise-host",
+        "127.0.0.1",
+        "--reveal-secret",
+      );
+      expect(listening.result.transport.listening).toBe(true);
+      const peer = Bun.spawn(
+        ["node", resolve(root, "tooling/check-pairing-listener.mjs")],
+        { stdin: "pipe", stdout: "pipe", stderr: "pipe" },
+      );
+      try {
+        peer.stdin.write(
+          JSON.stringify({
+            invitation: listening.result.offer,
+            transport: listening.result.transport,
+          }) + "\n",
+        );
+        peer.stdin.end();
+        const [text, error, code] = await Promise.all([
+          new Response(peer.stdout).text(),
+          new Response(peer.stderr).text(),
+          peer.exited,
+        ]);
+        expect(code).toBe(0);
+        expect(error).toBe("");
+        expect(JSON.parse(text).completed).toBe(true);
+        expect(JSON.parse(text).authenticated).toBe(true);
+        expect(JSON.parse(text).inputEnabled).toBe(false);
+      } finally {
+        if (peer.exitCode === null) peer.kill();
+      }
+      expect((await invoke("status", "pairing")).result.pairing.state).toBe(
+        "closed",
+      );
+      const phones = (await invoke("list", "pairing")).result.phones;
+      expect(phones).toHaveLength(1);
+      expect(phones[0].phoneId).toBe("oracle-phone");
+      expect(phones[0].active).toBe(true);
+      const revoked = await invoke(
+        "revoke",
+        "pairing",
+        "--phone-id",
+        "oracle-phone",
+      );
+      expect(revoked.result.phones[0].active).toBe(false);
+      expect(revoked.result.offer).toBe(null);
+      expect(revoked.result.transport.listening).toBe(true);
+      expect(
+        (await invoke("stop-listening", "pairing")).result.transport.listening,
+      ).toBe(false);
       const stopped = await invoke("stop");
       expect(stopped.result.receiver.snapshot.active).toBe(false);
       const deadline = Date.now() + 3000;

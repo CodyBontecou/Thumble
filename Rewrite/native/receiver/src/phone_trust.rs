@@ -315,6 +315,31 @@ impl PhoneTrustStore {
         tx.commit().map_err(error)?;
         Ok(phone)
     }
+    /// Recheck native connection authorization without retaining its bearer credential.
+    pub(crate) fn authorize_epoch(
+        &mut self,
+        id: &str,
+        epoch: &str,
+        now: u64,
+    ) -> Result<TrustedPhone, &'static str> {
+        let tx = self
+            .connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(error)?;
+        let now = observe(&tx, now, false)?;
+        let phone = tx
+            .query_row(
+                "SELECT phone_id,label,epoch,active,expires_at FROM phones WHERE phone_id=?1",
+                [id],
+                metadata,
+            )
+            .optional()
+            .map_err(error)?
+            .filter(|p| p.active && p.credential_epoch == epoch && (now as u64) < p.expires_at)
+            .ok_or("phone_authentication_rejected")?;
+        tx.commit().map_err(error)?;
+        Ok(phone)
+    }
     /// Persist revocation even if wall time moved backward. Runtime release is the native session owner's job.
     pub fn revoke(&mut self, id: &str, now: u64) -> Result<(), &'static str> {
         if !runtime::identity(id) {

@@ -44,6 +44,17 @@ public struct PhoneCredential: Sendable, CustomStringConvertible, CustomDebugStr
     text.utf8.count == 64
       && text.utf8.allSatisfy { (48...57).contains($0) || (97...102).contains($0) }
   }
+  /// Native TLS use only. No raw token getter is exposed to the application bridge.
+  func authenticationFrame(authority: String) throws -> ControlTLSFrame {
+    guard EnrollmentInvitation.identity(authority) else { throw PhoneCredentialError.invalid }
+    let token = storage.token.map { String(format: "%02x", $0) }.joined()
+    return try ControlTLSFrame(
+      kind: .control,
+      payload: JSONSerialization.data(withJSONObject: [
+        "version": 1, "command": "authenticate", "authorityInstanceId": authority,
+        "phoneId": metadata.phoneID, "credentialEpoch": String(metadata.epoch), "credential": token,
+      ]))
+  }
   private static let magic = Data([84, 72, 80, 67, 49, 0, 0, 0])
   func encoded() -> Data {
     var bytes = Self.magic

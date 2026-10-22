@@ -11,6 +11,8 @@ class InputEngine(
     private val output: (InputSample) -> Boolean,
     private val feedback: (GamepadStateV1) -> Unit = {},
 ) {
+    internal var onRelease: (ReleaseReason) -> Unit = {}
+
     private data class Capture(val region: ControlRegion, val x: Double, val y: Double)
 
     private val owner = Thread.currentThread()
@@ -119,12 +121,14 @@ class InputEngine(
     fun cancel(reason: ReleaseReason) {
         checkOwner()
         if (publishing || disposed) return
+        val wasConnected = connected
         captures.clear()
         state = GamepadReport.neutral()
         lastRelease = reason
         emit()
         connected = false
         if (reason == ReleaseReason.disposed) disposed = true
+        if (wasConnected) onRelease(reason)
     }
 
     private fun accepts(generation: String) =
@@ -191,6 +195,7 @@ class InputEngine(
                 state = GamepadReport.neutral()
                 lastRelease = ReleaseReason.sequenceExhausted
                 feedback(state)
+                onRelease(ReleaseReason.sequenceExhausted)
                 return
             }
             val sample = InputSample(generation, sequence.toString(), state)
@@ -201,12 +206,14 @@ class InputEngine(
                 state = GamepadReport.neutral()
                 lastRelease = ReleaseReason.transportFailure
                 feedback(state)
+                onRelease(ReleaseReason.transportFailure)
             }
         } catch (_: Exception) {
             connected = false
             captures.clear()
             state = GamepadReport.neutral()
             lastRelease = ReleaseReason.transportFailure
+            onRelease(ReleaseReason.transportFailure)
         } finally {
             publishing = false
         }

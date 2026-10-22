@@ -1,5 +1,8 @@
 //! Pinned host-authenticated TLS only. Phone enrollment/trust and input admission are separate.
-use ring::digest;
+use ring::{
+    digest,
+    rand::{SecureRandom, SystemRandom},
+};
 use rustls::{
     client::{
         danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier},
@@ -309,6 +312,7 @@ pub struct ControlFrame {
 pub struct ControlChannel {
     stream: Option<Stream>,
     server_pin: Option<CertificatePin>,
+    binding: Option<[u8; 16]>,
 }
 impl ControlChannel {
     pub fn connect_pinned(
@@ -340,6 +344,7 @@ impl ControlChannel {
         Ok(Self {
             stream: Some(Stream::Client(StreamOwned::new(conn, socket))),
             server_pin: None,
+            binding: None,
         })
     }
     pub fn accept_unenrolled(
@@ -360,9 +365,14 @@ impl ControlChannel {
         {
             return Err(TransportRejected);
         }
+        let mut binding = [0; 16];
+        SystemRandom::new()
+            .fill(&mut binding)
+            .map_err(|_| TransportRejected)?;
         Ok(Self {
             stream: Some(Stream::Server(StreamOwned::new(conn, socket))),
             server_pin: Some(identity.pin()),
+            binding: Some(binding),
         })
     }
     pub(crate) fn native_server_pin(&self) -> Option<CertificatePin> {
@@ -371,6 +381,9 @@ impl ControlChannel {
         } else {
             None
         }
+    }
+    pub(crate) fn native_binding(&self) -> Option<[u8; 16]> {
+        self.stream.as_ref().and(self.binding)
     }
     pub fn close(&mut self) {
         self.stream = None;

@@ -1,7 +1,7 @@
 use thumble_rewrite_receiver::{gamepad, runtime, security};
 mod clock;
 
-use runtime::{identity, Output, Request, Runtime};
+use runtime::{identity, Output, Request};
 use serde_json::json;
 use std::{
     fs::File,
@@ -10,6 +10,7 @@ use std::{
     sync::mpsc,
     time::Duration,
 };
+use thumble_rewrite_receiver::packet_runtime::PacketRuntime;
 const FRAME_LIMIT: usize = 64 * 1024;
 
 struct Recording {
@@ -52,8 +53,9 @@ fn run(root: &Path, log: Option<&Path>) -> Result<(), &'static str> {
     let mut output = Recording {
         file: security::file(log, true)?,
     };
-    let mut runtime = Runtime::default();
-    runtime.release(&mut output, "startup")?;
+    let mut runtime = PacketRuntime::default();
+    runtime.release_reason(&mut output, "startup")?;
+    let mut ingress = thumble_rewrite_receiver::native_ingress::Server::bind(root)?;
     let (incoming, received) = mpsc::sync_channel::<Option<Vec<u8>>>(16);
     std::thread::spawn(move || {
         let mut input = BufReader::new(std::io::stdin());
@@ -112,15 +114,19 @@ fn run(root: &Path, log: Option<&Path>) -> Result<(), &'static str> {
         let now = match clock::millis() {
             Ok(n) => n,
             Err(error) => {
-                let _ = runtime.release(&mut output, "clock_failed");
+                let _ = runtime.release_reason(&mut output, "clock_failed");
                 return Err(error);
             }
         };
         runtime.tick(now, &mut output)?;
+        if let Err(error) = ingress.drain(&mut runtime, now, &mut output) {
+            let _ = runtime.release_reason(&mut output, "native_input_owner_failed");
+            return Err(error);
+        }
         let bytes = match received.recv_timeout(Duration::from_millis(10)) {
             Ok(Some(bytes)) => bytes,
             Ok(None) | Err(mpsc::RecvTimeoutError::Disconnected) => {
-                runtime.release(&mut output, "owner_disconnected")?;
+                runtime.release_reason(&mut output, "owner_disconnected")?;
                 break;
             }
             Err(mpsc::RecvTimeoutError::Timeout) => continue,
@@ -133,7 +139,7 @@ fn run(root: &Path, log: Option<&Path>) -> Result<(), &'static str> {
                 let id = Some(request.request_id);
                 (
                     id,
-                    runtime.apply(request.body, clock::millis()?, &mut output),
+                    runtime.apply_owner(request.body, clock::millis()?, &mut output),
                 )
             }
             None => (None, Err("invalid_request")),
@@ -146,7 +152,7 @@ fn run(root: &Path, log: Option<&Path>) -> Result<(), &'static str> {
             Err(error) => json!({"version":1,"requestId":request_id,"ok":false,"error":error}),
         };
         if outgoing.try_send(reply.to_string()).is_err() {
-            runtime.release(&mut output, "owner_backpressure")?;
+            runtime.release_reason(&mut output, "owner_backpressure")?;
             return Err("owner_output_unavailable");
         }
         if stopping {
@@ -159,7 +165,22 @@ fn run(root: &Path, log: Option<&Path>) -> Result<(), &'static str> {
     Ok(())
 }
 fn main() {
-    let result = args().and_then(|(mode, root, log)| match mode.as_str() {
+    let native_args = std::env::args().skip(1).collect::<Vec<_>>();
+    let result = if native_args
+        .first()
+        .is_some_and(|mode| mode == "pairing-host")
+    {
+        if !(3..=4).contains(&native_args.len()) {
+            Err("invalid_pairing_host_arguments")
+        } else {
+            thumble_rewrite_receiver::pairing_host::run(
+                Path::new(&native_args[1]),
+                &native_args[2],
+                native_args.get(3).map(Path::new),
+            )
+        }
+    } else {
+        args().and_then(|(mode, root, log)| match mode.as_str() {
         "secure-directory" => security::directory(&root),
         "host-identity-initialize" | "host-identity-show" if log.is_none() => {
             let operation = if mode == "host-identity-initialize" { thumble_rewrite_receiver::host_identity::load_or_create } else { thumble_rewrite_receiver::host_identity::load_existing };
@@ -169,7 +190,8 @@ fn main() {
         }
         "run" => run(&root, log.as_deref()),
         _ => Err("unsupported_mode"),
-    });
+    })
+    };
     if let Err(error) = result {
         eprintln!("{error}");
         std::process::exit(1);

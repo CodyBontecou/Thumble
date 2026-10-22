@@ -16,6 +16,7 @@ import ThumbleContracts
   private var admitted = false
   private var publishing = false
   private var disposed = false
+  var onRelease: (ReleaseReason) -> Void = { _ in }
   private let output: (InputSample) -> Bool
   private let feedback: (GamepadStateV1) -> Void
   public private(set) var connected = false
@@ -97,12 +98,23 @@ import ThumbleContracts
   }
   public func cancel(_ reason: ReleaseReason) {
     guard !publishing, !disposed else { return }
+    let wasConnected = connected
     captures.removeAll()
     state = .neutral
     lastRelease = reason
     emit()
     connected = false
     if reason == .disposed { disposed = true }
+    if wasConnected { onRelease(reason) }
+  }
+  /// Terminal transport cleanup already fences host output; do not enqueue another sample.
+  func retire(_ reason: ReleaseReason) {
+    guard !publishing else { return }
+    captures.removeAll()
+    connected = false
+    state = .neutral
+    lastRelease = reason
+    feedback(state)
   }
   private func accepts(_ generation: String) -> Bool {
     !disposed && map != nil && generation == self.generation && (connected || practice)
@@ -162,6 +174,7 @@ import ThumbleContracts
       state = .neutral
       lastRelease = .sequenceExhausted
       feedback(state)
+      onRelease(.sequenceExhausted)
       return
     }
     let sample = InputSample(generation: generation, sequence: String(sequence), state: state)
@@ -172,6 +185,7 @@ import ThumbleContracts
       state = .neutral
       lastRelease = .transportFailure
       feedback(state)
+      onRelease(.transportFailure)
     }
   }
 }

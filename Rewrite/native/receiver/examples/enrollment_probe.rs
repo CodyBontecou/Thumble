@@ -35,7 +35,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos()
     )));
     let identity = host_identity::load_or_create(&root.0)?;
-    let mut store = PhoneTrustStore::open(&root.0)?;
+    let store = Mutex::new(PhoneTrustStore::open(&root.0)?);
     let mut windows = PairingWindows::new("synthetic-enrollment", identity.pin())?;
     let offer = windows.open(now()?)?;
     let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0))?;
@@ -57,7 +57,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     let mut channel =
         ControlChannel::accept_unenrolled(stream, &identity).map_err(|_| "tls_failed")?;
-    let result = enrollment::enroll(&mut channel, &Mutex::new(windows), &mut store, now);
+    let result = enrollment::enroll(
+        &mut channel,
+        &Mutex::new(windows),
+        &store,
+        &Mutex::new(()),
+        now,
+    );
     match result {
         Ok(phone) => println!(
             "{}",

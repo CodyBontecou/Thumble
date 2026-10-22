@@ -16,7 +16,12 @@ internal interface NativeFrameIO : Closeable {
  * ready TLS transport still needs authenticated enrollment/configuration before input admission.
  * close is terminal; a new connection and fresh packet grant are required after any failure.
  */
-class NativeTLSDelivery internal constructor(connect: () -> NativeFrameIO) : Closeable {
+class NativeTLSDelivery private constructor(initial: NativeFrameIO?, connect: () -> NativeFrameIO) :
+    Closeable {
+    internal constructor(connect: () -> NativeFrameIO) : this(null, connect)
+
+    internal constructor(raw: NativeFrameIO) : this(raw, { raw })
+
     enum class State {
         CONNECTING,
         READY,
@@ -24,8 +29,8 @@ class NativeTLSDelivery internal constructor(connect: () -> NativeFrameIO) : Clo
     }
 
     private val gate = Object()
-    private var current = State.CONNECTING
-    private var io: NativeFrameIO? = null
+    private var current = if (initial == null) State.CONNECTING else State.READY
+    private var io: NativeFrameIO? = initial
     private val controls = ArrayDeque<ControlTLSFrame>()
     private val received = ArrayDeque<ControlTLSFrame>()
     private var latestInput: ControlTLSFrame? = null
@@ -33,7 +38,7 @@ class NativeTLSDelivery internal constructor(connect: () -> NativeFrameIO) : Clo
         get() = synchronized(gate) { current }
 
     init {
-        Thread({ writeLoop(connect) }, "thumble-native-tls-writer")
+        Thread({ writeLoop { initial ?: connect() } }, "thumble-native-tls-writer")
             .apply { isDaemon = true }
             .start()
     }

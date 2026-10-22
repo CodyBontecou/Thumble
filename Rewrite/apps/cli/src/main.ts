@@ -31,6 +31,9 @@ function options(values: string[]): Map<string, string | true> {
     if (
       ![
         "--identity-dir",
+        "--bind-address",
+        "--advertise-host",
+        "--phone-id",
         "--runtime-dir",
         "--receiver",
         "--profile-id",
@@ -52,6 +55,25 @@ function required(opts: Map<string, string | true>, key: string): string {
   const value = opts.get(key);
   if (typeof value !== "string") throw new Error("missing_option");
   return value;
+}
+function nativeIdentity(
+  receiver: string,
+  directory: string,
+  action: "initialize" | "show",
+) {
+  const child = spawnSync(receiver, [`host-identity-${action}`, directory], {
+    encoding: "utf8",
+    timeout: 5000,
+    maxBuffer: 4096,
+    windowsHide: true,
+  });
+  if (child.error || child.status !== 0) {
+    const code = child.stderr?.trim();
+    throw new Error(
+      code && /^[a-z_]+$/.test(code) ? code : "host_identity_unavailable",
+    );
+  }
+  return decodeHostIdentity(JSON.parse(child.stdout));
 }
 async function main(): Promise<unknown> {
   const [family, action, ...rest] = arguments_;
@@ -82,33 +104,68 @@ async function main(): Promise<unknown> {
     const directory = required(opts, "--identity-dir");
     if (!isAbsolute(directory))
       throw new Error("identity_directory_must_be_absolute");
-    const child = spawnSync(receiver, [`host-identity-${action}`, directory], {
-      encoding: "utf8",
-      timeout: 5000,
-      maxBuffer: 4096,
-      windowsHide: true,
-    });
-    if (child.error || child.status !== 0) {
-      const code = child.stderr?.trim();
-      throw new Error(
-        code && /^[a-z_]+$/.test(code) ? code : "host_identity_unavailable",
-      );
-    }
-    return decodeHostIdentity(JSON.parse(child.stdout));
+    return nativeIdentity(receiver, directory, action);
   }
+
   if (family === "__service" && action === "run") {
-    await serve(receiver, root);
+    const identityDirectory = opts.get("--identity-dir");
+    if (
+      identityDirectory !== undefined &&
+      (typeof identityDirectory !== "string" || !isAbsolute(identityDirectory))
+    )
+      throw new Error("identity_directory_must_be_absolute");
+    await serve(
+      receiver,
+      root,
+      typeof identityDirectory === "string" ? identityDirectory : undefined,
+    );
     return undefined;
   }
   if (family === "service" && action === "run") {
-    await serve(receiver, root);
+    const identityDirectory = opts.get("--identity-dir");
+    if (
+      identityDirectory !== undefined &&
+      (typeof identityDirectory !== "string" || !isAbsolute(identityDirectory))
+    )
+      throw new Error("identity_directory_must_be_absolute");
+    await serve(
+      receiver,
+      root,
+      typeof identityDirectory === "string" ? identityDirectory : undefined,
+    );
     return undefined;
   }
   if (family === "service" && action === "start") {
     secureDirectory(receiver, root);
+    const identityDirectory = opts.get("--identity-dir");
+    if (
+      identityDirectory !== undefined &&
+      (typeof identityDirectory !== "string" || !isAbsolute(identityDirectory))
+    )
+      throw new Error("identity_directory_must_be_absolute");
+    const expectedIdentity =
+      typeof identityDirectory === "string"
+        ? nativeIdentity(receiver, identityDirectory, "show")
+        : undefined;
+    let running;
     try {
-      return await request(readEndpoint(root, receiver), { command: "status" });
+      running = await request(readEndpoint(root, receiver), {
+        command: "status",
+      });
     } catch {}
+    if (running) {
+      if (expectedIdentity) {
+        const pairing = await requestPairing(readEndpoint(root, receiver), {
+          command: "pairing-status",
+        });
+        if (
+          !pairing.transport?.persistentIdentity ||
+          pairing.transport.certificatePin !== expectedIdentity.certificatePin
+        )
+          throw new Error("service_identity_configuration_mismatch");
+      }
+      return running;
+    }
     const launcher = source
       ? [process.execPath, process.argv[1]!]
       : [process.execPath];
@@ -122,6 +179,9 @@ async function main(): Promise<unknown> {
         root,
         "--receiver",
         receiver,
+        ...(typeof identityDirectory === "string"
+          ? ["--identity-dir", identityDirectory]
+          : []),
       ],
       { detached: true, stdio: "ignore", windowsHide: true },
     );
@@ -139,12 +199,41 @@ async function main(): Promise<unknown> {
     throw new Error("service_start_failed");
   }
   if (family === "pairing") {
-    if (action !== "open" && action !== "status" && action !== "cancel")
+    if (
+      ![
+        "open",
+        "status",
+        "list",
+        "revoke",
+        "cancel",
+        "listen",
+        "stop-listening",
+      ].includes(action ?? "")
+    )
       throw new Error("unsupported_pairing_command");
-    if (action === "open" && opts.get("--reveal-secret") !== true)
+    if (
+      (action === "open" || action === "listen") &&
+      opts.get("--reveal-secret") !== true
+    )
       throw new Error("pairing_secret_output_opt_in_required");
+    if (action === "revoke")
+      return requestPairing(readEndpoint(root, receiver), {
+        command: "pairing-revoke",
+        phoneId: required(opts, "--phone-id"),
+      });
+    if (action === "listen")
+      return requestPairing(readEndpoint(root, receiver), {
+        command: "pairing-listen",
+        bindAddress: required(opts, "--bind-address"),
+        advertiseHost: required(opts, "--advertise-host"),
+      });
     return requestPairing(readEndpoint(root, receiver), {
-      command: `pairing-${action}`,
+      command: `pairing-${action}` as
+        | "pairing-open"
+        | "pairing-status"
+        | "pairing-list"
+        | "pairing-cancel"
+        | "pairing-stop-listening",
     });
   }
   let command: LocalCommand;

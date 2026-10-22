@@ -155,6 +155,34 @@ impl Runtime {
             .filter(|a| a.generation == generation && a.session_id == session)
             .ok_or("inactive_generation")
     }
+    /// Attach a native packet source to this acknowledged configuration without changing its owner lease.
+    pub(crate) fn switch_packet_source(
+        &mut self,
+        generation: u64,
+        revision: u64,
+        now: u64,
+        output: &mut impl Output,
+    ) -> Result<String, &'static str> {
+        self.tick(now, output)?;
+        let owner = self
+            .active
+            .as_ref()
+            .filter(|a| a.generation == generation && self.revision == revision)
+            .ok_or("inactive_generation")?
+            .session_id
+            .clone();
+        self.report = NEUTRAL;
+        self.reason = "packet_source_barrier";
+        if let Err(error) = output.submit(NEUTRAL, self.reason) {
+            let _ = self.release(output, "output_failed");
+            return Err(error);
+        }
+        if let Some(active) = self.active.as_mut() {
+            active.sequence = None;
+            active.input_deadline = None;
+        }
+        Ok(owner)
+    }
     pub fn apply(
         &mut self,
         command: Command,

@@ -204,39 +204,117 @@ fn receive<T: serde::de::DeserializeOwned>(
 pub fn enroll(
     channel: &mut ControlChannel,
     windows: &Mutex<PairingWindows>,
-    store: &mut PhoneTrustStore,
+    store: &Mutex<PhoneTrustStore>,
+    policy_mutation: &Mutex<()>,
     mut now: impl FnMut() -> Result<u64, &'static str>,
 ) -> Result<TrustedPhone, &'static str> {
     let result = (|| {
-        let (authority, pin) = {
-            let policy = windows.lock().map_err(|_| "pairing_owner_unavailable")?;
-            (policy.authority.clone(), policy.pin)
-        };
-        if channel.native_server_pin() != Some(pin) || store.host_pin() != pin.hex() {
-            return Err("enrollment_host_mismatch");
-        }
-        let hello: Hello = receive(channel)?;
-        if hello.version != 1
-            || hello.command != "hello"
-            || hello.control_version != 2
-            || hello.input_version != 1
-            || hello.document_version != 1
-            || hello.capabilities_version != 1
-        {
-            return Err("enrollment_version_unsupported");
-        }
-        let reply = serde_json::json!({"version":1,"command":"hello","authorityInstanceId":authority,"controlVersion":2,"inputVersion":1,"documentVersion":1,"capabilitiesVersion":1,"inputEnabled":false});
-        channel
-            .send(
-                FrameKind::Control,
-                &serde_json::to_vec(&reply).map_err(|_| "enrollment_message_invalid")?,
+        begin(channel, windows, store, 2)?;
+        complete(channel, windows, store, policy_mutation, None, &mut now)
+    })();
+    if result.is_err() {
+        channel.close();
+    }
+    result
+}
+pub(crate) fn serve(
+    channel: &mut ControlChannel,
+    windows: &Mutex<PairingWindows>,
+    store: &Mutex<PhoneTrustStore>,
+    policy_mutation: &Mutex<()>,
+    input_grants: &crate::input_broker::Registry,
+    root: &std::path::Path,
+    mut now: impl FnMut() -> Result<u64, &'static str>,
+) -> Result<(), &'static str> {
+    let result = (|| match begin(channel, windows, store, 4)? {
+        2 => complete(
+            channel,
+            windows,
+            store,
+            policy_mutation,
+            Some(input_grants),
+            &mut now,
+        )
+        .map(|_| ()),
+        version @ (3 | 4) => {
+            let authority = windows
+                .lock()
+                .map_err(|_| "pairing_owner_unavailable")?
+                .authority
+                .clone();
+            crate::authenticated_control::serve_after_hello(
+                channel,
+                &authority,
+                store,
+                policy_mutation,
+                if version == 4 {
+                    Some((root, input_grants))
+                } else {
+                    None
+                },
+                &mut now,
             )
-            .map_err(|_| "enrollment_transport_failed")?;
-        let request: Enroll = receive(channel)?;
-        if request.version != 1 || request.command != "enroll" {
-            return Err("enrollment_message_invalid");
         }
-        crate::phone_trust::validate_phone(&request.phone_id, &request.label)?;
+        _ => Err("enrollment_version_unsupported"),
+    })();
+    channel.close();
+    result
+}
+fn begin(
+    channel: &mut ControlChannel,
+    windows: &Mutex<PairingWindows>,
+    store: &Mutex<PhoneTrustStore>,
+    max_version: u8,
+) -> Result<u8, &'static str> {
+    let (authority, pin) = {
+        let policy = windows.lock().map_err(|_| "pairing_owner_unavailable")?;
+        (policy.authority.clone(), policy.pin)
+    };
+    if channel.native_server_pin() != Some(pin)
+        || store
+            .lock()
+            .map_err(|_| "phone_trust_owner_unavailable")?
+            .host_pin()
+            != pin.hex()
+    {
+        return Err("enrollment_host_mismatch");
+    }
+    let hello: Hello = receive(channel)?;
+    if hello.version != 1
+        || hello.command != "hello"
+        || !(2..=max_version).contains(&hello.control_version)
+        || hello.input_version != 1
+        || hello.document_version != 1
+        || hello.capabilities_version != 1
+    {
+        return Err("enrollment_version_unsupported");
+    }
+    let reply = serde_json::json!({"version":1,"command":"hello","authorityInstanceId":authority,"controlVersion":hello.control_version,"inputVersion":1,"documentVersion":1,"capabilitiesVersion":1,"inputEnabled":false});
+    channel
+        .send(
+            FrameKind::Control,
+            &serde_json::to_vec(&reply).map_err(|_| "enrollment_message_invalid")?,
+        )
+        .map_err(|_| "enrollment_transport_failed")?;
+    Ok(hello.control_version)
+}
+fn complete(
+    channel: &mut ControlChannel,
+    windows: &Mutex<PairingWindows>,
+    store: &Mutex<PhoneTrustStore>,
+    policy_mutation: &Mutex<()>,
+    input_grants: Option<&crate::input_broker::Registry>,
+    now: &mut impl FnMut() -> Result<u64, &'static str>,
+) -> Result<TrustedPhone, &'static str> {
+    let request: Enroll = receive(channel)?;
+    if request.version != 1 || request.command != "enroll" {
+        return Err("enrollment_message_invalid");
+    }
+    crate::phone_trust::validate_phone(&request.phone_id, &request.label)?;
+    let issued = {
+        let _mutation = policy_mutation
+            .lock()
+            .map_err(|_| "phone_trust_owner_unavailable")?;
         let proof_time = match now() {
             Ok(time) => time,
             Err(error) => {
@@ -256,31 +334,33 @@ pub fn enroll(
                 &request.proof,
                 proof_time,
             )?;
-        let issued = store.enroll_after_pairing(&request.phone_id, &request.label, now()?)?;
-        issued.send_enrollment(channel)?;
-        let ack: Acknowledgment =
-            receive(channel).map_err(|_| "phone_credential_delivery_unconfirmed")?;
-        if ack.version != 1
-            || ack.command != "enrollment-stored"
-            || ack.phone_id != issued.phone().phone_id
-            || ack.credential_epoch != issued.phone().credential_epoch
-        {
-            return Err("phone_credential_delivery_unconfirmed");
+        let issued = store
+            .lock()
+            .map_err(|_| "phone_trust_owner_unavailable")?
+            .enroll_after_pairing(&request.phone_id, &request.label, now()?)?;
+        if let Some(grants) = input_grants {
+            grants.retire_phone(&request.phone_id)?;
         }
-        let completed = serde_json::json!({"version":1,"command":"enrollment-complete","phoneId":issued.phone().phone_id,"credentialEpoch":issued.phone().credential_epoch,"inputEnabled":false});
-        channel
-            .send(
-                FrameKind::Control,
-                &serde_json::to_vec(&completed)
-                    .map_err(|_| "phone_credential_delivery_unconfirmed")?,
-            )
-            .map_err(|_| "phone_credential_delivery_unconfirmed")?;
-        Ok(issued.phone().clone())
-    })();
-    if result.is_err() {
-        channel.close();
+        issued
+    };
+    issued.send_enrollment(channel)?;
+    let ack: Acknowledgment =
+        receive(channel).map_err(|_| "phone_credential_delivery_unconfirmed")?;
+    if ack.version != 1
+        || ack.command != "enrollment-stored"
+        || ack.phone_id != issued.phone().phone_id
+        || ack.credential_epoch != issued.phone().credential_epoch
+    {
+        return Err("phone_credential_delivery_unconfirmed");
     }
-    result
+    let completed = serde_json::json!({"version":1,"command":"enrollment-complete","phoneId":issued.phone().phone_id,"credentialEpoch":issued.phone().credential_epoch,"inputEnabled":false});
+    channel
+        .send(
+            FrameKind::Control,
+            &serde_json::to_vec(&completed).map_err(|_| "phone_credential_delivery_unconfirmed")?,
+        )
+        .map_err(|_| "phone_credential_delivery_unconfirmed")?;
+    Ok(issued.phone().clone())
 }
 
 #[cfg(test)]
@@ -357,10 +437,10 @@ mod tests {
         let address = listener.local_addr().unwrap();
         let path = root.0.clone();
         let worker = thread::spawn(move || {
-            let mut store = PhoneTrustStore::open(&path).unwrap();
+            let store = Mutex::new(PhoneTrustStore::open(&path).unwrap());
             let (stream, _) = listener.accept().unwrap();
             let mut channel = ControlChannel::accept_unenrolled(stream, &identity).unwrap();
-            let result = enroll(&mut channel, &windows, &mut store, clock);
+            let result = enroll(&mut channel, &windows, &store, &Mutex::new(()), clock);
             (result, windows.lock().unwrap().status(102).unwrap())
         });
         let mut channel = ControlChannel::connect_pinned(address, pin).unwrap();
@@ -580,16 +660,16 @@ mod tests {
             assert!(channel.receive().is_err());
         });
         let mut client = ControlChannel::connect_pinned(address, pin).unwrap();
-        let mut store = PhoneTrustStore::open(&root.0).unwrap();
+        let store = Mutex::new(PhoneTrustStore::open(&root.0).unwrap());
         let mut w = PairingWindows::new("authority-a", pin).unwrap();
         w.open(100).unwrap();
         let w = Mutex::new(w);
         assert_eq!(
-            enroll(&mut client, &w, &mut store, || Ok(101)).err(),
+            enroll(&mut client, &w, &store, &Mutex::new(()), || Ok(101)).err(),
             Some("enrollment_host_mismatch")
         );
         assert_eq!(w.lock().unwrap().status(102).unwrap().attempts_remaining, 5);
-        assert!(store.list().unwrap().is_empty());
+        assert!(store.lock().unwrap().list().unwrap().is_empty());
         server.join().unwrap();
     }
     #[test]

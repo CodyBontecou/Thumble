@@ -44,6 +44,23 @@ internal constructor(val metadata: PhoneCredentialMetadata, token: ByteArray) {
 
     override fun toString() = "PhoneCredential([redacted])"
 
+    internal fun authenticationFrame(authority: String): ControlTLSFrame {
+        if (!EnrollmentInvitation.identity(authority)) throw PhoneCredentialRejected()
+        val value =
+            org.json
+                .JSONObject()
+                .put("version", 1)
+                .put("command", "authenticate")
+                .put("authorityInstanceId", authority)
+                .put("phoneId", metadata.phoneID)
+                .put("credentialEpoch", metadata.epoch.toString())
+                .put("credential", secret.joinToString("") { "%02x".format(it.toInt() and 255) })
+        return ControlTLSFrame(
+            ControlTLSFrame.Kind.CONTROL,
+            value.toString().toByteArray(Charsets.UTF_8),
+        )
+    }
+
     internal fun encode(): ByteArray {
         val id = metadata.phoneID.toByteArray(Charsets.UTF_8)
         val out = java.io.ByteArrayOutputStream()

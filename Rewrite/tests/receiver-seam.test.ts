@@ -37,8 +37,7 @@ async function command(
       process.execPath,
       cli,
       ...args,
-      "--runtime-dir",
-      directory,
+      ...(args[0] === "identity" ? [] : ["--runtime-dir", directory]),
       "--receiver",
       executable,
       "--json",
@@ -416,3 +415,354 @@ test("pairing CLI requires secret opt-in, authenticated IPC, private status and 
     ).toBe("closed");
   });
 }, 15000);
+
+async function* peerLines(
+  stream: ReadableStream<Uint8Array>,
+): AsyncGenerator<any> {
+  const reader = stream.getReader();
+  let buffer = "";
+  try {
+    for (;;) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      buffer += new TextDecoder().decode(chunk.value);
+      let at;
+      while ((at = buffer.indexOf("\n")) >= 0) {
+        const line = buffer.slice(0, at);
+        buffer = buffer.slice(at + 1);
+        yield parseStrictJson(line);
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
+function listenerPeer(invitation: unknown, transport: unknown, pause = false) {
+  const child = Bun.spawn(
+    ["node", resolve(root, "tooling/check-pairing-listener.mjs")],
+    { stdin: "pipe", stdout: "pipe", stderr: "pipe" },
+  );
+  child.stdin.write(JSON.stringify({ invitation, transport, pause }) + "\n");
+  if (!pause) child.stdin.end();
+  return { child, lines: peerLines(child.stdout) };
+}
+test("headless CLI native listener pairs through independent pinned TLS and cancels stalled enrollment", async () => {
+  await fixture(async (directory, parent) => {
+    const identityDirectory = join(parent, "identity");
+    expect(
+      (
+        await command(
+          directory,
+          "identity",
+          "initialize",
+          "--identity-dir",
+          identityDirectory,
+        )
+      ).code,
+    ).toBe(0);
+    expect(
+      (
+        await command(
+          directory,
+          "service",
+          "start",
+          "--identity-dir",
+          identityDirectory,
+        )
+      ).code,
+    ).toBe(0);
+    expect(
+      (
+        await command(
+          directory,
+          "pairing",
+          "listen",
+          "--bind-address",
+          "127.0.0.1:0",
+          "--advertise-host",
+          "127.0.0.1",
+        )
+      ).value.error,
+    ).toBe("pairing_secret_output_opt_in_required");
+    const opened = await command(
+      directory,
+      "pairing",
+      "listen",
+      "--bind-address",
+      "127.0.0.1:0",
+      "--advertise-host",
+      "127.0.0.1",
+      "--reveal-secret",
+    );
+    expect(opened.code).toBe(0);
+    const { offer, transport } = opened.value.result;
+    expect(transport.listening).toBe(true);
+    expect(transport.persistentIdentity).toBe(true);
+    expect(transport.inputEnabled).toBe(false);
+    expect(offer.authorityInstanceId).toBe(
+      opened.value.result.authorityInstanceId,
+    );
+    const peer = listenerPeer(offer, transport);
+    try {
+      const result = await peer.lines.next();
+      expect(result.value.completed).toBe(true);
+      expect(result.value.authenticated).toBe(true);
+      expect(result.value.inputEnabled).toBe(false);
+      expect(await peer.child.exited).toBe(0);
+      expect(await new Response(peer.child.stderr).text()).toBe("");
+    } finally {
+      if (peer.child.exitCode === null) peer.child.kill();
+    }
+    const status = await command(directory, "pairing", "status");
+    expect(status.value.result.pairing.state).toBe("closed");
+    expect(status.value.result.offer).toBe(null);
+    expect(JSON.stringify(status.value)).not.toContain(offer.secret);
+    const reopened = await command(
+      directory,
+      "pairing",
+      "open",
+      "--reveal-secret",
+    );
+    expect(reopened.code).toBe(0);
+    const stalled = listenerPeer(
+      reopened.value.result.offer,
+      reopened.value.result.transport,
+      true,
+    );
+    try {
+      expect((await stalled.lines.next()).value.phase).toBe("hello");
+      expect(
+        (await command(directory, "pairing", "cancel")).value.result.pairing
+          .state,
+      ).toBe("closed");
+      stalled.child.stdin.write("continue\n");
+      stalled.child.stdin.end();
+      expect((await stalled.lines.next()).value.proofRejected).toBe(true);
+      expect(await stalled.child.exited).toBe(0);
+      expect(await new Response(stalled.child.stderr).text()).toBe("");
+    } finally {
+      if (stalled.child.exitCode === null) stalled.child.kill();
+    }
+    const inventory = await command(directory, "pairing", "list");
+    expect(inventory.code).toBe(0);
+    expect(inventory.value.result.phones).toHaveLength(1);
+    expect(inventory.value.result.phones[0].phoneId).toBe("oracle-phone");
+    expect(inventory.value.result.phones[0].active).toBe(true);
+    const endpoint = readEndpoint(directory, executable);
+    const active = await request(endpoint, {
+      command: "activate",
+      expectedRevision: "0",
+      profileId: "revocation-check",
+    });
+    await request(endpoint, {
+      command: "sample",
+      expectedGeneration: active.receiver.snapshot.generation,
+      sequence: "1",
+      state: held,
+      allowRecordedInput: true,
+    });
+    const revoked = await command(
+      directory,
+      "pairing",
+      "revoke",
+      "--phone-id",
+      "oracle-phone",
+    );
+    const released = await request(endpoint, { command: "status" });
+    expect(released.receiver.snapshot.active).toBe(false);
+    expect(released.receiver.snapshot.reportHex).toBe(neutral);
+    expect(revoked.code).toBe(0);
+    expect(revoked.value.result.phones[0].active).toBe(false);
+    expect(revoked.value.result.pairing.state).toBe("closed");
+    expect(revoked.value.result.transport.listening).toBe(true);
+    const next = await request(endpoint, {
+      command: "activate",
+      expectedRevision: released.receiver.snapshot.revision,
+      profileId: "failed-revocation-check",
+    });
+    await request(endpoint, {
+      command: "sample",
+      expectedGeneration: next.receiver.snapshot.generation,
+      sequence: "1",
+      state: held,
+      allowRecordedInput: true,
+    });
+    const missing = await command(
+      directory,
+      "pairing",
+      "revoke",
+      "--phone-id",
+      "missing-phone",
+    );
+    expect(missing.value.error).toBe("phone_not_found");
+    expect(
+      (await request(endpoint, { command: "status" })).receiver.snapshot
+        .reportHex,
+    ).toBe(neutral);
+    expect(
+      (await request(endpoint, { command: "status" })).receiver.snapshot.active,
+    ).toBe(false);
+    const stopped = await command(directory, "pairing", "stop-listening");
+    expect(stopped.value.result.pairing.networkEnabled).toBe(false);
+    expect(stopped.value.result.transport.port).toBe(null);
+    expect((await command(directory, "service", "stop")).code).toBe(0);
+    await waitFor(() => {
+      try {
+        readEndpoint(directory, executable);
+        return false;
+      } catch {
+        return true;
+      }
+    });
+    expect(
+      (
+        await command(
+          directory,
+          "service",
+          "start",
+          "--identity-dir",
+          identityDirectory,
+        )
+      ).code,
+    ).toBe(0);
+    const persisted = await command(directory, "pairing", "list");
+    expect(persisted.value.result.phones[0].active).toBe(false);
+    expect(persisted.value.result.phones[0].credentialEpoch).toBe(
+      inventory.value.result.phones[0].credentialEpoch,
+    );
+    expect(
+      (await command(directory, "receiver", "status")).value.result.receiver
+        .snapshot.inputEnabled,
+    ).toBe(false);
+  });
+}, 20000);
+test("CLI default cannot listen without explicit identity and running identity mismatches fail", async () => {
+  await fixture(async (directory, parent) => {
+    expect((await command(directory, "service", "start")).code).toBe(0);
+    const denied = await command(
+      directory,
+      "pairing",
+      "listen",
+      "--bind-address",
+      "127.0.0.1:0",
+      "--advertise-host",
+      "127.0.0.1",
+      "--reveal-secret",
+    );
+    expect(denied.value.error).toBe("pairing_persistent_identity_required");
+    const identityDirectory = join(parent, "different-identity");
+    expect(
+      (
+        await command(
+          directory,
+          "identity",
+          "initialize",
+          "--identity-dir",
+          identityDirectory,
+        )
+      ).code,
+    ).toBe(0);
+    const mismatch = await command(
+      directory,
+      "service",
+      "start",
+      "--identity-dir",
+      identityDirectory,
+    );
+    expect(mismatch.value.error).toBe(
+      "service_identity_configuration_mismatch",
+    );
+    expect(
+      (await command(directory, "pairing", "status")).value.result.transport
+        .persistentIdentity,
+    ).toBe(false);
+  });
+}, 15000);
+
+async function portClosed(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = createConnection({ host: "127.0.0.1", port });
+    const done = (closed: boolean) => {
+      socket.destroy();
+      resolve(closed);
+    };
+    socket.once("connect", () => done(false));
+    socket.once("error", () => done(true));
+    socket.setTimeout(500, () => done(false));
+  });
+}
+test("service death closes enrollment listener and neutralizes receiver despite a stalled TLS peer", async () => {
+  await fixture(async (directory, parent) => {
+    const identityDirectory = join(parent, "identity");
+    expect(
+      (
+        await command(
+          directory,
+          "identity",
+          "initialize",
+          "--identity-dir",
+          identityDirectory,
+        )
+      ).code,
+    ).toBe(0);
+    expect(
+      (
+        await command(
+          directory,
+          "service",
+          "start",
+          "--identity-dir",
+          identityDirectory,
+        )
+      ).code,
+    ).toBe(0);
+    const invitation = (
+      await command(
+        directory,
+        "pairing",
+        "listen",
+        "--bind-address",
+        "127.0.0.1:0",
+        "--advertise-host",
+        "127.0.0.1",
+        "--reveal-secret",
+      )
+    ).value.result;
+    const peer = listenerPeer(invitation.offer, invitation.transport, true);
+    try {
+      expect((await peer.lines.next()).value.phase).toBe("hello");
+      const endpoint = readEndpoint(directory, executable);
+      await request(endpoint, {
+        command: "activate",
+        expectedRevision: "0",
+        profileId: "listener-fault",
+      });
+      await request(endpoint, {
+        command: "sample",
+        expectedGeneration: "1",
+        sequence: "1",
+        state: held,
+        allowRecordedInput: true,
+      });
+      const killed = performance.now();
+      process.kill(endpoint.servicePid, "SIGKILL");
+      await waitFor(
+        () =>
+          events(endpoint.recordingLog).some(
+            (event) => event.reason === "owner_disconnected",
+          ),
+        1500,
+      );
+      expect(performance.now() - killed).toBeLessThan(1000);
+      expect(events(endpoint.recordingLog).at(-1)?.reportHex).toBe(neutral);
+      await waitFor(() => portClosed(invitation.transport.port), 1500);
+      peer.child.stdin.write("continue\n");
+      peer.child.stdin.end();
+      expect((await peer.lines.next()).value.proofRejected).toBe(true);
+      expect(await peer.child.exited).toBe(0);
+      expect(await new Response(peer.child.stderr).text()).toBe("");
+    } finally {
+      if (peer.child.exitCode === null) peer.child.kill();
+    }
+  });
+}, 20000);

@@ -16,7 +16,7 @@ export function decodePairingResponse(
   const reply = decodePairingReply(value);
   if (
     reply.authorityInstanceId !== authorityInstanceId ||
-    (command.command === "pairing-open"
+    (["pairing-open", "pairing-listen"].includes(command.command)
       ? reply.offer === null
       : reply.offer !== null)
   )

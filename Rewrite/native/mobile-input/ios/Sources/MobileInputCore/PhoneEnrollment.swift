@@ -40,6 +40,9 @@ public actor PhoneCredentialWorker {
   private let vault = PhoneCredentialVault()
   public init() {}
   public func save(_ credential: PhoneCredential) throws { try vault.save(credential) }
+  public func load(hostPin: String, now: UInt64) throws -> PhoneCredential? {
+    try vault.load(hostPin: hostPin, now: now)
+  }
 }
 protocol EnrollmentCredentialSink: Sendable {
   func save(_ credential: PhoneCredential) async throws
