@@ -286,9 +286,11 @@ internal object EnrollmentJSON {
         data class Integer(val value: Long) : Value()
 
         data class BooleanValue(val value: Boolean) : Value()
+
+        object Null : Value()
     }
 
-    fun parse(bytes: ByteArray): Map<String, Value> {
+    fun parse(bytes: ByteArray, allowNull: Boolean = false): Map<String, Value> {
         if (bytes.size !in 2..65536) throw PhoneEnrollmentRejected()
         val text =
             Charsets.UTF_8.newDecoder()
@@ -361,6 +363,7 @@ internal object EnrollmentJSON {
                     when (token) {
                         "true" -> Value.BooleanValue(true)
                         "false" -> Value.BooleanValue(false)
+                        "null" -> if (allowNull) Value.Null else throw PhoneEnrollmentRejected()
                         else -> {
                             if (
                                 token.isEmpty() ||

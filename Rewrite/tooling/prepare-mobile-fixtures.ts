@@ -8,6 +8,10 @@ const target = resolve(
 mkdirSync(target, { recursive: true });
 for (const [source, name] of [
   [
+    "packages/fixtures/native-input-control-v5.json",
+    "native-input-control-v5.json",
+  ],
+  [
     "packages/fixtures/native-input-control-v4.json",
     "native-input-control-v4.json",
   ],

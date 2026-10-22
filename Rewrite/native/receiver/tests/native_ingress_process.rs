@@ -798,7 +798,7 @@ fn udp_revocation_and_listener_stop_acknowledge_native_neutral_and_old_keys_cann
 ) {
     let mut receiver = Receiver::new();
     let _owner = receiver.maintain_owner();
-    receiver.activate();
+    receiver.activate_timing(1750, 1500);
     let (mut host, value) = listen_host(&receiver);
     let old = phone_enroll(&value);
     let (mut channel, receipt) = datagram_auth(&value, &old);
@@ -823,7 +823,7 @@ fn udp_revocation_and_listener_stop_acknowledge_native_neutral_and_old_keys_cann
     let offer = host.execute(PairingCommand::PairingOpen {}).unwrap();
     let fresh = phone_enroll(&offer);
     assert_ne!(old["credentialEpoch"], fresh["credentialEpoch"]);
-    assert_eq!(receiver.command(json!({"command":"activate","generation":"2","revision":"2","profileId":"new","sessionId":"service-owner","leaseMs":750,"inputTtlMs":350}))["ok"],true);
+    assert_eq!(receiver.command(json!({"command":"activate","generation":"2","revision":"2","profileId":"new","sessionId":"service-owner","leaseMs":1750,"inputTtlMs":1500}))["ok"],true);
     let (mut channel, receipt) = datagram_auth(&offer, &fresh);
     let (mut new_sender, grant, new_socket) = datagram_grant(&mut channel, &receipt, "2", "2");
     datagram_deliver(

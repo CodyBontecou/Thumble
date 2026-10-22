@@ -4,6 +4,8 @@ import Foundation
 struct PhoneInputGrant {
   let packet: InputPacketGrant
   let lifetime: UInt64
+  let sessionID: String
+  let udpPort: UInt16?
   static func configuration(
     _ value: [String: EnrollmentJSON.Value], connection: String, map: ControlMap
   ) throws {
@@ -16,19 +18,23 @@ struct PhoneInputGrant {
       ]
     else { throw PhoneControlError.rejected }
   }
-  init(_ value: [String: EnrollmentJSON.Value], connection: String, map: ControlMap) throws {
+  init(
+    _ value: [String: EnrollmentJSON.Value], connection: String, map: ControlMap,
+    datagrams: Bool = false
+  ) throws {
+    let fields = Set([
+      "version", "command", "connectionId", "generation", "revision",
+      "sessionId", "key", "noncePrefix", "lifetimeMs", "packetVersion", "packetBytes",
+      "packetLimit", "transport", "inputEnabled",
+    ])
     guard
-      Set(value.keys)
-        == Set([
-          "version", "command", "connectionId", "generation", "revision",
-          "sessionId", "key", "noncePrefix", "lifetimeMs", "packetVersion", "packetBytes",
-          "packetLimit", "transport", "inputEnabled",
-        ]),
+      Set(value.keys) == (datagrams ? fields.union(["udpPort"]) : fields),
       value["version"] == .integer(1), value["command"] == .string("input-granted"),
       value["connectionId"] == .string(connection), value["generation"] == .string(map.generation),
       value["revision"] == .string(map.revision), value["packetVersion"] == .integer(1),
       value["packetBytes"] == .integer(108), value["packetLimit"] == .string("1048576"),
-      value["transport"] == .string("tls"), value["inputEnabled"] == .boolean(false),
+      value["transport"] == .string(datagrams ? "udp+tls" : "tls"),
+      value["inputEnabled"] == .boolean(false),
       case .integer(let duration)? = value["lifetimeMs"], (100...60_000).contains(duration),
       let generation = ControlMap.counter(map.generation), generation > 0
     else { throw PhoneControlError.rejected }
@@ -37,6 +43,16 @@ struct PhoneInputGrant {
       session: Self.hex(value["sessionId"], bytes: 16),
       noncePrefix: Self.hex(value["noncePrefix"], bytes: 4), generation: generation)
     lifetime = UInt64(duration)
+    guard case .string(let session)? = value["sessionId"] else { throw PhoneControlError.rejected }
+    sessionID = session
+    if datagrams {
+      guard case .integer(let port)? = value["udpPort"], (1...65_535).contains(port) else {
+        throw PhoneControlError.rejected
+      }
+      udpPort = UInt16(port)
+    } else {
+      udpPort = nil
+    }
   }
   private static func hex(_ value: EnrollmentJSON.Value?, bytes: Int) throws -> Data {
     guard case .string(let text)? = value, text.utf8.count == bytes * 2,

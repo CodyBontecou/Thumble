@@ -195,8 +195,9 @@ enum EnrollmentJSON {
     case string(String)
     case integer(UInt64)
     case boolean(Bool)
+    case null
   }
-  static func parse(_ data: Data) throws -> [String: Value] {
+  static func parse(_ data: Data, allowNull: Bool = false) throws -> [String: Value] {
     let bytes = Array(data)
     var at = 0
     func reject() -> PhoneEnrollmentError { .rejected }
@@ -248,6 +249,8 @@ enum EnrollmentJSON {
           value = .boolean(true)
         } else if token == Array("false".utf8) {
           value = .boolean(false)
+        } else if allowNull && token == Array("null".utf8) {
+          value = .null
         } else {
           guard !token.isEmpty, token.allSatisfy({ (48...57).contains($0) }),
             token.count == 1 || token.first != 48,

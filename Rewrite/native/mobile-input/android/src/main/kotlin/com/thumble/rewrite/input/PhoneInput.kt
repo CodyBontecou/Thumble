@@ -77,9 +77,12 @@ internal class PhoneInputGrant(
     value: Map<String, EnrollmentJSON.Value>,
     connection: String,
     map: ControlMap,
+    datagrams: Boolean = false,
 ) {
     val packet: InputPacketGrant
     val lifetime: Long
+    val sessionID: String
+    val udpPort: Int?
 
     init {
         val duration =
@@ -102,7 +105,7 @@ internal class PhoneInputGrant(
                     "packetLimit",
                     "transport",
                     "inputEnabled",
-                ) ||
+                ) + (if (datagrams) setOf("udpPort") else emptySet()) ||
                 value["version"] != EnrollmentJSON.Value.Integer(1) ||
                 value["command"] != EnrollmentJSON.Value.Text("input-granted") ||
                 value["connectionId"] != EnrollmentJSON.Value.Text(connection) ||
@@ -111,7 +114,8 @@ internal class PhoneInputGrant(
                 value["packetVersion"] != EnrollmentJSON.Value.Integer(1) ||
                 value["packetBytes"] != EnrollmentJSON.Value.Integer(108) ||
                 value["packetLimit"] != EnrollmentJSON.Value.Text("1048576") ||
-                value["transport"] != EnrollmentJSON.Value.Text("tls") ||
+                value["transport"] !=
+                    EnrollmentJSON.Value.Text(if (datagrams) "udp+tls" else "tls") ||
                 value["inputEnabled"] != EnrollmentJSON.Value.BooleanValue(false) ||
                 duration !in 100..60_000
         )
@@ -127,6 +131,15 @@ internal class PhoneInputGrant(
                 generation,
             )
         lifetime = duration
+        sessionID = (value["sessionId"] as EnrollmentJSON.Value.Text).value
+        udpPort =
+            if (datagrams) {
+                val port =
+                    (value["udpPort"] as? EnrollmentJSON.Value.Integer)?.value
+                        ?: throw PhoneControlRejected()
+                if (port !in 1..65535) throw PhoneControlRejected()
+                port.toInt()
+            } else null
     }
 
     companion object {
