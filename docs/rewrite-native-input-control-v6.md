@@ -93,8 +93,17 @@ legacy version rejection, early and expired requests, epoch replacement,
 credential expiry, clock rollback and ambiguous JSON fields. Negotiation tests
 exercise versions 4–6 and reject unsupported versions/host capability.
 
-These controlled-clock tests do not establish a real-duration phone session.
-Swift/Kotlin automatic renewal, native sender transfer, app opt-in and a
-headless hold across multiple real 60-second deadlines remain required before
-claiming continuous phone operation. Physical gameplay, latency, signing and
+Swift and Kotlin now have native-only strict renewal decoders. They require an
+exact predecessor, unchanged TLS/configuration/UDP scope, and a still-live old
+authorization bounded by credential expiry. Ordinary grant decoders reject the
+renewal shape. Their encrypted-channel continuation seam requires a live,
+non-reentrant source and distinct key/session material; it preserves the next
+engine sample sequence while starting a fresh cryptographic counter. Native
+engine tests retain an actual held touch through two channel handoffs and reject
+stale channels, reused keys/sessions, closed sources and failed first delivery.
+
+These controlled-clock host and native engine tests do not establish a
+real-duration phone session. Automatic renewal scheduling, transport/progress
+handoff, app opt-in and a headless hold across multiple real 60-second deadlines
+remain required before claiming continuous phone operation. Physical gameplay, latency, signing and
 optical live-sync acceptance remain separate open gates.

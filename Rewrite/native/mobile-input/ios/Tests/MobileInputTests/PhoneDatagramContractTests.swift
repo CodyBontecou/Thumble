@@ -99,3 +99,57 @@ private func datagramFixture(_ name: String) throws -> [String: EnrollmentJSON.V
     try EnrollmentJSON.parse(Data("{\"value\":null,\"value\":null}".utf8), allowNull: true)
   }
 }
+
+private func renewalFixture() throws -> [String: EnrollmentJSON.Value] {
+  var value = try datagramFixture("grant")
+  value["command"] = .string("input-renewed")
+  value["replacesSessionId"] = .string(session)
+  value["sessionId"] = .string(String(repeating: "44", count: 16))
+  value["authorizationExpiresAt"] = .integer(91_000)
+  return value
+}
+@Test private func renewalRequiresExactPredecessorPortScopeAndUnexpiredAuthority() throws {
+  let scope = PhoneInputRenewalScope(
+    sessionID: session, udpPort: 43210, authorizationExpiresAt: 60_000,
+    credentialExpiresAt: 120_000)
+  let fixture = try renewalFixture()
+  let result = try PhoneInputRenewal(
+    fixture, connection: binding, map: datagramMap(), scope: scope, now: 31_000)
+  #expect(result.authorizationExpiresAt == 91_000)
+  #expect(result.grant.sessionID == String(repeating: "44", count: 16))
+  #expect(throws: PhoneControlError.self) {
+    try PhoneInputGrant(fixture, connection: binding, map: datagramMap(), datagrams: true)
+  }
+  for (field, replacement) in [
+    ("command", EnrollmentJSON.Value.string("input-granted")),
+    ("replacesSessionId", .string(String(repeating: "55", count: 16))),
+    ("sessionId", .string(session)), ("udpPort", .integer(43211)),
+    ("connectionId", .string(String(repeating: "cd", count: 16))),
+    ("revision", .string("2")), ("generation", .string("2")),
+    ("authorizationExpiresAt", .integer(59_999)),
+    ("authorizationExpiresAt", .integer(120_001)),
+    ("authorizationExpiresAt", .string("91000")),
+    ("extra", .boolean(false)),
+  ] {
+    var value = fixture
+    value[field] = replacement
+    #expect(throws: PhoneControlError.self) {
+      try PhoneInputRenewal(
+        value, connection: binding, map: datagramMap(), scope: scope, now: 31_000)
+    }
+  }
+  for field in ["replacesSessionId", "authorizationExpiresAt", "key", "udpPort"] {
+    var value = fixture
+    value.removeValue(forKey: field)
+    #expect(throws: PhoneControlError.self) {
+      try PhoneInputRenewal(
+        value, connection: binding, map: datagramMap(), scope: scope, now: 31_000)
+    }
+  }
+  for time: UInt64 in [60_000, 90_000] {
+    #expect(throws: PhoneControlError.self) {
+      try PhoneInputRenewal(
+        fixture, connection: binding, map: datagramMap(), scope: scope, now: time)
+    }
+  }
+}

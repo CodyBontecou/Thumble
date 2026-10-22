@@ -28,8 +28,9 @@ commit over UDP. The [protocol](../rewrite-native-input-control-v6.md) defines
 per-grant and continuous-time connection work bounds. Versions 3–5 retain their
 existing lifetime behavior.
 
-Native phone sender/transport transfer and automatic renewal remain
-unimplemented. The apps must verify held controls across multiple real renewals
-before opting in. Controlled-clock host tests prove protocol and registry
+Native phone renewal decoders and encrypted-channel continuation preserve engine
+sequencing under fresh key/session material. Automatic renewal scheduling and
+transport/progress transfer remain unimplemented. The apps must verify held
+controls across multiple real renewals before opting in. Controlled-clock host tests prove protocol and registry
 boundaries, not real-duration phone operation. This decision enables neither
 physical output nor any launch acceptance claim.

@@ -645,4 +645,45 @@ mod tests {
         );
         host_identity::load_existing(&root.0).err().unwrap();
     }
+    #[test]
+    fn durable_authorization_observations_remain_monotonic_across_journal_recovery() {
+        // Compare only in isolated fixtures. Production journal policy is unchanged.
+        for journal in ["DELETE", "WAL"] {
+            let root = Root::new();
+            let mut store = PhoneTrustStore::open(&root.0).unwrap();
+            let actual: String = store
+                .connection
+                .pragma_update_and_check(None, "journal_mode", journal, |row| row.get(0))
+                .unwrap();
+            assert_eq!(actual.to_uppercase(), journal);
+            let issued = store
+                .enroll_after_pairing("io-phone", "IO fixture", 100)
+                .unwrap();
+            let mut durations = Vec::with_capacity(32);
+            for now in 101..=132 {
+                let started = std::time::Instant::now();
+                let phone = store.authorize_epoch("io-phone", "1", now).unwrap();
+                assert_eq!(phone.credential_epoch, "1");
+                durations.push(started.elapsed().as_micros());
+            }
+            durations.sort_unstable();
+            eprintln!("trust-journal-probe journal={journal} sqlite={} samples={} medianUs={} p95Us={} maxUs={}",
+                rusqlite::version(), durations.len(), durations[16], durations[30], durations[31]);
+            drop(store);
+            let mut reopened = PhoneTrustStore::open(&root.0).unwrap();
+            assert_eq!(
+                reopened.authorize_epoch("io-phone", "1", 131).err(),
+                Some("phone_trust_clock_rollback")
+            );
+            assert!(reopened
+                .authenticate("io-phone", &issued.token, 133)
+                .is_ok());
+            reopened.revoke("io-phone", 134).unwrap();
+            drop(reopened);
+            assert!(PhoneTrustStore::open(&root.0)
+                .unwrap()
+                .authorize_epoch("io-phone", "1", 135)
+                .is_err());
+        }
+    }
 }

@@ -223,4 +223,107 @@ class InputPacketChannelTest {
         assertFalse(broken.submit(InputSample("1", "0", GamepadReport.neutral())))
         assertFalse(broken.submit(InputSample("1", "1", GamepadReport.neutral())))
     }
+
+    @Test
+    fun freshKeysContinueHeldTouchesWithoutResettingEngineSequence() {
+        val packets = mutableListOf<ByteArray>()
+        var channel =
+            InputPacketChannel(grant()) {
+                packets.add(it)
+                true
+            }
+        val engine = InputEngine({ channel.submit(it) })
+        engine.activate(
+            ControlMap(
+                generation = "1",
+                revision = "1",
+                controls = listOf(ControlRegion("south", "south", 0.1, 0.1, 0.3, 0.3)),
+            )
+        )
+        engine.connect("1")
+        assertTrue(engine.begin(1L, "1", 0.2, 0.2))
+        val priorRelease = engine.lastRelease
+        for (byte in listOf(31.toByte(), 32.toByte())) {
+            val next =
+                InputPacketGrant(
+                    ByteArray(32) { byte },
+                    ByteArray(16) { byte },
+                    ByteArray(4) { byte },
+                    1uL,
+                )
+            val old = channel
+            channel =
+                old.continued(next) {
+                    packets.add(it)
+                    true
+                }
+            assertFalse(old.submit(InputSample("1", "2", GamepadReport.neutral())))
+            val before = packets.size
+            engine.tick()
+            assertTrue(engine.connected)
+            assertEquals(priorRelease, engine.lastRelease)
+            assertEquals(listOf(GamepadButtonV1.south), engine.state.buttons)
+            assertEquals(before + 1, packets.size)
+            assertTrue(packets.last().sliceArray(32..39).all { it == 0.toByte() })
+            assertEquals(
+                listOf(GamepadButtonV1.south),
+                InputPacketReceiver(next).open(packets.last()).buttons,
+            )
+        }
+        engine.end(1L, "1")
+        assertTrue(engine.connected)
+        assertTrue(engine.state.buttons.isEmpty())
+        assertEquals(1.toByte(), packets.last()[32])
+    }
+
+    @Test
+    fun continuationCannotReuseMaterialReviveClosedChannelsOrHideSendFailure() {
+        fun reject(block: () -> Unit) {
+            try {
+                block()
+                fail("invalid continuation accepted")
+            } catch (_: PacketRejected) {}
+        }
+        for (next in
+            listOf(
+                grant(),
+                InputPacketGrant(
+                    ByteArray(32) { 57 },
+                    ByteArray(16) { 7 },
+                    ByteArray(4) { 9 },
+                    1uL,
+                ),
+                InputPacketGrant(
+                    ByteArray(32) { 5 },
+                    ByteArray(16) { 91 },
+                    ByteArray(4) { 91 },
+                    1uL,
+                ),
+            )) {
+            val channel = InputPacketChannel(grant()) { true }
+            assertTrue(channel.submit(InputSample("1", "0", GamepadReport.neutral())))
+            reject { channel.continued(next) { true } }
+            assertFalse(channel.submit(InputSample("1", "1", GamepadReport.neutral())))
+        }
+        val fresh =
+            InputPacketGrant(ByteArray(32) { 73 }, ByteArray(16) { 73 }, ByteArray(4) { 73 }, 1uL)
+        val closed = InputPacketChannel(grant()) { true }
+        closed.close()
+        reject { closed.continued(fresh) { true } }
+        var channel = InputPacketChannel(grant()) { true }
+        val engine = InputEngine({ channel.submit(it) })
+        engine.activate(
+            ControlMap(
+                generation = "1",
+                revision = "1",
+                controls = listOf(ControlRegion("south", "south", 0.1, 0.1, 0.3, 0.3)),
+            )
+        )
+        engine.connect("1")
+        channel = channel.continued(fresh) { false }
+        engine.tick()
+        assertFalse(engine.connected)
+        assertEquals(ReleaseReason.transportFailure, engine.lastRelease)
+        reject { channel.continued(grant()) { true } }
+    }
 }

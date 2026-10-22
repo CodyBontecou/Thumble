@@ -61,7 +61,10 @@ jobs:
         if: runner.os == 'Windows'
         env:
           RUST_BACKTRACE: "1"
-        run: cargo test --locked --manifest-path native/receiver/Cargo.toml --test native_ingress_process stale_grant_receipts_and_old_generation_packets_cannot_replace_or_release_new_configuration -- --exact --nocapture
+        run: |
+          cargo test --locked --manifest-path native/receiver/Cargo.toml --lib phone_trust::tests::durable_authorization_observations_remain_monotonic_across_journal_recovery -- --exact --nocapture
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo test --locked --manifest-path native/receiver/Cargo.toml --test native_ingress_process stale_grant_receipts_and_old_generation_packets_cannot_replace_or_release_new_configuration -- --exact --nocapture
       # Bound concurrent fixture processes on hosted runners. Concurrency within
       # each native scenario and all safety deadlines remain unchanged.
       - run: bun run native:test

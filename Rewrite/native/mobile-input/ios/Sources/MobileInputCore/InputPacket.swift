@@ -76,6 +76,11 @@ public enum InputPacketState {
     limit = packetLimit
   }
   public func close() { grant = nil }
+  fileprivate func acceptsContinuation(_ successor: InputPacketGrant) -> Bool {
+    guard let grant else { return false }
+    return grant.generation == successor.generation && grant.session != successor.session
+      && grant.key != successor.key
+  }
   public func seal(_ state: GamepadStateV1) throws -> Data {
     let plain = try InputPacketState.encode(state)
     guard let grant, next < limit else {
@@ -138,8 +143,22 @@ public enum InputPacketState {
     available = false
     sender.close()
   }
+  /// Continue only a live channel with fresh native material; engine sequence never resets.
+  func continued(grant: InputPacketGrant, send: @escaping (Data) -> Bool) throws
+    -> InputPacketChannel
+  {
+    guard available, !publishing, next > 0, sender.acceptsContinuation(grant) else {
+      close()
+      throw InputPacketError.rejected
+    }
+    defer { close() }
+    let successor = try InputPacketChannel(grant: grant, packetLimit: 65_536, send: send)
+    successor.next = next
+    return successor
+  }
   public func submit(_ sample: InputSample) -> Bool {
-    guard available, !publishing, sample.generation == generation, sample.sequence == String(next)
+    guard available, !publishing, next < UInt64.max,
+      sample.generation == generation, sample.sequence == String(next)
     else {
       close()
       return false

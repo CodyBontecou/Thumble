@@ -205,3 +205,79 @@ private func grant(_ f: PacketFixture, key: Data? = nil) throws -> InputPacketGr
     reentrant?.submit(InputSample(generation: f.generation, sequence: "0", state: .neutral))
       == false)
 }
+
+@Test @MainActor private func freshKeysContinueHeldTouchesWithoutResettingEngineSequence() throws {
+  let f = try packetFixture()
+  var packets: [Data] = []
+  var channel = try InputPacketChannel(grant: grant(f)) {
+    packets.append($0)
+    return true
+  }
+  let engine = InputEngine(output: { channel.submit($0) })
+  let map = ControlMap(
+    generation: f.generation, revision: "1",
+    controls: [
+      ControlRegion(id: "south", action: "south", x: 0.1, y: 0.1, width: 0.3, height: 0.3)
+    ])
+  try engine.activate(map)
+  try engine.connect(generation: f.generation)
+  #expect(engine.begin(id: 1, generation: f.generation, x: 0.2, y: 0.2))
+  let priorRelease = engine.lastRelease
+  for byte: UInt8 in [31, 32] {
+    let next = try InputPacketGrant(
+      key: Data(repeating: byte, count: 32),
+      session: Data(repeating: byte, count: 16), noncePrefix: Data(repeating: byte, count: 4),
+      generation: #require(UInt64(f.generation)))
+    let old = channel
+    channel = try old.continued(grant: next) {
+      packets.append($0)
+      return true
+    }
+    #expect(!old.submit(InputSample(generation: f.generation, sequence: "2", state: .neutral)))
+    let before = packets.count
+    engine.tick()
+    #expect(
+      engine.connected && engine.state.buttons == [.south] && engine.lastRelease == priorRelease)
+    #expect(packets.count == before + 1)
+    #expect(packets.last!.dropFirst(32).prefix(8).allSatisfy { $0 == 0 })
+    #expect(try InputPacketReceiver(grant: next).open(packets.last!).buttons == [.south])
+  }
+  engine.end(id: 1, generation: f.generation)
+  #expect(engine.connected && engine.state.buttons.isEmpty)
+  #expect(packets.last!.dropFirst(32).first == 1)
+}
+
+@Test @MainActor private func continuationCannotReuseMaterialReviveClosedChannelsOrHideSendFailure()
+  throws
+{
+  let f = try packetFixture()
+  let reusedKey = try InputPacketGrant(
+    key: bytes(f.keyHex), session: Data(repeating: 91, count: 16),
+    noncePrefix: Data(repeating: 91, count: 4), generation: #require(UInt64(f.generation)))
+  for next in [try grant(f), try grant(f, key: Data(repeating: 57, count: 32)), reusedKey] {
+    let channel = try InputPacketChannel(grant: grant(f)) { _ in true }
+    #expect(channel.submit(InputSample(generation: f.generation, sequence: "0", state: .neutral)))
+    #expect(throws: InputPacketError.self) { try channel.continued(grant: next) { _ in true } }
+    #expect(!channel.submit(InputSample(generation: f.generation, sequence: "1", state: .neutral)))
+  }
+  let fresh = try InputPacketGrant(
+    key: Data(repeating: 73, count: 32),
+    session: Data(repeating: 73, count: 16), noncePrefix: Data(repeating: 73, count: 4),
+    generation: #require(UInt64(f.generation)))
+  let closed = try InputPacketChannel(grant: grant(f)) { _ in true }
+  closed.close()
+  #expect(throws: InputPacketError.self) { try closed.continued(grant: fresh) { _ in true } }
+  var channel = try InputPacketChannel(grant: grant(f)) { _ in true }
+  let engine = InputEngine(output: { channel.submit($0) })
+  try engine.activate(
+    ControlMap(
+      generation: f.generation, revision: "1",
+      controls: [
+        ControlRegion(id: "south", action: "south", x: 0.1, y: 0.1, width: 0.3, height: 0.3)
+      ]))
+  try engine.connect(generation: f.generation)
+  channel = try channel.continued(grant: fresh) { _ in false }
+  engine.tick()
+  #expect(!engine.connected && engine.lastRelease == .transportFailure)
+  #expect(throws: InputPacketError.self) { try channel.continued(grant: grant(f)) { _ in true } }
+}

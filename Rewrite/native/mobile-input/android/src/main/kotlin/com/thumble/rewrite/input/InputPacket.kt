@@ -36,6 +36,11 @@ class InputPacketGrant(
         prefix = noncePrefix.copyOf()
     }
 
+    internal fun distinctContinuation(successor: InputPacketGrant): Boolean =
+        generation == successor.generation &&
+            key != successor.key &&
+            !session.contentEquals(successor.session)
+
     internal fun header(sequence: Long): ByteArray =
         ByteBuffer.allocate(40)
             .order(ByteOrder.LITTLE_ENDIAN)
@@ -187,6 +192,7 @@ class InputPacketChannel(
 ) {
     private val owner = Thread.currentThread()
     private val sender = InputPacketSender(grant, packetLimit)
+    private var continuation: ((InputPacketGrant) -> Boolean)? = grant::distinctContinuation
     private val generation = grant.generation.toString()
     private var next = 0L
     private var available = true
@@ -200,6 +206,24 @@ class InputPacketChannel(
         thread()
         available = false
         sender.close()
+        continuation = null
+    }
+
+    /** Preserve native sample sequencing; reset only a fresh grant's packet counter. */
+    internal fun continued(
+        grant: InputPacketGrant,
+        send: (ByteArray) -> Boolean,
+    ): InputPacketChannel {
+        thread()
+        if (!available || publishing || next == 0L || continuation?.invoke(grant) != true) {
+            close()
+            throw PacketRejected()
+        }
+        try {
+            return InputPacketChannel(grant, 65_536, send).also { it.next = next }
+        } finally {
+            close()
+        }
     }
 
     fun submit(sample: InputSample): Boolean {
@@ -207,6 +231,7 @@ class InputPacketChannel(
         if (
             !available ||
                 publishing ||
+                next == Long.MAX_VALUE ||
                 sample.generation != generation ||
                 sample.sequence != next.toString()
         ) {

@@ -114,4 +114,45 @@ class PhoneDatagramContractTest {
             fail("duplicate accepted")
         } catch (_: PhoneEnrollmentRejected) {}
     }
+
+    @Test
+    fun renewalRequiresExactPredecessorPortScopeAndUnexpiredAuthority() {
+        val scope = PhoneInputRenewalScope(session, 43210, 60_000, 120_000)
+        val value =
+            fixture("grant") +
+                mapOf(
+                    "command" to EnrollmentJSON.Value.Text("input-renewed"),
+                    "replacesSessionId" to EnrollmentJSON.Value.Text(session),
+                    "sessionId" to EnrollmentJSON.Value.Text("44".repeat(16)),
+                    "authorizationExpiresAt" to EnrollmentJSON.Value.Integer(91_000),
+                )
+        val result = PhoneInputRenewal(value, binding, map, scope, 31_000)
+        assertEquals(91_000, result.authorizationExpiresAt)
+        assertEquals("44".repeat(16), result.grant.sessionID)
+        rejected { PhoneInputGrant(value, binding, map, true) }
+        for ((field, replacement) in
+            listOf(
+                "command" to EnrollmentJSON.Value.Text("input-granted"),
+                "replacesSessionId" to EnrollmentJSON.Value.Text("55".repeat(16)),
+                "sessionId" to EnrollmentJSON.Value.Text(session),
+                "udpPort" to EnrollmentJSON.Value.Integer(43211),
+                "connectionId" to EnrollmentJSON.Value.Text("cd".repeat(16)),
+                "revision" to EnrollmentJSON.Value.Text("2"),
+                "generation" to EnrollmentJSON.Value.Text("2"),
+                "authorizationExpiresAt" to EnrollmentJSON.Value.Integer(59_999),
+                "authorizationExpiresAt" to EnrollmentJSON.Value.Integer(120_001),
+                "authorizationExpiresAt" to EnrollmentJSON.Value.Text("91000"),
+                "extra" to EnrollmentJSON.Value.BooleanValue(false),
+            )) {
+            rejected {
+                PhoneInputRenewal(value + (field to replacement), binding, map, scope, 31_000)
+            }
+        }
+        for (field in listOf("replacesSessionId", "authorizationExpiresAt", "key", "udpPort")) {
+            rejected { PhoneInputRenewal(value - field, binding, map, scope, 31_000) }
+        }
+        for (time in listOf(60_000L, 90_000L, -1L)) {
+            rejected { PhoneInputRenewal(value, binding, map, scope, time) }
+        }
+    }
 }
