@@ -6,8 +6,8 @@ use std::{
     path::PathBuf,
     process::{Child, ChildStdin, Command, Stdio},
     sync::{
-        atomic::{AtomicU64, Ordering},
-        mpsc,
+        atomic::{AtomicBool, AtomicU64, Ordering},
+        mpsc, Arc, Mutex,
     },
     thread,
     time::{Duration, Instant},
@@ -18,12 +18,37 @@ use thumble_rewrite_receiver::{
     native_ingress::Client,
 };
 static NEXT: AtomicU64 = AtomicU64::new(0);
-struct Receiver {
-    root: PathBuf,
-    child: Child,
+struct OwnerPipe {
     input: Option<ChildStdin>,
     replies: mpsc::Receiver<Value>,
     serial: u64,
+}
+impl OwnerPipe {
+    fn command(&mut self, body: Value) -> Value {
+        self.serial += 1;
+        let value = json!({"version":1,"requestId":format!("native-{}",self.serial),"body":body});
+        writeln!(self.input.as_mut().unwrap(), "{value}").unwrap();
+        self.input.as_mut().unwrap().flush().unwrap();
+        self.replies.recv_timeout(Duration::from_secs(2)).unwrap()
+    }
+}
+struct OwnerHeartbeat {
+    stop: Arc<AtomicBool>,
+    thread: Option<thread::JoinHandle<()>>,
+}
+impl Drop for OwnerHeartbeat {
+    fn drop(&mut self) {
+        self.stop.store(true, Ordering::SeqCst);
+        if let Some(worker) = self.thread.take() {
+            worker.join().unwrap();
+        }
+    }
+}
+struct Receiver {
+    root: PathBuf,
+    child: Child,
+    owner: Arc<Mutex<OwnerPipe>>,
+    generation: Arc<AtomicU64>,
 }
 impl Receiver {
     fn new() -> Self {
@@ -62,17 +87,49 @@ impl Receiver {
         Self {
             root,
             child,
-            input,
-            replies,
-            serial: 0,
+            owner: Arc::new(Mutex::new(OwnerPipe {
+                input,
+                replies,
+                serial: 0,
+            })),
+            generation: Arc::new(AtomicU64::new(0)),
         }
     }
     fn command(&mut self, body: Value) -> Value {
-        self.serial += 1;
-        let value = json!({"version":1,"requestId":format!("native-{}",self.serial),"body":body});
-        writeln!(self.input.as_mut().unwrap(), "{value}").unwrap();
-        self.input.as_mut().unwrap().flush().unwrap();
-        self.replies.recv_timeout(Duration::from_secs(2)).unwrap()
+        let generation = if body["command"] == "activate" {
+            body["generation"].as_str().and_then(|s| s.parse().ok())
+        } else {
+            None
+        };
+        let reply = self.owner.lock().unwrap().command(body);
+        if reply["ok"] == true {
+            if let Some(generation) = generation {
+                self.generation.store(generation, Ordering::SeqCst);
+            }
+        }
+        reply
+    }
+    /// Model the independent healthy configuration owner during valid transport scenarios.
+    /// Tests of owner disappearance intentionally do not create this guard.
+    fn maintain_owner(&self) -> OwnerHeartbeat {
+        let stop = Arc::new(AtomicBool::new(false));
+        let stopped = stop.clone();
+        let owner = self.owner.clone();
+        let generation = self.generation.clone();
+        let worker = thread::spawn(move || {
+            while !stopped.load(Ordering::SeqCst) {
+                let generation = generation.load(Ordering::SeqCst);
+                if generation > 0 {
+                    let Ok(mut owner) = owner.lock() else { break };
+                    let _ = owner.command(json!({"command":"renew","generation":generation.to_string(),"sessionId":"service-owner"}));
+                }
+                thread::sleep(Duration::from_millis(50));
+            }
+        });
+        OwnerHeartbeat {
+            stop,
+            thread: Some(worker),
+        }
     }
     fn activate(&mut self) {
         assert_eq!(self.command(json!({"command":"activate","generation":"1","revision":"1","profileId":"profile-a","sessionId":"service-owner","leaseMs":750,"inputTtlMs":350}))["ok"],true);
@@ -96,7 +153,7 @@ impl Receiver {
 }
 impl Drop for Receiver {
     fn drop(&mut self) {
-        self.input = None;
+        self.owner.lock().unwrap_or_else(|e| e.into_inner()).input = None;
         let _ = self.child.kill();
         let _ = self.child.wait();
         for _ in 0..100 {
@@ -113,6 +170,7 @@ fn held() -> GamepadState {
 #[test]
 fn native_process_routes_sealed_packets_without_bun_and_preserves_replay_and_owner_fences() {
     let mut receiver = Receiver::new();
+    let _owner = receiver.maintain_owner();
     let mut client = Client::connect(&receiver.root).unwrap();
     assert!(!client.configuration().unwrap().active);
     assert!(client.grant([8; 16], 1, 1, 1000).is_err());
@@ -159,6 +217,7 @@ fn native_process_routes_sealed_packets_without_bun_and_preserves_replay_and_own
 #[test]
 fn stale_local_connection_cleanup_cannot_release_a_new_source_but_current_disconnect_does() {
     let mut receiver = Receiver::new();
+    let _owner = receiver.maintain_owner();
     receiver.activate();
     let mut old = Client::connect(&receiver.root).unwrap();
     let grant = old.grant([8; 16], 1, 1, 1000).unwrap();
@@ -213,6 +272,7 @@ fn continuous_native_traffic_cannot_keep_a_lost_configuration_owner_alive() {
 #[test]
 fn stalled_ipc_clients_do_not_block_owner_commands_or_input_expiry() {
     let mut receiver = Receiver::new();
+    let _owner = receiver.maintain_owner();
     receiver.activate();
     let mut client = Client::connect(&receiver.root).unwrap();
     let grant = client.grant([8; 16], 1, 1, 2000).unwrap();
@@ -365,6 +425,7 @@ fn phone_held(channel: &mut ControlChannel, receipt: &Value, sender: &mut Packet
 #[test]
 fn authenticated_tls_input_reaches_the_independent_receiver_and_revocation_waits_for_neutral() {
     let mut receiver = Receiver::new();
+    let _owner = receiver.maintain_owner();
     receiver.activate();
     let (mut host, value) = listen_host(&receiver);
     let credential = phone_enroll(&value);
@@ -392,6 +453,7 @@ fn authenticated_tls_input_reaches_the_independent_receiver_and_revocation_waits
 #[test]
 fn reenrollment_retires_old_receiver_keys_before_delivering_the_new_credential() {
     let mut receiver = Receiver::new();
+    let _owner = receiver.maintain_owner();
     receiver.activate();
     let (mut host, value) = listen_host(&receiver);
     let old = phone_enroll(&value);
@@ -400,20 +462,44 @@ fn reenrollment_retires_old_receiver_keys_before_delivering_the_new_credential()
     let (mut sender, _) = phone_grant(&mut channel, &receipt);
     phone_held(&mut channel, &receipt, &mut sender);
     assert_ne!(receiver.status()["reportHex"], hex(&NEUTRAL));
+    let stop = Arc::new(AtomicBool::new(false));
+    let stopped = stop.clone();
+    let sampling = thread::spawn(move || {
+        while !stopped.load(Ordering::SeqCst) {
+            if channel
+                .send(FrameKind::Input, &sender.seal(&held()).unwrap())
+                .is_err()
+            {
+                break;
+            }
+            thread::sleep(Duration::from_millis(30));
+        }
+        channel
+    });
     let offer = host.execute(PairingCommand::PairingOpen {}).unwrap();
     let fresh = phone_enroll(&offer);
+    stop.store(true, Ordering::SeqCst);
+    let mut channel = sampling.join().unwrap();
     assert_ne!(fresh["credentialEpoch"], old["credentialEpoch"]);
     assert_eq!(receiver.status()["reportHex"], hex(&NEUTRAL));
     assert_eq!(receiver.status()["active"], false);
-    control_send(
-        &mut channel,
-        json!({"version":1,"command":"control-status","connectionId":receipt["connectionId"]}),
+    assert_eq!(
+        receiver.status()["lastReleaseReason"],
+        "native_input_released"
+    );
+    let _ = channel.send(
+        FrameKind::Control,
+        &serde_json::to_vec(
+            &json!({"version":1,"command":"control-status","connectionId":receipt["connectionId"]}),
+        )
+        .unwrap(),
     );
     assert!(channel.receive().is_err());
 }
 #[test]
 fn native_tls_source_release_is_acknowledged_and_a_peer_drop_retires_its_grant() {
     let mut receiver = Receiver::new();
+    let _owner = receiver.maintain_owner();
     receiver.activate();
     let (_host, value) = listen_host(&receiver);
     let credential = phone_enroll(&value);
@@ -448,6 +534,7 @@ fn native_tls_source_release_is_acknowledged_and_a_peer_drop_retires_its_grant()
 #[test]
 fn stale_grant_receipts_and_old_generation_packets_cannot_replace_or_release_new_configuration() {
     let mut receiver = Receiver::new();
+    let _owner = receiver.maintain_owner();
     receiver.activate();
     let (_host, value) = listen_host(&receiver);
     let credential = phone_enroll(&value);
@@ -475,4 +562,24 @@ fn stale_grant_receipts_and_old_generation_packets_cannot_replace_or_release_new
     let (mut sender, _) = phone_grant(&mut fresh, &fresh_receipt);
     phone_held(&mut fresh, &fresh_receipt, &mut sender);
     assert_ne!(receiver.status()["reportHex"], hex(&NEUTRAL));
+}
+
+#[test]
+fn managed_configuration_owner_survives_slow_pairing_before_native_input() {
+    let mut receiver = Receiver::new();
+    let _owner = receiver.maintain_owner();
+    receiver.activate();
+    let (_host, value) = listen_host(&receiver);
+    let credential = phone_enroll(&value);
+    thread::sleep(Duration::from_millis(900)); // Exceeds the unchanged 750ms owner lease.
+    let (mut channel, receipt) = phone_auth(&value, &credential);
+    let (mut sender, _) = phone_grant(&mut channel, &receipt);
+    phone_held(&mut channel, &receipt, &mut sender);
+    assert_ne!(receiver.status()["reportHex"], hex(&NEUTRAL));
+    channel.close();
+    receiver.wait_neutral();
+    assert_eq!(
+        receiver.status()["lastReleaseReason"],
+        "native_input_released"
+    );
 }

@@ -846,12 +846,16 @@ mod tests {
         assert!(host.listener.as_ref().unwrap().peers.lock().unwrap().len() <= 8);
         host.execute(Command::PairingStopListening {}).unwrap();
         assert!(TcpStream::connect(&address).is_err());
-        for socket in sockets {
-            socket
-                .set_read_timeout(Some(Duration::from_millis(500)))
-                .unwrap();
-            let mut bytes = [0];
-            match std::io::Read::read(&mut &socket, &mut bytes) {
+        for mut socket in sockets {
+            // Some platforms reject socket-option changes after peer reset. Observe closure itself.
+            let (closed, result) = mpsc::sync_channel(1);
+            thread::spawn(move || {
+                let _ = closed.send(std::io::Read::read(&mut socket, &mut [0]));
+            });
+            match result
+                .recv_timeout(Duration::from_millis(500))
+                .expect("stopped listener must close every peer")
+            {
                 Ok(0) => {}
                 Err(error)
                     if !matches!(
