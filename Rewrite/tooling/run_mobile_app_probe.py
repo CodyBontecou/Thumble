@@ -16,6 +16,29 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 ROOT = Path(__file__).resolve().parent.parent
 
+CHECKPOINT_FIELDS = {"phase", "generation", "elapsedMs", "maximumPublicationGapMs", "connected", "held", "releaseReason", "publications", "appState", "idleDisabled"}
+CHECKPOINT_REASONS = {"none", "touchCancelled", "background", "screenLock", "rotation", "profileReplacement", "disconnected", "disposed", "practice", "invalidTouch", "transportFailure", "sequenceExhausted"}
+
+
+def decode_checkpoint(value):
+    """Only bounded, synthetic test state may enter diagnostic artifacts."""
+    if type(value) is not dict or set(value) != CHECKPOINT_FIELDS:
+        raise ValueError("app_checkpoint_invalid")
+    if type(value["phase"]) is not str or value["phase"] not in {"connected", "holding", "ended"}:
+        raise ValueError("app_checkpoint_invalid")
+    if type(value["generation"]) is not str or value["generation"] not in {"1", "2"}:
+        raise ValueError("app_checkpoint_invalid")
+    if type(value["releaseReason"]) is not str or value["releaseReason"] not in CHECKPOINT_REASONS:
+        raise ValueError("app_checkpoint_invalid")
+    for key in ("connected", "held", "idleDisabled"):
+        if type(value[key]) is not bool:
+            raise ValueError("app_checkpoint_invalid")
+    for key, maximum in (("elapsedMs", 180000), ("maximumPublicationGapMs", 180000), ("publications", 1000000), ("appState", 2)):
+        if type(value[key]) is not int or not 0 <= value[key] <= maximum:
+            raise ValueError("app_checkpoint_invalid")
+    return {key: value[key] for key in sorted(CHECKPOINT_FIELDS)}
+
+
 class Probe:
     def __init__(self):
         self.process = None
@@ -23,6 +46,8 @@ class Probe:
         self.lock = threading.Lock()
         self.completed = False
         self.failure_codes = []
+        self.checkpoints = []
+        self.readers = []
         self.counts = {"held": 0, "fresh": 0, "neutral": 0, "renewalStarts": 0, "renewalVerified": 0}
 
     def line(self):
@@ -48,14 +73,18 @@ class Probe:
                     for line in self.process.stdout:
                         self.lines.put(line)
                     self.lines.put(b"")
-                threading.Thread(target=read, daemon=True).start()
+                reader = threading.Thread(target=read, daemon=True)
+                self.readers.append(reader)
+                reader.start()
                 def read_failures():
                     for line in iter(lambda: self.process.stderr.readline(4096), b""):
                         match = re.fullmatch(r'Error: "((?:probe|native_input)_[a-z_]{1,96})"', line.decode("utf-8", errors="replace").strip())
                         if match:
                             self.failure_codes.append(match.group(1))
                             del self.failure_codes[:-8]
-                threading.Thread(target=read_failures, daemon=True).start()
+                failure_reader = threading.Thread(target=read_failures, daemon=True)
+                self.readers.append(failure_reader)
+                failure_reader.start()
                 offer = self.line()
                 assert offer.pop("scope") == "synthetic-loopback-recording-only"
                 assert self.command("a")["active"] is True
@@ -97,6 +126,15 @@ class Probe:
                 raise ValueError("app_probe_unknown_command")
             return {"ok": True}
 
+    def checkpoint(self, value):
+        value = decode_checkpoint(value)
+        with self.lock:
+            if self.process is None or self.completed or len(self.checkpoints) >= 64:
+                raise ValueError("app_checkpoint_unavailable")
+            self.checkpoints.append(value)
+        print("[DEBUG-renewal-app] checkpoint " + json.dumps(value, sort_keys=True), flush=True)
+        return {"ok": True}
+
     def close(self):
         if self.process is not None and self.process.poll() is None:
             self.process.terminate()
@@ -105,6 +143,8 @@ class Probe:
             except subprocess.TimeoutExpired:
                 self.process.kill()
                 self.process.wait(timeout=5)
+        for reader in self.readers:
+            reader.join(timeout=0.2)
 
 
 def main():
@@ -119,6 +159,35 @@ def main():
     probe = Probe()
     reverse_ports = set()
     class Handler(BaseHTTPRequestHandler):
+        def do_POST(self):
+            # This route belongs only to the synthetic QA app. Never reflect
+            # request paths, arbitrary error descriptions, credentials or packets.
+            try:
+                self.connection.settimeout(2)
+                raw_length = self.headers.get("Content-Length", "")
+                if self.path != "/diagnostic" or not re.fullmatch(r"[1-9][0-9]{0,3}", raw_length):
+                    raise ValueError("app_checkpoint_invalid")
+                length = int(raw_length)
+                if length > 1024:
+                    raise ValueError("app_checkpoint_invalid")
+                def unique(pairs):
+                    result = {}
+                    for key, value in pairs:
+                        if key in result:
+                            raise ValueError("app_checkpoint_invalid")
+                        result[key] = value
+                    return result
+                value = probe.checkpoint(json.loads(self.rfile.read(length), object_pairs_hook=unique))
+                payload = json.dumps(value).encode()
+                self.send_response(200)
+            except Exception:
+                payload = b'{"error":"app_checkpoint_invalid"}'
+                self.send_response(400)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+
         def do_GET(self):
             try:
                 value = probe.request(self.path)
@@ -159,7 +228,9 @@ def main():
         assert probe.completed, "native app pairing/reconnect witness did not finish"
         print("Verified app native pairing/reconnect against recording-only receiver: " + json.dumps(probe.counts), flush=True)
     finally:
+        native_exit_before_cleanup = probe.process.poll() if probe.process is not None else None
         probe.close()
+        print("[DEBUG-renewal-app] final " + json.dumps({"completed": probe.completed, "counts": probe.counts, "nativeExitBeforeCleanup": native_exit_before_cleanup, "nativeFailureCodes": probe.failure_codes, "lastCheckpoint": probe.checkpoints[-1] if probe.checkpoints else None}, sort_keys=True), flush=True)
         server.shutdown()
         server.server_close()
         if reverse:

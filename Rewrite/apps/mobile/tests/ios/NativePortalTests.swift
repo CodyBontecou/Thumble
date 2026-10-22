@@ -182,7 +182,7 @@ import XCTest
     XCTAssertEqual(GamepadReport.hex(engine.state), GamepadReport.hex(.neutral))
   }
 
-  private func probe(_ path: String) async throws -> [String: Any] {
+  private func probe(_ path: String, body: [String: Any]? = nil) async throws -> [String: Any] {
     let resource = try XCTUnwrap(
       Bundle(for: Self.self).url(forResource: "AppProbeConfig", withExtension: "json"))
     let config = try XCTUnwrap(
@@ -192,11 +192,33 @@ import XCTest
     let url = try XCTUnwrap(URL(string: "http://127.0.0.1:\(port)\(path)"))
     var request = URLRequest(url: url)
     request.timeoutInterval = 6
+    if let body {
+      request.httpMethod = "POST"
+      request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+      request.httpBody = try JSONSerialization.data(withJSONObject: body)
+    }
     let (data, response) = try await URLSession.shared.data(for: request)
     XCTAssertEqual(
       (response as? HTTPURLResponse)?.statusCode, 200,
       "recording-only host witness failed at \(path)")
     return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+  }
+  private func checkpoint(
+    _ view: ThumbleInputView, phase: String, generation: String,
+    elapsedMs: Int, publications: Int, maximumPublicationGapMs: Int = 0
+  ) async throws {
+    _ = try await probe(
+      "/diagnostic",
+      body: [
+        "phase": phase, "generation": generation,
+        "elapsedMs": elapsedMs, "publications": publications,
+        "maximumPublicationGapMs": maximumPublicationGapMs,
+        "connected": view.engine.connected,
+        "held": view.engine.state.buttons.contains(.south) && view.engine.state.leftTrigger == 1,
+        "releaseReason": view.engine.lastRelease?.rawValue ?? "none",
+        "appState": UIApplication.shared.applicationState.rawValue,
+        "idleDisabled": UIApplication.shared.isIdleTimerDisabled,
+      ])
   }
   func testNativePairingVaultBindingAndReconnectReachRecordingReceiver() async throws {
     let window = try await applicationWindow()
@@ -208,9 +230,20 @@ import XCTest
       let view = try install(in: window)
       var phases: [String] = []
       var publications = 0
+      var lastPublication: ContinuousClock.Instant?
+      var maximumPublicationGapMs = 0
       let flow = PhoneConnection(
         anchor: view,
         feedback: { [weak view] in
+          let now = ContinuousClock.now
+          if let lastPublication {
+            let gap = lastPublication.duration(to: now).components
+            maximumPublicationGapMs = max(
+              maximumPublicationGapMs,
+              min(180000, max(0, Int(gap.seconds * 1000 + gap.attoseconds / 1_000_000_000_000_000)))
+            )
+          }
+          lastPublication = now
           publications += 1
           view?.publishFeedback($0)
         },
@@ -270,6 +303,8 @@ import XCTest
       XCTAssertEqual(view.engine.generation, generation)
       XCTAssertEqual(GamepadReport.hex(view.engine.state), GamepadReport.hex(.neutral))
       _ = try await probe("/fresh")
+      try await checkpoint(
+        view, phase: "connected", generation: generation, elapsedMs: 0, publications: publications)
       let south = try XCTUnwrap(template.controls.first { $0.action == "south" })
       XCTAssertTrue(
         view.engine.begin(
@@ -283,19 +318,38 @@ import XCTest
             x: trigger.x + trigger.width / 2, y: trigger.y + trigger.height / 2))
         _ = try await probe("/renewal-start")
         let beforePublications = publications
-        let until = ContinuousClock.now.advanced(by: .seconds(75))
+        let started = ContinuousClock.now
+        lastPublication = started
+        maximumPublicationGapMs = 0
+        let until = started.advanced(by: .seconds(75))
+        var nextCheckpoint = 0
         while ContinuousClock.now < until {
           try await Task.sleep(for: .milliseconds(250))
-          guard view.engine.connected else {
+          let duration = started.duration(to: .now).components
+          let elapsed = min(
+            180000,
+            max(0, Int(duration.seconds * 1000 + duration.attoseconds / 1_000_000_000_000_000)))
+          guard view.engine.connected, view.engine.state.buttons.contains(.south),
+            view.engine.state.leftTrigger == 1
+          else {
+            try? await checkpoint(
+              view, phase: "ended", generation: generation, elapsedMs: elapsed,
+              publications: publications - beforePublications,
+              maximumPublicationGapMs: maximumPublicationGapMs)
             throw NSError(
               domain: "ThumbleNativePortalTests", code: 2,
               userInfo: [
                 NSLocalizedDescriptionKey:
-                  "Native hold ended: reason=\(String(describing: view.engine.lastRelease)) elapsedMs=\(75000 - Int(ContinuousClock.now.duration(to: until).components.seconds * 1000)) appState=\(UIApplication.shared.applicationState.rawValue) idleDisabled=\(UIApplication.shared.isIdleTimerDisabled) publications=\(publications-beforePublications)"
+                  "Native hold ended: reason=\(String(describing: view.engine.lastRelease)) elapsedMs=\(elapsed) appState=\(UIApplication.shared.applicationState.rawValue) idleDisabled=\(UIApplication.shared.isIdleTimerDisabled) publications=\(publications-beforePublications)"
               ])
           }
-          XCTAssertTrue(view.engine.state.buttons.contains(.south))
-          XCTAssertEqual(view.engine.state.leftTrigger, 1)
+          if elapsed >= nextCheckpoint {
+            try await checkpoint(
+              view, phase: "holding", generation: generation, elapsedMs: elapsed,
+              publications: publications - beforePublications,
+              maximumPublicationGapMs: maximumPublicationGapMs)
+            nextCheckpoint = elapsed + 5000
+          }
         }
         _ = try await probe("/renewal-verified")
         XCTAssertGreaterThan(publications, beforePublications)
