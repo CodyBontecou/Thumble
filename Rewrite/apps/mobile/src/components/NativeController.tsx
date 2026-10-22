@@ -5,12 +5,14 @@ import { standardControllerMap } from "@thumble/domain/controller-layout";
 import { colors } from "../theme/colors";
 import {
   decodePracticeAdmission,
+  decodeConnectionAdmission,
   type ControlMap,
 } from "@thumble/contracts/mobile-input";
 
 const NativeView = requireNativeViewManager<
   ViewProps & {
-    practiceMap: ControlMap;
+    practiceMap?: ControlMap;
+    connectionMap?: ControlMap;
     onAdmission: (event: { nativeEvent: { admission: unknown } }) => void;
   }
 >("ThumbleNativeInput");
@@ -36,13 +38,20 @@ const labels: Record<string, string> = {
   dpadRight: "→",
 };
 const map = standardControllerMap("1", "0");
-export function NativeController() {
-  const [phase, setPhase] = useState<"starting" | "ready" | "error">(
-    "starting",
-  );
+export function NativeController({
+  connected = false,
+}: {
+  connected?: boolean;
+}) {
+  const [phase, setPhase] = useState<string>("starting");
   const admit = useCallback(
     (event: { nativeEvent: { admission: unknown } }) => {
       try {
+        if (connected) {
+          const ack = decodeConnectionAdmission(event.nativeEvent.admission);
+          setPhase(ack.status);
+          return;
+        }
         const ack = decodePracticeAdmission(event.nativeEvent.admission);
         if (
           ack.status !== "ready" ||
@@ -55,7 +64,7 @@ export function NativeController() {
         setPhase("error");
       }
     },
-    [],
+    [connected],
   );
   return (
     <View style={{ flex: 1 }}>
@@ -98,16 +107,26 @@ export function NativeController() {
         ))}
       </View>
       <NativeView
-        practiceMap={map}
+        {...(connected ? { connectionMap: map } : { practiceMap: map })}
         onAdmission={admit}
         testID="controller-surface"
         pointerEvents={phase === "ready" ? "auto" : "none"}
-        accessibilityLabel="Practice controller"
+        accessibilityLabel={
+          connected ? "Connected controller" : "Practice controller"
+        }
         style={{ flex: 1, backgroundColor: "transparent" }}
       />
-      {phase !== "error" && (
+      {!["error", "unavailable", "cancelled", "disconnected"].includes(
+        phase,
+      ) && (
         <Text
-          testID={phase === "ready" ? "practice-ready" : "practice-starting"}
+          testID={
+            connected
+              ? `connection-${phase}`
+              : phase === "ready"
+                ? "practice-ready"
+                : "practice-starting"
+          }
           maxFontSizeMultiplier={1.3}
           pointerEvents="none"
           style={{
@@ -120,10 +139,21 @@ export function NativeController() {
             color: colors.secondaryLabel,
           }}
         >
-          {phase === "ready" ? "Practice ready" : "Starting practice…"}
+          {connected
+            ? ({
+                ready: "Connected to receiver",
+                waiting: "Waiting for invitation",
+                pairing: "Saving phone trust…",
+                connecting: "Connecting…",
+              }[phase] ?? "Starting connection…")
+            : phase === "ready"
+              ? "Practice ready"
+              : "Starting practice…"}
         </Text>
       )}
-      {phase === "error" && (
+      {["error", "unavailable", "cancelled", "disconnected"].includes(
+        phase,
+      ) && (
         <Text
           accessibilityRole="alert"
           style={{
@@ -134,7 +164,13 @@ export function NativeController() {
             top: 8,
           }}
         >
-          The controller could not start. Close practice and try again.
+          {connected
+            ? phase === "cancelled"
+              ? "Connection cancelled. Close this controller to try again."
+              : phase === "disconnected"
+                ? "Disconnected. Close and reconnect to start with released controls."
+                : "Ask your agent to start the receiver and open pairing, then try again."
+            : "The controller could not start. Close practice and try again."}
         </Text>
       )}
     </View>

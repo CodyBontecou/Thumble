@@ -8,3 +8,6 @@ reports/
 
 # Native-provider evidence tooling
 __pycache__/
+
+# Generated native QA side-channel port, never a product endpoint.
+apps/mobile/tests/ios/AppProbeConfig.json

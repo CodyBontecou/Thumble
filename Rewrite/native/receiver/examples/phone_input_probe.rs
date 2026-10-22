@@ -2,7 +2,7 @@
 use serde_json::{json, Value};
 use std::{
     fs,
-    io::{BufRead, BufReader, Read, Write},
+    io::{BufRead, BufReader, Read, Seek, SeekFrom, Write},
     path::PathBuf,
     process::{Child, ChildStdin, Command, Stdio},
     sync::mpsc,
@@ -21,6 +21,8 @@ struct Receiver {
     replies: mpsc::Receiver<Value>,
     serial: u64,
     generation: u64,
+    recording: PathBuf,
+    recording_start: u64,
 }
 impl Receiver {
     fn start(root: &std::path::Path) -> Result<Self, Box<dyn std::error::Error>> {
@@ -61,6 +63,8 @@ impl Receiver {
             replies,
             serial: 0,
             generation: 0,
+            recording: root.join("recording.jsonl"),
+            recording_start: 0,
         };
         if receiver.replies.recv_timeout(Duration::from_secs(5))?["ready"] != true {
             receiver.child.kill()?;
@@ -84,7 +88,29 @@ impl Receiver {
     }
     fn activate(&mut self) -> Result<Value, Box<dyn std::error::Error>> {
         self.generation += 1;
-        self.command(json!({"command":"activate","generation":self.generation.to_string(),"revision":self.generation.to_string(),"profileId":"phone-input-test","sessionId":"probe-owner","leaseMs":1750,"inputTtlMs":1500}))
+        let reply = self.command(json!({"command":"activate","generation":self.generation.to_string(),"revision":self.generation.to_string(),"profileId":"phone-input-test","sessionId":"probe-owner","leaseMs":1750,"inputTtlMs":1500}))?;
+        self.recording_start = fs::metadata(&self.recording)?.len();
+        Ok(reply)
+    }
+    fn first_source_sample_neutral(&self) -> Result<bool, Box<dyn std::error::Error>> {
+        let mut file = fs::File::open(&self.recording)?;
+        file.seek(SeekFrom::Start(self.recording_start))?;
+        let mut text = String::new();
+        file.take(65_536).read_to_string(&mut text)?;
+        // Only complete output records count; the receiver may currently be appending one.
+        let Some(last) = text.rfind('\n') else {
+            return Ok(false);
+        };
+        for line in text[..last].lines() {
+            let value: Value = serde_json::from_str(line)?;
+            if value["reason"] == "sample" {
+                if value["reportHex"] != hex(&NEUTRAL) {
+                    return Err("probe_first_app_sample_was_not_neutral".into());
+                }
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
     fn renew(&mut self) {
         if self.generation > 0 {
@@ -174,6 +200,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 emit(
                     json!({"active":true,"generation":value["generation"],"revision":value["revision"]}),
                 )?;
+            }
+            Ok(b'c') => {
+                let expiry = Instant::now() + Duration::from_secs(1);
+                loop {
+                    receiver.renew();
+                    let value = receiver.command(json!({"command":"status"}))?;
+                    if value["active"] == true
+                        && value["reportHex"] == hex(&NEUTRAL)
+                        && receiver.first_source_sample_neutral()?
+                    {
+                        break;
+                    }
+                    if Instant::now() >= expiry {
+                        return Err("probe_app_source_not_neutral".into());
+                    }
+                    thread::sleep(Duration::from_millis(5));
+                }
+                emit(json!({"freshNeutral":true,"firstSampleNeutral":true}))?;
             }
             Ok(b'z') => {
                 let expiry = Instant::now() + Duration::from_secs(1);

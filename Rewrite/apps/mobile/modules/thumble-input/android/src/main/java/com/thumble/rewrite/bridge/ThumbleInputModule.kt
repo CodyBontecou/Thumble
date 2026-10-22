@@ -25,7 +25,13 @@ class ThumbleInputModule : Module() {
             Prop("practiceMap") { view: ThumbleInputView, value: Map<String, Any?> ->
                 view.pendingPractice = value
             }
-            OnViewDidUpdateProps { view: ThumbleInputView -> view.admitPractice() }
+            Prop("connectionMap") { view: ThumbleInputView, value: Map<String, Any?> ->
+                view.pendingConnection = value
+            }
+            OnViewDidUpdateProps { view: ThumbleInputView ->
+                view.admitPractice()
+                view.admitConnection()
+            }
             AsyncFunction("configure") { view: ThumbleInputView, map: Map<String, Any?> ->
                 view.configure(map)
             }
@@ -43,12 +49,13 @@ class ThumbleInputModule : Module() {
 
 class ThumbleInputView(context: Context, appContext: AppContext) : ExpoView(context, appContext) {
     val onAdmission by EventDispatcher()
+    internal var pendingConnection: Map<String, Any?>? = null
     internal var pendingPractice: Map<String, Any?>? = null
     private var practiceAdmitted = false
 
     internal fun admitPractice() {
         val map = pendingPractice ?: return
-        if (practiceAdmitted) return
+        if (practiceAdmitted || pendingConnection != null) return
         practiceAdmitted = true
         try {
             val receipt = configure(map)
@@ -72,7 +79,7 @@ class ThumbleInputView(context: Context, appContext: AppContext) : ExpoView(cont
         get() = feedbackPublications
 
     private var feedbackState = GamepadReport.neutral()
-    val engine =
+    var engine =
         InputEngine(
             { false },
             { state ->
@@ -81,7 +88,70 @@ class ThumbleInputView(context: Context, appContext: AppContext) : ExpoView(cont
                 invalidate()
             },
         )
-    val surface = InputSurface(context, engine)
+        private set
+
+    var surface = InputSurface(context, engine)
+        private set
+
+    private var liveOwned = false
+    private var liveMode = false
+    private var connectionAttempted = false
+    private var connection: PhoneConnection? = null
+
+    internal fun admitConnection() {
+        val raw = pendingConnection ?: return
+        if (disposed || connectionAttempted || !isAttachedToWindow || width <= 0 || height <= 0)
+            return
+        connectionAttempted = true
+        try {
+            check(pendingPractice == null)
+            val template = decode(raw)
+            configure(raw)
+            val flow =
+                PhoneConnection(this, ::publishFeedback, ::adoptConnectedEngine) { status ->
+                    onAdmission(mapOf("admission" to mapOf("version" to 1, "status" to status)))
+                }
+            connection = flow
+            flow.start(template)
+        } catch (_: Exception) {
+            onAdmission(mapOf("admission" to mapOf("version" to 1, "status" to "unavailable")))
+        }
+    }
+
+    private fun publishFeedback(state: com.thumble.rewrite.contracts.GamepadStateV1) {
+        if (feedbackPublications < Long.MAX_VALUE) feedbackPublications++
+        feedbackState = state
+        invalidate()
+    }
+
+    fun adoptConnectedEngine(next: InputEngine) {
+        check(!disposed && isAttachedToWindow)
+        val nextSurface = InputSurface.connected(context, next)
+        val map = checkNotNull(nextSurface.configuration)
+        detachCapture()
+        surface.dispose()
+        engine = next
+        surface = nextSurface
+        configured = map
+        liveOwned = true
+        liveMode = true
+        attachCapture()
+        check(next.connected)
+        onAdmission(
+            mapOf(
+                "admission" to
+                    mapOf(
+                        "version" to 1,
+                        "status" to "ready",
+                        "generation" to map.generation,
+                        "revision" to map.revision,
+                        "practice" to false,
+                        "connected" to true,
+                    )
+            )
+        )
+    }
+
     private var configured: ControlMap? = null
     private var disposed = false
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -103,6 +173,11 @@ class ThumbleInputView(context: Context, appContext: AppContext) : ExpoView(cont
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
+        attachCapture()
+        admitConnection()
+    }
+
+    private fun attachCapture() {
         if (disposed) return
         // Each region is a direct Activity child, so Android can split a second
         // pointer to navigation instead of assigning it to a full-screen portal.
@@ -117,6 +192,7 @@ class ThumbleInputView(context: Context, appContext: AppContext) : ExpoView(cont
     }
 
     override fun onDetachedFromWindow() {
+        connection?.close()
         detachCapture()
         super.onDetachedFromWindow()
     }
@@ -147,6 +223,12 @@ class ThumbleInputView(context: Context, appContext: AppContext) : ExpoView(cont
     }
 
     internal fun syncCapture(): Boolean {
+        if (liveOwned && !engine.connected) {
+            liveOwned = false
+            connection?.close()
+            onAdmission(mapOf("admission" to mapOf("version" to 1, "status" to "disconnected")))
+        }
+        admitConnection()
         val host = captureHost ?: return false
         val visible = Rect()
         val location = IntArray(2)
@@ -182,7 +264,7 @@ class ThumbleInputView(context: Context, appContext: AppContext) : ExpoView(cont
                 surface.width != width ||
                 surface.height != height
         ) {
-            surface.release(ReleaseReason.rotation)
+            if (surface.width > 0 && surface.height > 0) surface.release(ReleaseReason.rotation)
             surface.layout(left, top, left + width, top + height)
         }
         for (region in regions) {
@@ -254,7 +336,7 @@ class ThumbleInputView(context: Context, appContext: AppContext) : ExpoView(cont
     }
 
     fun configure(raw: Map<String, Any?>): Map<String, Any> {
-        check(!disposed) { "disposed" }
+        check(!disposed && !liveMode) { "unavailable" }
         val next = decode(raw)
         val previous = configured
         if (
@@ -271,7 +353,7 @@ class ThumbleInputView(context: Context, appContext: AppContext) : ExpoView(cont
     }
 
     fun practice(enabled: Boolean) {
-        check(!disposed) { "disposed" }
+        check(!disposed && !liveMode) { "unavailable" }
         surface.setPractice(enabled)
     }
 
@@ -279,6 +361,7 @@ class ThumbleInputView(context: Context, appContext: AppContext) : ExpoView(cont
         if (disposed) return
         if (reason == ReleaseReason.disposed) {
             disposed = true
+            connection?.close()
             detachCapture()
             surface.dispose()
         } else surface.release(reason)

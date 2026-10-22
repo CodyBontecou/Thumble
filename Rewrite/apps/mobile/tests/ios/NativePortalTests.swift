@@ -1,3 +1,4 @@
+import Foundation
 import MobileInputCore
 import MobileInputUIKit
 import ThumbleContracts
@@ -140,6 +141,143 @@ import XCTest
     XCTAssertEqual(GamepadReport.hex(engine.state), GamepadReport.hex(.neutral))
     container.addSubview(surface)
     XCTAssertFalse(engine.connected)
+  }
+
+  func testAppPortalAdoptsExactNativeReceiptWithoutFirstLayoutRelease() async throws {
+    let window = try await applicationWindow()
+    let view = try install(in: window)
+    defer {
+      view.release(.disposed)
+      view.removeFromSuperview()
+    }
+    let old = view.engine
+    let map = ControlMap(generation: "7", revision: "4", controls: try fixtureMap().controls)
+    let engine = InputEngine(
+      output: { _ in true }, feedback: { [weak view] in view?.publishFeedback($0) })
+    try engine.activate(map)
+    try engine.connect(generation: "7")
+    try view.adoptConnectedEngine(engine)
+    window.layoutIfNeeded()
+    XCTAssertFalse(old.connected)
+    XCTAssertEqual(GamepadReport.hex(old.state), GamepadReport.hex(.neutral))
+    XCTAssertTrue(view.engine === engine)
+    XCTAssertTrue(view.surface.window === window)
+    XCTAssertTrue(engine.connected)
+    XCTAssertEqual(view.surface.configuration?.generation, "7")
+    XCTAssertEqual(view.surface.configuration?.revision, "4")
+    XCTAssertThrowsError(try view.configure(try fixtureMap()))
+    XCTAssertThrowsError(try view.practice(true))
+    XCTAssertTrue(engine.connected)
+    let control = try XCTUnwrap(map.controls.first { $0.action == "south" })
+    let point = CGPoint(
+      x: (control.x + control.width / 2) * view.bounds.width,
+      y: (control.y + control.height / 2) * view.bounds.height)
+    XCTAssertTrue(window.hitTest(view.convert(point, to: window), with: nil) === view.surface)
+    XCTAssertTrue(
+      engine.begin(
+        id: 1, generation: "7", x: control.x + control.width / 2, y: control.y + control.height / 2)
+    )
+    view.removeFromSuperview()
+    XCTAssertFalse(engine.connected)
+    XCTAssertEqual(GamepadReport.hex(engine.state), GamepadReport.hex(.neutral))
+  }
+
+  private func probe(_ path: String) async throws -> [String: Any] {
+    let resource = try XCTUnwrap(
+      Bundle(for: Self.self).url(forResource: "AppProbeConfig", withExtension: "json"))
+    let config = try XCTUnwrap(
+      JSONSerialization.jsonObject(with: Data(contentsOf: resource)) as? [String: Int])
+    let port = try XCTUnwrap(config["port"])
+    XCTAssertTrue((1...65535).contains(port), "Run this suite with run_mobile_app_probe.py")
+    let url = try XCTUnwrap(URL(string: "http://127.0.0.1:\(port)\(path)"))
+    var request = URLRequest(url: url)
+    request.timeoutInterval = 6
+    let (data, response) = try await URLSession.shared.data(for: request)
+    XCTAssertEqual(
+      (response as? HTTPURLResponse)?.statusCode, 200,
+      "recording-only host witness failed at \(path)")
+    return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+  }
+  func testNativePairingVaultBindingAndReconnectReachRecordingReceiver() async throws {
+    let window = try await applicationWindow()
+    let invitation = try await probe("/begin")
+    let text = try XCTUnwrap(
+      String(data: JSONSerialization.data(withJSONObject: invitation), encoding: .utf8))
+    for generation in ["1", "2"] {
+      if generation == "2" { _ = try await probe("/next") }
+      let view = try install(in: window)
+      var phases: [String] = []
+      let flow = PhoneConnection(
+        anchor: view,
+        feedback: { [weak view] in view?.publishFeedback($0) },
+        install: { [weak view] engine in
+          guard let view else { throw InputError.unavailable }
+          try view.adoptConnectedEngine(engine)
+        }, status: { phases.append($0) })
+      defer {
+        flow.close()
+        view.release(.disposed)
+        view.removeFromSuperview()
+      }
+      let template = try fixtureMap()
+      flow.start(template: template)
+      try await Task.sleep(for: .milliseconds(400))
+      var top = window.rootViewController
+      while let next = top?.presentedViewController { top = next }
+      let alert = try XCTUnwrap(top as? UIAlertController)
+      let field = try XCTUnwrap(alert.textFields?.first)
+      XCTAssertTrue(field.isSecureTextEntry)
+      field.text = nil
+      XCTAssertTrue(
+        flow.textField(
+          field, shouldChangeCharactersIn: NSRange(location: 0, length: 0), replacementString: "{}")
+      )
+      XCTAssertFalse(
+        flow.textField(
+          field, shouldChangeCharactersIn: NSRange(location: 0, length: 0),
+          replacementString: String(repeating: "x", count: 4097)))
+      if generation == "1" {
+        for style in [UIUserInterfaceStyle.light, .dark] {
+          window.overrideUserInterfaceStyle = style
+          window.layoutIfNeeded()
+          try await Task.sleep(for: .milliseconds(100))
+          let image = UIGraphicsImageRenderer(bounds: window.bounds).image { _ in
+            window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
+          }
+          let attachment = XCTAttachment(image: image)
+          attachment.name = style == .light ? "native-pairing-light" : "native-pairing-dark"
+          attachment.lifetime = .keepAlways
+          add(attachment)
+        }
+        window.overrideUserInterfaceStyle = .unspecified
+
+        field.text = text
+        flow.submitInvitation(try XCTUnwrap(field.text), template: template)
+      } else {
+        XCTAssertTrue(alert.actions.contains { $0.title == "Reconnect" })
+        flow.reconnect(template: template)
+      }
+      for _ in 0..<160 {
+        if view.engine.connected || phases.contains("unavailable") { break }
+        try await Task.sleep(for: .milliseconds(50))
+      }
+      XCTAssertFalse(phases.contains("unavailable"), "native pairing/authentication failed")
+      XCTAssertTrue(view.engine.connected)
+      XCTAssertEqual(view.engine.generation, generation)
+      XCTAssertEqual(GamepadReport.hex(view.engine.state), GamepadReport.hex(.neutral))
+      _ = try await probe("/fresh")
+      let south = try XCTUnwrap(template.controls.first { $0.action == "south" })
+      XCTAssertTrue(
+        view.engine.begin(
+          id: 1, generation: generation, x: south.x + south.width / 2, y: south.y + south.height / 2
+        ))
+      _ = try await probe("/held")
+      view.release(.disposed)
+      view.removeFromSuperview()
+      _ = try await probe("/neutral")
+      XCTAssertFalse(view.engine.connected)
+    }
+    _ = try await probe("/finish")
   }
 
 }

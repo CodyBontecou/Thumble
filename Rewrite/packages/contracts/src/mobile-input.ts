@@ -103,6 +103,71 @@ export function decodePracticeAdmission(value: unknown): PracticeAdmission {
     connected: false,
   });
 }
+/** Native connection lifecycle metadata only; bootstrap text and credentials have no bridge form. */
+export type ConnectionAdmission =
+  | Readonly<{
+      version: 1;
+      status: "ready";
+      generation: string;
+      revision: string;
+      practice: false;
+      connected: true;
+    }>
+  | Readonly<{
+      version: 1;
+      status:
+        | "waiting"
+        | "pairing"
+        | "connecting"
+        | "cancelled"
+        | "unavailable"
+        | "disconnected";
+    }>;
+export function decodeConnectionAdmission(value: unknown): ConnectionAdmission {
+  const status = Object.getOwnPropertyDescriptor(
+    record(value),
+    "status",
+  )?.value;
+  if (status !== "ready") {
+    const v = dataObject(value, ["version", "status"]);
+    if (v.version !== 1) throw new Error("invalid_connection_admission");
+    switch (status) {
+      case "waiting":
+      case "pairing":
+      case "connecting":
+      case "cancelled":
+      case "unavailable":
+      case "disconnected":
+        return Object.freeze({ version: 1, status });
+      default:
+        throw new Error("invalid_connection_admission");
+    }
+  }
+  const v = dataObject(value, [
+    "version",
+    "status",
+    "generation",
+    "revision",
+    "practice",
+    "connected",
+  ]);
+  if (
+    v.version !== 1 ||
+    v.practice !== false ||
+    v.connected !== true ||
+    v.generation === "0"
+  )
+    throw new Error("invalid_connection_admission");
+  return Object.freeze({
+    version: 1,
+    status,
+    generation: counter(v.generation),
+    revision: counter(v.revision),
+    practice: false,
+    connected: true,
+  });
+}
+
 function dataObject(
   value: unknown,
   fields: readonly string[],

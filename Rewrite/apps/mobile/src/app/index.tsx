@@ -11,13 +11,34 @@ export default function Home() {
       contentContainerStyle={{ padding: 24, gap: 24 }}
     >
       <Text style={{ fontSize: 28, fontWeight: "700", color: colors.label }}>
-        Try the controller
+        Your controller
       </Text>
       <Text
         style={{ fontSize: 17, lineHeight: 25, color: colors.secondaryLabel }}
       >
-        Practice the controls without connecting to a computer.
+        Connect to your computer, or practice the controls first.
       </Text>
+      <Pressable
+        onPress={() => router.navigate("/connect")}
+        testID="home-connect"
+        accessibilityRole="button"
+        accessibilityLabel="Connect to computer"
+        style={({ pressed }) => ({
+          minHeight: 52,
+          justifyContent: "center",
+          alignItems: "center",
+          borderRadius: 12,
+          borderCurve: "continuous",
+          backgroundColor: colors.accent,
+          opacity: pressed ? 0.65 : 1,
+        })}
+      >
+        <Text
+          style={{ fontSize: 17, fontWeight: "600", color: colors.background }}
+        >
+          Connect to computer
+        </Text>
+      </Pressable>
       <Pressable
         onPress={() => router.navigate("/practice")}
         testID="home-practice"

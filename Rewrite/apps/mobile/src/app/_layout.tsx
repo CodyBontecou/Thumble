@@ -10,6 +10,10 @@ export default function Layout() {
       <Stack>
         <Stack.Screen name="index" options={{ title: "Thumble" }} />
         <Stack.Screen
+          name="connect"
+          options={{ headerShown: false, presentation: "fullScreenModal" }}
+        />
+        <Stack.Screen
           name="practice"
           options={{ headerShown: false, presentation: "fullScreenModal" }}
         />

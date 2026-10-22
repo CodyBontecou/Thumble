@@ -4,18 +4,22 @@ import { StatusBar } from "expo-status-bar";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { NativeController } from "../components/NativeController";
 import { colors } from "../theme/colors";
-export default function Practice() {
+export function ControllerScreen({
+  connected = false,
+}: {
+  connected?: boolean;
+}) {
   const router = useRouter(),
     { width, height } = useWindowDimensions();
   return (
     <SafeAreaView
-      testID="practice-screen"
+      testID={connected ? "connection-screen" : "practice-screen"}
       style={{ flex: 1, backgroundColor: colors.background }}
     >
       <StatusBar hidden={width > height} />
       <View style={{ flex: 1 }}>
         {width > height ? (
-          <NativeController />
+          <NativeController connected={connected} />
         ) : (
           <View
             testID="practice-orientation"
@@ -40,12 +44,14 @@ export default function Practice() {
                 textAlign: "center",
               }}
             >
-              Practice uses the landscape controller layout.
+              {connected
+                ? "The connected controller uses the landscape layout."
+                : "Practice uses the landscape controller layout."}
             </Text>
           </View>
         )}
         <Pressable
-          testID="practice-done"
+          testID={connected ? "connection-done" : "practice-done"}
           accessibilityRole="button"
           accessibilityLabel="Done"
           onPress={() => router.back()}
@@ -69,4 +75,8 @@ export default function Practice() {
       </View>
     </SafeAreaView>
   );
+}
+
+export default function Practice() {
+  return <ControllerScreen />;
 }

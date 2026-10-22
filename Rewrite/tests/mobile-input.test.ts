@@ -3,6 +3,7 @@ import fixture from "../packages/fixtures/mobile-input-v1.json";
 import {
   decodeControlMap,
   decodePracticeAdmission,
+  decodeConnectionAdmission,
 } from "@thumble/contracts/mobile-input";
 import { decodeGamepadState } from "@thumble/contracts";
 import { encodeGamepadReport } from "@thumble/domain";
@@ -146,5 +147,59 @@ test("practice admission requires a native neutral-output receipt and rejects ma
       status: "unavailable",
       generation: "1",
     }),
+  ).toThrow();
+});
+
+test("native connection admission accepts only metadata and exact live receipts", () => {
+  const ready = {
+    version: 1,
+    status: "ready",
+    generation: "7",
+    revision: "4",
+    practice: false,
+    connected: true,
+  } as const;
+  expect(decodeConnectionAdmission(ready)).toEqual(ready);
+  for (const status of [
+    "waiting",
+    "pairing",
+    "connecting",
+    "cancelled",
+    "unavailable",
+    "disconnected",
+  ] as const) {
+    expect(decodeConnectionAdmission({ version: 1, status })).toEqual({
+      version: 1,
+      status,
+    });
+    expect(() =>
+      decodeConnectionAdmission({ version: 1, status, secret: "not-allowed" }),
+    ).toThrow();
+  }
+  for (const change of [
+    { version: 2 },
+    { generation: "0" },
+    { generation: "01" },
+    { revision: 4 },
+    { practice: true },
+    { connected: false },
+    { secret: "not-allowed" },
+  ])
+    expect(() => decodeConnectionAdmission({ ...ready, ...change })).toThrow();
+  let invoked = false;
+  expect(() =>
+    decodeConnectionAdmission({
+      version: 1,
+      status: {
+        toString() {
+          invoked = true;
+          return "waiting";
+        },
+      },
+    }),
+  ).toThrow();
+  expect(invoked).toBe(false);
+  expect(() =>
+    decodeConnectionAdmission({ version: 1, status: "starting" }),
   ).toThrow();
 });

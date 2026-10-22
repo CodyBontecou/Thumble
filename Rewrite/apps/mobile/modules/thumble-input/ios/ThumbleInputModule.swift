@@ -16,7 +16,13 @@ public final class ThumbleInputModule: Module {
       Prop("practiceMap") { (view: ThumbleInputView, value: [String: Any]) in
         view.pendingPractice = value
       }
-      OnViewDidUpdateProps { (view: ThumbleInputView) in view.admitPractice() }
+      Prop("connectionMap") { (view: ThumbleInputView, value: [String: Any]) in
+        view.pendingConnection = value
+      }
+      OnViewDidUpdateProps { (view: ThumbleInputView) in
+        view.admitPractice()
+        view.admitConnection()
+      }
       AsyncFunction("configure") { (view: ThumbleInputView, value: [String: Any]) in
         let map = try ThumbleInputView.decodeMap(value)
         let receipt = try withInputView(view) { try $0.configure(map) }
@@ -41,10 +47,11 @@ public final class ThumbleInputModule: Module {
 
 @MainActor final class ThumbleInputView: ExpoView {
   let onAdmission = EventDispatcher()
+  fileprivate var pendingConnection: [String: Any]?
   fileprivate var pendingPractice: [String: Any]?
   private var practiceAdmitted = false
   fileprivate func admitPractice() {
-    guard let pendingPractice, !practiceAdmitted else { return }
+    guard pendingConnection == nil, let pendingPractice, !practiceAdmitted else { return }
     practiceAdmitted = true
     do {
       let receipt = try configure(Self.decodeMap(pendingPractice))
@@ -68,6 +75,69 @@ public final class ThumbleInputModule: Module {
       self?.setNeedsDisplay()
     })
   lazy var surface = InputSurface(engine: engine)
+  private var liveOwned = false
+  private var liveMode = false
+  private var connectionAttempted = false
+  private var connection: PhoneConnection?
+  fileprivate func admitConnection() {
+    guard !disposed, !connectionAttempted, let pendingConnection, window != nil,
+      bounds.width > 0, bounds.height > 0
+    else { return }
+    connectionAttempted = true
+    do {
+      guard pendingPractice == nil else { throw InputError.invalidMap }
+      let template = try Self.decodeMap(pendingConnection)
+      _ = try configure(template)
+      let flow = PhoneConnection(
+        anchor: self,
+        feedback: { [weak self] state in self?.publishFeedback(state) },
+        install: { [weak self] engine in
+          guard let self, self.window != nil, !self.disposed else { throw InputError.unavailable }
+          try self.adoptConnectedEngine(engine)
+        },
+        status: { [weak self] status in
+          self?.onAdmission(["admission": ["version": 1, "status": status]])
+        })
+      connection = flow
+      flow.start(template: template)
+    } catch {
+      onAdmission(["admission": ["version": 1, "status": "unavailable"]])
+    }
+  }
+  func publishFeedback(_ state: GamepadStateV1) {
+    feedbackState = state
+    setNeedsDisplay()
+  }
+  func adoptConnectedEngine(_ next: InputEngine) throws {
+    guard !disposed, window != nil else { throw InputError.unavailable }
+    let nextSurface = try InputSurface(connectedEngine: next)
+    guard let map = nextSurface.configuration else { throw InputError.unavailable }
+    portal?.removeFromSuperview()
+    portal = nil
+    surface.removeFromSuperview()
+    surface.dispose()
+    engine = next
+    surface = nextSurface
+    configured = map
+    lastReceipt = nil
+    liveOwned = true
+    liveMode = true
+    installPortal()
+    guard next.connected else { throw InputError.unavailable }
+    onAdmission([
+      "admission": [
+        "version": 1, "status": "ready", "generation": map.generation,
+        "revision": map.revision, "practice": false, "connected": true,
+      ]
+    ])
+  }
+  fileprivate func connectionTick() {
+    if liveOwned && !engine.connected {
+      liveOwned = false
+      connection?.close()
+      onAdmission(["admission": ["version": 1, "status": "disconnected"]])
+    }
+  }
   private var feedbackState = GamepadStateV1.neutral
   private var lastReceipt: ActivationReceipt?
   private var configured: ControlMap?
@@ -81,12 +151,21 @@ public final class ThumbleInputModule: Module {
   override func layoutSubviews() {
     super.layoutSubviews()
     portal?.synchronize()
+    admitConnection()
   }
   override func didMoveToWindow() {
     super.didMoveToWindow()
     portal?.removeFromSuperview()
     portal = nil
     surface.removeFromSuperview()
+    guard window != nil, !disposed else {
+      connection?.close()
+      return
+    }
+    installPortal()
+    admitConnection()
+  }
+  private func installPortal() {
     guard let window, !disposed else { return }
     // UIWindow-owned sibling: no React root gesture recognizer in touch ancestry.
     let next = TouchPortal(anchor: self, surface: surface)
@@ -106,7 +185,7 @@ public final class ThumbleInputModule: Module {
     }
   }
   func configure(_ map: ControlMap) throws -> ActivationReceipt {
-    guard !disposed else { throw InputError.unavailable }
+    guard !disposed, !liveMode else { throw InputError.unavailable }
     // React may repeat the same configuration while replaying an effect. An
     // identical map acknowledges existing ownership without creating touches.
     if let previous = configured, let receipt = lastReceipt, Self.same(previous, map) {
@@ -118,13 +197,14 @@ public final class ThumbleInputModule: Module {
     return receipt
   }
   func practice(_ enabled: Bool) throws {
-    guard !disposed else { throw InputError.unavailable }
+    guard !disposed, !liveMode else { throw InputError.unavailable }
     surface.setPractice(enabled)
   }
   func release(_ reason: ReleaseReason) {
     guard !disposed else { return }
     if reason == .disposed {
       disposed = true
+      connection?.close()
       portal?.removeFromSuperview()
       portal = nil
       surface.removeFromSuperview()
@@ -239,6 +319,7 @@ public final class ThumbleInputModule: Module {
       removeFromSuperview()
       return
     }
+    anchor.connectionTick()
     let nextFrame = anchor.convert(anchor.bounds, to: window)
     var visible = nextFrame
     var ancestor: UIView? = anchor
@@ -260,7 +341,7 @@ public final class ThumbleInputModule: Module {
     if !available && !isHidden { surface.release(.disconnected) }
     isHidden = !available
     if frame != nextFrame {
-      surface.release(.rotation)
+      if frame.size != .zero { surface.release(.rotation) }
       frame = nextFrame
       surface.frame = bounds
     }

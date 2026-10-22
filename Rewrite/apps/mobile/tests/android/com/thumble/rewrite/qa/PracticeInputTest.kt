@@ -115,7 +115,8 @@ class PracticeInputTest {
         target.startActivity(launch)
         waitForTargetApp()
         device.waitForIdle()
-        device.findObject(By.res("practice-done"))?.click()
+        (device.findObject(By.res("practice-done")) ?: device.findObject(By.res("connection-done")))
+            ?.click()
         assertTrue(device.wait(Until.gone(By.res("practice-done")), 10_000))
         device.setOrientationNatural()
         awaitRotation(0)
@@ -151,7 +152,8 @@ class PracticeInputTest {
         target.startActivity(launch)
         waitForTargetApp()
         device.waitForIdle()
-        checkNotNull(device.wait(Until.findObject(By.res("practice-done")), 15_000)).click()
+        (device.findObject(By.res("practice-done")) ?: device.findObject(By.res("connection-done")))
+            ?.click()
         assertTrue(
             "Done did not return home",
             device.wait(Until.gone(By.res("practice-done")), 10_000),
@@ -231,6 +233,143 @@ class PracticeInputTest {
                 surface.dispose()
             }
         }
+    }
+
+    @Test
+    fun appCaptureAdoptsExactNativeReceiptWithoutFirstLayoutRelease() {
+        ui {
+            val old = controller.engine
+            val map =
+                com.thumble.rewrite.input.ControlMap(
+                    generation = "7",
+                    revision = "4",
+                    controls =
+                        listOf(
+                            com.thumble.rewrite.input.ControlRegion(
+                                "face",
+                                "south",
+                                0.0,
+                                0.0,
+                                1.0,
+                                1.0,
+                            )
+                        ),
+                )
+            val engine = com.thumble.rewrite.input.InputEngine({ true })
+            engine.activate(map)
+            engine.connect("7")
+            controller.adoptConnectedEngine(engine)
+            assertFalse(old.connected)
+            assertEquals(GamepadReport.neutral(), old.state)
+            assertTrue(engine === controller.engine)
+            assertTrue(engine.connected)
+            assertEquals("7", controller.surface.configuration?.generation)
+            assertEquals("4", controller.surface.configuration?.revision)
+            try {
+                controller.practice(true)
+                fail("React practice replaced live owner")
+            } catch (_: IllegalStateException) {}
+            assertTrue(engine.connected)
+        }
+        device.waitForIdle()
+        val center = ui {
+            assertTrue(controller.engine.connected)
+            val origin = IntArray(2)
+            controller.surface.getLocationOnScreen(origin)
+            Point(
+                origin[0] + controller.surface.width / 2f,
+                origin[1] + controller.surface.height / 2f,
+            )
+        }
+        SystemClock.sleep(30)
+        val down = SystemClock.uptimeMillis()
+        send(down, MotionEvent.ACTION_DOWN, listOf(center))
+        ui { assertEquals(setOf("south"), controller.engine.state.buttons.map { it.name }.toSet()) }
+        send(down, MotionEvent.ACTION_UP, listOf(center))
+        ui {
+            assertEquals(GamepadReport.neutral(), controller.engine.state)
+            controller.release(com.thumble.rewrite.input.ReleaseReason.disposed)
+            assertFalse(controller.engine.connected)
+        }
+    }
+
+    private fun probe(path: String): JSONObject {
+        val port =
+            checkNotNull(InstrumentationRegistry.getArguments().getString("thumbleProbePort"))
+                .toInt()
+        require(port in 1..65535)
+        return java.net.Socket("127.0.0.1", port).use { socket ->
+            socket.soTimeout = 6000
+            socket
+                .getOutputStream()
+                .write(
+                    "GET $path HTTP/1.0\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+                        .toByteArray(Charsets.US_ASCII)
+                )
+            val response = socket.getInputStream().bufferedReader().readText()
+            check(response.startsWith("HTTP/1.0 200")) { "recording_only_host_witness_failed" }
+            JSONObject(response.substringAfter("\r\n\r\n"))
+        }
+    }
+
+    @Test
+    fun nativePairingVaultBindingAndReconnectReachRecordingReceiver() {
+        val invitation = probe("/begin").toString()
+        checkNotNull(device.findObject(By.res("practice-done"))).click()
+        for (generation in listOf("1", "2")) {
+            if (generation == "2") probe("/next")
+            checkNotNull(device.wait(Until.findObject(By.res("home-connect")), 10_000)).click()
+            assertNotNull(
+                device.wait(Until.findObject(By.text("Connect to your computer")), 10_000)
+            )
+            if (generation == "1") {
+                val field = checkNotNull(device.findObject(By.desc("Pairing invitation")))
+                field.text = invitation
+                checkNotNull(device.findObject(By.res("android:id/button1"))).click()
+            } else checkNotNull(device.findObject(By.res("android:id/button3"))).click()
+            awaitText("Connected to receiver")
+            controller = ui {
+                val activity =
+                    ActivityLifecycleMonitorRegistry.getInstance()
+                        .getActivitiesInStage(Stage.RESUMED)
+                        .single()
+                checkNotNull(find(activity.window.decorView))
+            }
+            ui {
+                assertTrue(controller.engine.connected)
+                assertEquals(generation, controller.engine.generation)
+                assertEquals(GamepadReport.neutral(), controller.engine.state)
+            }
+            probe("/fresh")
+            val south =
+                fixture.getJSONArray("probes").let { probes ->
+                    (0 until probes.length())
+                        .map { probes.getJSONObject(it) }
+                        .first { it.getString("id") == "standard-south" }
+                }
+            SystemClock.sleep(30)
+            val down = SystemClock.uptimeMillis()
+            val held = point(south)
+            send(down, MotionEvent.ACTION_DOWN, listOf(held))
+            probe("/held")
+            val done = checkNotNull(device.findObject(By.res("connection-done"))).visibleCenter
+            val points = listOf(held, Point(done.x.toFloat(), done.y.toFloat()))
+            send(
+                down,
+                MotionEvent.ACTION_POINTER_DOWN or (1 shl MotionEvent.ACTION_POINTER_INDEX_SHIFT),
+                points,
+            )
+            send(
+                down,
+                MotionEvent.ACTION_POINTER_UP or (1 shl MotionEvent.ACTION_POINTER_INDEX_SHIFT),
+                points,
+            )
+            send(down, MotionEvent.ACTION_UP, listOf(held))
+            assertNotNull(device.wait(Until.findObject(By.res("home-connect")), 10_000))
+            probe("/neutral")
+            ui { assertFalse(controller.engine.connected) }
+        }
+        probe("/finish")
     }
 
     private data class Point(val x: Float, val y: Float)
