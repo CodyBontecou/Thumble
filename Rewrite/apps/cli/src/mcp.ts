@@ -1,9 +1,11 @@
+import { decodeConfigurationCommand } from "@thumble/contracts/configuration";
 import { McpServer, type CallToolResult } from "@modelcontextprotocol/server";
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import {
   readEndpointAsync,
   request,
   requestPairing,
+  requestConfiguration,
 } from "@thumble/client/local";
 import { decodeLocalCommand } from "@thumble/contracts/receiver";
 import { GAMEPAD_BUTTONS } from "@thumble/contracts";
@@ -14,6 +16,7 @@ export function startMcp(
   root: string,
   receiver: string,
   allowRecordedInput: boolean,
+  allowConfigurationWrite = false,
 ): void {
   let traces = 0;
   const trace = (phase: string): void => {
@@ -25,6 +28,8 @@ export function startMcp(
     "receiver_release",
     "pairing_status",
     "pairing_list",
+    "configuration_list",
+    ...(allowConfigurationWrite ? ["configuration_rename_profile"] : []),
     ...(allowRecordedInput ? ["receiver_activate", "receiver_sample"] : []),
   ]);
   const transport = new BoundedStdioTransport(
@@ -115,6 +120,61 @@ export function startMcp(
                 command:
                   action === "status" ? "pairing-status" : "pairing-list",
               }),
+            ),
+        );
+      server.registerTool(
+        "configuration_list",
+        {
+          description:
+            "Read one bounded page of saved profile metadata. Catalog validation does not establish runtime validity. Pin expectedRevision when reading subsequent pages.",
+          inputSchema: z
+            .object({
+              expectedRevision: epoch.nullable(),
+              offset: z.number().int().min(0).max(255),
+            })
+            .strict(),
+          annotations: annotations(true),
+        },
+        (args) =>
+          receipt(async () =>
+            requestConfiguration(
+              await readEndpointAsync(root, receiver),
+              decodeConfigurationCommand({
+                command: "configuration-list",
+                ...args,
+              }),
+            ),
+          ),
+      );
+      if (allowConfigurationWrite)
+        server.registerTool(
+          "configuration_rename_profile",
+          {
+            description:
+              "Rename the explicit saved profile at expectedRevision, preserving unrelated source. Retry with the same operationId and payload for the original durable receipt. Does not publish input configuration.",
+            inputSchema: z
+              .object({
+                operationId: z.string().regex(/^[A-Za-z0-9-]{1,64}$/),
+                expectedRevision: epoch,
+                profileId: z
+                  .string()
+                  .regex(
+                    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+                  ),
+                name: z.string().min(1).max(512),
+              })
+              .strict(),
+            annotations: annotations(false),
+          },
+          (args) =>
+            receipt(async () =>
+              requestConfiguration(
+                await readEndpointAsync(root, receiver),
+                decodeConfigurationCommand({
+                  command: "configuration-rename-profile",
+                  ...args,
+                }),
+              ),
             ),
         );
       // Capability comes only from the launching user's flag, never tool arguments.

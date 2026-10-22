@@ -1,3 +1,9 @@
+import {
+  decodeConfigurationCommand,
+  decodeConfigurationReply,
+  type ConfigurationCommand,
+  type ConfigurationReply,
+} from "@thumble/contracts/configuration";
 import { decodePairingResponse } from "./pairing.ts";
 import {
   decodePairingCommand,
@@ -202,9 +208,18 @@ export function requestPairing(
     return decodePairingResponse(value, endpoint.instanceId, body);
   });
 }
+export function requestConfiguration(
+  endpoint: Endpoint,
+  input: ConfigurationCommand,
+): Promise<ConfigurationReply> {
+  const command = decodeConfigurationCommand(input);
+  return exchange(endpoint, command, (value) =>
+    decodeConfigurationReply(value, command),
+  );
+}
 function exchange<Result>(
   endpoint: Endpoint,
-  body: LocalCommand | PairingCommand,
+  body: LocalCommand | PairingCommand | ConfigurationCommand,
   decode: (value: unknown) => Result,
 ): Promise<Result> {
   const requestId = randomUUID();

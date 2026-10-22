@@ -6,9 +6,11 @@
   "exports": {
     ".": "./src/runtime-controller.ts",
     "./pairing": "./src/pairing.ts",
-    "./configuration-store": "./src/configuration-store.ts"
+    "./configuration-store": "./src/configuration-store.ts",
+    "./configuration-catalog": "./src/configuration-catalog.ts"
   },
   "dependencies": {
-    "@thumble/contracts": "workspace:*"
+    "@thumble/contracts": "workspace:*",
+    "@thumble/domain": "workspace:*"
   }
 }

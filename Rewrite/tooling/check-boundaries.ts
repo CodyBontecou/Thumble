@@ -16,7 +16,13 @@ export function checkPortableSource(
     } else if (
       !(
         name !== "contracts" &&
-        /^@thumble\/contracts(?:\/(?:receiver|mobile-input|pairing|json))?$/.test(
+        /^@thumble\/contracts(?:\/(?:receiver|mobile-input|pairing|json|configuration))?$/.test(
+          module,
+        )
+      ) &&
+      !(
+        name === "application" &&
+        /^@thumble\/domain(?:\/(?:configuration-catalog|controller-layout))?$/.test(
           module,
         )
       )

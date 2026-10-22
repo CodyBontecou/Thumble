@@ -107,6 +107,7 @@ try {
             "receiver_release",
             "pairing_status",
             "pairing_list",
+            "configuration_list",
             ...(recording ? ["receiver_activate", "receiver_sample"] : []),
           ].sort(),
         );

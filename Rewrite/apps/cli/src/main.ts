@@ -1,3 +1,4 @@
+import { decodeConfigurationCommand } from "@thumble/contracts/configuration";
 import { startMcp } from "./mcp.ts";
 import { decodeHostIdentity } from "@thumble/contracts/host-identity";
 import { spawn, spawnSync } from "node:child_process";
@@ -9,6 +10,7 @@ import {
   readStateFile,
   request,
   requestPairing,
+  requestConfiguration,
   runtimeDirectory,
 } from "@thumble/client/local";
 import {
@@ -25,12 +27,22 @@ function options(values: string[]): Map<string, string | true> {
     const key = values[i]!;
     if (!key.startsWith("--") || result.has(key))
       throw new Error("invalid_arguments");
-    if (["--json", "--allow-recorded-input", "--reveal-secret"].includes(key)) {
+    if (
+      [
+        "--json",
+        "--allow-recorded-input",
+        "--reveal-secret",
+        "--allow-configuration-write",
+      ].includes(key)
+    ) {
       result.set(key, true);
       continue;
     }
     if (
       ![
+        "--operation-id",
+        "--name",
+        "--offset",
         "--identity-dir",
         "--bind-address",
         "--advertise-host",
@@ -106,10 +118,20 @@ async function main(): Promise<unknown> {
     if (action !== "serve") throw new Error("unsupported_mcp_command");
     for (const key of opts.keys())
       if (
-        !["--runtime-dir", "--receiver", "--allow-recorded-input"].includes(key)
+        ![
+          "--runtime-dir",
+          "--receiver",
+          "--allow-recorded-input",
+          "--allow-configuration-write",
+        ].includes(key)
       )
         throw new Error("invalid_mcp_option");
-    startMcp(root, receiver, opts.get("--allow-recorded-input") === true);
+    startMcp(
+      root,
+      receiver,
+      opts.get("--allow-recorded-input") === true,
+      opts.get("--allow-configuration-write") === true,
+    );
     return undefined;
   }
   if (family === "identity") {
@@ -252,6 +274,54 @@ async function main(): Promise<unknown> {
         | "pairing-cancel"
         | "pairing-stop-listening",
     });
+  }
+  if (family === "configuration") {
+    if (action !== "list" && action !== "rename-profile")
+      throw new Error("unsupported_configuration_command");
+    const allowed =
+      action === "list"
+        ? [
+            "--runtime-dir",
+            "--receiver",
+            "--json",
+            "--expected-revision",
+            "--offset",
+          ]
+        : [
+            "--runtime-dir",
+            "--receiver",
+            "--json",
+            "--expected-revision",
+            "--operation-id",
+            "--profile-id",
+            "--name",
+          ];
+    for (const key of opts.keys())
+      if (!allowed.includes(key))
+        throw new Error("invalid_configuration_option");
+    const rawOffset = opts.get("--offset") ?? "0";
+    if (
+      action === "list" &&
+      (typeof rawOffset !== "string" ||
+        !/^(?:0|[1-9][0-9]{0,2})$/.test(rawOffset))
+    )
+      throw new Error("invalid_configuration_offset");
+    const command = decodeConfigurationCommand(
+      action === "list"
+        ? {
+            command: "configuration-list",
+            expectedRevision: opts.get("--expected-revision") ?? null,
+            offset: Number(rawOffset),
+          }
+        : {
+            command: "configuration-rename-profile",
+            operationId: required(opts, "--operation-id"),
+            expectedRevision: required(opts, "--expected-revision"),
+            profileId: required(opts, "--profile-id"),
+            name: required(opts, "--name"),
+          },
+    );
+    return requestConfiguration(readEndpoint(root, receiver), command);
   }
   let command: LocalCommand;
   if ((family === "service" || family === "receiver") && action === "status")

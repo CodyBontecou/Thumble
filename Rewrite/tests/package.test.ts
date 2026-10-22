@@ -1,3 +1,5 @@
+import { SqliteConfigurationRepository } from "@thumble/storage";
+import { catalogFixtureSource, a, b } from "./helpers/configuration-fixture.ts";
 import { expect, test } from "bun:test";
 import {
   existsSync,
@@ -84,6 +86,21 @@ packageTest(
       }
       return parseStrictJson(out);
     };
+    const configuration = new SqliteConfigurationRepository(
+      runtime,
+      join(directory, `thumble-rewrite-receiver${extension}`),
+    );
+    try {
+      configuration.commit({
+        operationId: "fixture-seed",
+        payloadHash: "f".repeat(64),
+        expectedRevision: "0",
+        source: catalogFixtureSource(),
+        affectedEntities: [a, b],
+      });
+    } finally {
+      configuration.close();
+    }
     try {
       const identity = await invoke("initialize", "identity");
       expect(identity.result.certificatePin).toMatch(/^[0-9a-f]{64}$/);
@@ -104,6 +121,33 @@ packageTest(
       expect(status.result.service.instanceId).toBe(
         started.result.service.instanceId,
       );
+      const configurationProbe = Bun.spawn(
+        [
+          "node",
+          resolve(root, "tooling/test-configuration-mcp-node.mjs"),
+          process.execPath,
+          join(directory, `thumble-rewrite${extension}`),
+          join(directory, `thumble-rewrite-receiver${extension}`),
+          runtime,
+          process.platform === "win32"
+            ? (process.env.SystemRoot ?? "C:\\Windows") + "\\System32"
+            : "/usr/bin:/bin",
+        ],
+        { stdout: "pipe", stderr: "pipe" },
+      );
+      const [configurationOut, configurationErr, configurationCode] =
+        await Promise.all([
+          new Response(configurationProbe.stdout).text(),
+          new Response(configurationProbe.stderr).text(),
+          configurationProbe.exited,
+        ]);
+      expect(configurationErr).toBe("");
+      expect(configurationCode).toBe(0);
+      expect(JSON.parse(configurationOut)).toEqual({
+        ok: true,
+        scenarios: 4,
+        server: "standalone",
+      });
       const pairing = await invoke("open", "pairing", "--reveal-secret");
       expect(pairing.result.offer.secret).toMatch(/^[0-9a-f]{64}$/);
       const pairingStatus = await invoke("status", "pairing");

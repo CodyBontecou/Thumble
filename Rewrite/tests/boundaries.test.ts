@@ -36,3 +36,23 @@ test("portable domain imports and ordinary document variables remain valid", () 
     ),
   ).toThrow();
 });
+
+// The application may use pure domain operations, but domain/contracts cannot
+// reverse that dependency or acquire storage/platform adapters.
+test("application operations can depend on domain while reverse imports remain forbidden", () => {
+  expect(() =>
+    checkPortableSource(
+      "packages/application/src/catalog.ts",
+      'import { ConfigurationCatalog } from "@thumble/domain/configuration-catalog";',
+      "application",
+    ),
+  ).not.toThrow();
+  for (const name of ["domain", "contracts", "client"] as const)
+    expect(() =>
+      checkPortableSource(
+        `packages/${name}/src/catalog.ts`,
+        'import { ConfigurationCatalog } from "@thumble/domain/configuration-catalog";',
+        name,
+      ),
+    ).toThrow();
+});

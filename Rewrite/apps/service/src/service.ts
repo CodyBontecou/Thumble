@@ -1,3 +1,9 @@
+import { createHash } from "node:crypto";
+import { ConfigurationCatalogOperations } from "@thumble/application/configuration-catalog";
+import {
+  decodeConfigurationCommand,
+  type ConfigurationReply,
+} from "@thumble/contracts/configuration";
 import { SqliteConfigurationRepository } from "@thumble/storage";
 import { NativePairingHost } from "./native-pairing.ts";
 import {
@@ -77,6 +83,11 @@ export async function serve(
     native.disconnect();
     throw error;
   }
+  const catalogOperations = new ConfigurationCatalogOperations(
+    configuration,
+    (payload) => createHash("sha256").update(payload, "utf8").digest("hex"),
+    () => Date.now().toString(),
+  );
   const controller = new RuntimeController(native, randomUUID);
   const pairing = new NativePairingHost(
     executable,
@@ -156,9 +167,17 @@ export async function serve(
             )
           )
             throw new Error("unauthorized");
-          let result: ServiceStatus | PairingReply;
+          let result: ServiceStatus | PairingReply | ConfigurationReply;
           const operation = record(envelope.body).command;
           if (
+            typeof operation === "string" &&
+            operation.startsWith("configuration-")
+          ) {
+            result = catalogOperations.execute(
+              decodeConfigurationCommand(envelope.body),
+              { read: true, write: true },
+            );
+          } else if (
             typeof operation === "string" &&
             operation.startsWith("pairing-")
           ) {

@@ -9,6 +9,7 @@
     "./mobile-input": "./src/mobile-input.ts",
     "./host-identity": "./src/host-identity.ts",
     "./pairing": "./src/pairing.ts",
-    "./json": "./src/lossless-json.ts"
+    "./json": "./src/lossless-json.ts",
+    "./configuration": "./src/configuration.ts"
   }
 }

@@ -5,13 +5,8 @@ export type ConfigurationSource = Readonly<{
   contentHash: string;
   source: LosslessJson;
 }>;
-export type ConfigurationReceipt = Readonly<{
-  version: 1;
-  operationId: string;
-  resultingRevision: string;
-  contentHash: string;
-  affectedEntities: readonly string[];
-}>;
+import type { ConfigurationReceipt } from "@thumble/contracts/configuration";
+export type { ConfigurationReceipt } from "@thumble/contracts/configuration";
 export type ConfigurationCommit = Readonly<{
   operationId: string;
   payloadHash: string;
