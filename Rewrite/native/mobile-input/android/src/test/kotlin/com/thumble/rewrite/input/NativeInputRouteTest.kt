@@ -192,4 +192,42 @@ class NativeInputRouteTest {
         assertTrue(route.offer(sender.seal(GamepadReport.neutral())))
         assertTrue(route.reliable)
     }
+
+    @Test
+    fun freshGrantRouteRetainsKnownFallbackWithFreshProgress() {
+        val old = NativeInputRoute({ 0 }, { false }, { true })
+        val sender = InputPacketSender(grant())
+        assertTrue(old.offer(sender.seal(GamepadReport.neutral())))
+        assertTrue(old.offer(sender.seal(GamepadReport.neutral())))
+        assertTrue(old.observe(progress(1uL)))
+        assertTrue(old.reliable)
+        var udp = 0
+        val tls = mutableListOf<ByteArray>()
+        val successor =
+            NativeInputRoute(
+                { 0 },
+                {
+                    udp++
+                    true
+                },
+                {
+                    tls.add(it)
+                    true
+                },
+                initiallyReliable = old.reliable,
+            )
+        old.close()
+        val fresh =
+            InputPacketSender(
+                InputPacketGrant(ByteArray(32) { 6 }, ByteArray(16) { 6 }, ByteArray(4) { 6 }, 1uL)
+            )
+        assertNull(successor.acknowledged)
+        assertNull(successor.lastOffered)
+        assertTrue(successor.offer(fresh.seal(GamepadReport.neutral())))
+        assertTrue(successor.offer(fresh.seal(GamepadReport.neutral())))
+        assertEquals(2, tls.size)
+        assertEquals(0, udp)
+        assertTrue(successor.reliable)
+        assertTrue(successor.observe(progress(0uL)))
+    }
 }

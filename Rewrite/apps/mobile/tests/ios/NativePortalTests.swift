@@ -207,9 +207,13 @@ import XCTest
       if generation == "2" { _ = try await probe("/next") }
       let view = try install(in: window)
       var phases: [String] = []
+      var publications = 0
       let flow = PhoneConnection(
         anchor: view,
-        feedback: { [weak view] in view?.publishFeedback($0) },
+        feedback: { [weak view] in
+          publications += 1
+          view?.publishFeedback($0)
+        },
         install: { [weak view] engine in
           guard let view else { throw InputError.unavailable }
           try view.adoptConnectedEngine(engine)
@@ -271,6 +275,32 @@ import XCTest
         view.engine.begin(
           id: 1, generation: generation, x: south.x + south.width / 2, y: south.y + south.height / 2
         ))
+      if generation == "1" {
+        let trigger = try XCTUnwrap(template.controls.first { $0.action == "leftTrigger" })
+        XCTAssertTrue(
+          view.engine.begin(
+            id: 2, generation: generation,
+            x: trigger.x + trigger.width / 2, y: trigger.y + trigger.height / 2))
+        _ = try await probe("/renewal-start")
+        let beforePublications = publications
+        let until = ContinuousClock.now.advanced(by: .seconds(75))
+        while ContinuousClock.now < until {
+          try await Task.sleep(for: .milliseconds(250))
+          guard view.engine.connected else {
+            throw NSError(
+              domain: "ThumbleNativePortalTests", code: 2,
+              userInfo: [
+                NSLocalizedDescriptionKey:
+                  "Native hold ended: reason=\(String(describing: view.engine.lastRelease)) elapsedMs=\(75000 - Int(ContinuousClock.now.duration(to: until).components.seconds * 1000)) appState=\(UIApplication.shared.applicationState.rawValue) idleDisabled=\(UIApplication.shared.isIdleTimerDisabled) publications=\(publications-beforePublications)"
+              ])
+          }
+          XCTAssertTrue(view.engine.state.buttons.contains(.south))
+          XCTAssertEqual(view.engine.state.leftTrigger, 1)
+        }
+        _ = try await probe("/renewal-verified")
+        XCTAssertGreaterThan(publications, beforePublications)
+        view.engine.end(id: 2, generation: generation)
+      }
       _ = try await probe("/held")
       view.release(.disposed)
       view.removeFromSuperview()

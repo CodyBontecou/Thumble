@@ -149,3 +149,34 @@ private func routeProgress(_ sequence: UInt64?, active: Bool = true) throws -> P
   #expect(!route.reliable)
   #expect(route.offer(try sender.seal(.neutral)) && route.reliable)
 }
+
+@Test @MainActor private func freshGrantRouteRetainsKnownFallbackWithFreshProgress() throws {
+  let old = NativeInputRoute(now: { 0 }, udp: { _ in false }, tls: { _ in true })
+  let sender = try InputPacketSender(grant: routeGrant())
+  #expect(old.offer(try sender.seal(.neutral)))
+  #expect(old.offer(try sender.seal(.neutral)))
+  #expect(old.observe(try routeProgress(1)) && old.reliable)
+  var udp = 0
+  var tls: [Data] = []
+  let successor = NativeInputRoute(
+    now: { 0 },
+    udp: { _ in
+      udp += 1
+      return true
+    },
+    tls: {
+      tls.append($0)
+      return true
+    }, initiallyReliable: old.reliable)
+  old.close()
+  let fresh = try InputPacketSender(
+    grant: InputPacketGrant(
+      key: Data(repeating: 6, count: 32),
+      session: Data(repeating: 6, count: 16), noncePrefix: Data(repeating: 6, count: 4),
+      generation: 1))
+  #expect(successor.acknowledged == nil && successor.lastOffered == nil)
+  #expect(successor.offer(try fresh.seal(.neutral)))
+  #expect(successor.offer(try fresh.seal(.neutral)))
+  #expect(tls.count == 2 && udp == 0 && successor.reliable)
+  #expect(successor.observe(try routeProgress(0)))
+}

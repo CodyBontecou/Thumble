@@ -425,10 +425,18 @@ class PhoneInputTest {
         for (mode in listOf("tls", "udp", "udp-blackhole")) actualNativeInputWitness(mode)
     }
 
+    @Test
+    fun actualAutomaticRenewalHoldsBeyondInitialExpiryAcrossUdpAndTlsFallback() {
+        for (mode in listOf("renewal-udp", "renewal-tls-fallback")) actualNativeInputWitness(mode)
+    }
+
     private fun actualNativeInputWitness(mode: String) {
+        val renewing = mode.startsWith("renewal-")
         val path = System.getenv("THUMBLE_NATIVE_INPUT_PROBE")
         org.junit.Assume.assumeTrue(path != null)
-        val process = ProcessBuilder(path!!).start()
+        val process =
+            (if (renewing) ProcessBuilder(path!!, "--renewal-watch") else ProcessBuilder(path!!))
+                .start()
         val reader = process.inputStream.bufferedReader()
         val reads = java.util.concurrent.Executors.newSingleThreadExecutor()
         var enrollment: PhoneEnrollmentClient? = null
@@ -493,9 +501,9 @@ class PhoneInputTest {
                         ::connect,
                         { _, _ -> saved },
                         System::currentTimeMillis,
-                        controlVersion = if (mode == "tls") 4 else 5,
+                        controlVersion = if (renewing) 6 else if (mode == "tls") 4 else 5,
                         datagramFactory = { host, port ->
-                            if (mode == "udp-blackhole")
+                            if (mode == "udp-blackhole" || mode == "renewal-tls-fallback")
                                 object : NativeDatagramIO {
                                     private var closed = false
 
@@ -521,7 +529,13 @@ class PhoneInputTest {
                     ControlMap(
                         generation = generation,
                         revision = generation,
-                        controls = map().controls,
+                        controls =
+                            if (renewing)
+                                listOf(
+                                    ControlRegion("south", "south", 0.0, 0.0, 0.4, 1.0),
+                                    ControlRegion("trigger", "leftTrigger", 0.5, 0.0, 0.4, 1.0),
+                                )
+                            else map().controls,
                     )
                 val admission = client.prepareInput(map)
                 val engine = admission.bind()
@@ -534,7 +548,33 @@ class PhoneInputTest {
                 command(122)
                 assertTrue(line().getBoolean("freshNeutral"))
                 assertTrue(engine.begin(1, generation, 0.2, 0.2))
-                if (generation == "1" || mode != "tls")
+                if (renewing && generation == "1") {
+                    assertTrue(engine.begin(2L, generation, 0.6, 0.2))
+                    // Keep native sampling active while initial UDP loss selects TLS fallback.
+                    repeat(16) {
+                        Thread.sleep(16)
+                        engine.tick()
+                    }
+                    command(98)
+                    assertTrue(line().getBoolean("watching"))
+                    val until = System.nanoTime() + TimeUnit.SECONDS.toNanos(75)
+                    while (System.nanoTime() < until) {
+                        Thread.sleep(16)
+                        engine.tick()
+                        assertTrue(engine.connected)
+                    }
+                    command(118)
+                    val verified = line()
+                    assertTrue(verified.getBoolean("continuousHeld"))
+                    assertTrue(verified.getInt("rotations") >= 2)
+                    assertTrue(verified.getLong("durationMs") >= 75_000)
+                    assertEquals(0, verified.getInt("neutralPulses"))
+                    assertEquals(350, verified.getInt("inputTtlMs"))
+                    println(
+                        "native-renewal-witness platform=kotlin mode=$mode durationMs=${verified.getLong("durationMs")} rotations=${verified.getInt("rotations")} samples=${verified.getInt("samples")}"
+                    )
+                    engine.end(2L, generation)
+                } else if (generation == "1" || mode != "tls")
                     repeat(if (generation == "1") 62 else 5) {
                         Thread.sleep(50)
                         engine.tick()

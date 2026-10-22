@@ -24,7 +24,7 @@ internal constructor(
             client.inputCheckpoint()
             val packet = grant ?: throw PhoneControlRejected()
             grant = null
-            val channel = InputPacketChannel(packet, 65_536, client::offerInput)
+            val channel = client.bindChannel(packet)
             val engine = InputEngine(channel::submit, feedback)
             engine.onRelease = {
                 channel.close()

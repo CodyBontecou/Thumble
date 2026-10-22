@@ -342,12 +342,14 @@ private func everyNativeLifecycleCancellationClosesTheGrantChannel(_ reason: Rel
 #if os(macOS)
   @Test(
     .enabled(if: ProcessInfo.processInfo.environment["THUMBLE_NATIVE_INPUT_PROBE"] != nil),
-    arguments: ["tls", "udp", "udp-blackhole"])
+    arguments: ["tls", "udp", "udp-blackhole", "renewal-udp", "renewal-tls-fallback"])
   @MainActor
   private func actualPhoneTouchCrossesTlsAndNativeIpcThenRetiresAndReconnectsNeutral(mode: String)
     async throws
   {
+    let renewing = mode.hasPrefix("renewal-")
     let process = Process()
+    if renewing { process.arguments = ["--renewal-watch"] }
     let output = Pipe()
     let input = Pipe()
     process.executableURL = URL(
@@ -392,9 +394,12 @@ private func everyNativeLifecycleCancellationClosesTheGrantChannel(_ reason: Rel
         io: try ControlTLSClient(
           host: endpoint.host,
           port: endpoint.port, certificatePin: endpoint.certificatePin), storage: storage,
-        now: { UInt64(Date().timeIntervalSince1970 * 1000) }, controlVersion: mode == "tls" ? 4 : 5,
+        now: { UInt64(Date().timeIntervalSince1970 * 1000) },
+        controlVersion: renewing ? 6 : (mode == "tls" ? 4 : 5),
         datagramFactory: { host, port in
-          if mode == "udp-blackhole" { return BlackholeDatagram() }
+          if mode == "udp-blackhole" || mode == "renewal-tls-fallback" {
+            return BlackholeDatagram()
+          }
           return try NativeDatagramClient(host: host, port: port)
         })
       defer { control.close() }
@@ -407,7 +412,13 @@ private func everyNativeLifecycleCancellationClosesTheGrantChannel(_ reason: Rel
         metadata.active && metadata.generation == generation && metadata.revision == generation)
       #expect(!metadata.inputEnabled)
       let map = ControlMap(
-        generation: generation, revision: generation, controls: inputMap().controls)
+        generation: generation, revision: generation,
+        controls: renewing
+          ? [
+            ControlRegion(id: "south", action: "south", x: 0, y: 0, width: 0.4, height: 1),
+            ControlRegion(
+              id: "trigger", action: "leftTrigger", x: 0.5, y: 0, width: 0.4, height: 1),
+          ] : inputMap().controls)
       let engine = try await control.bindInput(map)
       let adopted = try engine.claimTouchSurface()
       #expect(adopted.generation == generation && adopted.revision == generation)
@@ -415,7 +426,33 @@ private func everyNativeLifecycleCancellationClosesTheGrantChannel(_ reason: Rel
       try command(122)
       #expect(try await line()["freshNeutral"] as? Bool == true)
       #expect(engine.begin(id: 1, generation: generation, x: 0.2, y: 0.2))
-      if generation == "1" || mode != "tls" {
+      if renewing && generation == "1" {
+        #expect(engine.begin(id: 2, generation: generation, x: 0.6, y: 0.2))
+        // Native frames keep flowing while the initial UDP loss detector selects fallback.
+        for _ in 0..<16 {
+          try await Task.sleep(for: .milliseconds(16))
+          engine.tick()
+        }
+        try command(98)
+        #expect(try await line()["watching"] as? Bool == true)
+        let until = ContinuousClock.now.advanced(by: .seconds(75))
+        while ContinuousClock.now < until {
+          try await Task.sleep(for: .milliseconds(16))
+          engine.tick()
+          try #require(engine.connected)
+        }
+        try command(118)
+        let verified = try await line()
+        #expect(verified["continuousHeld"] as? Bool == true)
+        #expect((verified["rotations"] as? Int ?? 0) >= 2)
+        #expect((verified["durationMs"] as? Int ?? 0) >= 75_000)
+        #expect(verified["neutralPulses"] as? Int == 0)
+        #expect(verified["inputTtlMs"] as? Int == 350)
+        print(
+          "native-renewal-witness platform=swift mode=\(mode) durationMs=\(verified["durationMs"] ?? 0) rotations=\(verified["rotations"] ?? 0) samples=\(verified["samples"] ?? 0)"
+        )
+        engine.end(id: 2, generation: generation)
+      } else if generation == "1" || mode != "tls" {
         for _ in 0..<(generation == "1" ? 62 : 5) {
           try await Task.sleep(for: .milliseconds(50))
           engine.tick()

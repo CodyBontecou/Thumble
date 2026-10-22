@@ -13,7 +13,11 @@ import Foundation
   private(set) var acknowledged: UInt64?
   private(set) var reliable = false
   private(set) var closed = false
-  init(now: @escaping () -> UInt64, udp: @escaping (Data) -> Bool, tls: @escaping (Data) -> Bool) {
+  init(
+    now: @escaping () -> UInt64, udp: @escaping (Data) -> Bool, tls: @escaping (Data) -> Bool,
+    initiallyReliable: Bool = false
+  ) {
+    reliable = initiallyReliable
     self.now = now
     self.udp = udp
     self.tls = tls

@@ -143,7 +143,7 @@ import UIKit
     status("connecting")
     let client = try PhoneControlClient(
       endpoint: endpoint, storage: storage,
-      inputSessions: true, datagrams: true)
+      inputSessions: true, datagrams: true, renewals: true)
     control = client
     guard try await client.authenticate().inputSessionAvailable else {
       throw InputError.unavailable

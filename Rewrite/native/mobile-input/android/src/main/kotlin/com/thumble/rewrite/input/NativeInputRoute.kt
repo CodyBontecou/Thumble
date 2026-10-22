@@ -5,6 +5,7 @@ internal class NativeInputRoute(
     private val now: () -> Long,
     private val udp: (ByteArray) -> Boolean,
     private val tls: (ByteArray) -> Boolean,
+    initiallyReliable: Boolean = false,
 ) {
     private var scope: ByteArray? = null
     private var next = 0uL
@@ -16,7 +17,7 @@ internal class NativeInputRoute(
     var acknowledged: ULong? = null
         private set
 
-    var reliable = false
+    var reliable = initiallyReliable
         private set
 
     var closed = false

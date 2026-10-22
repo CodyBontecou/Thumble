@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import queue
+import re
 import subprocess
 import sys
 import threading
@@ -21,7 +22,8 @@ class Probe:
         self.lines = queue.Queue(maxsize=32)
         self.lock = threading.Lock()
         self.completed = False
-        self.counts = {"held": 0, "fresh": 0, "neutral": 0}
+        self.failure_codes = []
+        self.counts = {"held": 0, "fresh": 0, "neutral": 0, "renewalStarts": 0, "renewalVerified": 0}
 
     def line(self):
         text = self.lines.get(timeout=5)
@@ -41,12 +43,19 @@ class Probe:
                 assert self.process is None, "app_probe_already_started"
                 executable = ROOT / "native/receiver/target/debug/examples/phone_input_probe"
                 assert executable.is_file(), "build native phone_input_probe before app tests"
-                self.process = subprocess.Popen([str(executable)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+                self.process = subprocess.Popen([str(executable), "--renewal-watch"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                 def read():
                     for line in self.process.stdout:
                         self.lines.put(line)
                     self.lines.put(b"")
                 threading.Thread(target=read, daemon=True).start()
+                def read_failures():
+                    for line in iter(lambda: self.process.stderr.readline(4096), b""):
+                        match = re.fullmatch(r'Error: "((?:probe|native_input)_[a-z_]{1,96})"', line.decode("utf-8", errors="replace").strip())
+                        if match:
+                            self.failure_codes.append(match.group(1))
+                            del self.failure_codes[:-8]
+                threading.Thread(target=read_failures, daemon=True).start()
                 offer = self.line()
                 assert offer.pop("scope") == "synthetic-loopback-recording-only"
                 assert self.command("a")["active"] is True
@@ -57,6 +66,16 @@ class Probe:
                 result = self.command("h")
                 assert result["held"] is True and result["inputEnabled"] is False
                 self.counts["held"] += 1
+            elif path == "/renewal-start":
+                result = self.command("b")
+                assert result["watching"] is True and result["inputTtlMs"] == 350
+                self.counts["renewalStarts"] += 1
+            elif path == "/renewal-verified":
+                result = self.command("v")
+                assert result["continuousHeld"] is True and result["durationMs"] >= 75000
+                assert result["rotations"] >= 2 and result["neutralPulses"] == 0 and result["inputTtlMs"] == 350
+                self.counts["renewalVerified"] += 1
+                print("app_native_renewal_verified " + json.dumps(result), flush=True)
             elif path == "/fresh":
                 result = self.command("c")
                 assert result["freshNeutral"] is True and result["firstSampleNeutral"] is True
@@ -72,7 +91,7 @@ class Probe:
                 result = self.command("f")
                 assert result["completed"] is True and result["inputEnabled"] is False
                 assert self.process.wait(timeout=5) == 0
-                assert self.counts == {"held": 2, "fresh": 2, "neutral": 2}, "missing native app receiver witnesses"
+                assert self.counts == {"held": 2, "fresh": 2, "neutral": 2, "renewalStarts": 1, "renewalVerified": 1}, "missing native app receiver witnesses"
                 self.completed = True
             else:
                 raise ValueError("app_probe_unknown_command")
@@ -112,7 +131,7 @@ def main():
                 if self.path != "/begin":
                     print("app_probe_phase_pass " + self.path, flush=True)
             except Exception as error:
-                print("app_probe_phase_failed " + self.path + " " + type(error).__name__, flush=True)
+                print("app_probe_phase_failed " + self.path + " " + type(error).__name__ + " probeFailure=" + (probe.failure_codes[-1] if probe.failure_codes else "none"), flush=True)
                 payload = b'{"error":"app_probe_failed"}'
                 self.send_response(500)
             self.send_header("Content-Type", "application/json")

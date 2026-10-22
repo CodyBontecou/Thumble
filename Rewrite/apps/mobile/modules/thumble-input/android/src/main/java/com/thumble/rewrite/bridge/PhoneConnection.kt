@@ -189,6 +189,7 @@ internal class PhoneConnection(
                         anchor.context.applicationContext,
                         inputSessions = true,
                         datagrams = true,
+                        renewals = true,
                     )
                 synchronized(gate) {
                     check(!closed)

@@ -351,6 +351,67 @@ class PracticeInputTest {
             val down = SystemClock.uptimeMillis()
             val held = point(south)
             send(down, MotionEvent.ACTION_DOWN, listOf(held))
+            if (generation == "1") {
+                val trigger =
+                    fixture.getJSONArray("probes").let { probes ->
+                        (0 until probes.length())
+                            .map { probes.getJSONObject(it) }
+                            .single { it.getString("id") == "standard-leftTrigger" }
+                    }
+                val heldBoth = listOf(held, point(trigger))
+                send(
+                    down,
+                    MotionEvent.ACTION_POINTER_DOWN or
+                        (1 shl MotionEvent.ACTION_POINTER_INDEX_SHIFT),
+                    heldBoth,
+                )
+                val context = ui {
+                    checkNotNull(
+                        (target.applicationContext as ReactApplication)
+                            .reactHost
+                            ?.currentReactContext
+                    )
+                }
+                val blocked = CountDownLatch(1)
+                val resume = CountDownLatch(1)
+                val finished = CountDownLatch(1)
+                assertTrue(
+                    context.runOnJSQueueThread {
+                        blocked.countDown()
+                        try {
+                            resume.await(100, TimeUnit.SECONDS)
+                        } finally {
+                            finished.countDown()
+                        }
+                    }
+                )
+                assertTrue(blocked.await(5, TimeUnit.SECONDS))
+                try {
+                    probe("/renewal-start")
+                    val publications = ui { controller.nativeFeedbackPublications }
+                    val until = SystemClock.uptimeMillis() + 75_000
+                    while (SystemClock.uptimeMillis() < until) {
+                        SystemClock.sleep(250)
+                        ui {
+                            assertTrue(controller.engine.connected)
+                            assertTrue(controller.engine.state.buttons.any { it.name == "south" })
+                            assertEquals(1.0, controller.engine.state.leftTrigger, 0.0)
+                        }
+                    }
+                    probe("/renewal-verified")
+                    assertTrue(ui { controller.nativeFeedbackPublications } > publications)
+                    assertEquals("JS resumed during native renewal", 1L, finished.count)
+                    send(
+                        down,
+                        MotionEvent.ACTION_POINTER_UP or
+                            (1 shl MotionEvent.ACTION_POINTER_INDEX_SHIFT),
+                        heldBoth,
+                    )
+                } finally {
+                    resume.countDown()
+                    assertTrue(finished.await(5, TimeUnit.SECONDS))
+                }
+            }
             probe("/held")
             val done = checkNotNull(device.findObject(By.res("connection-done"))).visibleCenter
             val points = listOf(held, Point(done.x.toFloat(), done.y.toFloat()))

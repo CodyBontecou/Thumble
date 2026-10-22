@@ -92,7 +92,40 @@ changes and renewal requests. Older protocol revisions retain lifetime work
 bounds. At most one current and one pending source exist per registry entry;
 renewal history is not retained.
 
-## Verification and remaining integration
+## Automatic native phone operation
+
+Both phone clients expose explicit native `renewals` opt-in, which requires the
+UDP/TLS input mode and negotiates control version 6. The bundled iOS and Android
+connection owners enable it. Existing SDK defaults and older control revisions
+retain their prior behavior; an unsupported hello never silently downgrades.
+Only credential expiry metadata is retained after authentication, not a second
+copy of the bearer for renewal.
+
+Renewal is scheduled from the continuous-time instant captured before the grant
+request, at grant lifetime minus 25 seconds (normally about 35 seconds). Both
+clients recheck the old authorization and input wall/continuous deadlines after
+renewal I/O. The new local wall deadline is clipped to the renewed host expiry
+and request time plus 60 seconds; the new continuous deadline includes time spent
+requesting the grant. Rollback or a reply arriving after any old local deadline
+is terminal. A receipt already bounded by credential expiry is not repeatedly
+renewed without an extension.
+
+Swift swaps the native channel and route on the main actor, retaining the same
+engine/captures, then ticks a full-state packet zero. Android's control worker
+prepares at most one renewal; the next UI-owned input sample performs the swap
+and offers packet zero. The worker's two-second commitment budget starts before
+its request, and it cannot query progress until that UI offer succeeds. It never
+mutates the touch engine from its network thread. Both clients require a
+non-null receiver acknowledgment on the new scope before finishing renewal.
+
+New routes reset source-scoped counters, headers and progress. They retain a
+known reliable fallback, so renewal does not retry a previously failed UDP path.
+The existing bounded datagram socket can be reused; old in-flight datagrams have
+no authority after host commitment. No grant material, scheduling, progress or
+per-sample state crosses the React bridge. Configuration ownership, native owner
+lease, input TTL, lifecycle cancellation and neutral reconnect are unchanged.
+
+## Verification and remaining acceptance
 
 The host tests use actual pinned TLS, SQLite trust, private receiver IPC and
 recorded native reports, with a controlled wall clock. Two renewals cross the
@@ -112,8 +145,21 @@ engine sample sequence while starting a fresh cryptographic counter. Native
 engine tests retain an actual held touch through two channel handoffs and reject
 stale channels, reused keys/sessions, closed sources and failed first delivery.
 
-These controlled-clock host and native engine tests do not establish a
-real-duration phone session. Automatic renewal scheduling, transport/progress
-handoff, app opt-in and a headless hold across multiple real 60-second deadlines
-remain required before claiming continuous phone operation. Physical gameplay, latency, signing and
-optical live-sync acceptance remain separate open gates.
+Controlled-clock client tests cover two automatic renewals while retaining a
+button and trigger, expiry/rollback or lifecycle cancellation during grant I/O,
+reused keys, malformed scope, missing commitment acknowledgment and Android's
+bounded wait for a UI sample. Native TLS witnesses additionally hold for at least
+75 real seconds in both UDP and forced fallback modes. The independent receiver
+checks every complete recorded report, counts at least two accepted counter
+resets and requires zero neutral pulses under a 350 ms input TTL, then verifies
+acknowledged release and neutral reconnect.
+
+Bundled app witnesses use the actual UIKit/Android frame loops and credential
+providers. The Android case injects two system touch pointers and blocks the
+actual JS queue throughout its 75-second hold; the UIKit case uses native
+semantic touch admission on the installed surface. Both require continued native
+feedback and the independent receiver proof before reconnecting. These headless
+recording witnesses do not establish physical gameplay, latency, ergonomics,
+production signing/driver behavior, haptics or mandatory optical live-sync
+acceptance. Cold hosted app validation remains required for each published
+snapshot.

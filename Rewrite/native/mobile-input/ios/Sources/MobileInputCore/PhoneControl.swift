@@ -34,6 +34,12 @@ extension PhoneCredentialWorker: ControlCredentialSource {}
   private var last: UInt64 = 0
   private var deadline: UInt64?
   private var admitted: PhoneControlMetadata?
+  private var credentialExpiresAt: UInt64?
+  private var inputSessionID: String?
+  private var inputUDPPort: UInt16?
+  private var inputRenewalDue: ContinuousClock.Instant?
+  private var inputContinuousLast: ContinuousClock.Instant?
+  private let continuousNow: () -> ContinuousClock.Instant
   private let controlVersion: Int
   private var inputAttempted = false
   private var inputChannel: InputPacketChannel?
@@ -52,9 +58,11 @@ extension PhoneCredentialWorker: ControlCredentialSource {}
   private let now: () -> UInt64
   public convenience init(
     endpoint: TrustedHostEndpoint, storage: PhoneCredentialWorker, inputSessions: Bool = false,
-    datagrams: Bool = false
+    datagrams: Bool = false, renewals: Bool = false
   ) throws {
-    guard !datagrams || inputSessions else { throw PhoneControlError.rejected }
+    guard !datagrams || inputSessions, !renewals || datagrams else {
+      throw PhoneControlError.rejected
+    }
     try self.init(
       endpoint: endpoint,
       io: ControlTLSClient(
@@ -63,15 +71,17 @@ extension PhoneCredentialWorker: ControlCredentialSource {}
       now: {
         let time = Date().timeIntervalSince1970 * 1000
         return time.isFinite && time >= 0 && time < Double(Int64.max) ? UInt64(time) : UInt64.max
-      }, controlVersion: inputSessions ? (datagrams ? 5 : 4) : 3)
+      }, controlVersion: renewals ? 6 : (inputSessions ? (datagrams ? 5 : 4) : 3))
   }
   init(
     endpoint: TrustedHostEndpoint, io: any EnrollmentFrameIO, storage: any ControlCredentialSource,
     now: @escaping () -> UInt64, controlVersion: Int = 3,
     datagramFactory: @escaping (String, UInt16) throws -> any NativeDatagramIO = {
       try NativeDatagramClient(host: $0, port: $1)
-    }, routeNow: @escaping () -> UInt64 = { DispatchTime.now().uptimeNanoseconds / 1_000_000 }
+    }, routeNow: @escaping () -> UInt64 = { DispatchTime.now().uptimeNanoseconds / 1_000_000 },
+    continuousNow: @escaping () -> ContinuousClock.Instant = { .now }
   ) {
+    self.continuousNow = continuousNow
     self.datagramFactory = datagramFactory
     self.routeNow = routeNow
     self.controlVersion = controlVersion
@@ -100,10 +110,10 @@ extension PhoneCredentialWorker: ControlCredentialSource {}
     let frame = try await io.receive()
     try checkpoint()
     guard frame.kind == .control else { throw PhoneControlError.rejected }
-    return try EnrollmentJSON.parse(frame.payload, allowNull: controlVersion == 5)
+    return try EnrollmentJSON.parse(frame.payload, allowNull: controlVersion >= 5)
   }
   public func authenticate() async throws -> PhoneControlMetadata {
-    guard (3...5).contains(controlVersion), state == .idle, !busy else {
+    guard (3...6).contains(controlVersion), state == .idle, !busy else {
       throw PhoneControlError.rejected
     }
     state = .authenticating
@@ -137,6 +147,7 @@ extension PhoneCredentialWorker: ControlCredentialSource {}
         let values = try await receive()
         let receipt = try decode(values, command: "authenticated", credential: credential.metadata)
         admitted = receipt
+        credentialExpiresAt = credential.metadata.expiresAt
         deadline = min(receipt.expiresAt, last + 60_000)
         state = .authenticated
         return receipt
@@ -244,18 +255,23 @@ extension PhoneCredentialWorker: ControlCredentialSource {}
         try PhoneInputGrant.configuration(
           try await receive(), connection: admitted.connectionID, map: map)
         let requested = try checkpoint()
-        let continuous = ContinuousClock.now
+        let continuous = continuousNow()
         try send([
           "version": 1, "command": "input-grant", "connectionId": admitted.connectionID,
           "generation": map.generation, "revision": map.revision,
         ])
         let grant = try PhoneInputGrant(
           try await receive(), connection: admitted.connectionID, map: map,
-          datagrams: controlVersion == 5)
+          datagrams: controlVersion >= 5)
         inputDeadline = min(deadline ?? 0, requested + grant.lifetime)
         inputContinuousDeadline = continuous.advanced(by: .milliseconds(Int64(grant.lifetime)))
+        inputContinuousLast = continuous
+        inputRenewalDue = continuous.advanced(
+          by: .milliseconds(Int64(grant.lifetime - min(grant.lifetime, 25_000))))
+        inputSessionID = grant.sessionID
+        inputUDPPort = grant.udpPort
         try inputCheckpoint()
-        if controlVersion == 5 {
+        if controlVersion >= 5 {
           if let port = grant.udpPort {
             do {
               let udp = try datagramFactory(endpoint.host, port)
@@ -274,29 +290,10 @@ extension PhoneCredentialWorker: ControlCredentialSource {}
             }
           }
           try inputCheckpoint()
-          route = NativeInputRoute(
-            now: routeNow,
-            udp: { [weak self] packet in
-              self?.datagram?.offer(packet) ?? false
-            },
-            tls: { [weak self] packet in
-              guard let self, let frame = try? ControlTLSFrame(kind: .input, payload: packet) else {
-                return false
-              }
-              return self.io.offer(frame)
-            })
+          route = makeRoute()
         }
         inputChannel = try InputPacketChannel(grant: grant.packet, packetLimit: 65_536) {
-          [weak self] packet in
-          guard let self else { return false }
-          do {
-            try self.inputCheckpoint()
-            if let route = self.route { return route.offer(packet) }
-            return self.io.offer(try ControlTLSFrame(kind: .input, payload: packet))
-          } catch {
-            self.close()
-            return false
-          }
+          [weak self] packet in self?.offerInput(packet) ?? false
         }
         let engine = InputEngine(
           output: { [weak self] sample in
@@ -307,17 +304,21 @@ extension PhoneCredentialWorker: ControlCredentialSource {}
         _ = try engine.activate(map)
         try engine.connect(generation: map.generation)
         guard engine.connected else { throw PhoneControlError.rejected }
-        let session = grant.sessionID
         heartbeat = Task { [weak self] in
           while !Task.isCancelled {
-            let delay = self?.controlVersion == 5 ? 100 : 1000
+            let delay = (self?.controlVersion ?? 0) >= 5 ? 100 : 1000
             do { try await Task.sleep(for: .milliseconds(delay)) } catch { return }
             guard let self, self.state != .closed else { return }
             if self.busy { continue }
             do {
               try self.inputCheckpoint()
-              if self.controlVersion == 5 {
-                try await self.progress(session: session, map: map)
+              if self.controlVersion >= 5 {
+                if self.renewalDue {
+                  try await self.renewInput(map: map)
+                } else {
+                  guard let session = self.inputSessionID else { throw PhoneControlError.rejected }
+                  try await self.progress(session: session, map: map)
+                }
               } else {
                 _ = try await self.status()
               }
@@ -336,10 +337,89 @@ extension PhoneCredentialWorker: ControlCredentialSource {}
       Task { @MainActor [weak self] in self?.close() }
     }
   }
-  private func progress(session: String, map: ControlMap) async throws {
-    guard !busy, let admitted, let route else { throw PhoneControlError.rejected }
+  private func makeRoute(reliable: Bool = false) -> NativeInputRoute {
+    NativeInputRoute(
+      now: routeNow, udp: { [weak self] in self?.datagram?.offer($0) ?? false },
+      tls: { [weak self] packet in
+        guard let self, let frame = try? ControlTLSFrame(kind: .input, payload: packet) else {
+          return false
+        }
+        return self.io.offer(frame)
+      }, initiallyReliable: reliable)
+  }
+  private func offerInput(_ packet: Data) -> Bool {
+    do {
+      try inputCheckpoint()
+      if let route { return route.offer(packet) }
+      return io.offer(try ControlTLSFrame(kind: .input, payload: packet))
+    } catch {
+      close()
+      return false
+    }
+  }
+  private var renewalDue: Bool {
+    controlVersion == 6 && inputRenewalDue.map { continuousNow() >= $0 } == true
+      && (credentialExpiresAt ?? 0) > (admitted?.expiresAt ?? UInt64.max)
+  }
+  private func renewInput(map: ControlMap) async throws {
+    guard controlVersion == 6, !busy, let admitted, let credentialExpiresAt,
+      let session = inputSessionID, let port = inputUDPPort, let inputChannel,
+      let engine = inputEngine, engine.connected
+    else { throw PhoneControlError.rejected }
     busy = true
     defer { busy = false }
+    try inputCheckpoint()
+    let requested = try checkpoint()
+    let continuous = continuousNow()
+    try send([
+      "version": 1, "command": "input-renew", "connectionId": admitted.connectionID,
+      "sessionId": session, "generation": map.generation, "revision": map.revision,
+    ])
+    let value = try await receive()
+    // The old source must remain live after I/O. A late grant cannot revive it.
+    try inputCheckpoint()
+    guard inputSessionID == session, inputEngine === engine, engine.connected else {
+      throw PhoneControlError.rejected
+    }
+    let renewal = try PhoneInputRenewal(
+      value, connection: admitted.connectionID, map: map,
+      scope: PhoneInputRenewalScope(
+        sessionID: session, udpPort: port,
+        authorizationExpiresAt: admitted.expiresAt, credentialExpiresAt: credentialExpiresAt),
+      now: last)
+    let grant = renewal.grant
+    let successor = try inputChannel.continued(grant: grant.packet) { [weak self] in
+      self?.offerInput($0) ?? false
+    }
+    self.admitted = PhoneControlMetadata(
+      phoneID: admitted.phoneID, credentialEpoch: admitted.credentialEpoch,
+      connectionID: admitted.connectionID, expiresAt: renewal.authorizationExpiresAt,
+      inputSessionAvailable: admitted.inputSessionAvailable)
+    deadline = min(renewal.authorizationExpiresAt, requested + 60_000)
+    inputDeadline = min(deadline ?? 0, requested + grant.lifetime)
+    inputContinuousDeadline = continuous.advanced(by: .milliseconds(Int64(grant.lifetime)))
+    inputRenewalDue = continuous.advanced(
+      by: .milliseconds(Int64(grant.lifetime - min(grant.lifetime, 25_000))))
+    inputSessionID = grant.sessionID
+    let reliable = route?.reliable ?? false
+    route?.close()
+    route = makeRoute(reliable: reliable)
+    self.inputChannel = successor
+    try inputCheckpoint()
+    // Same engine/captures, fresh full-state packet zero through the reliable writer barrier.
+    engine.tick()
+    guard engine.connected else { throw PhoneControlError.rejected }
+    try await requestProgress(session: grant.sessionID, map: map)
+    guard route?.acknowledged != nil else { throw PhoneControlError.rejected }
+  }
+  private func progress(session: String, map: ControlMap) async throws {
+    guard !busy else { throw PhoneControlError.rejected }
+    busy = true
+    defer { busy = false }
+    try await requestProgress(session: session, map: map)
+  }
+  private func requestProgress(session: String, map: ControlMap) async throws {
+    guard let admitted, let route else { throw PhoneControlError.rejected }
     try send([
       "version": 1, "command": "input-status", "connectionId": admitted.connectionID,
       "sessionId": session,
@@ -354,8 +434,13 @@ extension PhoneCredentialWorker: ControlCredentialSource {}
   private func inputCheckpoint() throws {
     let time = try checkpoint()
     guard let inputDeadline, time < inputDeadline,
-      let inputContinuousDeadline, ContinuousClock.now < inputContinuousDeadline
+      let inputContinuousDeadline
     else { throw PhoneControlError.rejected }
+    let continuous = continuousNow()
+    guard continuous < inputContinuousDeadline,
+      inputContinuousLast.map({ continuous >= $0 }) ?? false
+    else { throw PhoneControlError.rejected }
+    inputContinuousLast = continuous
   }
   public func close() {
     guard state != .closed else { return }
@@ -373,6 +458,13 @@ extension PhoneCredentialWorker: ControlCredentialSource {}
     if inputEngine?.connected == true { inputEngine?.retire(.disconnected) }
     inputEngine = nil
     admitted = nil
+    credentialExpiresAt = nil
+    inputSessionID = nil
+    inputUDPPort = nil
+    inputRenewalDue = nil
+    inputDeadline = nil
+    inputContinuousDeadline = nil
+    inputContinuousLast = nil
     io.close()
   }
 }

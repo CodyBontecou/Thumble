@@ -58,6 +58,21 @@ internal constructor(
     private val owner = Any()
     private var io: NativeFrameIO? = null
     @Volatile private var admitted: PhoneControlMetadata? = null
+    @Volatile private var credentialExpiresAt: Long? = null
+    @Volatile private var inputSessionID: String? = null
+    @Volatile private var inputUDPPort: Int? = null
+    @Volatile private var inputRenewalDue: Long? = null
+
+    private class PendingRenewal(
+        val value: PhoneInputRenewal,
+        val previous: String,
+        val requested: Long,
+        val started: Long,
+    ) {
+        var committed = false
+    }
+
+    private var pendingRenewal: PendingRenewal? = null
     @Volatile private var last = 0L
     @Volatile private var deadline: Long? = null
     private val inputAttempted = AtomicBoolean(false)
@@ -75,6 +90,7 @@ internal constructor(
         context: Context,
         inputSessions: Boolean = false,
         datagrams: Boolean = false,
+        renewals: Boolean = false,
     ) : this(
         endpoint,
         {
@@ -94,7 +110,10 @@ internal constructor(
         PhoneCredentialVault(context)::load,
         System::currentTimeMillis,
         true,
-        if (datagrams) {
+        if (renewals) {
+            if (!inputSessions || !datagrams) throw PhoneControlRejected()
+            6
+        } else if (datagrams) {
             if (!inputSessions) throw PhoneControlRejected()
             5
         } else if (inputSessions) 4 else 3,
@@ -140,13 +159,13 @@ internal constructor(
         val frame = transport().receive()
         checkpoint()
         if (frame.kind != ControlTLSFrame.Kind.CONTROL) throw PhoneControlRejected()
-        return EnrollmentJSON.parse(frame.payload, allowNull = controlVersion == 5)
+        return EnrollmentJSON.parse(frame.payload, allowNull = controlVersion >= 5)
     }
 
     fun authenticate(): PhoneControlMetadata {
         worker()
         if (
-            controlVersion !in 3..5 ||
+            controlVersion !in 3..6 ||
                 !started.compareAndSet(false, true) ||
                 !busy.compareAndSet(false, true)
         )
@@ -200,6 +219,7 @@ internal constructor(
             transport().send(credential.authenticationFrame(endpoint.authorityInstanceID))
             val receipt = decode(receive(), "authenticated", credential.metadata)
             admitted = receipt
+            credentialExpiresAt = credential.metadata.expiresAt
             deadline = minOf(receipt.expiresAt, Math.addExact(last, 60_000L))
             return receipt
         } catch (_: Exception) {
@@ -294,7 +314,7 @@ internal constructor(
     fun inputConfiguration(): PhoneInputConfiguration {
         worker()
         if (
-            controlVersion !in 4..5 ||
+            controlVersion !in 4..6 ||
                 admitted == null ||
                 inputAttempted.get() ||
                 !busy.compareAndSet(false, true)
@@ -322,7 +342,7 @@ internal constructor(
     fun prepareInput(map: ControlMap): PhoneInputAdmission {
         worker()
         if (
-            controlVersion !in 4..5 ||
+            controlVersion !in 4..6 ||
                 admitted == null ||
                 inputAttempted.get() ||
                 !busy.compareAndSet(false, true)
@@ -349,11 +369,18 @@ internal constructor(
                     .put("generation", map.generation)
                     .put("revision", map.revision)
             )
-            val grant = PhoneInputGrant(receive(), connection, map, datagrams = controlVersion == 5)
+            val grant = PhoneInputGrant(receive(), connection, map, datagrams = controlVersion >= 5)
             inputDeadline = minOf(deadline ?: 0, Math.addExact(requested, grant.lifetime))
             inputElapsedDeadline =
                 Math.addExact(startedAt, Math.multiplyExact(grant.lifetime, 1_000_000))
             inputElapsedLast = startedAt
+            inputRenewalDue =
+                Math.addExact(
+                    startedAt,
+                    Math.multiplyExact(maxOf(0, grant.lifetime - 25_000), 1_000_000),
+                )
+            inputSessionID = grant.sessionID
+            inputUDPPort = grant.udpPort
             inputCheckpoint()
             val raw = transport()
             val delivery = NativeControlDelivery(raw)
@@ -366,8 +393,7 @@ internal constructor(
                 inputDelivery = delivery
             }
             val udpPort = grant.udpPort
-            val session = grant.sessionID
-            if (controlVersion == 5) {
+            if (controlVersion >= 5) {
                 route =
                     NativeInputRoute(
                         { elapsed() / 1_000_000 },
@@ -408,10 +434,17 @@ internal constructor(
                         {
                             try {
                                 while (!closed.get()) {
-                                    Thread.sleep(if (controlVersion == 5) 100 else 1000)
+                                    Thread.sleep(if (controlVersion >= 5) 100 else 1000)
                                     if (busy.get()) continue
                                     inputCheckpoint()
-                                    if (controlVersion == 5) progress(session, map) else status()
+                                    if (controlVersion >= 5) {
+                                        if (renewalDue()) renewInput(map)
+                                        else
+                                            progress(
+                                                inputSessionID ?: throw PhoneControlRejected(),
+                                                map,
+                                            )
+                                    } else status()
                                 }
                             } catch (_: Exception) {
                                 close()
@@ -432,24 +465,171 @@ internal constructor(
         }
     }
 
-    private fun progress(session: String, map: ControlMap) {
+    private fun renewalDue(): Boolean =
+        controlVersion == 6 &&
+            inputRenewalDue?.let { elapsed() >= it } == true &&
+            (credentialExpiresAt ?: 0) > (admitted?.expiresAt ?: Long.MAX_VALUE)
+
+    private fun renewInput(map: ControlMap) {
         if (!busy.compareAndSet(false, true)) return
         try {
-            val connection = admitted?.connectionID ?: throw PhoneControlRejected()
+            inputCheckpoint()
+            val receipt = admitted ?: throw PhoneControlRejected()
+            val session = inputSessionID ?: throw PhoneControlRejected()
+            val port = inputUDPPort ?: throw PhoneControlRejected()
+            val credentialExpiry = credentialExpiresAt ?: throw PhoneControlRejected()
+            val requested = checkpoint()
+            val startedAt = elapsed()
             send(
                 JSONObject()
                     .put("version", 1)
-                    .put("command", "input-status")
-                    .put("connectionId", connection)
+                    .put("command", "input-renew")
+                    .put("connectionId", receipt.connectionID)
                     .put("sessionId", session)
+                    .put("generation", map.generation)
+                    .put("revision", map.revision)
             )
-            val value = receive()
+            val reply = receive()
             inputCheckpoint()
-            if (route?.observe(value, connection, session, map) != true)
-                throw PhoneControlRejected()
+            val renewal =
+                PhoneInputRenewal(
+                    reply,
+                    receipt.connectionID,
+                    map,
+                    PhoneInputRenewalScope(session, port, receipt.expiresAt, credentialExpiry),
+                    checkpoint(),
+                )
+            val pending = PendingRenewal(renewal, session, requested, startedAt)
+            synchronized(owner) {
+                inputCheckpoint()
+                if (pendingRenewal != null || inputSessionID != session)
+                    throw PhoneControlRejected()
+                pendingRenewal = pending
+            }
+            // UI-owned frames commit the handoff. Network work never calls the engine.
+            val commitDeadline = Math.addExact(startedAt, 2_000_000_000L)
+            while (true) {
+                inputCheckpoint()
+                if (synchronized(owner) { pending.committed }) break
+                if (elapsed() >= commitDeadline) throw PhoneControlRejected()
+                Thread.sleep(1)
+            }
+            requestProgress(renewal.grant.sessionID, map)
+            if (route?.acknowledged == null) throw PhoneControlRejected()
         } finally {
             busy.set(false)
         }
+    }
+
+    internal inner class BoundInput(grant: InputPacketGrant) {
+        private var channel = InputPacketChannel(grant, 65_536, this@PhoneControlClient::offerInput)
+
+        fun submit(sample: InputSample): Boolean {
+            try {
+                inputThread()
+                val pending =
+                    synchronized(owner) {
+                        inputCheckpoint()
+                        pendingRenewal?.also { next ->
+                            if (next.previous != inputSessionID || next.committed)
+                                throw PhoneControlRejected()
+                            val receipt = admitted ?: throw PhoneControlRejected()
+                            val delivery = inputDelivery ?: throw PhoneControlRejected()
+                            val renewed = next.value
+                            val grant = renewed.grant
+                            channel =
+                                channel.continued(grant.packet, this@PhoneControlClient::offerInput)
+                            admitted =
+                                PhoneControlMetadata(
+                                    receipt.phoneID,
+                                    receipt.credentialEpoch,
+                                    receipt.connectionID,
+                                    renewed.authorizationExpiresAt,
+                                    receipt.inputSessionAvailable,
+                                )
+                            deadline =
+                                minOf(
+                                    renewed.authorizationExpiresAt,
+                                    Math.addExact(next.requested, 60_000),
+                                )
+                            inputDeadline =
+                                minOf(deadline ?: 0, Math.addExact(next.requested, grant.lifetime))
+                            inputElapsedDeadline =
+                                Math.addExact(
+                                    next.started,
+                                    Math.multiplyExact(grant.lifetime, 1_000_000),
+                                )
+                            inputRenewalDue =
+                                Math.addExact(
+                                    next.started,
+                                    Math.multiplyExact(
+                                        maxOf(0, grant.lifetime - 25_000),
+                                        1_000_000,
+                                    ),
+                                )
+                            inputSessionID = grant.sessionID
+                            val reliable = route?.reliable ?: false
+                            route?.close()
+                            route =
+                                NativeInputRoute(
+                                    { elapsed() / 1_000_000 },
+                                    { datagram?.offer(it) ?: false },
+                                    delivery::offerInput,
+                                    initiallyReliable = reliable,
+                                )
+                            inputCheckpoint()
+                        }
+                    }
+                val accepted = channel.submit(sample)
+                if (!accepted) throw PhoneControlRejected()
+                synchronized(owner) {
+                    if (closed.get()) throw PhoneControlRejected()
+                    if (pending != null) {
+                        if (pendingRenewal !== pending) throw PhoneControlRejected()
+                        // Packet zero is already in the ordered writer before the worker may ask
+                        // for progress.
+                        pending.committed = true
+                        pendingRenewal = null
+                    }
+                }
+                return true
+            } catch (_: Exception) {
+                this@PhoneControlClient.close()
+                channel.close()
+                return false
+            }
+        }
+
+        fun close() = channel.close()
+    }
+
+    internal fun bindChannel(grant: InputPacketGrant): BoundInput {
+        inputThread()
+        inputCheckpoint()
+        return BoundInput(grant)
+    }
+
+    private fun progress(session: String, map: ControlMap) {
+        if (!busy.compareAndSet(false, true)) return
+        try {
+            requestProgress(session, map)
+        } finally {
+            busy.set(false)
+        }
+    }
+
+    private fun requestProgress(session: String, map: ControlMap) {
+        val connection = admitted?.connectionID ?: throw PhoneControlRejected()
+        send(
+            JSONObject()
+                .put("version", 1)
+                .put("command", "input-status")
+                .put("connectionId", connection)
+                .put("sessionId", session)
+        )
+        val value = receive()
+        inputCheckpoint()
+        if (route?.observe(value, connection, session, map) != true) throw PhoneControlRejected()
     }
 
     internal fun inputThread() {
@@ -491,6 +671,11 @@ internal constructor(
             synchronized(owner) {
                 val current = io
                 io = null
+                pendingRenewal = null
+                credentialExpiresAt = null
+                inputSessionID = null
+                inputUDPPort = null
+                inputRenewalDue = null
                 current
             }
         if (connected != null)

@@ -29,8 +29,14 @@ per-grant and continuous-time connection work bounds. Versions 3–5 retain thei
 existing lifetime behavior.
 
 Native phone renewal decoders and encrypted-channel continuation preserve engine
-sequencing under fresh key/session material. Automatic renewal scheduling and
-transport/progress transfer remain unimplemented. The apps must verify held
-controls across multiple real renewals before opting in. Controlled-clock host tests prove protocol and registry
-boundaries, not real-duration phone operation. This decision enables neither
-physical output nor any launch acceptance claim.
+sequencing under fresh key/session material. Both clients now schedule renewal
+under old wall/continuous deadlines, transfer native channel/route/progress
+ownership and require a new receiver acknowledgment. Swift commits on its UI
+actor; Android prepares on the control worker and commits at the next UI sample
+within a bounded wait. Known TLS fallback survives a fresh grant.
+
+Real-time native witnesses retain a button/trigger for 75 seconds across two
+accepted renewals on UDP and forced TLS fallback. Bundled app tests add the
+actual frame loops, with Android's JS queue blocked. These recording-only tests
+enable app protocol-v6 opt-in without claiming physical output or launch
+acceptance; hosted validation and the remaining product gates stay open.

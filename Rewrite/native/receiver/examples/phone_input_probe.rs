@@ -23,9 +23,13 @@ struct Receiver {
     generation: u64,
     recording: PathBuf,
     recording_start: u64,
+    input_ttl_ms: u64,
 }
 impl Receiver {
-    fn start(root: &std::path::Path) -> Result<Self, Box<dyn std::error::Error>> {
+    fn start(
+        root: &std::path::Path,
+        renewal_watch: bool,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
         let executable = std::env::current_exe()?;
         let binary = executable
             .parent()
@@ -65,6 +69,7 @@ impl Receiver {
             generation: 0,
             recording: root.join("recording.jsonl"),
             recording_start: 0,
+            input_ttl_ms: if renewal_watch { 350 } else { 1500 },
         };
         if receiver.replies.recv_timeout(Duration::from_secs(5))?["ready"] != true {
             receiver.child.kill()?;
@@ -88,7 +93,7 @@ impl Receiver {
     }
     fn activate(&mut self) -> Result<Value, Box<dyn std::error::Error>> {
         self.generation += 1;
-        let reply = self.command(json!({"command":"activate","generation":self.generation.to_string(),"revision":self.generation.to_string(),"profileId":"phone-input-test","sessionId":"probe-owner","leaseMs":1750,"inputTtlMs":1500}))?;
+        let reply = self.command(json!({"command":"activate","generation":self.generation.to_string(),"revision":self.generation.to_string(),"profileId":"phone-input-test","sessionId":"probe-owner","leaseMs":1750,"inputTtlMs":self.input_ttl_ms}))?;
         self.recording_start = fs::metadata(&self.recording)?.len();
         Ok(reply)
     }
@@ -149,6 +154,91 @@ impl Drop for Receiver {
         let _ = self.child.wait();
     }
 }
+struct HoldWatch {
+    started: Instant,
+    offset: u64,
+    expected: String,
+    last_sequence: u64,
+    rotations: u32,
+    samples: u64,
+}
+impl HoldWatch {
+    fn begin(receiver: &mut Receiver) -> Result<Self, Box<dyn std::error::Error>> {
+        let state: GamepadState = serde_json::from_value(
+            json!({"buttons":["south"],"leftStickX":0,"leftStickY":0,"rightStickX":0,"rightStickY":0,"leftTrigger":1,"rightTrigger":0}),
+        )?;
+        let expected = hex(&state.report());
+        let deadline = Instant::now() + Duration::from_secs(1);
+        let sequence = loop {
+            receiver.renew();
+            let value = receiver.command(json!({"command":"status"}))?;
+            if value["active"] == true && value["reportHex"] == expected {
+                break value["sequence"]
+                    .as_str()
+                    .ok_or("probe_sequence_missing")?
+                    .parse()?;
+            }
+            if Instant::now() >= deadline {
+                return Err("probe_held_trigger_not_ready".into());
+            }
+            thread::sleep(Duration::from_millis(5));
+        };
+        // Start at a complete record even if another native sample is being appended.
+        let length = fs::metadata(&receiver.recording)?.len();
+        let start = length.saturating_sub(65_536);
+        let mut file = fs::File::open(&receiver.recording)?;
+        file.seek(SeekFrom::Start(start))?;
+        let mut text = String::new();
+        file.take(length - start).read_to_string(&mut text)?;
+        let offset = start + text.rfind('\n').map(|i| i as u64 + 1).unwrap_or(0);
+        Ok(Self {
+            started: Instant::now(),
+            offset,
+            expected,
+            last_sequence: sequence,
+            rotations: 0,
+            samples: 0,
+        })
+    }
+    fn observe(&mut self, receiver: &mut Receiver) -> Result<(), Box<dyn std::error::Error>> {
+        let mut file = fs::File::open(&receiver.recording)?;
+        file.seek(SeekFrom::Start(self.offset))?;
+        let mut text = String::new();
+        file.take(65_536).read_to_string(&mut text)?;
+        if let Some(last) = text.rfind('\n') {
+            for line in text[..last].lines() {
+                let value: Value = serde_json::from_str(line)?;
+                if value["reportHex"] != self.expected || value["reason"] != "sample" {
+                    return Err("probe_continuous_hold_interrupted".into());
+                }
+                self.samples += 1;
+            }
+            self.offset += last as u64 + 1;
+        }
+        let value = receiver.command(json!({"command":"status"}))?;
+        if value["active"] != true || value["reportHex"] != self.expected {
+            return Err("probe_continuous_hold_inactive".into());
+        }
+        let sequence: u64 = value["sequence"]
+            .as_str()
+            .ok_or("probe_sequence_missing")?
+            .parse()?;
+        if sequence < self.last_sequence {
+            self.rotations += 1;
+        }
+        self.last_sequence = sequence;
+        Ok(())
+    }
+    fn finish(self) -> Result<Value, Box<dyn std::error::Error>> {
+        let duration = self.started.elapsed().as_millis();
+        if duration < 75_000 || self.rotations < 2 || self.samples == 0 {
+            return Err("probe_renewal_duration_or_rotations_insufficient".into());
+        }
+        Ok(
+            json!({"continuousHeld":true,"durationMs":duration,"rotations":self.rotations,"samples":self.samples,"neutralPulses":0,"inputTtlMs":350,"inputEnabled":false}),
+        )
+    }
+}
 struct Root(PathBuf);
 impl Drop for Root {
     fn drop(&mut self) {
@@ -161,6 +251,12 @@ fn emit(value: Value) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let renewal_watch = match args.as_slice() {
+        [] => false,
+        [mode] if mode == "--renewal-watch" => true,
+        _ => return Err("probe_arguments_invalid".into()),
+    };
     let root = Root(std::env::temp_dir().canonicalize()?.join(format!(
         "thumble-phone-input-probe-{}-{}",
         std::process::id(),
@@ -168,7 +264,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     )));
     fs::create_dir(&root.0)?;
     let runtime = root.0.join("runtime");
-    let mut receiver = Receiver::start(&runtime)?;
+    let mut receiver = Receiver::start(&runtime, renewal_watch)?;
     let identity = root.0.join("identity");
     host_identity::load_or_create(&identity)?;
     let mut host = Host::new(&runtime, "synthetic-input", Some(&identity))?;
@@ -188,18 +284,31 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
     });
-    let expiry = Instant::now() + Duration::from_secs(30);
+    let expiry = Instant::now() + Duration::from_secs(if renewal_watch { 180 } else { 30 });
+    let mut watch: Option<HoldWatch> = None;
     loop {
         if Instant::now() >= expiry {
             return Err("probe_deadline".into());
         }
         receiver.renew();
+        if let Some(watch) = watch.as_mut() {
+            watch.observe(&mut receiver)?;
+        }
         match commands.recv_timeout(Duration::from_millis(100)) {
             Ok(b'a') => {
                 let value = receiver.activate()?;
                 emit(
                     json!({"active":true,"generation":value["generation"],"revision":value["revision"]}),
                 )?;
+            }
+            Ok(b'b') if renewal_watch && watch.is_none() => {
+                watch = Some(HoldWatch::begin(&mut receiver)?);
+                emit(json!({"watching":true,"inputTtlMs":350,"minimumMs":75000}))?;
+            }
+            Ok(b'v') if renewal_watch => {
+                let mut current = watch.take().ok_or("probe_watch_missing")?;
+                current.observe(&mut receiver)?;
+                emit(current.finish()?)?;
             }
             Ok(b'c') => {
                 let expiry = Instant::now() + Duration::from_secs(1);
