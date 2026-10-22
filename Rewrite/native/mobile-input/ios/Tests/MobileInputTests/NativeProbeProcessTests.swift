@@ -5,28 +5,48 @@
   @Test @MainActor private func syntheticProbeReadsAndExitWaitDoNotStarveNativeSamplingActor()
     async throws
   {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
+      "thumble-probe-barrier-" + UUID().uuidString)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let readGate = directory.appendingPathComponent("read")
+    let exitGate = directory.appendingPathComponent("exit")
+    // The child cannot produce output/exit until a task on the input actor
+    // opens each gate. This tests progress, without machine-speed thresholds.
     let probe = NativeProbeProcess(
-      path: "/bin/sh", arguments: ["-c", "sleep 0.5; printf 'ready\\n'; sleep 0.5"])
-    var ticks = 0
-    let sampling = Task { @MainActor in
-      while !Task.isCancelled {
-        do { try await Task.sleep(for: .milliseconds(10)) } catch { return }
-        ticks += 1
-      }
-    }
-    defer { sampling.cancel() }
+      path: "/bin/sh",
+      arguments: [
+        "-c",
+        "while [ ! -f \"$1\" ]; do sleep 0.01; done; printf 'ready\\n'; while [ ! -f \"$2\" ]; do sleep 0.01; done",
+        "thumble-probe-barrier", readGate.path, exitGate.path,
+      ])
+    var sampledDuringRead = false
+    var sampledDuringExit = false
     do {
       try await probe.start()
+      let readSample = Task { @MainActor in
+        await Task.yield()
+        sampledDuringRead = true
+        try Data().write(to: readGate)
+      }
       #expect(try await probe.line() == Data("ready".utf8))
-      #expect(ticks >= 10)
+      try await readSample.value
+      #expect(sampledDuringRead)
+      let exitSample = Task { @MainActor in
+        await Task.yield()
+        sampledDuringExit = true
+        try Data().write(to: exitGate)
+      }
       #expect(await probe.wait() == 0)
-      #expect(ticks >= 30)
+      try await exitSample.value
+      #expect(sampledDuringExit)
       await probe.stop()
     } catch {
       await probe.stop()
       throw error
     }
   }
+
 #endif
 
 #if os(macOS)
