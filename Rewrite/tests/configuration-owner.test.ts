@@ -347,10 +347,17 @@ test(
       ]);
       // [DEBUG-config-peer] The synthetic peer emits only these fixed phases.
       const phases: string[] = [];
+      let stdoutBytes = 0,
+        stdoutLines = 0;
+      owner.child.stdout.on("data", (chunk: Buffer) => {
+        stdoutBytes = Math.min(1048576, stdoutBytes + chunk.byteLength);
+        for (const byte of chunk)
+          if (byte === 10) stdoutLines = Math.min(1024, stdoutLines + 1);
+      });
       owner.child.stderr.on("data", (chunk: Buffer) => {
         for (const phase of chunk
           .toString("utf8")
-          .match(/test_peer_(?:listening|input|reply|end)/g) ?? [])
+          .match(/test_peer_(?:listening|input|reply|flushed|end)/g) ?? [])
           if (phases.length < 16) phases.push(phase);
       });
       const exited = once(owner.child, "exit");
@@ -371,7 +378,10 @@ test(
         ]);
         expect(owner.child.exitCode).toBe(0);
       } catch (error) {
-        console.log("[DEBUG-config-peer] " + JSON.stringify({ phases }));
+        console.log(
+          "[DEBUG-config-peer] " +
+            JSON.stringify({ phases, stdoutBytes, stdoutLines }),
+        );
         throw error;
       } finally {
         if (deadline) clearTimeout(deadline);

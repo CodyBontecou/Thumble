@@ -1,7 +1,7 @@
 export {};
 // Test-only peer: structurally valid private envelope, invalid typed result.
 // [DEBUG-config-peer] Bounded phases only; never print requests or their fields.
-const phase = (value: "listening" | "input" | "reply" | "end") =>
+const phase = (value: "listening" | "input" | "reply" | "flushed" | "end") =>
   process.stderr.write(`test_peer_${value}\n`);
 await new Promise<void>((resolve) => {
   let buffer = Buffer.alloc(0);
@@ -21,6 +21,7 @@ await new Promise<void>((resolve) => {
           ok: true,
           result: { version: 1, kind: "catalog", revision: "999" },
         }) + "\n",
+        () => phase("flushed"),
       );
       phase("reply");
     }

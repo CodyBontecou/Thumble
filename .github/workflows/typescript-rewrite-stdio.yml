@@ -1,0 +1,49 @@
+name: TypeScript rewrite Windows stdio
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "Rewrite/apps/service/src/native-pipe.ts"
+      - "Rewrite/apps/service/src/configuration-owner.ts"
+      - "Rewrite/tests/configuration-owner.test.ts"
+      - "Rewrite/tests/fixtures/invalid-configuration-owner.ts"
+      - "Rewrite/package.json"
+      - "Rewrite/bun.lock"
+      - ".github/workflows/typescript-rewrite-stdio.yml"
+  pull_request:
+    paths:
+      - "Rewrite/apps/service/src/native-pipe.ts"
+      - "Rewrite/apps/service/src/configuration-owner.ts"
+      - "Rewrite/tests/configuration-owner.test.ts"
+      - "Rewrite/tests/fixtures/invalid-configuration-owner.ts"
+      - "Rewrite/package.json"
+      - "Rewrite/bun.lock"
+      - ".github/workflows/typescript-rewrite-stdio.yml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  windows-stdio:
+    runs-on: windows-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: Rewrite
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.3
+      - run: bun install --frozen-lockfile
+      # This actual parent/peer test needs no native build or physical output.
+      # Keep the strict error assertion and the existing two-second pipe deadline.
+      - name: Exercise the real invalid typed reply path
+        run: bun test tests/configuration-owner.test.ts --test-name-pattern "invalid typed configuration result"
