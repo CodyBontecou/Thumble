@@ -20,6 +20,7 @@ export class BoundedStdioTransport implements Transport {
   constructor(
     private input: Readable,
     private output: Writable,
+    private trace: (phase: string) => void = () => {},
   ) {}
   async start(): Promise<void> {
     if (this.started || this.closed)
@@ -43,6 +44,7 @@ export class BoundedStdioTransport implements Transport {
   };
   private data = (chunk: Buffer): void => {
     if (this.closed) return;
+    let stage = "framing";
     try {
       // Scan incrementally so a chunk containing several valid frames is allowed,
       // but an unterminated frame never accumulates beyond the byte budget.
@@ -57,8 +59,11 @@ export class BoundedStdioTransport implements Transport {
           this.buffer,
         );
         this.buffer = Buffer.alloc(0);
+        stage = "json";
         parseStrictJson(text);
+        stage = "schema";
         const message = deserializeMessage(text);
+        stage = "request-budget";
         if ("method" in message && "id" in message) {
           if (
             (typeof message.id === "string" && message.id.length > 128) ||
@@ -70,16 +75,21 @@ export class BoundedStdioTransport implements Transport {
             throw new Error();
           this.pending.add(message.id);
         }
+        stage = "dispatch";
+        this.trace("incoming");
         this.onmessage?.(message);
+        this.trace("dispatched");
         start = end + 1;
       }
     } catch {
+      this.trace("invalid-" + stage);
       this.onerror?.(new Error("mcp_invalid_or_excessive_message"));
       void this.close();
     }
   };
   async send(message: JSONRPCMessage): Promise<void> {
     if (this.closed) throw new Error("mcp_transport_closed");
+    this.trace("reply");
     const line = Buffer.from(JSON.stringify(message) + "\n");
     if (line.length > FRAME_BYTES || this.outputBytes + line.length > 262144) {
       await this.close();
@@ -104,8 +114,12 @@ export class BoundedStdioTransport implements Transport {
           resolve();
         }
       };
-      const onDrain = (): void => done();
+      const onDrain = (): void => {
+        this.trace("drained");
+        done();
+      };
       const timer = setTimeout(() => {
+        this.trace("output-timeout");
         done(new Error());
         void this.close();
       }, 3000);
@@ -114,7 +128,10 @@ export class BoundedStdioTransport implements Transport {
       // Windows and Node streams. Do not wait for an optional write callback.
       this.output.once("drain", onDrain);
       try {
-        if (this.output.write(line)) done();
+        if (this.output.write(line)) {
+          this.trace("accepted");
+          done();
+        } else this.trace("backpressured");
       } catch {
         done(new Error());
         void this.close();
@@ -124,6 +141,7 @@ export class BoundedStdioTransport implements Transport {
   async close(): Promise<void> {
     if (this.closed) return;
     this.closed = true;
+    this.trace("closed");
     this.input.off("data", this.data);
     this.input.off("end", this.end);
     this.input.off("close", this.end);

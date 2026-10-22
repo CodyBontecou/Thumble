@@ -15,7 +15,16 @@ export function startMcp(
   receiver: string,
   allowRecordedInput: boolean,
 ): void {
-  const transport = new BoundedStdioTransport(process.stdin, process.stdout);
+  let traces = 0;
+  const trace = (phase: string): void => {
+    if (process.env.THUMBLE_REWRITE_MCP_TRACE === "1" && traces++ < 128)
+      console.error(`MCP transport phase=${phase}`);
+  };
+  const transport = new BoundedStdioTransport(
+    process.stdin,
+    process.stdout,
+    trace,
+  );
   serveStdio(
     () => {
       const server = new McpServer({
@@ -164,6 +173,6 @@ export function startMcp(
       }
       return server;
     },
-    { transport, maxSubscriptions: 0 },
+    { transport, maxSubscriptions: 0, onerror: () => trace("sdk-error") },
   );
 }

@@ -165,6 +165,7 @@ test("SDK modern and legacy clients share CLI authority, preserve input opt-in a
             ...(optIn ? ["--allow-recorded-input"] : []),
           ],
           stderr: "pipe",
+          env: { ...process.env, THUMBLE_REWRITE_MCP_TRACE: "1" },
         });
         let stderr = "";
         transport.stderr?.on("data", (chunk) => {
@@ -178,6 +179,8 @@ test("SDK modern and legacy clients share CLI authority, preserve input opt-in a
             },
           },
         );
+        const call: Client["callTool"] = (params, options) =>
+          client.callTool(params, { ...options, timeout: 5000 });
         try {
           phase(
             `connect-${legacy ? "legacy" : "modern"}-${optIn ? "recording" : "default"}`,
@@ -203,7 +206,7 @@ test("SDK modern and legacy clients share CLI authority, preserve input opt-in a
             ].sort(),
           );
           phase("status-call");
-          const status = await client.callTool(
+          const status = await call(
             { name: "receiver_status", arguments: {} },
             { timeout: 5000 },
           );
@@ -214,14 +217,14 @@ test("SDK modern and legacy clients share CLI authority, preserve input opt-in a
             result: await request(endpoint, { command: "status" }),
           });
           expect(JSON.stringify(status)).not.toContain(endpoint.token);
-          const invalid = await client.callTool({
+          const invalid = await call({
             name: "receiver_release",
             arguments: { extra: true },
           });
           expect(invalid.isError).toBe(true);
           if (optIn) {
             const current = await request(endpoint, { command: "status" });
-            const active = await client.callTool({
+            const active = await call({
               name: "receiver_activate",
               arguments: {
                 expectedRevision: current.receiver.snapshot.revision,
@@ -231,7 +234,7 @@ test("SDK modern and legacy clients share CLI authority, preserve input opt-in a
             expect(active.isError).not.toBe(true);
             const generation = (await request(endpoint, { command: "status" }))
               .receiver.snapshot.generation;
-            const sampled = await client.callTool({
+            const sampled = await call({
               name: "receiver_sample",
               arguments: {
                 expectedGeneration: generation,
@@ -246,15 +249,14 @@ test("SDK modern and legacy clients share CLI authority, preserve input opt-in a
             ).toBe("1");
           } else {
             await expect(
-              client.callTool({
+              call({
                 name: "receiver_activate",
                 arguments: { expectedRevision: "0", profileId: "mcp-profile" },
               }),
             ).rejects.toThrow("Tool receiver_activate not found");
           }
           expect(
-            (await client.callTool({ name: "receiver_release", arguments: {} }))
-              .isError,
+            (await call({ name: "receiver_release", arguments: {} })).isError,
           ).not.toBe(true);
           expect(
             (await request(endpoint, { command: "status" })).receiver.snapshot
@@ -264,8 +266,21 @@ test("SDK modern and legacy clients share CLI authority, preserve input opt-in a
           phase("client-close");
           await client.close();
           phase("client-closed");
+          if (process.env.CI)
+            console.error(
+              stderr
+                .split(/\r?\n/)
+                .filter((line) => /^MCP transport phase=[a-z-]+$/.test(line))
+                .join("\n"),
+            );
         }
-        expect(stderr).toBe("");
+        expect(
+          stderr
+            .split(/\r?\n/)
+            .filter((line) => !/^MCP transport phase=[a-z-]+$/.test(line))
+            .join("\n")
+            .trim(),
+        ).toBe("");
         expect(
           (await request(endpoint, { command: "status" })).service.instanceId,
         ).toBe(endpoint.instanceId);
