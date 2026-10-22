@@ -345,6 +345,7 @@ fn control_send(channel: &mut ControlChannel, value: Value) {
         .send(FrameKind::Control, &serde_json::to_vec(&value).unwrap())
         .unwrap();
 }
+#[track_caller]
 fn control_receive(channel: &mut ControlChannel) -> Value {
     let frame = channel.receive().unwrap();
     assert_eq!(frame.kind, FrameKind::Control);
@@ -550,15 +551,27 @@ fn native_tls_source_release_is_acknowledged_and_a_peer_drop_retires_its_grant()
 }
 #[test]
 fn stale_grant_receipts_and_old_generation_packets_cannot_replace_or_release_new_configuration() {
+    let started = Instant::now();
+    let phase = |label| {
+        eprintln!(
+            "stale-grant phase={label} elapsedMs={}",
+            started.elapsed().as_millis()
+        )
+    };
     let mut receiver = Receiver::new();
+    phase("receiver-ready");
     let _owner = receiver.maintain_owner();
     receiver.activate();
     let (_host, value) = listen_host(&receiver);
     let credential = phone_enroll(&value);
+    phase("enrolled");
     receiver.command(json!({"command":"renew","generation":"1","sessionId":"service-owner"}));
     let (mut channel, receipt) = phone_auth(&value, &credential);
+    phase("current-authenticated");
     let (mut sender, _) = phone_grant(&mut channel, &receipt);
+    phase("current-granted");
     phone_held(&mut channel, &receipt, &mut sender);
+    phase("current-held-acknowledged");
     // Maintain real native full-state input while a different TLS peer proves
     // rejection. Time spent handshaking that peer must not stand in for TTL loss.
     let stop = Arc::new(AtomicBool::new(false));
@@ -576,33 +589,40 @@ fn stale_grant_receipts_and_old_generation_packets_cannot_replace_or_release_new
         (channel, sender)
     });
     let (mut stale, stale_receipt) = phone_auth(&value, &credential);
+    phase("stale-authenticated");
     control_send(
         &mut stale,
         json!({"version":1,"command":"input-grant","connectionId":stale_receipt["connectionId"],"generation":"1","revision":"2"}),
     );
     assert!(stale.receive().is_err());
+    phase("stale-rejected");
     let observed = receiver.status();
     assert_ne!(observed["reportHex"], hex(&NEUTRAL), "{observed}");
     stop.store(true, Ordering::SeqCst);
     let (mut channel, mut sender) = sampling.join().unwrap();
+    phase("sampling-joined");
     // Drain all old-generation samples before explicitly replacing configuration.
     control_send(
         &mut channel,
         json!({"version":1,"command":"control-status","connectionId":receipt["connectionId"]}),
     );
     assert_eq!(control_receive(&mut channel)["command"], "control-status");
+    phase("sampling-drained");
     assert_eq!(receiver.command(json!({"command":"activate","generation":"2","revision":"2","profileId":"profile-b","sessionId":"service-owner","leaseMs":750,"inputTtlMs":350}))["ok"],true);
     channel
         .send(FrameKind::Input, &sender.seal(&held()).unwrap())
         .unwrap();
     assert!(channel.receive().is_err());
+    phase("old-generation-rejected");
     let status = receiver.status();
     assert_eq!(status["active"], true);
     assert_eq!(status["generation"], "2");
     assert_eq!(status["reportHex"], hex(&NEUTRAL));
     let (mut fresh, fresh_receipt) = phone_auth(&value, &credential);
+    phase("fresh-authenticated");
     let (mut sender, _) = phone_grant(&mut fresh, &fresh_receipt);
     phone_held(&mut fresh, &fresh_receipt, &mut sender);
+    phase("fresh-held-acknowledged");
     assert_ne!(receiver.status()["reportHex"], hex(&NEUTRAL));
 }
 

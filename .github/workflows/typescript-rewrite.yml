@@ -3,9 +3,19 @@ name: TypeScript rewrite (headless)
 on:
   workflow_dispatch:
   push:
-    paths: ["Rewrite/**", "Host/fixtures/gamepad/v2.json", ".github/workflows/typescript-rewrite.yml"]
+    paths:
+      [
+        "Rewrite/**",
+        "Host/fixtures/gamepad/v2.json",
+        ".github/workflows/typescript-rewrite.yml",
+      ]
   pull_request:
-    paths: ["Rewrite/**", "Host/fixtures/gamepad/v2.json", ".github/workflows/typescript-rewrite.yml"]
+    paths:
+      [
+        "Rewrite/**",
+        "Host/fixtures/gamepad/v2.json",
+        ".github/workflows/typescript-rewrite.yml",
+      ]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -46,6 +56,11 @@ jobs:
       - run: bun x --no-install prettier --check .
       - run: cargo fmt --manifest-path native/receiver/Cargo.toml -- --check
       - run: cargo clippy --locked --manifest-path native/receiver/Cargo.toml --all-targets -- -D warnings
+      - name: Isolate Windows stale-grant regression with phase diagnostics
+        if: runner.os == 'Windows'
+        env:
+          RUST_BACKTRACE: "1"
+        run: cargo test --locked --manifest-path native/receiver/Cargo.toml --test native_ingress_process stale_grant_receipts_and_old_generation_packets_cannot_replace_or_release_new_configuration -- --exact --nocapture
       - run: bun run native:test
       - run: bun run native:build
       - name: Verify native TLS with independent Node/OpenSSL client

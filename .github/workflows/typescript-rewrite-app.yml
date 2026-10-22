@@ -50,7 +50,7 @@ jobs:
         working-directory: Rewrite/apps/mobile
         run: bun run prebuild --platform android
       - name: Install app build SDK
-        run: sdkmanager 'platforms;android-37' 'build-tools;37.0.0'
+        run: sdkmanager 'platforms;android-37.0' 'build-tools;37.0.0'
       - name: Enable KVM on the ephemeral runner
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
