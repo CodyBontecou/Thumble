@@ -1,3 +1,4 @@
+import { OwnedAuthorityDocument } from "@thumble/domain/owned-authority";
 import {
   CONFIGURATION_PAGE_SIZE,
   decodeConfigurationCommand,
@@ -92,7 +93,11 @@ export class ConfigurationCatalogOperations {
           nextOffset: null,
         });
       }
-      const catalog = ConfigurationCatalog.read(current.source);
+      const authority = OwnedAuthorityDocument.isAuthority(current.source)
+        ? OwnedAuthorityDocument.read(current.source)
+        : undefined;
+      const catalog =
+        authority?.catalog ?? ConfigurationCatalog.read(current.source);
       if (command.offset >= catalog.profiles.length)
         throw new Error("configuration_offset_invalid");
       const profiles = Object.freeze(
@@ -114,7 +119,11 @@ export class ConfigurationCatalogOperations {
       });
     }
     if (!current) throw new Error("configuration_not_initialized");
-    const catalog = ConfigurationCatalog.read(current.source);
+    const authority = OwnedAuthorityDocument.isAuthority(current.source)
+      ? OwnedAuthorityDocument.read(current.source)
+      : undefined;
+    const catalog =
+      authority?.catalog ?? ConfigurationCatalog.read(current.source);
     const profile = catalog.profiles.find((p) => p.id === command.profileId);
     if (!profile) throw new Error("profile_not_found");
     const clock = counter(this.now());
@@ -122,18 +131,18 @@ export class ConfigurationCatalogOperations {
       throw new Error("configuration_clock_invalid");
     const updatedAt =
       BigInt(clock) > BigInt(profile.updatedAt) ? clock : profile.updatedAt;
-    const candidate = catalog.renameProfile(
-      command.profileId,
-      command.name,
-      updatedAt,
-    );
+    const candidate = authority
+      ? authority.renameProfile(command.profileId, command.name, updatedAt)
+          .source
+      : catalog.renameProfile(command.profileId, command.name, updatedAt)
+          .source;
     // Even a same-name operation commits a receipt/revision: retry semantics do
     // not depend on the current name, clock or intervening configuration edits.
     const result = this.repository.commit({
       operationId: command.operationId,
       payloadHash: payloadHash!,
       expectedRevision: command.expectedRevision,
-      source: candidate.source,
+      source: candidate,
       affectedEntities: [command.profileId],
     });
     return Object.freeze({ version: 1, kind: "committed", ...result });

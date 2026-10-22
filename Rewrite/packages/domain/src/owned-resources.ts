@@ -50,6 +50,31 @@ export function decodeResourceBase64(text: string): Uint8Array {
   }
   return bytes;
 }
+/** Portable canonical encoder, with bounded work and no spread/call-stack growth. */
+export function encodeResourceBase64(bytes: Uint8Array): string {
+  if (!(bytes instanceof Uint8Array) || bytes.length > MAXIMUM_BYTES)
+    invalidOwned();
+  const alphabet =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  const parts: string[] = [];
+  let chunk = "";
+  for (let i = 0; i < bytes.length; i += 3) {
+    const a = bytes[i]!,
+      b = bytes[i + 1] ?? 0,
+      c = bytes[i + 2] ?? 0;
+    chunk +=
+      alphabet[a >>> 2]! +
+      alphabet[((a & 3) << 4) | (b >>> 4)]! +
+      (i + 1 < bytes.length ? alphabet[((b & 15) << 2) | (c >>> 6)]! : "=") +
+      (i + 2 < bytes.length ? alphabet[c & 63]! : "=");
+    if (chunk.length >= 8192) {
+      parts.push(chunk);
+      chunk = "";
+    }
+  }
+  parts.push(chunk);
+  return parts.join("");
+}
 /** One private byte allocation per digest. Reads return defensive copies. */
 export class OwnedResourceTable {
   readonly #entries: ReadonlyMap<string, Uint8Array>;

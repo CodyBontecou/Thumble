@@ -1,10 +1,14 @@
+import { LosslessJson } from "@thumble/contracts/json";
+import { OwnedAuthorityDocument } from "@thumble/domain/owned-authority";
+import { encodeResourceBase64 } from "@thumble/domain/owned-resources";
 import { createHash } from "node:crypto";
 import { FileAssetStore } from "@thumble/storage/asset-files";
 import { SqliteConfigurationRepository } from "@thumble/storage";
-import { catalogFixtureSource, a, b } from "./helpers/configuration-fixture.ts";
+import { a, b } from "./helpers/configuration-fixture.ts";
 import { expect, test } from "bun:test";
 import {
   existsSync,
+  readFileSync,
   copyFileSync,
   mkdirSync,
   mkdtempSync,
@@ -131,16 +135,24 @@ packageTest(
     );
     const assetBytes = new TextEncoder().encode("standalone synthetic asset");
     const assetSHA = createHash("sha256").update(assetBytes).digest("hex");
+    const ownedSource = LosslessJson.parse(
+      readFileSync(ownedFile, "utf8")
+        .replace(/EA000000-0000-0000-0000-000000000001/gi, b)
+        .replace(/0F38B980-9D36-56B6-8425-826EA40B149D/gi, a),
+    ).set(
+      "/profiles/0/appearanceResources/" + assetSHA,
+      JSON.stringify(encodeResourceBase64(assetBytes)),
+    );
+    const prepared = OwnedAuthorityDocument.prepare(ownedSource, (bytes) =>
+      createHash("sha256").update(bytes).digest("hex"),
+    );
     try {
       configuration.commit({
         operationId: "fixture-seed",
         payloadHash: "f".repeat(64),
         expectedRevision: "0",
-        source: catalogFixtureSource().set(
-          "/assetSHA256",
-          JSON.stringify(assetSHA),
-        ),
-        assets: [assetBytes],
+        source: prepared.document.source,
+        assets: prepared.assets(),
         affectedEntities: [a, b],
       });
     } finally {
@@ -299,6 +311,54 @@ packageTest(
       while (
         existsSync(join(runtime, "endpoint.json")) &&
         Date.now() < deadline
+      )
+        await Bun.sleep(20);
+      expect(existsSync(join(runtime, "endpoint.json"))).toBe(false);
+      const reopened = new SqliteConfigurationRepository(
+        runtime,
+        join(directory, `thumble-rewrite-receiver${extension}`),
+      );
+      try {
+        const stored = OwnedAuthorityDocument.read(reopened.current()!.source);
+        expect(stored.resources).toEqual(prepared.document.resources);
+        const files = new FileAssetStore(
+          runtime,
+          join(directory, `thumble-rewrite-receiver${extension}`),
+        );
+        const restored = stored.materialize(
+          (key) => files.read(key),
+          (bytes) => createHash("sha256").update(bytes).digest("hex"),
+        );
+        expect(
+          restored.catalog.profiles.find((profile) => profile.id === a)?.name,
+        ).toBe("SDK legacy 🦊");
+        expect(restored.source.get("/profiles/0/customization")?.text()).toBe(
+          ownedSource.get("/profiles/0/customization")?.text(),
+        );
+      } finally {
+        reopened.close();
+      }
+      await invoke("start");
+      expect((await invoke("list", "configuration")).result.revision).toBe("3");
+      const replay = await invoke(
+        "rename-profile",
+        "configuration",
+        "--operation-id",
+        "sdk-modern",
+        "--expected-revision",
+        "1",
+        "--profile-id",
+        a,
+        "--name",
+        "SDK modern 🦊",
+      );
+      expect(replay.result.replayed).toBe(true);
+      expect(replay.result.receipt.resultingRevision).toBe("2");
+      await invoke("stop");
+      const restartDeadline = Date.now() + 3000;
+      while (
+        existsSync(join(runtime, "endpoint.json")) &&
+        Date.now() < restartDeadline
       )
         await Bun.sleep(20);
       expect(existsSync(join(runtime, "endpoint.json"))).toBe(false);

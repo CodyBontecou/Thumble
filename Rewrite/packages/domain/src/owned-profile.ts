@@ -76,6 +76,8 @@ const CONTROL = [
   "shadowStrength",
   "showsIntegratedLabel",
 ];
+export const OWNED_SURFACE_FIELDS = Object.freeze(SURFACE);
+export const OWNED_CONTROL_FIELDS = Object.freeze(CONTROL);
 const BARS = [
   "status",
   "profile_menu",

@@ -270,6 +270,9 @@ export class LosslessJson {
   text(): string {
     return this.#text;
   }
+  get byteLength(): number {
+    return utf8Size(this.#text, LOSSLESS_JSON_LIMITS.bytes);
+  }
   /** UTF-16 key ordering and unchanged number lexemes: deliberately not RFC 8785. */
   canonicalText(): string {
     return render(this.#node, true);
@@ -287,6 +290,87 @@ export class LosslessJson {
       throw error;
     }
     return node ? new LosslessJson(node, render(node, false)) : undefined;
+  }
+  /** Atomically replace nonoverlapping existing values in one traversal. No
+   * insertion/removal/index shifting; untouched source spans stay exact. */
+  replaceValues(replacements: ReadonlyMap<string, LosslessJson>): LosslessJson {
+    if (
+      !(replacements instanceof Map) ||
+      Object.getOwnPropertyDescriptor(Map.prototype, "size")!.get!.call(
+        replacements,
+      ) > 8192
+    )
+      throw new Error("json_replacements_invalid");
+    type Edit = { replacement?: Node; children: Map<string, Edit> };
+    const root: Edit = { children: new Map() };
+    for (const [path, value] of Map.prototype.entries.call(replacements)) {
+      if (typeof path !== "string" || !(value instanceof LosslessJson))
+        throw new Error("json_replacements_invalid");
+      let edit = root;
+      for (const part of pointer(path)) {
+        if (edit.replacement) throw new Error("json_replacements_overlap");
+        let next = edit.children.get(part);
+        if (!next) {
+          next = { children: new Map() };
+          edit.children.set(part, next);
+        }
+        edit = next;
+      }
+      if (edit.replacement || edit.children.size)
+        throw new Error("json_replacements_overlap");
+      edit.replacement = value.#node;
+    }
+    if (root.children.size === 0 && !root.replacement) return this;
+    const pieces: string[] = [];
+    let length = 0;
+    const append = (...values: string[]) => {
+      for (const value of values) {
+        length += value.length;
+        if (length > LOSSLESS_JSON_LIMITS.bytes)
+          throw new Error("configuration_json_too_large");
+        pieces.push(value);
+      }
+    };
+    function change(node: Node, edit: Edit): void {
+      if (edit.replacement) {
+        append(render(edit.replacement, false));
+        return;
+      }
+      if (edit.children.size === 0) {
+        append(render(node, false));
+        return;
+      }
+      const found = new Set<string>();
+      if (node.kind === "object") {
+        append("{");
+        node.entries.forEach(([key, value], i) => {
+          if (i) append(",");
+          append(JSON.stringify(key), ":");
+          const child = edit.children.get(key);
+          if (child) {
+            found.add(key);
+            change(value, child);
+          } else append(render(value, false));
+        });
+        append("}");
+      } else if (node.kind === "array") {
+        append("[");
+        node.items.forEach((value, i) => {
+          if (i) append(",");
+          const key = String(i),
+            child = edit.children.get(key);
+          if (child) {
+            found.add(key);
+            change(value, child);
+          } else append(render(value, false));
+        });
+        append("]");
+      }
+      if (found.size !== edit.children.size)
+        throw new Error("json_path_missing");
+    }
+    change(this.#node, root);
+    return LosslessJson.parse(pieces.join(""));
   }
   set(path: string, replacement: string): LosslessJson {
     return this.edit(pointer(path), parse(replacement));

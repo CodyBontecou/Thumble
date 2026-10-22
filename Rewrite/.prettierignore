@@ -18,3 +18,6 @@ apps/mobile/modules/**/.gradle/
 
 # Exact retained owned-v5 compatibility fixtures; hashes checked by tests.
 packages/fixtures/owned-configuration-v1/
+
+# Exact number lexemes and opaque source spans in the authority format vector.
+packages/fixtures/owned-authority-v1/

@@ -1,3 +1,4 @@
+export {};
 // Test-only peer: structurally valid private envelope, invalid typed result.
 // [DEBUG-config-peer] Bounded phases only; never print requests or their fields.
 const phase = (value: "listening" | "input" | "reply" | "end") =>

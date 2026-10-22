@@ -8,7 +8,8 @@
     "./configuration-catalog": "./src/configuration-catalog.ts",
     "./controller-layout": "./src/controller-layout.ts",
     "./owned-configuration": "./src/owned-configuration.ts",
-    "./owned-resources": "./src/owned-resources.ts"
+    "./owned-resources": "./src/owned-resources.ts",
+    "./owned-authority": "./src/owned-authority.ts"
   },
   "dependencies": {
     "@thumble/contracts": "workspace:*"

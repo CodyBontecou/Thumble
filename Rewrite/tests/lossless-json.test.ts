@@ -147,3 +147,106 @@ test("byte, graph and depth limits apply again to composed edits", () => {
   expect(() => LosslessJson.parse('"' + "é".repeat(limit / 2) + '"')).toThrow();
   expect(() => LosslessJson.parse("{}").set("/large", large.text())).toThrow();
 });
+
+test("batch replacements are atomic, nonoverlapping and preserve untouched opaque spans", () => {
+  const opaque =
+    '{ "huge":18446744073709551615,"decimal":-0.00,"key":"\\u0061" }';
+  const source = LosslessJson.parse(
+    `{"profiles":[{"name":"a","opaque":${opaque}},{"name":"b"}],"a/b":{"~key":0}}`,
+  );
+  const edits = new Map([
+    ["/profiles/0/name", LosslessJson.parse('"A"')],
+    ["/profiles/1/name", LosslessJson.parse('"B"')],
+    ["/a~1b/~0key", LosslessJson.parse("9")],
+  ]);
+  const changed = source.replaceValues(edits);
+  expect(changed.get("/profiles/0/name")?.stringValue).toBe("A");
+  expect(changed.get("/profiles/1/name")?.stringValue).toBe("B");
+  expect(changed.get("/a~1b/~0key")?.integerValue).toBe(9);
+  expect(changed.get("/profiles/0/opaque")?.text()).toBe(opaque);
+  expect(source.get("/profiles/0/name")?.stringValue).toBe("a");
+  expect(source.replaceValues(new Map())).toBe(source);
+  const protectedMap = new Map([
+    ["/profiles/0/name", LosslessJson.parse('"C"')],
+  ]);
+  Object.defineProperty(protectedMap, "size", {
+    get() {
+      throw new Error("map_getter_executed");
+    },
+  });
+  Object.defineProperty(protectedMap, "entries", {
+    get() {
+      throw new Error("map_getter_executed");
+    },
+  });
+  expect(
+    source.replaceValues(protectedMap).get("/profiles/0/name")?.stringValue,
+  ).toBe("C");
+  expect(LosslessJson.parse('{"k":"é🦊"}').byteLength).toBe(14);
+  for (const paths of [
+    ["/profiles", "/profiles/0"],
+    ["/profiles/0", "/profiles"],
+    ["", "/profiles"],
+    ["/profiles", ""],
+  ])
+    expect(() =>
+      source.replaceValues(
+        new Map(paths.map((path) => [path, LosslessJson.parse("null")])),
+      ),
+    ).toThrow("json_replacements_overlap");
+  for (const path of [
+    "/missing",
+    "/profiles/01",
+    "/profiles/-",
+    "/profiles/2",
+    "/profiles/0/name/child",
+  ])
+    expect(() =>
+      source.replaceValues(new Map([[path, LosslessJson.parse("null")]])),
+    ).toThrow("json_path_missing");
+  expect(source.get("/profiles/1/name")?.stringValue).toBe("b");
+  expect(
+    source.replaceValues(new Map([["", LosslessJson.parse("true")]]))
+      .booleanValue,
+  ).toBe(true);
+});
+
+test("batch replacements recheck composed size, graph and depth before returning", () => {
+  const source = LosslessJson.parse('{"a":0,"b":0}');
+  const huge = LosslessJson.parse(
+    JSON.stringify("x".repeat(LOSSLESS_JSON_LIMITS.bytes / 2)),
+  );
+  expect(() =>
+    source.replaceValues(
+      new Map([
+        ["/a", huge],
+        ["/b", huge],
+      ]),
+    ),
+  ).toThrow("configuration_json_too_large");
+  const nested = LosslessJson.parse(
+    "[".repeat(LOSSLESS_JSON_LIMITS.depth) +
+      "0" +
+      "]".repeat(LOSSLESS_JSON_LIMITS.depth),
+  );
+  expect(() => source.replaceValues(new Map([["/a", nested]]))).toThrow();
+  const many = LosslessJson.parse("[" + "0,".repeat(70000) + "0]");
+  expect(() =>
+    source.replaceValues(
+      new Map([
+        ["/a", many],
+        ["/b", many],
+      ]),
+    ),
+  ).toThrow();
+  expect(() =>
+    source.replaceValues(
+      new Map(
+        Array.from({ length: 8193 }, (_, i) => [
+          "/" + i,
+          LosslessJson.parse("0"),
+        ]),
+      ),
+    ),
+  ).toThrow("json_replacements_invalid");
+});
