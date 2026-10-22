@@ -50,6 +50,7 @@ class PhoneInputTest {
         val frames = CopyOnWriteArrayList<ControlTLSFrame>()
         val closed = CountDownLatch(1)
         var beforeReceive: (Int) -> Unit = {}
+        var beforeInputSend: () -> Unit = {}
         var reads = 0
         var pauseGrant = false
         var pauseAt = 4
@@ -71,6 +72,7 @@ class PhoneInputTest {
 
         override fun send(frame: ControlTLSFrame) {
             if (closed.count == 0L) throw PhoneControlRejected()
+            if (frame.kind == ControlTLSFrame.Kind.INPUT) beforeInputSend()
             frames.add(frame)
             if (
                 frame.kind == ControlTLSFrame.Kind.CONTROL &&
@@ -668,13 +670,28 @@ class PhoneInputTest {
                     assertTrue(io.inputs().isEmpty())
                     assertFalse(io.commands().contains("input-grant"))
                 } else {
+                    val sendStarted = CountDownLatch(1)
+                    val continueSend = CountDownLatch(1)
+                    io.beforeInputSend = {
+                        sendStarted.countDown()
+                        check(continueSend.await(2, TimeUnit.SECONDS))
+                    }
                     val engine = client.prepareInput(map()).bind()
-                    assertTrue(engine.connected)
-                    assertEquals(GamepadReport.neutral(), engine.state)
-                    rejects { client.inputConfiguration() }
-                    assertTrue(engine.connected)
-                    assertEquals(1, io.inputs().size)
-                    engine.cancel(ReleaseReason.disconnected)
+                    try {
+                        assertTrue(sendStarted.await(1, TimeUnit.SECONDS))
+                        assertTrue(engine.connected)
+                        assertEquals(GamepadReport.neutral(), engine.state)
+                        rejects { client.inputConfiguration() }
+                        assertTrue(engine.connected)
+                        assertTrue(io.inputs().isEmpty())
+                        continueSend.countDown()
+                        waitUntil { io.inputs().isNotEmpty() }
+                        assertTrue(engine.connected)
+                        assertEquals(1, io.inputs().size)
+                    } finally {
+                        continueSend.countDown()
+                        engine.cancel(ReleaseReason.disconnected)
+                    }
                 }
             } finally {
                 client.close()

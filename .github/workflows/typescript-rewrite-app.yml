@@ -5,7 +5,8 @@ on:
   push:
     paths:
       - "Rewrite/apps/mobile/**"
-      - "Rewrite/native/mobile-input/**"
+      - "Rewrite/native/mobile-input/android/src/main/**"
+      - "Rewrite/native/mobile-input/ios/Sources/**"
       - "Rewrite/packages/client/**"
       - "Rewrite/packages/contracts/**"
       - "Rewrite/packages/domain/**"
@@ -22,7 +23,8 @@ on:
   pull_request:
     paths:
       - "Rewrite/apps/mobile/**"
-      - "Rewrite/native/mobile-input/**"
+      - "Rewrite/native/mobile-input/android/src/main/**"
+      - "Rewrite/native/mobile-input/ios/Sources/**"
       - "Rewrite/packages/client/**"
       - "Rewrite/packages/contracts/**"
       - "Rewrite/packages/domain/**"
