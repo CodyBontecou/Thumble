@@ -22,7 +22,7 @@ export function checkPortableSource(
       ) &&
       !(
         name === "application" &&
-        /^@thumble\/domain(?:\/(?:configuration-catalog|controller-layout|owned-configuration|owned-authority))?$/.test(
+        /^@thumble\/domain(?:\/(?:configuration-catalog|controller-layout|owned-configuration|owned-authority|wow-live))?$/.test(
           module,
         )
       )

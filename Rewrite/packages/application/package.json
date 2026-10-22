@@ -10,7 +10,8 @@
     "./configuration-catalog": "./src/configuration-catalog.ts",
     "./configuration-validation": "./src/configuration-validation.ts",
     "./configuration-import": "./src/configuration-import.ts",
-    "./configuration-export": "./src/configuration-export.ts"
+    "./configuration-export": "./src/configuration-export.ts",
+    "./wow-live-observer": "./src/wow-live-observer.ts"
   },
   "dependencies": {
     "@thumble/contracts": "workspace:*",
