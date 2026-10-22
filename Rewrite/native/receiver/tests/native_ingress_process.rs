@@ -897,3 +897,89 @@ fn udp_revocation_and_listener_stop_acknowledge_native_neutral_and_old_keys_cann
     let port = grant["udpPort"].as_u64().unwrap() as u16;
     let _rebound = std::net::UdpSocket::bind((Ipv4Addr::LOCALHOST, port)).unwrap();
 }
+
+#[test]
+fn live_native_key_rotation_preserves_held_state_and_stale_cleanup_cannot_retire_the_successor() {
+    let mut receiver = Receiver::new();
+    let _owner = receiver.maintain_owner();
+    receiver.activate_timing(1750, 1500);
+    let mut client = Client::connect(&receiver.root).unwrap();
+    let grant = client.grant([8; 16], 1, 1, 5000).unwrap();
+    let previous = grant.binding();
+    let mut old = grant.into_sender().unwrap();
+    client
+        .packet(previous, &old.seal(&held()).unwrap())
+        .unwrap();
+    let initial = receiver.status();
+    assert_eq!(initial["reportHex"], hex(&held().report()));
+    let recording = receiver.root.join("recording.jsonl");
+    let before = fs::metadata(&recording).unwrap().len() as usize;
+    let grant = client.rotate(previous, 1, 1, 5000).unwrap();
+    let next = grant.binding();
+    assert!(previous != next);
+    assert_eq!(receiver.status()["reportHex"], initial["reportHex"]);
+    client
+        .packet(previous, &old.seal(&held()).unwrap())
+        .unwrap();
+    let mut sender = grant.into_sender().unwrap();
+    client.packet(next, &sender.seal(&held()).unwrap()).unwrap();
+    assert_eq!(receiver.status()["sequence"], "0");
+    client.release(previous).unwrap();
+    assert!(client
+        .packet(previous, &old.seal(&held()).unwrap())
+        .is_err());
+    client.packet(next, &sender.seal(&held()).unwrap()).unwrap();
+    let current = receiver.status();
+    assert_eq!(current["generation"], "1");
+    assert_eq!(current["revision"], "1");
+    assert_eq!(current["sequence"], "1");
+    assert_eq!(current["reportHex"], initial["reportHex"]);
+    assert_eq!(current["inputEnabled"], false);
+    for line in fs::read_to_string(&recording).unwrap()[before..].lines() {
+        let record: Value = serde_json::from_str(line).unwrap();
+        assert_eq!(
+            record["reportHex"], initial["reportHex"],
+            "rotation emitted a release pulse"
+        );
+    }
+    drop(client);
+    receiver.wait_neutral();
+    assert_eq!(
+        receiver.status()["lastReleaseReason"],
+        "native_input_released"
+    );
+}
+
+#[test]
+fn cancelling_staged_native_material_preserves_current_input_and_disconnect_retires_both() {
+    let mut receiver = Receiver::new();
+    let _owner = receiver.maintain_owner();
+    receiver.activate_timing(1750, 1500);
+    let mut client = Client::connect(&receiver.root).unwrap();
+    let grant = client.grant([8; 16], 1, 1, 5000).unwrap();
+    let previous = grant.binding();
+    let mut old = grant.into_sender().unwrap();
+    client
+        .packet(previous, &old.seal(&held()).unwrap())
+        .unwrap();
+    assert!(client.rotate(previous, 2, 1, 5000).is_err());
+    let grant = client.rotate(previous, 1, 1, 5000).unwrap();
+    let staged = grant.binding();
+    let mut cancelled = grant.into_sender().unwrap();
+    client.release(staged).unwrap();
+    assert!(client
+        .packet(staged, &cancelled.seal(&held()).unwrap())
+        .is_err());
+    client
+        .packet(previous, &old.seal(&held()).unwrap())
+        .unwrap();
+    assert_eq!(receiver.status()["reportHex"], hex(&held().report()));
+    let _pending = client.rotate(previous, 1, 1, 5000).unwrap();
+    assert_eq!(receiver.status()["reportHex"], hex(&held().report()));
+    drop(client);
+    receiver.wait_neutral();
+    assert_eq!(
+        receiver.status()["lastReleaseReason"],
+        "native_input_released"
+    );
+}

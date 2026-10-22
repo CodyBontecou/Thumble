@@ -1,6 +1,6 @@
 # Private native input IPC version 1
 
-The actual headless recording receiver now exposes a native-only loopback endpoint alongside its existing private Bun configuration pipe. The control owner can inspect the acknowledged active configuration, install a fresh packet source against its exact generation/revision, forward sealed packets and release that source. Native control version 4 now uses this transport for authenticated grant dispatch and reliable sealed packet relay. Native phone grant consumers/input-engine binding and UDP are still pending. Version 3 continues to report input unavailable, and real OS output remains disabled.
+The actual headless recording receiver now exposes a native-only loopback endpoint alongside its existing private Bun configuration pipe. The control owner can inspect the acknowledged active configuration, install a fresh packet source against its exact generation/revision, forward sealed packets and release that source. Native control version 4 now uses this transport for authenticated grant dispatch and reliable sealed packet relay. Native phone grant consumers/input-engine binding and UDP are implemented in the [version-5 phone contract](rewrite-native-phone-input-v5.md). Version 3 continues to report input unavailable, and real OS output remains disabled.
 
 ## Local ownership and authentication
 
@@ -25,8 +25,43 @@ Four fixed workers and a four-connection queue register at most eight sockets. W
 
 The receiver generates fresh key/session/nonce-prefix material at installation and enforces the existing 100ms–10min grant lifetime bound, exact configuration receipt, neutral source barrier, replay rules and 64-source budget. The requested lifetime starts at receiver installation; future control admission must cap it by the authenticated owner and retire on owner/epoch loss. Packet traffic cannot renew the service's 750ms lease or replayed input's 350ms TTL. Owner pipe loss, backpressure, clock failure, source release and configuration replacement retire the packet admission through the same packet-aware runtime. See [the activation handoff](rewrite-receiver-session-handoff.md).
 
+## Staged same-source key handoff
+
+Private opcode 5 accepts exactly 52 bytes: the current connection/session reference
+(16 bytes each), acknowledged generation/revision (little-endian u64 each), and
+new lifetime (little-endian u32). Its response has the same opaque 72-byte grant
+shape as installation. `Client.rotate` retains the current connection identity;
+the receiver generates a fresh random key, session ID and nonce prefix. No phone,
+Bun or React message chooses this material.
+
+Staging requires the exact still-live current reference, an already accepted input
+sample and the same active configuration. It retains at most one staged grant,
+with a commit deadline of two seconds or the requested lifetime, whichever is
+shorter. It emits no output, resets no counter and extends no current deadline.
+Old packets continue normally until a valid staged packet with counter zero
+commits the handoff. The new authenticated full state may retain held controls;
+the old source's key/counter is then retired. This continuity operation is distinct
+from ordinary source installation, which retains its neutral barrier. The current
+owner lease, input TTL and old grant must remain valid through commit; there is
+no expired-source recovery path.
+
+Cancelling the staged reference preserves the live current source. Releasing or
+losing the current owner retires both; after commit, stale cleanup of the previous
+reference cannot release its successor. Workers retain at most the current and
+staged cleanup references. Abandoned grant-response delivery fails closed.
+Repeated rotations use constant staging memory and do not consume the separate
+64-source reconnect/install history. Only the trusted receiver issues fresh
+random rotation material; arbitrary supplied old key/session pairs are not an
+IPC request form.
+
+This receiver primitive does not extend phone authorization. Control versions
+3–5 and both phone clients still use their existing grant/authentication limits.
+A separately negotiated renewal flow must recheck trust and authorization,
+coordinate TLS/UDP progress and commit on the native input owner before enabling
+continuous renewal. See [the decision](adr/0010-rewrite-live-grant-rotation.md).
+
 ## Evidence and open work
 
 Rust unit tests cover one-owner election, descriptor rotation, malformed endpoint data, symlink refusal, wrong capabilities, bad framing/shapes, stale-port server impersonation, expired work, abandoned delivery and bounded draining. Cross-process tests launch the actual receiver executable, request a grant through native IPC, seal/forward input with the native Rust sender and inspect the existing owner/status/recording output. They cover replay, exact generation/revision, recorded-sample exclusion, separate owner renewal, replacement and stale cleanup, disconnect neutralization, continuous native traffic with a lost owner, and stalled sockets while input expires. The CLI/service and standalone package retain their existing bounded safety coverage with the new endpoint enabled.
 
-These checks are local and newer than public snapshot 07da0e0; no hosted/Windows result is claimed for this source. Native phone grant delivery/input binding, UDP, physical output/signing, real phone networking, optical sync and launch acceptance remain pending. No retained desktop functionality is retired.
+The staged rotation checks are local until their exact-source hosted run passes. Existing native phone binding and UDP remain covered by their own snapshots. Continuous phone renewal, physical output/signing, real phone networking, optical sync and launch acceptance remain pending. No retained desktop functionality is retired.

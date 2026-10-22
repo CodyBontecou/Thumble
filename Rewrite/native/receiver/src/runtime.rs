@@ -183,6 +183,43 @@ impl Runtime {
         }
         Ok(owner)
     }
+    /// Commit a private same-owner key handoff with a freshly authenticated full state.
+    /// This is not a new source: the existing owner/input leases must still be live.
+    pub(crate) fn continue_packet_source(
+        &mut self,
+        generation: u64,
+        revision: u64,
+        owner: &str,
+        state: crate::generated::GamepadState,
+        now: u64,
+        output: &mut impl Output,
+    ) -> Result<(), &'static str> {
+        self.tick(now, output)?;
+        if !state.validate() || self.revision != revision {
+            return Err("inactive_generation");
+        }
+        let active = self
+            .active
+            .as_ref()
+            .filter(|a| {
+                a.generation == generation
+                    && a.session_id == owner
+                    && a.sequence.is_some()
+                    && a.input_deadline.is_some()
+            })
+            .ok_or("input_session_closed")?;
+        let input_ttl = active.input_ttl_ms;
+        let report = state.report();
+        if output.submit(report, "sample").is_err() {
+            let _ = self.release(output, "output_failed");
+            return Err("output_failed");
+        }
+        let active = self.active.as_mut().ok_or("input_session_closed")?;
+        active.sequence = Some(0);
+        active.input_deadline = Some(now.saturating_add(input_ttl));
+        self.report = report;
+        Ok(())
+    }
     pub fn apply(
         &mut self,
         command: Command,

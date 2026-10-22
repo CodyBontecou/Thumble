@@ -5,6 +5,7 @@ use crate::{
     runtime::{Command, Output, Runtime, Snapshot},
 };
 const GRANT_LIFETIME_MS: u64 = 600_000;
+const ROTATION_WAIT_MS: u64 = 2000;
 struct Admission {
     packets: PacketReceiver,
     generation: u64,
@@ -12,10 +13,17 @@ struct Admission {
     owner_session: String,
     expires: u64,
 }
+struct Rotation {
+    packets: PacketReceiver,
+    session: [u8; 16],
+    expires: u64,
+    commit_deadline: u64,
+}
 #[derive(Default)]
 pub struct PacketRuntime {
     core: Runtime,
     admission: Option<Admission>,
+    rotation: Option<Rotation>,
     last_time: Option<u64>,
     used_sessions: Vec<[u8; 16]>,
 }
@@ -70,6 +78,7 @@ impl PacketRuntime {
         }
         if (retires && result.is_ok()) || !self.core.is_active() {
             self.admission = None;
+            self.rotation = None;
         }
         result
     }
@@ -101,8 +110,10 @@ impl PacketRuntime {
             .switch_packet_source(generation, revision, now, output);
         if owner.is_err() && !self.core.is_active() {
             self.admission = None;
+            self.rotation = None;
         }
         let owner_session = owner?;
+        self.rotation = None;
         self.used_sessions.push(session);
         self.admission = Some(Admission {
             packets: PacketReceiver::new(grant),
@@ -113,9 +124,61 @@ impl PacketRuntime {
         });
         Ok(())
     }
+    /// Stage only for the current live source; the native issuer supplies fresh random key material.
+    /// Preparing a grant never changes output, packet sequence, or any existing deadline.
+    pub(crate) fn stage_rotation(
+        &mut self,
+        previous: [u8; 16],
+        grant: PacketGrant,
+        revision: u64,
+        lifetime_ms: u64,
+        now: u64,
+        output: &mut impl Output,
+    ) -> Result<(), &'static str> {
+        self.tick(now, output)?;
+        if self.rotation.is_some() {
+            return Err("input_rotation_pending");
+        }
+        if !(100..=GRANT_LIFETIME_MS).contains(&lifetime_ms) {
+            return Err("invalid_grant_lifetime");
+        }
+        let active = self
+            .admission
+            .as_ref()
+            .filter(|a| a.session == previous && a.generation == grant.generation())
+            .ok_or("input_session_closed")?;
+        let snapshot = self.core.snapshot();
+        if snapshot.revision != revision.to_string()
+            || snapshot.sequence.is_none()
+            || grant.session() == active.session
+            || self.used_sessions.contains(&grant.session())
+        {
+            return Err("input_rotation_invalid");
+        }
+        let expires = now.checked_add(lifetime_ms).ok_or("invalid_clock")?;
+        let commit_deadline = now
+            .checked_add(ROTATION_WAIT_MS.min(lifetime_ms))
+            .ok_or("invalid_clock")?;
+        self.rotation = Some(Rotation {
+            session: grant.session(),
+            packets: PacketReceiver::new(grant),
+            expires,
+            commit_deadline,
+        });
+        Ok(())
+    }
+    pub(crate) fn rotation_session(&self) -> Option<[u8; 16]> {
+        self.rotation.as_ref().map(|r| r.session)
+    }
+    pub(crate) fn cancel_rotation(&mut self, session: [u8; 16]) {
+        if self.rotation_session() == Some(session) {
+            self.rotation = None;
+        }
+    }
     pub fn tick(&mut self, now: u64, output: &mut impl Output) -> Result<(), &'static str> {
         if self.last_time.is_some_and(|last| now < last) {
             self.admission = None;
+            self.rotation = None;
             self.core.release(output, "clock_rollback")?;
             return Err("clock_rollback");
         }
@@ -128,6 +191,14 @@ impl PacketRuntime {
         if !self.core.is_active() {
             self.admission = None;
         }
+        if self.admission.is_none()
+            || self
+                .rotation
+                .as_ref()
+                .is_some_and(|r| now >= r.commit_deadline)
+        {
+            self.rotation = None;
+        }
         result
     }
     /// Either UDP or reliable fallback passes the identical sealed packet here.
@@ -138,6 +209,43 @@ impl PacketRuntime {
         output: &mut impl Output,
     ) -> Result<(), &'static str> {
         self.tick(now, output)?;
+        if self
+            .rotation
+            .as_ref()
+            .is_some_and(|r| packet.get(8..24) == Some(r.session.as_slice()))
+        {
+            let rotation = self.rotation.as_mut().ok_or("input_session_closed")?;
+            let state = rotation
+                .packets
+                .open(packet)
+                .map_err(|_| "input_packet_rejected")?;
+            if rotation.packets.newest_sequence() != Some(0) {
+                self.rotation = None;
+                return Err("input_rotation_requires_first_sample");
+            }
+            let rotation = self.rotation.take().ok_or("input_session_closed")?;
+            let current = self.admission.as_ref().ok_or("input_session_closed")?;
+            let generation = current.generation;
+            let owner = current.owner_session.clone();
+            let revision = crate::runtime::decimal(&self.core.snapshot().revision)?;
+            let result = self
+                .core
+                .continue_packet_source(generation, revision, &owner, state, now, output);
+            if result.is_err() {
+                if !self.core.is_active() {
+                    self.admission = None;
+                }
+                return result;
+            }
+            self.admission = Some(Admission {
+                packets: rotation.packets,
+                generation,
+                session: rotation.session,
+                owner_session: owner,
+                expires: rotation.expires,
+            });
+            return Ok(());
+        }
         let a = self.admission.as_mut().ok_or("input_session_closed")?;
         let state = a
             .packets
@@ -156,6 +264,7 @@ impl PacketRuntime {
         );
         if result.is_err() {
             self.admission = None;
+            self.rotation = None;
         }
         result.map(|_| ())
     }
@@ -198,6 +307,7 @@ impl PacketRuntime {
         reason: &'static str,
     ) -> Result<(), &'static str> {
         self.admission = None;
+        self.rotation = None;
         self.core.release(output, reason)
     }
 }
@@ -215,6 +325,7 @@ mod tests {
     struct Sink {
         report: [u8; 20],
         failed: bool,
+        history: Vec<[u8; 20]>,
     }
     impl Output for Sink {
         fn submit(&mut self, report: [u8; 20], _: &'static str) -> Result<(), &'static str> {
@@ -222,6 +333,7 @@ mod tests {
                 Err("mock_output_failed")
             } else {
                 self.report = report;
+                self.history.push(report);
                 Ok(())
             }
         }
@@ -546,6 +658,277 @@ mod tests {
         o.failed = false;
         assert_eq!(
             r.receive(&s.seal(&state(true)).unwrap(), 104, &mut o),
+            Err("input_session_closed")
+        );
+    }
+    fn rotation_grant(id: u8) -> PacketGrant {
+        PacketGrant::new(&[id; 32], [id; 16], [id; 4], 1).unwrap()
+    }
+    fn live_source(lifetime: u64) -> (PacketRuntime, Sink, PacketSender) {
+        let mut runtime = PacketRuntime::default();
+        let mut sink = Sink::default();
+        owner_activate(&mut runtime, &mut sink, 0);
+        runtime.attach(grant(1), 9, lifetime, 1, &mut sink).unwrap();
+        let mut sender = PacketSender::new(grant(1), PACKET_LIMIT).unwrap();
+        runtime
+            .receive(&sender.seal(&state(false)).unwrap(), 2, &mut sink)
+            .unwrap();
+        runtime
+            .receive(&sender.seal(&state(true)).unwrap(), 3, &mut sink)
+            .unwrap();
+        sink.history.clear();
+        (runtime, sink, sender)
+    }
+    #[test]
+    fn staged_key_rotation_keeps_held_output_and_commits_only_authenticated_packet_zero() {
+        let (mut runtime, mut sink, mut old) = live_source(1000);
+        let held = sink.report;
+        runtime
+            .stage_rotation(SESSION, rotation_grant(8), 9, 2000, 4, &mut sink)
+            .unwrap();
+        assert_eq!(runtime.snapshot().sequence.as_deref(), Some("1"));
+        assert!(sink.history.is_empty());
+        runtime
+            .receive(&old.seal(&state(true)).unwrap(), 5, &mut sink)
+            .unwrap();
+        let mut next = PacketSender::new(rotation_grant(8), PACKET_LIMIT).unwrap();
+        let packet = next.seal(&state(true)).unwrap();
+        let mut corrupt = packet.clone();
+        corrupt[90] ^= 1;
+        assert_eq!(
+            runtime.receive(&corrupt, 6, &mut sink),
+            Err("input_packet_rejected")
+        );
+        assert_eq!(runtime.rotation_session(), Some([8; 16]));
+        runtime.receive(&packet, 7, &mut sink).unwrap();
+        assert_eq!(runtime.snapshot().sequence.as_deref(), Some("0"));
+        assert_eq!(sink.report, held);
+        assert!(sink.history.iter().all(|r| *r == held));
+        let publications = sink.history.len();
+        assert_eq!(
+            runtime.receive(&old.seal(&state(false)).unwrap(), 8, &mut sink),
+            Err("input_packet_rejected")
+        );
+        assert_eq!(
+            runtime.receive(&packet, 9, &mut sink),
+            Err("input_packet_rejected")
+        );
+        assert_eq!(sink.history.len(), publications);
+        runtime
+            .receive(&next.seal(&state(false)).unwrap(), 10, &mut sink)
+            .unwrap();
+        assert_eq!(sink.report, NEUTRAL);
+    }
+    #[test]
+    fn stage_rejects_foreign_scope_reused_source_and_overlapping_handoffs_without_output() {
+        let (mut runtime, mut sink, _) = live_source(1000);
+        for (previous, next, revision, lifetime) in [
+            ([6; 16], rotation_grant(8), 9, 1000),
+            (SESSION, rotation_grant(8), 10, 1000),
+            (SESSION, grant(2), 9, 1000),
+            (SESSION, grant(1), 9, 1000),
+            (SESSION, rotation_grant(8), 9, 99),
+        ] {
+            assert!(runtime
+                .stage_rotation(previous, next, revision, lifetime, 4, &mut sink)
+                .is_err());
+            assert!(runtime.rotation_session().is_none());
+            assert!(sink.history.is_empty());
+        }
+        runtime
+            .stage_rotation(SESSION, rotation_grant(8), 9, 1000, 4, &mut sink)
+            .unwrap();
+        assert_eq!(
+            runtime.stage_rotation(SESSION, rotation_grant(9), 9, 1000, 5, &mut sink),
+            Err("input_rotation_pending")
+        );
+        assert_eq!(runtime.rotation_session(), Some([8; 16]));
+        runtime.cancel_rotation([9; 16]);
+        assert_eq!(runtime.rotation_session(), Some([8; 16]));
+        runtime.cancel_rotation([8; 16]);
+        assert!(runtime.rotation_session().is_none());
+        assert!(sink.history.is_empty());
+    }
+    #[test]
+    fn rotation_cannot_bypass_initial_admission_or_start_with_a_skipped_packet() {
+        let mut runtime = PacketRuntime::default();
+        let mut sink = Sink::default();
+        owner_activate(&mut runtime, &mut sink, 0);
+        runtime.attach(grant(1), 9, 1000, 1, &mut sink).unwrap();
+        assert_eq!(
+            runtime.stage_rotation(SESSION, rotation_grant(8), 9, 1000, 2, &mut sink),
+            Err("input_rotation_invalid")
+        );
+        let mut old = PacketSender::new(grant(1), PACKET_LIMIT).unwrap();
+        runtime
+            .receive(&old.seal(&state(true)).unwrap(), 3, &mut sink)
+            .unwrap();
+        runtime
+            .stage_rotation(SESSION, rotation_grant(8), 9, 1000, 4, &mut sink)
+            .unwrap();
+        let mut next = PacketSender::new(rotation_grant(8), PACKET_LIMIT).unwrap();
+        let _ = next.seal(&state(true)).unwrap();
+        assert_eq!(
+            runtime.receive(&next.seal(&state(false)).unwrap(), 5, &mut sink),
+            Err("input_rotation_requires_first_sample")
+        );
+        assert!(runtime.rotation_session().is_none());
+        assert_eq!(sink.report, state(true).report());
+        runtime
+            .receive(&old.seal(&state(false)).unwrap(), 6, &mut sink)
+            .unwrap();
+        assert_eq!(sink.report, NEUTRAL);
+    }
+    #[test]
+    fn preparing_or_committing_rotation_never_renews_the_configuration_owner_or_expired_input() {
+        let (mut runtime, mut sink, _) = live_source(2000);
+        runtime
+            .stage_rotation(SESSION, rotation_grant(8), 9, 5000, 4, &mut sink)
+            .unwrap();
+        let mut next = PacketSender::new(rotation_grant(8), PACKET_LIMIT).unwrap();
+        assert_eq!(
+            runtime.receive(&next.seal(&state(true)).unwrap(), 353, &mut sink),
+            Err("input_session_closed")
+        );
+        assert_eq!(runtime.snapshot().last_release_reason, "input_expired");
+        assert_eq!(sink.report, NEUTRAL);
+        let (mut runtime, mut sink, mut old) = live_source(2000);
+        for now in [200, 400, 600] {
+            runtime
+                .receive(&old.seal(&state(true)).unwrap(), now, &mut sink)
+                .unwrap();
+        }
+        runtime
+            .stage_rotation(SESSION, rotation_grant(8), 9, 5000, 604, &mut sink)
+            .unwrap();
+        let mut next = PacketSender::new(rotation_grant(8), PACKET_LIMIT).unwrap();
+        runtime
+            .receive(&next.seal(&state(true)).unwrap(), 610, &mut sink)
+            .unwrap();
+        runtime.tick(750, &mut sink).unwrap();
+        assert_eq!(runtime.snapshot().last_release_reason, "lease_expired");
+        assert_eq!(sink.report, NEUTRAL);
+    }
+    #[test]
+    fn grant_expiry_release_replacement_and_clock_rollback_discard_pending_keys() {
+        for reason in ["grant", "release", "replace", "rollback"] {
+            let (mut runtime, mut sink, _) =
+                live_source(if reason == "grant" { 100 } else { 1000 });
+            runtime
+                .stage_rotation(SESSION, rotation_grant(8), 9, 5000, 4, &mut sink)
+                .unwrap();
+            let now = match reason {
+                "grant" => 101,
+                "release" => {
+                    runtime
+                        .release_reason(&mut sink, "explicit_release")
+                        .unwrap();
+                    5
+                }
+                "replace" => {
+                    runtime
+                        .apply_owner(
+                            Command::Activate {
+                                generation: "2".into(),
+                                revision: "10".into(),
+                                profile_id: "new-profile".into(),
+                                session_id: "next-owner".into(),
+                                lease_ms: 750,
+                                input_ttl_ms: 350,
+                            },
+                            5,
+                            &mut sink,
+                        )
+                        .unwrap();
+                    6
+                }
+                _ => {
+                    assert_eq!(runtime.tick(2, &mut sink), Err("clock_rollback"));
+                    5
+                }
+            };
+            let mut next = PacketSender::new(rotation_grant(8), PACKET_LIMIT).unwrap();
+            assert!(runtime
+                .receive(&next.seal(&state(true)).unwrap(), now, &mut sink)
+                .is_err());
+            assert!(runtime.rotation_session().is_none());
+            assert_eq!(sink.report, NEUTRAL);
+        }
+    }
+    #[test]
+    fn pending_handoff_times_out_without_extending_or_disturbing_the_live_source() {
+        let (mut runtime, mut sink, mut old) = live_source(5000);
+        runtime
+            .stage_rotation(SESSION, rotation_grant(8), 9, 5000, 4, &mut sink)
+            .unwrap();
+        for now in (100..=2000).step_by(100) {
+            owner_renew(&mut runtime, &mut sink, now);
+            runtime
+                .receive(&old.seal(&state(true)).unwrap(), now, &mut sink)
+                .unwrap();
+        }
+        let mut next = PacketSender::new(rotation_grant(8), PACKET_LIMIT).unwrap();
+        assert_eq!(
+            runtime.receive(&next.seal(&state(false)).unwrap(), 2004, &mut sink),
+            Err("input_packet_rejected")
+        );
+        assert!(runtime.rotation_session().is_none());
+        assert_eq!(sink.report, state(true).report());
+        runtime
+            .stage_rotation(SESSION, rotation_grant(9), 9, 5000, 2005, &mut sink)
+            .unwrap();
+    }
+    #[test]
+    fn repeated_continuity_rotations_keep_constant_staging_and_do_not_consume_reconnect_history() {
+        let (mut runtime, mut sink, _) = live_source(5000);
+        let mut session = SESSION;
+        let mut latest = None;
+        for id in 8..88 {
+            let now = u64::from(id) * 2;
+            runtime
+                .stage_rotation(session, rotation_grant(id), 9, 5000, now, &mut sink)
+                .unwrap();
+            let mut sender = PacketSender::new(rotation_grant(id), PACKET_LIMIT).unwrap();
+            runtime
+                .receive(&sender.seal(&state(true)).unwrap(), now + 1, &mut sink)
+                .unwrap();
+            assert_eq!(runtime.used_sessions.len(), 1);
+            assert!(runtime.rotation_session().is_none());
+            assert_eq!(sink.report, state(true).report());
+            session = [id; 16];
+            latest = Some(sender);
+        }
+        let mut latest = latest.unwrap();
+        for now in [350, 600, 740] {
+            runtime
+                .receive(&latest.seal(&state(true)).unwrap(), now, &mut sink)
+                .unwrap();
+        }
+        runtime.tick(750, &mut sink).unwrap();
+        assert_eq!(runtime.snapshot().last_release_reason, "lease_expired");
+        assert_eq!(sink.report, NEUTRAL);
+    }
+    #[test]
+    fn failed_rotation_publication_retires_current_and_pending_material() {
+        let (mut runtime, mut sink, mut old) = live_source(1000);
+        runtime
+            .stage_rotation(SESSION, rotation_grant(8), 9, 1000, 4, &mut sink)
+            .unwrap();
+        let mut next = PacketSender::new(rotation_grant(8), PACKET_LIMIT).unwrap();
+        sink.failed = true;
+        assert_eq!(
+            runtime.receive(&next.seal(&state(true)).unwrap(), 5, &mut sink),
+            Err("output_failed")
+        );
+        assert!(!runtime.snapshot().active);
+        assert!(runtime.rotation_session().is_none());
+        sink.failed = false;
+        assert_eq!(
+            runtime.receive(&old.seal(&state(true)).unwrap(), 6, &mut sink),
+            Err("input_session_closed")
+        );
+        assert_eq!(
+            runtime.receive(&next.seal(&state(true)).unwrap(), 7, &mut sink),
             Err("input_session_closed")
         );
     }

@@ -31,6 +31,7 @@ const STATUS: u8 = 1;
 const GRANT: u8 = 2;
 const PACKET: u8 = 3;
 const RELEASE: u8 = 4;
+const ROTATE: u8 = 5;
 fn random<const N: usize>() -> Result<[u8; N], &'static str> {
     let mut bytes = [0; N];
     SystemRandom::new()
@@ -317,6 +318,44 @@ impl Client {
             },
         })
     }
+    /// Stage fresh material for this exact still-live source. No receiver state changes until packet zero.
+    pub fn rotate(
+        &mut self,
+        previous: GrantRef,
+        generation: u64,
+        revision: u64,
+        lifetime_ms: u32,
+    ) -> Result<NativeGrant, &'static str> {
+        let mut b = previous.connection.to_vec();
+        b.extend_from_slice(&previous.session);
+        b.extend_from_slice(&generation.to_le_bytes());
+        b.extend_from_slice(&revision.to_le_bytes());
+        b.extend_from_slice(&lifetime_ms.to_le_bytes());
+        let b = self.request(ROTATE, &b)?;
+        if b.len() != 72
+            || number(&b, 52) != generation
+            || number(&b, 60) != revision
+            || u32::from_le_bytes(b[68..72].try_into().unwrap()) != lifetime_ms
+        {
+            return Err("native_input_grant_invalid");
+        }
+        let session = b[32..48].try_into().unwrap();
+        if session == previous.session {
+            return Err("native_input_grant_invalid");
+        }
+        Ok(NativeGrant {
+            key: b[..32].try_into().unwrap(),
+            session,
+            prefix: b[48..52].try_into().unwrap(),
+            generation,
+            revision,
+            lifetime_ms,
+            binding: GrantRef {
+                connection: previous.connection,
+                session,
+            },
+        })
+    }
     pub fn packet(&mut self, binding: GrantRef, packet: &[u8]) -> Result<(), &'static str> {
         if packet.len() != PACKET_BYTES {
             return Err("native_input_packet_invalid");
@@ -365,6 +404,7 @@ pub struct Server {
     workers: Vec<thread::JoinHandle<()>>,
     path: PathBuf,
     binding: Option<Binding>,
+    staged: Option<Binding>,
 }
 impl Server {
     pub fn bind(root: &Path) -> Result<Self, &'static str> {
@@ -418,7 +458,7 @@ impl Server {
                 };
                 let _ = stream.set_nonblocking(false);
                 let _ = stream.set_nodelay(true);
-                let mut owned: Option<GrantRef> = None;
+                let mut owned: Vec<GrantRef> = Vec::with_capacity(2);
                 let authenticated_server = (|| {
                     let hello = receive(&mut stream, FRAME_WAIT)?;
                     if hello.len() != 17 || hello[0] != 0 {
@@ -441,11 +481,19 @@ impl Server {
                     let payload = b[34..].to_vec();
                     if !matches!(
                         (op, payload.len()),
-                        (STATUS, 0) | (GRANT, 36) | (PACKET, 140) | (RELEASE, 32)
+                        (STATUS, 0) | (GRANT, 36) | (PACKET, 140) | (RELEASE, 32) | (ROTATE, 52)
                     ) {
                         break;
                     }
-                    let grant_connection = if op == GRANT {
+                    let old_reference = if matches!(op, ROTATE | PACKET | RELEASE) {
+                        Some(GrantRef {
+                            connection: payload[..16].try_into().unwrap(),
+                            session: payload[16..32].try_into().unwrap(),
+                        })
+                    } else {
+                        None
+                    };
+                    let grant_connection = if matches!(op, GRANT | ROTATE) {
                         Some(<[u8; 16]>::try_from(&payload[..16]).unwrap())
                     } else {
                         None
@@ -466,12 +514,22 @@ impl Server {
                     let reply = match result.recv_timeout(OP_WAIT) {
                         Ok(Ok(payload)) => {
                             if let Some(connection) = grant_connection {
-                                owned = Some(GrantRef {
+                                if op == GRANT {
+                                    owned.clear();
+                                } else {
+                                    owned.retain(|r| Some(*r) == old_reference);
+                                }
+                                owned.push(GrantRef {
                                     connection,
                                     session: payload[32..48].try_into().unwrap(),
                                 });
                             } else if op == RELEASE {
-                                owned = None;
+                                owned.retain(|r| Some(*r) != old_reference);
+                            } else if op == PACKET
+                                && owned.last().copied() == old_reference
+                                && owned.len() == 2
+                            {
+                                owned.remove(0);
                             }
                             let mut r = vec![0, op];
                             r.extend_from_slice(&payload);
@@ -483,7 +541,7 @@ impl Server {
                         break;
                     }
                 }
-                if let Some(binding) = owned {
+                for binding in owned {
                     let (response, _) = mpsc::sync_channel(1);
                     let mut payload = binding.connection.to_vec();
                     payload.extend_from_slice(&binding.session);
@@ -552,6 +610,7 @@ impl Server {
             workers,
             path,
             binding: None,
+            staged: None,
         })
     }
     pub fn drain(
@@ -575,9 +634,10 @@ impl Server {
             } else {
                 self.apply(request.op, &request.payload, runtime, now, output)
             };
-            let issued = request.op == GRANT && result.is_ok();
+            let issued = matches!(request.op, GRANT | ROTATE) && result.is_ok();
             if request.response.try_send(result).is_err() && issued {
                 self.binding = None;
+                self.staged = None;
                 runtime.release_reason(output, "native_grant_delivery_failed")?;
             }
         }
@@ -598,6 +658,14 @@ impl Server {
             .is_some_and(|a| !snapshot.active || a.generation.to_string() != snapshot.generation)
         {
             self.binding = None;
+            self.staged = None;
+        }
+        if self
+            .staged
+            .as_ref()
+            .is_some_and(|s| runtime.rotation_session() != Some(s.reference.session))
+        {
+            self.staged = None;
         }
         match op {
             STATUS => {
@@ -625,9 +693,52 @@ impl Server {
                     now,
                     output,
                 )?;
+                self.staged = None;
                 self.binding = Some(Binding {
                     reference: GrantRef {
                         connection,
+                        session,
+                    },
+                    generation,
+                });
+                let mut r = key.to_vec();
+                r.extend_from_slice(&session);
+                r.extend_from_slice(&prefix);
+                r.extend_from_slice(&generation.to_le_bytes());
+                r.extend_from_slice(&revision.to_le_bytes());
+                r.extend_from_slice(&lifetime.to_le_bytes());
+                Ok(r)
+            }
+            ROTATE => {
+                let previous = GrantRef {
+                    connection: b[..16].try_into().unwrap(),
+                    session: b[16..32].try_into().unwrap(),
+                };
+                if !self
+                    .binding
+                    .as_ref()
+                    .is_some_and(|a| a.reference == previous)
+                {
+                    return Err("native_input_session_closed");
+                }
+                let generation = number(b, 32);
+                let revision = number(b, 40);
+                let lifetime = u32::from_le_bytes(b[48..52].try_into().unwrap());
+                let key = random::<32>()?;
+                let session = random::<16>()?;
+                let prefix = random::<4>()?;
+                runtime.stage_rotation(
+                    previous.session,
+                    PacketGrant::new(&key, session, prefix, generation)
+                        .map_err(|_| "native_input_grant_invalid")?,
+                    revision,
+                    u64::from(lifetime),
+                    now,
+                    output,
+                )?;
+                self.staged = Some(Binding {
+                    reference: GrantRef {
+                        connection: previous.connection,
                         session,
                     },
                     generation,
@@ -645,11 +756,15 @@ impl Server {
                     connection: b[..16].try_into().unwrap(),
                     session: b[16..32].try_into().unwrap(),
                 };
-                if !self
+                let current = self
                     .binding
                     .as_ref()
-                    .is_some_and(|a| a.reference == reference)
-                {
+                    .is_some_and(|a| a.reference == reference);
+                let staged = self
+                    .staged
+                    .as_ref()
+                    .is_some_and(|a| a.reference == reference);
+                if !current && !staged {
                     return if op == RELEASE {
                         Ok(Vec::new())
                     } else {
@@ -658,9 +773,16 @@ impl Server {
                 }
                 if op == PACKET {
                     runtime.receive(&b[32..], now, output)?;
-                } else {
+                    if staged {
+                        self.binding = self.staged.take();
+                    }
+                } else if current {
                     self.binding = None;
+                    self.staged = None;
                     runtime.release_reason(output, "native_input_released")?;
+                } else {
+                    runtime.cancel_rotation(reference.session);
+                    self.staged = None;
                 }
                 Ok(Vec::new())
             }
@@ -788,7 +910,13 @@ mod tests {
         let mut shape = vec![1];
         shape.extend_from_slice(&endpoint[10..]);
         shape.push(GRANT);
-        for payload in [wrong, shape] {
+        let mut short_rotation = vec![1];
+        short_rotation.extend_from_slice(&endpoint[10..]);
+        short_rotation.push(ROTATE);
+        short_rotation.extend_from_slice(&[0; 51]);
+        let mut long_rotation = short_rotation.clone();
+        long_rotation.extend_from_slice(&[0; 2]);
+        for payload in [wrong, shape, short_rotation, long_rotation] {
             let mut stream = TcpStream::connect((Ipv4Addr::LOCALHOST, port)).unwrap();
             send(&mut stream, &[0; 17], OP_WAIT).unwrap();
             assert_eq!(receive(&mut stream, OP_WAIT).unwrap().len(), 33);
@@ -865,6 +993,57 @@ mod tests {
             runtime.snapshot().last_release_reason,
             "native_grant_delivery_failed"
         );
+    }
+    #[test]
+    fn abandoned_rotation_delivery_retires_the_held_source_and_staged_material() {
+        let root = Root::new();
+        let mut server = Server::bind(&root.0).unwrap();
+        let (mut runtime, mut sink) = runtime();
+        let grant = server
+            .apply(GRANT, &grant_payload(), &mut runtime, 2, &mut sink)
+            .unwrap();
+        let key: [u8; 32] = grant[..32].try_into().unwrap();
+        let session: [u8; 16] = grant[32..48].try_into().unwrap();
+        let prefix: [u8; 4] = grant[48..52].try_into().unwrap();
+        let mut sender = PacketSender::new(
+            PacketGrant::new(&key, session, prefix, 1).unwrap(),
+            PACKET_LIMIT,
+        )
+        .unwrap();
+        let held: GamepadState = serde_json::from_value(serde_json::json!({"buttons":["south"],"leftStickX":0,"leftStickY":0,"rightStickX":0,"rightStickY":0,"leftTrigger":1,"rightTrigger":1})).unwrap();
+        let mut packet = vec![8; 16];
+        packet.extend_from_slice(&session);
+        packet.extend_from_slice(&sender.seal(&held).unwrap());
+        server
+            .apply(PACKET, &packet, &mut runtime, 3, &mut sink)
+            .unwrap();
+        assert_ne!(sink.0, NEUTRAL);
+        let mut payload = vec![8; 16];
+        payload.extend_from_slice(&session);
+        payload.extend_from_slice(&1u64.to_le_bytes());
+        payload.extend_from_slice(&1u64.to_le_bytes());
+        payload.extend_from_slice(&1000u32.to_le_bytes());
+        let (incoming, pending) = mpsc::sync_channel(1);
+        server.pending = pending;
+        let (response, receipt) = mpsc::sync_channel(1);
+        drop(receipt);
+        incoming
+            .send(Pending {
+                op: ROTATE,
+                payload,
+                deadline: Instant::now() + OP_WAIT,
+                response,
+            })
+            .unwrap();
+        server.drain(&mut runtime, 4, &mut sink).unwrap();
+        assert_eq!(sink.0, NEUTRAL);
+        assert!(!runtime.snapshot().active);
+        assert_eq!(
+            runtime.snapshot().last_release_reason,
+            "native_grant_delivery_failed"
+        );
+        assert!(server.binding.is_none() && server.staged.is_none());
+        assert!(runtime.rotation_session().is_none());
     }
     #[test]
     fn draining_native_requests_is_bounded_for_owner_progress() {
