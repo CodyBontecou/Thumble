@@ -4,11 +4,37 @@ on:
   workflow_dispatch:
   push:
     paths:
-      - "Rewrite/**"
+      - "Rewrite/apps/mobile/**"
+      - "Rewrite/native/mobile-input/**"
+      - "Rewrite/packages/client/**"
+      - "Rewrite/packages/contracts/**"
+      - "Rewrite/packages/domain/**"
+      - "Rewrite/packages/fixtures/**"
+      - "Rewrite/packages/*/package.json"
+      - "Rewrite/package.json"
+      - "Rewrite/bun.lock"
+      - "Rewrite/bunfig.toml"
+      - "Rewrite/tsconfig*.json"
+      - "Rewrite/tooling/check_mobile_app_results.py"
+      - "Rewrite/tooling/prepare-mobile-fixtures.ts"
+      - "Rewrite/tooling/generate-contracts.ts"
       - ".github/workflows/typescript-rewrite-app.yml"
   pull_request:
     paths:
-      - "Rewrite/**"
+      - "Rewrite/apps/mobile/**"
+      - "Rewrite/native/mobile-input/**"
+      - "Rewrite/packages/client/**"
+      - "Rewrite/packages/contracts/**"
+      - "Rewrite/packages/domain/**"
+      - "Rewrite/packages/fixtures/**"
+      - "Rewrite/packages/*/package.json"
+      - "Rewrite/package.json"
+      - "Rewrite/bun.lock"
+      - "Rewrite/bunfig.toml"
+      - "Rewrite/tsconfig*.json"
+      - "Rewrite/tooling/check_mobile_app_results.py"
+      - "Rewrite/tooling/prepare-mobile-fixtures.ts"
+      - "Rewrite/tooling/generate-contracts.ts"
       - ".github/workflows/typescript-rewrite-app.yml"
 
 concurrency:

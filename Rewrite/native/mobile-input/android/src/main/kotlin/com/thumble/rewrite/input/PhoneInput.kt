@@ -148,17 +148,11 @@ internal class PhoneInputGrant(
             connection: String,
             map: ControlMap,
         ) {
+            val metadata = PhoneInputConfiguration.decode(value, connection)
             if (
-                value !=
-                    mapOf(
-                        "version" to EnrollmentJSON.Value.Integer(1),
-                        "command" to EnrollmentJSON.Value.Text("input-configuration"),
-                        "connectionId" to EnrollmentJSON.Value.Text(connection),
-                        "active" to EnrollmentJSON.Value.BooleanValue(true),
-                        "generation" to EnrollmentJSON.Value.Text(map.generation),
-                        "revision" to EnrollmentJSON.Value.Text(map.revision),
-                        "inputEnabled" to EnrollmentJSON.Value.BooleanValue(false),
-                    )
+                !metadata.active ||
+                    metadata.generation != map.generation ||
+                    metadata.revision != map.revision
             )
                 throw PhoneControlRejected()
         }

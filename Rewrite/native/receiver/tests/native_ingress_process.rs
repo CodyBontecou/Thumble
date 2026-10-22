@@ -576,18 +576,24 @@ fn stale_grant_receipts_and_old_generation_packets_cannot_replace_or_release_new
     // rejection. Time spent handshaking that peer must not stand in for TTL loss.
     let stop = Arc::new(AtomicBool::new(false));
     let stopped = stop.clone();
+    // Bound this fixture to one input/status round trip. Concurrent authorization
+    // work can otherwise queue samples ahead of the status barrier and make this
+    // generation-fencing scenario depend on unchecked producer throughput.
+    let sampling_receipt = receipt.clone();
+    let (sample_ready, first_sample) = mpsc::sync_channel(1);
     let sampling = thread::spawn(move || {
+        let mut ready = Some(sample_ready);
         while !stopped.load(Ordering::SeqCst) {
-            if channel
-                .send(FrameKind::Input, &sender.seal(&held()).unwrap())
-                .is_err()
-            {
-                break;
+            phone_held(&mut channel, &sampling_receipt, &mut sender);
+            if let Some(ready) = ready.take() {
+                ready.send(()).unwrap();
             }
             thread::sleep(Duration::from_millis(30));
         }
         (channel, sender)
     });
+    first_sample.recv_timeout(Duration::from_secs(2)).unwrap();
+    phase("sampling-first-native-ack");
     let (mut stale, stale_receipt) = phone_auth(&value, &credential);
     phase("stale-authenticated");
     control_send(

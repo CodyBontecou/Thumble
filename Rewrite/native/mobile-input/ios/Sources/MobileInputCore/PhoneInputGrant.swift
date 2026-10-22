@@ -9,15 +9,11 @@ struct PhoneInputGrant {
   static func configuration(
     _ value: [String: EnrollmentJSON.Value], connection: String, map: ControlMap
   ) throws {
-    guard
-      value == [
-        "version": .integer(1), "command": .string("input-configuration"),
-        "connectionId": .string(connection), "active": .boolean(true),
-        "generation": .string(map.generation), "revision": .string(map.revision),
-        "inputEnabled": .boolean(false),
-      ]
+    let metadata = try PhoneInputConfiguration(value, connection: connection)
+    guard metadata.active, metadata.generation == map.generation, metadata.revision == map.revision
     else { throw PhoneControlError.rejected }
   }
+
   init(
     _ value: [String: EnrollmentJSON.Value], connection: String, map: ControlMap,
     datagrams: Bool = false

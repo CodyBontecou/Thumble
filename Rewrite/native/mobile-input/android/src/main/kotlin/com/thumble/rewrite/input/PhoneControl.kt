@@ -290,6 +290,34 @@ internal constructor(
         }
     }
 
+    /** Worker-only bootstrap metadata; inspection never admits a grant or touch owner. */
+    fun inputConfiguration(): PhoneInputConfiguration {
+        worker()
+        if (
+            controlVersion !in 4..5 ||
+                admitted == null ||
+                inputAttempted.get() ||
+                !busy.compareAndSet(false, true)
+        )
+            throw PhoneControlRejected()
+        try {
+            if (inputAttempted.get()) throw PhoneControlRejected()
+            val connection = admitted!!.connectionID
+            send(
+                JSONObject()
+                    .put("version", 1)
+                    .put("command", "input-configuration")
+                    .put("connectionId", connection)
+            )
+            return PhoneInputConfiguration.decode(receive(), connection)
+        } catch (_: Exception) {
+            close()
+            throw PhoneControlRejected()
+        } finally {
+            busy.set(false)
+        }
+    }
+
     /** Worker-only grant admission; bind the returned owner once on the native input/UI thread. */
     fun prepareInput(map: ControlMap): PhoneInputAdmission {
         worker()

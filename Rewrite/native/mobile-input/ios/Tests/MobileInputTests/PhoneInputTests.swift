@@ -21,6 +21,7 @@ private actor InputTestStorage: ControlCredentialSource {
   var beforeReceive: (Int) -> Void = { _ in }
   var paused: CheckedContinuation<Void, Never>?
   var pauseGrant = false
+  var pauseAt = 4
   var didPause = false
   var onPause: CheckedContinuation<Void, Never>?
   init(_ replies: [[String: Any]]) { self.replies = replies }
@@ -32,7 +33,7 @@ private actor InputTestStorage: ControlCredentialSource {
   }
   func receive() async throws -> ControlTLSFrame {
     receiving += 1
-    if pauseGrant && receiving == 4 {
+    if pauseGrant && receiving == pauseAt {
       didPause = true
       onPause?.resume()
       onPause = nil
@@ -401,6 +402,10 @@ private func everyNativeLifecycleCancellationClosesTheGrantChannel(_ reason: Rel
       try command(97)
       let configuration = try await line()
       #expect(configuration["generation"] as? String == generation)
+      let metadata = try await control.inputConfiguration()
+      #expect(
+        metadata.active && metadata.generation == generation && metadata.revision == generation)
+      #expect(!metadata.inputEnabled)
       let map = ControlMap(
         generation: generation, revision: generation, controls: inputMap().controls)
       let engine = try await control.bindInput(map)
@@ -456,3 +461,92 @@ private func everyNativeLifecycleCancellationClosesTheGrantChannel(_ reason: Rel
     func load(hostPin: String, now: UInt64) -> PhoneCredential? { credential }
   }
 #endif
+
+@Test @MainActor private func bootstrapConfigurationExposesExactEpochsWithoutAdmittingInput()
+  async throws
+{
+  let f = try inputFixture()
+  for changes: [String: Any] in [
+    ["active": false, "generation": "0", "revision": "0"],
+    ["active": false, "generation": "1", "revision": "1"],
+    ["generation": "18446744073709551615", "revision": "18446744073709551615"],
+  ] {
+    let config = f["configuration"]!.merging(changes) { _, new in new }
+    let io = InputControlIO([f["hello"]!, f["authenticated"]!, config])
+    let client = try inputClient(io)
+    defer { client.close() }
+    await #expect(throws: PhoneControlError.self) { try await client.inputConfiguration() }
+    _ = try await client.authenticate()
+    let receipt = try await client.inputConfiguration()
+    #expect(receipt.active == config["active"] as? Bool)
+    #expect(receipt.generation == config["generation"] as? String)
+    #expect(receipt.revision == config["revision"] as? String)
+    #expect(!receipt.inputEnabled && io.inputs.isEmpty)
+    #expect(io.commands == ["hello", "authenticate", "input-configuration"])
+  }
+}
+@Test @MainActor private func malformedBootstrapMetadataClosesWithoutGrantOrTouchOwner()
+  async throws
+{
+  let f = try inputFixture()
+  for changes: [String: Any] in [
+    ["connectionId": String(repeating: "ff", count: 16)], ["generation": "0"],
+    ["generation": "18446744073709551616"], ["generation": "01"], ["generation": 1],
+    ["revision": "-1"], ["revision": "18446744073709551616"],
+    ["active": 1], ["inputEnabled": true], ["credential": "unexpected"],
+  ] {
+    let io = InputControlIO([
+      f["hello"]!, f["authenticated"]!, f["configuration"]!.merging(changes) { _, new in new },
+    ])
+    let client = try inputClient(io)
+    _ = try await client.authenticate()
+    await #expect(throws: PhoneControlError.self) { try await client.inputConfiguration() }
+    #expect(io.closed && io.inputs.isEmpty)
+    #expect(io.commands == ["hello", "authenticate", "input-configuration"])
+  }
+}
+@Test @MainActor private func metadataInspectionDoesNotConsumeOrReplaceExactGrantAdmission()
+  async throws
+{
+  let f = try inputFixture()
+  for changed in [false, true] {
+    var configuration = f["configuration"]!
+    if changed { configuration["revision"] = "2" }
+    let io = InputControlIO([
+      f["hello"]!, f["authenticated"]!, f["configuration"]!, configuration, f["grant"]!,
+    ])
+    let client = try inputClient(io)
+    defer { client.close() }
+    _ = try await client.authenticate()
+    #expect(try await client.inputConfiguration().revision == "1")
+    #expect(io.inputs.isEmpty)
+    if changed {
+      await #expect(throws: PhoneControlError.self) { try await client.bindInput(inputMap()) }
+      #expect(io.closed && io.inputs.isEmpty && !io.commands.contains("input-grant"))
+    } else {
+      let engine = try await client.bindInput(inputMap())
+      #expect(engine.connected && GamepadReport.hex(engine.state) == GamepadReport.hex(.neutral))
+      await #expect(throws: PhoneControlError.self) { try await client.inputConfiguration() }
+      #expect(engine.connected && io.inputs.count == 1)
+      engine.cancel(.disconnected)
+    }
+  }
+}
+@Test @MainActor private func lateBootstrapMetadataCannotSurviveCloseOrCancellation() async throws {
+  let f = try inputFixture()
+  for cancel in [false, true] {
+    let io = InputControlIO([f["hello"]!, f["authenticated"]!, f["configuration"]!])
+    let client = try inputClient(io)
+    _ = try await client.authenticate()
+    io.pauseGrant = true
+    io.pauseAt = 3
+    let pending = Task { try await client.inputConfiguration() }
+    await io.waitForGrant()
+    await #expect(throws: PhoneControlError.self) { try await client.status() }
+    if cancel { pending.cancel() } else { client.close() }
+    io.resume()
+    await #expect(throws: PhoneControlError.self) { try await pending.value }
+    #expect(io.closed && io.inputs.isEmpty)
+    #expect(io.commands == ["hello", "authenticate", "input-configuration"])
+  }
+}

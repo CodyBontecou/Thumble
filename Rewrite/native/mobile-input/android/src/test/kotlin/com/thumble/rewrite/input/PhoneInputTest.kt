@@ -52,6 +52,7 @@ class PhoneInputTest {
         var beforeReceive: (Int) -> Unit = {}
         var reads = 0
         var pauseGrant = false
+        var pauseAt = 4
         val paused = CountDownLatch(1)
         val resume = CountDownLatch(1)
         val status = f.getJSONObject("status")
@@ -81,7 +82,7 @@ class PhoneInputTest {
 
         override fun receive(): ControlTLSFrame {
             reads++
-            if (pauseGrant && reads == 4) {
+            if (pauseGrant && reads == pauseAt) {
                 paused.countDown()
                 check(resume.await(2, TimeUnit.SECONDS))
             }
@@ -94,6 +95,11 @@ class PhoneInputTest {
 
         override fun close() {
             closed.countDown()
+        }
+
+        fun replies(vararg values: JSONObject) {
+            queue.clear()
+            values.forEach { queue.add(frame(it)) }
         }
 
         fun inputs() = frames.filter { it.kind == ControlTLSFrame.Kind.INPUT }
@@ -504,6 +510,11 @@ class PhoneInputTest {
                 assertTrue(client.authenticate().inputSessionAvailable)
                 command(97)
                 assertEquals(generation, line().getString("generation"))
+                val metadata = client.inputConfiguration()
+                assertTrue(metadata.active)
+                assertEquals(generation, metadata.generation)
+                assertEquals(generation, metadata.revision)
+                assertFalse(metadata.inputEnabled)
                 val map =
                     ControlMap(
                         generation = generation,
@@ -574,6 +585,135 @@ class PhoneInputTest {
                 assertEquals(GamepadReport.neutral(), feedback.last())
             }
             assertTrue(io.closed.await(1, TimeUnit.SECONDS))
+        }
+    }
+
+    @Test
+    fun bootstrapConfigurationExposesExactEpochsWithoutAdmittingInput() {
+        for ((active, generation, revision) in
+            listOf(
+                Triple(false, "0", "0"),
+                Triple(false, "1", "1"),
+                Triple(true, "18446744073709551615", "18446744073709551615"),
+            )) {
+            val f = fixture()
+            val io = IO(f)
+            val client = client(io)
+            try {
+                rejects { client.inputConfiguration() }
+                client.authenticate()
+                io.replies(
+                    f.getJSONObject("configuration")
+                        .put("active", active)
+                        .put("generation", generation)
+                        .put("revision", revision)
+                )
+                val receipt = client.inputConfiguration()
+                assertEquals(active, receipt.active)
+                assertEquals(generation, receipt.generation)
+                assertEquals(revision, receipt.revision)
+                assertFalse(receipt.inputEnabled)
+                assertTrue(io.inputs().isEmpty())
+                assertEquals(listOf("hello", "authenticate", "input-configuration"), io.commands())
+            } finally {
+                client.close()
+            }
+        }
+    }
+
+    @Test
+    fun malformedBootstrapMetadataClosesWithoutGrantOrTouchOwner() {
+        for ((field, replacement) in
+            listOf(
+                "connectionId" to "ff".repeat(16),
+                "generation" to "0",
+                "generation" to "18446744073709551616",
+                "generation" to "01",
+                "generation" to 1,
+                "revision" to "-1",
+                "revision" to "18446744073709551616",
+                "active" to 1,
+                "inputEnabled" to true,
+                "credential" to "unexpected",
+            )) {
+            val f = fixture()
+            val io = IO(f)
+            val client = client(io)
+            client.authenticate()
+            io.replies(f.getJSONObject("configuration").put(field, replacement))
+            rejects { client.inputConfiguration() }
+            assertTrue(io.closed.await(1, TimeUnit.SECONDS))
+            assertTrue(io.inputs().isEmpty())
+            assertEquals(listOf("hello", "authenticate", "input-configuration"), io.commands())
+        }
+    }
+
+    @Test
+    fun metadataInspectionDoesNotConsumeOrReplaceExactGrantAdmission() {
+        for (changed in listOf(false, true)) {
+            val f = fixture()
+            val io = IO(f)
+            val client = client(io)
+            try {
+                client.authenticate()
+                val inspected = f.getJSONObject("configuration")
+                val current =
+                    JSONObject(inspected.toString()).apply { if (changed) put("revision", "2") }
+                io.replies(inspected, current, f.getJSONObject("grant"))
+                assertEquals("1", client.inputConfiguration().revision)
+                assertTrue(io.inputs().isEmpty())
+                if (changed) {
+                    rejects { client.prepareInput(map()) }
+                    assertTrue(io.closed.await(1, TimeUnit.SECONDS))
+                    assertTrue(io.inputs().isEmpty())
+                    assertFalse(io.commands().contains("input-grant"))
+                } else {
+                    val engine = client.prepareInput(map()).bind()
+                    assertTrue(engine.connected)
+                    assertEquals(GamepadReport.neutral(), engine.state)
+                    rejects { client.inputConfiguration() }
+                    assertTrue(engine.connected)
+                    assertEquals(1, io.inputs().size)
+                    engine.cancel(ReleaseReason.disconnected)
+                }
+            } finally {
+                client.close()
+            }
+        }
+    }
+
+    @Test
+    fun lateBootstrapMetadataCannotSurviveCloseOrInterruption() {
+        for (interrupt in listOf(false, true)) {
+            val f = fixture()
+            val io = IO(f)
+            val client = client(io)
+            client.authenticate()
+            io.pauseGrant = true
+            io.pauseAt = 3
+            val rejected = CountDownLatch(1)
+            val worker = Thread {
+                try {
+                    client.inputConfiguration()
+                } catch (_: PhoneControlRejected) {
+                    rejected.countDown()
+                }
+            }
+            try {
+                worker.start()
+                assertTrue(io.paused.await(1, TimeUnit.SECONDS))
+                rejects { client.status() }
+                if (interrupt) worker.interrupt() else client.close()
+                io.resume.countDown()
+                assertTrue(rejected.await(1, TimeUnit.SECONDS))
+                assertTrue(io.closed.await(1, TimeUnit.SECONDS))
+                assertTrue(io.inputs().isEmpty())
+                assertEquals(listOf("hello", "authenticate", "input-configuration"), io.commands())
+            } finally {
+                client.close()
+                io.resume.countDown()
+                worker.join(1000)
+            }
         }
     }
 }

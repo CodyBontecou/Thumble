@@ -203,6 +203,28 @@ extension PhoneCredentialWorker: ControlCredentialSource {}
       Task { @MainActor [weak self] in self?.close() }
     }
   }
+  /// Bootstrap metadata, prior to any input attempt. No packet grant or bearer escapes.
+  public func inputConfiguration() async throws -> PhoneInputConfiguration {
+    guard controlVersion >= 4, state == .authenticated, !busy, !inputAttempted,
+      let admitted
+    else { throw PhoneControlError.rejected }
+    busy = true
+    defer { busy = false }
+    return try await withTaskCancellationHandler {
+      do {
+        try send([
+          "version": 1, "command": "input-configuration", "connectionId": admitted.connectionID,
+        ])
+        return try PhoneInputConfiguration(try await receive(), connection: admitted.connectionID)
+      } catch {
+        close()
+        throw PhoneControlError.rejected
+      }
+    } onCancel: {
+      Task { @MainActor [weak self] in self?.close() }
+    }
+  }
+
   /// A single native touch owner for one exact acknowledged configuration. No raw grant escapes.
   public func bindInput(
     _ map: ControlMap, feedback: @escaping (GamepadStateV1) -> Void = { _ in }
