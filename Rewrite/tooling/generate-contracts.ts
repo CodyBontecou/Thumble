@@ -97,3 +97,5 @@ for (const [path, content] of Object.entries(outputs)) {
 }
 
 await import("./generate-input-packet-fixtures.ts");
+
+await import("./generate-controller-layout-fixture.ts");
