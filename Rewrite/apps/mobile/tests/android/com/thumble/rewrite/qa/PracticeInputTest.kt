@@ -113,7 +113,7 @@ class PracticeInputTest {
             checkNotNull(target.packageManager.getLaunchIntentForPackage(target.packageName))
         launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         target.startActivity(launch)
-        assertTrue(device.wait(Until.hasObject(By.pkg(target.packageName)), 15_000))
+        waitForTargetApp()
         device.waitForIdle()
         device.findObject(By.res("practice-done"))?.click()
         assertTrue(device.wait(Until.gone(By.res("practice-done")), 10_000))
@@ -149,7 +149,7 @@ class PracticeInputTest {
             checkNotNull(target.packageManager.getLaunchIntentForPackage(target.packageName))
         launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         target.startActivity(launch)
-        assertTrue(device.wait(Until.hasObject(By.pkg(target.packageName)), 15_000))
+        waitForTargetApp()
         device.waitForIdle()
         checkNotNull(device.wait(Until.findObject(By.res("practice-done")), 15_000)).click()
         assertTrue(
@@ -211,6 +211,32 @@ class PracticeInputTest {
         } finally {
             event.recycle()
         }
+    }
+
+    private fun waitForTargetApp() {
+        val deadline = SystemClock.uptimeMillis() + 15_000
+        var recoveredLauncher = false
+        while (SystemClock.uptimeMillis() < deadline) {
+            // Fresh Google-APIs CI images can show the launcher's boot ANR over
+            // the running test Activity. Never dismiss a Thumble app failure.
+            val launcher =
+                device.findObject(
+                    By.pkg("android")
+                        .res("android:id/alertTitle")
+                        .text("Pixel Launcher isn't responding")
+                )
+            if (launcher != null && android.os.Build.HARDWARE in setOf("ranchu", "goldfish")) {
+                check(!recoveredLauncher) { "emulator_launcher_repeated_anr" }
+                recoveredLauncher = true
+                android.util.Log.w("ThumbleQa", "closing_emulator_launcher_anr")
+                checkNotNull(device.findObject(By.pkg("android").res("android:id/aerr_close")))
+                    .click()
+                device.waitForIdle()
+            }
+            if (device.hasObject(By.pkg(target.packageName))) return
+            SystemClock.sleep(100)
+        }
+        assertTrue("Target Activity was not visible", device.hasObject(By.pkg(target.packageName)))
     }
 
     private fun report() = ui { GamepadReport.hex(controller.engine.state) }

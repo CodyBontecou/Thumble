@@ -55,8 +55,8 @@ oversized input close the connection before the invalid frame dispatches. EOF
 closes the protocol connection; clients must keep input open while awaiting
 responses. Existing in-flight authority work is not rolled back by disconnect.
 
-Headless tests use actual SDK clients for both eras against the independent
-native receiver/service. A separate Node SDK client probe checks all four
+Headless tests run the official SDK client on Node for both eras against the independent
+native receiver/service. The Node SDK client driver checks all four
 era/capability combinations against the Bun server, including invalid arguments
 and unavailable tools. They cover catalog opt-in, malformed arguments, authority
 parity, recording, release and service survival. The standalone packaging test
@@ -68,3 +68,11 @@ The CLI package includes runtime license notices. The notice manifest pins SDK
 runtime distributions and dependency versions; verification/build rejects stale
 notices. The audited Node bundle uses Ajv and excludes the separate Cloudflare
 validator. No hosted service, browser transport or remote MCP listener is added.
+
+The product server runs in Bun, including on Windows. The SDK client driver runs
+in its supported Node runtime on every platform. A preserved Windows witness
+shows the Bun-hosted SDK client timing out after an accepted JSON-RPC error,
+while the independent Node client passes the same four scenarios against the
+same server. Driver receipts require all scenarios and both negotiated eras.
+Direct Bun-child tests additionally require natural EOF/framing-error exit and
+protocol-only stdout without SDK-assisted process termination.

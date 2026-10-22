@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { mkdtempSync, realpathSync, rmSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { isAbsolute, join } from "node:path";
 import { Client } from "@modelcontextprotocol/client";
@@ -29,6 +29,10 @@ let phase = "startup";
 let trace = [];
 try {
   await invoke("start");
+  const token = JSON.parse(
+    readFileSync(join(runtime, "endpoint.json"), "utf8"),
+  ).token;
+  assert.match(token, /^[0-9a-f]{64}$/);
   for (const legacy of [false, true])
     for (const recording of [false, true]) {
       phase = `connect-${legacy ? "legacy" : "modern"}-${recording ? "recording" : "default"}`;
@@ -92,6 +96,7 @@ try {
           ok: true,
           result: await invoke("status"),
         });
+        assert.equal(JSON.stringify(status).includes(token), false);
         phase = "invalid-arguments";
         assert.equal(
           (await call({ name: "receiver_release", arguments: { extra: true } }))

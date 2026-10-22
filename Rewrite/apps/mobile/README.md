@@ -56,7 +56,10 @@ waking/rotation, and Done while another finger holds a control. Seven cases are
 required. Real injected stick coordinates allow one signed 16-bit unit of
 quantization error; buttons, triggers, headers and complete neutralization remain
 exact. Test setup wakes only its selected synthetic emulator; APKs build before
-CI boots it. Failure capture preserves the original exception ahead of teardown. The
+CI boots it. On emulator hardware, setup can close one specifically identified
+Pixel Launcher boot-ANR dialog covering the Activity; repeated launcher errors
+and Thumble app failures still fail. Failure capture preserves the original
+exception ahead of teardown. The
 ancestry test was observed failing before moving input outside the React root.
 The generated Android release key is a development template key, not release
 signing evidence.

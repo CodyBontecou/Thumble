@@ -2,6 +2,8 @@
 
 Isolated M2 implementation under coexistence. Bun **1.4.3**, TypeScript **6.0.3** and Rust **1.88.0** are pinned. This development seam uses a **recording backend**: it emits no OS input and does not activate a retained profile catalog.
 
+Development requires Node 20+ for independent MCP SDK and TLS protocol checks. The standalone user runtime consists of the CLI and native helper binaries.
+
 ```sh
 bun install --frozen-lockfile
 bun run native:build

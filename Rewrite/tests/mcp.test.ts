@@ -3,15 +3,12 @@ import { PassThrough, Writable } from "node:stream";
 import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { Client } from "@modelcontextprotocol/client";
-import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
 import { BoundedStdioTransport } from "../apps/cli/src/mcp-transport.ts";
 import {
   readEndpoint,
   readEndpointAsync,
   request,
 } from "@thumble/client/local";
-import { neutralGamepadState } from "@thumble/contracts";
 
 const root = resolve(import.meta.dir, "..");
 const receiver = resolve(
@@ -118,186 +115,31 @@ test("MCP accepts the writable backpressure signal without waiting for a platfor
   }
 });
 
-test("SDK modern and legacy clients share CLI authority, preserve input opt-in and emergency release across MCP exit", async () => {
-  const parent = realpathSync(mkdtempSync(join(tmpdir(), "thumble-mcp-"))),
-    runtime = join(parent, "runtime");
-  const start = Bun.spawn(
+test("independent Node SDK clients exercise both MCP eras, capability gates and service survival", async () => {
+  const child = Bun.spawn(
     [
+      "node",
+      resolve(root, "tooling/test-mcp-node.mjs"),
       process.execPath,
       cli,
-      "service",
-      "start",
-      "--runtime-dir",
-      runtime,
-      "--receiver",
       receiver,
     ],
     { stdout: "pipe", stderr: "pipe" },
   );
-  const phase = (label: string) => {
-    if (process.env.CI) console.error(`MCP fixture phase=${label}`);
-  };
-  try {
-    phase("service-start");
-    const [startupOutput, startupError, startupCode] = await Promise.all([
-      new Response(start.stdout).text(),
-      new Response(start.stderr).text(),
-      start.exited,
-    ]);
-    expect(startupCode).toBe(0);
-    expect(startupError).toBe("");
-    expect(JSON.parse(startupOutput).ok).toBe(true);
-    phase("service-ready");
-    const endpoint = readEndpoint(runtime, receiver);
-    expect(await readEndpointAsync(runtime, receiver)).toEqual(endpoint);
-    for (const legacy of [false, true])
-      for (const optIn of [false, true]) {
-        const transport = new StdioClientTransport({
-          command: process.execPath,
-          args: [
-            cli,
-            "mcp",
-            "serve",
-            "--runtime-dir",
-            runtime,
-            "--receiver",
-            receiver,
-            ...(optIn ? ["--allow-recorded-input"] : []),
-          ],
-          stderr: "pipe",
-          env: { ...process.env, THUMBLE_REWRITE_MCP_TRACE: "1" },
-        });
-        let stderr = "";
-        transport.stderr?.on("data", (chunk) => {
-          stderr += chunk.toString();
-        });
-        const client = new Client(
-          { name: "thumble-headless-test", version: "1" },
-          {
-            versionNegotiation: {
-              mode: legacy ? "legacy" : { pin: "2026-07-28" },
-            },
-          },
-        );
-        const call: Client["callTool"] = (params, options) =>
-          client.callTool(params, { ...options, timeout: 5000 });
-        try {
-          phase(
-            `connect-${legacy ? "legacy" : "modern"}-${optIn ? "recording" : "default"}`,
-          );
-          await client.connect(
-            transport,
-            legacy
-              ? { prior: { kind: "legacy" }, timeout: 5000 }
-              : { timeout: 5000 },
-          );
-          phase("connected");
-          expect(client.getProtocolEra()).toBe(legacy ? "legacy" : "modern");
-          phase("tools-list");
-          const tools = await client.listTools(undefined, { timeout: 5000 });
-          phase("tools-listed");
-          expect(tools.tools.map((t) => t.name).sort()).toEqual(
-            [
-              "receiver_status",
-              "receiver_release",
-              "pairing_status",
-              "pairing_list",
-              ...(optIn ? ["receiver_activate", "receiver_sample"] : []),
-            ].sort(),
-          );
-          phase("status-call");
-          const status = await call(
-            { name: "receiver_status", arguments: {} },
-            { timeout: 5000 },
-          );
-          phase("status-returned");
-          expect(status.structuredContent).toEqual({
-            version: 1,
-            ok: true,
-            result: await request(endpoint, { command: "status" }),
-          });
-          expect(JSON.stringify(status)).not.toContain(endpoint.token);
-          const invalid = await call({
-            name: "receiver_release",
-            arguments: { extra: true },
-          });
-          expect(invalid.isError).toBe(true);
-          if (optIn) {
-            const current = await request(endpoint, { command: "status" });
-            const active = await call({
-              name: "receiver_activate",
-              arguments: {
-                expectedRevision: current.receiver.snapshot.revision,
-                profileId: "mcp-profile",
-              },
-            });
-            expect(active.isError).not.toBe(true);
-            const generation = (await request(endpoint, { command: "status" }))
-              .receiver.snapshot.generation;
-            const sampled = await call({
-              name: "receiver_sample",
-              arguments: {
-                expectedGeneration: generation,
-                sequence: "1",
-                state: { ...neutralGamepadState(), buttons: ["south"] },
-              },
-            });
-            expect(sampled.isError).not.toBe(true);
-            expect(
-              (await request(endpoint, { command: "status" })).receiver.snapshot
-                .sequence,
-            ).toBe("1");
-          } else {
-            await expect(
-              call({
-                name: "receiver_activate",
-                arguments: { expectedRevision: "0", profileId: "mcp-profile" },
-              }),
-            ).rejects.toThrow("tool_unavailable");
-          }
-          expect(
-            (await call({ name: "receiver_release", arguments: {} })).isError,
-          ).not.toBe(true);
-          expect(
-            (await request(endpoint, { command: "status" })).receiver.snapshot
-              .active,
-          ).toBe(false);
-        } finally {
-          phase("client-close");
-          await client.close();
-          phase("client-closed");
-          if (process.env.CI)
-            console.error(
-              stderr
-                .split(/\r?\n/)
-                .filter((line) => /^MCP transport phase=[a-z-]+$/.test(line))
-                .join("\n"),
-            );
-        }
-        expect(
-          stderr
-            .split(/\r?\n/)
-            .filter((line) => !/^MCP transport phase=[a-z-]+$/.test(line))
-            .join("\n")
-            .trim(),
-        ).toBe("");
-        expect(
-          (await request(endpoint, { command: "status" })).service.instanceId,
-        ).toBe(endpoint.instanceId);
-      }
-  } finally {
-    try {
-      await request(readEndpoint(runtime, receiver), { command: "stop" });
-    } catch {}
-    for (let i = 0; i < 50; i++) {
-      try {
-        rmSync(parent, { recursive: true, force: true });
-        break;
-      } catch {
-        await Bun.sleep(20);
-      }
-    }
-  }
+  const [stdout, stderr, code] = await Promise.all([
+    new Response(child.stdout).text(),
+    new Response(child.stderr).text(),
+    child.exited,
+  ]);
+  expect(stderr).toBe("");
+  expect(code).toBe(0);
+  expect(JSON.parse(stdout)).toEqual({
+    ok: true,
+    runtime: expect.stringMatching(/^v[0-9]+\.[0-9]+\.[0-9]+$/),
+    eras: ["modern", "legacy"],
+    scenarios: 4,
+    inputEnabled: false,
+  });
 }, 30000);
 
 test("MCP rejects unavailable tools before dispatch without reflecting caller data", async () => {
@@ -344,3 +186,106 @@ test("MCP rejects unavailable tools before dispatch without reflecting caller da
   expect(calls).toBe(1);
   await transport.close();
 });
+
+test("MCP exits naturally on EOF or invalid framing and keeps CLI errors off stdout", async () => {
+  const parent = realpathSync(mkdtempSync(join(tmpdir(), "thumble-mcp-eof-")));
+  const bounded = async <T>(promise: Promise<T>): Promise<T> => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([
+        promise,
+        new Promise<never>((_resolve, reject) => {
+          timer = setTimeout(
+            () => reject(new Error("mcp_child_did_not_finish")),
+            3000,
+          );
+        }),
+      ]);
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+  try {
+    for (const kind of ["eof", "invalid", "arguments"]) {
+      const child = Bun.spawn(
+        [
+          process.execPath,
+          cli,
+          "mcp",
+          "serve",
+          "--runtime-dir",
+          join(parent, "runtime"),
+          ...(kind === "arguments" ? ["--json"] : []),
+        ],
+        {
+          stdin: "pipe",
+          stdout: "pipe",
+          stderr: "pipe",
+          env: { ...process.env, THUMBLE_REWRITE_MCP_TRACE: "0" },
+        },
+      );
+      const reader = child.stdout.getReader();
+      const decoder = new TextDecoder();
+      try {
+        if (kind === "eof") {
+          child.stdin.write(
+            JSON.stringify({
+              jsonrpc: "2.0",
+              id: 1,
+              method: "initialize",
+              params: {
+                protocolVersion: "2025-11-25",
+                capabilities: {},
+                clientInfo: { name: "eof-test", version: "1" },
+              },
+            }) + "\n",
+          );
+          let first = "";
+          while (!first.includes("\n")) {
+            const chunk = await bounded(reader.read());
+            expect(chunk.done).not.toBe(true);
+            first += decoder.decode(chunk.value, { stream: true });
+            expect(first.length).toBeLessThanOrEqual(65536);
+          }
+          const lines = first.trim().split("\n");
+          expect(lines).toHaveLength(1);
+          expect(JSON.parse(lines[0]!).id).toBe(1);
+          expect(JSON.parse(lines[0]!).result.protocolVersion).toBe(
+            "2025-11-25",
+          );
+          child.stdin.end();
+        } else if (kind === "invalid")
+          child.stdin.write(
+            '{"jsonrpc":"2.0","id":1,"id":2,"method":"ping"}\n',
+          );
+        const remaining = (async () => {
+          let text = "";
+          while (true) {
+            const chunk = await reader.read();
+            if (chunk.done) return text;
+            text += decoder.decode(chunk.value, { stream: true });
+            if (text.length > 65536) throw new Error("mcp_stdout_limit");
+          }
+        })();
+        const [stdout, stderr, code] = await bounded(
+          Promise.all([
+            remaining,
+            new Response(child.stderr).text(),
+            child.exited,
+          ]),
+        );
+        expect(stdout).toBe("");
+        expect(stderr.trim()).toBe(
+          kind === "arguments" ? "invalid_mcp_option" : "",
+        );
+        expect(code).toBe(kind === "arguments" ? 1 : 0);
+      } finally {
+        if (child.exitCode === null) child.kill();
+        await child.exited;
+        reader.releaseLock();
+      }
+    }
+  } finally {
+    rmSync(parent, { recursive: true, force: true });
+  }
+}, 10000);

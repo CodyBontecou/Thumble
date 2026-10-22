@@ -74,9 +74,6 @@ jobs:
           node tooling/test-control-tls.mjs
       - run: bun run typecheck
       - run: bun run test:ci
-      - name: Verify MCP with an independent Node SDK client
-        if: always() && !cancelled()
-        run: bun tooling/check-mcp-node.ts
         timeout-minutes: 2
       - run: bun run build
       - run: bun run test:package:ci
