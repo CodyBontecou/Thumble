@@ -10,6 +10,8 @@ ANDROID = {
     "sixNativeTouchesAndCancellationWorkWhileActualJsQueueIsBlocked",
     "rotationReleasesOldSurfaceAndReopensNeutral",
     "backgroundingReleasesCapturedNativeTouches",
+    "sleepingReleasesNativeTouchesAndWakingStartsNeutral",
+    "doneWithASecondFingerReleasesTheHeldController",
 }
 
 def check_android(path):
@@ -17,7 +19,7 @@ def check_android(path):
     for file in Path(path).rglob("TEST-*.xml"):
         root = ET.parse(file).getroot()
         cases.extend(root.iter("testcase"))
-    assert len(cases) == len(ANDROID), "expected exactly five app tests on one emulator"
+    assert len(cases) == len(ANDROID), "expected exactly seven app tests on one emulator"
     assert {c.get("name") for c in cases} == ANDROID, "missing/unexpected app cases"
     assert all(c.get("classname") == "com.thumble.rewrite.qa.PracticeInputTest" for c in cases)
     assert all(not any(c.find(tag) is not None for tag in ("skipped", "failure", "error")) for c in cases), "app test failure or skip"

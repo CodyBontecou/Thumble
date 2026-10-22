@@ -14,8 +14,11 @@ there is no JavaScript per-touch/per-frame input method or event.
 
 A native view below a React root still participates in React Native's root touch
 and pointer dispatch. An Android instrumentation witness reproduced that ancestry
-before this change. Capture now lives in an Activity-content sibling on Android
-and a UIWindow sibling on iOS. The React child is a presentation/geometry anchor.
+before this change. Capture now uses individual Activity-child regions on Android and a UIWindow
+sibling on iOS. Android forwards those separate pointer streams into one native
+engine in a touch-ignoring ViewGroupOverlay. A full-screen Android sibling swallowed
+a second finger's Done tap while another control was held; the per-region routing
+fixes that case without sending controller streams through React. The React child is a presentation/geometry anchor.
 
 Native code follows the anchor's visible rectangle and detaches/releases when it
 leaves the window. Initial touches outside controller regions pass through to
@@ -35,11 +38,13 @@ credential bearers or per-frame feedback cross this boundary.
 
 Android instrumentation uses a separate `.qa` variant with bundled Release
 JavaScript and native dependencies. Production Release retains shrinking; QA does
-not shrink the test-visible classes. Five required cases inject actual system
+not shrink the test-visible classes. Seven required cases inject actual system
 MotionEvents into all 19 regions, hold six fingers while the actual React Native
-JS queue is blocked, cancel natively before JS resumes, release on background,
-rotate/reopen neutral, verify absence of React-root ancestry, and use Done during
-cleanup. A checker rejects missing, failed or skipped witnesses.
+JS queue is blocked, cancel natively before JS resumes, require native frame feedback to progress, release on
+background/sleep, wake and rotate/reopen neutral, verify absence of React-root
+ancestry for every capture region, and tap Done with a second finger while another
+control stays held. Setup wakes its synthetic emulator and captures primary
+failures before teardown. CI builds APKs before booting the emulator. A checker rejects missing, failed or skipped witnesses.
 
 iOS hosted tests run inside the bundled app, attach the actual native view beneath
 its React root, verify all 19 UIKit hit-test destinations, navigation pass-through,

@@ -1,12 +1,12 @@
 package com.thumble.rewrite.bridge
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Rect
 import android.view.MotionEvent
 import android.view.View
-import android.view.ViewGroup
 import android.view.ViewTreeObserver
 import android.widget.FrameLayout
 import com.thumble.rewrite.input.*
@@ -15,6 +15,7 @@ import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.kotlin.viewevent.EventDispatcher
 import expo.modules.kotlin.views.ExpoView
+import kotlin.math.ceil
 
 class ThumbleInputModule : Module() {
     override fun definition() = ModuleDefinition {
@@ -66,11 +67,16 @@ class ThumbleInputView(context: Context, appContext: AppContext) : ExpoView(cont
         }
     }
 
+    private var feedbackPublications = 0L
+    val nativeFeedbackPublications: Long
+        get() = feedbackPublications
+
     private var feedbackState = GamepadReport.neutral()
     val engine =
         InputEngine(
             { false },
             { state ->
+                if (feedbackPublications < Long.MAX_VALUE) feedbackPublications++
                 feedbackState = state
                 invalidate()
             },
@@ -79,10 +85,15 @@ class ThumbleInputView(context: Context, appContext: AppContext) : ExpoView(cont
     private var configured: ControlMap? = null
     private var disposed = false
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-    private var portal: TouchPortal? = null
+    private var captureHost: FrameLayout? = null
+    private val regions = mutableListOf<TouchRegion>()
+    val nativeCaptureViews: List<View>
+        get() = regions.toList()
+
+    private var captureVisible = false
     private var observer: ViewTreeObserver? = null
     private val align = ViewTreeObserver.OnPreDrawListener {
-        syncPortal()
+        syncCapture()
         true
     }
 
@@ -93,35 +104,50 @@ class ThumbleInputView(context: Context, appContext: AppContext) : ExpoView(cont
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         if (disposed) return
-        // Activity-owned sibling, outside ReactSurfaceView and its JS dispatcher.
-        val content = rootView.findViewById<ViewGroup>(android.R.id.content) ?: return
-        val next = TouchPortal(context, this)
-        next.addView(surface, FrameLayout.LayoutParams(-1, -1))
-        content.addView(next, ViewGroup.LayoutParams(0, 0))
-        portal = next
+        // Each region is a direct Activity child, so Android can split a second
+        // pointer to navigation instead of assigning it to a full-screen portal.
+        val host = rootView.findViewById<FrameLayout>(android.R.id.content) ?: return
+        captureHost = host
+        // ViewGroupOverlay participates in native attachment/frame callbacks but
+        // never receives system touches. Region views forward their own streams.
+        host.overlay.add(surface)
+        rebuildRegions()
         observer = rootView.viewTreeObserver.also { it.addOnPreDrawListener(align) }
-        syncPortal()
+        syncCapture()
     }
 
     override fun onDetachedFromWindow() {
-        detachPortal()
+        detachCapture()
         super.onDetachedFromWindow()
     }
 
-    private fun detachPortal() {
+    private fun detachCapture() {
         observer?.takeIf { it.isAlive }?.removeOnPreDrawListener(align)
         observer = null
-        portal?.let {
-            it.removeView(surface)
-            (it.parent as? ViewGroup)?.removeView(it)
+        captureHost?.let { host ->
+            regions.forEach { host.removeView(it) }
+            host.overlay.remove(surface)
         }
-        portal = null
+        regions.clear()
+        captureHost = null
+        captureVisible = false
         surface.release(ReleaseReason.disconnected)
     }
 
-    internal fun syncPortal(): Boolean {
-        val overlay = portal ?: return false
-        val host = overlay.parent as? ViewGroup ?: return false
+    private fun rebuildRegions() {
+        val host = captureHost ?: return
+        regions.forEach { host.removeView(it) }
+        regions.clear()
+        for (control in configured?.controls.orEmpty()) {
+            val region = TouchRegion(context, this, control)
+            region.visibility = View.GONE
+            host.addView(region, FrameLayout.LayoutParams(0, 0))
+            regions.add(region)
+        }
+    }
+
+    internal fun syncCapture(): Boolean {
+        val host = captureHost ?: return false
         val visible = Rect()
         val location = IntArray(2)
         getLocationOnScreen(location)
@@ -142,32 +168,49 @@ class ThumbleInputView(context: Context, appContext: AppContext) : ExpoView(cont
                 getGlobalVisibleRect(visible) &&
                 visible == Rect(location[0], location[1], location[0] + width, location[1] + height)
         if (!available) {
-            if (overlay.visibility == View.VISIBLE) surface.release(ReleaseReason.disconnected)
-            overlay.visibility = View.GONE
+            if (captureVisible) surface.release(ReleaseReason.disconnected)
+            captureVisible = false
+            regions.forEach { it.visibility = View.GONE }
             return false
         }
         host.getLocationOnScreen(location)
-        val desired =
-            FrameLayout.LayoutParams(width, height).apply {
-                leftMargin = visible.left - location[0]
-                topMargin = visible.top - location[1]
-            }
-        val old = overlay.layoutParams as? FrameLayout.LayoutParams
+        val left = visible.left - location[0]
+        val top = visible.top - location[1]
         if (
-            old == null ||
-                old.width != width ||
-                old.height != height ||
-                old.leftMargin != desired.leftMargin ||
-                old.topMargin != desired.topMargin
+            surface.left != left ||
+                surface.top != top ||
+                surface.width != width ||
+                surface.height != height
         ) {
             surface.release(ReleaseReason.rotation)
-            overlay.layoutParams = desired
+            surface.layout(left, top, left + width, top + height)
         }
-        overlay.visibility = View.VISIBLE
+        for (region in regions) {
+            val c = region.control
+            val x = (c.x * width).toInt()
+            val y = (c.y * height).toInt()
+            val w = ceil((c.x + c.width) * width).toInt() - x
+            val h = ceil((c.y + c.height) * height).toInt() - y
+            val params = region.layoutParams as FrameLayout.LayoutParams
+            if (
+                params.width != w ||
+                    params.height != h ||
+                    params.leftMargin != left + x ||
+                    params.topMargin != top + y
+            ) {
+                params.width = w
+                params.height = h
+                params.leftMargin = left + x
+                params.topMargin = top + y
+                region.layoutParams = params
+            }
+            region.visibility = View.VISIBLE
+        }
+        captureVisible = true
         return true
     }
 
-    internal fun containsControl(x: Float, y: Float): Boolean =
+    private fun containsControl(x: Float, y: Float): Boolean =
         configured?.controls.orEmpty().any {
             x >= it.x * width &&
                 x < (it.x + it.width) * width &&
@@ -175,20 +218,38 @@ class ThumbleInputView(context: Context, appContext: AppContext) : ExpoView(cont
                 y < (it.y + it.height) * height
         }
 
-    private class TouchPortal(context: Context, private val anchor: ThumbleInputView) :
-        FrameLayout(context) {
+    private class TouchRegion(
+        context: Context,
+        private val anchor: ThumbleInputView,
+        val control: ControlRegion,
+    ) : View(context) {
         init {
-            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
         }
 
-        override fun dispatchTouchEvent(event: MotionEvent): Boolean {
-            if (!anchor.syncPortal()) return false
-            if (
-                event.actionMasked == MotionEvent.ACTION_DOWN &&
-                    !anchor.containsControl(event.x, event.y)
-            )
-                return false
-            return super.dispatchTouchEvent(event)
+        // This inaccessible proxy only forwards streams; InputSurface owns performClick.
+        @SuppressLint("ClickableViewAccessibility")
+        override fun onTouchEvent(event: MotionEvent): Boolean {
+            if (!anchor.syncCapture()) return false
+            val own = IntArray(2)
+            val full = IntArray(2)
+            getLocationOnScreen(own)
+            anchor.surface.getLocationOnScreen(full)
+            val translated = MotionEvent.obtain(event)
+            try {
+                translated.offsetLocation(
+                    (own[0] - full[0]).toFloat(),
+                    (own[1] - full[1]).toFloat(),
+                )
+                if (
+                    translated.actionMasked == MotionEvent.ACTION_DOWN &&
+                        !anchor.containsControl(translated.x, translated.y)
+                )
+                    return false
+                return anchor.surface.onTouchEvent(translated)
+            } finally {
+                translated.recycle()
+            }
         }
     }
 
@@ -204,6 +265,7 @@ class ThumbleInputView(context: Context, appContext: AppContext) : ExpoView(cont
         ) {
             surface.configure(next)
             configured = next
+            rebuildRegions()
         }
         return mapOf("version" to 1, "generation" to next.generation, "revision" to next.revision)
     }
@@ -217,7 +279,7 @@ class ThumbleInputView(context: Context, appContext: AppContext) : ExpoView(cont
         if (disposed) return
         if (reason == ReleaseReason.disposed) {
             disposed = true
-            detachPortal()
+            detachCapture()
             surface.dispose()
         } else surface.release(reason)
     }

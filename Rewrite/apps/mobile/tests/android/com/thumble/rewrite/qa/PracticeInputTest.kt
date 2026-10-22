@@ -20,11 +20,13 @@ import java.io.ByteArrayOutputStream
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import org.json.JSONObject
-import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TestRule
 import org.junit.runner.RunWith
+import org.junit.runners.model.Statement
 
 @RunWith(AndroidJUnit4::class)
 class PracticeInputTest {
@@ -44,6 +46,39 @@ class PracticeInputTest {
         var result: Result<T>? = null
         instrumentation.runOnMainSync { result = runCatching(block) }
         return checkNotNull(result).getOrThrow()
+    }
+
+    private var opened = false
+
+    @get:Rule
+    val preservePrimaryFailure = TestRule { base, _ ->
+        object : Statement() {
+            override fun evaluate() {
+                val primary = runCatching { base.evaluate() }.exceptionOrNull()
+                if (primary != null) {
+                    runCatching {
+                        val dump = ByteArrayOutputStream()
+                        device.dumpWindowHierarchy(dump)
+                        android.util.Log.e(
+                            "ThumbleQa",
+                            "screenOn=${device.isScreenOn}; package=${device.currentPackageName}; rotation=${device.displayRotation}; ${dump.toString("UTF-8").take(48_000)}",
+                        )
+                    }
+                }
+                val teardown = runCatching { cleanup() }.exceptionOrNull()
+                if (primary != null) {
+                    if (teardown != null) primary.addSuppressed(teardown)
+                    throw primary
+                }
+                if (teardown != null) throw teardown
+            }
+        }
+    }
+
+    private fun wakeTestDevice() {
+        device.wakeUp()
+        device.executeShellCommand("wm dismiss-keyguard")
+        assertTrue("Test emulator did not wake", device.isScreenOn)
     }
 
     private fun find(view: View): ThumbleInputView? {
@@ -73,6 +108,7 @@ class PracticeInputTest {
 
     @Before
     fun openPractice() {
+        wakeTestDevice()
         val launch =
             checkNotNull(target.packageManager.getLaunchIntentForPackage(target.packageName))
         launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -99,10 +135,16 @@ class PracticeInputTest {
         assertEquals("1", ui { controller.engine.generation })
         assertTrue(ui { controller.engine.practice })
         assertFalse(ui { controller.engine.connected })
+        opened = true
     }
 
-    @After
-    fun cleanup() {
+    private fun cleanup() {
+        if (!opened) {
+            device.setOrientationNatural()
+            device.unfreezeRotation()
+            return
+        }
+        wakeTestDevice()
         val launch =
             checkNotNull(target.packageManager.getLaunchIntentForPackage(target.packageName))
         launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -177,19 +219,24 @@ class PracticeInputTest {
 
     @Test
     fun touchSurfaceHasNoReactRootAncestor() {
-        val ancestry = ui {
-            val names = mutableListOf<String>()
-            var parent = controller.surface.parent
-            while (parent is View) {
-                names.add(parent.javaClass.name)
-                parent = parent.parent
+        val captures = ui { controller.nativeCaptureViews }
+        assertEquals(19, captures.size)
+        assertTrue(ui { controller.surface.isAttachedToWindow })
+        for (capture in captures + controller.surface) {
+            val ancestry = ui {
+                val names = mutableListOf<String>()
+                var parent = capture.parent
+                while (parent is View) {
+                    names.add(parent.javaClass.name)
+                    parent = parent.parent
+                }
+                names
             }
-            names
+            assertFalse(
+                "Native touches would enter React's root dispatcher: $ancestry",
+                ancestry.any { it.endsWith(".ReactRootView") || it.endsWith(".ReactSurfaceView") },
+            )
         }
-        assertFalse(
-            "Native touches would enter React's root dispatcher: $ancestry",
-            ancestry.any { it.endsWith(".ReactRootView") || it.endsWith(".ReactSurfaceView") },
-        )
     }
 
     @Test
@@ -255,11 +302,16 @@ class PracticeInputTest {
                     points,
                 )
             }
+            val publications = ui { controller.nativeFeedbackPublications }
             val until = SystemClock.uptimeMillis() + 2_500
             while (SystemClock.uptimeMillis() < until) {
                 assertEquals(chord.getString("reportHex"), report())
                 SystemClock.sleep(20)
             }
+            assertTrue(
+                "Native frame feedback stopped with JS",
+                ui { controller.nativeFeedbackPublications } > publications,
+            )
             assertEquals("JS queue resumed before native input finished", 1L, finished.count)
             send(down, MotionEvent.ACTION_CANCEL, points)
             points.clear()
@@ -272,6 +324,69 @@ class PracticeInputTest {
                 resume.countDown()
             }
         }
+    }
+
+    @Test
+    fun doneWithASecondFingerReleasesTheHeldController() {
+        val probe = fixture.getJSONArray("probes").getJSONObject(0)
+        val control = point(probe)
+        val down = SystemClock.uptimeMillis()
+        send(down, MotionEvent.ACTION_DOWN, listOf(control))
+        assertEquals(probe.getString("reportHex"), report())
+        val bounds = checkNotNull(device.findObject(By.res("practice-done"))).visibleBounds
+        val done = Point(bounds.exactCenterX(), bounds.exactCenterY())
+        val both = listOf(control, done)
+        try {
+            send(
+                down,
+                MotionEvent.ACTION_POINTER_DOWN or (1 shl MotionEvent.ACTION_POINTER_INDEX_SHIFT),
+                both,
+            )
+            send(
+                down,
+                MotionEvent.ACTION_POINTER_UP or (1 shl MotionEvent.ACTION_POINTER_INDEX_SHIFT),
+                both,
+            )
+            assertTrue(
+                "A held control swallowed the second finger's Done tap",
+                device.wait(Until.gone(By.res("practice-done")), 5_000),
+            )
+            assertNotNull(device.wait(Until.findObject(By.res("home-practice")), 5_000))
+            assertEquals(neutral(), report())
+            opened = false
+        } finally {
+            // Navigation may already have caused the system to cancel this target.
+            runCatching { send(down, MotionEvent.ACTION_CANCEL, listOf(control)) }
+        }
+    }
+
+    @Test
+    fun sleepingReleasesNativeTouchesAndWakingStartsNeutral() {
+        val probe = fixture.getJSONArray("probes").getJSONObject(0)
+        val points = listOf(point(probe))
+        send(SystemClock.uptimeMillis(), MotionEvent.ACTION_DOWN, points)
+        assertEquals(probe.getString("reportHex"), report())
+        try {
+            device.sleep()
+            val until = SystemClock.uptimeMillis() + 2_000
+            while (report() != neutral() && SystemClock.uptimeMillis() < until) SystemClock.sleep(
+                10
+            )
+            assertEquals(neutral(), report())
+        } finally {
+            wakeTestDevice()
+        }
+        awaitText("Practice ready")
+        assertEquals(neutral(), report())
+        val fresh = listOf(point(probe))
+        val down = SystemClock.uptimeMillis()
+        send(down, MotionEvent.ACTION_DOWN, fresh)
+        try {
+            assertEquals(probe.getString("reportHex"), report())
+        } finally {
+            send(down, MotionEvent.ACTION_CANCEL, fresh)
+        }
+        assertEquals(neutral(), report())
     }
 
     @Test

@@ -26,8 +26,10 @@ event after props commit. This avoids Fabric's imperative view-tag mount race.
 The strict receipt lives inside an `admission` event envelope, separate from
 React Native's `target`/`timeStamp` metadata.
 
-A transparent input surface is attached as an Activity content/`UIWindow` sibling
-outside React root ancestry. Merely putting a native child inside a React view
+Android uses separate Activity-child capture regions with one shared native
+engine in a touch-ignoring `ViewGroupOverlay`; iOS uses a `UIWindow` sibling.
+Both stay outside React root ancestry. Separate Android regions allow a second
+finger to tap Done while another finger holds a control. Merely putting a native child inside a React view
 still sends touches through React's root dispatcher. The sibling accepts initial
 touches only in validated controller regions; Done and other navigation pass
 through. Native layout/visibility checks follow the presentation anchor, releasing
@@ -48,8 +50,11 @@ ANDROID_SERIAL=YOUR_TEST_SERIAL ./gradlew :app:connectedNativeQaAndroidTest -Pre
 The `.qa` application variant bundles Release JavaScript/native dependencies and
 keeps test classes unminified. Production Release keeps its own shrinking policy.
 Instrumentation injects actual system touch events into all 19 regions and a
-six-finger chord, blocks the actual React Native JS queue, checks native
-cancellation, background release, rotation/reopening and Done navigation. The
+six-finger chord, blocks the actual React Native JS queue, requires native frame
+feedback to advance, and checks cancellation, background/sleep release, neutral
+waking/rotation, and Done while another finger holds a control. Seven cases are
+required. Test setup wakes only its selected synthetic emulator; APKs build before
+CI boots it. Failure capture preserves the original exception ahead of teardown. The
 ancestry test was observed failing before moving input outside the React root.
 The generated Android release key is a development template key, not release
 signing evidence.
