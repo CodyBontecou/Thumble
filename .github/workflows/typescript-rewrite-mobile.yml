@@ -3,9 +3,41 @@ name: TypeScript rewrite native mobile
 on:
   workflow_dispatch:
   push:
-    paths: ["Rewrite/**", "Host/fixtures/gamepad/v2.json", ".github/workflows/typescript-rewrite-mobile.yml"]
+    paths:
+      - "Rewrite/native/**"
+      - "Rewrite/apps/mobile/**"
+      - "Rewrite/packages/*/package.json"
+      - "Rewrite/packages/client/src/mobile-input.ts"
+      - "Rewrite/packages/contracts/src/mobile-input.ts"
+      - "Rewrite/packages/contracts/generated/**"
+      - "Rewrite/packages/contracts/schema/**"
+      - "Rewrite/packages/fixtures/**"
+      - "Rewrite/tooling/**"
+      - "Rewrite/package.json"
+      - "Rewrite/bun.lock"
+      - "Rewrite/bunfig.toml"
+      - "Rewrite/tsconfig*.json"
+      - "Host/fixtures/gamepad/v2.json"
+      - ".github/actions/**"
+      - ".github/workflows/typescript-rewrite-mobile.yml"
   pull_request:
-    paths: ["Rewrite/**", "Host/fixtures/gamepad/v2.json", ".github/workflows/typescript-rewrite-mobile.yml"]
+    paths:
+      - "Rewrite/native/**"
+      - "Rewrite/apps/mobile/**"
+      - "Rewrite/packages/*/package.json"
+      - "Rewrite/packages/client/src/mobile-input.ts"
+      - "Rewrite/packages/contracts/src/mobile-input.ts"
+      - "Rewrite/packages/contracts/generated/**"
+      - "Rewrite/packages/contracts/schema/**"
+      - "Rewrite/packages/fixtures/**"
+      - "Rewrite/tooling/**"
+      - "Rewrite/package.json"
+      - "Rewrite/bun.lock"
+      - "Rewrite/bunfig.toml"
+      - "Rewrite/tsconfig*.json"
+      - "Host/fixtures/gamepad/v2.json"
+      - ".github/actions/**"
+      - ".github/workflows/typescript-rewrite-mobile.yml"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

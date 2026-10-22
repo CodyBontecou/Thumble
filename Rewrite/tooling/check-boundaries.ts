@@ -16,7 +16,7 @@ export function checkPortableSource(
     } else if (
       !(
         name !== "contracts" &&
-        /^@thumble\/contracts(?:\/(?:receiver|mobile-input|pairing))?$/.test(
+        /^@thumble\/contracts(?:\/(?:receiver|mobile-input|pairing|json))?$/.test(
           module,
         )
       )
