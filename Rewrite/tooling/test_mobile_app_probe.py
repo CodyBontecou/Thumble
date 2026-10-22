@@ -24,6 +24,13 @@ class CheckpointTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "app_checkpoint_invalid"):
                     decode_checkpoint({**self.value(), field: value})
 
+    def test_enrollment_phase_is_an_allowlisted_label_without_error_or_peer_data(self):
+        for phase in ("idle", "connecting", "negotiating", "credential", "storing", "acknowledging", "confirming", "complete"):
+            self.assertEqual(decode_checkpoint({**self.value(), "connectionPhase": "enrollment-" + phase})["connectionPhase"], "enrollment-" + phase)
+        for phase in ("enrollment-private-error", "enrollment-storing-token", "enrollment-", "enrollment-complete\n"):
+            with self.assertRaisesRegex(ValueError, "app_checkpoint_invalid"):
+                decode_checkpoint({**self.value(), "connectionPhase": phase})
+
     def test_invalid_checkpoint_cannot_be_logged_and_memory_is_bounded(self):
         probe = Probe()
         probe.process = object()  # Only synthetic ownership admission is needed here.

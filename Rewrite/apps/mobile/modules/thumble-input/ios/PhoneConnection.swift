@@ -10,6 +10,14 @@ import UIKit
     case idle
     case pairRequested = "pair-requested"
     case enrolling
+    case enrollmentIdle = "enrollment-idle"
+    case enrollmentConnecting = "enrollment-connecting"
+    case enrollmentNegotiating = "enrollment-negotiating"
+    case enrollmentCredential = "enrollment-credential"
+    case enrollmentStoring = "enrollment-storing"
+    case enrollmentAcknowledging = "enrollment-acknowledging"
+    case enrollmentConfirming = "enrollment-confirming"
+    case enrollmentComplete = "enrollment-complete"
     case endpointSaved = "endpoint-saved"
     case controlRequested = "control-requested"
     case authenticating, configuration, input, installing, connected
@@ -122,6 +130,7 @@ import UIKit
         defaults.set(phoneID, forKey: "rewrite.phone.id")
         diagnosticPhase = .enrolling
         _ = try await client.enroll(phoneID: phoneID, label: "Thumble iPhone")
+        diagnosticPhase = .enrollmentComplete
         client.close()
         enrollment = nil
         try Task.checkCancellation()
@@ -186,6 +195,20 @@ import UIKit
   }
   private func fail() {
     guard !closed else { return }
+    // [DEBUG-enrollment-admission] Preserve the failed native phase before cleanup.
+    if let enrollment {
+      diagnosticPhase =
+        switch enrollment.diagnosticPhase {
+        case .idle: .enrollmentIdle
+        case .connecting: .enrollmentConnecting
+        case .negotiating: .enrollmentNegotiating
+        case .credential: .enrollmentCredential
+        case .storing: .enrollmentStoring
+        case .acknowledging: .enrollmentAcknowledging
+        case .confirming: .enrollmentConfirming
+        case .complete: .enrollmentComplete
+        }
+    }
     close()
     status("unavailable")
   }

@@ -198,9 +198,13 @@ import XCTest
       request.httpBody = try JSONSerialization.data(withJSONObject: body)
     }
     let (data, response) = try await URLSession.shared.data(for: request)
-    XCTAssertEqual(
-      (response as? HTTPURLResponse)?.statusCode, 200,
-      "recording-only host witness failed at \(path)")
+    guard (response as? HTTPURLResponse)?.statusCode == 200 else {
+      throw NSError(
+        domain: "ThumbleAppProbe", code: 1,
+        userInfo: [
+          NSLocalizedDescriptionKey: "recording-only host witness failed at \(path)"
+        ])
+    }
     return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
   }
   private func checkpoint(

@@ -26,7 +26,7 @@ def decode_checkpoint(value):
         raise ValueError("app_checkpoint_invalid")
     if type(value["phase"]) is not str or value["phase"] not in {"connected", "holding", "ended", "admission-failed"}:
         raise ValueError("app_checkpoint_invalid")
-    if type(value["connectionPhase"]) is not str or value["connectionPhase"] not in {"idle", "pair-requested", "enrolling", "endpoint-saved", "control-requested", "authenticating", "configuration", "input", "installing", "connected"}:
+    if type(value["connectionPhase"]) is not str or value["connectionPhase"] not in {"idle", "pair-requested", "enrolling", "enrollment-idle", "enrollment-connecting", "enrollment-negotiating", "enrollment-credential", "enrollment-storing", "enrollment-acknowledging", "enrollment-confirming", "enrollment-complete", "endpoint-saved", "control-requested", "authenticating", "configuration", "input", "installing", "connected"}:
         raise ValueError("app_checkpoint_invalid")
     if type(value["generation"]) is not str or value["generation"] not in {"1", "2"}:
         raise ValueError("app_checkpoint_invalid")

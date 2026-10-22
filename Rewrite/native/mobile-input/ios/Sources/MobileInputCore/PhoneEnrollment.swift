@@ -87,6 +87,11 @@ extension ControlTLSClient: EnrollmentFrameIO {}
 
 /// Control version 2: success requires durable local storage and the host's final confirmation.
 @MainActor public final class PhoneEnrollmentClient {
+  // [DEBUG-enrollment-admission] Temporary fixed phases, with no peer data.
+  public enum DiagnosticPhase: String, Sendable {
+    case idle, connecting, negotiating, credential, storing, acknowledging, confirming, complete
+  }
+  public private(set) var diagnosticPhase: DiagnosticPhase = .idle
   private enum State { case idle, enrolling, finished, closed }
   private var state: State = .idle
   private let invitation: EnrollmentInvitation
@@ -146,7 +151,9 @@ extension ControlTLSClient: EnrollmentFrameIO {}
     return try await withTaskCancellationHandler {
       do {
         _ = try checkpoint(invitationRequired: true)
+        diagnosticPhase = .connecting
         try await io.connect()
+        diagnosticPhase = .negotiating
         _ = try checkpoint(invitationRequired: true)
         try send([
           "version": 1, "command": "hello", "controlVersion": 2, "inputVersion": 1,
@@ -162,6 +169,7 @@ extension ControlTLSClient: EnrollmentFrameIO {}
         ]
         guard hello == expected else { throw PhoneEnrollmentError.rejected }
         _ = try checkpoint(invitationRequired: true)
+        diagnosticPhase = .credential
         try send([
           "version": 1, "command": "enroll", "authorityInstanceId": invitation.authorityInstanceID,
           "windowId": invitation.windowID, "proof": invitation.proof, "phoneId": phoneID,
@@ -187,12 +195,15 @@ extension ControlTLSClient: EnrollmentFrameIO {}
         let credential = try PhoneCredential(
           hostPin: invitation.certificatePin, phoneID: phoneID, epoch: epoch, expiresAt: expires,
           token: secret)
+        diagnosticPhase = .storing
         try await sink.save(credential)
         guard try checkpoint() < expires else { throw PhoneEnrollmentError.rejected }
+        diagnosticPhase = .acknowledging
         try send([
           "version": 1, "command": "enrollment-stored", "phoneId": phoneID,
           "credentialEpoch": epochText,
         ])
+        diagnosticPhase = .confirming
         let complete = try await receive()
         guard
           complete == [
@@ -202,6 +213,7 @@ extension ControlTLSClient: EnrollmentFrameIO {}
           ], last < expires
         else { throw PhoneEnrollmentError.rejected }
         state = .finished
+        diagnosticPhase = .complete
         return credential.metadata
       } catch {
         close()

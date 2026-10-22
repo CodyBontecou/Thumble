@@ -32,6 +32,7 @@ private actor EnrollmentTestSink: EnrollmentCredentialSink {
 @MainActor private final class EnrollmentFakeIO: EnrollmentFrameIO {
   var frames: [ControlTLSFrame]
   var closed = false
+  var failConnect = false
   let events: EnrollmentEvents
   init(_ objects: [[String: Any]], events: EnrollmentEvents) throws {
     self.events = events
@@ -39,7 +40,10 @@ private actor EnrollmentTestSink: EnrollmentCredentialSink {
       try ControlTLSFrame(kind: .control, payload: JSONSerialization.data(withJSONObject: $0))
     }
   }
-  func connect() async throws { events.add("connect") }
+  func connect() async throws {
+    events.add("connect")
+    if failConnect { throw PhoneEnrollmentError.rejected }
+  }
   func offer(_ frame: ControlTLSFrame) -> Bool {
     guard !closed, let values = try? EnrollmentJSON.parse(frame.payload),
       case .string(let command)? = values["command"]
@@ -105,6 +109,7 @@ private func invitation() throws -> EnrollmentInvitation {
   #expect(events.items == ["connect", "hello", "enroll", "saved", "enrollment-stored"])
   #expect(!io.closed)
   #expect(metadata.epoch == 7)
+  #expect(client.diagnosticPhase == .complete)
   #expect(String(describing: try invitation()) == "EnrollmentInvitation([redacted])")
   client.close()
 }
@@ -125,6 +130,7 @@ private func invitation() throws -> EnrollmentInvitation {
       try await client.enroll(phoneID: "phone-a", label: "Controller")
     }
     #expect(!events.items.contains("enroll"))
+    #expect(client.diagnosticPhase == .negotiating)
     #expect(io.closed)
   }
 }
@@ -151,6 +157,7 @@ private func invitation() throws -> EnrollmentInvitation {
     }
     let saved = await sink.saved?.metadata
     #expect(saved == nil)
+    #expect(client.diagnosticPhase == .credential)
     #expect(!events.items.contains("enrollment-stored"))
     #expect(io.closed)
   }
@@ -167,6 +174,7 @@ private func invitation() throws -> EnrollmentInvitation {
   }
   #expect(!events.items.contains("enrollment-stored"))
   #expect(io.closed)
+  #expect(client.diagnosticPhase == .storing)
 }
 @Test @MainActor private func missingOrMismatchedCompletionPreservesSavedCredentialWithoutSuccess()
   async throws
@@ -189,6 +197,7 @@ private func invitation() throws -> EnrollmentInvitation {
     }
     let saved = await sink.saved?.metadata
     #expect(saved?.epoch == 7)
+    #expect(client.diagnosticPhase == .confirming)
     #expect(events.items.contains("enrollment-stored"))
     #expect(io.closed)
   }
@@ -228,6 +237,7 @@ private func invitation() throws -> EnrollmentInvitation {
       try await client.enroll(phoneID: "phone-a", label: "Controller")
     }
     #expect(!events.items.contains("enroll"))
+    #expect(client.diagnosticPhase == .negotiating)
     #expect(io.closed)
   }
 }
@@ -307,4 +317,20 @@ private func invitation() throws -> EnrollmentInvitation {
   #expect(throws: (any Error).self) {
     try EnrollmentInvitation.decode(Data([123, 34, 97, 34, 58, 34, 255, 34, 125]))
   }
+}
+
+@Test @MainActor private func connectionFailureRetainsOnlyItsBoundedEnrollmentPhase() async throws {
+  let f = try enrollmentFixture()
+  let events = EnrollmentEvents()
+  let sink = EnrollmentTestSink(events)
+  let io = try EnrollmentFakeIO([object(f, "hello")], events: events)
+  io.failConnect = true
+  let client = PhoneEnrollmentClient(
+    invitation: try invitation(), io: io, sink: sink, now: { 1000 })
+  await #expect(throws: PhoneEnrollmentError.self) {
+    try await client.enroll(phoneID: "phone-a", label: "Controller")
+  }
+  #expect(events.items == ["connect", "closed"])
+  #expect(client.diagnosticPhase == .connecting)
+  #expect(await sink.saved == nil)
 }
