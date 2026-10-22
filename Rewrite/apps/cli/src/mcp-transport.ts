@@ -90,6 +90,7 @@ export class BoundedStdioTransport implements Transport {
       const done = (error?: Error): void => {
         if (!this.writes.delete(done)) return;
         clearTimeout(timer);
+        this.output.off("drain", onDrain);
         this.outputBytes -= line.length;
         if (error) reject(new Error("mcp_output_unavailable"));
         else {
@@ -103,12 +104,21 @@ export class BoundedStdioTransport implements Transport {
           resolve();
         }
       };
+      const onDrain = (): void => done();
       const timer = setTimeout(() => {
         done(new Error());
         void this.close();
       }, 3000);
       this.writes.add(done);
-      this.output.write(line, (error) => done(error ?? undefined));
+      // The stream's boolean/drain contract is portable across Bun stdio on
+      // Windows and Node streams. Do not wait for an optional write callback.
+      this.output.once("drain", onDrain);
+      try {
+        if (this.output.write(line)) done();
+      } catch {
+        done(new Error());
+        void this.close();
+      }
     });
   }
   async close(): Promise<void> {
