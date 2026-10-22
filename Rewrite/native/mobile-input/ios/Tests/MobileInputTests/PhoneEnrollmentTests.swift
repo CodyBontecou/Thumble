@@ -237,7 +237,7 @@ private func invitation() throws -> EnrollmentInvitation {
       try await client.enroll(phoneID: "phone-a", label: "Controller")
     }
     #expect(!events.items.contains("enroll"))
-    #expect(client.diagnosticPhase == .negotiating)
+    #expect(client.diagnosticPhase == (rollback ? .negotiating : .idle))
     #expect(io.closed)
   }
 }
