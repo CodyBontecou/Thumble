@@ -345,6 +345,14 @@ test(
         process.execPath,
         resolve(import.meta.dir, "fixtures/invalid-configuration-owner.ts"),
       ]);
+      // [DEBUG-config-peer] The synthetic peer emits only these fixed phases.
+      const phases: string[] = [];
+      owner.child.stderr.on("data", (chunk: Buffer) => {
+        for (const phase of chunk
+          .toString("utf8")
+          .match(/test_peer_(?:listening|input|reply|end)/g) ?? [])
+          if (phases.length < 16) phases.push(phase);
+      });
       const exited = once(owner.child, "exit");
       let deadline: ReturnType<typeof setTimeout> | undefined;
       try {
@@ -362,6 +370,9 @@ test(
           }),
         ]);
         expect(owner.child.exitCode).toBe(0);
+      } catch (error) {
+        console.log("[DEBUG-config-peer] " + JSON.stringify({ phases }));
+        throw error;
       } finally {
         if (deadline) clearTimeout(deadline);
         await close(owner);
