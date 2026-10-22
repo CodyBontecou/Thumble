@@ -43,7 +43,11 @@ import Testing
     try ControlTLSClient(host: "127.0.0.1", port: 0, certificatePin: pin)
   }
   let client = try ControlTLSClient(host: "127.0.0.1", port: 1, certificatePin: pin)
+  #expect(client.diagnosticRuntimeOutcome == .idle)
   client.close()
+  #expect(client.diagnosticRuntimeOutcome == .closed)
+  client.close()
+  #expect(client.diagnosticRuntimeOutcome == .closed)
   #expect(!client.offer(try ControlTLSFrame(kind: .control, payload: Data([1]))))
   do {
     try await client.connect()
@@ -88,6 +92,7 @@ import Testing
       defer { client.close() }
       try await client.connect()
       #expect(client.diagnosticConnectOutcome == .ready)
+      #expect(client.diagnosticRuntimeOutcome == .ready)
       let message = Data("actual-swift-native-control".utf8)
       #expect(client.offer(try ControlTLSFrame(kind: .control, payload: message)))
       #expect(try await client.receive().payload == message)

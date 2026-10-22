@@ -303,7 +303,8 @@ import XCTest
   }
   private func checkpoint(
     _ view: ThumbleInputView, connectionPhase: String,
-    tlsConnectOutcome: ControlTLSConnectOutcome, phase: String, generation: String,
+    tlsConnectOutcome: ControlTLSConnectOutcome, controlFailure: PhoneControlFailureStage,
+    runtimeOutcome: ControlTLSRuntimeOutcome, phase: String, generation: String,
     elapsedMs: Int, publications: Int, maximumPublicationGapMs: Int = 0
   ) async throws {
     _ = try await probe(
@@ -311,6 +312,8 @@ import XCTest
       body: [
         "phase": phase, "generation": generation, "connectionPhase": connectionPhase,
         "tlsConnectOutcome": tlsConnectOutcome.rawValue,
+        "controlFailureStage": controlFailure.rawValue,
+        "tlsRuntimeOutcome": runtimeOutcome.rawValue,
         "anchorKeyWindow": view.window?.isKeyWindow ?? false,
         "elapsedMs": elapsedMs, "publications": publications,
         "maximumPublicationGapMs": maximumPublicationGapMs,
@@ -419,6 +422,8 @@ import XCTest
         try? await checkpoint(
           view, connectionPhase: flow.diagnosticPhase.rawValue,
           tlsConnectOutcome: flow.diagnosticConnectOutcome,
+          controlFailure: flow.diagnosticControlFailure,
+          runtimeOutcome: flow.diagnosticRuntimeOutcome,
           phase: "admission-failed", generation: generation, elapsedMs: 0,
           publications: publications)
         XCTFail("native pairing/admission failed at \(flow.diagnosticPhase.rawValue)")
@@ -429,7 +434,9 @@ import XCTest
       _ = try await probe("/fresh")
       try await checkpoint(
         view, connectionPhase: flow.diagnosticPhase.rawValue,
-        tlsConnectOutcome: flow.diagnosticConnectOutcome, phase: "connected",
+        tlsConnectOutcome: flow.diagnosticConnectOutcome,
+        controlFailure: flow.diagnosticControlFailure,
+        runtimeOutcome: flow.diagnosticRuntimeOutcome, phase: "connected",
         generation: generation, elapsedMs: 0, publications: publications)
       let south = try XCTUnwrap(template.controls.first { $0.action == "south" })
       XCTAssertTrue(
@@ -460,7 +467,9 @@ import XCTest
           else {
             try? await checkpoint(
               view, connectionPhase: flow.diagnosticPhase.rawValue,
-              tlsConnectOutcome: flow.diagnosticConnectOutcome, phase: "ended",
+              tlsConnectOutcome: flow.diagnosticConnectOutcome,
+              controlFailure: flow.diagnosticControlFailure,
+              runtimeOutcome: flow.diagnosticRuntimeOutcome, phase: "ended",
               generation: generation, elapsedMs: elapsed,
               publications: publications - beforePublications,
               maximumPublicationGapMs: maximumPublicationGapMs)
@@ -474,7 +483,9 @@ import XCTest
           if elapsed >= nextCheckpoint {
             try await checkpoint(
               view, connectionPhase: flow.diagnosticPhase.rawValue,
-              tlsConnectOutcome: flow.diagnosticConnectOutcome, phase: "holding",
+              tlsConnectOutcome: flow.diagnosticConnectOutcome,
+              controlFailure: flow.diagnosticControlFailure,
+              runtimeOutcome: flow.diagnosticRuntimeOutcome, phase: "holding",
               generation: generation, elapsedMs: elapsed,
               publications: publications - beforePublications,
               maximumPublicationGapMs: maximumPublicationGapMs)

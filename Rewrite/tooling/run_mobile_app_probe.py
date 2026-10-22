@@ -23,7 +23,7 @@ CHECKPOINT_REASONS = {"none", "touchCancelled", "background", "screenLock", "rot
 
 def decode_checkpoint(value):
     """Only bounded, synthetic test state may enter diagnostic artifacts."""
-    if type(value) is not dict or set(value) not in (CHECKPOINT_FIELDS, CHECKPOINT_FIELDS | {"tlsConnectOutcome"}):
+    if type(value) is not dict or not CHECKPOINT_FIELDS <= set(value) or set(value) - CHECKPOINT_FIELDS - {"tlsConnectOutcome", "controlFailureStage", "tlsRuntimeOutcome"}:
         raise ValueError("app_checkpoint_invalid")
     if type(value["phase"]) is not str or value["phase"] not in {"connected", "holding", "ended", "admission-failed"}:
         raise ValueError("app_checkpoint_invalid")
@@ -41,6 +41,10 @@ def decode_checkpoint(value):
             raise ValueError("app_checkpoint_invalid")
     if "tlsConnectOutcome" in value and (type(value["tlsConnectOutcome"]) is not str or value["tlsConnectOutcome"] not in {"idle", "connecting", "deadline", "network-failed", "cancelled", "tls-version-rejected", "alpn-rejected", "ready"}):
         raise ValueError("app_checkpoint_invalid")
+    for key, allowed in (("controlFailureStage", {"none", "checkpoint", "progress", "renewal", "status", "offering"}),
+                         ("tlsRuntimeOutcome", {"idle", "ready", "closed", "cancelled", "read-deadline", "write-deadline", "read-failed", "write-failed", "invalid-frame", "queue-overflow", "network-failed"})):
+        if key in value and (type(value[key]) is not str or value[key] not in allowed):
+            raise ValueError("app_checkpoint_invalid")
     return {key: value[key] for key in sorted(value)}
 
 

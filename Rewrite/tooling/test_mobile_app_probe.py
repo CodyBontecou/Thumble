@@ -44,6 +44,19 @@ class CheckpointTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "app_checkpoint_invalid"):
                 decode_checkpoint({**self.value(), "tlsConnectOutcome": value})
 
+    def test_runtime_outcomes_are_optional_fixed_labels(self):
+        for key, values in (("controlFailureStage", ("none", "checkpoint", "progress", "renewal", "status", "offering")),
+                            ("tlsRuntimeOutcome", ("idle", "ready", "closed", "cancelled", "read-deadline", "write-deadline", "read-failed", "write-failed", "invalid-frame", "queue-overflow", "network-failed"))):
+            for value in values:
+                self.assertEqual(decode_checkpoint({**self.value(), key: value})[key], value)
+            for value in (True, 1, None, "private-error", "ready\n"):
+                with self.assertRaisesRegex(ValueError, "app_checkpoint_invalid"):
+                    decode_checkpoint({**self.value(), key: value})
+        combined = {**self.value(), "tlsConnectOutcome": "ready", "controlFailureStage": "progress", "tlsRuntimeOutcome": "read-deadline"}
+        self.assertEqual(decode_checkpoint(combined), combined)
+        with self.assertRaisesRegex(ValueError, "app_checkpoint_invalid"):
+            decode_checkpoint({**combined, "error": "private"})
+
     def test_invalid_checkpoint_cannot_be_logged_and_memory_is_bounded(self):
         probe = Probe()
         probe.process = object()  # Only synthetic ownership admission is needed here.

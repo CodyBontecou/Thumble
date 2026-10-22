@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "sdkVersion": "10.0.402",
+  "repository": "https://github.com/hifihedgehog/HIDMaestro.git",
+  "commit": "63cc6481f9e82fc8600bda8aaa65cb3271113a19",
+  "files": {
+    "sdk/HIDMaestro.Core/HMGamepadState.cs": "2b85b8f2ca07ec8cc7ef3b65890ffb7c36ec1371df637802689c6b92a4c38b19",
+    "profiles/microsoft/xbox-360-wired.json": "679aa37d80bb5554343fad383e1c420796a3e1f07e221437fc8e62292df5717c",
+    "LICENSE": "1b637c35922ac7a519d208afb8b45e278597d896f7ff799eff375f0753470790"
+  },
+  "declarations": ["HMGamepadState", "HMAxis", "HMButton", "HMHat"],
+  "assemblyScope": "data-type-api-subset-not-official-sdk"
+}

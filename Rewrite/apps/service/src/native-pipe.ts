@@ -23,6 +23,7 @@ export class NativePipe<Ready, Reply> {
   private failed = false;
   private readySeen = false;
   private diagnosticCount = 0;
+  private diagnosticReadCount = 0;
   private readyResolve!: (value: Ready) => void;
   private readyReject!: (error: Error) => void;
   constructor(
@@ -51,6 +52,13 @@ export class NativePipe<Ready, Reply> {
     const startup = setTimeout(() => this.fail("startup-timeout"), 3000);
     void this.ready.finally(() => clearTimeout(startup)).catch(() => {});
     this.child.stdout.on("data", (chunk: Buffer) => {
+      if (
+        process.env.THUMBLE_REWRITE_PIPE_PROBE === "1" &&
+        this.diagnosticReadCount++ < 16
+      )
+        console.error(
+          `[DEBUG-native-pipe-read] chunkBytes=${chunk.length} ready=${this.readySeen} failed=${this.failed} pending=${this.pending.size} flowing=${this.child.stdout.readableFlowing} readableBytes=${this.child.stdout.readableLength}`,
+        );
       this.buffer = Buffer.concat([this.buffer, chunk]);
       for (let newline; (newline = this.buffer.indexOf(10)) >= 0; ) {
         if (newline + 1 > FRAME_BYTES) return this.fail("frame-too-large");
@@ -122,7 +130,7 @@ export class NativePipe<Ready, Reply> {
       this.diagnosticCount++ < 32
     )
       console.error(
-        `[DEBUG-native-pipe] reason=${reason} ready=${this.readySeen} failed=${this.failed} pending=${this.pending.size} bufferedBytes=${this.buffer.length}`,
+        `[DEBUG-native-pipe] reason=${reason} ready=${this.readySeen} failed=${this.failed} pending=${this.pending.size} bufferedBytes=${this.buffer.length} flowing=${this.child.stdout.readableFlowing} readableBytes=${this.child.stdout.readableLength} stdoutDestroyed=${this.child.stdout.destroyed}`,
       );
     if (this.failed) return;
     this.failed = true;

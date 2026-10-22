@@ -332,6 +332,7 @@ extension String {
     return result
   }
   #expect(processed, "native heartbeat did not finish processing the invalid receipt")
+  #expect(client.diagnosticFailureStage == .status)
   #expect(io.receiving == 5 && io.replies.isEmpty && io.commands.contains("control-status"))
   #expect(
     io.closed && !engine.connected && GamepadReport.hex(engine.state) == GamepadReport.hex(.neutral)

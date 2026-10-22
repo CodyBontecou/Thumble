@@ -102,40 +102,7 @@ jobs:
             events="$RUNNER_TEMP/real-service-swift-$witness.jsonl"
             status=0
             swift test --package-path native/mobile-input/ios --filter "$test_filter" --event-stream-output-path "$events" --event-stream-version 0 > "$RUNNER_TEMP/real-service-swift-$witness.log" 2>&1 || status=$?
-            python3 - "$events" "$test_filter" "$expected_cases" "$status" "reports/mobile-real-service-swift-$witness.json" <<'PYCODE'
-          import json, pathlib, sys
-          source, name, count, status, destination = sys.argv[1:]
-          result = {"platform": "swift", "witness": name, "status": "failed"}
-          try:
-              path = pathlib.Path(source)
-              assert int(status) == 0 and path.stat().st_size <= 2_097_152
-              records = [json.loads(line) for line in path.read_text().splitlines() if line]
-              assert len(records) <= 4096 and all(r.get("version") == 0 for r in records)
-              tests = [r["payload"] for r in records if r.get("kind") == "test"]
-              assert len(tests) == 1 and tests[0]["name"].split("(")[0] == name
-              test_id = tests[0]["id"]
-              cases = {c["id"] for c in tests[0]["_testCases"]}
-              assert len(cases) == int(count)
-              events = [r["payload"] for r in records if r.get("kind") == "event"]
-              kinds = [e["kind"] for e in events]
-              allowed = {"runStarted", "runEnded", "testStarted", "testEnded", "testCaseStarted", "testCaseEnded"}
-              assert set(kinds) <= allowed
-              for kind in ("runStarted", "runEnded", "testStarted", "testEnded"):
-                  assert kinds.count(kind) == 1
-              assert all(e.get("testID", test_id) == test_id for e in events)
-              for kind in ("testCaseStarted", "testCaseEnded"):
-                  observed = [e["_testCase"]["id"] for e in events if e["kind"] == kind]
-                  assert len(observed) == int(count) and set(observed) == cases
-              for e in events:
-                  if e["kind"] in ("testEnded", "runEnded"):
-                      assert any(m.get("symbol") == "pass" for m in e.get("messages", []))
-              result.update(status="passed", cases=int(count), skipped=0, failures=0)
-          except (AssertionError, OSError, ValueError, KeyError, TypeError):
-              pass
-          pathlib.Path(destination).write_text(json.dumps(result, sort_keys=True) + "\n")
-          if result["status"] != "passed":
-              raise SystemExit("real_service_swift_witness_failed")
-          PYCODE
+            python3 tooling/check_real_service_swift_witness.py "$events" "$test_filter" "$expected_cases" "$status" "reports/mobile-real-service-swift-$witness.json"
           done
       - name: Compile native modules directly against both iOS SDKs
         run: |
@@ -189,6 +156,9 @@ jobs:
       - name: Install real-service dependencies
         working-directory: Rewrite
         run: bun install --frozen-lockfile
+      - name: Prepare shared native SDK fixtures
+        working-directory: Rewrite
+        run: bun run mobile:prepare
       - uses: actions/setup-java@v4
         with:
           distribution: temurin

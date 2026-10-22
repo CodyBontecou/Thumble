@@ -66,7 +66,25 @@ struct ControlTLSConnectDiagnostic {
 
 /// Native TLS transport only. A ready connection is not phone trust or input authorization.
 /// UI-thread sampling remains independent of React; Network.framework performs the socket I/O.
+/// Fixed diagnostic outcomes only; no network error text, endpoint or packet is exposed.
+public enum ControlTLSRuntimeOutcome: String, Sendable {
+  case idle, ready, closed, cancelled
+  case readDeadline = "read-deadline"
+  case writeDeadline = "write-deadline"
+  case readFailed = "read-failed"
+  case writeFailed = "write-failed"
+  case invalidFrame = "invalid-frame"
+  case queueOverflow = "queue-overflow"
+  case networkFailed = "network-failed"
+}
 @MainActor public final class ControlTLSClient {
+  public private(set) var diagnosticRuntimeOutcome: ControlTLSRuntimeOutcome = .idle
+  private func fail(_ outcome: ControlTLSRuntimeOutcome) {
+    guard state != .closed else { return }
+    diagnosticRuntimeOutcome = outcome
+    close()
+  }
+
   public static let serverName = "thumble-rewrite.local"
   public static let alpn = "thumble-rewrite-control/1"
   private enum State { case idle, connecting, ready, closed }
@@ -174,6 +192,7 @@ struct ControlTLSConnectDiagnostic {
       }
       connectDiagnostic.finish(.ready)
       state = .ready
+      diagnosticRuntimeOutcome = .ready
       connectDeadline?.cancel()
       connectDeadline = nil
       let continuation = opening
@@ -181,10 +200,10 @@ struct ControlTLSConnectDiagnostic {
       continuation?.resume()
     case .failed:
       connectDiagnostic.finish(.networkFailed)
-      close()
+      fail(.networkFailed)
     case .cancelled:
       connectDiagnostic.finish(.cancelled)
-      close()
+      fail(.cancelled)
     default: break
     }
   }
@@ -203,14 +222,14 @@ struct ControlTLSConnectDiagnostic {
     switch frame.kind {
     case .control:
       guard controls.count < 8 else {
-        close()
+        fail(.queueOverflow)
         return false
       }
       controls.append(frame)
     case .input:
       if frame.startsInputGrant {
         guard controls.count < 8 else {
-          close()
+          fail(.queueOverflow)
           return false
         }
         // New-key packet zero is a commitment barrier, never a replaceable snapshot.
@@ -237,7 +256,7 @@ struct ControlTLSConnectDiagnostic {
     writing = true
     writeDeadline = Task { [weak self] in
       do { try await Task.sleep(for: .seconds(2)) } catch { return }
-      self?.close()
+      self?.fail(.writeDeadline)
     }
     connection.send(
       content: frame.encoded(),
@@ -247,7 +266,7 @@ struct ControlTLSConnectDiagnostic {
           self.writeDeadline?.cancel()
           self.writeDeadline = nil
           self.writing = false
-          if error != nil { self.close() } else { self.drain() }
+          if error != nil { self.fail(.writeFailed) } else { self.drain() }
         }
       })
   }
@@ -259,7 +278,7 @@ struct ControlTLSConnectDiagnostic {
         reading = continuation
         readDeadline = Task { [weak self] in
           do { try await Task.sleep(for: .seconds(2)) } catch { return }
-          self?.close()
+          self?.fail(.readDeadline)
         }
         receivePrefix()
       }
@@ -272,9 +291,12 @@ struct ControlTLSConnectDiagnostic {
       [weak self] data, _, complete, error in
       Task { @MainActor [weak self] in
         guard let self, self.state == .ready, self.reading != nil else { return }
-        guard error == nil, !complete, let data, let length = try? ControlTLSFrame.bodyLength(data)
-        else {
-          self.close()
+        guard error == nil, !complete, let data else {
+          self.fail(.readFailed)
+          return
+        }
+        guard let length = try? ControlTLSFrame.bodyLength(data) else {
+          self.fail(.invalidFrame)
           return
         }
         self.receiveBody(length)
@@ -286,10 +308,12 @@ struct ControlTLSConnectDiagnostic {
       [weak self] data, _, _, error in
       Task { @MainActor [weak self] in
         guard let self, self.state == .ready, self.reading != nil else { return }
-        guard error == nil, let data, data.count == length,
-          let frame = try? ControlTLSFrame.decodeBody(data)
-        else {
-          self.close()
+        guard error == nil, let data, data.count == length else {
+          self.fail(.readFailed)
+          return
+        }
+        guard let frame = try? ControlTLSFrame.decodeBody(data) else {
+          self.fail(.invalidFrame)
           return
         }
         self.readDeadline?.cancel()
@@ -302,6 +326,9 @@ struct ControlTLSConnectDiagnostic {
   }
   public func close() {
     guard state != .closed else { return }
+    if diagnosticRuntimeOutcome == .idle || diagnosticRuntimeOutcome == .ready {
+      diagnosticRuntimeOutcome = .closed
+    }
     connectDiagnostic.finish(.cancelled)
     state = .closed
     connection.cancel()

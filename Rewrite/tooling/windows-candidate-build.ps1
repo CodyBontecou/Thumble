@@ -91,7 +91,6 @@ $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer
 $vs = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
 if ($LASTEXITCODE -ne 0 -or -not $vs -or @($vs).Count -ne 1) { throw 'Unique C++ Visual Studio installation required' }
 if ($vs -match '[!%&|<>^"\r\n]') { throw 'Unsupported shell metacharacter in Visual Studio path' }
-$env:VSINSTALLDIR = $vs
 $vcvars = Join-Path $vs 'VC/Auxiliary/Build/vcvarsall.bat'
 # Avoid PowerShell's legacy cmd.exe nested-quote rewriting: /c starts with
 # the literal CALL token, and the generated wrapper owns all batch quoting.
@@ -106,7 +105,26 @@ function Invoke-BatchWrapper([string]$Wrapper, [string]$Log, [long]$Limit) {
 }
 # Explicit initialization plus a compiler lookup is required before either
 # build, not merely a successful native_env return. No compiled output runs.
-$setup = @('@echo off', ('call "' + $vcvars + '" x64'), 'if errorlevel 1 exit /b 1', 'where cl.exe', 'if errorlevel 1 exit /b 1')
+# Start from the selected installation rather than pre-seeding VSINSTALLDIR.
+# A prior developer environment can make vcvars skip or reuse stale initialization.
+# These resets are local to each wrapper child, not the runner or parent process.
+$reset = @('VSINSTALLDIR', 'VCINSTALLDIR', 'VCToolsInstallDir', 'VCToolsVersion', 'VSCMD_VER', 'VSCMD_ARG_HOST_ARCH', 'VSCMD_ARG_TGT_ARCH', '__VSCMD_PREINIT_PATH', 'INCLUDE', 'LIB', 'LIBPATH') | ForEach-Object { 'set "' + $_ + '="' }
+$setup = @('@echo off') + $reset + @(
+    'set "VSCMD_SKIP_SENDTELEMETRY=1"',
+    ('call "' + $vcvars + '" x64'),
+    'if errorlevel 1 exit /b 1',
+    'echo compiler_environment_after_vcvars',
+    'set VSINSTALLDIR', 'set VCToolsVersion', 'set VCToolsInstallDir',
+    'set VSCMD_ARG_HOST_ARCH', 'set VSCMD_ARG_TGT_ARCH',
+    'set UniversalCRTSdkDir', 'set UCRTVersion',
+    'if not defined VCToolsInstallDir exit /b 1',
+    'set "HM_EXPECTED_COMPILER=%VCToolsInstallDir%bin\Hostx64\x64\cl.exe"',
+    'if not exist "%HM_EXPECTED_COMPILER%" exit /b 1',
+    'where cl.exe', 'if errorlevel 1 exit /b 1',
+    'set "HM_RESOLVED_COMPILER="',
+    'for /f "delims=" %%C in (''where cl.exe'') do if not defined HM_RESOLVED_COMPILER set "HM_RESOLVED_COMPILER=%%C"',
+    'if /i not "%HM_RESOLVED_COMPILER%"=="%HM_EXPECTED_COMPILER%" exit /b 1'
+)
 $compilerWrapper = Join-Path $WorkRoot 'compiler-metadata.cmd'
 ($setup + @('cl.exe /Bv', 'set VCToolsVersion', 'set VCToolsInstallDir', 'set UniversalCRTSdkDir', 'set UCRTVersion', 'exit /b 0')) | Set-Content -Encoding ascii $compilerWrapper
 $compilerLog = Join-Path $EvidenceRoot 'compiler.txt'

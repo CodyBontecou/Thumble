@@ -27,7 +27,20 @@ protocol ControlCredentialSource: Sendable {
 extension PhoneCredentialWorker: ControlCredentialSource {}
 
 /// One pinned native channel. Reconnection requires a fresh client and never restores touches.
+/// First failure stage only, retained for the synthetic app witness.
+public enum PhoneControlFailureStage: String, Sendable {
+  case none, checkpoint, progress, renewal, status, offering
+}
 @MainActor public final class PhoneControlClient {
+  public private(set) var diagnosticFailureStage: PhoneControlFailureStage = .none
+  public var diagnosticRuntimeOutcome: ControlTLSRuntimeOutcome {
+    (io as? ControlTLSClient)?.diagnosticRuntimeOutcome ?? .idle
+  }
+  private func fail(_ stage: PhoneControlFailureStage) {
+    if diagnosticFailureStage == .none { diagnosticFailureStage = stage }
+    close()
+  }
+
   private enum State { case idle, authenticating, authenticated, closed }
   private var state: State = .idle
   private var busy = false
@@ -310,20 +323,24 @@ extension PhoneCredentialWorker: ControlCredentialSource {}
             do { try await Task.sleep(for: .milliseconds(delay)) } catch { return }
             guard let self, self.state != .closed else { return }
             if self.busy { continue }
+            var stage = PhoneControlFailureStage.checkpoint
             do {
               try self.inputCheckpoint()
               if self.controlVersion >= 5 {
                 if self.renewalDue {
+                  stage = .renewal
                   try await self.renewInput(map: map)
                 } else {
                   guard let session = self.inputSessionID else { throw PhoneControlError.rejected }
+                  stage = .progress
                   try await self.progress(session: session, map: map)
                 }
               } else {
+                stage = .status
                 _ = try await self.status()
               }
             } catch {
-              self.close()
+              self.fail(stage)
               return
             }
           }
@@ -353,7 +370,7 @@ extension PhoneCredentialWorker: ControlCredentialSource {}
       if let route { return route.offer(packet) }
       return io.offer(try ControlTLSFrame(kind: .input, payload: packet))
     } catch {
-      close()
+      fail(.offering)
       return false
     }
   }

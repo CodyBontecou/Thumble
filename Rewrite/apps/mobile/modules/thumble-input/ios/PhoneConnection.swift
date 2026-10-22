@@ -25,6 +25,14 @@ import UIKit
   }
   private(set) var diagnosticPhase: DiagnosticPhase = .idle
   private(set) var diagnosticConnectOutcome: ControlTLSConnectOutcome = .idle
+  private var lastControlFailure: PhoneControlFailureStage = .none
+  private var lastRuntimeOutcome: ControlTLSRuntimeOutcome = .idle
+  var diagnosticControlFailure: PhoneControlFailureStage {
+    control?.diagnosticFailureStage ?? lastControlFailure
+  }
+  var diagnosticRuntimeOutcome: ControlTLSRuntimeOutcome {
+    control?.diagnosticRuntimeOutcome ?? lastRuntimeOutcome
+  }
 
   private weak var anchor: UIView?
   private var prompt: UIAlertController?
@@ -280,6 +288,10 @@ import UIKit
   }
   func close() {
     guard !closed else { return }
+    if let control {
+      lastControlFailure = control.diagnosticFailureStage
+      lastRuntimeOutcome = control.diagnosticRuntimeOutcome
+    }
     closed = true
     NotificationCenter.default.removeObserver(self)
     catalogClient?.close()
