@@ -3,6 +3,7 @@ name: TypeScript rewrite mobile app
 on:
   workflow_dispatch:
   push:
+    branches: [main]
     paths:
       - "Rewrite/apps/mobile/**"
       - "Rewrite/native/mobile-input/android/src/main/**"

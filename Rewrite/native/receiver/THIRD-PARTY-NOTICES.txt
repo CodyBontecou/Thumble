@@ -1,5 +1,5 @@
 Native receiver third-party notices
-Cargo.lock SHA-256: dd7272e332e172c66f64fa94f9fc894dcee12373b0f932a72949dfb5b582362d
+Cargo.lock SHA-256: 2e65cca6d92f4fb7687c35890415f872d2a216e088a58454fd2b8abfac19ae1d
 
 Includes every locked registry dependency, including target-specific and development dependencies. MIT is selected where offered as a license alternative. Supplemental notices are retained.
 
@@ -275,6 +275,71 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
 ========================================================================
+block2 0.6.2
+
+Published crate omits LICENSE/COPYING files. Audited metadata: https://github.com/madsmtm/objc2
+Version 0.6.2; VCS commit b4167b582b2f75f9a1be75495c41b765344fd03c; license MIT; MIT selected.
+Published package authors (not an invented copyright notice): ["Mads Marquart <mads@marquart.dk>"]
+Upstream declaration: https://raw.githubusercontent.com/madsmtm/objc2/b4167b582b2f75f9a1be75495c41b765344fd03c/LICENSE.md
+SHA-256: 7f976f7e9cb2d87df7230606feb932c3f21ac0e664045a775b600046ff850c54
+# License
+
+The licensing of these crates is a bit complicated:
+- The crates `objc2`, `block2`, `objc2-foundation` and `objc2-encode` are
+  [currently][#23] licensed under [the MIT license][MIT].
+- All other crates are trio-licensed under the [Zlib], [Apache-2.0] or [MIT]
+  license, at your option.
+
+Furthermore, the crates are (usually automatically) derived from Apple SDKs,
+and that may have implications for licensing, see below for details.
+
+[#23]: https://github.com/madsmtm/objc2/issues/23
+[MIT]: https://opensource.org/license/MIT
+[Zlib]: https://zlib.net/zlib_license.html
+[Apache-2.0]: https://www.apache.org/licenses/LICENSE-2.0
+
+
+## Apple SDKs
+
+These crates are derived from Apple SDKs shipped with Xcode. You can obtain a
+copy of the Xcode license at:
+
+https://www.apple.com/legal/sla/docs/xcode.pdf
+
+Or by typing `xcodebuild -license` in your terminal.
+
+From reading the license, it is unclear whether distributing derived works
+such as these crates are allowed?
+
+But in any case, to practically use these crates, you will have to link, and
+that only works when you have the correct Xcode SDK available to provide the
+required `.tbd` files, which is why we choose to still use the normal SPDX
+identifiers in the crates (Xcode is required to use the crates, and when using
+Xcode you have already agreed to the Xcode license).
+
+Standard SPDX MIT template; literal placeholders are not a project-specific copyright claim.
+Source: https://raw.githubusercontent.com/spdx/license-list-data/main/text/MIT.txt
+SHA-256: b05785f9f18e6716bab63424b11454513b9943a222595b70411009202fc592b5
+MIT License
+
+Copyright (c) <year> <copyright holders>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+associated documentation files (the "Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the
+following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial
+portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT
+LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO
+EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+========================================================================
 bumpalo 3.20.3
 
 LICENSE-MIT
@@ -369,6 +434,66 @@ cipher 0.4.4
 
 LICENSE-MIT
 Copyright (c) 2016-2020 RustCrypto Developers
+
+Permission is hereby granted, free of charge, to any
+person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the
+Software without restriction, including without
+limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice
+shall be included in all copies or substantial portions
+of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+
+========================================================================
+core-foundation 0.10.1
+
+LICENSE-MIT
+Copyright (c) 2012-2013 Mozilla Foundation
+
+Permission is hereby granted, free of charge, to any
+person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the
+Software without restriction, including without
+limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice
+shall be included in all copies or substantial portions
+of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+
+========================================================================
+core-foundation-sys 0.8.7
+
+LICENSE-MIT
+Copyright (c) 2012-2013 Mozilla Foundation
 
 Permission is hereby granted, free of charge, to any
 person obtaining a copy of this software and associated
@@ -565,6 +690,71 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+========================================================================
+dispatch2 0.3.1
+
+Published crate omits LICENSE/COPYING files. Audited metadata: https://github.com/madsmtm/objc2
+Version 0.3.1; VCS commit 8852b424193ca41602281b3d7540d7c8ed51e49a; license Zlib OR Apache-2.0 OR MIT; MIT selected.
+Published package authors (not an invented copyright notice): ["Mads Marquart <mads@marquart.dk>","Mary <mary@mary.zone>"]
+Upstream declaration: https://raw.githubusercontent.com/madsmtm/objc2/8852b424193ca41602281b3d7540d7c8ed51e49a/LICENSE.md
+SHA-256: 7f976f7e9cb2d87df7230606feb932c3f21ac0e664045a775b600046ff850c54
+# License
+
+The licensing of these crates is a bit complicated:
+- The crates `objc2`, `block2`, `objc2-foundation` and `objc2-encode` are
+  [currently][#23] licensed under [the MIT license][MIT].
+- All other crates are trio-licensed under the [Zlib], [Apache-2.0] or [MIT]
+  license, at your option.
+
+Furthermore, the crates are (usually automatically) derived from Apple SDKs,
+and that may have implications for licensing, see below for details.
+
+[#23]: https://github.com/madsmtm/objc2/issues/23
+[MIT]: https://opensource.org/license/MIT
+[Zlib]: https://zlib.net/zlib_license.html
+[Apache-2.0]: https://www.apache.org/licenses/LICENSE-2.0
+
+
+## Apple SDKs
+
+These crates are derived from Apple SDKs shipped with Xcode. You can obtain a
+copy of the Xcode license at:
+
+https://www.apple.com/legal/sla/docs/xcode.pdf
+
+Or by typing `xcodebuild -license` in your terminal.
+
+From reading the license, it is unclear whether distributing derived works
+such as these crates are allowed?
+
+But in any case, to practically use these crates, you will have to link, and
+that only works when you have the correct Xcode SDK available to provide the
+required `.tbd` files, which is why we choose to still use the normal SPDX
+identifiers in the crates (Xcode is required to use the crates, and when using
+Xcode you have already agreed to the Xcode license).
+
+Standard SPDX MIT template; literal placeholders are not a project-specific copyright claim.
+Source: https://raw.githubusercontent.com/spdx/license-list-data/main/text/MIT.txt
+SHA-256: b05785f9f18e6716bab63424b11454513b9943a222595b70411009202fc592b5
+MIT License
+
+Copyright (c) <year> <copyright holders>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+associated documentation files (the "Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the
+following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial
+portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT
+LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO
+EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ========================================================================
 displaydoc 0.2.7
@@ -1309,6 +1499,266 @@ CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
+
+========================================================================
+objc2 0.6.5
+
+Published crate omits LICENSE/COPYING files. Audited metadata: https://github.com/madsmtm/objc2
+Version 0.6.5; VCS commit d7d2fa23ceaa5e6096c923b081040e5d81b3b9df; license MIT; MIT selected.
+Published package authors (not an invented copyright notice): ["Mads Marquart <mads@marquart.dk>"]
+Upstream declaration: https://raw.githubusercontent.com/madsmtm/objc2/d7d2fa23ceaa5e6096c923b081040e5d81b3b9df/LICENSE.md
+SHA-256: 7f976f7e9cb2d87df7230606feb932c3f21ac0e664045a775b600046ff850c54
+# License
+
+The licensing of these crates is a bit complicated:
+- The crates `objc2`, `block2`, `objc2-foundation` and `objc2-encode` are
+  [currently][#23] licensed under [the MIT license][MIT].
+- All other crates are trio-licensed under the [Zlib], [Apache-2.0] or [MIT]
+  license, at your option.
+
+Furthermore, the crates are (usually automatically) derived from Apple SDKs,
+and that may have implications for licensing, see below for details.
+
+[#23]: https://github.com/madsmtm/objc2/issues/23
+[MIT]: https://opensource.org/license/MIT
+[Zlib]: https://zlib.net/zlib_license.html
+[Apache-2.0]: https://www.apache.org/licenses/LICENSE-2.0
+
+
+## Apple SDKs
+
+These crates are derived from Apple SDKs shipped with Xcode. You can obtain a
+copy of the Xcode license at:
+
+https://www.apple.com/legal/sla/docs/xcode.pdf
+
+Or by typing `xcodebuild -license` in your terminal.
+
+From reading the license, it is unclear whether distributing derived works
+such as these crates are allowed?
+
+But in any case, to practically use these crates, you will have to link, and
+that only works when you have the correct Xcode SDK available to provide the
+required `.tbd` files, which is why we choose to still use the normal SPDX
+identifiers in the crates (Xcode is required to use the crates, and when using
+Xcode you have already agreed to the Xcode license).
+
+Standard SPDX MIT template; literal placeholders are not a project-specific copyright claim.
+Source: https://raw.githubusercontent.com/spdx/license-list-data/main/text/MIT.txt
+SHA-256: b05785f9f18e6716bab63424b11454513b9943a222595b70411009202fc592b5
+MIT License
+
+Copyright (c) <year> <copyright holders>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+associated documentation files (the "Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the
+following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial
+portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT
+LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO
+EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+========================================================================
+objc2-core-foundation 0.3.2
+
+Published crate omits LICENSE/COPYING files. Audited metadata: https://github.com/madsmtm/objc2
+Version 0.3.2; VCS commit 7b1abfd750a2cacaea71d6a56ecfb83cb7de560b; license Zlib OR Apache-2.0 OR MIT; MIT selected.
+Published package authors (not an invented copyright notice): []
+Upstream declaration: https://raw.githubusercontent.com/madsmtm/objc2/7b1abfd750a2cacaea71d6a56ecfb83cb7de560b/LICENSE.md
+SHA-256: 7f976f7e9cb2d87df7230606feb932c3f21ac0e664045a775b600046ff850c54
+# License
+
+The licensing of these crates is a bit complicated:
+- The crates `objc2`, `block2`, `objc2-foundation` and `objc2-encode` are
+  [currently][#23] licensed under [the MIT license][MIT].
+- All other crates are trio-licensed under the [Zlib], [Apache-2.0] or [MIT]
+  license, at your option.
+
+Furthermore, the crates are (usually automatically) derived from Apple SDKs,
+and that may have implications for licensing, see below for details.
+
+[#23]: https://github.com/madsmtm/objc2/issues/23
+[MIT]: https://opensource.org/license/MIT
+[Zlib]: https://zlib.net/zlib_license.html
+[Apache-2.0]: https://www.apache.org/licenses/LICENSE-2.0
+
+
+## Apple SDKs
+
+These crates are derived from Apple SDKs shipped with Xcode. You can obtain a
+copy of the Xcode license at:
+
+https://www.apple.com/legal/sla/docs/xcode.pdf
+
+Or by typing `xcodebuild -license` in your terminal.
+
+From reading the license, it is unclear whether distributing derived works
+such as these crates are allowed?
+
+But in any case, to practically use these crates, you will have to link, and
+that only works when you have the correct Xcode SDK available to provide the
+required `.tbd` files, which is why we choose to still use the normal SPDX
+identifiers in the crates (Xcode is required to use the crates, and when using
+Xcode you have already agreed to the Xcode license).
+
+Standard SPDX MIT template; literal placeholders are not a project-specific copyright claim.
+Source: https://raw.githubusercontent.com/spdx/license-list-data/main/text/MIT.txt
+SHA-256: b05785f9f18e6716bab63424b11454513b9943a222595b70411009202fc592b5
+MIT License
+
+Copyright (c) <year> <copyright holders>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+associated documentation files (the "Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the
+following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial
+portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT
+LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO
+EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+========================================================================
+objc2-encode 4.1.0
+
+Published crate omits LICENSE/COPYING files. Audited metadata: https://github.com/madsmtm/objc2
+Version 4.1.0; VCS commit 8d214f5477365ffcbcbb7de058c86ed9a518efb7; license MIT; MIT selected.
+Published package authors (not an invented copyright notice): ["Mads Marquart <mads@marquart.dk>"]
+Upstream declaration: https://raw.githubusercontent.com/madsmtm/objc2/8d214f5477365ffcbcbb7de058c86ed9a518efb7/LICENSE.md
+SHA-256: 7f976f7e9cb2d87df7230606feb932c3f21ac0e664045a775b600046ff850c54
+# License
+
+The licensing of these crates is a bit complicated:
+- The crates `objc2`, `block2`, `objc2-foundation` and `objc2-encode` are
+  [currently][#23] licensed under [the MIT license][MIT].
+- All other crates are trio-licensed under the [Zlib], [Apache-2.0] or [MIT]
+  license, at your option.
+
+Furthermore, the crates are (usually automatically) derived from Apple SDKs,
+and that may have implications for licensing, see below for details.
+
+[#23]: https://github.com/madsmtm/objc2/issues/23
+[MIT]: https://opensource.org/license/MIT
+[Zlib]: https://zlib.net/zlib_license.html
+[Apache-2.0]: https://www.apache.org/licenses/LICENSE-2.0
+
+
+## Apple SDKs
+
+These crates are derived from Apple SDKs shipped with Xcode. You can obtain a
+copy of the Xcode license at:
+
+https://www.apple.com/legal/sla/docs/xcode.pdf
+
+Or by typing `xcodebuild -license` in your terminal.
+
+From reading the license, it is unclear whether distributing derived works
+such as these crates are allowed?
+
+But in any case, to practically use these crates, you will have to link, and
+that only works when you have the correct Xcode SDK available to provide the
+required `.tbd` files, which is why we choose to still use the normal SPDX
+identifiers in the crates (Xcode is required to use the crates, and when using
+Xcode you have already agreed to the Xcode license).
+
+Standard SPDX MIT template; literal placeholders are not a project-specific copyright claim.
+Source: https://raw.githubusercontent.com/spdx/license-list-data/main/text/MIT.txt
+SHA-256: b05785f9f18e6716bab63424b11454513b9943a222595b70411009202fc592b5
+MIT License
+
+Copyright (c) <year> <copyright holders>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+associated documentation files (the "Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the
+following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial
+portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT
+LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO
+EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+========================================================================
+objc2-io-kit 0.3.2
+
+Published crate omits LICENSE/COPYING files. Audited metadata: https://github.com/madsmtm/objc2
+Version 0.3.2; VCS commit 7b1abfd750a2cacaea71d6a56ecfb83cb7de560b; license Zlib OR Apache-2.0 OR MIT; MIT selected.
+Published package authors (not an invented copyright notice): []
+Upstream declaration: https://raw.githubusercontent.com/madsmtm/objc2/7b1abfd750a2cacaea71d6a56ecfb83cb7de560b/LICENSE.md
+SHA-256: 7f976f7e9cb2d87df7230606feb932c3f21ac0e664045a775b600046ff850c54
+# License
+
+The licensing of these crates is a bit complicated:
+- The crates `objc2`, `block2`, `objc2-foundation` and `objc2-encode` are
+  [currently][#23] licensed under [the MIT license][MIT].
+- All other crates are trio-licensed under the [Zlib], [Apache-2.0] or [MIT]
+  license, at your option.
+
+Furthermore, the crates are (usually automatically) derived from Apple SDKs,
+and that may have implications for licensing, see below for details.
+
+[#23]: https://github.com/madsmtm/objc2/issues/23
+[MIT]: https://opensource.org/license/MIT
+[Zlib]: https://zlib.net/zlib_license.html
+[Apache-2.0]: https://www.apache.org/licenses/LICENSE-2.0
+
+
+## Apple SDKs
+
+These crates are derived from Apple SDKs shipped with Xcode. You can obtain a
+copy of the Xcode license at:
+
+https://www.apple.com/legal/sla/docs/xcode.pdf
+
+Or by typing `xcodebuild -license` in your terminal.
+
+From reading the license, it is unclear whether distributing derived works
+such as these crates are allowed?
+
+But in any case, to practically use these crates, you will have to link, and
+that only works when you have the correct Xcode SDK available to provide the
+required `.tbd` files, which is why we choose to still use the normal SPDX
+identifiers in the crates (Xcode is required to use the crates, and when using
+Xcode you have already agreed to the Xcode license).
+
+Standard SPDX MIT template; literal placeholders are not a project-specific copyright claim.
+Source: https://raw.githubusercontent.com/spdx/license-list-data/main/text/MIT.txt
+SHA-256: b05785f9f18e6716bab63424b11454513b9943a222595b70411009202fc592b5
+MIT License
+
+Copyright (c) <year> <copyright holders>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+associated documentation files (the "Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the
+following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial
+portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT
+LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO
+EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ========================================================================
 oid-registry 0.8.1

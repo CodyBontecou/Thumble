@@ -1,3 +1,4 @@
+import { nativeNoticeSupplement } from "./native-notice-supplements.ts";
 // Regenerate after cargo fetch --locked. Reads only the locked registry source cache.
 import { createHash } from "node:crypto";
 import {
@@ -59,6 +60,16 @@ for (const pkg of parsed.package) {
         ];
   output += `\n${"=".repeat(72)}\n${pkg.name} ${pkg.version}\n`;
   if (!selected.length) {
+    const audited = nativeNoticeSupplement(
+      root,
+      pkg.name,
+      pkg.version,
+      directory,
+    );
+    if (audited !== undefined) {
+      output += audited;
+      continue;
+    }
     // These published subcrates omit license files; use the same upstream project's packaged license.
     const fallback =
       pkg.name === "asn1-rs-impl"

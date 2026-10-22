@@ -1,3 +1,4 @@
+import { inspectOutputCapabilities } from "./output-doctor.ts";
 import { runConfigurationOwner } from "@thumble/service/configuration-owner-process";
 import { inspectConfigurationFile } from "@thumble/service/configuration-files";
 import { decodeConfigurationCommand } from "@thumble/contracts/configuration";
@@ -106,10 +107,6 @@ function nativeIdentity(
 async function main(): Promise<unknown> {
   const [family, action, ...rest] = arguments_;
   const opts = options(rest);
-  const raw = opts.get("--runtime-dir");
-  const root = runtimeDirectory(
-    typeof raw === "string" ? raw : join(homedir(), ".thumble-rewrite-runtime"),
-  );
   const configured = opts.get("--receiver");
   const receiver =
     typeof configured === "string"
@@ -123,6 +120,16 @@ async function main(): Promise<unknown> {
             dirname(process.execPath),
             `thumble-rewrite-receiver${extension}`,
           );
+  if (family === "output" && action === "doctor") {
+    for (const key of opts.keys())
+      if (!["--receiver", "--json"].includes(key))
+        throw new Error("invalid_output_doctor_option");
+    return inspectOutputCapabilities(receiver);
+  }
+  const raw = opts.get("--runtime-dir");
+  const root = runtimeDirectory(
+    typeof raw === "string" ? raw : join(homedir(), ".thumble-rewrite-runtime"),
+  );
   if (family === "mcp") {
     if (action !== "serve") throw new Error("unsupported_mcp_command");
     for (const key of opts.keys())

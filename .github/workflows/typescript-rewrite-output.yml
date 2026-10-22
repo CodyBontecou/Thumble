@@ -3,6 +3,7 @@ name: TypeScript rewrite dormant output
 on:
   workflow_dispatch:
   push:
+    branches: [main]
     paths:
       - "Rewrite/native/output-core/**"
       - "Rewrite/native/windows-candidate/**"

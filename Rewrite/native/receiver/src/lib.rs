@@ -42,3 +42,5 @@ mod cached_authorization;
 mod trust_reservation;
 
 pub mod export_files;
+
+pub mod output_doctor;

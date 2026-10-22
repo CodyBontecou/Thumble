@@ -11,7 +11,8 @@
     "./owned-resources": "./src/owned-resources.ts",
     "./owned-authority": "./src/owned-authority.ts",
     "./wow-live": "./src/wow-live.ts",
-    "./wow-optical-panel": "./src/wow-optical-panel.ts"
+    "./wow-optical-panel": "./src/wow-optical-panel.ts",
+    "./saved-controller-map": "./src/saved-controller-map.ts"
   },
   "dependencies": {
     "@thumble/contracts": "workspace:*"

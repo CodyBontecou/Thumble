@@ -1,0 +1,176 @@
+/// <reference types="bun" />
+import { afterEach, beforeAll, expect, mock, test } from "bun:test";
+import { createElement } from "react";
+import { act, create, type ReactTestRenderer } from "react-test-renderer";
+
+// Substitute only platform host components; real hooks, contracts and TSX run.
+mock.module("react-native", () => ({
+  View: "View",
+  Text: "Text",
+  Platform: { OS: "ios" },
+  PlatformColor: (name: string) => name,
+}));
+mock.module("expo-modules-core", () => ({
+  requireNativeViewManager: (name: string) => name,
+}));
+const { NativeController } = await import("./NativeController.tsx");
+let renderer: ReactTestRenderer | undefined;
+beforeAll(() => {
+  Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+});
+afterEach(async () => {
+  await act(() => renderer?.unmount());
+  renderer = undefined;
+});
+async function mount(connected = true) {
+  await act(() => {
+    renderer = create(createElement(NativeController, { connected }));
+  });
+}
+function native() {
+  if (!renderer) throw new Error("renderer_missing");
+  return renderer.root.findByProps({ testID: "controller-surface" });
+}
+async function admission(status: string, generation = "1") {
+  const value =
+    status === "ready"
+      ? {
+          version: 1,
+          status,
+          generation,
+          revision: "0",
+          practice: false,
+          connected: true,
+        }
+      : { version: 1, status };
+  await act(() =>
+    native().props.onAdmission({ nativeEvent: { admission: value } }),
+  );
+}
+async function catalog(value: unknown) {
+  await act(() =>
+    native().props.onCatalog({ nativeEvent: { catalog: value } }),
+  );
+}
+function summary() {
+  return (
+    renderer?.root.findAllByProps({ testID: "saved-profile-summary" }) ?? []
+  );
+}
+function page(count: number, nextOffset: number | null = null) {
+  return Object.assign(
+    {
+      kind: "catalog",
+      revision: count ? "1" : "0",
+      contentHash: count ? "a".repeat(64) : null,
+      activeProfileId: count ? "aaaaaaaa-0000-0000-0000-000000000001" : null,
+      defaultProfileId: null,
+      nextOffset,
+      profileCount: count,
+    },
+    ...Array.from({ length: count }, (_, index) => ({
+      [`profile${index}Id`]: `aaaaaaaa-0000-0000-0000-${String(index + 1).padStart(12, "0")}`,
+      [`profile${index}Name`]: "Synthetic profile 日本語 🕹️ ".repeat(2),
+      [`profile${index}UpdatedAt`]: "0",
+    })),
+  );
+}
+
+test("actual controller renders native metadata only after connected admission", async () => {
+  await mount();
+  expect(summary()).toHaveLength(0);
+  expect(native().props.pointerEvents).toBe("none");
+  await catalog(page(2));
+  expect(summary()).toHaveLength(0);
+  await admission("ready");
+  expect(native().props.pointerEvents).toBe("auto");
+  expect(summary()[0]?.props.children).toBe("2 saved profiles");
+  expect(JSON.stringify(summary()[0]?.props)).not.toContain(
+    "Synthetic profile",
+  );
+});
+
+test("actual controller renders empty, singular and paginated count summaries", async () => {
+  await mount();
+  await admission("ready");
+  for (const [value, text] of [
+    [page(0), "No saved profiles"],
+    [page(1), "1 saved profile"],
+    [page(16, 16), "16 saved profiles · More available"],
+  ] as const) {
+    await catalog(value);
+    expect(summary()[0]?.props.children).toBe(text);
+    expect(summary()[0]?.props.numberOfLines).toBe(2);
+    expect(summary()[0]?.props.pointerEvents).toBe("none");
+  }
+});
+
+test("actual controller rejects malformed and native error notifications without disabling input", async () => {
+  await mount();
+  await admission("ready");
+  for (const value of [
+    { kind: "error", error: "phone_catalog_timeout" },
+    { ...page(1), secret: "never render" },
+    null,
+    { kind: "catalog", profileCount: 1e9 },
+  ]) {
+    await catalog(value);
+    expect(summary()[0]?.props.children).toBe("Saved profiles unavailable");
+    expect(native().props.pointerEvents).toBe("auto");
+  }
+});
+
+test("actual controller hides metadata on disconnect and clears it on remount", async () => {
+  await mount();
+  await admission("ready");
+  await catalog(page(2));
+  await admission("disconnected");
+  expect(summary()).toHaveLength(0);
+  expect(native().props.pointerEvents).toBe("none");
+  await act(() => renderer?.unmount());
+  await mount();
+  await admission("ready");
+  expect(summary()).toHaveLength(0);
+});
+
+test("practice controller never exposes saved metadata", async () => {
+  await mount(false);
+  await catalog(page(2));
+  expect(summary()).toHaveLength(0);
+});
+
+test("same mounted reconnect never restores prior count or error while fetching", async () => {
+  await mount();
+  await admission("ready");
+  for (const prior of [
+    page(2),
+    { kind: "error", error: "phone_catalog_timeout" },
+  ]) {
+    await catalog(prior);
+    expect(summary()).toHaveLength(1);
+    await admission("disconnected");
+    await admission("connecting");
+    await admission("ready");
+    expect(summary()).toHaveLength(0);
+    expect(native().props.pointerEvents).toBe("auto");
+  }
+  await admission("connecting");
+  await catalog(page(1));
+  await admission("ready");
+  expect(summary()[0]?.props.children).toBe("1 saved profile");
+});
+
+test("new admission identity clears stale metadata while ordinary ready events preserve it", async () => {
+  await mount();
+  await admission("ready");
+  await catalog(page(2));
+  await admission("ready");
+  expect(summary()[0]?.props.children).toBe("2 saved profiles");
+  await admission("ready", "2");
+  expect(summary()).toHaveLength(0);
+  await catalog(page(1));
+  await act(() =>
+    renderer?.update(createElement(NativeController, { connected: true })),
+  );
+  expect(summary()[0]?.props.children).toBe("1 saved profile");
+});

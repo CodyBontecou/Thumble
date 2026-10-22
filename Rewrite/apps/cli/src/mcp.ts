@@ -1,3 +1,4 @@
+import { inspectOutputCapabilities } from "./output-doctor.ts";
 import { inspectConfigurationFile } from "@thumble/service/configuration-files";
 import { decodeConfigurationCommand } from "@thumble/contracts/configuration";
 import { McpServer, type CallToolResult } from "@modelcontextprotocol/server";
@@ -25,6 +26,7 @@ export function startMcp(
       console.error(`MCP transport phase=${phase}`);
   };
   const allowedTools = new Set([
+    "output_doctor",
     "receiver_status",
     "receiver_release",
     "pairing_status",
@@ -88,6 +90,16 @@ export function startMcp(
         idempotentHint: true,
         openWorldHint: false,
       });
+      server.registerTool(
+        "output_doctor",
+        {
+          description:
+            "Inspect offline native output capabilities and signed-claim/source evidence without a running service. Recording-only; no device creation, driver probe, permission prompt or physical output.",
+          inputSchema: empty,
+          annotations: annotations(true),
+        },
+        () => receipt(() => inspectOutputCapabilities(receiver)),
+      );
       server.registerTool(
         "receiver_status",
         {

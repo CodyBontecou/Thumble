@@ -3,6 +3,7 @@ name: TypeScript rewrite Windows stdio
 on:
   workflow_dispatch:
   push:
+    branches: [main]
     paths:
       - "Rewrite/apps/service/src/native-pipe.ts"
       - "Rewrite/apps/service/src/configuration-owner.ts"

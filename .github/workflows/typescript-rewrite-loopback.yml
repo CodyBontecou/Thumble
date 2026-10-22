@@ -3,6 +3,7 @@ name: TypeScript rewrite iOS loopback diagnostic
 on:
   workflow_dispatch:
   push:
+    branches: [main]
     paths:
       - "Rewrite/tooling/check_ios_loopback.py"
       - "Rewrite/tooling/test_ios_loopback.py"

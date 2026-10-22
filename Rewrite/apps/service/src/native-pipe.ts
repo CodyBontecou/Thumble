@@ -22,6 +22,7 @@ export class NativePipe<Ready, Reply> {
   private buffer = Buffer.alloc(0);
   private failed = false;
   private readySeen = false;
+  private diagnosticCount = 0;
   private readyResolve!: (value: Ready) => void;
   private readyReject!: (error: Error) => void;
   constructor(
@@ -44,15 +45,15 @@ export class NativePipe<Ready, Reply> {
       detached: process.platform === "win32",
     });
     this.child.stderr.resume();
-    this.child.on("error", () => this.fail());
-    this.child.on("exit", () => this.fail());
-    this.child.stdin.on("error", () => this.fail());
-    const startup = setTimeout(() => this.fail(), 3000);
+    this.child.on("error", () => this.fail("child-error"));
+    this.child.on("exit", () => this.fail("child-exit"));
+    this.child.stdin.on("error", () => this.fail("stdin-error"));
+    const startup = setTimeout(() => this.fail("startup-timeout"), 3000);
     void this.ready.finally(() => clearTimeout(startup)).catch(() => {});
     this.child.stdout.on("data", (chunk: Buffer) => {
       this.buffer = Buffer.concat([this.buffer, chunk]);
       for (let newline; (newline = this.buffer.indexOf(10)) >= 0; ) {
-        if (newline + 1 > FRAME_BYTES) return this.fail();
+        if (newline + 1 > FRAME_BYTES) return this.fail("frame-too-large");
         const frame = this.buffer.subarray(0, newline);
         this.buffer = this.buffer.subarray(newline + 1);
         try {
@@ -64,11 +65,11 @@ export class NativePipe<Ready, Reply> {
             ),
           );
         } catch {
-          this.fail();
+          this.fail("receive-invalid");
           return;
         }
       }
-      if (this.buffer.length > FRAME_BYTES) this.fail();
+      if (this.buffer.length > FRAME_BYTES) this.fail("frame-too-large");
     });
   }
   private receive(value: Record<string, unknown>): void {
@@ -105,7 +106,24 @@ export class NativePipe<Ready, Reply> {
       pending.reject(new Error(value.error));
     }
   }
-  private fail(): void {
+  private fail(
+    reason:
+      | "child-error"
+      | "child-exit"
+      | "stdin-error"
+      | "startup-timeout"
+      | "frame-too-large"
+      | "receive-invalid"
+      | "request-timeout"
+      | "disconnect",
+  ): void {
+    if (
+      process.env.THUMBLE_REWRITE_PIPE_PROBE === "1" &&
+      this.diagnosticCount++ < 32
+    )
+      console.error(
+        `[DEBUG-native-pipe] reason=${reason} ready=${this.readySeen} failed=${this.failed} pending=${this.pending.size} bufferedBytes=${this.buffer.length}`,
+      );
     if (this.failed) return;
     this.failed = true;
     this.child.stdin.destroy();
@@ -127,7 +145,7 @@ export class NativePipe<Ready, Reply> {
     if (Buffer.byteLength(line) > FRAME_BYTES)
       throw new Error("native_request_too_large");
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => this.fail(), timeoutMs);
+      const timer = setTimeout(() => this.fail("request-timeout"), timeoutMs);
       this.pending.set(requestId, { resolve, reject, timer });
       this.child.stdin.write(line);
     });
@@ -144,6 +162,6 @@ export class NativePipe<Ready, Reply> {
     this.child.stdin.write(line);
   }
   disconnect(): void {
-    this.fail();
+    this.fail("disconnect");
   }
 }

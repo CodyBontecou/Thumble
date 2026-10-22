@@ -11,6 +11,7 @@
     "./pairing": "./src/pairing.ts",
     "./json": "./src/lossless-json.ts",
     "./configuration": "./src/configuration.ts",
-    "./phone-catalog": "./src/phone-catalog.ts"
+    "./phone-catalog": "./src/phone-catalog.ts",
+    "./output-capabilities": "./src/output-capabilities.ts"
   }
 }

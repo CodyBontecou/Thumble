@@ -1,0 +1,60 @@
+name: TypeScript rewrite Windows candidate compile
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "Rewrite/tooling/windows-candidate-build.ps1"
+      - "Rewrite/tooling/windows-candidate-toolchain.json"
+      - ".github/workflows/typescript-rewrite-windows-candidate.yml"
+  pull_request:
+    paths:
+      - "Rewrite/tooling/windows-candidate-build.ps1"
+      - "Rewrite/tooling/windows-candidate-toolchain.json"
+      - ".github/workflows/typescript-rewrite-windows-candidate.yml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+
+jobs:
+  unsigned-compile:
+    runs-on: windows-2022
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Fetch the audited candidate source without credentials
+        run: |
+          $pin = Get-Content -Raw Rewrite/tooling/windows-candidate-toolchain.json | ConvertFrom-Json
+          if ($pin.upstream.repository -cne 'https://github.com/hifihedgehog/HIDMaestro.git' -or $pin.upstream.commit -cne '63cc6481f9e82fc8600bda8aaa65cb3271113a19') { throw 'Unreviewed candidate source' }
+          $source = Join-Path $env:RUNNER_TEMP 'hidmaestro-source'
+          git init $source
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git -C $source config core.autocrlf false
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git -C $source config core.eol lf
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git -C $source -c credential.helper= fetch --depth=1 $pin.upstream.repository $pin.upstream.commit
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git -C $source checkout --detach FETCH_HEAD
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Validate the source and compile unsigned native files only
+        run: |
+          $source = Join-Path $env:RUNNER_TEMP 'hidmaestro-source'
+          ./Rewrite/tooling/windows-candidate-build.ps1 -Mode ValidateOnly -SourceRoot $source
+          ./Rewrite/tooling/windows-candidate-build.ps1 -Mode Build -SourceRoot $source -WorkRoot (Join-Path $env:RUNNER_TEMP 'hidmaestro-kit') -EvidenceRoot (Join-Path $env:RUNNER_TEMP 'hidmaestro-evidence') -ConfirmUnsignedCompileOnly
+      - name: Upload bounded compile evidence only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rewrite-windows-candidate-compile-evidence
+          path: ${{ runner.temp }}/hidmaestro-evidence/
+          if-no-files-found: warn

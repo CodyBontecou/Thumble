@@ -103,6 +103,7 @@ try {
         assert.deepEqual(
           tools,
           [
+            "output_doctor",
             "receiver_status",
             "receiver_release",
             "pairing_status",
@@ -111,6 +112,20 @@ try {
             "configuration_validate_file",
             ...(recording ? ["receiver_activate", "receiver_sample"] : []),
           ].sort(),
+        );
+        phase = "output-doctor";
+        const doctor = await call({ name: "output_doctor", arguments: {} });
+        assert.equal(doctor.isError, undefined);
+        assert.equal(doctor.structuredContent.ok, true);
+        assert.equal(doctor.structuredContent.result.backend, "recording");
+        assert.equal(
+          doctor.structuredContent.result.physicalOutputEnabled,
+          false,
+        );
+        assert.equal(doctor.structuredContent.result.runtimeIntegrated, false);
+        assert.equal(
+          doctor.structuredContent.result.osDeviceAuthorization,
+          "not-inspected",
         );
         phase = "status";
         const status = await call({ name: "receiver_status", arguments: {} });

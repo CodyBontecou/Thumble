@@ -1,5 +1,5 @@
 import { decodePhoneCatalogNotification } from "@thumble/contracts/phone-catalog";
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Text, View, type ViewProps } from "react-native";
 import { requireNativeViewManager } from "expo-modules-core";
 import { standardControllerMap } from "@thumble/domain/controller-layout";
@@ -45,6 +45,7 @@ export function NativeController({
 }: {
   connected?: boolean;
 }) {
+  const admittedSession = useRef<string | null>(null);
   const [catalogSummary, setCatalogSummary] = useState<string | null>(null);
   const receiveCatalog = useCallback(
     (event: { nativeEvent: { catalog: unknown } }) => {
@@ -74,6 +75,18 @@ export function NativeController({
       try {
         if (connected) {
           const ack = decodeConnectionAdmission(event.nativeEvent.admission);
+          if (ack.status === "ready") {
+            const session = `${ack.generation}:${ack.revision}`;
+            if (
+              admittedSession.current !== null &&
+              admittedSession.current !== session
+            )
+              setCatalogSummary(null);
+            admittedSession.current = session;
+          } else {
+            admittedSession.current = null;
+            setCatalogSummary(null);
+          }
           setPhase(ack.status);
           return;
         }
@@ -86,6 +99,8 @@ export function NativeController({
           throw new Error("practice_admission_mismatch");
         setPhase("ready");
       } catch {
+        admittedSession.current = null;
+        setCatalogSummary(null);
         setPhase("error");
       }
     },

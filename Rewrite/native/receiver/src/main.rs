@@ -187,6 +187,11 @@ fn main() {
     let native_args = std::env::args().skip(1).collect::<Vec<_>>();
     let result = if native_args
         .first()
+        .is_some_and(|mode| mode == "output-capabilities")
+    {
+        thumble_rewrite_receiver::output_doctor::run(&native_args)
+    } else if native_args
+        .first()
         .is_some_and(|mode| mode == "pairing-host")
     {
         if !(3..=4).contains(&native_args.len()) {

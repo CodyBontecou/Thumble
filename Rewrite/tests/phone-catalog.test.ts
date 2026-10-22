@@ -207,29 +207,72 @@ test("malformed phone catalog child result terminates its poisoned owner", async
     resolve(import.meta.dir, "fixtures/invalid-configuration-owner.ts"),
   ]);
   const exited = once(owner.child, "exit");
-  let deadline: ReturnType<typeof setTimeout> | undefined;
+  let phase = "startup";
+  const started = performance.now();
+  let originalFailure = false;
+  let fixtureTail = "";
+  const fixturePhases: string[] = [];
+  owner.child.stderr.on("data", (chunk: Buffer) => {
+    // A fixed-marker-only bounded collector tolerates split stream chunks.
+    fixtureTail = (fixtureTail + chunk.toString("utf8")).slice(-4096);
+    for (let newline; (newline = fixtureTail.indexOf("\n")) >= 0; ) {
+      const line = fixtureTail.slice(0, newline).trimEnd();
+      fixtureTail = fixtureTail.slice(newline + 1);
+      const match =
+        /^\[DEBUG-invalid-owner\] phase=(ready-written|request-received|reply-written|stdin-ended)$/.exec(
+          line,
+        );
+      if (match && fixturePhases.length < 16) fixturePhases.push(match[1]!);
+    }
+  });
+  const bounded = async <T>(
+    operation: Promise<T>,
+    millis: number,
+    code: string,
+  ): Promise<T> => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([
+        operation,
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error(code)), millis);
+        }),
+      ]);
+    } finally {
+      clearTimeout(timer);
+    }
+  };
   try {
     await owner.ready;
-    await expect(owner.readCatalogForPhone(command)).rejects.toThrow(
-      "configuration_response_invalid",
-    );
-    await Promise.race([
-      exited,
-      new Promise((_, reject) => {
-        deadline = setTimeout(
-          () => reject(new Error("poisoned_owner_not_terminated")),
-          1000,
-        );
-      }),
-    ]);
+    phase = "request";
+    await expect(
+      bounded(
+        owner.readCatalogForPhone(command),
+        4000,
+        "test_catalog_reply_not_observed",
+      ),
+    ).rejects.toThrow("configuration_response_invalid");
+    phase = "exit";
+    await bounded(exited, 1000, "poisoned_owner_not_terminated");
     expect(
       owner.child.exitCode !== null || owner.child.signalCode !== null,
     ).toBe(true);
+    phase = "complete";
+  } catch (error) {
+    originalFailure = true;
+    console.error(
+      `[DEBUG-phone-catalog-test] phase=${phase} elapsedMs=${Math.round(performance.now() - started)} fixturePhases=${fixturePhases.join(",") || "none"} exited=${owner.child.exitCode !== null || owner.child.signalCode !== null}`,
+    );
+    throw error;
   } finally {
-    clearTimeout(deadline);
     owner.disconnect();
     if (owner.child.exitCode === null && owner.child.signalCode === null)
       owner.child.kill("SIGKILL");
-    await exited;
+    try {
+      await bounded(exited, 1000, "test_catalog_cleanup_not_terminated");
+    } catch (error) {
+      if (!originalFailure) throw error;
+      console.error("[DEBUG-phone-catalog-test] phase=cleanup-not-terminated");
+    }
   }
-});
+}, 10000);
