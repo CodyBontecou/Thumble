@@ -1,3 +1,4 @@
+import { runConfigurationOwner } from "@thumble/service/configuration-owner-process";
 import { inspectConfigurationFile } from "@thumble/service/configuration-files";
 import { decodeConfigurationCommand } from "@thumble/contracts/configuration";
 import { startMcp } from "./mcp.ts";
@@ -148,6 +149,13 @@ async function main(): Promise<unknown> {
     return nativeIdentity(receiver, directory, action);
   }
 
+  if (family === "__configuration" && action === "run") {
+    for (const key of opts.keys())
+      if (!["--runtime-dir", "--receiver"].includes(key))
+        throw new Error("invalid_configuration_owner_option");
+    await runConfigurationOwner(root, receiver);
+    return undefined;
+  }
   if (family === "__service" && action === "run") {
     const identityDirectory = opts.get("--identity-dir");
     if (
@@ -159,6 +167,7 @@ async function main(): Promise<unknown> {
       receiver,
       root,
       typeof identityDirectory === "string" ? identityDirectory : undefined,
+      source ? [process.execPath, process.argv[1]!] : [process.execPath],
     );
     return undefined;
   }
@@ -173,6 +182,7 @@ async function main(): Promise<unknown> {
       receiver,
       root,
       typeof identityDirectory === "string" ? identityDirectory : undefined,
+      source ? [process.execPath, process.argv[1]!] : [process.execPath],
     );
     return undefined;
   }

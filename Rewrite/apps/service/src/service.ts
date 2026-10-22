@@ -1,10 +1,8 @@
-import { createHash } from "node:crypto";
-import { ConfigurationCatalogOperations } from "@thumble/application/configuration-catalog";
+import { ConfigurationOwner } from "./configuration-owner.ts";
 import {
   decodeConfigurationCommand,
   type ConfigurationReply,
 } from "@thumble/contracts/configuration";
-import { SqliteConfigurationRepository } from "@thumble/storage";
 import { NativePairingHost } from "./native-pairing.ts";
 import {
   decodePairingCommand,
@@ -68,7 +66,8 @@ async function waitForOwnerExit(child: ChildProcess): Promise<void> {
 export async function serve(
   executable: string,
   path: string,
-  identityDirectory?: string,
+  identityDirectory: string | undefined,
+  configurationLauncher: readonly string[],
 ): Promise<void> {
   const directory = secureDirectory(executable, path),
     instanceId = randomUUID(),
@@ -76,18 +75,22 @@ export async function serve(
   const recordingLog = join(directory, `receiver-${instanceId}.jsonl`);
   const native = new NativeReceiver(executable, directory, recordingLog);
   await native.ready;
-  let configuration: SqliteConfigurationRepository;
+  const configuration = new ConfigurationOwner(
+    executable,
+    directory,
+    configurationLauncher,
+  );
   try {
-    configuration = new SqliteConfigurationRepository(directory, executable);
+    await configuration.ready;
   } catch (error) {
+    configuration.disconnect();
     native.disconnect();
+    await Promise.all([
+      waitForOwnerExit(native.child),
+      waitForOwnerExit(configuration.child),
+    ]);
     throw error;
   }
-  const catalogOperations = new ConfigurationCatalogOperations(
-    configuration,
-    (payload) => createHash("sha256").update(payload, "utf8").digest("hex"),
-    () => Date.now().toString(),
-  );
   const controller = new RuntimeController(native, randomUUID);
   const pairing = new NativePairingHost(
     executable,
@@ -98,9 +101,14 @@ export async function serve(
   try {
     await pairing.ready;
   } catch (error) {
-    configuration.close();
+    configuration.disconnect();
     pairing.disconnect();
     native.disconnect();
+    await Promise.all([
+      waitForOwnerExit(native.child),
+      waitForOwnerExit(pairing.child),
+      waitForOwnerExit(configuration.child),
+    ]);
     throw error;
   }
   const sockets = new Set<Socket>();
@@ -173,9 +181,8 @@ export async function serve(
             typeof operation === "string" &&
             operation.startsWith("configuration-")
           ) {
-            result = catalogOperations.execute(
+            result = await configuration.request(
               decodeConfigurationCommand(envelope.body),
-              { read: true, write: true },
             );
           } else if (
             typeof operation === "string" &&
@@ -258,7 +265,7 @@ export async function serve(
     } catch {}
     native.disconnect();
     try {
-      configuration.close();
+      configuration.disconnect();
     } catch {
       process.exit(1);
     }
@@ -269,6 +276,7 @@ export async function serve(
       await Promise.all([
         waitForOwnerExit(native.child),
         waitForOwnerExit(pairing.child),
+        waitForOwnerExit(configuration.child),
       ]);
     } catch {
       process.exit(1);
@@ -283,12 +291,15 @@ export async function serve(
   process.on("SIGINT", () => void stop());
   native.child.once("exit", () => void stop());
   pairing.child.once("exit", () => void stop());
+  configuration.child.once("exit", () => void stop());
   server.on("error", () => void stop());
   if (
     native.child.exitCode !== null ||
     native.child.signalCode !== null ||
     pairing.child.exitCode !== null ||
-    pairing.child.signalCode !== null
+    pairing.child.signalCode !== null ||
+    configuration.child.exitCode !== null ||
+    configuration.child.signalCode !== null
   )
     void stop();
 }
