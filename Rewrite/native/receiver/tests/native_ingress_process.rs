@@ -559,13 +559,38 @@ fn stale_grant_receipts_and_old_generation_packets_cannot_replace_or_release_new
     let (mut channel, receipt) = phone_auth(&value, &credential);
     let (mut sender, _) = phone_grant(&mut channel, &receipt);
     phone_held(&mut channel, &receipt, &mut sender);
+    // Maintain real native full-state input while a different TLS peer proves
+    // rejection. Time spent handshaking that peer must not stand in for TTL loss.
+    let stop = Arc::new(AtomicBool::new(false));
+    let stopped = stop.clone();
+    let sampling = thread::spawn(move || {
+        while !stopped.load(Ordering::SeqCst) {
+            if channel
+                .send(FrameKind::Input, &sender.seal(&held()).unwrap())
+                .is_err()
+            {
+                break;
+            }
+            thread::sleep(Duration::from_millis(30));
+        }
+        (channel, sender)
+    });
     let (mut stale, stale_receipt) = phone_auth(&value, &credential);
     control_send(
         &mut stale,
         json!({"version":1,"command":"input-grant","connectionId":stale_receipt["connectionId"],"generation":"1","revision":"2"}),
     );
     assert!(stale.receive().is_err());
-    assert_ne!(receiver.status()["reportHex"], hex(&NEUTRAL));
+    let observed = receiver.status();
+    assert_ne!(observed["reportHex"], hex(&NEUTRAL), "{observed}");
+    stop.store(true, Ordering::SeqCst);
+    let (mut channel, mut sender) = sampling.join().unwrap();
+    // Drain all old-generation samples before explicitly replacing configuration.
+    control_send(
+        &mut channel,
+        json!({"version":1,"command":"control-status","connectionId":receipt["connectionId"]}),
+    );
+    assert_eq!(control_receive(&mut channel)["command"], "control-status");
     assert_eq!(receiver.command(json!({"command":"activate","generation":"2","revision":"2","profileId":"profile-b","sessionId":"service-owner","leaseMs":750,"inputTtlMs":350}))["ok"],true);
     channel
         .send(FrameKind::Input, &sender.seal(&held()).unwrap())
