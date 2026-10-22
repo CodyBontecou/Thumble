@@ -17,7 +17,7 @@
     "check:boundaries": "bun tooling/check-boundaries.ts",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.portable.json",
     "test": "bun test",
-    "verify": "bun run check:generated && bun run check:boundaries && bun run typecheck && bun test",
+    "verify": "bun run check:generated && bun run check:boundaries && bun run format:check && bun run typecheck && bun test",
     "test:ci": "bun tooling/ci-test.ts",
     "native:notices": "bun tooling/native-notices.ts",
     "native:build": "cargo +1.88.0 build --locked --manifest-path native/receiver/Cargo.toml",
@@ -27,7 +27,8 @@
     "test:package": "THUMBLE_REWRITE_PACKAGE_TEST=1 bun test tests/package.test.ts",
     "test:package:ci": "bun tooling/ci-test.ts --package",
     "mobile:prepare": "bun tooling/prepare-mobile-fixtures.ts",
-    "mobile:ios:sdk": "bun tooling/check-mobile-ios.ts"
+    "mobile:ios:sdk": "bun tooling/check-mobile-ios.ts",
+    "format:check": "bun x --no-install prettier --check ."
   },
   "devDependencies": {
     "@thumble/application": "workspace:*",
