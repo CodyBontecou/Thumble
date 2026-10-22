@@ -380,7 +380,12 @@ test(
       } catch (error) {
         console.log(
           "[DEBUG-config-peer] " +
-            JSON.stringify({ phases, stdoutBytes, stdoutLines }),
+            JSON.stringify({
+              phases,
+              stdoutBytes,
+              stdoutLines,
+              pipe: owner.diagnostics,
+            }),
         );
         throw error;
       } finally {

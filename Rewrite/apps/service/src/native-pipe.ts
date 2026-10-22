@@ -20,6 +20,34 @@ export class NativePipe<Ready, Reply> {
     }
   >();
   private buffer = Buffer.alloc(0);
+  // [DEBUG-config-pipe] Temporary fixed phase/count evidence; never packet data.
+  private diagnosticBytes = 0;
+  private diagnosticFrames = 0;
+  private diagnosticPhase:
+    | "ready"
+    | "parse"
+    | "envelope"
+    | "correlation"
+    | "codec"
+    | "delivery"
+    | "waiting" = "ready";
+  private diagnosticFailure:
+    | "open"
+    | "spawn"
+    | "exit"
+    | "stdin"
+    | "startup"
+    | "deadline"
+    | "frame"
+    | "disconnect" = "open";
+  get diagnostics() {
+    return Object.freeze({
+      bytes: this.diagnosticBytes,
+      frames: this.diagnosticFrames,
+      phase: this.diagnosticPhase,
+      failure: this.diagnosticFailure,
+    });
+  }
   private failed = false;
   private readySeen = false;
   private readyResolve!: (value: Ready) => void;
@@ -43,18 +71,24 @@ export class NativePipe<Ready, Reply> {
       detached: process.platform === "win32",
     });
     this.child.stderr.resume();
-    this.child.on("error", () => this.fail());
-    this.child.on("exit", () => this.fail());
-    this.child.stdin.on("error", () => this.fail());
-    const startup = setTimeout(() => this.fail(), 3000);
+    this.child.on("error", () => this.fail("spawn"));
+    this.child.on("exit", () => this.fail("exit"));
+    this.child.stdin.on("error", () => this.fail("stdin"));
+    const startup = setTimeout(() => this.fail("startup"), 3000);
     void this.ready.finally(() => clearTimeout(startup)).catch(() => {});
     this.child.stdout.on("data", (chunk: Buffer) => {
+      this.diagnosticBytes = Math.min(
+        1048576,
+        this.diagnosticBytes + chunk.byteLength,
+      );
       this.buffer = Buffer.concat([this.buffer, chunk]);
       for (let newline; (newline = this.buffer.indexOf(10)) >= 0; ) {
-        if (newline + 1 > FRAME_BYTES) return this.fail();
+        if (newline + 1 > FRAME_BYTES) return this.fail("frame");
         const frame = this.buffer.subarray(0, newline);
         this.buffer = this.buffer.subarray(newline + 1);
         try {
+          this.diagnosticPhase = "parse";
+          this.diagnosticFrames = Math.min(65536, this.diagnosticFrames + 1);
           this.receive(
             record(
               parseStrictJson(
@@ -63,11 +97,11 @@ export class NativePipe<Ready, Reply> {
             ),
           );
         } catch {
-          this.fail();
+          this.fail("frame");
           return;
         }
       }
-      if (this.buffer.length > FRAME_BYTES) this.fail();
+      if (this.buffer.length > FRAME_BYTES) this.fail("frame");
     });
   }
   private receive(value: Record<string, unknown>): void {
@@ -77,18 +111,22 @@ export class NativePipe<Ready, Reply> {
       this.readyResolve(ready);
       return;
     }
+    this.diagnosticPhase = "envelope";
     if (
       value.version !== 1 ||
       typeof value.requestId !== "string" ||
       typeof value.ok !== "boolean"
     )
       throw new Error("invalid_native_response");
+    this.diagnosticPhase = "correlation";
     const pending = this.pending.get(value.requestId);
     if (!pending) throw new Error("unexpected_native_response");
     if (value.ok) {
+      this.diagnosticPhase = "codec";
       const reply = this.codec.reply(value);
       this.pending.delete(value.requestId);
       clearTimeout(pending.timer);
+      this.diagnosticPhase = "delivery";
       pending.resolve(reply);
     } else {
       exact(value, ["version", "requestId", "ok", "error"]);
@@ -99,8 +137,9 @@ export class NativePipe<Ready, Reply> {
       pending.reject(new Error(value.error));
     }
   }
-  private fail(): void {
+  private fail(reason: typeof this.diagnosticFailure): void {
     if (this.failed) return;
+    this.diagnosticFailure = reason;
     this.failed = true;
     this.child.stdin.destroy();
     this.readyReject(new Error(this.unavailable));
@@ -119,12 +158,13 @@ export class NativePipe<Ready, Reply> {
     if (Buffer.byteLength(line) > FRAME_BYTES)
       throw new Error("native_request_too_large");
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => this.fail(), 2000);
+      const timer = setTimeout(() => this.fail("deadline"), 2000);
       this.pending.set(requestId, { resolve, reject, timer });
+      this.diagnosticPhase = "waiting";
       this.child.stdin.write(line);
     });
   }
   disconnect(): void {
-    this.fail();
+    this.fail("disconnect");
   }
 }
