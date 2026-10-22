@@ -132,7 +132,10 @@ impl Receiver {
         }
     }
     fn activate(&mut self) {
-        assert_eq!(self.command(json!({"command":"activate","generation":"1","revision":"1","profileId":"profile-a","sessionId":"service-owner","leaseMs":750,"inputTtlMs":350}))["ok"],true);
+        self.activate_timing(750, 350);
+    }
+    fn activate_timing(&mut self, lease: u64, ttl: u64) {
+        assert_eq!(self.command(json!({"command":"activate","generation":"1","revision":"1","profileId":"profile-a","sessionId":"service-owner","leaseMs":lease,"inputTtlMs":ttl}))["ok"],true);
     }
     fn status(&mut self) -> Value {
         let reply = self.command(json!({"command":"status"}));
@@ -693,7 +696,9 @@ fn udp_and_tls_share_one_authenticated_counter_and_reject_malformed_datagrams_wi
 ) {
     let mut receiver = Receiver::new();
     let _owner = receiver.maintain_owner();
-    receiver.activate();
+    // This scenario probes transport ordering through many reliable round trips.
+    // The separate replay/expiry test retains 350ms and does not renew input.
+    receiver.activate_timing(1750, 1500);
     let (_host, value) = listen_host(&receiver);
     let credential = phone_enroll(&value);
     let (mut channel, receipt) = datagram_auth(&value, &credential);
