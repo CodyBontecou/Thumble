@@ -92,6 +92,9 @@ extension ControlTLSClient: EnrollmentFrameIO {}
     case idle, connecting, negotiating, credential, storing, acknowledging, confirming, complete
   }
   public private(set) var diagnosticPhase: DiagnosticPhase = .idle
+  public var diagnosticConnectOutcome: ControlTLSConnectOutcome? {
+    (io as? ControlTLSClient)?.diagnosticConnectOutcome
+  }
   private enum State { case idle, enrolling, finished, closed }
   private var state: State = .idle
   private let invitation: EnrollmentInvitation

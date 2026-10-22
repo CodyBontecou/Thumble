@@ -1,3 +1,6 @@
+import { ConfigurationExportOperations } from "@thumble/application/configuration-export";
+import { FileAssetStore } from "@thumble/storage/asset-files";
+import { publishConfigurationFile } from "./configuration-export-files.ts";
 import { ConfigurationImportOperations } from "@thumble/application/configuration-import";
 import { readConfigurationFile } from "@thumble/client/local";
 import { configurationSourceHash } from "@thumble/storage";
@@ -30,6 +33,14 @@ export async function runConfigurationOwner(
     digest: (text) => createHash("sha256").update(text, "utf8").digest("hex"),
     sourceHash: configurationSourceHash,
     resourceHash: (bytes) => createHash("sha256").update(bytes).digest("hex"),
+  });
+  const assets = new FileAssetStore(directory, executable);
+  const exports = new ConfigurationExportOperations(repository, {
+    encode: (text) => Buffer.from(text, "utf8"),
+    readAsset: (hash) => assets.read(hash),
+    sourceHash: configurationSourceHash,
+    resourceHash: (bytes) => createHash("sha256").update(bytes).digest("hex"),
+    publish: (path, bytes) => publishConfigurationFile(executable, path, bytes),
   });
   try {
     await new Promise<void>((resolve, reject) => {
@@ -125,7 +136,9 @@ export async function runConfigurationOwner(
             const result =
               command.command === "configuration-import-file"
                 ? imports.execute(command, { read: true, write: true })
-                : operations.execute(command, { read: true, write: true });
+                : command.command === "configuration-export-file"
+                  ? exports.execute(command, { read: true, write: true })
+                  : operations.execute(command, { read: true, write: true });
             write({ version: 1, requestId, ok: true, result });
           } catch (error) {
             const code =

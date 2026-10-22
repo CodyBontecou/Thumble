@@ -23,7 +23,7 @@ CHECKPOINT_REASONS = {"none", "touchCancelled", "background", "screenLock", "rot
 
 def decode_checkpoint(value):
     """Only bounded, synthetic test state may enter diagnostic artifacts."""
-    if type(value) is not dict or set(value) != CHECKPOINT_FIELDS:
+    if type(value) is not dict or set(value) not in (CHECKPOINT_FIELDS, CHECKPOINT_FIELDS | {"tlsConnectOutcome"}):
         raise ValueError("app_checkpoint_invalid")
     if type(value["phase"]) is not str or value["phase"] not in {"connected", "holding", "ended", "admission-failed"}:
         raise ValueError("app_checkpoint_invalid")
@@ -39,7 +39,9 @@ def decode_checkpoint(value):
     for key, maximum in (("elapsedMs", 180000), ("maximumPublicationGapMs", 180000), ("publications", 1000000), ("appState", 2)):
         if type(value[key]) is not int or not 0 <= value[key] <= maximum:
             raise ValueError("app_checkpoint_invalid")
-    return {key: value[key] for key in sorted(CHECKPOINT_FIELDS)}
+    if "tlsConnectOutcome" in value and (type(value["tlsConnectOutcome"]) is not str or value["tlsConnectOutcome"] not in {"idle", "connecting", "deadline", "network-failed", "cancelled", "tls-version-rejected", "alpn-rejected", "ready"}):
+        raise ValueError("app_checkpoint_invalid")
+    return {key: value[key] for key in sorted(value)}
 
 
 GET_PHASES = frozenset({"/health", "/begin", "/held", "/renewal-start", "/renewal-verified", "/fresh", "/neutral", "/next", "/finish"})

@@ -196,6 +196,11 @@ fn main() {
         }
     } else if native_args
         .first()
+        .is_some_and(|mode| mode == "configuration-export-file")
+    {
+        thumble_rewrite_receiver::export_files::run(&native_args)
+    } else if native_args
+        .first()
         .is_some_and(|mode| mode.starts_with("assets-"))
     {
         thumble_rewrite_receiver::asset_files::run(&native_args)

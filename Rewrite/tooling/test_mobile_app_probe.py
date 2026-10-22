@@ -37,6 +37,13 @@ class CheckpointTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "app_checkpoint_invalid"):
                 decode_checkpoint({**self.value(), "connectionPhase": phase})
 
+    def test_tls_connect_outcome_is_optional_bounded_metadata_without_peer_errors(self):
+        for outcome in ("idle", "connecting", "deadline", "network-failed", "cancelled", "tls-version-rejected", "alpn-rejected", "ready"):
+            self.assertEqual(decode_checkpoint({**self.value(), "tlsConnectOutcome": outcome})["tlsConnectOutcome"], outcome)
+        for value in (True, 1, None, "network-failed:private-error", "ready\n"):
+            with self.assertRaisesRegex(ValueError, "app_checkpoint_invalid"):
+                decode_checkpoint({**self.value(), "tlsConnectOutcome": value})
+
     def test_invalid_checkpoint_cannot_be_logged_and_memory_is_bounded(self):
         probe = Probe()
         probe.process = object()  # Only synthetic ownership admission is needed here.

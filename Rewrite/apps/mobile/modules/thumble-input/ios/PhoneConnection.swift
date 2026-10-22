@@ -23,6 +23,7 @@ import UIKit
     case authenticating, configuration, input, installing, connected
   }
   private(set) var diagnosticPhase: DiagnosticPhase = .idle
+  private(set) var diagnosticConnectOutcome: ControlTLSConnectOutcome = .idle
 
   private weak var anchor: UIView?
   private var prompt: UIAlertController?
@@ -131,6 +132,7 @@ import UIKit
         diagnosticPhase = .enrolling
         _ = try await client.enroll(phoneID: phoneID, label: "Thumble iPhone")
         diagnosticPhase = .enrollmentComplete
+        diagnosticConnectOutcome = client.diagnosticConnectOutcome ?? .idle
         client.close()
         enrollment = nil
         try Task.checkCancellation()
@@ -197,6 +199,7 @@ import UIKit
     guard !closed else { return }
     // [DEBUG-enrollment-admission] Preserve the failed native phase before cleanup.
     if let enrollment {
+      diagnosticConnectOutcome = enrollment.diagnosticConnectOutcome ?? .idle
       diagnosticPhase =
         switch enrollment.diagnosticPhase {
         case .idle: .enrollmentIdle

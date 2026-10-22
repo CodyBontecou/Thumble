@@ -9,7 +9,9 @@
     "./controller-layout": "./src/controller-layout.ts",
     "./owned-configuration": "./src/owned-configuration.ts",
     "./owned-resources": "./src/owned-resources.ts",
-    "./owned-authority": "./src/owned-authority.ts"
+    "./owned-authority": "./src/owned-authority.ts",
+    "./wow-live": "./src/wow-live.ts",
+    "./wow-optical-panel": "./src/wow-optical-panel.ts"
   },
   "dependencies": {
     "@thumble/contracts": "workspace:*"

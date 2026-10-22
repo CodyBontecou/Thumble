@@ -17,7 +17,29 @@ export type ConfigurationImportStatusCommand = Readonly<{
 export type ConfigurationImportCommand =
   | ConfigurationImportFileCommand
   | ConfigurationImportStatusCommand;
+type ConfigurationExportFields = Readonly<{
+  operationId: string;
+  expectedRevision: string;
+  expectedSourceHash: string;
+  path: string;
+}>;
+export type ConfigurationExportCommand =
+  | (ConfigurationExportFields &
+      Readonly<{ command: "configuration-export-file" }>)
+  | (ConfigurationExportFields &
+      Readonly<{ command: "configuration-export-status" }>);
+export type ConfigurationExported = Readonly<{
+  version: 1;
+  kind: "exported";
+  operationId: string;
+  revision: string;
+  sourceHash: string;
+  artifactHash: string;
+  byteCount: number;
+  replayed: boolean;
+}>;
 export type ConfigurationCommand =
+  | ConfigurationExportCommand
   | ConfigurationImportCommand
   | Readonly<{
       command: "configuration-list";
@@ -47,6 +69,14 @@ export type ConfigurationImportCommitted = Readonly<{
   activationCompatibility: "not-evaluated";
 }>;
 export type ConfigurationReply =
+  | ConfigurationExported
+  | Readonly<{ version: 1; kind: "export-pending"; operationId: string }>
+  | Readonly<{
+      version: 1;
+      kind: "export-failed";
+      operationId: string;
+      error: string;
+    }>
   | ConfigurationImportCommitted
   | Readonly<{ version: 1; kind: "import-pending"; operationId: string }>
   | Readonly<{
@@ -171,14 +201,16 @@ export function decodeConfigurationCommand(
   }
   if (
     kind === "configuration-import-file" ||
-    kind === "configuration-import-status"
+    kind === "configuration-import-status" ||
+    kind === "configuration-export-file" ||
+    kind === "configuration-export-status"
   ) {
     const v = object(value, [
       "command",
       "operationId",
       "expectedRevision",
       "expectedSourceHash",
-      ...(kind === "configuration-import-file" ? ["path"] : []),
+      ...(kind !== "configuration-import-status" ? ["path"] : []),
     ]);
     const fields = {
       operationId: identity(v.operationId),
@@ -203,6 +235,66 @@ export function decodeConfigurationReply(
   command: ConfigurationCommand,
 ): ConfigurationReply {
   const kind = Object.getOwnPropertyDescriptor(record(value), "kind")?.value;
+  const exporting =
+    command.command === "configuration-export-file" ||
+    command.command === "configuration-export-status";
+  if (exporting && (kind === "export-pending" || kind === "export-failed")) {
+    const v = object(value, [
+      "version",
+      "kind",
+      "operationId",
+      ...(kind === "export-failed" ? ["error"] : []),
+    ]);
+    if (v.version !== 1 || v.operationId !== command.operationId) invalid();
+    if (kind === "export-pending")
+      return Object.freeze({
+        version: 1,
+        kind,
+        operationId: command.operationId,
+      });
+    if (typeof v.error !== "string" || !/^[a-z_]{1,80}$/.test(v.error))
+      invalid();
+    return Object.freeze({
+      version: 1,
+      kind,
+      operationId: command.operationId,
+      error: v.error,
+    });
+  }
+  if (exporting && kind === "exported") {
+    const v = object(value, [
+      "version",
+      "kind",
+      "operationId",
+      "revision",
+      "sourceHash",
+      "artifactHash",
+      "byteCount",
+      "replayed",
+    ]);
+    if (
+      v.version !== 1 ||
+      v.operationId !== command.operationId ||
+      v.revision !== command.expectedRevision ||
+      v.sourceHash !== command.expectedSourceHash ||
+      typeof v.replayed !== "boolean" ||
+      typeof v.byteCount !== "number" ||
+      !Number.isSafeInteger(v.byteCount) ||
+      v.byteCount < 1 ||
+      v.byteCount > 8 * 1024 * 1024
+    )
+      invalid();
+    return Object.freeze({
+      version: 1,
+      kind,
+      operationId: command.operationId,
+      revision: counter(v.revision),
+      sourceHash: hash(v.sourceHash),
+      artifactHash: hash(v.artifactHash),
+      byteCount: v.byteCount,
+      replayed: v.replayed,
+    });
+  }
   const importing =
     command.command === "configuration-import-file" ||
     command.command === "configuration-import-status";

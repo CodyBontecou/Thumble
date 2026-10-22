@@ -36,6 +36,8 @@ export function startMcp(
           "configuration_rename_profile",
           "configuration_import_file",
           "configuration_import_status",
+          "configuration_export_file",
+          "configuration_export_status",
         ]
       : []),
     ...(allowRecordedInput ? ["receiver_activate", "receiver_sample"] : []),
@@ -225,6 +227,40 @@ export function startMcp(
                       action === "file"
                         ? "configuration-import-file"
                         : "configuration-import-status",
+                    ...args,
+                  }),
+                ),
+              ),
+          );
+      }
+      if (allowConfigurationWrite) {
+        for (const action of ["file", "status"] as const)
+          server.registerTool(
+            `configuration_export_${action}`,
+            {
+              description:
+                action === "file"
+                  ? "Export the entire saved configuration at the exact revision and content hash returned by configuration_list. Materializes verified resources into a standalone owned-v5 local file. Atomic no-clobber publication: an existing identical artifact is a replay; any other existing file is refused. Returns a background job immediately; poll configuration_export_status. No authority changes or activation. Export operation IDs are scoped to this service session; retry after restart requires the same current revision."
+                  : "Inspect a bounded export job using the exact original operation ID, revision, authority content hash and destination path. The destination binds the intent but is never returned in status. Resubmit export-file if the service restarted; a changed authority returns conflict and existing output is untouched.",
+              inputSchema: z
+                .object({
+                  operationId: z.string().regex(/^[A-Za-z0-9-]{1,64}$/),
+                  expectedRevision: epoch,
+                  expectedSourceHash: z.string().regex(/^[0-9a-f]{64}$/),
+                  path: z.string().min(1).max(4096),
+                })
+                .strict(),
+              annotations: annotations(action === "status"),
+            },
+            (args) =>
+              receipt(async () =>
+                requestConfiguration(
+                  await readEndpointAsync(root, receiver),
+                  decodeConfigurationCommand({
+                    command:
+                      action === "file"
+                        ? "configuration-export-file"
+                        : "configuration-export-status",
                     ...args,
                   }),
                 ),

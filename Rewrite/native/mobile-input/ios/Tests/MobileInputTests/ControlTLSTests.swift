@@ -102,6 +102,7 @@ import Testing
         host: "127.0.0.1", port: info.port, certificatePin: info.pin)
       defer { client.close() }
       try await client.connect()
+      #expect(client.diagnosticConnectOutcome == .ready)
       let message = Data("actual-swift-native-control".utf8)
       #expect(client.offer(try ControlTLSFrame(kind: .control, payload: message)))
       #expect(try await client.receive().payload == message)
@@ -141,6 +142,12 @@ import Testing
         Issue.record("wrong pin accepted")
       } catch {}
       #expect(!client.offer(try ControlTLSFrame(kind: .control, payload: Data([1]))))
+      #expect(
+        [ControlTLSConnectOutcome.networkFailed, .deadline].contains(
+          client.diagnosticConnectOutcome))
+      let failedOutcome = client.diagnosticConnectOutcome
+      client.close()
+      #expect(client.diagnosticConnectOutcome == failedOutcome)
     }
   }
   @Test(.enabled(if: ProcessInfo.processInfo.environment["THUMBLE_NATIVE_TLS_PROBE"] != nil))
@@ -330,3 +337,39 @@ import Testing
     }
   }
 #endif
+
+@Test private func connectDiagnosticPreservesFirstTerminalOutcomeAcrossLateCallbacks() {
+  for outcome: ControlTLSConnectOutcome in [
+    .deadline, .networkFailed, .cancelled, .versionRejected, .alpnRejected, .ready,
+  ] {
+    var diagnostic = ControlTLSConnectDiagnostic()
+    #expect(diagnostic.outcome == .idle)
+    diagnostic.begin()
+    #expect(diagnostic.outcome == .connecting)
+    diagnostic.finish(outcome)
+    // A cancelled NWConnection callback, deadline task or late ready callback
+    // cannot replace the first connection result after cleanup begins.
+    for late: ControlTLSConnectOutcome in [.cancelled, .networkFailed, .deadline, .ready] {
+      diagnostic.finish(late)
+      diagnostic.begin()
+      #expect(diagnostic.outcome == outcome)
+    }
+  }
+}
+@Test @MainActor private func explicitCloseBeforeOrDuringConnectPreservesCancellation() async throws
+{
+  let pin = String(repeating: "0", count: 64)
+  let client = try ControlTLSClient(host: "127.0.0.1", port: 1, certificatePin: pin)
+  #expect(client.diagnosticConnectOutcome == .idle)
+  // A close queued before the unstructured connect task starts is terminal;
+  // the task must throw without overwriting that outcome or reconnecting.
+  let opening = Task { try await client.connect() }
+  client.close()
+  do {
+    try await opening.value
+    Issue.record("closed connection accepted")
+  } catch {}
+  #expect(client.diagnosticConnectOutcome == .cancelled)
+  client.close()
+  #expect(client.diagnosticConnectOutcome == .cancelled)
+}

@@ -45,6 +45,25 @@ public struct ControlTLSFrame: Sendable {
   }
 }
 
+/// Fixed diagnostic metadata only; never includes endpoint, certificate or error text.
+public enum ControlTLSConnectOutcome: String, Sendable {
+  case idle, connecting, deadline
+  case networkFailed = "network-failed"
+  case cancelled
+  case versionRejected = "tls-version-rejected"
+  case alpnRejected = "alpn-rejected"
+  case ready
+}
+struct ControlTLSConnectDiagnostic {
+  private(set) var outcome: ControlTLSConnectOutcome = .idle
+  mutating func begin() { if outcome == .idle { outcome = .connecting } }
+  mutating func finish(_ next: ControlTLSConnectOutcome) {
+    guard outcome == .idle || outcome == .connecting else { return }
+    guard next != .idle && next != .connecting else { return }
+    outcome = next
+  }
+}
+
 /// Native TLS transport only. A ready connection is not phone trust or input authorization.
 /// UI-thread sampling remains independent of React; Network.framework performs the socket I/O.
 @MainActor public final class ControlTLSClient {
@@ -52,6 +71,8 @@ public struct ControlTLSFrame: Sendable {
   public static let alpn = "thumble-rewrite-control/1"
   private enum State { case idle, connecting, ready, closed }
   private var state: State = .idle
+  private var connectDiagnostic = ControlTLSConnectDiagnostic()
+  public var diagnosticConnectOutcome: ControlTLSConnectOutcome { connectDiagnostic.outcome }
   private let connection: NWConnection
   private let networkQueue = DispatchQueue(label: "com.thumble.rewrite.control-tls")
   private var opening: CheckedContinuation<Void, any Error>?
@@ -114,6 +135,7 @@ public struct ControlTLSFrame: Sendable {
   public func connect() async throws {
     guard state == .idle else { throw ControlTLSError.rejected }
     state = .connecting
+    connectDiagnostic.begin()
     try await withTaskCancellationHandler {
       try await withCheckedThrowingContinuation { continuation in
         opening = continuation
@@ -122,6 +144,7 @@ public struct ControlTLSFrame: Sendable {
         }
         connectDeadline = Task { [weak self] in
           do { try await Task.sleep(for: .seconds(3)) } catch { return }
+          self?.connectDiagnostic.finish(.deadline)
           self?.close()
         }
         connection.start(queue: networkQueue)
@@ -138,19 +161,30 @@ public struct ControlTLSFrame: Sendable {
         let metadata = connection.metadata(definition: NWProtocolTLS.definition)
           as? NWProtocolTLS.Metadata,
         sec_protocol_metadata_get_negotiated_tls_protocol_version(metadata.securityProtocolMetadata)
-          == .TLSv13,
-        Self.negotiatedALPN(metadata.securityProtocolMetadata) == Self.alpn
+          == .TLSv13
       else {
+        connectDiagnostic.finish(.versionRejected)
         close()
         return
       }
+      guard Self.negotiatedALPN(metadata.securityProtocolMetadata) == Self.alpn else {
+        connectDiagnostic.finish(.alpnRejected)
+        close()
+        return
+      }
+      connectDiagnostic.finish(.ready)
       state = .ready
       connectDeadline?.cancel()
       connectDeadline = nil
       let continuation = opening
       opening = nil
       continuation?.resume()
-    case .failed, .cancelled: close()
+    case .failed:
+      connectDiagnostic.finish(.networkFailed)
+      close()
+    case .cancelled:
+      connectDiagnostic.finish(.cancelled)
+      close()
     default: break
     }
   }
@@ -268,6 +302,7 @@ public struct ControlTLSFrame: Sendable {
   }
   public func close() {
     guard state != .closed else { return }
+    connectDiagnostic.finish(.cancelled)
     state = .closed
     connection.cancel()
     connection.stateUpdateHandler = nil

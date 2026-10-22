@@ -1,7 +1,7 @@
 // Independent modern/legacy MCP and CLI import parity, synthetic local fixture only.
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { copyFileSync, existsSync, rmSync } from "node:fs";
+import { copyFileSync, existsSync, readFileSync, rmSync } from "node:fs";
 import { dirname, isAbsolute, join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { promisify } from "node:util";
@@ -55,7 +55,8 @@ const flags = (args) => [
   args.expectedSourceHash,
 ];
 let scenarios = 0,
-  last;
+  last,
+  lastExport;
 try {
   await invoke("service", "start");
   const inspection = await invoke("configuration", "validate-file", [
@@ -101,6 +102,8 @@ try {
         for (const name of [
           "configuration_import_file",
           "configuration_import_status",
+          "configuration_export_file",
+          "configuration_export_status",
         ])
           assert.equal(names.includes(name), writable);
         const catalog = await invoke("configuration", "list");
@@ -110,12 +113,16 @@ try {
           expectedSourceHash: inspection.contentHash,
           path: file,
         };
-        if (!writable)
+        if (!writable) {
           await assert.rejects(
             call("configuration_import_file", args),
             /tool_unavailable/,
           );
-        else {
+          await assert.rejects(
+            call("configuration_export_file", args),
+            /tool_unavailable/,
+          );
+        } else {
           const [mcpStart, cliStart] = await Promise.all([
             call("configuration_import_file", args),
             invoke("configuration", "import-file", [
@@ -193,6 +200,74 @@ try {
             (await invoke("configuration", "list")).revision,
             result.receipt.resultingRevision,
           );
+          const authority = await invoke("configuration", "list");
+          const exportArgs = {
+            operationId: `export-${legacy ? "legacy" : "modern"}`,
+            expectedRevision: authority.revision,
+            expectedSourceHash: authority.contentHash,
+            path: join(
+              dirname(runtime),
+              `export-${legacy ? "legacy" : "modern"}.json`,
+            ),
+          };
+          const exportFlags = [...flags(exportArgs), "--file", exportArgs.path];
+          const [mcpExport, cliExport] = await Promise.all([
+            call("configuration_export_file", exportArgs),
+            invoke("configuration", "export-file", exportFlags),
+          ]);
+          assert.notEqual(mcpExport.isError, true);
+          assert.match(
+            mcpExport.structuredContent.result.kind,
+            /^(export-pending|exported)$/,
+          );
+          assert.match(cliExport.kind, /^(export-pending|exported)$/);
+          let exported;
+          do {
+            exported = (await call("configuration_export_status", exportArgs))
+              .structuredContent.result;
+            if (exported.kind === "export-pending") await sleep(20);
+          } while (
+            exported.kind === "export-pending" &&
+            performance.now() < deadline
+          );
+          assert.equal(exported.kind, "exported");
+          assert.equal(exported.revision, authority.revision);
+          assert.equal(exported.sourceHash, authority.contentHash);
+          assert.equal(
+            exported.byteCount,
+            readFileSync(exportArgs.path).length,
+          );
+          assert.equal(
+            JSON.stringify(exported).includes(exportArgs.path),
+            false,
+          );
+          assert.deepEqual(
+            JSON.parse(readFileSync(exportArgs.path, "utf8")),
+            JSON.parse(readFileSync(file, "utf8")),
+          );
+          const cliExportStatus = await invoke(
+            "configuration",
+            "export-status",
+            exportFlags,
+          );
+          assert.deepEqual(cliExportStatus, exported);
+          const badExport = await call("configuration_export_file", {
+            ...exportArgs,
+            path: join(dirname(runtime), "different-output.json"),
+          });
+          assert.equal(
+            badExport.structuredContent.error,
+            "operation_id_reused",
+          );
+          assert.equal(
+            (await invoke("configuration", "list")).revision,
+            authority.revision,
+          );
+          lastExport = {
+            args: exportArgs,
+            result: exported,
+            flags: exportFlags,
+          };
           last = { args, result };
         }
         const receiverStatus = await invoke("receiver", "status");
@@ -224,6 +299,19 @@ try {
     if (recovered.kind === "import-pending") await sleep(20);
   } while (recovered.kind === "import-pending" && performance.now() < deadline);
   assert.deepEqual(recovered, { ...last.result, replayed: true });
+  const exportPending = await invoke(
+    "configuration",
+    "export-file",
+    lastExport.flags,
+  );
+  assert.equal(exportPending.kind, "export-pending");
+  let exported;
+  do {
+    exported = await invoke("configuration", "export-status", lastExport.flags);
+    if (exported.kind === "export-pending") await sleep(20);
+  } while (exported.kind === "export-pending" && performance.now() < deadline);
+  assert.deepEqual(exported, { ...lastExport.result, replayed: true });
+
   console.log(
     JSON.stringify({
       ok: true,

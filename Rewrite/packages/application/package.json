@@ -9,7 +9,8 @@
     "./configuration-store": "./src/configuration-store.ts",
     "./configuration-catalog": "./src/configuration-catalog.ts",
     "./configuration-validation": "./src/configuration-validation.ts",
-    "./configuration-import": "./src/configuration-import.ts"
+    "./configuration-import": "./src/configuration-import.ts",
+    "./configuration-export": "./src/configuration-export.ts"
   },
   "dependencies": {
     "@thumble/contracts": "workspace:*",

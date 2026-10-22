@@ -295,7 +295,11 @@ async function main(): Promise<unknown> {
           throw new Error("invalid_configuration_option");
       return inspectConfigurationFile(required(opts, "--file"));
     }
-    if (action === "import-file" || action === "import-status") {
+    if (
+      ["import-file", "import-status", "export-file", "export-status"].includes(
+        action ?? "",
+      )
+    ) {
       const allowed = [
         "--runtime-dir",
         "--receiver",
@@ -303,7 +307,7 @@ async function main(): Promise<unknown> {
         "--operation-id",
         "--expected-revision",
         "--expected-source-hash",
-        ...(action === "import-file" ? ["--file"] : []),
+        ...(action !== "import-status" ? ["--file"] : []),
       ];
       for (const key of opts.keys())
         if (!allowed.includes(key))
@@ -312,11 +316,17 @@ async function main(): Promise<unknown> {
         command:
           action === "import-file"
             ? "configuration-import-file"
-            : "configuration-import-status",
+            : action === "import-status"
+              ? "configuration-import-status"
+              : action === "export-file"
+                ? "configuration-export-file"
+                : "configuration-export-status",
         operationId: required(opts, "--operation-id"),
         expectedRevision: required(opts, "--expected-revision"),
         expectedSourceHash: required(opts, "--expected-source-hash"),
-        ...(action === "import-file" ? { path: required(opts, "--file") } : {}),
+        ...(action !== "import-status"
+          ? { path: required(opts, "--file") }
+          : {}),
       });
       return requestConfiguration(readEndpoint(root, receiver), command);
     }
