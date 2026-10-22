@@ -48,6 +48,9 @@ internal constructor(
     private val requireWorker: Boolean = false,
     private val controlVersion: Int = 3,
     private val elapsed: () -> Long = System::nanoTime,
+    private val datagramFactory: (String, Int) -> NativeDatagramIO = { host, port ->
+        NativeDatagramDelivery(InetSocketAddress(host, port))
+    },
 ) : Closeable {
     private val started = AtomicBoolean(false)
     private val closed = AtomicBoolean(false)
@@ -63,12 +66,15 @@ internal constructor(
     private var inputElapsedLast: Long? = null
     @Volatile private var inputDelivery: NativeControlDelivery? = null
     @Volatile private var heartbeat: Thread? = null
+    @Volatile private var datagram: NativeDatagramIO? = null
+    @Volatile private var route: NativeInputRoute? = null
 
     @TargetApi(29)
     constructor(
         endpoint: TrustedHostEndpoint,
         context: Context,
         inputSessions: Boolean = false,
+        datagrams: Boolean = false,
     ) : this(
         endpoint,
         {
@@ -88,7 +94,10 @@ internal constructor(
         PhoneCredentialVault(context)::load,
         System::currentTimeMillis,
         true,
-        if (inputSessions) 4 else 3,
+        if (datagrams) {
+            if (!inputSessions) throw PhoneControlRejected()
+            5
+        } else if (inputSessions) 4 else 3,
         android.os.SystemClock::elapsedRealtimeNanos,
     )
 
@@ -131,13 +140,13 @@ internal constructor(
         val frame = transport().receive()
         checkpoint()
         if (frame.kind != ControlTLSFrame.Kind.CONTROL) throw PhoneControlRejected()
-        return EnrollmentJSON.parse(frame.payload)
+        return EnrollmentJSON.parse(frame.payload, allowNull = controlVersion == 5)
     }
 
     fun authenticate(): PhoneControlMetadata {
         worker()
         if (
-            controlVersion !in 3..4 ||
+            controlVersion !in 3..5 ||
                 !started.compareAndSet(false, true) ||
                 !busy.compareAndSet(false, true)
         )
@@ -238,13 +247,13 @@ internal constructor(
                 expires <= last ||
                 value["inputEnabled"] != EnrollmentJSON.Value.BooleanValue(false) ||
                 value["inputSessionAvailable"] !=
-                    EnrollmentJSON.Value.BooleanValue(controlVersion == 4) ||
+                    EnrollmentJSON.Value.BooleanValue(controlVersion >= 4) ||
                 credential?.let {
                     it.phoneID != phone || it.epoch != epoch || expires > it.expiresAt
                 } == true
         )
             throw PhoneControlRejected()
-        val receipt = PhoneControlMetadata(phone, epoch, connection, expires, controlVersion == 4)
+        val receipt = PhoneControlMetadata(phone, epoch, connection, expires, controlVersion >= 4)
         if (admitted?.let { it != receipt } == true) throw PhoneControlRejected()
         return receipt
     }
@@ -285,7 +294,7 @@ internal constructor(
     fun prepareInput(map: ControlMap): PhoneInputAdmission {
         worker()
         if (
-            controlVersion != 4 ||
+            controlVersion !in 4..5 ||
                 admitted == null ||
                 inputAttempted.get() ||
                 !busy.compareAndSet(false, true)
@@ -312,7 +321,7 @@ internal constructor(
                     .put("generation", map.generation)
                     .put("revision", map.revision)
             )
-            val grant = PhoneInputGrant(receive(), connection, map)
+            val grant = PhoneInputGrant(receive(), connection, map, datagrams = controlVersion == 5)
             inputDeadline = minOf(deadline ?: 0, Math.addExact(requested, grant.lifetime))
             inputElapsedDeadline =
                 Math.addExact(startedAt, Math.multiplyExact(grant.lifetime, 1_000_000))
@@ -328,16 +337,53 @@ internal constructor(
                 io = delivery
                 inputDelivery = delivery
             }
+            val udpPort = grant.udpPort
+            val session = grant.sessionID
+            if (controlVersion == 5) {
+                route =
+                    NativeInputRoute(
+                        { elapsed() / 1_000_000 },
+                        { datagram?.offer(it) ?: false },
+                        delivery::offerInput,
+                    )
+                // DNS/socket setup runs independently. The UI can immediately
+                // start neutral and use TLS even if UDP setup never completes.
+                Thread(
+                        {
+                            val udp =
+                                try {
+                                    udpPort?.let { datagramFactory(endpoint.host, it) }
+                                } catch (_: Exception) {
+                                    null
+                                }
+                            val keep =
+                                synchronized(owner) {
+                                    if (closed.get()) false
+                                    else {
+                                        datagram = udp
+                                        true
+                                    }
+                                }
+                            if (!keep) udp?.close()
+                        },
+                        "thumble-input-udp-open",
+                    )
+                    .apply {
+                        isDaemon = true
+                        start()
+                    }
+                inputCheckpoint()
+            }
             val admission = PhoneInputAdmission(grant.packet, map, this)
             heartbeat =
                 Thread(
                         {
                             try {
                                 while (!closed.get()) {
-                                    Thread.sleep(1000)
+                                    Thread.sleep(if (controlVersion == 5) 100 else 1000)
                                     if (busy.get()) continue
                                     inputCheckpoint()
-                                    status()
+                                    if (controlVersion == 5) progress(session, map) else status()
                                 }
                             } catch (_: Exception) {
                                 close()
@@ -353,6 +399,26 @@ internal constructor(
         } catch (_: Exception) {
             close()
             throw PhoneControlRejected()
+        } finally {
+            busy.set(false)
+        }
+    }
+
+    private fun progress(session: String, map: ControlMap) {
+        if (!busy.compareAndSet(false, true)) return
+        try {
+            val connection = admitted?.connectionID ?: throw PhoneControlRejected()
+            send(
+                JSONObject()
+                    .put("version", 1)
+                    .put("command", "input-status")
+                    .put("connectionId", connection)
+                    .put("sessionId", session)
+            )
+            val value = receive()
+            inputCheckpoint()
+            if (route?.observe(value, connection, session, map) != true)
+                throw PhoneControlRejected()
         } finally {
             busy.set(false)
         }
@@ -381,7 +447,7 @@ internal constructor(
     internal fun offerInput(packet: ByteArray): Boolean =
         try {
             inputCheckpoint()
-            inputDelivery?.offerInput(packet) == true
+            route?.offer(packet) ?: (inputDelivery?.offerInput(packet) == true)
         } catch (_: Exception) {
             close()
             false
@@ -389,6 +455,8 @@ internal constructor(
 
     override fun close() {
         if (!closed.compareAndSet(false, true)) return
+        route?.close()
+        datagram?.close()
         heartbeat?.interrupt()
         heartbeat = null
         val connected =

@@ -21,7 +21,15 @@ class PhoneInputTest {
             controls = listOf(ControlRegion("south", "south", 0.0, 0.0, 1.0, 1.0)),
         )
 
-    private fun client(io: IO, now: () -> Long = { 1000 }, elapsed: () -> Long = { 1000 }) =
+    private fun client(
+        io: IO,
+        now: () -> Long = { 1000 },
+        elapsed: () -> Long = { 1000 },
+        version: Int = 4,
+        datagramFactory: (String, Int) -> NativeDatagramIO = { host, port ->
+            NativeDatagramDelivery(java.net.InetSocketAddress(host, port))
+        },
+    ) =
         PhoneControlClient(
             TrustedHostEndpoint("127.0.0.1", 1234, "11".repeat(32), "authority-a"),
             { io },
@@ -32,8 +40,9 @@ class PhoneInputTest {
                 )
             },
             now,
-            controlVersion = 4,
+            controlVersion = version,
             elapsed = elapsed,
+            datagramFactory = datagramFactory,
         )
 
     private class IO(f: JSONObject) : NativeFrameIO {
@@ -107,6 +116,108 @@ class PhoneInputTest {
         while (!check()) {
             assertTrue("timed out", System.nanoTime() < deadline)
             Thread.sleep(1)
+        }
+    }
+
+    private fun version5Fixture(): JSONObject =
+        fixture().apply {
+            getJSONObject("hello").put("controlVersion", 5)
+            getJSONObject("grant").put("transport", "udp+tls").put("udpPort", 43210)
+        }
+
+    @Test
+    fun stalledUdpSetupDoesNotBlockNeutralInputAndLateSetupClosesAfterOwnerLoss() {
+        val io = IO(version5Fixture())
+        val started = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val udpClosed = CountDownLatch(1)
+        val worker = java.util.concurrent.Executors.newSingleThreadExecutor()
+        val client =
+            client(
+                io,
+                version = 5,
+                datagramFactory = { _, _ ->
+                    started.countDown()
+                    check(release.await(2, TimeUnit.SECONDS))
+                    object : NativeDatagramIO {
+                        override fun offer(packet: ByteArray) = false
+
+                        override fun close() {
+                            udpClosed.countDown()
+                        }
+                    }
+                },
+            )
+        try {
+            client.authenticate()
+            val admission =
+                worker
+                    .submit<PhoneInputAdmission> { client.prepareInput(map()) }
+                    .get(500, TimeUnit.MILLISECONDS)
+            assertTrue(started.await(1, TimeUnit.SECONDS))
+            val engine = admission.bind()
+            assertTrue(engine.connected)
+            assertTrue(engine.begin(1, "1", 0.2, 0.2))
+            client.close()
+            release.countDown()
+            assertTrue(udpClosed.await(1, TimeUnit.SECONDS))
+            engine.tick()
+            assertFalse(engine.connected)
+            assertEquals(GamepadReport.neutral(), engine.state)
+        } finally {
+            client.close()
+            release.countDown()
+            worker.shutdownNow()
+        }
+    }
+
+    @Test
+    fun invalidVersion5ProgressClosesTheBoundTouchOwner() {
+        for ((field, replacement) in
+            listOf(
+                "active" to false,
+                "sessionId" to "99".repeat(16),
+                "lastAcceptedSequence" to "2",
+            )) {
+            val io = IO(version5Fixture())
+            val client =
+                client(
+                    io,
+                    version = 5,
+                    datagramFactory = { _, _ ->
+                        object : NativeDatagramIO {
+                            override fun offer(packet: ByteArray) = false
+
+                            override fun close() {}
+                        }
+                    },
+                )
+            try {
+                client.authenticate()
+                val engine = client.prepareInput(map()).bind()
+                assertTrue(engine.begin(1, "1", 0.2, 0.2))
+                val progress =
+                    JSONObject()
+                        .put("version", 1)
+                        .put("command", "input-status")
+                        .put("connectionId", "ab".repeat(16))
+                        .put("sessionId", "33".repeat(16))
+                        .put("active", true)
+                        .put("generation", "1")
+                        .put("revision", "1")
+                        .put("lastAcceptedSequence", "0")
+                        .put("inputEnabled", false)
+                        .put(field, replacement)
+                io.queue.add(
+                    ControlTLSFrame(ControlTLSFrame.Kind.CONTROL, progress.toString().toByteArray())
+                )
+                assertTrue(io.closed.await(500, TimeUnit.MILLISECONDS))
+                engine.tick()
+                assertFalse(engine.connected)
+                assertEquals(GamepadReport.neutral(), engine.state)
+            } finally {
+                client.close()
+            }
         }
     }
 
@@ -303,6 +414,10 @@ class PhoneInputTest {
 
     @Test
     fun actualNativeTouchCrossesTlsAndIpcWithFreshNeutralReconnect() {
+        for (mode in listOf("tls", "udp", "udp-blackhole")) actualNativeInputWitness(mode)
+    }
+
+    private fun actualNativeInputWitness(mode: String) {
         val path = System.getenv("THUMBLE_NATIVE_INPUT_PROBE")
         org.junit.Assume.assumeTrue(path != null)
         val process = ProcessBuilder(path!!).start()
@@ -370,7 +485,20 @@ class PhoneInputTest {
                         ::connect,
                         { _, _ -> saved },
                         System::currentTimeMillis,
-                        controlVersion = 4,
+                        controlVersion = if (mode == "tls") 4 else 5,
+                        datagramFactory = { host, port ->
+                            if (mode == "udp-blackhole")
+                                object : NativeDatagramIO {
+                                    private var closed = false
+
+                                    override fun offer(packet: ByteArray) = !closed
+
+                                    override fun close() {
+                                        closed = true
+                                    }
+                                }
+                            else NativeDatagramDelivery(java.net.InetSocketAddress(host, port))
+                        },
                     )
                 control = client
                 assertTrue(client.authenticate().inputSessionAvailable)
@@ -389,8 +517,8 @@ class PhoneInputTest {
                 command(122)
                 assertTrue(line().getBoolean("freshNeutral"))
                 assertTrue(engine.begin(1, generation, 0.2, 0.2))
-                if (generation == "1")
-                    repeat(62) {
+                if (generation == "1" || mode != "tls")
+                    repeat(if (generation == "1") 62 else 5) {
                         Thread.sleep(50)
                         engine.tick()
                     }

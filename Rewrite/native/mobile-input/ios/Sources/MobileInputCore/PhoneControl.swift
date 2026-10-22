@@ -41,13 +41,20 @@ extension PhoneCredentialWorker: ControlCredentialSource {}
   private var inputDeadline: UInt64?
   private var inputContinuousDeadline: ContinuousClock.Instant?
   private var heartbeat: Task<Void, Never>?
+  private var datagram: (any NativeDatagramIO)?
+  private var datagramOpening: Task<Void, Never>?
+  private var route: NativeInputRoute?
+  private let datagramFactory: (String, UInt16) throws -> any NativeDatagramIO
+  private let routeNow: () -> UInt64
   private let endpoint: TrustedHostEndpoint
   private let io: any EnrollmentFrameIO
   private let storage: any ControlCredentialSource
   private let now: () -> UInt64
   public convenience init(
-    endpoint: TrustedHostEndpoint, storage: PhoneCredentialWorker, inputSessions: Bool = false
+    endpoint: TrustedHostEndpoint, storage: PhoneCredentialWorker, inputSessions: Bool = false,
+    datagrams: Bool = false
   ) throws {
+    guard !datagrams || inputSessions else { throw PhoneControlError.rejected }
     try self.init(
       endpoint: endpoint,
       io: ControlTLSClient(
@@ -56,12 +63,17 @@ extension PhoneCredentialWorker: ControlCredentialSource {}
       now: {
         let time = Date().timeIntervalSince1970 * 1000
         return time.isFinite && time >= 0 && time < Double(Int64.max) ? UInt64(time) : UInt64.max
-      }, controlVersion: inputSessions ? 4 : 3)
+      }, controlVersion: inputSessions ? (datagrams ? 5 : 4) : 3)
   }
   init(
     endpoint: TrustedHostEndpoint, io: any EnrollmentFrameIO, storage: any ControlCredentialSource,
-    now: @escaping () -> UInt64, controlVersion: Int = 3
+    now: @escaping () -> UInt64, controlVersion: Int = 3,
+    datagramFactory: @escaping (String, UInt16) throws -> any NativeDatagramIO = {
+      try NativeDatagramClient(host: $0, port: $1)
+    }, routeNow: @escaping () -> UInt64 = { DispatchTime.now().uptimeNanoseconds / 1_000_000 }
   ) {
+    self.datagramFactory = datagramFactory
+    self.routeNow = routeNow
     self.controlVersion = controlVersion
     self.endpoint = endpoint
     self.io = io
@@ -88,10 +100,10 @@ extension PhoneCredentialWorker: ControlCredentialSource {}
     let frame = try await io.receive()
     try checkpoint()
     guard frame.kind == .control else { throw PhoneControlError.rejected }
-    return try EnrollmentJSON.parse(frame.payload)
+    return try EnrollmentJSON.parse(frame.payload, allowNull: controlVersion == 5)
   }
   public func authenticate() async throws -> PhoneControlMetadata {
-    guard controlVersion == 3 || controlVersion == 4, state == .idle, !busy else {
+    guard (3...5).contains(controlVersion), state == .idle, !busy else {
       throw PhoneControlError.rejected
     }
     state = .authenticating
@@ -149,7 +161,7 @@ extension PhoneCredentialWorker: ControlCredentialSource {}
       value["version"] == .integer(1), value["command"] == .string(command),
       value["authorityInstanceId"] == .string(endpoint.authorityInstanceID),
       value["inputEnabled"] == .boolean(false),
-      value["inputSessionAvailable"] == .boolean(controlVersion == 4),
+      value["inputSessionAvailable"] == .boolean(controlVersion >= 4),
       case .string(let phone)? = value["phoneId"], EnrollmentInvitation.identity(phone),
       case .string(let epochText)? = value["credentialEpoch"], let epoch = UInt64(epochText),
       epoch > 0, epoch <= UInt64(Int64.max), String(epoch) == epochText,
@@ -161,7 +173,7 @@ extension PhoneCredentialWorker: ControlCredentialSource {}
     else { throw PhoneControlError.rejected }
     let receipt = PhoneControlMetadata(
       phoneID: phone, credentialEpoch: epoch, connectionID: connection, expiresAt: expires,
-      inputSessionAvailable: controlVersion == 4)
+      inputSessionAvailable: controlVersion >= 4)
     guard admitted.map({ $0 == receipt }) ?? true else { throw PhoneControlError.rejected }
     return receipt
   }
@@ -195,7 +207,7 @@ extension PhoneCredentialWorker: ControlCredentialSource {}
   public func bindInput(
     _ map: ControlMap, feedback: @escaping (GamepadStateV1) -> Void = { _ in }
   ) async throws -> InputEngine {
-    guard controlVersion == 4, state == .authenticated, !busy, !inputAttempted,
+    guard controlVersion >= 4, state == .authenticated, !busy, !inputAttempted,
       let admitted
     else { throw PhoneControlError.rejected }
     _ = try map.validated()
@@ -216,15 +228,48 @@ extension PhoneCredentialWorker: ControlCredentialSource {}
           "generation": map.generation, "revision": map.revision,
         ])
         let grant = try PhoneInputGrant(
-          try await receive(), connection: admitted.connectionID, map: map)
+          try await receive(), connection: admitted.connectionID, map: map,
+          datagrams: controlVersion == 5)
         inputDeadline = min(deadline ?? 0, requested + grant.lifetime)
         inputContinuousDeadline = continuous.advanced(by: .milliseconds(Int64(grant.lifetime)))
         try inputCheckpoint()
+        if controlVersion == 5 {
+          if let port = grant.udpPort {
+            do {
+              let udp = try datagramFactory(endpoint.host, port)
+              datagram = udp
+              // Neutral/TLS input starts immediately; UDP setup cannot consume
+              // the receiver TTL or block admission to the fallback transport.
+              datagramOpening = Task { [weak self] in
+                do { try await udp.connect() } catch {
+                  udp.close()
+                  if self?.datagram === udp { self?.datagram = nil }
+                }
+              }
+            } catch {
+              datagram?.close()
+              datagram = nil
+            }
+          }
+          try inputCheckpoint()
+          route = NativeInputRoute(
+            now: routeNow,
+            udp: { [weak self] packet in
+              self?.datagram?.offer(packet) ?? false
+            },
+            tls: { [weak self] packet in
+              guard let self, let frame = try? ControlTLSFrame(kind: .input, payload: packet) else {
+                return false
+              }
+              return self.io.offer(frame)
+            })
+        }
         inputChannel = try InputPacketChannel(grant: grant.packet, packetLimit: 65_536) {
           [weak self] packet in
           guard let self else { return false }
           do {
             try self.inputCheckpoint()
+            if let route = self.route { return route.offer(packet) }
             return self.io.offer(try ControlTLSFrame(kind: .input, payload: packet))
           } catch {
             self.close()
@@ -240,14 +285,20 @@ extension PhoneCredentialWorker: ControlCredentialSource {}
         _ = try engine.activate(map)
         try engine.connect(generation: map.generation)
         guard engine.connected else { throw PhoneControlError.rejected }
+        let session = grant.sessionID
         heartbeat = Task { [weak self] in
           while !Task.isCancelled {
-            do { try await Task.sleep(for: .seconds(1)) } catch { return }
+            let delay = self?.controlVersion == 5 ? 100 : 1000
+            do { try await Task.sleep(for: .milliseconds(delay)) } catch { return }
             guard let self, self.state != .closed else { return }
             if self.busy { continue }
             do {
               try self.inputCheckpoint()
-              _ = try await self.status()
+              if self.controlVersion == 5 {
+                try await self.progress(session: session, map: map)
+              } else {
+                _ = try await self.status()
+              }
             } catch {
               self.close()
               return
@@ -263,6 +314,21 @@ extension PhoneCredentialWorker: ControlCredentialSource {}
       Task { @MainActor [weak self] in self?.close() }
     }
   }
+  private func progress(session: String, map: ControlMap) async throws {
+    guard !busy, let admitted, let route else { throw PhoneControlError.rejected }
+    busy = true
+    defer { busy = false }
+    try send([
+      "version": 1, "command": "input-status", "connectionId": admitted.connectionID,
+      "sessionId": session,
+    ])
+    let value = try await receive()
+    try inputCheckpoint()
+    let progress = try PhoneInputProgress(
+      value, connection: admitted.connectionID, session: session,
+      map: map, lastOffered: route.lastOffered, previous: route.acknowledged)
+    guard route.observe(progress) else { throw PhoneControlError.rejected }
+  }
   private func inputCheckpoint() throws {
     let time = try checkpoint()
     guard let inputDeadline, time < inputDeadline,
@@ -274,6 +340,12 @@ extension PhoneCredentialWorker: ControlCredentialSource {}
     state = .closed
     heartbeat?.cancel()
     heartbeat = nil
+    route?.close()
+    route = nil
+    datagramOpening?.cancel()
+    datagramOpening = nil
+    datagram?.close()
+    datagram = nil
     inputChannel?.close()
     inputChannel = nil
     if inputEngine?.connected == true { inputEngine?.retire(.disconnected) }

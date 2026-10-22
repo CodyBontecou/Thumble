@@ -77,13 +77,88 @@ private func inputMap() -> ControlMap {
     controls: [ControlRegion(id: "south", action: "south", x: 0, y: 0, width: 1, height: 1)])
 }
 @MainActor private func inputClient(
-  _ io: InputControlIO, now: @escaping () -> UInt64 = { 1000 }, version: Int = 4
+  _ io: InputControlIO, now: @escaping () -> UInt64 = { 1000 }, version: Int = 4,
+  datagramFactory: @escaping (String, UInt16) throws -> any NativeDatagramIO = {
+    try NativeDatagramClient(host: $0, port: $1)
+  }
 ) throws -> PhoneControlClient {
   PhoneControlClient(
     endpoint: try TrustedHostEndpoint(
       host: "127.0.0.1", port: 1234,
       certificatePin: String(repeating: "1", count: 64), authorityInstanceID: "authority-a"),
-    io: io, storage: InputTestStorage(), now: now, controlVersion: version)
+    io: io, storage: InputTestStorage(), now: now, controlVersion: version,
+    datagramFactory: datagramFactory)
+}
+
+@MainActor private final class NeverReadyDatagram: NativeDatagramIO {
+  private var waiting: CheckedContinuation<Void, any Error>?
+  private(set) var closed = false
+  func connect() async throws {
+    guard !closed else { throw PhoneControlError.rejected }
+    try await withCheckedThrowingContinuation { waiting = $0 }
+  }
+  func offer(_ packet: Data) -> Bool { false }
+  func close() {
+    closed = true
+    let pending = waiting
+    waiting = nil
+    pending?.resume(throwing: PhoneControlError.rejected)
+  }
+}
+private func version5InputFixture() throws -> [String: [String: Any]] {
+  var f = try inputFixture()
+  f["hello"]?["controlVersion"] = 5
+  f["grant"]?["transport"] = "udp+tls"
+  f["grant"]?["udpPort"] = 43210
+  return f
+}
+@Test @MainActor private func stalledUdpSetupCannotDelayNeutralInputOrTlsFallback() async throws {
+  let f = try version5InputFixture()
+  let io = InputControlIO([f["hello"]!, f["authenticated"]!, f["configuration"]!, f["grant"]!])
+  let udp = NeverReadyDatagram()
+  let client = try inputClient(io, version: 5, datagramFactory: { _, _ in udp })
+  defer { client.close() }
+  _ = try await client.authenticate()
+  let fence = Task {
+    try await Task.sleep(for: .milliseconds(500))
+    client.close()
+  }
+  defer { fence.cancel() }
+  let engine = try await client.bindInput(inputMap())
+  #expect(engine.connected && io.inputs.count == 1)
+  #expect(engine.begin(id: 1, generation: "1", x: 0.2, y: 0.2))
+  #expect(io.inputs.count == 2)
+  client.close()
+  #expect(udp.closed && !engine.connected)
+}
+@Test @MainActor private func invalidVersion5ProgressClosesTheActualTouchOwner() async throws {
+  let f = try version5InputFixture()
+  for replacement: [String: Any] in [
+    ["active": false], ["sessionId": String(repeating: "99", count: 16)],
+    ["lastAcceptedSequence": "2"],
+  ] {
+    var progress: [String: Any] = [
+      "version": 1, "command": "input-status", "connectionId": String(repeating: "ab", count: 16),
+      "sessionId": String(repeating: "33", count: 16), "active": true, "generation": "1",
+      "revision": "1", "lastAcceptedSequence": "0", "inputEnabled": false,
+    ]
+    progress.merge(replacement) { _, new in new }
+    let io = InputControlIO([
+      f["hello"]!, f["authenticated"]!, f["configuration"]!, f["grant"]!, progress,
+    ])
+    let client = try inputClient(io, version: 5, datagramFactory: { _, _ in NeverReadyDatagram() })
+    defer { client.close() }
+    _ = try await client.authenticate()
+    let engine = try await client.bindInput(inputMap())
+    #expect(engine.begin(id: 1, generation: "1", x: 0.2, y: 0.2))
+    for _ in 0..<50 {
+      if io.closed { break }
+      try await Task.sleep(for: .milliseconds(10))
+    }
+    #expect(
+      io.closed && !engine.connected
+        && GamepadReport.hex(engine.state) == GamepadReport.hex(.neutral))
+  }
 }
 
 @Test @MainActor private func version4BindsOneNativeEngineAndStartsNeutralWithoutExportingGrant()
@@ -264,9 +339,12 @@ private func everyNativeLifecycleCancellationClosesTheGrantChannel(_ reason: Rel
   #expect(feedback.last == GamepadReport.hex(.neutral))
 }
 #if os(macOS)
-  @Test(.enabled(if: ProcessInfo.processInfo.environment["THUMBLE_NATIVE_INPUT_PROBE"] != nil))
+  @Test(
+    .enabled(if: ProcessInfo.processInfo.environment["THUMBLE_NATIVE_INPUT_PROBE"] != nil),
+    arguments: ["tls", "udp", "udp-blackhole"])
   @MainActor
-  private func actualPhoneTouchCrossesTlsAndNativeIpcThenRetiresAndReconnectsNeutral() async throws
+  private func actualPhoneTouchCrossesTlsAndNativeIpcThenRetiresAndReconnectsNeutral(mode: String)
+    async throws
   {
     let process = Process()
     let output = Pipe()
@@ -313,7 +391,11 @@ private func everyNativeLifecycleCancellationClosesTheGrantChannel(_ reason: Rel
         io: try ControlTLSClient(
           host: endpoint.host,
           port: endpoint.port, certificatePin: endpoint.certificatePin), storage: storage,
-        now: { UInt64(Date().timeIntervalSince1970 * 1000) }, controlVersion: 4)
+        now: { UInt64(Date().timeIntervalSince1970 * 1000) }, controlVersion: mode == "tls" ? 4 : 5,
+        datagramFactory: { host, port in
+          if mode == "udp-blackhole" { return BlackholeDatagram() }
+          return try NativeDatagramClient(host: host, port: port)
+        })
       defer { control.close() }
       #expect(try await control.authenticate().inputSessionAvailable)
       try command(97)
@@ -325,8 +407,8 @@ private func everyNativeLifecycleCancellationClosesTheGrantChannel(_ reason: Rel
       try command(122)
       #expect(try await line()["freshNeutral"] as? Bool == true)
       #expect(engine.begin(id: 1, generation: generation, x: 0.2, y: 0.2))
-      if generation == "1" {
-        for _ in 0..<62 {
+      if generation == "1" || mode != "tls" {
+        for _ in 0..<(generation == "1" ? 62 : 5) {
           try await Task.sleep(for: .milliseconds(50))
           engine.tick()
         }
@@ -346,6 +428,12 @@ private func everyNativeLifecycleCancellationClosesTheGrantChannel(_ reason: Rel
     #expect(try await line()["completed"] as? Bool == true)
     process.waitUntilExit()
     #expect(process.terminationStatus == 0)
+  }
+  @MainActor private final class BlackholeDatagram: NativeDatagramIO {
+    private var closed = false
+    func connect() async throws {}
+    func offer(_ packet: Data) -> Bool { !closed }
+    func close() { closed = true }
   }
   private actor InputProbeReader {
     let handle: FileHandle
