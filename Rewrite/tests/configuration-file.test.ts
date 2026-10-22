@@ -1,8 +1,10 @@
 import { expect, test } from "bun:test";
+import { LosslessJson } from "@thumble/contracts/json";
 import {
   copyFileSync,
   mkdtempSync,
   realpathSync,
+  readFileSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -82,6 +84,27 @@ test("file inspection rejects unsafe paths, invalid source and byte overflow wit
         "unsafe_configuration_file",
       );
     }
+  } finally {
+    rmSync(parent, { recursive: true, force: true });
+  }
+});
+
+test("file inspection rejects malformed declared native settings without a mirror", () => {
+  const parent = realpathSync(
+      mkdtempSync(join(tmpdir(), "thumble-file-settings-")),
+    ),
+    file = join(parent, "owned.json");
+  try {
+    const source = LosslessJson.parse(readFileSync(fixture, "utf8"))
+      .remove("/profiles/1/customization/customButtons")
+      .set(
+        "/profiles/1/customization/elements/6/joystickOutputSettings/sensitivity",
+        "1e9999",
+      );
+    writeFileSync(file, source.text());
+    expect(() => inspectConfigurationFile(file)).toThrow(
+      "invalid_owned_configuration",
+    );
   } finally {
     rmSync(parent, { recursive: true, force: true });
   }

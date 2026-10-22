@@ -1,3 +1,13 @@
+import {
+  readOwnedInputSettings,
+  type OwnedInputSettings,
+} from "./owned-input-settings.ts";
+export type {
+  OwnedInputSettings,
+  OwnedJoystickSettings,
+  OwnedTriggerSettings,
+  OwnedTrackpadSettings,
+} from "./owned-input-settings.ts";
 import type { LosslessJson } from "@thumble/contracts/json";
 import { readOwnedOutput, type OwnedOutput } from "./owned-bindings.ts";
 import {
@@ -154,6 +164,7 @@ export type OwnedElement = Readonly<{
   id: string;
   kind: OwnedControlKind;
   source: LosslessJson;
+  inputSettings: OwnedInputSettings | null;
 }> &
   OwnedInputFields;
 export type OwnedProfile = Readonly<{
@@ -298,94 +309,6 @@ function inputFields(value: LosslessJson): OwnedInputFields {
   });
 }
 
-const SETTINGS = {
-  joystickOutputSettings: {
-    analogTarget: "none",
-    sendsDigitalDirections: true,
-    deadZone: 0.12,
-    sensitivity: 1,
-    invertX: false,
-    invertY: false,
-    snapToCardinal: false,
-  },
-  triggerSettings: {
-    target: "right",
-    orientation: "vertical",
-    deadZone: 0.03,
-    sensitivity: 1,
-    sendsDigitalButton: false,
-    digitalThreshold: 0.5,
-  },
-  trackpadSettings: {
-    sensitivity: 1.2,
-    scrollSensitivity: 0.85,
-    naturalScrolling: true,
-    tapToClick: true,
-    twoFingerScroll: true,
-  },
-} as const;
-function settings(
-  key: keyof typeof SETTINGS,
-  value: LosslessJson | undefined,
-): string {
-  const result: Record<string, string | number | boolean> = {
-    ...SETTINGS[key],
-  };
-  if (value) {
-    object(value);
-    for (const [name, defaultValue] of Object.entries(result)) {
-      const v = value.get("/" + name);
-      if (typeof defaultValue === "boolean") {
-        if (v?.booleanValue === undefined) invalidOwned();
-        result[name] = v.booleanValue;
-      } else if (typeof defaultValue === "number") {
-        if (v?.numberToken === undefined) invalidOwned();
-        const number = Number(v.numberToken);
-        if (!Number.isFinite(number)) invalidOwned();
-        const [lower, upper] =
-          name === "deadZone"
-            ? [0, 0.85]
-            : name === "digitalThreshold"
-              ? [0.01, 1]
-              : name === "scrollSensitivity"
-                ? [0.1, 4]
-                : key === "trackpadSettings"
-                  ? [0.2, 4]
-                  : [0.2, 3];
-        result[name] = Math.max(lower!, Math.min(upper!, number));
-      } else {
-        const choices =
-          name === "analogTarget"
-            ? ["none", "left_stick", "right_stick", "mouse_look"]
-            : name === "target"
-              ? ["left", "right"]
-              : ["vertical", "horizontal"];
-        const text = v?.stringValue;
-        if (!text || !choices.includes(text)) invalidOwned();
-        result[name] = text;
-      }
-    }
-    if (key === "trackpadSettings") {
-      const button = field(value, "clickButton");
-      if (button) {
-        const text = button.stringValue;
-        if (!text || !["left", "right", "middle"].includes(text))
-          invalidOwned();
-        result.clickButton = text;
-      }
-      const moves = field(value, "movesCursor");
-      if (moves) {
-        if (moves.booleanValue === undefined) invalidOwned();
-        if (!moves.booleanValue) result.movesCursor = false;
-      }
-    }
-  }
-  if (key === "joystickOutputSettings" && result.analogTarget === "none")
-    result.sendsDigitalDirections = true;
-  if (key === "joystickOutputSettings" && result.analogTarget === "mouse_look")
-    result.sendsDigitalDirections = false;
-  return JSON.stringify(result);
-}
 function mirror(m: LosslessJson, declared: OwnedElement): void {
   const mapping = field(m, "joystickMapping");
   if (mapping) {
@@ -400,19 +323,21 @@ function mirror(m: LosslessJson, declared: OwnedElement): void {
       )
         invalidOwned();
   }
-  for (const [key, controlKind] of [
-    ["joystickOutputSettings", "joystick"],
-    ["triggerSettings", "trigger"],
-    ["trackpadSettings", "trackpad"],
-  ] as const) {
-    const value = field(m, key);
-    if (
-      value &&
-      declared.kind === controlKind &&
-      settings(key, value) !== settings(key, field(declared.source, key))
-    )
-      invalidOwned();
-  }
+  const mirroredSettings = readOwnedInputSettings(declared.kind, m);
+  const settingsKey =
+    declared.kind === "joystick"
+      ? "joystickOutputSettings"
+      : declared.kind === "trigger"
+        ? "triggerSettings"
+        : declared.kind === "trackpad"
+          ? "trackpadSettings"
+          : undefined;
+  if (
+    settingsKey &&
+    field(m, settingsKey) &&
+    JSON.stringify(mirroredSettings) !== JSON.stringify(declared.inputSettings)
+  )
+    invalidOwned();
 }
 function designIdentity(value: LosslessJson): string {
   let kind_: string | undefined, raw: string | undefined;
@@ -673,7 +598,13 @@ export function readOwnedProfile(
       type = kind(value);
     if (byId.has(id)) invalidOwned();
     const input = inputFields(value);
-    const element = Object.freeze({ id, kind: type, source: value, ...input });
+    const element = Object.freeze({
+      id,
+      kind: type,
+      source: value,
+      inputSettings: readOwnedInputSettings(type, value),
+      ...input,
+    });
     elements.push(element);
     byId.set(id, element);
   }

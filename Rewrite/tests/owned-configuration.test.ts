@@ -3,7 +3,10 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { LosslessJson } from "@thumble/contracts/json";
-import { OwnedConfigurationDocument } from "@thumble/domain/owned-configuration";
+import {
+  OwnedConfigurationDocument,
+  type OwnedInputSettings,
+} from "@thumble/domain/owned-configuration";
 import { decodeResourceBase64 } from "@thumble/domain/owned-resources";
 const root = resolve(
   import.meta.dir,
@@ -302,4 +305,179 @@ test("native mirror settings, kind limits and missing joystick outputs cannot be
       "5",
     );
   expect(read(equal).source.text()).toBe(equal.text());
+});
+
+test("declared input settings cannot bypass admission by omitting custom-button mirrors", () => {
+  const source = LosslessJson.parse(text).remove(
+      "/profiles/1/customization/customButtons",
+    ),
+    path = "/profiles/1/customization/elements/6/joystickOutputSettings";
+  for (const bad of [
+    source.set(path, "[]"),
+    source.set(path, "{}"),
+    source.set(path + "/sensitivity", "1e9999"),
+    source.set(path + "/deadZone", '"0.12"'),
+    source.set(path + "/invertY", "null"),
+    source.set(path + "/analogTarget", '"future-output"'),
+  ])
+    expect(() => read(bad)).toThrow("invalid_owned_configuration");
+});
+
+test("native settings projections apply retained defaults and clamps without rewriting source", () => {
+  const base = LosslessJson.parse(text).remove(
+      "/profiles/1/customization/customButtons",
+    ),
+    path = "/profiles/1/customization/elements/6";
+  const cases: readonly {
+    kind: "joystick" | "trigger" | "trackpad";
+    key: string;
+    raw: object;
+    expected: OwnedInputSettings;
+  }[] = [
+    {
+      kind: "joystick",
+      key: "joystickOutputSettings",
+      raw: {
+        analogTarget: "mouse_look",
+        sendsDigitalDirections: true,
+        deadZone: 5,
+        sensitivity: -2,
+        invertX: true,
+        invertY: false,
+        snapToCardinal: true,
+      },
+      expected: {
+        kind: "joystick",
+        analogTarget: "mouse_look",
+        sendsDigitalDirections: false,
+        deadZone: 0.85,
+        sensitivity: 0.2,
+        invertX: true,
+        invertY: false,
+        snapToCardinal: true,
+      },
+    },
+    {
+      kind: "trigger",
+      key: "triggerSettings",
+      raw: {
+        target: "left",
+        orientation: "horizontal",
+        deadZone: -2,
+        sensitivity: 99,
+        sendsDigitalButton: true,
+        digitalThreshold: 0,
+      },
+      expected: {
+        kind: "trigger",
+        target: "left",
+        orientation: "horizontal",
+        deadZone: 0,
+        sensitivity: 3,
+        sendsDigitalButton: true,
+        digitalThreshold: 0.01,
+      },
+    },
+    {
+      kind: "trackpad",
+      key: "trackpadSettings",
+      raw: {
+        sensitivity: 99,
+        scrollSensitivity: -1,
+        naturalScrolling: false,
+        tapToClick: false,
+        twoFingerScroll: true,
+        clickButton: "middle",
+        movesCursor: false,
+      },
+      expected: {
+        kind: "trackpad",
+        sensitivity: 4,
+        scrollSensitivity: 0.1,
+        naturalScrolling: false,
+        tapToClick: false,
+        twoFingerScroll: true,
+        clickButton: "middle",
+        movesCursor: false,
+      },
+    },
+  ];
+  for (const row of cases) {
+    const source = base
+      .set(path + "/kind", JSON.stringify(row.kind))
+      .remove(path + "/joystickMapping")
+      .remove(path + "/joystickOutputSettings")
+      .set(
+        path + "/" + row.key,
+        JSON.stringify({ ...row.raw, futureMetadata: { exact: "preserve" } }),
+      )
+      .set(
+        path + "/" + row.key + "/futureMetadata/raw",
+        "9007199254740993.0000",
+      );
+    const document = read(source),
+      projected = document.profiles[1]!.elements[6]!.inputSettings;
+    expect(projected).toEqual(row.expected);
+    expect(Object.isFrozen(projected)).toBe(true);
+    expect(document.source.text()).toBe(source.text());
+    for (const bad of ["{}", "[]", "true", '"invalid"'])
+      expect(() => read(source.set(path + "/" + row.key, bad))).toThrow(
+        "invalid_owned_configuration",
+      );
+    for (const token of ["1e9999", '"1"', "true", "null"])
+      expect(() =>
+        read(source.set(path + "/" + row.key + "/sensitivity", token)),
+      ).toThrow("invalid_owned_configuration");
+    const absent = read(source.remove(path + "/" + row.key)).profiles[1]!
+      .elements[6]!.inputSettings;
+    const nulled = read(source.set(path + "/" + row.key, "null")).profiles[1]!
+      .elements[6]!.inputSettings;
+    expect(nulled).toEqual(absent);
+    expect(absent?.kind).toBe(row.kind);
+    expect(absent?.sensitivity).toBe(row.kind === "trackpad" ? 1.2 : 1);
+  }
+  expect(read().profiles[0]!.elements[0]!.inputSettings).toBeNull();
+});
+
+test("trackpad optional click and cursor defaults preserve mirror equivalence and reject malformed choices", () => {
+  const path = "/profiles/1/customization/elements/6",
+    mirror = "/profiles/1/customization/customButtons/0";
+  const settings = {
+    sensitivity: 1.2,
+    scrollSensitivity: 0.85,
+    naturalScrolling: true,
+    tapToClick: true,
+    twoFingerScroll: true,
+  };
+  const source = LosslessJson.parse(text)
+    .set(path + "/kind", '"trackpad"')
+    .set(mirror + "/controlKind", '"trackpad"')
+    .remove(path + "/joystickMapping")
+    .remove(mirror + "/joystickMapping")
+    .remove(path + "/joystickOutputSettings")
+    .remove(mirror + "/joystickOutputSettings")
+    .set(path + "/trackpadSettings", JSON.stringify(settings))
+    .set(
+      mirror + "/trackpadSettings",
+      JSON.stringify({ ...settings, clickButton: null, movesCursor: true }),
+    );
+  const projected = read(source).profiles[1]!.elements[6]!.inputSettings;
+  expect(projected).toEqual({
+    ...settings,
+    kind: "trackpad",
+    clickButton: null,
+    movesCursor: true,
+  });
+  for (const [key, token] of [
+    ["clickButton", '"future"'],
+    ["clickButton", "false"],
+    ["movesCursor", '"true"'],
+    ["tapToClick", "null"],
+  ])
+    expect(() =>
+      read(source.set(path + "/trackpadSettings/" + key, token!)),
+    ).toThrow("invalid_owned_configuration");
+  expect(() =>
+    read(source.set(mirror + "/trackpadSettings/movesCursor", "false")),
+  ).toThrow("invalid_owned_configuration");
 });

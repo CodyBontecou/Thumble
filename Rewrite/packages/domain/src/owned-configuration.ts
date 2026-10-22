@@ -10,6 +10,10 @@ export type {
   OwnedControlKind,
   OwnedInputPart,
   OwnedPresentation,
+  OwnedInputSettings,
+  OwnedJoystickSettings,
+  OwnedTriggerSettings,
+  OwnedTrackpadSettings,
 } from "./owned-profile.ts";
 export type { ResourceDigest } from "./owned-resources.ts";
 /** Immutable exact-source document. This codec never migrates or activates authority. */
