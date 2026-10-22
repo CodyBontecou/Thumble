@@ -3,7 +3,10 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "exports": "./src/service.ts",
+  "exports": {
+    ".": "./src/service.ts",
+    "./configuration-files": "./src/configuration-files.ts"
+  },
   "dependencies": {
     "@thumble/contracts": "workspace:*",
     "@thumble/application": "workspace:*",

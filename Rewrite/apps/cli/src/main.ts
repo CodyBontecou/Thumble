@@ -1,3 +1,4 @@
+import { inspectConfigurationFile } from "@thumble/service/configuration-files";
 import { decodeConfigurationCommand } from "@thumble/contracts/configuration";
 import { startMcp } from "./mcp.ts";
 import { decodeHostIdentity } from "@thumble/contracts/host-identity";
@@ -40,6 +41,7 @@ function options(values: string[]): Map<string, string | true> {
     }
     if (
       ![
+        "--file",
         "--operation-id",
         "--name",
         "--offset",
@@ -276,6 +278,12 @@ async function main(): Promise<unknown> {
     });
   }
   if (family === "configuration") {
+    if (action === "validate-file") {
+      for (const key of opts.keys())
+        if (!["--file", "--json"].includes(key))
+          throw new Error("invalid_configuration_option");
+      return inspectConfigurationFile(required(opts, "--file"));
+    }
     if (action !== "list" && action !== "rename-profile")
       throw new Error("unsupported_configuration_command");
     const allowed =
@@ -292,6 +300,7 @@ async function main(): Promise<unknown> {
             "--receiver",
             "--json",
             "--expected-revision",
+            "--file",
             "--operation-id",
             "--profile-id",
             "--name",

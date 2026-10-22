@@ -1,3 +1,4 @@
+import { LosslessJson, LOSSLESS_JSON_LIMITS } from "@thumble/contracts/json";
 import {
   decodeConfigurationCommand,
   decodeConfigurationReply,
@@ -67,6 +68,40 @@ function boundedRead(fd: number, maximum: number): string {
   );
 }
 export function readStateFile(path: string): unknown {
+  return parseStrictJson(readInputText(path, FRAME_BYTES));
+}
+export function readConfigurationFile(path: string): LosslessJson {
+  if (
+    typeof path !== "string" ||
+    !isAbsolute(path) ||
+    path.includes("\0") ||
+    path.length > 4096
+  )
+    throw new Error("configuration_file_path_invalid");
+  try {
+    return LosslessJson.parse(readInputText(path, LOSSLESS_JSON_LIMITS.bytes));
+  } catch (error) {
+    if (
+      error &&
+      typeof error === "object" &&
+      "code" in error &&
+      ["ENOENT", "EACCES", "EPERM", "EISDIR"].includes(String(error.code))
+    )
+      throw new Error("configuration_file_unavailable");
+    if (error instanceof Error) {
+      const codes: Record<string, string> = {
+        state_too_large: "configuration_file_too_large",
+        file_too_large: "configuration_file_too_large",
+        unsafe_state_file: "unsafe_configuration_file",
+        state_file_changed: "configuration_file_changed",
+      };
+      if (Object.hasOwn(codes, error.message))
+        throw new Error(codes[error.message]);
+    }
+    throw error;
+  }
+}
+function readInputText(path: string, maximumBytes: number): string {
   const before = lstatSync(path);
   if (!before.isFile() || before.isSymbolicLink())
     throw new Error("unsafe_state_file");
@@ -77,13 +112,18 @@ export function readStateFile(path: string): unknown {
   );
   try {
     const metadata = fstatSync(fd);
-    if (!metadata.isFile() || metadata.size > FRAME_BYTES)
-      throw new Error("state_too_large");
-    const text = boundedRead(fd, FRAME_BYTES);
+    if (
+      !metadata.isFile() ||
+      before.dev !== metadata.dev ||
+      before.ino !== metadata.ino
+    )
+      throw new Error("unsafe_state_file");
+    if (metadata.size > maximumBytes) throw new Error("state_too_large");
+    const text = boundedRead(fd, maximumBytes);
     const after = fstatSync(fd);
     if (metadata.size !== after.size || metadata.mtimeMs !== after.mtimeMs)
       throw new Error("state_file_changed");
-    return parseStrictJson(text);
+    return text;
   } finally {
     closeSync(fd);
   }

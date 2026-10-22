@@ -4,6 +4,7 @@ import { expect, test } from "bun:test";
 import {
   existsSync,
   copyFileSync,
+  mkdirSync,
   mkdtempSync,
   realpathSync,
   rmSync,
@@ -86,6 +87,42 @@ packageTest(
       }
       return parseStrictJson(out);
     };
+    const inspection = join(directory, "inspection");
+    mkdirSync(inspection);
+    const bareCli = join(inspection, `thumble-rewrite${extension}`),
+      ownedFile = join(inspection, "owned.json");
+    copyFileSync(join(directory, `thumble-rewrite${extension}`), bareCli);
+    copyFileSync(
+      resolve(root, "packages/fixtures/owned-configuration-v1/document.json"),
+      ownedFile,
+    );
+    const fileProbe = Bun.spawn(
+      [
+        "node",
+        resolve(root, "tooling/test-configuration-file-node.mjs"),
+        process.execPath,
+        bareCli,
+        ownedFile,
+        inspection,
+        process.platform === "win32"
+          ? (process.env.SystemRoot ?? "C:\\Windows") + "\\System32"
+          : "/usr/bin:/bin",
+      ],
+      { stdout: "pipe", stderr: "pipe" },
+    );
+    const [fileOut, fileErr, fileCode] = await Promise.all([
+      new Response(fileProbe.stdout).text(),
+      new Response(fileProbe.stderr).text(),
+      fileProbe.exited,
+    ]);
+    expect(fileErr).toBe("");
+    expect(fileCode).toBe(0);
+    expect(JSON.parse(fileOut)).toEqual({
+      ok: true,
+      scenarios: 2,
+      server: "standalone",
+      serviceRequired: false,
+    });
     const configuration = new SqliteConfigurationRepository(
       runtime,
       join(directory, `thumble-rewrite-receiver${extension}`),

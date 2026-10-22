@@ -1,3 +1,4 @@
+import { inspectConfigurationFile } from "@thumble/service/configuration-files";
 import { decodeConfigurationCommand } from "@thumble/contracts/configuration";
 import { McpServer, type CallToolResult } from "@modelcontextprotocol/server";
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
@@ -29,6 +30,7 @@ export function startMcp(
     "pairing_status",
     "pairing_list",
     "configuration_list",
+    "configuration_validate_file",
     ...(allowConfigurationWrite ? ["configuration_rename_profile"] : []),
     ...(allowRecordedInput ? ["receiver_activate", "receiver_sample"] : []),
   ]);
@@ -122,6 +124,16 @@ export function startMcp(
               }),
             ),
         );
+      server.registerTool(
+        "configuration_validate_file",
+        {
+          description:
+            "Validate an explicit local owned-v5 configuration file without installation or migration. Returns bounded integrity/count metadata; platform output and image decoding remain separate activation gates.",
+          inputSchema: z.object({ path: z.string().min(1).max(4096) }).strict(),
+          annotations: annotations(true),
+        },
+        (args) => receipt(async () => inspectConfigurationFile(args.path)),
+      );
       server.registerTool(
         "configuration_list",
         {

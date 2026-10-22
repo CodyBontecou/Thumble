@@ -83,7 +83,9 @@ function name(value: string | undefined): string {
   return value;
 }
 /** Exact nonnegative Int64 projection, including exponent/fraction spellings. */
-function timestamp(value: LosslessJson | undefined): string {
+export function configurationTimestamp(
+  value: LosslessJson | undefined,
+): string {
   const token = value?.numberToken;
   if (token === undefined) return invalid();
   const match = /^(-?)(\d+)(?:\.(\d+))?(?:[eE]([+-]?\d+))?$/.exec(token)!;
@@ -129,7 +131,7 @@ export class ConfigurationCatalog {
     )
       invalid();
     const exportedAt = source.get("/exportedAt");
-    if (exportedAt) timestamp(exportedAt);
+    if (exportedAt) configurationTimestamp(exportedAt);
     const records = source.get("/profiles");
     if (
       records?.kind !== "array" ||
@@ -151,7 +153,7 @@ export class ConfigurationCatalog {
         Object.freeze({
           id,
           name: name(record.get("/name")?.stringValue),
-          updatedAt: timestamp(record.get("/updatedAt")),
+          updatedAt: configurationTimestamp(record.get("/updatedAt")),
         }),
       );
     }
@@ -185,7 +187,7 @@ export class ConfigurationCatalog {
     name(newName);
     // Application clocks pass canonical decimal milliseconds, never JS numbers.
     if (!/^(?:0|[1-9][0-9]{0,18})$/.test(updatedAt)) invalid();
-    timestamp(LosslessJson.parse(updatedAt));
+    configurationTimestamp(LosslessJson.parse(updatedAt));
     const previous = this.profiles[index]!;
     if (previous.name === newName) return this;
     if (BigInt(updatedAt) < BigInt(previous.updatedAt))

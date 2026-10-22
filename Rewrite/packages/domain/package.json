@@ -6,7 +6,9 @@
   "exports": {
     ".": "./src/gamepad-report.ts",
     "./configuration-catalog": "./src/configuration-catalog.ts",
-    "./controller-layout": "./src/controller-layout.ts"
+    "./controller-layout": "./src/controller-layout.ts",
+    "./owned-configuration": "./src/owned-configuration.ts",
+    "./owned-resources": "./src/owned-resources.ts"
   },
   "dependencies": {
     "@thumble/contracts": "workspace:*"

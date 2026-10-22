@@ -15,3 +15,6 @@ apps/mobile/.expo/
 apps/mobile/expo-env.d.ts
 apps/mobile/modules/**/build/
 apps/mobile/modules/**/.gradle/
+
+# Exact retained owned-v5 compatibility fixtures; hashes checked by tests.
+packages/fixtures/owned-configuration-v1/

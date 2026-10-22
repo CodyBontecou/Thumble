@@ -1,0 +1,29 @@
+# Rewrite owned-v5 inspection
+
+The rewrite now has a portable TypeScript owned-v5 structural codec and a shared read-only inspection operation. It retains the existing `com.codybontecou.pocketpad.keypad-configuration` version-5 source instead of inventing another persisted profile format. Reading a file does not install it, migrate an authority, change peer advertisements or publish receiver configuration.
+
+## Exact source and projections
+
+`OwnedConfigurationDocument.read` combines the lossless catalog reader with control identities, binding-owner checks, native mirror reconciliation, descriptive presentation, design references, landscape canvas identity, appearance-bank structure and resource integrity. It retains the immutable `LosslessJson` source and exposes frozen profile/element projections. Controls have explicit typed kind, output/default output, part outputs, joystick mapping and presentation. Unknown safe metadata and exact numeric spellings remain in source; projection values never replace the document.
+
+Profiles use case-insensitive UUID identity. Declared controls cannot repeat an identity, retain retired slot fields or exceed the existing 128-control, two-joystick, two-trigger and three-trackpad limits. Swift alternating UUID dictionaries are recognized for customization/label maps. References must point to declared controls. Custom-button mirrors must identify the same declared kind, and their native joystick/trigger/trackpad settings must agree after the retained normalization rules. Comparison does not write clamped values back into source. Design layers/groups reject dangling or repeated member identities. Profile/global binding maps validate UUID ownership, key-code/modifier ranges, sequence limits and duplicate identity aliases.
+
+The codec retains all eight light/dark × Base/LT/RT/LT+RT appearance states. Bank keys, state identity, canonical paint-owner fields, matching control sets, asset references and collection identity are validated. The canonical customization remains separate from saved paint. Resource envelopes require version 1 and an appearance bank. Base64 is canonical, digest keys are lowercase SHA-256, every reference resolves and binary budgets remain bounded by the 8 MiB document/resource limits. A known resource reference without its resource envelope is rejected even in an opaque extension. Pool bytes are allocated once per digest; access returns defensive copies, including protection against a digest adapter retaining its input. Resource hashing uses the host's established SHA-256 implementation through a trusted port, never a function supplied by imported data.
+
+The Base64 decoder uses a linear, constant-stack loop, including exact padding-bit checks. It does not use a repeated regular-expression group that could consume an engine's regexp stack on large valid image strings. Source JSON keeps the existing 8 MiB, 64-level and 131,072-node limits; known structural collections have explicit bounded counts.
+
+## CLI and MCP
+
+`configuration validate-file --file /absolute/path/configuration.json --json` inspects an explicit local file. MCP exposes the equivalent `configuration_validate_file` tool with a `path` argument in its default read-only tool set. Both invoke the same application operation. They work without a service, native receiver, desktop GUI or authority database, including from the standalone executable with no Bun/Node/receiver on its server PATH. Node is used only by the independent SDK test client.
+
+The file reader rejects relative/NUL/oversized paths, symlinks and nonregular files; checks descriptor identity against the initial metadata; bounds reads and checks size/mtime before returning. Errors use bounded codes. Successful inspection returns only profile/control/state/resource counts, decoded resource bytes and the versioned lossless source hash. Names, local launch associations, bookmark bytes, images, raw source and credentials are not returned. File inspection does not require configuration-write or recording-input capability.
+
+The source hash uses the existing ledger's `thumble-lossless-json-v1` canonicalization namespace and preserves number lexemes. It is different from the retained portable artifact's exact-inner-JSON checksum. Inspection accepts raw local configuration documents; it is not an artifact import/export command.
+
+## Acceptance and remaining work
+
+The copied retained document and 41-case admission matrix remain byte-exact under their original manifest hashes. Tests cover the complete matrix, opaque large-number preservation, all eight states, immutable output/resource projections, aliases, malformed references, conflicting native mirrors, binding/design ownership and large Base64 inputs. Independent official Node SDK clients exercise modern and legacy MCP and compare CLI results. Standalone tests copy only the compiled CLI plus a synthetic input file into a separate directory and prove inspection creates no service/runtime directory and needs no sibling helper.
+
+This is structural owned-v5/interchange admission. Full geometry/style/haptic value validation, image decoding/pixel limits, platform-specific keyboard/pointer/gamepad support and rejection of unsupported execution semantics belong to the remaining typed editing/runtime compiler gates. Unknown gamepad names are preserved as document data, as in the retained codec; inspection explicitly reports `activationCompatibility: not-evaluated`. Its success must never be used as an activation receipt.
+
+Authority initialization/import, profile CRUD and scoped rich edits, asset staging, undo, phone journals/reconciliation, migration, acknowledged publication and launch/cutover acceptance remain open. The existing catalog rename operation retains its metadata-only contract. No profile source is installed by this batch.
