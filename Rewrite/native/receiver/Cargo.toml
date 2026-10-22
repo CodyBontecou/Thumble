@@ -9,6 +9,8 @@ publish = false
 
 [features]
 default = []
+output-bridge = ["dep:thumble-rewrite-output-core"]
+output-macos = ["output-bridge", "thumble-rewrite-output-core/macos-hid"]
 output-doctor-macos = ["dep:thumble-rewrite-output-core", "thumble-rewrite-output-core/macos-hid"]
 
 [dependencies]
@@ -24,7 +26,6 @@ subtle = "=2.6.1"
 fs2 = "=0.4.3"
 libc = "=0.2.175"
 
-[target.'cfg(target_os = "macos")'.dependencies]
 thumble-rewrite-output-core = { path = "../output-core", optional = true, default-features = false }
 
 [target.'cfg(windows)'.dependencies]

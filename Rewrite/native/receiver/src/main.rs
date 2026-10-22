@@ -1,5 +1,4 @@
-use thumble_rewrite_receiver::{gamepad, runtime, security};
-mod clock;
+use thumble_rewrite_receiver::{clock, gamepad, runtime, security};
 
 use runtime::{identity, Output, Request};
 use serde_json::json;
@@ -72,8 +71,11 @@ fn run(root: &Path, log: Option<&Path>) -> Result<(), &'static str> {
     let mut output = Recording {
         file: security::file(log, true)?,
     };
+    run_owner(root, &mut output)
+}
+fn run_owner(root: &Path, output: &mut impl Output) -> Result<(), &'static str> {
     let mut runtime = PacketRuntime::default();
-    runtime.release_reason(&mut output, "startup")?;
+    runtime.release_reason(output, "startup")?;
     let mut ingress = thumble_rewrite_receiver::native_ingress::Server::bind(root)?;
     let (incoming, received) = mpsc::sync_channel::<Option<Vec<u8>>>(16);
     std::thread::spawn(move || {
@@ -133,19 +135,26 @@ fn run(root: &Path, log: Option<&Path>) -> Result<(), &'static str> {
         let now = match clock::millis() {
             Ok(n) => n,
             Err(error) => {
-                let _ = runtime.release_reason(&mut output, "clock_failed");
+                let _ = runtime.release_reason(output, "clock_failed");
                 return Err(error);
             }
         };
-        runtime.tick(now, &mut output)?;
-        if let Err(error) = ingress.drain(&mut runtime, now, &mut output) {
-            let _ = runtime.release_reason(&mut output, "native_input_owner_failed");
+        if let Err(error) = runtime.tick(now, output) {
+            // Definite backend failures retire the runtime but leave the owner
+            // available for a fresh activation CAS. An uncertain worker remains
+            // restart-required and rejects every subsequent activation.
+            if !error.starts_with("physical_output_") {
+                return Err(error);
+            }
+        }
+        if let Err(error) = ingress.drain(&mut runtime, now, output) {
+            let _ = runtime.release_reason(output, "native_input_owner_failed");
             return Err(error);
         }
         let bytes = match received.recv_timeout(Duration::from_millis(10)) {
             Ok(Some(bytes)) => bytes,
             Ok(None) | Err(mpsc::RecvTimeoutError::Disconnected) => {
-                runtime.release_reason(&mut output, "owner_disconnected")?;
+                runtime.release_reason(output, "owner_disconnected")?;
                 break;
             }
             Err(mpsc::RecvTimeoutError::Timeout) => continue,
@@ -161,7 +170,7 @@ fn run(root: &Path, log: Option<&Path>) -> Result<(), &'static str> {
                 let id = Some(request.request_id);
                 (
                     id,
-                    runtime.apply_owner(request.body, clock::millis()?, &mut output),
+                    runtime.apply_owner(request.body, clock::millis()?, output),
                 )
             }
             None => (None, Err("invalid_request")),
@@ -177,7 +186,7 @@ fn run(root: &Path, log: Option<&Path>) -> Result<(), &'static str> {
             Err(error) => json!({"version":1,"requestId":request_id,"ok":false,"error":error}),
         };
         if outgoing.try_send(reply.to_string()).is_err() {
-            runtime.release_reason(&mut output, "owner_backpressure")?;
+            runtime.release_reason(output, "owner_backpressure")?;
             return Err("owner_output_unavailable");
         }
         if stopping {
@@ -189,9 +198,42 @@ fn run(root: &Path, log: Option<&Path>) -> Result<(), &'static str> {
     let _ = finished.recv_timeout(Duration::from_millis(100));
     Ok(())
 }
+fn run_macos_hid(arguments: &[String]) -> Result<(), &'static str> {
+    if arguments.len() != 3 || arguments[2] != "--allow-physical-output" {
+        return Err("physical_output_explicit_flag_required");
+    }
+    #[cfg(all(target_os = "macos", feature = "output-macos"))]
+    {
+        use std::sync::Arc;
+        use thumble_rewrite_receiver::output_bridge::{Bridge, KernelClock};
+        let root = Path::new(&arguments[1]);
+        security::directory(root)?;
+        let lock = security::file(&root.join("receiver.lock"), false)?;
+        fs2::FileExt::try_lock_exclusive(&lock).map_err(|_| "receiver_owner_exists")?;
+        let mut owner = [0u8; 16];
+        ring::rand::SecureRandom::fill(&ring::rand::SystemRandom::new(), &mut owner)
+            .map_err(|_| "physical_output_unavailable")?;
+        let mut output = Bridge::new(
+            thumble_rewrite_output_core::macos::MacFactory,
+            Arc::new(KernelClock),
+            owner,
+            "macos-hid",
+        )?;
+        run_owner(root, &mut output)
+    }
+    #[cfg(not(all(target_os = "macos", feature = "output-macos")))]
+    {
+        Err("physical_output_not_built")
+    }
+}
 fn main() {
     let native_args = std::env::args().skip(1).collect::<Vec<_>>();
     let result = if native_args
+        .first()
+        .is_some_and(|mode| mode == "run-macos-hid")
+    {
+        run_macos_hid(&native_args)
+    } else if native_args
         .first()
         .is_some_and(|mode| mode == "output-capabilities")
     {

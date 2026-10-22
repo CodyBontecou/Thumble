@@ -797,6 +797,11 @@ impl Server {
         output: &mut impl Output,
     ) -> Result<Vec<u8>, &'static str> {
         let snapshot = runtime.snapshot();
+        // This wire explicitly promises recording-only inputEnabled:false. A
+        // physical backend needs separate capability/status negotiation first.
+        if snapshot.backend != "recording" {
+            return Err("native_input_backend_not_supported");
+        }
         if self
             .binding
             .as_ref()
@@ -1035,6 +1040,59 @@ mod tests {
         b.extend_from_slice(&1u64.to_le_bytes());
         b.extend_from_slice(&1000u32.to_le_bytes());
         b
+    }
+    #[test]
+    fn recording_only_phone_wire_cannot_issue_a_physical_output_grant() {
+        struct PhysicalStatus;
+        impl crate::runtime::OutputStatus for PhysicalStatus {
+            fn backend(&self) -> &'static str {
+                "macos-hid"
+            }
+            fn enabled(&self, _: u64) -> bool {
+                true
+            }
+        }
+        struct PhysicalSink;
+        impl Output for PhysicalSink {
+            fn submit(&mut self, _: [u8; 20], _: &'static str) -> Result<(), &'static str> {
+                Ok(())
+            }
+            fn status(&self) -> Option<Arc<dyn crate::runtime::OutputStatus>> {
+                Some(Arc::new(PhysicalStatus))
+            }
+        }
+        let root = Root::new();
+        let mut server = Server::bind(&root.0).unwrap();
+        let mut runtime = PacketRuntime::default();
+        let mut sink = PhysicalSink;
+        runtime
+            .apply_owner(
+                Command::Activate {
+                    generation: "1".into(),
+                    revision: "1".into(),
+                    profile_id: "profile-a".into(),
+                    session_id: "owner".into(),
+                    lease_ms: 750,
+                    input_ttl_ms: 350,
+                },
+                0,
+                &mut sink,
+            )
+            .unwrap();
+        assert_eq!(runtime.snapshot().backend, "macos-hid");
+        assert!(runtime.snapshot().input_enabled);
+        assert_eq!(
+            server.apply(GRANT, &grant_payload(), &mut runtime, 1, &mut sink),
+            Err("native_input_backend_not_supported")
+        );
+        assert_eq!(
+            server.apply(STATUS, &[], &mut runtime, 1, &mut sink),
+            Err("native_input_backend_not_supported")
+        );
+        assert!(server.binding.is_none());
+        assert!(runtime.snapshot().active);
+        assert_eq!(runtime.snapshot().generation, "1");
+        assert_eq!(runtime.snapshot().report_hex, crate::gamepad::hex(&NEUTRAL));
     }
     #[test]
     fn endpoint_has_one_native_owner_rotates_capability_and_never_exposes_material_through_a_codec()

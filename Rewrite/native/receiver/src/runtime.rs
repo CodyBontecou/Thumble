@@ -3,6 +3,7 @@ use crate::{
     generated::GamepadState,
 };
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -81,9 +82,45 @@ pub struct Runtime {
     profile_id: Option<String>,
     report: [u8; 20],
     reason: &'static str,
+    output_status: Option<Arc<dyn OutputStatus>>,
+}
+pub trait OutputStatus: Send + Sync {
+    fn backend(&self) -> &'static str;
+    fn enabled(&self, generation: u64) -> bool;
 }
 pub trait Output {
     fn submit(&mut self, report: [u8; 20], reason: &'static str) -> Result<(), &'static str>;
+    fn begin(&mut self, _generation: u64, _deadline: u64) -> Result<(), &'static str> {
+        Ok(())
+    }
+    fn submit_until(
+        &mut self,
+        report: [u8; 20],
+        reason: &'static str,
+        _deadline: u64,
+    ) -> Result<(), &'static str> {
+        self.submit(report, reason)
+    }
+    fn set_deadline(&mut self, _deadline: u64) -> Result<(), &'static str> {
+        Ok(())
+    }
+    fn retire(&mut self, reason: &'static str) -> Result<(), &'static str> {
+        self.submit(NEUTRAL, reason)
+    }
+    fn health(&self, _generation: u64) -> Result<(), &'static str> {
+        Ok(())
+    }
+    fn status(&self) -> Option<Arc<dyn OutputStatus>> {
+        None
+    }
+}
+
+fn sample_error(error: &'static str) -> &'static str {
+    if error.starts_with("physical_output_") {
+        error
+    } else {
+        "output_failed"
+    }
 }
 
 pub fn decimal(value: &str) -> Result<u64, &'static str> {
@@ -111,6 +148,7 @@ impl Default for Runtime {
             profile_id: None,
             report: NEUTRAL,
             reason: "startup",
+            output_status: None,
         }
     }
 }
@@ -120,8 +158,15 @@ impl Runtime {
     }
     pub fn snapshot(&self) -> Snapshot {
         Snapshot {
-            backend: "recording",
-            input_enabled: false,
+            backend: self
+                .output_status
+                .as_ref()
+                .map_or("recording", |s| s.backend()),
+            input_enabled: self.active.as_ref().is_some_and(|a| {
+                self.output_status
+                    .as_ref()
+                    .is_some_and(|s| s.enabled(a.generation))
+            }),
             active: self.active.is_some(),
             generation: self.generation.to_string(),
             revision: self.revision.to_string(),
@@ -140,13 +185,15 @@ impl Runtime {
         output: &mut impl Output,
         reason: &'static str,
     ) -> Result<(), &'static str> {
+        self.output_status = output.status();
         // Retire session before touching output. Failures cannot restore input.
         self.active = None;
         self.report = NEUTRAL;
         self.reason = reason;
-        output.submit(NEUTRAL, reason)
+        output.retire(reason)
     }
     pub fn tick(&mut self, now: u64, output: &mut impl Output) -> Result<(), &'static str> {
+        self.output_status = output.status();
         if let Some(active) = &self.active {
             if now >= active.owner_deadline {
                 self.release(output, "lease_expired")?;
@@ -155,6 +202,12 @@ impl Runtime {
                 .is_some_and(|deadline| now >= deadline)
             {
                 self.release(output, "input_expired")?;
+            }
+        }
+        if let Some(active) = &self.active {
+            if let Err(error) = output.health(active.generation) {
+                let _ = self.release(output, "output_failed");
+                return Err(error);
             }
         }
         Ok(())
@@ -184,7 +237,12 @@ impl Runtime {
             .clone();
         self.report = NEUTRAL;
         self.reason = "packet_source_barrier";
-        if let Err(error) = output.submit(NEUTRAL, self.reason) {
+        let deadline = self
+            .active
+            .as_ref()
+            .ok_or("inactive_generation")?
+            .owner_deadline;
+        if let Err(error) = output.submit_until(NEUTRAL, self.reason, deadline) {
             let _ = self.release(output, "output_failed");
             return Err(error);
         }
@@ -221,9 +279,10 @@ impl Runtime {
             .ok_or("input_session_closed")?;
         let input_ttl = active.input_ttl_ms;
         let report = state.report();
-        if output.submit(report, "sample").is_err() {
+        let deadline = active.owner_deadline.min(now.saturating_add(input_ttl));
+        if let Err(error) = output.submit_until(report, "sample", deadline) {
             let _ = self.release(output, "output_failed");
-            return Err("output_failed");
+            return Err(sample_error(error));
         }
         let active = self.active.as_mut().ok_or("input_session_closed")?;
         active.sequence = Some(0);
@@ -263,10 +322,16 @@ impl Runtime {
                 {
                     return Err("invalid_activation");
                 }
-                self.release(output, "activation_barrier")?;
+                let barrier = self.release(output, "activation_barrier");
+                // Accepted CAS counters are consumed even if native retirement/start fails.
                 self.generation = generation;
                 self.revision = revision;
                 self.profile_id = Some(profile_id);
+                barrier?;
+                if let Err(error) = output.begin(generation, now.saturating_add(lease_ms)) {
+                    self.reason = "output_failed";
+                    return Err(error);
+                }
                 self.active = Some(Active {
                     generation,
                     session_id,
@@ -282,7 +347,16 @@ impl Runtime {
                 session_id,
             } => {
                 let a = self.matching(&generation, &session_id)?;
-                a.owner_deadline = now.saturating_add(a.lease_ms);
+                let deadline = now.saturating_add(a.lease_ms);
+                let effective = a.input_deadline.map_or(deadline, |d| d.min(deadline));
+                if let Err(error) = output.set_deadline(effective) {
+                    let _ = self.release(output, "output_failed");
+                    return Err(error);
+                }
+                self.active
+                    .as_mut()
+                    .ok_or("inactive_generation")?
+                    .owner_deadline = deadline;
             }
             Command::Sample {
                 generation,
@@ -300,9 +374,10 @@ impl Runtime {
                 }
                 let report = state.report();
                 // If output fails, latch neutral/inactive; do not acknowledge partial input.
-                if output.submit(report, "sample").is_err() {
+                let deadline = a.owner_deadline.min(now.saturating_add(a.input_ttl_ms));
+                if let Err(error) = output.submit_until(report, "sample", deadline) {
                     let _ = self.release(output, "output_failed");
-                    return Err("output_failed");
+                    return Err(sample_error(error));
                 }
                 let a = self.active.as_mut().ok_or("inactive_generation")?;
                 a.sequence = Some(sequence);

@@ -67,7 +67,9 @@ try {
           "--runtime-dir",
           runtime,
           ...nativeOptions,
-          ...(recording ? ["--allow-recorded-input"] : []),
+          ...(recording
+            ? ["--allow-recorded-input", "--allow-wow-capture"]
+            : []),
         ],
         env: { ...serverEnvironment, THUMBLE_REWRITE_MCP_TRACE: "1" },
         stderr: "pipe",
@@ -104,6 +106,7 @@ try {
           tools,
           [
             "output_doctor",
+            "wow_capture_status",
             "receiver_status",
             "receiver_saved_status",
             "receiver_release",
@@ -116,10 +119,34 @@ try {
                   "receiver_activate",
                   "receiver_activate_saved",
                   "receiver_sample",
+                  "wow_capture_start",
+                  "wow_capture_request",
+                  "wow_capture_stop",
                 ]
               : []),
           ].sort(),
         );
+        const captureStatus = await call({
+          name: "wow_capture_status",
+          arguments: {},
+        });
+        assert.equal(captureStatus.structuredContent.ok, true);
+        assert.equal(captureStatus.structuredContent.result.enabled, false);
+        assert.equal(
+          captureStatus.structuredContent.result.permission,
+          "not-inspected",
+        );
+        if (recording) {
+          const captureStart = await call({
+            name: "wow_capture_start",
+            arguments: {},
+          });
+          assert.equal(captureStart.structuredContent.ok, false);
+          assert.equal(
+            captureStart.structuredContent.error,
+            "wow_capture_not_enabled",
+          );
+        }
         phase = "output-doctor";
         const doctor = await call({ name: "output_doctor", arguments: {} });
         assert.equal(doctor.isError, undefined);

@@ -130,14 +130,14 @@ fn report() -> Report {
     b[3] = 0x10;
     Report::try_from(b).unwrap()
 }
-fn owner() -> (OutputOwner, Arc<State>, Arc<Mutex<Instant>>) {
+fn owner() -> (OutputOwner, Arc<State>, Arc<Mutex<u64>>) {
     let state = State::new();
-    let time = Arc::new(Mutex::new(Instant::now()));
+    let time = Arc::new(Mutex::new(1000u64));
     let clock = time.clone();
     (
-        OutputOwner::with_clock(
+        OutputOwner::spawn(
             FakeFactory(state.clone()),
-            Arc::new(move || *clock.lock().unwrap()),
+            Arc::new(move || Ok(*clock.lock().unwrap())),
         )
         .unwrap(),
         state,
@@ -147,16 +147,16 @@ fn owner() -> (OutputOwner, Arc<State>, Arc<Mutex<Instant>>) {
 fn done(mut pending: Pending) -> Result<Receipt, Error> {
     pending.wait(Duration::from_secs(1))?.ok_or(Error::NotReady)
 }
-fn now(time: &Mutex<Instant>) -> Instant {
+fn now(time: &Mutex<u64>) -> u64 {
     *time.lock().unwrap()
 }
-fn start(owner: &OutputOwner, time: &Mutex<Instant>, generation: u64) {
+fn start(owner: &OutputOwner, time: &Mutex<u64>, generation: u64) {
     assert_eq!(
         done(
             owner
                 .request(Operation::Activate {
                     scope: scope(generation),
-                    valid_until: now(time) + Duration::from_secs(60)
+                    valid_until: now(time) + 60_000
                 })
                 .unwrap()
         )
@@ -223,7 +223,7 @@ fn owner_generation_barriers_and_confirmed_replacement_do_not_overlap_devices() 
             owner
                 .request(Operation::Activate {
                     scope: other,
-                    valid_until: now(&time) + Duration::from_secs(1)
+                    valid_until: now(&time) + 1000
                 })
                 .unwrap()
         ),
@@ -297,17 +297,17 @@ fn deadline_renewal_cannot_revive_expired_scope_using_controllable_clock() {
         owner
             .request(Operation::RenewDeadline {
                 scope: scope(1),
-                valid_until: previous + Duration::from_secs(1),
+                valid_until: previous + 1000,
             })
             .unwrap(),
     )
     .unwrap();
-    *time.lock().unwrap() = previous + Duration::from_secs(1);
+    *time.lock().unwrap() = previous + 1000;
     let result = done(
         owner
             .request(Operation::RenewDeadline {
                 scope: scope(1),
-                valid_until: previous + Duration::from_secs(2),
+                valid_until: previous + 2000,
             })
             .unwrap(),
     );
@@ -347,7 +347,7 @@ fn release_timeout_is_uncertain_and_no_replacement_or_shutdown_ack_precedes_canc
             owner
                 .request(Operation::Activate {
                     scope: scope(2),
-                    valid_until: now(&time) + Duration::from_secs(1)
+                    valid_until: now(&time) + 1000
                 })
                 .unwrap()
         ),
@@ -427,7 +427,7 @@ fn no_authorization_no_device_and_invalid_scope_deadline_wait_bounds_fail_closed
             owner
                 .request(Operation::Activate {
                     scope: scope(0),
-                    valid_until: now(&time) + Duration::from_secs(1)
+                    valid_until: now(&time) + 1000
                 })
                 .unwrap()
         ),
@@ -447,7 +447,7 @@ fn no_authorization_no_device_and_invalid_scope_deadline_wait_bounds_fail_closed
     let mut pending = owner
         .request(Operation::Activate {
             scope: scope(1),
-            valid_until: now(&time) + Duration::from_secs(1),
+            valid_until: now(&time) + 1000,
         })
         .unwrap();
     assert_eq!(pending.wait(Duration::ZERO), Err(Error::WaitBudget));
@@ -457,13 +457,13 @@ fn no_authorization_no_device_and_invalid_scope_deadline_wait_bounds_fail_closed
     );
     assert_eq!(state.devices.load(Ordering::Acquire), 0);
     stop(&owner);
-    let unsupported = OutputOwner::spawn(UnsupportedFactory).unwrap();
+    let unsupported = OutputOwner::spawn(UnsupportedFactory, Arc::new(|| Ok(1000))).unwrap();
     assert_eq!(
         done(
             unsupported
                 .request(Operation::Activate {
                     scope: scope(1),
-                    valid_until: Instant::now() + Duration::from_secs(1)
+                    valid_until: 2000
                 })
                 .unwrap()
         ),
@@ -480,7 +480,7 @@ fn failed_initial_neutral_never_acknowledges_ready_and_retains_failure() {
             owner
                 .request(Operation::Activate {
                     scope: scope(1),
-                    valid_until: now(&time) + Duration::from_secs(1)
+                    valid_until: now(&time) + 1000
                 })
                 .unwrap()
         ),
@@ -530,5 +530,485 @@ fn cancellation_failure_retains_context_until_confirmation_and_never_reports_fal
     );
     assert_eq!(state.devices.load(Ordering::Acquire), 0);
     assert_eq!(owner.snapshot().phase, Phase::Failed);
+    stop(&owner);
+}
+
+#[test]
+fn first_submit_installs_shorter_deadline_before_io_and_never_acknowledges_expired_output() {
+    let (owner, state, time) = owner();
+    start(&owner, &time, 1);
+    *state.held.lock().unwrap() = true;
+    let deadline = now(&time) + 350;
+    let mut held = owner
+        .request(Operation::SubmitUntil {
+            scope: scope(1),
+            report: report(),
+            valid_until: deadline,
+        })
+        .unwrap();
+    state.await_event("nonneutral");
+    assert_eq!(owner.snapshot().valid_until, Some(deadline));
+    assert!(owner.snapshot().admits_at(deadline - 1));
+    assert!(!owner.snapshot().admits_at(deadline));
+    *time.lock().unwrap() = deadline;
+    state.unblock();
+    assert_eq!(held.wait(Duration::from_secs(1)), Err(Error::Expired));
+    assert!(owner.snapshot().scope.is_none());
+    assert_eq!(state.devices.load(Ordering::Acquire), 0);
+    stop(&owner);
+}
+
+#[test]
+fn exact_deadline_can_shorten_or_remain_equal_without_changing_legacy_renewal_rules() {
+    let (owner, state, time) = owner();
+    start(&owner, &time, 1);
+    let input_deadline = now(&time) + 350;
+    done(
+        owner
+            .request(Operation::SubmitUntil {
+                scope: scope(1),
+                report: report(),
+                valid_until: input_deadline,
+            })
+            .unwrap(),
+    )
+    .unwrap();
+    // Receiver renews the owner but still supplies min(owner, unchanged input TTL).
+    done(
+        owner
+            .request(Operation::SetDeadline {
+                scope: scope(1),
+                valid_until: input_deadline,
+            })
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(owner.snapshot().valid_until, Some(input_deadline));
+    assert_eq!(
+        done(
+            owner
+                .request(Operation::RenewDeadline {
+                    scope: scope(1),
+                    valid_until: input_deadline
+                })
+                .unwrap()
+        ),
+        Err(Error::InvalidDeadline)
+    );
+    done(
+        owner
+            .request(Operation::SetDeadline {
+                scope: scope(1),
+                valid_until: input_deadline - 10,
+            })
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(owner.snapshot().valid_until, Some(input_deadline - 10));
+    assert_eq!(
+        state
+            .events
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(kind, _)| *kind == "nonneutral")
+            .count(),
+        1
+    );
+    stop(&owner);
+}
+
+#[test]
+fn queued_extensions_and_reports_cannot_revive_a_scope_after_sleep_inclusive_jump() {
+    let (owner, state, time) = owner();
+    start(&owner, &time, 1);
+    *state.held.lock().unwrap() = true;
+    let mut in_flight = owner
+        .request(Operation::SubmitUntil {
+            scope: scope(1),
+            report: report(),
+            valid_until: 1350,
+        })
+        .unwrap();
+    state.await_event("nonneutral");
+    let queued = [
+        Operation::SetDeadline {
+            scope: scope(1),
+            valid_until: 3_602_000,
+        },
+        Operation::SubmitUntil {
+            scope: scope(1),
+            report: report(),
+            valid_until: 3_602_000,
+        },
+        Operation::RenewDeadline {
+            scope: scope(1),
+            valid_until: 3_602_000,
+        },
+    ]
+    .map(|op| owner.request(op).unwrap());
+    // Simulates a one-hour suspend in the injected receiver domain; no real sleep.
+    *time.lock().unwrap() = 3_601_000;
+    state.unblock();
+    assert_eq!(in_flight.wait(Duration::from_secs(1)), Err(Error::Expired));
+    for p in queued {
+        assert_eq!(done(p), Err(Error::NotReady));
+    }
+    assert_eq!(
+        state
+            .events
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(kind, _)| *kind == "nonneutral")
+            .count(),
+        1
+    );
+    assert_eq!(state.devices.load(Ordering::Acquire), 0);
+    stop(&owner);
+}
+
+#[test]
+fn past_explicit_effective_deadline_neutralizes_instead_of_retaining_older_longer_authority() {
+    for submit in [false, true] {
+        let (owner, state, time) = owner();
+        start(&owner, &time, 1);
+        let op = if submit {
+            Operation::SubmitUntil {
+                scope: scope(1),
+                report: report(),
+                valid_until: now(&time),
+            }
+        } else {
+            Operation::SetDeadline {
+                scope: scope(1),
+                valid_until: now(&time),
+            }
+        };
+        assert_eq!(done(owner.request(op).unwrap()), Err(Error::Expired));
+        assert!(owner.snapshot().scope.is_none());
+        assert_eq!(
+            state
+                .events
+                .lock()
+                .unwrap()
+                .iter()
+                .filter(|(kind, _)| *kind == "nonneutral")
+                .count(),
+            0
+        );
+        stop(&owner);
+    }
+}
+
+type FaultTime = Arc<Mutex<Result<u64, ClockFault>>>;
+fn fault_owner() -> (OutputOwner, Arc<State>, FaultTime) {
+    let state = State::new();
+    let time = Arc::new(Mutex::new(Ok(1000)));
+    let clock = time.clone();
+    (
+        OutputOwner::spawn(
+            FakeFactory(state.clone()),
+            Arc::new(move || *clock.lock().unwrap()),
+        )
+        .unwrap(),
+        state,
+        time,
+    )
+}
+#[test]
+fn clock_fault_during_io_retires_and_latches_until_explicit_fresh_generation_and_valid_high_water()
+{
+    for fault in [ClockFault::Unavailable, ClockFault::Regressed] {
+        let (owner, state, time) = fault_owner();
+        done(
+            owner
+                .request(Operation::Activate {
+                    scope: scope(1),
+                    valid_until: 2000,
+                })
+                .unwrap(),
+        )
+        .unwrap();
+        *state.held.lock().unwrap() = true;
+        let mut in_flight = owner
+            .request(Operation::SubmitUntil {
+                scope: scope(1),
+                report: report(),
+                valid_until: 1500,
+            })
+            .unwrap();
+        state.await_event("nonneutral");
+        *time.lock().unwrap() = if fault == ClockFault::Unavailable {
+            Err(fault)
+        } else {
+            Ok(999)
+        };
+        state.unblock();
+        assert_eq!(
+            in_flight.wait(Duration::from_secs(1)),
+            Err(Error::Backend(Fault::Clock(fault)))
+        );
+        assert_eq!(owner.snapshot().clock_fault, Some(fault));
+        assert!(owner.snapshot().scope.is_none());
+        assert!(!owner.snapshot().admits_at(1000));
+        *time.lock().unwrap() = Ok(1000);
+        assert_eq!(
+            done(
+                owner
+                    .request(Operation::SubmitUntil {
+                        scope: scope(1),
+                        report: report(),
+                        valid_until: 2000
+                    })
+                    .unwrap()
+            ),
+            Err(Error::Backend(Fault::Clock(fault)))
+        );
+        assert_eq!(
+            done(
+                owner
+                    .request(Operation::Activate {
+                        scope: scope(1),
+                        valid_until: 2000
+                    })
+                    .unwrap()
+            ),
+            Err(Error::StaleGeneration)
+        );
+        assert_eq!(owner.snapshot().clock_fault, Some(fault));
+        if fault == ClockFault::Regressed {
+            *time.lock().unwrap() = Ok(999);
+            assert_eq!(
+                done(
+                    owner
+                        .request(Operation::Activate {
+                            scope: scope(2),
+                            valid_until: 2000
+                        })
+                        .unwrap()
+                ),
+                Err(Error::Backend(Fault::Clock(ClockFault::Regressed)))
+            );
+            *time.lock().unwrap() = Ok(1000);
+        }
+        done(
+            owner
+                .request(Operation::Activate {
+                    scope: scope(if fault == ClockFault::Regressed { 3 } else { 2 }),
+                    valid_until: 2000,
+                })
+                .unwrap(),
+        )
+        .unwrap();
+        assert!(owner.snapshot().admits_at(1000));
+        assert_eq!(owner.snapshot().clock_fault, None);
+        stop(&owner);
+    }
+}
+
+#[test]
+fn unavailable_clock_blocks_startup_without_factory_work_and_shutdown_still_completes() {
+    let state = State::new();
+    let owner = OutputOwner::spawn(
+        FakeFactory(state.clone()),
+        Arc::new(|| Err(ClockFault::Unavailable)),
+    )
+    .unwrap();
+    assert_eq!(
+        done(
+            owner
+                .request(Operation::Activate {
+                    scope: scope(1),
+                    valid_until: 2000
+                })
+                .unwrap()
+        ),
+        Err(Error::Backend(Fault::Clock(ClockFault::Unavailable)))
+    );
+    assert_eq!(state.events.lock().unwrap().len(), 0);
+    assert_eq!(owner.snapshot().clock_fault, Some(ClockFault::Unavailable));
+    stop(&owner);
+}
+
+#[test]
+fn clock_failure_after_creation_never_acknowledges_ready_and_preserves_retirement_confirmation() {
+    struct FailAfterCreate(FakeFactory, FaultTime);
+    impl Factory for FailAfterCreate {
+        fn authorization(&mut self) -> Result<(), Fault> {
+            self.0.authorization()
+        }
+        fn create(&mut self) -> Result<Box<dyn Device>, Fault> {
+            let device = self.0.create()?;
+            *self.1.lock().unwrap() = Err(ClockFault::Unavailable);
+            Ok(device)
+        }
+    }
+    let state = State::new();
+    let time = Arc::new(Mutex::new(Ok(1000)));
+    let clock = time.clone();
+    let owner = OutputOwner::spawn(
+        FailAfterCreate(FakeFactory(state.clone()), time),
+        Arc::new(move || *clock.lock().unwrap()),
+    )
+    .unwrap();
+    assert_eq!(
+        done(
+            owner
+                .request(Operation::Activate {
+                    scope: scope(1),
+                    valid_until: 2000
+                })
+                .unwrap()
+        ),
+        Err(Error::Backend(Fault::Clock(ClockFault::Unavailable)))
+    );
+    assert_eq!(owner.snapshot().phase, Phase::Failed);
+    assert!(owner.snapshot().scope.is_none());
+    assert_eq!(state.devices.load(Ordering::Acquire), 0);
+    assert_eq!(
+        state
+            .events
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(kind, _)| *kind == "nonneutral")
+            .count(),
+        0
+    );
+    stop(&owner);
+}
+
+#[test]
+fn clock_failure_between_deadline_install_and_native_submission_prevents_held_report() {
+    use std::collections::VecDeque;
+    let state = State::new();
+    let readings = Arc::new(Mutex::new(VecDeque::<Result<u64, ClockFault>>::new()));
+    let clock = readings.clone();
+    let (_sender, receiver) = mpsc::sync_channel(QUEUE);
+    let shared = Arc::new(Mutex::new(Snapshot::default()));
+    let mut worker = Worker::new(
+        FakeFactory(state.clone()),
+        receiver,
+        shared,
+        Arc::new(AtomicBool::new(false)),
+        Arc::new(move || clock.lock().unwrap().pop_front().unwrap_or(Ok(1000))),
+    );
+    let (reply, result) = mpsc::sync_channel(1);
+    worker.apply(Command {
+        id: 1,
+        operation: Operation::Activate {
+            scope: scope(1),
+            valid_until: 2000,
+        },
+        reply,
+    });
+    assert_eq!(result.recv().unwrap().unwrap().phase, Phase::Ready);
+    readings
+        .lock()
+        .unwrap()
+        .extend([Ok(1000), Err(ClockFault::Unavailable)]);
+    let (reply, result) = mpsc::sync_channel(1);
+    worker.apply(Command {
+        id: 2,
+        operation: Operation::SubmitUntil {
+            scope: scope(1),
+            report: report(),
+            valid_until: 1350,
+        },
+        reply,
+    });
+    assert_eq!(worker.state.phase, Phase::Retiring);
+    assert_eq!(worker.state.clock_fault, Some(ClockFault::Unavailable));
+    assert_eq!(
+        state
+            .events
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(kind, _)| *kind == "nonneutral")
+            .count(),
+        0
+    );
+    worker.poll_retirement();
+    assert_eq!(
+        result.recv().unwrap(),
+        Err(Error::Backend(Fault::Clock(ClockFault::Unavailable)))
+    );
+    assert_eq!(state.devices.load(Ordering::Acquire), 0);
+}
+
+#[test]
+fn clock_fault_retirement_remains_pending_until_confirmation_and_shutdown_can_progress() {
+    let (owner, state, time) = fault_owner();
+    done(
+        owner
+            .request(Operation::Activate {
+                scope: scope(1),
+                valid_until: 2000,
+            })
+            .unwrap(),
+    )
+    .unwrap();
+    state.canceled.store(false, Ordering::Release);
+    *time.lock().unwrap() = Err(ClockFault::Unavailable);
+    state.await_event("cancel");
+    assert!(owner.snapshot().scope.is_none());
+    assert_eq!(owner.snapshot().clock_fault, Some(ClockFault::Unavailable));
+    assert_eq!(state.devices.load(Ordering::Acquire), 1);
+    let mut shutdown = owner.request(Operation::Shutdown).unwrap();
+    assert_eq!(shutdown.wait(Duration::from_millis(1)), Ok(None));
+    state.canceled.store(true, Ordering::Release);
+    assert_eq!(
+        shutdown
+            .wait(Duration::from_secs(1))
+            .unwrap()
+            .unwrap()
+            .phase,
+        Phase::Stopped
+    );
+    assert_eq!(state.devices.load(Ordering::Acquire), 0);
+}
+
+#[test]
+fn startup_clock_fault_cannot_be_recovered_by_replaying_the_failed_activation_generation() {
+    let (owner, state, time) = fault_owner();
+    *time.lock().unwrap() = Err(ClockFault::Unavailable);
+    assert_eq!(
+        done(
+            owner
+                .request(Operation::Activate {
+                    scope: scope(1),
+                    valid_until: 2000
+                })
+                .unwrap()
+        ),
+        Err(Error::Backend(Fault::Clock(ClockFault::Unavailable)))
+    );
+    assert_eq!(owner.snapshot().highest_generation, 1);
+    *time.lock().unwrap() = Ok(1000);
+    assert_eq!(
+        done(
+            owner
+                .request(Operation::Activate {
+                    scope: scope(1),
+                    valid_until: 2000
+                })
+                .unwrap()
+        ),
+        Err(Error::StaleGeneration)
+    );
+    assert_eq!(owner.snapshot().clock_fault, Some(ClockFault::Unavailable));
+    assert_eq!(state.devices.load(Ordering::Acquire), 0);
+    done(
+        owner
+            .request(Operation::Activate {
+                scope: scope(2),
+                valid_until: 2000,
+            })
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(owner.snapshot().clock_fault, None);
     stop(&owner);
 }

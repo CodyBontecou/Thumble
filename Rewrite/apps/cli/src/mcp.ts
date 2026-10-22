@@ -10,6 +10,7 @@ import {
   requestPairing,
   requestConfiguration,
   requestSavedRuntime,
+  requestWowCapture,
 } from "@thumble/client/local";
 import { decodeLocalCommand } from "@thumble/contracts/receiver";
 import { GAMEPAD_BUTTONS } from "@thumble/contracts";
@@ -21,6 +22,7 @@ export function startMcp(
   receiver: string,
   allowRecordedInput: boolean,
   allowConfigurationWrite = false,
+  allowWowCapture = false,
 ): void {
   let traces = 0;
   const trace = (phase: string): void => {
@@ -29,6 +31,10 @@ export function startMcp(
   };
   const allowedTools = new Set([
     "output_doctor",
+    "wow_capture_status",
+    ...(allowWowCapture
+      ? ["wow_capture_start", "wow_capture_request", "wow_capture_stop"]
+      : []),
     "receiver_status",
     "receiver_saved_status",
     "receiver_release",
@@ -95,6 +101,49 @@ export function startMcp(
         idempotentHint: true,
         openWorldHint: false,
       });
+      server.registerTool(
+        "wow_capture_status",
+        {
+          description:
+            "Read optical capture metadata only. Does not start capture, inspect/request permission or advance game freshness.",
+          inputSchema: empty,
+          annotations: annotations(true),
+        },
+        () =>
+          receipt(async () =>
+            requestWowCapture(await readEndpointAsync(root, receiver), {
+              command: "wow-capture-status",
+            }),
+          ),
+      );
+      if (allowWowCapture)
+        for (const action of ["start", "request", "stop"] as const)
+          server.registerTool(
+            `wow_capture_${action}`,
+            {
+              description:
+                "Explicit optical single-frame capture control. Requires a service launched with an authorized capture helper. No configuration commit or live-sync acceptance.",
+              inputSchema: empty,
+              annotations: { ...annotations(false), idempotentHint: false },
+            },
+            () =>
+              receipt(async () =>
+                requestWowCapture(
+                  await readEndpointAsync(root, receiver),
+                  action === "start"
+                    ? {
+                        command: "wow-capture-start",
+                        source: "world-of-warcraft",
+                      }
+                    : {
+                        command:
+                          action === "request"
+                            ? "wow-capture-request"
+                            : "wow-capture-stop",
+                      },
+                ),
+              ),
+          );
       server.registerTool(
         "output_doctor",
         {

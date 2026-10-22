@@ -2,8 +2,8 @@ import { decodeGamepadState, type GamepadState } from "./index.ts";
 export { parseStrictJson } from "./strict-json.ts";
 export const FRAME_BYTES = 65536;
 export type Snapshot = Readonly<{
-  backend: "recording";
-  inputEnabled: false;
+  backend: "recording" | "macos-hid";
+  inputEnabled: boolean;
   active: boolean;
   generation: string;
   revision: string;
@@ -156,8 +156,10 @@ export function decodeSnapshot(value: unknown): Snapshot {
     "lastReleaseReason",
   ]);
   if (
-    s.backend !== "recording" ||
-    s.inputEnabled !== false ||
+    (s.backend !== "recording" && s.backend !== "macos-hid") ||
+    typeof s.inputEnabled !== "boolean" ||
+    (s.backend === "recording" && s.inputEnabled !== false) ||
+    (s.inputEnabled === true && s.active !== true) ||
     typeof s.active !== "boolean" ||
     typeof s.reportHex !== "string" ||
     !/^[0-9a-f]{40}$/.test(s.reportHex) ||
@@ -165,8 +167,8 @@ export function decodeSnapshot(value: unknown): Snapshot {
   )
     throw new Error("invalid_receiver_response");
   return Object.freeze({
-    backend: "recording",
-    inputEnabled: false,
+    backend: s.backend,
+    inputEnabled: s.inputEnabled,
     active: s.active,
     generation: counter(s.generation),
     revision: counter(s.revision),

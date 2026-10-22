@@ -14,6 +14,8 @@
     "./phone-catalog": "./src/phone-catalog.ts",
     "./output-capabilities": "./src/output-capabilities.ts",
     "./saved-runtime": "./src/saved-runtime.ts",
-    "./phone-controls": "./src/phone-controls.ts"
+    "./phone-controls": "./src/phone-controls.ts",
+    "./wow-capture": "./src/wow-capture.ts",
+    "./wow-capture-control": "./src/wow-capture-control.ts"
   }
 }

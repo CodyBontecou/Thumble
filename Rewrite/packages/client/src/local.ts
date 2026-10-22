@@ -1,4 +1,10 @@
 import {
+  decodeWowCaptureCommand,
+  decodeWowCaptureControlStatus,
+  type WowCaptureCommand,
+  type WowCaptureControlStatus,
+} from "@thumble/contracts/wow-capture-control";
+import {
   decodeSavedRuntimeCommand,
   decodeSavedRuntimeStatus,
   type SavedRuntimeCommand,
@@ -270,6 +276,16 @@ export function requestSavedRuntime(
     return status;
   });
 }
+export function requestWowCapture(
+  endpoint: Endpoint,
+  body: WowCaptureCommand,
+): Promise<WowCaptureControlStatus> {
+  return exchange(
+    endpoint,
+    decodeWowCaptureCommand(body),
+    decodeWowCaptureControlStatus,
+  );
+}
 export function requestPairing(
   endpoint: Endpoint,
   body: PairingCommand,
@@ -294,7 +310,8 @@ function exchange<Result>(
     | LocalCommand
     | PairingCommand
     | ConfigurationCommand
-    | SavedRuntimeCommand,
+    | SavedRuntimeCommand
+    | WowCaptureCommand,
   decode: (value: unknown) => Result,
 ): Promise<Result> {
   const requestId = randomUUID();

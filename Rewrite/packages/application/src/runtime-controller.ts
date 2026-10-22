@@ -88,6 +88,8 @@ export class RuntimeController {
       this.sessionId = sessionId;
       return activated;
     }
+    if (status.backend !== "recording")
+      throw new Error("recorded_input_requires_recording_backend");
     if (
       command.expectedGeneration !== status.generation ||
       !status.active ||

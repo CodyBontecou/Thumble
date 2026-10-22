@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - "Rewrite/native/output-core/**"
+      - "Rewrite/native/receiver/**"
       - "Rewrite/native/windows-candidate/**"
       - "Host/fixtures/gamepad/v2.json"
       - "ThirdParty/SteamControllerBridge-LICENSE.txt"
@@ -14,6 +15,7 @@ on:
   pull_request:
     paths:
       - "Rewrite/native/output-core/**"
+      - "Rewrite/native/receiver/**"
       - "Rewrite/native/windows-candidate/**"
       - "Host/fixtures/gamepad/v2.json"
       - "ThirdParty/SteamControllerBridge-LICENSE.txt"
@@ -62,3 +64,44 @@ jobs:
         run: cargo clippy --locked --release --all-targets --all-features -- -D warnings
       - name: Test optimized fake lifecycle or pure mapping
         run: cargo test --locked --release --all-features
+
+  receiver-output-bridge:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: Rewrite/native/receiver
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: Rewrite/native/receiver
+      - name: Require default dependency graph to exclude physical output
+        shell: bash
+        run: |
+          python - <<'PYCODE'
+          import subprocess
+          tree = subprocess.check_output(["cargo", "tree", "--locked", "--no-default-features", "--edges", "normal", "--prefix", "none"], text=True)
+          assert "thumble-rewrite-output-core " not in tree
+          PYCODE
+      - name: Check receiver Rust formatting
+        run: cargo fmt -- --check
+      - name: Check portable output bridge
+        run: cargo clippy --locked --all-targets --features output-bridge -- -D warnings
+      - name: Test output bridge with fake factories only
+        run: cargo test --locked --features output-bridge
+      - name: Check macOS adapter compilation without device activation
+        if: runner.os == 'macOS'
+        run: cargo clippy --locked --all-targets --all-features -- -D warnings
+      - name: Test macOS compilation and fake bridge without device activation
+        if: runner.os == 'macOS'
+        run: cargo test --locked --all-features

@@ -1,0 +1,74 @@
+name: TypeScript rewrite Windows optical helper (compile and synthetic only)
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "Rewrite/native/windows-optical/**"
+      - "Rewrite/native/wow-capture-windows/**"
+      - "Rewrite/tooling/test-windows-optical-parity.ts"
+      - "Rewrite/tooling/test-windows-capture-interop.ts"
+      - "Rewrite/tooling/windows-capture-notices.ts"
+      - "Rewrite/packages/fixtures/wow-live-v1.json"
+      - "Rewrite/packages/contracts/src/wow-capture.ts"
+      - "Rewrite/packages/domain/src/wow-capture-receipt.ts"
+      - "Rewrite/apps/service/src/wow-atlas-decoder.ts"
+      - ".github/workflows/typescript-rewrite-windows-optical.yml"
+  push:
+    branches: [main]
+    paths:
+      - "Rewrite/native/windows-optical/**"
+      - "Rewrite/native/wow-capture-windows/**"
+      - "Rewrite/tooling/test-windows-optical-parity.ts"
+      - "Rewrite/tooling/test-windows-capture-interop.ts"
+      - "Rewrite/tooling/windows-capture-notices.ts"
+      - "Rewrite/packages/fixtures/wow-live-v1.json"
+      - "Rewrite/packages/contracts/src/wow-capture.ts"
+      - "Rewrite/packages/domain/src/wow-capture-receipt.ts"
+      - "Rewrite/apps/service/src/wow-atlas-decoder.ts"
+      - ".github/workflows/typescript-rewrite-windows-optical.yml"
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+jobs:
+  compile-and-synthetic:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 12
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Preserve source line endings for exact notice hashes
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.3
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.88.0 --profile minimal --component rustfmt --component clippy
+      - name: Install locked TypeScript workspace dependencies
+        working-directory: Rewrite
+        run: bun install --frozen-lockfile
+      - name: Compile and test pure policy and native helper with fake providers only
+        run: |
+          cargo +1.88.0 fmt --manifest-path Rewrite/native/windows-optical/Cargo.toml --check
+          cargo +1.88.0 fmt --manifest-path Rewrite/native/wow-capture-windows/Cargo.toml --check
+          cargo +1.88.0 clippy --locked --manifest-path Rewrite/native/windows-optical/Cargo.toml --all-targets -- -D warnings
+          cargo +1.88.0 clippy --locked --manifest-path Rewrite/native/wow-capture-windows/Cargo.toml --all-targets -- -D warnings
+          cargo +1.88.0 test --locked --manifest-path Rewrite/native/windows-optical/Cargo.toml
+          cargo +1.88.0 test --locked --manifest-path Rewrite/native/wow-capture-windows/Cargo.toml
+          cargo +1.88.0 build --locked --manifest-path Rewrite/native/wow-capture-windows/Cargo.toml
+      - name: Verify all dependency notices
+        run: bun Rewrite/tooling/windows-capture-notices.ts --check
+      - name: Check synthetic decoder parity and framed PNG receipt interoperability
+        run: |
+          bun Rewrite/tooling/test-windows-optical-parity.ts
+          bun Rewrite/tooling/test-windows-capture-interop.ts

@@ -1,0 +1,45 @@
+{
+  "frameSha256" : "841a9c41b426f0ba44f26aa186025e3302ef64c97b5deca6fa79cdf1e9a68551",
+  "scales" : [
+    {
+      "rgbaSha256" : "dd94305a5268532e90ef89c36780a655416c960509e7829ff4985708b1e4ce5f",
+      "scale" : 0.75
+    },
+    {
+      "rgbaSha256" : "7d8ba0b3ea0678493bc6d1282daac3d2091e75435bfb004854426692cb1c8d06",
+      "scale" : 0.85299999999999998
+    },
+    {
+      "rgbaSha256" : "dd94305a5268532e90ef89c36780a655416c960509e7829ff4985708b1e4ce5f",
+      "scale" : 1
+    },
+    {
+      "rgbaSha256" : "54c81b15d5ba7aa6907b6254f0c397413e8dae2a56b067b5e591c697b96c2dd8",
+      "scale" : 1.1000000000000001
+    },
+    {
+      "rgbaSha256" : "5d1c6bf622ca0aed5e24e586fdb814fbdeda56e42ddd7de4c1ae8fc793328d23",
+      "scale" : 1.28
+    },
+    {
+      "rgbaSha256" : "dd94305a5268532e90ef89c36780a655416c960509e7829ff4985708b1e4ce5f",
+      "scale" : 1.5
+    },
+    {
+      "rgbaSha256" : "dd94305a5268532e90ef89c36780a655416c960509e7829ff4985708b1e4ce5f",
+      "scale" : 1.6000000000000001
+    },
+    {
+      "rgbaSha256" : "dd94305a5268532e90ef89c36780a655416c960509e7829ff4985708b1e4ce5f",
+      "scale" : 2
+    },
+    {
+      "rgbaSha256" : "dd94305a5268532e90ef89c36780a655416c960509e7829ff4985708b1e4ce5f",
+      "scale" : 2.5569999999999999
+    },
+    {
+      "rgbaSha256" : "dd94305a5268532e90ef89c36780a655416c960509e7829ff4985708b1e4ce5f",
+      "scale" : 3
+    }
+  ]
+}

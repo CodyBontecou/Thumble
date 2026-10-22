@@ -63,6 +63,7 @@
         "@thumble/application": "workspace:*",
         "@thumble/client": "workspace:*",
         "@thumble/contracts": "workspace:*",
+        "@thumble/domain": "workspace:*",
         "@thumble/storage": "workspace:*",
       },
     },

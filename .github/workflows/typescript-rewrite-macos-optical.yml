@@ -1,0 +1,41 @@
+name: TypeScript rewrite macOS optical helper
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "Rewrite/native/wow-capture-macos/**"
+      - ".github/workflows/typescript-rewrite-macos-optical.yml"
+  pull_request:
+    paths:
+      - "Rewrite/native/wow-capture-macos/**"
+      - ".github/workflows/typescript-rewrite-macos-optical.yml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+
+jobs:
+  synthetic-macos-capture:
+    runs-on: macos-15
+    timeout-minutes: 15
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+    defaults:
+      run:
+        working-directory: Rewrite/native/wow-capture-macos
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check native source formatting
+        run: swift format lint --recursive --strict Sources Tests Package.swift
+      - name: Compile helper and test synthetic capture identities, frames and pixels
+        run: swift test -Xswiftc -warnings-as-errors
+      - name: Check synthetic capture bounds with Address Sanitizer
+        run: swift test --sanitize=address -Xswiftc -warnings-as-errors
+      # Tests inject capture providers; no screen enumeration, capture, status,
+      # permission request or product helper activation runs on this job.

@@ -2,6 +2,15 @@ import { checkCliNotices } from "./check-cli-notices.ts";
 import { createHash } from "node:crypto";
 import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
+const arguments_ = process.argv.slice(2);
+if (
+  arguments_.length > 1 ||
+  (arguments_.length === 1 && arguments_[0] !== "--with-macos-output")
+)
+  throw new Error("unsupported_build_option");
+const withMacOutput = arguments_[0] === "--with-macos-output";
+if (withMacOutput && process.platform !== "darwin")
+  throw new Error("macos_output_build_requires_macos");
 checkCliNotices();
 const root = resolve(import.meta.dir, ".."),
   extension = process.platform === "win32" ? ".exe" : "";
@@ -32,6 +41,7 @@ for (const command of [
     "build",
     "--locked",
     "--release",
+    ...(withMacOutput ? ["--features", "output-macos"] : []),
     "--manifest-path",
     "native/receiver/Cargo.toml",
   ],
@@ -66,7 +76,14 @@ copyFileSync(resolve(root, "REVIEWING.md"), resolve(root, "dist/REVIEWING.md"));
 writeFileSync(
   resolve(root, "dist/README.txt"),
   [
-    "Thumble rewrite review package. Recording backend only; no OS input is emitted.",
+    withMacOutput
+      ? "Thumble rewrite review package. Optional macOS HID code compiled; recording remains the default."
+      : "Thumble rewrite review package. Recording backend only; no OS input is emitted.",
+    ...(withMacOutput
+      ? [
+          "Physical output requires explicit service selection and --allow-physical-output, and an appropriately authorized native helper. This build does not sign or provision that helper.",
+        ]
+      : []),
     "Keep thumble-rewrite and thumble-rewrite-receiver (with .exe on Windows) together.",
     "Run: thumble-rewrite service start --runtime-dir ABSOLUTE_PRIVATE_PATH --json",
     "Then: thumble-rewrite receiver status --runtime-dir ABSOLUTE_PRIVATE_PATH --json",
@@ -79,5 +96,7 @@ writeFileSync(
   ].join("\n"),
 );
 console.log(
-  "Built standalone CLI and recording receiver; no repository checkout is needed at runtime",
+  withMacOutput
+    ? "Built standalone CLI and receiver with optional macOS output; no signing or physical activation performed"
+    : "Built standalone CLI and recording receiver; no repository checkout is needed at runtime",
 );

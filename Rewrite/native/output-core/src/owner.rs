@@ -1,10 +1,10 @@
-use crate::Report;
+use crate::{ClockDomain, ClockFault, Report};
 use std::sync::{
     atomic::{AtomicBool, AtomicU64, Ordering},
     mpsc, Arc, Mutex,
 };
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 const QUEUE: usize = 8;
 const POLL: Duration = Duration::from_millis(10);
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -14,6 +14,7 @@ pub enum Fault {
     Creation,
     Report,
     Cancellation,
+    Clock(ClockFault),
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Error {
@@ -50,14 +51,17 @@ pub struct Snapshot {
     pub phase: Phase,
     pub scope: Option<Scope>,
     pub highest_generation: u64,
-    pub valid_until: Option<Instant>,
+    pub valid_until: Option<u64>,
     pub fault: Option<Fault>,
+    /// Latched even if neutralization/cancellation also reports a backend fault.
+    pub clock_fault: Option<ClockFault>,
 }
 impl Snapshot {
     /// Ready is the last worker-confirmed device phase. Admission additionally
     /// requires the caller-supplied deadline to remain live, even if IO stalls.
-    pub fn admits_at(&self, now: Instant) -> bool {
+    pub fn admits_at(&self, now: u64) -> bool {
         self.phase == Phase::Ready
+            && self.clock_fault.is_none()
             && self.scope.is_some()
             && self.valid_until.is_some_and(|d| now < d)
     }
@@ -70,15 +74,38 @@ impl Default for Snapshot {
             highest_generation: 0,
             valid_until: None,
             fault: None,
+            clock_fault: None,
         }
     }
 }
 #[derive(Clone, Copy, Debug)]
 pub enum Operation {
-    Activate { scope: Scope, valid_until: Instant },
-    RenewDeadline { scope: Scope, valid_until: Instant },
-    Submit { scope: Scope, report: Report },
-    Release { scope: Scope },
+    Activate {
+        scope: Scope,
+        valid_until: u64,
+    },
+    RenewDeadline {
+        scope: Scope,
+        valid_until: u64,
+    },
+    Submit {
+        scope: Scope,
+        report: Report,
+    },
+    /// Exact authoritative deadline update; may shorten a still-live scope.
+    SetDeadline {
+        scope: Scope,
+        valid_until: u64,
+    },
+    /// Install the exact effective deadline before submitting this report.
+    SubmitUntil {
+        scope: Scope,
+        report: Report,
+        valid_until: u64,
+    },
+    Release {
+        scope: Scope,
+    },
     Shutdown,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -148,13 +175,8 @@ pub struct OutputOwner {
     next: AtomicU64,
 }
 impl OutputOwner {
-    pub fn spawn(factory: impl Factory) -> Result<Self, Error> {
-        Self::with_clock(factory, Arc::new(Instant::now))
-    }
-    fn with_clock(
-        factory: impl Factory,
-        clock: Arc<dyn Fn() -> Instant + Send + Sync>,
-    ) -> Result<Self, Error> {
+    /// The caller supplies the receiver's absolute sleep-inclusive clock domain.
+    pub fn spawn(factory: impl Factory, clock: Arc<dyn ClockDomain>) -> Result<Self, Error> {
         let (sender, receiver) = mpsc::sync_channel(QUEUE);
         let shared = Arc::new(Mutex::new(Snapshot::default()));
         let closing = Arc::new(AtomicBool::new(false));
@@ -235,8 +257,10 @@ struct Worker<F> {
     receiver: mpsc::Receiver<Command>,
     shared: Arc<Mutex<Snapshot>>,
     closing: Arc<AtomicBool>,
-    clock: Arc<dyn Fn() -> Instant + Send + Sync>,
+    clock: Arc<dyn ClockDomain>,
     state: Snapshot,
+    clock_high_water: Option<u64>,
+    clock_fault: Option<ClockFault>,
     device: Option<Box<dyn Device>>,
     retirement: Option<Retirement>,
     shutdown: Option<Command>,
@@ -247,7 +271,7 @@ impl<F: Factory> Worker<F> {
         receiver: mpsc::Receiver<Command>,
         shared: Arc<Mutex<Snapshot>>,
         closing: Arc<AtomicBool>,
-        clock: Arc<dyn Fn() -> Instant + Send + Sync>,
+        clock: Arc<dyn ClockDomain>,
     ) -> Self {
         Self {
             factory,
@@ -256,6 +280,8 @@ impl<F: Factory> Worker<F> {
             closing,
             clock,
             state: Snapshot::default(),
+            clock_high_water: None,
+            clock_fault: None,
             device: None,
             retirement: None,
             shutdown: None,
@@ -337,11 +363,55 @@ impl<F: Factory> Worker<F> {
             After::Expired => (),
         }
     }
+    fn read_clock(&mut self) -> Result<u64, ClockFault> {
+        let result = self.clock.now_ms().and_then(|now| {
+            if self.clock_high_water.is_some_and(|previous| now < previous) {
+                Err(ClockFault::Regressed)
+            } else {
+                self.clock_high_water = Some(now);
+                Ok(now)
+            }
+        });
+        if let Err(fault) = result {
+            if self.clock_fault.is_none() {
+                self.clock_fault = Some(fault);
+            }
+            self.state.clock_fault = self.clock_fault;
+        }
+        result
+    }
+    fn clock_failure(&mut self, c: Command, fault: ClockFault) {
+        // Even a startup read failure burns a valid requested generation, so
+        // replaying that failed activation cannot recover a clock-latched owner.
+        if let Operation::Activate { scope, .. } = c.operation {
+            if scope.owner != [0; 16] && scope.generation > self.state.highest_generation {
+                self.state.highest_generation = scope.generation;
+            }
+        }
+        let fault = Fault::Clock(fault);
+        if self.device.is_some() {
+            self.retire(After::Failure(c, fault), Some(fault));
+        } else {
+            self.state.scope = None;
+            self.state.valid_until = None;
+            self.state.phase = Phase::Failed;
+            self.state.fault = Some(fault);
+            self.publish();
+            self.reply(c, Err(Error::Backend(fault)));
+        }
+    }
     fn activate(&mut self, c: Command) {
         let Operation::Activate { scope, valid_until } = c.operation else {
             unreachable!()
         };
-        if valid_until <= (self.clock)() {
+        let now = match self.read_clock() {
+            Ok(now) => now,
+            Err(fault) => {
+                self.clock_failure(c, fault);
+                return;
+            }
+        };
+        if valid_until <= now {
             self.reply(c, Err(Error::Expired));
             return;
         }
@@ -357,7 +427,14 @@ impl<F: Factory> Worker<F> {
             self.reply(c, Err(Error::Backend(f)));
             return;
         }
-        if self.closing.load(Ordering::Acquire) || valid_until <= (self.clock)() {
+        let now = match self.read_clock() {
+            Ok(now) => now,
+            Err(fault) => {
+                self.clock_failure(c, fault);
+                return;
+            }
+        };
+        if self.closing.load(Ordering::Acquire) || valid_until <= now {
             self.state.phase = Phase::Inactive;
             self.publish();
             self.reply(
@@ -379,11 +456,23 @@ impl<F: Factory> Worker<F> {
             }
             Ok(device) => {
                 self.device = Some(device);
+                // Check the clock again before the initial native neutral call.
+                if let Err(fault) = self.read_clock() {
+                    self.clock_failure(c, fault);
+                    return;
+                }
                 if let Err(f) = self.device.as_mut().unwrap().submit(Report::NEUTRAL) {
                     self.retire(After::Failure(c, f), Some(f));
                     return;
                 }
-                if self.closing.load(Ordering::Acquire) || valid_until <= (self.clock)() {
+                let now = match self.read_clock() {
+                    Ok(now) => now,
+                    Err(fault) => {
+                        self.clock_failure(c, fault);
+                        return;
+                    }
+                };
+                if self.closing.load(Ordering::Acquire) || valid_until <= now {
                     self.retire(
                         After::Rejected(
                             c,
@@ -406,14 +495,7 @@ impl<F: Factory> Worker<F> {
         }
     }
     fn apply(&mut self, c: Command) {
-        if self.state.valid_until.is_some_and(|d| (self.clock)() >= d) && self.retirement.is_none()
-        {
-            self.retire(After::Expired, None);
-            if !matches!(c.operation, Operation::Shutdown) {
-                self.reply(c, Err(Error::Expired));
-                return;
-            }
-        }
+        // Shutdown/retirement must remain operable even when the authority clock fails.
         if matches!(c.operation, Operation::Shutdown) {
             if self.shutdown.is_some() {
                 self.reply(c, Err(Error::Busy));
@@ -430,6 +512,24 @@ impl<F: Factory> Worker<F> {
             self.reply(c, Err(Error::RetirementPending));
             return;
         }
+        let activates = matches!(c.operation, Operation::Activate { .. });
+        if let Some(fault) = self.clock_fault.filter(|_| !activates) {
+            self.reply(c, Err(Error::Backend(Fault::Clock(fault))));
+            return;
+        }
+        let now = match self.read_clock() {
+            Ok(now) => now,
+            Err(fault) => {
+                self.clock_failure(c, fault);
+                return;
+            }
+        };
+        // This check precedes every update: no queued extension can revive an old scope.
+        if self.state.valid_until.is_some_and(|d| now >= d) {
+            self.retire(After::Expired, None);
+            self.reply(c, Err(Error::Expired));
+            return;
+        }
         if let Operation::Activate { scope, valid_until } = c.operation {
             if scope.generation == 0 || scope.owner == [0; 16] {
                 self.reply(c, Err(Error::InvalidScope));
@@ -439,11 +539,14 @@ impl<F: Factory> Worker<F> {
                 self.reply(c, Err(Error::StaleGeneration));
                 return;
             }
-            if valid_until <= (self.clock)() {
+            if valid_until <= now {
                 self.reply(c, Err(Error::InvalidDeadline));
                 return;
             }
             self.state.highest_generation = scope.generation;
+            // Explicit fresh generation + successful non-regressed read is the only recovery.
+            self.clock_fault = None;
+            self.state.clock_fault = None;
             if self.device.is_some() {
                 self.retire(After::Activate(c), None);
             } else {
@@ -453,7 +556,9 @@ impl<F: Factory> Worker<F> {
         }
         let scope = match c.operation {
             Operation::Submit { scope, .. }
+            | Operation::SubmitUntil { scope, .. }
             | Operation::Release { scope }
+            | Operation::SetDeadline { scope, .. }
             | Operation::RenewDeadline { scope, .. } => scope,
             _ => unreachable!(),
         };
@@ -468,11 +573,45 @@ impl<F: Factory> Worker<F> {
             );
             return;
         }
+        // Explicit deadline operations accept shortening, but a past effective deadline
+        // immediately neutralizes/retires rather than retaining the older longer grant.
+        if let Operation::SetDeadline { valid_until, .. }
+        | Operation::SubmitUntil { valid_until, .. } = c.operation
+        {
+            if valid_until <= now {
+                self.retire(After::Rejected(c, Error::Expired), None);
+                return;
+            }
+            self.state.valid_until = Some(valid_until);
+            self.publish();
+        }
         match c.operation {
-            Operation::Submit { report, .. } => {
+            Operation::Submit { report, .. } | Operation::SubmitUntil { report, .. } => {
+                // Recheck immediately at the native IO boundary, after publishing
+                // the new deadline (which may itself have waited for a snapshot reader).
+                let now = match self.read_clock() {
+                    Ok(now) => now,
+                    Err(fault) => {
+                        self.clock_failure(c, fault);
+                        return;
+                    }
+                };
+                if self.state.valid_until.is_some_and(|d| now >= d) {
+                    self.retire(After::Rejected(c, Error::Expired), None);
+                    return;
+                }
                 if let Err(f) = self.device.as_mut().unwrap().submit(report) {
                     self.retire(After::Failure(c, f), Some(f));
-                } else if self.state.valid_until.is_some_and(|d| (self.clock)() >= d) {
+                    return;
+                }
+                let now = match self.read_clock() {
+                    Ok(now) => now,
+                    Err(fault) => {
+                        self.clock_failure(c, fault);
+                        return;
+                    }
+                };
+                if self.state.valid_until.is_some_and(|d| now >= d) {
                     self.retire(After::Rejected(c, Error::Expired), None);
                 } else {
                     self.reply(c, Ok(()));
@@ -480,7 +619,7 @@ impl<F: Factory> Worker<F> {
             }
             Operation::Release { .. } => self.retire(After::Reply(c), None),
             Operation::RenewDeadline { valid_until, .. } => {
-                if valid_until <= self.state.valid_until.unwrap() || valid_until <= (self.clock)() {
+                if valid_until <= self.state.valid_until.unwrap() || valid_until <= now {
                     self.reply(c, Err(Error::InvalidDeadline));
                     return;
                 }
@@ -488,6 +627,7 @@ impl<F: Factory> Worker<F> {
                 self.publish();
                 self.reply(c, Ok(()));
             }
+            Operation::SetDeadline { .. } => self.reply(c, Ok(())),
             _ => unreachable!(),
         }
     }
@@ -496,10 +636,14 @@ impl<F: Factory> Worker<F> {
             if self.retirement.is_some() {
                 self.poll_retirement();
             }
-            if self.state.valid_until.is_some_and(|d| (self.clock)() >= d)
-                && self.retirement.is_none()
-            {
-                self.retire(After::Expired, None);
+            if self.retirement.is_none() {
+                if let Some(deadline) = self.state.valid_until {
+                    match self.read_clock() {
+                        Ok(now) if now >= deadline => self.retire(After::Expired, None),
+                        Err(fault) => self.retire(After::Expired, Some(Fault::Clock(fault))),
+                        _ => (),
+                    }
+                }
             }
             if self.closing.load(Ordering::Acquire) && self.retirement.is_none() {
                 if self.device.is_some() {
