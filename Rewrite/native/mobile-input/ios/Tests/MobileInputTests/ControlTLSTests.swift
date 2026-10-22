@@ -202,6 +202,55 @@ import Testing
     }
   }
   @Test(.enabled(if: ProcessInfo.processInfo.environment["THUMBLE_NATIVE_TLS_PROBE"] != nil))
+  @MainActor private func grantPacketZeroSurvivesAWriteInFlightAndPrecedesItsStatusBarrier()
+    async throws
+  {
+    try await withProbe { info in
+      let client = try ControlTLSClient(
+        host: "127.0.0.1", port: info.port, certificatePin: info.pin)
+      defer { client.close() }
+      try await client.connect()
+      let url = try #require(
+        Bundle.module.url(
+          forResource: "input-packet-v1", withExtension: "json", subdirectory: "Fixtures"))
+      let fixture = try #require(
+        JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+      let vectors = try #require(fixture["vectors"] as? [[String: Any]])
+      let packets = try vectors.map { vector -> Data in
+        let text = try #require(vector["packetHex"] as? String)
+        var bytes = Data()
+        for offset in stride(from: 0, to: text.count, by: 2) {
+          let start = text.index(text.startIndex, offsetBy: offset)
+          bytes.append(try #require(UInt8(text[start..<text.index(start, offsetBy: 2)], radix: 16)))
+        }
+        return bytes
+      }
+      let before = Data("before-native-grant".utf8)
+      let after = Data("after-native-grant".utf8)
+      #expect(client.offer(try ControlTLSFrame(kind: .control, payload: before)))
+      // Do not suspend: the first write cannot complete on the main actor yet.
+      for packet in packets {
+        #expect(client.offer(try ControlTLSFrame(kind: .input, payload: packet)))
+      }
+      #expect(client.offer(try ControlTLSFrame(kind: .control, payload: after)))
+      #expect(try await client.receive().payload == before)
+      let first = try await client.receive()
+      try #require(first.payload != after, "packet zero was replaced before its status barrier")
+      let result = try #require(JSONSerialization.jsonObject(with: first.payload) as? [String: Any])
+      #expect(result["ok"] as? Bool == true)
+      #expect(
+        (result["snapshot"] as? [String: Any])?["reportHex"] as? String == vectors[0]["reportHex"]
+          as? String)
+      #expect(try await client.receive().payload == after)
+      let latest = try await client.receive()
+      let latestResult = try #require(
+        JSONSerialization.jsonObject(with: latest.payload) as? [String: Any])
+      #expect(
+        (latestResult["snapshot"] as? [String: Any])?["reportHex"] as? String == vectors.last?[
+          "reportHex"] as? String)
+    }
+  }
+  @Test(.enabled(if: ProcessInfo.processInfo.environment["THUMBLE_NATIVE_TLS_PROBE"] != nil))
   @MainActor private func actualNativeTouchEngineDeliversMultitouchThroughTLSAndReleasesOnLoss()
     async throws
   {

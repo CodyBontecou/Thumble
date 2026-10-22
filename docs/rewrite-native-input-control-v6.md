@@ -55,6 +55,16 @@ admission commits the successor before acknowledged progress changes. This
 continues the existing interaction without a neutral pulse; it does not replay
 touches, renew configuration ownership or bypass input TTL.
 
+Native TLS writers protect a packet with the public THI1 header and sequence
+zero in the same bounded FIFO as control frames. It clears the replaceable old
+input slot and cannot be coalesced away by later samples or overtaken by a
+following status request. The queue holds at most eight ordered frames plus one
+latest full-state snapshot and one in-flight write. Overflow is terminal. This
+header classification is transport scheduling only; the receiver still
+authenticates the complete packet. A real TLS backpressure test reproduces loss
+of packet zero with the prior writer and verifies the protected ordering; the
+Android worker has the matching stalled-writer case.
+
 The phone must prepare a fresh native sender, preserve the ongoing native touch
 interaction, submit current full state at sequence zero over TLS, and reset
 session-scoped progress to the new session. It must fence old UDP work and old

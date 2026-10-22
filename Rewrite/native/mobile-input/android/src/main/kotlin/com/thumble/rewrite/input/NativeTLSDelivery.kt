@@ -53,10 +53,21 @@ class NativeTLSDelivery private constructor(initial: NativeFrameIO?, connect: ()
             }
         synchronized(gate) {
             if (current != State.READY) return false
-            latestInput = frame
-            gate.notifyAll()
-            return true
+            if (!frame.startsInputGrant) {
+                latestInput = frame
+                gate.notifyAll()
+                return true
+            }
+            if (controls.size < 8) {
+                // Preserve packet zero ahead of following status/control barriers.
+                latestInput = null
+                controls.addLast(frame)
+                gate.notifyAll()
+                return true
+            }
         }
+        close()
+        return false
     }
 
     fun offerControl(payload: ByteArray): Boolean {

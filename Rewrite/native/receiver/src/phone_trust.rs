@@ -188,7 +188,25 @@ impl PhoneTrustStore {
         } else if app != APP_ID || version != 1 {
             return Err("phone_trust_version_unsupported");
         }
-        connection.execute_batch("PRAGMA journal_mode=DELETE; PRAGMA synchronous=EXTRA; PRAGMA max_page_count=256; PRAGMA foreign_keys=ON;").map_err(error)?;
+        let page_size: i64 = connection
+            .pragma_query_value(None, "page_size", |row| row.get(0))
+            .map_err(error)?;
+        if !(512..=4096).contains(&page_size) {
+            return Err("phone_trust_storage_invalid");
+        }
+        // Every observation still commits durably. WAL avoids deleting/syncing a
+        // rollback journal directory on every input sample. The sole store owner
+        // holds no read transaction between calls, allowing bounded checkpoints.
+        connection.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=EXTRA; PRAGMA wal_autocheckpoint=16; PRAGMA journal_size_limit=262144; PRAGMA max_page_count=256; PRAGMA foreign_keys=ON;").map_err(error)?;
+        let journal: String = connection
+            .pragma_query_value(None, "journal_mode", |row| row.get(0))
+            .map_err(error)?;
+        let synchronous: i64 = connection
+            .pragma_query_value(None, "synchronous", |row| row.get(0))
+            .map_err(error)?;
+        if journal != "wal" || synchronous != 3 {
+            return Err("phone_trust_storage_invalid");
+        }
         let check: String = connection
             .query_row("PRAGMA quick_check", [], |r| r.get(0))
             .map_err(error)?;
@@ -412,7 +430,7 @@ mod tests {
             .connection
             .pragma_query_value(None, "journal_mode", |r| r.get(0))
             .unwrap();
-        assert_eq!(mode, "delete");
+        assert_eq!(mode, "wal");
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
@@ -685,5 +703,59 @@ mod tests {
                 .authorize_epoch("io-phone", "1", 135)
                 .is_err());
         }
+    }
+    #[test]
+    fn durable_input_observations_checkpoint_without_unbounded_journal_growth() {
+        let root = Root::new();
+        let mut store = PhoneTrustStore::open(&root.0).unwrap();
+        assert_eq!(
+            store
+                .connection
+                .pragma_query_value(None, "wal_autocheckpoint", |r| r.get::<_, i64>(0))
+                .unwrap(),
+            16
+        );
+        assert_eq!(
+            store
+                .connection
+                .pragma_query_value(None, "journal_size_limit", |r| r.get::<_, i64>(0))
+                .unwrap(),
+            262144
+        );
+        store
+            .enroll_after_pairing("wal-phone", "Native", 100)
+            .unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            for name in ["phone-trust.sqlite3-wal", "phone-trust.sqlite3-shm"] {
+                assert_eq!(
+                    fs::metadata(root.0.join(name))
+                        .unwrap()
+                        .permissions()
+                        .mode()
+                        & 0o777,
+                    0o600
+                );
+            }
+        }
+        for now in 101..=228 {
+            store.authorize_epoch("wal-phone", "1", now).unwrap();
+            assert!(
+                fs::metadata(root.0.join("phone-trust.sqlite3-wal"))
+                    .unwrap()
+                    .len()
+                    <= 262144
+            );
+        }
+        drop(store);
+        let mut reopened = PhoneTrustStore::open(&root.0).unwrap();
+        assert_eq!(
+            reopened.authorize_epoch("wal-phone", "1", 227).err(),
+            Some("phone_trust_clock_rollback")
+        );
+        reopened.revoke("wal-phone", 229).unwrap();
+        drop(reopened);
+        assert!(!PhoneTrustStore::open(&root.0).unwrap().list().unwrap()[0].active);
     }
 }

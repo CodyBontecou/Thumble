@@ -41,6 +41,17 @@ class ControlTLSFrame(val kind: Kind, payload: ByteArray) {
         bytes = payload.copyOf()
     }
 
+    // Routing only; the independent receiver authenticates every packet.
+    internal val startsInputGrant: Boolean
+        get() =
+            kind == Kind.INPUT &&
+                bytes[0] == 84.toByte() &&
+                bytes[1] == 72.toByte() &&
+                bytes[2] == 73.toByte() &&
+                bytes[3] == 49.toByte() &&
+                (4 until 8).all { bytes[it] == 0.toByte() } &&
+                (32 until 40).all { bytes[it] == 0.toByte() }
+
     fun encode(): ByteArray {
         val size = bytes.size + 1
         return byteArrayOf(

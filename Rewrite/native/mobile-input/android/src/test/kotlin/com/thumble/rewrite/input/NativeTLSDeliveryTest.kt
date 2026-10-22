@@ -49,6 +49,35 @@ class NativeTLSDeliveryTest {
     }
 
     @Test
+    fun grantPacketZeroSurvivesAWriteInFlightAndPrecedesItsStatusBarrier() {
+        val io = FakeIO(true)
+        NativeTLSDelivery { io }
+            .use { delivery ->
+                until { delivery.state == NativeTLSDelivery.State.READY }
+                assertTrue(delivery.offerControl(byteArrayOf(1)))
+                assertTrue(io.entered.await(3, TimeUnit.SECONDS))
+                fun packet(sequence: Int): ByteArray =
+                    ByteArray(108).also {
+                        "THI1".toByteArray(Charsets.US_ASCII).copyInto(it)
+                        it[8] = 1
+                        it[24] = 1
+                        it[32] = sequence.toByte()
+                    }
+                val first = packet(0)
+                assertTrue(delivery.offerInput(first))
+                for (sequence in 1..99) assertTrue(delivery.offerInput(packet(sequence)))
+                assertTrue(delivery.offerControl(byteArrayOf(2)))
+                io.release.countDown()
+                until { io.sent.size >= 3 }
+                assertEquals(ControlTLSFrame.Kind.INPUT, io.sent[1].kind)
+                assertArrayEquals(first, io.sent[1].payload)
+                until { io.sent.size == 4 }
+                assertArrayEquals(byteArrayOf(2), io.sent[2].payload)
+                assertArrayEquals(packet(99), io.sent[3].payload)
+            }
+    }
+
+    @Test
     fun stalledNativeWriteCoalescesInputWithoutBlockingOffersOrReencrypting() {
         val io = FakeIO(true)
         NativeTLSDelivery { io }

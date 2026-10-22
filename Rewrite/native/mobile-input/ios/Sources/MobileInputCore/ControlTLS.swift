@@ -19,6 +19,11 @@ public struct ControlTLSFrame: Sendable {
     self.kind = kind
     self.payload = payload
   }
+  // Routing only: native packet authentication remains the receiver's responsibility.
+  var startsInputGrant: Bool {
+    kind == .input && payload.prefix(8) == Data([84, 72, 73, 49, 0, 0, 0, 0])
+      && payload.dropFirst(32).prefix(8).allSatisfy { $0 == 0 }
+  }
   public func encoded() -> Data {
     let length = UInt32(payload.count + 1)
     var result = Data((0..<4).reversed().map { UInt8(truncatingIfNeeded: length >> ($0 * 8)) })
@@ -157,7 +162,7 @@ public struct ControlTLSFrame: Sendable {
     }
     return sec_protocol_metadata_get_negotiated_protocol(metadata).map { String(cString: $0) }
   }
-  /// One in-flight frame, at most eight controls and one replaceable latest input snapshot.
+  /// One in-flight frame, eight ordered control/packet-zero frames and one latest input slot.
   /// A sealed packet is never re-encrypted. Coalescing preserves full-state repair and replay order.
   public func offer(_ frame: ControlTLSFrame) -> Bool {
     guard state == .ready else { return false }
@@ -168,7 +173,18 @@ public struct ControlTLSFrame: Sendable {
         return false
       }
       controls.append(frame)
-    case .input: latestInput = frame
+    case .input:
+      if frame.startsInputGrant {
+        guard controls.count < 8 else {
+          close()
+          return false
+        }
+        // New-key packet zero is a commitment barrier, never a replaceable snapshot.
+        latestInput = nil
+        controls.append(frame)
+      } else {
+        latestInput = frame
+      }
     }
     drain()
     return state == .ready
