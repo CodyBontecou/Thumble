@@ -1,3 +1,4 @@
+import { expectError } from "./helpers/rejection.ts";
 import { expect, test } from "bun:test";
 import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -123,7 +124,8 @@ test(
       await owner.ready;
       owner.child.kill("SIGKILL");
       try {
-        await expect(owner.request(list)).rejects.toThrow(
+        await expectError(
+          owner.request(list),
           "configuration_owner_unavailable",
         );
       } finally {
@@ -364,7 +366,8 @@ test(
       let deadline: ReturnType<typeof setTimeout> | undefined;
       try {
         await owner.ready;
-        await expect(owner.request(list)).rejects.toThrow(
+        await expectError(
+          owner.request(list),
           "configuration_response_invalid",
         );
         await Promise.race([
