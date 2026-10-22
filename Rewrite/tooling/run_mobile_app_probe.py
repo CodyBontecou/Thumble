@@ -16,7 +16,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 ROOT = Path(__file__).resolve().parent.parent
 
-CHECKPOINT_FIELDS = {"phase", "generation", "elapsedMs", "maximumPublicationGapMs", "connected", "held", "releaseReason", "publications", "appState", "idleDisabled"}
+CHECKPOINT_FIELDS = {"phase", "connectionPhase", "anchorKeyWindow", "generation", "elapsedMs", "maximumPublicationGapMs", "connected", "held", "releaseReason", "publications", "appState", "idleDisabled"}
 CHECKPOINT_REASONS = {"none", "touchCancelled", "background", "screenLock", "rotation", "profileReplacement", "disconnected", "disposed", "practice", "invalidTouch", "transportFailure", "sequenceExhausted"}
 
 
@@ -24,13 +24,15 @@ def decode_checkpoint(value):
     """Only bounded, synthetic test state may enter diagnostic artifacts."""
     if type(value) is not dict or set(value) != CHECKPOINT_FIELDS:
         raise ValueError("app_checkpoint_invalid")
-    if type(value["phase"]) is not str or value["phase"] not in {"connected", "holding", "ended"}:
+    if type(value["phase"]) is not str or value["phase"] not in {"connected", "holding", "ended", "admission-failed"}:
+        raise ValueError("app_checkpoint_invalid")
+    if type(value["connectionPhase"]) is not str or value["connectionPhase"] not in {"idle", "pair-requested", "enrolling", "endpoint-saved", "control-requested", "authenticating", "configuration", "input", "installing", "connected"}:
         raise ValueError("app_checkpoint_invalid")
     if type(value["generation"]) is not str or value["generation"] not in {"1", "2"}:
         raise ValueError("app_checkpoint_invalid")
     if type(value["releaseReason"]) is not str or value["releaseReason"] not in CHECKPOINT_REASONS:
         raise ValueError("app_checkpoint_invalid")
-    for key in ("connected", "held", "idleDisabled"):
+    for key in ("connected", "held", "idleDisabled", "anchorKeyWindow"):
         if type(value[key]) is not bool:
             raise ValueError("app_checkpoint_invalid")
     for key, maximum in (("elapsedMs", 180000), ("maximumPublicationGapMs", 180000), ("publications", 1000000), ("appState", 2)):

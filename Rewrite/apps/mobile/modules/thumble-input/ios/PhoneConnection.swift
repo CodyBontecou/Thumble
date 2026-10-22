@@ -5,6 +5,17 @@ import UIKit
 
 /// App-owned native bootstrap. Invitation text, vault material and channels never enter React.
 @MainActor final class PhoneConnection: NSObject, UITextFieldDelegate {
+  // [DEBUG-renewal-app] Temporary bounded admission evidence, never bridged to JS.
+  enum DiagnosticPhase: String {
+    case idle
+    case pairRequested = "pair-requested"
+    case enrolling
+    case endpointSaved = "endpoint-saved"
+    case controlRequested = "control-requested"
+    case authenticating, configuration, input, installing, connected
+  }
+  private(set) var diagnosticPhase: DiagnosticPhase = .idle
+
   private weak var anchor: UIView?
   private var prompt: UIAlertController?
   private var task: Task<Void, Never>?
@@ -96,6 +107,7 @@ import UIKit
     if let previous { previous.dismiss(animated: true, completion: action) } else { action() }
   }
   private func pair(_ invitation: EnrollmentInvitation, template: ControlMap) {
+    diagnosticPhase = .pairRequested
     guard !closed, anchor?.window?.isKeyWindow == true,
       UIApplication.shared.applicationState == .active
     else { return }
@@ -108,6 +120,7 @@ import UIKit
         let defaults = UserDefaults.standard
         let phoneID = defaults.string(forKey: "rewrite.phone.id") ?? UUID().uuidString.lowercased()
         defaults.set(phoneID, forKey: "rewrite.phone.id")
+        diagnosticPhase = .enrolling
         _ = try await client.enroll(phoneID: phoneID, label: "Thumble iPhone")
         client.close()
         enrollment = nil
@@ -119,6 +132,7 @@ import UIKit
           host: invitation.host, port: invitation.port,
           certificatePin: invitation.certificatePin,
           authorityInstanceID: invitation.authorityInstanceID)
+        diagnosticPhase = .endpointSaved
         Self.save(endpoint)
         try await bind(endpoint, template: template)
       } catch {
@@ -136,6 +150,7 @@ import UIKit
     }
   }
   private func bind(_ endpoint: TrustedHostEndpoint, template: ControlMap) async throws {
+    diagnosticPhase = .controlRequested
     try Task.checkCancellation()
     guard !closed, anchor?.window?.isKeyWindow == true,
       UIApplication.shared.applicationState == .active
@@ -145,16 +160,20 @@ import UIKit
       endpoint: endpoint, storage: storage,
       inputSessions: true, datagrams: true, renewals: true)
     control = client
+    diagnosticPhase = .authenticating
     guard try await client.authenticate().inputSessionAvailable else {
       throw InputError.unavailable
     }
+    diagnosticPhase = .configuration
     let metadata = try await client.inputConfiguration()
     guard metadata.active else {
       throw InputError.unavailable
     }
     let map = ControlMap(
       generation: metadata.generation, revision: metadata.revision, controls: template.controls)
+    diagnosticPhase = .input
     let engine = try await client.bindInput(map, feedback: feedback)
+    diagnosticPhase = .installing
     try Task.checkCancellation()
     guard !closed, anchor?.window?.isKeyWindow == true,
       UIApplication.shared.applicationState == .active
@@ -163,6 +182,7 @@ import UIKit
       throw InputError.unavailable
     }
     try install(engine)
+    diagnosticPhase = .connected
   }
   private func fail() {
     guard !closed else { return }

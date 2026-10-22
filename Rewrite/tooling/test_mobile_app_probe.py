@@ -7,7 +7,7 @@ from run_mobile_app_probe import Probe, decode_checkpoint
 
 class CheckpointTests(unittest.TestCase):
     def value(self):
-        return {"phase": "holding", "generation": "1", "elapsedMs": 35000,
+        return {"phase": "holding", "connectionPhase": "connected", "anchorKeyWindow": True, "generation": "1", "elapsedMs": 35000,
                 "maximumPublicationGapMs": 25, "connected": True, "held": True, "releaseReason": "profileReplacement",
                 "publications": 2000, "appState": 0, "idleDisabled": True}
 
@@ -17,7 +17,7 @@ class CheckpointTests(unittest.TestCase):
         source["connected"] = False
         self.assertTrue(result["connected"])
         for field, value in [("secret", "must-not-be-logged"), ("phase", "arbitrary"),
-                             ("generation", "999"), ("releaseReason", "private"),
+                             ("generation", "999"), ("connectionPhase", "private-phase"), ("anchorKeyWindow", 1), ("releaseReason", "private"),
                              ("elapsedMs", 180001), ("maximumPublicationGapMs", 180001), ("publications", -1), ("appState", 3),
                              ("connected", 1), ("elapsedMs", True), ("elapsedMs", 1.5)]:
             with self.subTest(field=field, value=value):

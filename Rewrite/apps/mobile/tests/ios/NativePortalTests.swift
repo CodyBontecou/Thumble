@@ -204,13 +204,14 @@ import XCTest
     return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
   }
   private func checkpoint(
-    _ view: ThumbleInputView, phase: String, generation: String,
+    _ view: ThumbleInputView, connectionPhase: String, phase: String, generation: String,
     elapsedMs: Int, publications: Int, maximumPublicationGapMs: Int = 0
   ) async throws {
     _ = try await probe(
       "/diagnostic",
       body: [
-        "phase": phase, "generation": generation,
+        "phase": phase, "generation": generation, "connectionPhase": connectionPhase,
+        "anchorKeyWindow": view.window?.isKeyWindow ?? false,
         "elapsedMs": elapsedMs, "publications": publications,
         "maximumPublicationGapMs": maximumPublicationGapMs,
         "connected": view.engine.connected,
@@ -298,13 +299,20 @@ import XCTest
         if view.engine.connected || phases.contains("unavailable") { break }
         try await Task.sleep(for: .milliseconds(50))
       }
-      XCTAssertFalse(phases.contains("unavailable"), "native pairing/authentication failed")
-      XCTAssertTrue(view.engine.connected)
+      guard !phases.contains("unavailable"), view.engine.connected else {
+        try? await checkpoint(
+          view, connectionPhase: flow.diagnosticPhase.rawValue,
+          phase: "admission-failed", generation: generation, elapsedMs: 0,
+          publications: publications)
+        XCTFail("native pairing/admission failed at \(flow.diagnosticPhase.rawValue)")
+        return
+      }
       XCTAssertEqual(view.engine.generation, generation)
       XCTAssertEqual(GamepadReport.hex(view.engine.state), GamepadReport.hex(.neutral))
       _ = try await probe("/fresh")
       try await checkpoint(
-        view, phase: "connected", generation: generation, elapsedMs: 0, publications: publications)
+        view, connectionPhase: flow.diagnosticPhase.rawValue, phase: "connected",
+        generation: generation, elapsedMs: 0, publications: publications)
       let south = try XCTUnwrap(template.controls.first { $0.action == "south" })
       XCTAssertTrue(
         view.engine.begin(
@@ -333,7 +341,8 @@ import XCTest
             view.engine.state.leftTrigger == 1
           else {
             try? await checkpoint(
-              view, phase: "ended", generation: generation, elapsedMs: elapsed,
+              view, connectionPhase: flow.diagnosticPhase.rawValue, phase: "ended",
+              generation: generation, elapsedMs: elapsed,
               publications: publications - beforePublications,
               maximumPublicationGapMs: maximumPublicationGapMs)
             throw NSError(
@@ -345,7 +354,8 @@ import XCTest
           }
           if elapsed >= nextCheckpoint {
             try await checkpoint(
-              view, phase: "holding", generation: generation, elapsedMs: elapsed,
+              view, connectionPhase: flow.diagnosticPhase.rawValue, phase: "holding",
+              generation: generation, elapsedMs: elapsed,
               publications: publications - beforePublications,
               maximumPublicationGapMs: maximumPublicationGapMs)
             nextCheckpoint = elapsed + 5000
