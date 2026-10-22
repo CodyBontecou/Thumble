@@ -188,15 +188,20 @@ packageTest(
         transport.stderr?.on("data", (chunk) => {
           errors += chunk.toString();
         });
-        const client = new Client({
-          name: "thumble-packaged-test",
-          version: "1",
-        });
+        const client = new Client(
+          { name: "thumble-packaged-test", version: "1" },
+          {
+            versionNegotiation: {
+              mode: legacy ? "legacy" : { pin: "2026-07-28" },
+            },
+          },
+        );
         try {
           await client.connect(
             transport,
             legacy ? { prior: { kind: "legacy" } } : {},
           );
+          expect(client.getProtocolEra()).toBe(legacy ? "legacy" : "modern");
           expect((await client.listTools()).tools).toHaveLength(4);
           const status = await client.callTool({
             name: "receiver_status",
