@@ -138,6 +138,7 @@ test("independent Node SDK clients exercise both MCP eras, capability gates and 
     runtime: expect.stringMatching(/^v[0-9]+\.[0-9]+\.[0-9]+$/),
     eras: ["modern", "legacy"],
     scenarios: 4,
+    server: "bun-source",
     inputEnabled: false,
   });
 }, 30000);

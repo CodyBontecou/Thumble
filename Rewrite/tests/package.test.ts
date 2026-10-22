@@ -1,5 +1,3 @@
-import { Client } from "@modelcontextprotocol/client";
-import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
 import { expect, test } from "bun:test";
 import {
   existsSync,
@@ -171,54 +169,35 @@ packageTest(
       expect(
         (await invoke("stop-listening", "pairing")).result.transport.listening,
       ).toBe(false);
-      for (const legacy of [false, true]) {
-        const transport = new StdioClientTransport({
-          command: join(directory, `thumble-rewrite${extension}`),
-          args: ["mcp", "serve", "--runtime-dir", runtime],
-          env: {
-            ...process.env,
-            PATH:
-              process.platform === "win32"
-                ? (process.env.SystemRoot ?? "C:\\Windows") + "\\System32"
-                : "/usr/bin:/bin",
-          },
-          stderr: "pipe",
-        });
-        let errors = "";
-        transport.stderr?.on("data", (chunk) => {
-          errors += chunk.toString();
-        });
-        const client = new Client(
-          { name: "thumble-packaged-test", version: "1" },
-          {
-            versionNegotiation: {
-              mode: legacy ? "legacy" : { pin: "2026-07-28" },
-            },
-          },
-        );
-        try {
-          await client.connect(
-            transport,
-            legacy ? { prior: { kind: "legacy" } } : {},
-          );
-          expect(client.getProtocolEra()).toBe(legacy ? "legacy" : "modern");
-          expect((await client.listTools()).tools).toHaveLength(4);
-          const status = await client.callTool({
-            name: "receiver_status",
-            arguments: {},
-          });
-          expect(status.isError).not.toBe(true);
-          expect(status.structuredContent).toMatchObject({ ok: true });
-          expect(
-            (await client.callTool({ name: "receiver_release", arguments: {} }))
-              .isError,
-          ).not.toBe(true);
-        } finally {
-          await client.close();
-        }
-        expect(errors).toBe("");
-        expect((await invoke("status")).ok).toBe(true);
-      }
+      const mcp = Bun.spawn(
+        [
+          "node",
+          resolve(root, "tooling/test-mcp-node.mjs"),
+          process.execPath,
+          join(directory, `thumble-rewrite${extension}`),
+          join(directory, `thumble-rewrite-receiver${extension}`),
+          process.platform === "win32"
+            ? (process.env.SystemRoot ?? "C:\\Windows") + "\\System32"
+            : "/usr/bin:/bin",
+        ],
+        { cwd: directory, stdout: "pipe", stderr: "pipe" },
+      );
+      const [mcpOutput, mcpError, mcpCode] = await Promise.all([
+        new Response(mcp.stdout).text(),
+        new Response(mcp.stderr).text(),
+        mcp.exited,
+      ]);
+      expect(mcpError).toBe("");
+      expect(mcpCode).toBe(0);
+      expect(JSON.parse(mcpOutput)).toEqual({
+        ok: true,
+        runtime: expect.stringMatching(/^v[0-9]+\.[0-9]+\.[0-9]+$/),
+        eras: ["modern", "legacy"],
+        scenarios: 4,
+        server: "standalone",
+        inputEnabled: false,
+      });
+      expect((await invoke("status")).ok).toBe(true);
       const stopped = await invoke("stop");
       expect(stopped.result.receiver.snapshot.active).toBe(false);
       const deadline = Date.now() + 3000;

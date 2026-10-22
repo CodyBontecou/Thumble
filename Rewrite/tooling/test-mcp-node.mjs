@@ -8,17 +8,36 @@ import { isAbsolute, join } from "node:path";
 import { Client } from "@modelcontextprotocol/client";
 import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
 
-const [bun, cli, receiver] = process.argv.slice(2);
+const [bun, cli, receiver, restrictedPath] = process.argv.slice(2);
+const source = cli?.endsWith(".ts") === true;
 if (![bun, cli, receiver].every((p) => typeof p === "string" && isAbsolute(p)))
   throw new Error("invalid_probe_arguments");
+const launcher = source ? [bun, cli] : [cli];
+const nativeOptions = source ? ["--receiver", receiver] : [];
+const serverEnvironment = {
+  ...process.env,
+  ...(restrictedPath === undefined ? {} : { PATH: restrictedPath }),
+};
 const parent = realpathSync(mkdtempSync(join(tmpdir(), "thumble-node-mcp-")));
 const runtime = join(parent, "runtime");
 const execute = promisify(execFile);
 const invoke = async (action) => {
   const { stdout, stderr } = await execute(
-    bun,
-    [cli, "service", action, "--runtime-dir", runtime, "--receiver", receiver],
-    { timeout: 5000, maxBuffer: 65536, windowsHide: true },
+    launcher[0],
+    [
+      ...launcher.slice(1),
+      "service",
+      action,
+      "--runtime-dir",
+      runtime,
+      ...nativeOptions,
+    ],
+    {
+      timeout: 5000,
+      maxBuffer: 65536,
+      windowsHide: true,
+      env: serverEnvironment,
+    },
   );
   assert.equal(stderr, "");
   const value = JSON.parse(stdout);
@@ -27,6 +46,8 @@ const invoke = async (action) => {
 };
 let phase = "startup";
 let trace = [];
+let completed = 0;
+const eras = new Set();
 try {
   await invoke("start");
   const token = JSON.parse(
@@ -38,18 +59,17 @@ try {
       phase = `connect-${legacy ? "legacy" : "modern"}-${recording ? "recording" : "default"}`;
       trace = [];
       const transport = new StdioClientTransport({
-        command: bun,
+        command: launcher[0],
         args: [
-          cli,
+          ...launcher.slice(1),
           "mcp",
           "serve",
           "--runtime-dir",
           runtime,
-          "--receiver",
-          receiver,
+          ...nativeOptions,
           ...(recording ? ["--allow-recorded-input"] : []),
         ],
-        env: { ...process.env, THUMBLE_REWRITE_MCP_TRACE: "1" },
+        env: { ...serverEnvironment, THUMBLE_REWRITE_MCP_TRACE: "1" },
         stderr: "pipe",
       });
       let stderr = "";
@@ -73,6 +93,7 @@ try {
             : { timeout: 5000 },
         );
         assert.equal(client.getProtocolEra(), legacy ? "legacy" : "modern");
+        eras.add(client.getProtocolEra());
         phase = "listing";
         const tools = (
           await client.listTools(undefined, { timeout: 5000 })
@@ -175,6 +196,7 @@ try {
           "",
         );
       }
+      completed++;
       phase = "service-survival";
       assert.equal(
         (await invoke("status")).receiver.snapshot.inputEnabled,
@@ -185,8 +207,9 @@ try {
     JSON.stringify({
       ok: true,
       runtime: process.version,
-      eras: ["modern", "legacy"],
-      scenarios: 4,
+      eras: [...eras],
+      scenarios: completed,
+      server: source ? "bun-source" : "standalone",
       inputEnabled: false,
     }),
   );
