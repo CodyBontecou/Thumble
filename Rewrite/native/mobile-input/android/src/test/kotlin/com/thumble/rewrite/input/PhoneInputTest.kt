@@ -525,6 +525,10 @@ class PhoneInputTest {
                     )
                 val admission = client.prepareInput(map)
                 val engine = admission.bind()
+                val adopted = engine.claimTouchSurface()
+                assertEquals(generation, adopted.generation)
+                assertEquals(generation, adopted.revision)
+                assertTrue(engine.connected)
                 // The sink is bounded and asynchronous: witness actual receiver admission instead
                 // of treating status as a flush.
                 command(122)

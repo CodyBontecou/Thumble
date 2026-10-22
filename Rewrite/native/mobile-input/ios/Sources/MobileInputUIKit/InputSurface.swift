@@ -6,6 +6,8 @@
   /// The output closure is a native transport/recording sink, never a JS event callback.
   @MainActor public final class InputSurface: UIView {
     public let engine: InputEngine
+    public private(set) var configuration: ControlMap?
+    private var wasAttached = false
     private var identities: [ObjectIdentifier: (UInt64, String)] = [:]
     private var nextIdentity: UInt64 = 0
     private var installedAt = 0.0
@@ -23,9 +25,17 @@
         self, selector: #selector(locked),
         name: UIApplication.protectedDataWillBecomeUnavailableNotification, object: nil)
     }
+    /// Adopt the engine already activated by PhoneControlClient.bindInput.
+    public convenience init(connectedEngine: InputEngine) throws {
+      let map = try connectedEngine.claimTouchSurface()
+      self.init(engine: connectedEngine)
+      configuration = map
+      installedAt = ProcessInfo.processInfo.systemUptime
+    }
     @available(*, unavailable) required init?(coder: NSCoder) { nil }
     @discardableResult public func configure(_ map: ControlMap) throws -> ActivationReceipt {
       let receipt = try engine.activate(map)
+      configuration = map
       identities.removeAll()
       installedAt = ProcessInfo.processInfo.systemUptime
       return receipt
@@ -61,9 +71,10 @@
       displayLink = nil
       guard window != nil else {
         identities.removeAll()
-        engine.cancel(.disconnected)
+        if wasAttached { engine.cancel(.disconnected) }
         return
       }
+      wasAttached = true
       let target = DisplayTarget(surface: self)
       let link = CADisplayLink(target: target, selector: #selector(DisplayTarget.tick(_:)))
       link.preferredFramesPerSecond = 60

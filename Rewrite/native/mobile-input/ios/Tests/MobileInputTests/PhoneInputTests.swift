@@ -409,6 +409,9 @@ private func everyNativeLifecycleCancellationClosesTheGrantChannel(_ reason: Rel
       let map = ControlMap(
         generation: generation, revision: generation, controls: inputMap().controls)
       let engine = try await control.bindInput(map)
+      let adopted = try engine.claimTouchSurface()
+      #expect(adopted.generation == generation && adopted.revision == generation)
+      #expect(engine.connected)
       try command(122)
       #expect(try await line()["freshNeutral"] as? Bool == true)
       #expect(engine.begin(id: 1, generation: generation, x: 0.2, y: 0.2))

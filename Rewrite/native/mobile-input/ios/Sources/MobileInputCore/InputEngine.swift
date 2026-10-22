@@ -14,6 +14,7 @@ import ThumbleContracts
   private var sequence: UInt64 = 0
   private var captures: [UInt64: Capture] = [:]
   private var admitted = false
+  private var surfaceClaimed = false
   private var publishing = false
   private var disposed = false
   var onRelease: (ReleaseReason) -> Void = { _ in }
@@ -55,6 +56,16 @@ import ThumbleContracts
     state = .neutral
     connected = true
     emit()
+  }
+  /// Single-use handoff of a newly bound, neutral engine to its native surface.
+  /// Returning the admitted map avoids a second activation or caller-supplied epochs.
+  public func claimTouchSurface() throws -> ControlMap {
+    guard !publishing else { throw InputError.reentrant }
+    guard !disposed, connected, !practice, !surfaceClaimed, captures.isEmpty,
+      sequence == 1, let map
+    else { throw InputError.unavailable }
+    surfaceClaimed = true
+    return map
   }
   @discardableResult public func begin(id: UInt64, generation: String, x: Double, y: Double) -> Bool
   {

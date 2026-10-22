@@ -161,6 +161,78 @@ class PracticeInputTest {
         device.unfreezeRotation()
     }
 
+    @Test
+    fun connectedEngineSurvivesInstallationCapturesTouchesAndReleasesOnRemoval() {
+        val surface = ui {
+            val activity =
+                ActivityLifecycleMonitorRegistry.getInstance()
+                    .getActivitiesInStage(Stage.RESUMED)
+                    .single()
+            val engine = com.thumble.rewrite.input.InputEngine({ true })
+            val map =
+                com.thumble.rewrite.input.ControlMap(
+                    generation = "7",
+                    revision = "4",
+                    controls =
+                        listOf(
+                            com.thumble.rewrite.input.ControlRegion(
+                                "face",
+                                "south",
+                                0.0,
+                                0.0,
+                                1.0,
+                                1.0,
+                            )
+                        ),
+                )
+            engine.activate(map)
+            engine.connect("7")
+            val view = com.thumble.rewrite.input.InputSurface.connected(activity, engine)
+            assertEquals(map, view.configuration)
+            assertTrue(engine.connected)
+            try {
+                com.thumble.rewrite.input.InputSurface.connected(activity, engine)
+                fail("duplicate surface accepted")
+            } catch (_: IllegalStateException) {}
+            assertTrue(engine.connected)
+            activity.addContentView(
+                view,
+                android.widget.FrameLayout.LayoutParams(240, 160).apply {
+                    leftMargin = 30
+                    topMargin = 50
+                },
+            )
+            view
+        }
+        try {
+            device.waitForIdle()
+            SystemClock.sleep(30)
+            val center = ui {
+                assertTrue(surface.engine.connected)
+                val origin = IntArray(2)
+                surface.getLocationOnScreen(origin)
+                Point(origin[0] + surface.width / 2f, origin[1] + surface.height / 2f)
+            }
+            val down = SystemClock.uptimeMillis()
+            send(down, MotionEvent.ACTION_DOWN, listOf(center))
+            ui {
+                assertEquals(setOf("south"), surface.engine.state.buttons.map { it.name }.toSet())
+            }
+            send(down, MotionEvent.ACTION_UP, listOf(center))
+            ui { assertEquals(GamepadReport.neutral(), surface.engine.state) }
+            ui {
+                (surface.parent as ViewGroup).removeView(surface)
+                assertFalse(surface.engine.connected)
+                assertEquals(GamepadReport.neutral(), surface.engine.state)
+            }
+        } finally {
+            ui {
+                (surface.parent as? ViewGroup)?.removeView(surface)
+                surface.dispose()
+            }
+        }
+    }
+
     private data class Point(val x: Float, val y: Float)
 
     private fun point(probe: JSONObject): Point = ui {

@@ -16,6 +16,14 @@ The route tracks at most 64 outstanding sequence/time pairs, with no cached plai
 
 The 150ms watchdog targets the CLI's current 350ms input TTL and requires continued native display sampling. It does not guarantee repair before arbitrary user-selected TTLs or network stalls. Shorter TTL configuration needs explicit timing negotiation before exposing it to users. If the receiver has already expired, neither fallback nor progress restores the source: a fresh acknowledged activation is required. Grant/credential wall and continuous deadlines remain independent of routing, and input never renews the configuration owner lease.
 
+## Native surface handoff
+
+`PhoneControlClient.bindInput` on Swift and `PhoneInputAdmission.bind` on Kotlin return an already activated, connected engine. Install it with `InputSurface(connectedEngine:)` or `InputSurface.connected(context, engine)`. These native factories claim the admitted immutable map directly; they do not activate again, change the receipt, emit another neutral packet or expose grant material. Sequence zero remains the initial reliable neutral sample; the first touch uses sequence one.
+
+An engine permits one surface claim over its lifetime, on its UI owner, outside publication, immediately after successful neutral admission and before any subsequent sample or captured touch. Rejected claims leave the engine untouched. A tick before installation makes the handoff unavailable. Reconnect requires a fresh admitted engine and surface. The caller must dispose/close a bound engine if installation fails; rejected claims do not retire another surface's active source.
+
+The first native attachment and initial size establish the view without cancelling the source. UIKit can assemble the view in an unattached container. Subsequent detachment, resizing, backgrounding and screen locking retain the existing release behavior. Reattaching a detached view never reconnects its engine. These factories are native APIs; no React property or event carries credentials, input packets or engines.
+
 ## Verification and remaining gates
 
 Native route tests verify reliable neutral admission, acknowledged UDP, dropped UDP, exact ciphertext fallback, one-way selection, monotonic counters, scope/clock rejection, partial-progress deadlines and fixed metadata bounds. Real UDP socket tests deliver exact packet bytes and verify terminal close. Client tests keep UDP setup blocked while binding and using TLS, then require cleanup of a late setup result; malformed/inactive/foreign/unsent progress closes a held touch owner.

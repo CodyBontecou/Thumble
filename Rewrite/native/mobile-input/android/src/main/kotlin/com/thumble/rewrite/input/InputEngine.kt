@@ -22,6 +22,7 @@ class InputEngine(
     private var sequence = 0uL
     private val captures = mutableMapOf<Long, Capture>()
     private var admitted = false
+    private var surfaceClaimed = false
     private var publishing = false
     private var disposed = false
     var connected = false
@@ -68,6 +69,25 @@ class InputEngine(
         state = GamepadReport.neutral()
         connected = true
         emit()
+    }
+
+    /** Claim a newly bound neutral engine exactly once without reactivating its grant. */
+    fun claimTouchSurface(): ControlMap {
+        checkOwner()
+        check(!publishing) { "reentrant" }
+        check(
+            !disposed &&
+                connected &&
+                !practice &&
+                !surfaceClaimed &&
+                captures.isEmpty() &&
+                sequence == 1uL
+        ) {
+            "unavailable"
+        }
+        val admitted = checkNotNull(map) { "unavailable" }
+        surfaceClaimed = true
+        return admitted
     }
 
     fun begin(id: Long, generation: String, x: Double, y: Double): Boolean {

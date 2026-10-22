@@ -106,4 +106,40 @@ import XCTest
     XCTAssertEqual(GamepadReport.hex(view.engine.state), GamepadReport.hex(.neutral))
     XCTAssertFalse(window.hitTest(point, with: nil) === view.surface)
   }
+  func testConnectedEngineSurvivesInitialInstallationAndReleasesOnRemoval() async throws {
+    let window = try await applicationWindow()
+    var samples: [InputSample] = []
+    let engine = InputEngine(output: {
+      samples.append($0)
+      return true
+    })
+    let map = try fixtureMap()
+    try engine.activate(map)
+    try engine.connect(generation: map.generation)
+    let surface = try InputSurface(connectedEngine: engine)
+    XCTAssertEqual(surface.configuration?.generation, map.generation)
+    XCTAssertEqual(surface.configuration?.revision, map.revision)
+    XCTAssertEqual(samples.count, 1)
+    XCTAssertEqual(samples.first?.sequence, "0")
+    let container = UIView(frame: CGRect(x: 20, y: 40, width: 240, height: 160))
+    surface.frame = container.bounds
+    container.addSubview(surface)
+    XCTAssertTrue(engine.connected)
+    defer {
+      surface.dispose()
+      container.removeFromSuperview()
+    }
+    window.addSubview(container)
+    container.layoutIfNeeded()
+    XCTAssertTrue(surface.window === window)
+    XCTAssertTrue(engine.connected)
+    XCTAssertThrowsError(try InputSurface(connectedEngine: engine))
+    XCTAssertTrue(engine.connected)
+    surface.removeFromSuperview()
+    XCTAssertFalse(engine.connected)
+    XCTAssertEqual(GamepadReport.hex(engine.state), GamepadReport.hex(.neutral))
+    container.addSubview(surface)
+    XCTAssertFalse(engine.connected)
+  }
+
 }

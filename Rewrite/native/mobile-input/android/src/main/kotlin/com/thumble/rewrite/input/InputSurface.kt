@@ -16,6 +16,9 @@ import android.view.View
 /** Transparent native overlay for the React renderer; stable pointer IDs, never indices. */
 class InputSurface(context: Context, val engine: InputEngine) :
     View(context), Choreographer.FrameCallback {
+    var configuration: ControlMap? = null
+        private set
+
     private val generations = mutableMapOf<Int, String>()
     private var installedAt = Long.MAX_VALUE
     private var registered = false
@@ -62,6 +65,7 @@ class InputSurface(context: Context, val engine: InputEngine) :
 
     fun configure(map: ControlMap): ActivationReceipt {
         val receipt = engine.activate(map)
+        configuration = map
         generations.clear()
         installedAt = SystemClock.uptimeMillis()
         return receipt
@@ -180,5 +184,16 @@ class InputSurface(context: Context, val engine: InputEngine) :
     override fun performClick(): Boolean {
         super.performClick()
         return true
+    }
+
+    companion object {
+        /** Attach an already authenticated engine; its admitted map remains authoritative. */
+        fun connected(context: Context, engine: InputEngine): InputSurface {
+            val map = engine.claimTouchSurface()
+            return InputSurface(context, engine).apply {
+                configuration = map
+                installedAt = SystemClock.uptimeMillis()
+            }
+        }
     }
 }
