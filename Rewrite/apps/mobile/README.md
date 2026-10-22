@@ -1,10 +1,11 @@
 # Rewrite mobile application — in progress
 
-Expo development/native builds for iOS and Android. This slice runs the standard
-controller in **local practice**: native feedback, no receiver connection and no OS
-input. Pairing, native credential/control binding, renewal, editing, haptics and WoW
-presentation are subsequent integration work. This does not replace the retained
-application or satisfy launch acceptance.
+Expo native development/Release builds for iOS and Android. The app includes local
+practice and a native connection flow: pinned TLS enrollment, credential-provider
+storage, UDP/TLS input, renewal, release and neutral reconnect. Input currently
+reaches a recording receiver; no OS input is emitted. Profile editing, haptics,
+WoW presentation and launch acceptance remain open. Hosted iOS bundled-app
+reliability is under investigation; local passes do not close it.
 
 From `Rewrite`, install the pinned Bun/Node dependencies with `bun install
 --frozen-lockfile`, then run `bun run mobile:prepare`. In `apps/mobile`, run
@@ -39,12 +40,16 @@ host output, and released touches are never reconstructed on reopening.
 
 ## Headless witnesses
 
-Use dedicated synthetic test simulators/emulators, without physical output.
+Use dedicated synthetic test simulators/emulators, without physical output. First
+build the recording-only witness from `Rewrite/`: `cargo +1.88.0 build --locked
+--manifest-path native/receiver/Cargo.toml --example phone_input_probe`. The Python
+harness owns the localhost witness and supplies its ephemeral QA port; direct
+test invocation cannot establish pairing/renewal acceptance.
 
 Android, after prebuild, from `android/`:
 
 ```sh
-ANDROID_SERIAL=YOUR_TEST_SERIAL ./gradlew :app:connectedNativeQaAndroidTest -PreactNativeArchitectures=arm64-v8a
+ANDROID_SERIAL=YOUR_TEST_SERIAL python3 ../../../tooling/run_mobile_app_probe.py --platform android -- ./gradlew :app:connectedNativeQaAndroidTest -PreactNativeArchitectures=arm64-v8a
 ```
 
 The `.qa` application variant bundles Release JavaScript/native dependencies and
@@ -52,8 +57,8 @@ keeps test classes unminified. Production Release keeps its own shrinking policy
 Instrumentation injects actual system touch events into all 19 regions and a
 six-finger chord, blocks the actual React Native JS queue, requires native frame
 feedback to advance, and checks cancellation, background/sleep release, neutral
-waking/rotation, and Done while another finger holds a control. Seven cases are
-required. Real injected stick coordinates allow one signed 16-bit unit of
+waking/rotation, and Done while another finger holds a control. Ten cases are
+required, including native connection, renewal, release and reconnect witnesses. Real injected stick coordinates allow one signed 16-bit unit of
 quantization error; buttons, triggers, headers and complete neutralization remain
 exact. Test setup wakes only its selected synthetic emulator; APKs build before
 CI boots it. On emulator hardware, setup can close one specifically identified
@@ -69,8 +74,11 @@ iOS, after prebuild, from `apps/mobile`:
 ```sh
 ruby tests/prepare-ios.rb
 (cd ios && pod install)
-xcodebuild -workspace ios/ThumbleRewrite.xcworkspace -scheme NativePortalTests -configuration Release -destination 'platform=iOS Simulator,id=YOUR_TEST_UDID' -derivedDataPath /tmp/thumble-mobile-ios-qa -parallel-testing-enabled NO ENABLE_TESTABILITY=YES CODE_SIGNING_ALLOWED=NO test
+python3 ../../tooling/run_mobile_app_probe.py --platform ios -- xcodebuild -workspace ios/ThumbleRewrite.xcworkspace -scheme NativePortalTests -configuration Release -destination 'platform=iOS Simulator,id=YOUR_TEST_UDID' -derivedDataPath /tmp/thumble-mobile-ios-qa -parallel-testing-enabled NO ENABLE_TESTABILITY=YES test
 ```
+
+The generated QA host uses simulator-only ad-hoc entitlements for the real
+Keychain provider. Do not disable host signing for these tests.
 
 The QA target disables Swift explicit dependency scanning after a reproduced
 Xcode 26.5 scanner deadlock; production compiler settings remain unchanged.
@@ -81,7 +89,8 @@ six-finger injection or JavaScript-stall acceptance. The separate native core te
 and SDK builds remain required. Preserve failures as well as successful runs.
 
 Physical-device latency, minimum touch targets across phone sizes, dark/large text
-and motion/accessibility review, signing/clean install, real transport and grant
-renewal remain open. Retained stack-safety verification remains required for
+and motion/accessibility review, signing/clean install and reliable hosted app
+acceptance remain open. The native transport/renewal recording witnesses run in
+the bundled-app suite; they are not physical gameplay evidence. Retained stack-safety verification remains required for
 subsequent shared-model/startup changes. Simulator compilation or
 practice routing does not certify gameplay or optical live sync.

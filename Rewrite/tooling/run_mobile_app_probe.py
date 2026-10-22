@@ -4,6 +4,7 @@ Only the QA test bundles know this side channel. Product code uses its normal
 native invitation field, credential provider, pinned TLS and native touch owner.
 """
 import argparse
+import http.client
 import json
 import os
 from pathlib import Path
@@ -41,9 +42,27 @@ def decode_checkpoint(value):
     return {key: value[key] for key in sorted(CHECKPOINT_FIELDS)}
 
 
+GET_PHASES = frozenset({"/health", "/begin", "/held", "/renewal-start", "/renewal-verified", "/fresh", "/neutral", "/next", "/finish"})
+
+
+def check_probe_health(port):
+    """Direct host loopback check; no proxy, invitation or native receiver involved."""
+    connection = http.client.HTTPConnection("127.0.0.1", port, timeout=2)
+    try:
+        connection.request("GET", "/health")
+        response = connection.getresponse()
+        return response.status == 200 and response.read(129) == b'{"ok":true}'
+    except (OSError, http.client.HTTPException):
+        return False
+    finally:
+        connection.close()
+
+
 class Probe:
     def __init__(self):
         self.process = None
+        self.begin_requests = 0
+        self.health_requests = 0
         self.lines = queue.Queue(maxsize=32)
         self.lock = threading.Lock()
         self.completed = False
@@ -65,6 +84,11 @@ class Probe:
         return self.line()
 
     def request(self, path):
+        if path == "/health":
+            self.health_requests = min(128, self.health_requests + 1)
+            return {"ok": True}
+        if path == "/begin":
+            self.begin_requests = min(128, self.begin_requests + 1)
         with self.lock:
             if path == "/begin":
                 assert self.process is None, "app_probe_already_started"
@@ -199,10 +223,11 @@ def main():
                     reverse_ports.add(tls_port)
                 payload = json.dumps(value, separators=(",", ":")).encode()
                 self.send_response(200)
-                if self.path != "/begin":
+                if self.path not in {"/begin", "/health"}:
                     print("app_probe_phase_pass " + self.path, flush=True)
             except Exception as error:
-                print("app_probe_phase_failed " + self.path + " " + type(error).__name__ + " probeFailure=" + (probe.failure_codes[-1] if probe.failure_codes else "none"), flush=True)
+                phase = self.path if self.path in GET_PHASES else "unknown"
+                print("app_probe_phase_failed " + phase + " " + type(error).__name__ + " probeFailure=" + (probe.failure_codes[-1] if probe.failure_codes else "none"), flush=True)
                 payload = b'{"error":"app_probe_failed"}'
                 self.send_response(500)
             self.send_header("Content-Type", "application/json")
@@ -213,7 +238,18 @@ def main():
             pass  # Never log invitations or network payloads.
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     port = server.server_port
-    threading.Thread(target=server.serve_forever, daemon=True).start()
+    server_thread = threading.Thread(target=server.serve_forever, daemon=True)
+    server_thread.start()
+    health_stop = threading.Event()
+    health = {"attempts": 0, "passed": 0, "failed": 0}
+    def monitor_health():
+        while not health_stop.wait(10):
+            healthy = check_probe_health(port)
+            health["attempts"] = min(128, health["attempts"] + 1)
+            field = "passed" if healthy else "failed"
+            health[field] = min(128, health[field] + 1)
+    health_thread = threading.Thread(target=monitor_health, daemon=True)
+    health_thread.start()
     adb = Path(os.environ.get("ANDROID_HOME", "")) / "platform-tools/adb"
     reverse = []
     if args.platform == "android":
@@ -225,14 +261,19 @@ def main():
     else:
         (ROOT / "apps/mobile/tests/ios/AppProbeConfig.json").write_text(json.dumps({"port": port}))
     try:
+        healthy = check_probe_health(port)
+        health.update({"attempts": 1, "passed": int(healthy), "failed": int(not healthy)})
+        assert healthy, "app_probe_http_server_not_ready"
         result = subprocess.call(command)
         assert result == 0, "app_test_command_failed"
         assert probe.completed, "native app pairing/reconnect witness did not finish"
         print("Verified app native pairing/reconnect against recording-only receiver: " + json.dumps(probe.counts), flush=True)
     finally:
         native_exit_before_cleanup = probe.process.poll() if probe.process is not None else None
+        health_stop.set()
+        health_thread.join(timeout=3)
         probe.close()
-        print("[DEBUG-renewal-app] final " + json.dumps({"completed": probe.completed, "counts": probe.counts, "nativeExitBeforeCleanup": native_exit_before_cleanup, "nativeFailureCodes": probe.failure_codes, "lastCheckpoint": probe.checkpoints[-1] if probe.checkpoints else None}, sort_keys=True), flush=True)
+        print("[DEBUG-renewal-app] final " + json.dumps({"completed": probe.completed, "counts": probe.counts, "httpDiagnostics": {"beginRequests": probe.begin_requests, "healthRequests": probe.health_requests, "serverThreadAlive": server_thread.is_alive(), "healthMonitor": health}, "nativeExitBeforeCleanup": native_exit_before_cleanup, "nativeFailureCodes": probe.failure_codes, "lastCheckpoint": probe.checkpoints[-1] if probe.checkpoints else None}, sort_keys=True), flush=True)
         server.shutdown()
         server.server_close()
         if reverse:

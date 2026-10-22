@@ -1,8 +1,14 @@
 """Diagnostic side-channel regression checks: arbitrary data must not reach logs."""
 import contextlib
 import io
+import http.client
+import json
+from pathlib import Path
+import tempfile
+from unittest.mock import patch
 import unittest
 from run_mobile_app_probe import Probe, decode_checkpoint
+import run_mobile_app_probe
 
 
 class CheckpointTests(unittest.TestCase):
@@ -45,6 +51,47 @@ class CheckpointTests(unittest.TestCase):
         self.assertNotIn("must-not-be-logged", output.getvalue())
         self.assertEqual(len(probe.checkpoints), 64)
         self.assertEqual(len(output.getvalue().splitlines()), 64)
+
+
+class HttpLivenessTests(unittest.TestCase):
+    def test_health_route_does_not_start_native_input_or_take_its_lock(self):
+        probe = Probe()
+        with probe.lock:
+            for _ in range(130):
+                self.assertEqual(probe.request("/health"), {"ok": True})
+        self.assertIsNone(probe.process)
+        self.assertEqual(probe.health_requests, 128)
+        self.assertEqual(probe.begin_requests, 0)
+
+    def test_failed_app_command_preserves_host_liveness_without_reflecting_unknown_paths(self):
+        with tempfile.TemporaryDirectory(prefix="thumble-http-witness-") as temporary:
+            root = Path(temporary)
+            (root / "apps/mobile/tests/ios").mkdir(parents=True)
+            output = io.StringIO()
+            def run_command(_):
+                port = json.loads((root / "apps/mobile/tests/ios/AppProbeConfig.json").read_text())["port"]
+                connection = http.client.HTTPConnection("127.0.0.1", port, timeout=2)
+                try:
+                    connection.request("GET", "/unknown?credential=must-not-be-recorded")
+                    response = connection.getresponse()
+                    self.assertEqual(response.status, 500)
+                    self.assertEqual(response.read(), b'{"error":"app_probe_failed"}')
+                finally:
+                    connection.close()
+                return 1
+            with patch("sys.argv", ["run_mobile_app_probe.py", "--platform", "ios", "--", "synthetic-command"]), \
+                 patch.object(run_mobile_app_probe, "ROOT", root), \
+                 patch.object(run_mobile_app_probe.subprocess, "call", side_effect=run_command), \
+                 contextlib.redirect_stdout(output):
+                with self.assertRaisesRegex(AssertionError, "app_test_command_failed"):
+                    run_mobile_app_probe.main()
+            self.assertNotIn("must-not-be-recorded", output.getvalue())
+            final = json.loads(output.getvalue().split("[DEBUG-renewal-app] final ", 1)[1])
+            self.assertEqual(final["httpDiagnostics"]["beginRequests"], 0)
+            self.assertEqual(final["httpDiagnostics"]["healthRequests"], 1)
+            self.assertTrue(final["httpDiagnostics"]["serverThreadAlive"])
+            self.assertEqual(final["httpDiagnostics"]["healthMonitor"], {"attempts": 1, "passed": 1, "failed": 0})
+            self.assertIsNone(final["nativeExitBeforeCleanup"])
 
 
 if __name__ == "__main__":
