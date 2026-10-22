@@ -153,22 +153,3 @@ private func bytes(_ hex: String) -> Data {
   #expect(try vault.load(hostPin: value.metadata.hostPin, now: 100) == nil)
   #expect(try vault.load(hostPin: other.metadata.hostPin, now: 100)?.metadata == other.metadata)
 }
-
-#if os(iOS)
-  @Test private func actualDeviceKeychainPersistsSyntheticCredentialAcrossVaultInstances() throws {
-    let pin = UUID().uuidString.lowercased().replacingOccurrences(of: "-", with: "")
-    let now = UInt64(Date().timeIntervalSince1970 * 1000)
-    let value = try PhoneCredential(
-      hostPin: pin + pin, phoneID: "test-phone", epoch: 1, expiresAt: now + 300_000,
-      token: Data(repeating: 42, count: 32))
-    let vault = PhoneCredentialVault()
-    defer { try? vault.forget(hostPin: value.metadata.hostPin) }
-    try vault.save(value)
-    let loaded = try #require(
-      try PhoneCredentialVault().load(hostPin: value.metadata.hostPin, now: now))
-    #expect(loaded.metadata == value.metadata)
-    #expect(loaded.encoded() == value.encoded())
-    try vault.forget(hostPin: value.metadata.hostPin)
-    #expect(try PhoneCredentialVault().load(hostPin: value.metadata.hostPin, now: now) == nil)
-  }
-#endif

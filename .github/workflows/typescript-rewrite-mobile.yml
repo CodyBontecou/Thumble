@@ -57,10 +57,16 @@ jobs:
           python3 tooling/test_native_vault_results.py
           xcrun simctl list devices available -j > reports/mobile-ios-devices.json
           device_id="$(python3 -c 'import json; d=json.load(open("reports/mobile-ios-devices.json")); print(next(x["udid"] for runtime,devices in d["devices"].items() if ".iOS-" in runtime for x in devices if x["name"].startswith("iPhone")))')"
-          (cd native/mobile-input/ios && xcodebuild -scheme ThumbleMobileInput -destination "platform=iOS Simulator,id=$device_id" -derivedDataPath "$RUNNER_TEMP/rewrite-keychain-tests" -resultBundlePath "$RUNNER_TEMP/rewrite-keychain-tests.xcresult" test) 2>&1 | tee reports/mobile-ios-keychain.txt
+          library_status=0
+          (cd native/mobile-input/ios && xcodebuild -scheme ThumbleMobileInput -destination "platform=iOS Simulator,id=$device_id" -derivedDataPath "$RUNNER_TEMP/rewrite-ios-simulator" -resultBundlePath "$RUNNER_TEMP/rewrite-ios-library-tests.xcresult" -parallel-testing-enabled NO test) 2>&1 | tee reports/mobile-ios-library-tests.txt || library_status=$?
+          xcrun xcresulttool get test-results summary --schema-version 0.1.0 --path "$RUNNER_TEMP/rewrite-ios-library-tests.xcresult" > reports/mobile-ios-library-summary.json
+          provider_status=0
+          xcodebuild -project native/mobile-input/ios/ProviderTests/KeychainProvider.xcodeproj -scheme KeychainProvider -destination "platform=iOS Simulator,id=$device_id" -derivedDataPath "$RUNNER_TEMP/rewrite-keychain-tests" -resultBundlePath "$RUNNER_TEMP/rewrite-keychain-tests.xcresult" -parallel-testing-enabled NO test 2>&1 | tee reports/mobile-ios-keychain.txt || provider_status=$?
           xcrun xcresulttool get test-results tests --schema-version 0.1.0 --path "$RUNNER_TEMP/rewrite-keychain-tests.xcresult" > reports/mobile-ios-keychain-tests.json
           xcrun xcresulttool get test-results summary --schema-version 0.1.0 --path "$RUNNER_TEMP/rewrite-keychain-tests.xcresult" > reports/mobile-ios-keychain-summary.json
           python3 tooling/check_native_vault_results.py ios reports/mobile-ios-keychain-tests.json reports/mobile-ios-keychain-summary.json | tee reports/mobile-ios-keychain-verification.txt
+          if [[ "$library_status" != 0 ]]; then exit "$library_status"; fi
+          exit "$provider_status"
       - name: Build native iPhone module
         working-directory: Rewrite/native/mobile-input/ios
         run: xcodebuild -scheme ThumbleMobileInput -destination 'generic/platform=iOS' -derivedDataPath '${{ runner.temp }}/rewrite-ios-device' CODE_SIGNING_ALLOWED=NO build
