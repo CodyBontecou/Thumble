@@ -156,6 +156,23 @@ jobs:
       - run: bun run typecheck
       - name: Check bounded app diagnostic protocol
         run: python3 -m unittest discover -s tooling -p test_mobile_app_probe.py -v
+      - name: Identify the exact iOS compiler cache scope
+        id: ios-toolchain
+        run: |
+          thumble_toolchain_id="$( { xcodebuild -version; xcrun --sdk iphonesimulator --show-sdk-build-version; uname -m; } | shasum -a 256 | cut -d ' ' -f 1)"
+          echo "cache-id=$thumble_toolchain_id" >> "$GITHUB_OUTPUT"
+      # Restore compiler module/stat caches only. Test results, simulator data,
+      # products and the per-run QA port are always generated afresh.
+      - name: Restore validated iOS compiler module caches
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: |
+            ${{ runner.temp }}/rewrite-mobile-app/ModuleCache.noindex
+            ${{ runner.temp }}/rewrite-mobile-app/SDKStatCaches.noindex
+            ~/Library/Developer/Xcode/DerivedData/SDKStatCaches.noindex
+          key: rewrite-ios-modules-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.ios-toolchain.outputs.cache-id }}-${{ hashFiles('Rewrite/bun.lock', 'Rewrite/apps/mobile/app.json', 'Rewrite/apps/mobile/plugins/**', 'Rewrite/apps/mobile/tests/prepare-ios.rb', 'Rewrite/apps/mobile/modules/thumble-input/ios/**', 'Rewrite/native/mobile-input/ios/Sources/**', 'Rewrite/packages/contracts/generated/swift/**') }}
+          restore-keys: |
+            rewrite-ios-modules-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.ios-toolchain.outputs.cache-id }}-
       - name: Generate native iOS app and QA target
         working-directory: Rewrite/apps/mobile
         run: |

@@ -623,4 +623,5 @@ mod tests {
         }
     }
     include!("authenticated_control_renewal_tests.rs");
+    include!("authenticated_control_contention_tests.rs");
 }
