@@ -21,7 +21,7 @@ const NAMES = [
 ];
 const sha = (bytes: Uint8Array) =>
   createHash("sha256").update(bytes).digest("hex");
-function bounded(path: string, limit: number): Buffer {
+export function readPackageArtifact(path: string, limit: number): Buffer {
   let descriptor: number | undefined;
   try {
     if (lstatSync(path).isSymbolicLink()) throw new Error();
@@ -63,10 +63,10 @@ export function packageCapture(root: string, plan: CaptureBuild | null): void {
     throw new Error("capture_package_directory_invalid");
   let helper: Buffer | undefined, notices: Buffer | undefined;
   if (plan) {
-    helper = bounded(join(root, plan.source), 128 * 1024 * 1024);
+    helper = readPackageArtifact(join(root, plan.source), 128 * 1024 * 1024);
     notices =
       plan.platform === "win32"
-        ? bounded(
+        ? readPackageArtifact(
             join(root, "native/wow-capture-windows/THIRD-PARTY-NOTICES.txt"),
             256 * 1024,
           )

@@ -12,3 +12,8 @@ android {
     '../../../../../packages/contracts/generated/kotlin'
   ]
 }
+
+dependencies {
+  implementation "com.journeyapps:zxing-android-embedded:4.3.0"
+  compileOnly "com.facebook.react:react-android"
+}

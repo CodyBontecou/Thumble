@@ -1,0 +1,68 @@
+name: TypeScript rewrite macOS pairing QR
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "Rewrite/native/pairing-qr-macos/**"
+      - "Rewrite/apps/cli/src/main.ts"
+      - "Rewrite/apps/cli/src/pairing-qr.ts"
+      - "Rewrite/tooling/build*.ts"
+      - "Rewrite/tooling/package*.ts"
+      - "Rewrite/tooling/verify-pairing-qr.swift"
+      - "Rewrite/tests/pairing-qr.test.ts"
+      - "Rewrite/tests/fixtures/pairing-qr-helper.ts"
+      - ".github/workflows/typescript-rewrite-macos-pairing-qr.yml"
+  pull_request:
+    paths:
+      - "Rewrite/native/pairing-qr-macos/**"
+      - "Rewrite/apps/cli/src/main.ts"
+      - "Rewrite/apps/cli/src/pairing-qr.ts"
+      - "Rewrite/tooling/build*.ts"
+      - "Rewrite/tooling/package*.ts"
+      - "Rewrite/tooling/verify-pairing-qr.swift"
+      - "Rewrite/tests/pairing-qr.test.ts"
+      - "Rewrite/tests/fixtures/pairing-qr-helper.ts"
+      - ".github/workflows/typescript-rewrite-macos-pairing-qr.yml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+
+jobs:
+  synthetic-pairing-qr:
+    runs-on: macos-15
+    timeout-minutes: 15
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+    defaults:
+      run:
+        working-directory: Rewrite
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.3
+      - uses: dtolnay/rust-toolchain@1.88.0
+      - run: bun install --frozen-lockfile
+      - name: Check native QR formatting
+        run: swift format lint --recursive --strict native/pairing-qr-macos/Sources native/pairing-qr-macos/Tests native/pairing-qr-macos/Package.swift
+      - name: Verify synthetic QR pixels and exact Vision decode
+        run: swift test --package-path native/pairing-qr-macos -Xswiftc -warnings-as-errors
+      - name: Build optional native renderer and recording-only receiver
+        run: |
+          swift build -c release --package-path native/pairing-qr-macos -Xswiftc -warnings-as-errors
+          cargo +1.88.0 build --locked --manifest-path native/receiver/Cargo.toml
+      - name: Test explicit loopback pairing QR and bounded private artifact export
+        env:
+          THUMBLE_REWRITE_PAIRING_QR_TEST: "1"
+        run: bun test tests/pairing-qr.test.ts tests/build-capture.test.ts
+      - name: Compile opt-in QR review package without helper execution
+        run: bun tooling/build.ts --with-pairing-qr
+      # Synthetic/local invitations only; no camera, physical phone, device,
+      # capture activation, signing identity, provisioning or credential artifact upload.

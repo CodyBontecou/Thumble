@@ -1,3 +1,4 @@
+import { exportPairingQR, validatePairingQRDestination } from "./pairing-qr.ts";
 import { outputLaunchOptions } from "./output-launch.ts";
 import { runWowCaptureOwner } from "@thumble/service/wow-capture-owner-process";
 import { inspectWowCapturePermission } from "@thumble/service/wow-capture-permission";
@@ -67,6 +68,8 @@ function options(values: string[]): Map<string, string | true> {
         "--runtime-dir",
         "--receiver",
         "--capture-helper",
+        "--qr-output",
+        "--qr-helper",
         "--source",
         "--profile-id",
         "--new-profile-id",
@@ -121,6 +124,13 @@ function nativeIdentity(
 async function main(): Promise<unknown> {
   const [family, action, ...rest] = arguments_;
   const opts = options(rest);
+  if (
+    (opts.has("--qr-output") || opts.has("--qr-helper")) &&
+    (family !== "pairing" ||
+      !["open", "listen"].includes(action ?? "") ||
+      !opts.has("--qr-output"))
+  )
+    throw new Error("invalid_pairing_qr_option");
   if (
     (opts.has("--output") || opts.has("--allow-physical-output")) &&
     !(
@@ -362,17 +372,37 @@ async function main(): Promise<unknown> {
       opts.get("--reveal-secret") !== true
     )
       throw new Error("pairing_secret_output_opt_in_required");
+    const qrOutput = opts.has("--qr-output")
+      ? required(opts, "--qr-output")
+      : undefined;
+    const qrHelper = opts.has("--qr-helper")
+      ? required(opts, "--qr-helper")
+      : join(dirname(process.execPath), "thumble-pairing-qr-macos");
+    if (qrOutput) validatePairingQRDestination(qrOutput, qrHelper);
     if (action === "revoke")
       return requestPairing(readEndpoint(root, receiver), {
         command: "pairing-revoke",
         phoneId: required(opts, "--phone-id"),
       });
-    if (action === "listen")
-      return requestPairing(readEndpoint(root, receiver), {
+    if (action === "listen") {
+      const reply = await requestPairing(readEndpoint(root, receiver), {
         command: "pairing-listen",
         bindAddress: required(opts, "--bind-address"),
         advertiseHost: required(opts, "--advertise-host"),
       });
+      return qrOutput
+        ? { ...reply, qrArtifact: exportPairingQR(reply, qrOutput, qrHelper) }
+        : reply;
+    }
+    if (action === "open" && qrOutput) {
+      const reply = await requestPairing(readEndpoint(root, receiver), {
+        command: "pairing-open",
+      });
+      return {
+        ...reply,
+        qrArtifact: exportPairingQR(reply, qrOutput, qrHelper),
+      };
+    }
     return requestPairing(readEndpoint(root, receiver), {
       command: `pairing-${action}` as
         | "pairing-open"

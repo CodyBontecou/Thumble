@@ -18,6 +18,7 @@ test("optical packaging is explicitly requested and composes with literal macOS 
   for (const platform of ["darwin", "win32", "linux"]) {
     expect(buildOptions([], platform)).toEqual({
       withMacOutput: false,
+      withPairingQR: false,
       capture: null,
     });
   }

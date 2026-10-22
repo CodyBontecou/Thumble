@@ -48,7 +48,11 @@ def prepare(package, authorized, destination):
     decoded_profile = hid.decode_profile(profile)
     receiver = package / "thumble-rewrite-receiver"
     capture = package / "thumble-wow-capture-macos"
-    for source in (receiver, capture):
+    qr = package / "thumble-pairing-qr-macos"
+    sources = [receiver, capture]
+    if qr.exists() or qr.is_symlink():
+        sources.append(qr)
+    for source in sources:
         regular(source, 128 * 1024 * 1024)
     if not destination.is_absolute() or destination.exists() or destination.is_symlink():
         raise RuntimeError("destination must be a new absolute app bundle path")
@@ -65,6 +69,11 @@ def prepare(package, authorized, destination):
     shutil.copyfile(capture, nested)
     main.chmod(0o755)
     nested.chmod(0o755)
+    optional_qr = None
+    if qr in sources:
+        optional_qr = helpers / qr.name
+        shutil.copyfile(qr, optional_qr)
+        optional_qr.chmod(0o755)
     shutil.copyfile(profile, contents / "embedded.provisionprofile")
     bundle_info = {
         "CFBundleIdentifier": bundle_id,
@@ -86,7 +95,8 @@ def prepare(package, authorized, destination):
     entitlements.write_bytes(plistlib.dumps(signature["entitlements"]))
     # Nested capture has no restricted HID entitlements. Do not sign the Bun CLI
     # with invented hardened-runtime/JIT entitlements: it remains a sibling.
-    run(["codesign", "--force", "--options", "runtime", "--timestamp=none", "--sign", identity, nested])
+    for helper in [nested, *([optional_qr] if optional_qr else [])]:
+        run(["codesign", "--force", "--options", "runtime", "--timestamp=none", "--sign", identity, helper])
     run(["codesign", "--force", "--options", "runtime", "--timestamp=none", "--sign", identity,
          "--entitlements", entitlements, destination])
     hid.verify_artifact(destination, bundle_id=bundle_id, distribution="development")
@@ -98,7 +108,7 @@ def prepare(package, authorized, destination):
         "captureExecuted": False, "distributionAcceptance": False,
         "files": {str(path.relative_to(destination)): {"sha256": sha(path), "bytes": path.stat().st_size}
                   for path in sorted(destination.rglob("*")) if path.is_file()},
-        "unsignedSourceHashes": {receiver.name: sha(receiver), capture.name: sha(capture)},
+        "unsignedSourceHashes": {source.name: sha(source) for source in sources},
     }
     manifest_path = destination.parent / (destination.stem + ".manifest.json")
     if manifest_path.exists() or manifest_path.is_symlink():

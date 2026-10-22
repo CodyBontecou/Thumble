@@ -12,6 +12,7 @@ import android.text.InputFilter
 import android.text.InputType
 import android.view.View
 import android.view.WindowManager
+import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.Switch
@@ -38,6 +39,7 @@ internal class PhoneConnection(
     @Volatile private var closed = false
     private var prompt: AlertDialog? = null
     private var field: EditText? = null
+    private var scanner: QrInvitationScanner? = null
     private var enrollment: PhoneEnrollmentClient? = null
     private var control: PhoneControlClient? = null
     private var catalogClient: PhoneCatalogClient? = null
@@ -59,13 +61,18 @@ internal class PhoneConnection(
                     if (next === context) break
                     context = next
                 }
-                if (context === activity && !closed) {
+                if (context === activity && !closed && scanner?.awaitingPermission != true) {
                     close()
                     status("disconnected")
                 }
             }
 
-            override fun onActivityStopped(activity: Activity) {}
+            override fun onActivityStopped(activity: Activity) {
+                if (!closed && activity === hostActivity()) {
+                    close()
+                    status("disconnected")
+                }
+            }
 
             override fun onActivityDestroyed(activity: Activity) {}
 
@@ -113,6 +120,23 @@ internal class PhoneConnection(
         val content =
             LinearLayout(activity).apply {
                 orientation = LinearLayout.VERTICAL
+                addView(
+                    Button(activity).apply {
+                        text = "Scan pairing code"
+                        minimumHeight = (48 * resources.displayMetrics.density).toInt()
+                        setOnClickListener {
+                            scanner?.close()
+                            scanner =
+                                QrInvitationScanner(activity) { invitation ->
+                                        if (!closed && anchor.isAttachedToWindow) {
+                                            prompt?.dismiss()
+                                            launch(template, invitation, null)
+                                        }
+                                    }
+                                    .also { it.start() }
+                        }
+                    }
+                )
                 addView(input)
                 addView(touchFeedback)
             }
@@ -331,12 +355,20 @@ internal class PhoneConnection(
             control?.close()
             control = null
         }
+        scanner?.close()
+        scanner = null
         application.unregisterActivityLifecycleCallbacks(lifecycle)
         worker.shutdownNow()
         field?.text?.clear()
         field = null
         prompt?.dismiss()
         prompt = null
+    }
+
+    private fun hostActivity(): Activity? {
+        var context: Context = anchor.context
+        while (context is ContextWrapper && context !is Activity) context = context.baseContext
+        return context as? Activity
     }
 
     private fun savedEndpoint(): TrustedHostEndpoint? = runCatching {

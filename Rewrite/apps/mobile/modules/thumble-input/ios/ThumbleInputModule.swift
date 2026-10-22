@@ -8,6 +8,12 @@ import UIKit
 public final class ThumbleInputModule: Module {
   public func definition() -> ModuleDefinition {
     Name("ThumbleNativeInput")
+    AsyncFunction("requestControllerLandscape") { () throws -> String in
+      try MainActor.assumeIsolated { try ControllerOrientation.request() }
+    }.runOnQueue(.main)
+    AsyncFunction("restoreControllerOrientation") { (token: String) -> Bool in
+      MainActor.assumeIsolated { ControllerOrientation.restore(token) }
+    }.runOnQueue(.main)
     // Expo dispatches view AsyncFunctions on the main queue. Assert that
     // contract before entering the Swift UI actor; only typed Sendable metadata
     // leaves the actor, with bridge dictionaries assembled afterwards.

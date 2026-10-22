@@ -1,10 +1,11 @@
+import { packagePairingQR } from "./package-pairing-qr.ts";
 import { buildOptions } from "./build-options.ts";
 import { packageCapture } from "./package-capture.ts";
 import { checkCliNotices } from "./check-cli-notices.ts";
 import { createHash } from "node:crypto";
 import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
-const { withMacOutput, capture } = buildOptions(
+const { withMacOutput, withPairingQR, capture } = buildOptions(
   process.argv.slice(2),
   process.platform,
 );
@@ -46,6 +47,18 @@ for (const command of [
     ? [[process.execPath, "tooling/windows-capture-notices.ts", "--check"]]
     : []),
   ...(capture ? [[...capture.command]] : []),
+  ...(withPairingQR
+    ? [
+        [
+          "swift",
+          "build",
+          "-c",
+          "release",
+          "--package-path",
+          "native/pairing-qr-macos",
+        ],
+      ]
+    : []),
   [
     process.execPath,
     "build",
@@ -75,6 +88,7 @@ copyFileSync(
 );
 copyFileSync(resolve(root, "REVIEWING.md"), resolve(root, "dist/REVIEWING.md"));
 packageCapture(root, capture);
+packagePairingQR(root, withPairingQR);
 writeFileSync(
   resolve(root, "dist/README.txt"),
   [
@@ -84,6 +98,11 @@ writeFileSync(
     ...(withMacOutput
       ? [
           "Physical output requires explicit service selection and --allow-physical-output, and an appropriately authorized native helper. This build does not sign or provision that helper.",
+        ]
+      : []),
+    ...(withPairingQR
+      ? [
+          "Optional pairing QR helper: thumble-pairing-qr-macos. Explicit pairing open/listen --reveal-secret --qr-output ABSOLUTE_NEW_PNG writes a secret-bearing 0600 image; delete it after pairing. Helper assembly never runs pairing or native output.",
         ]
       : []),
     ...(capture
@@ -112,3 +131,6 @@ console.log(
       ? "Built standalone CLI and receiver with optional macOS output; no signing or physical activation performed"
       : "Built standalone CLI and recording receiver; no repository checkout is needed at runtime",
 );
+
+if (withPairingQR)
+  console.log("Optional macOS pairing QR helper compiled/copied; not executed");

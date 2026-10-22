@@ -36,6 +36,7 @@ import UIKit
 
   private weak var anchor: UIView?
   private var prompt: UIAlertController?
+  private var scanner: PairingQRScanner?
   private var task: Task<Void, Never>?
   private var enrollment: PhoneEnrollmentClient?
   private var catalogClient: PhoneCatalogClient?
@@ -72,6 +73,9 @@ import UIKit
     NotificationCenter.default.addObserver(
       self, selector: #selector(background),
       name: UIApplication.willResignActiveNotification, object: nil)
+    NotificationCenter.default.addObserver(
+      self, selector: #selector(enteredBackground),
+      name: UIApplication.didEnterBackgroundNotification, object: nil)
   }
   func start(template: ControlMap? = nil) {
     guard !closed, prompt == nil, task == nil, let anchor,
@@ -102,6 +106,10 @@ import UIKit
         self?.close()
         self?.status("cancelled")
       })
+    alert.addAction(
+      UIAlertAction(title: "Scan Mac QR code", style: .default) { [weak self] _ in
+        self?.afterPrompt { [weak self] in self?.scanInvitation(template: template) }
+      })
     if Self.savedEndpoint() != nil {
       alert.addAction(
         UIAlertAction(title: "Reconnect", style: .default) { [weak self] _ in
@@ -128,6 +136,22 @@ import UIKit
       alert?.textFields?.first?.isEnabled = true
       alert?.textFields?.first?.resignFirstResponder()
     }
+  }
+  private func scanInvitation(template: ControlMap?) {
+    guard !closed, scanner == nil, let root = anchor?.window?.rootViewController else { return }
+    var presenter = root
+    while let next = presenter.presentedViewController { presenter = next }
+    let scanner = PairingQRScanner { [weak self] invitation in
+      guard let self, !self.closed else { return }
+      self.scanner = nil
+      if let invitation {
+        self.pair(invitation, template: template)
+      } else {
+        self.start(template: template)
+      }
+    }
+    self.scanner = scanner
+    presenter.present(scanner, animated: true)
   }
   // Native camera/manual entry points have no secret-bearing React representation.
   func submitInvitation(_ text: String, template: ControlMap? = nil) {
@@ -297,6 +321,9 @@ import UIKit
       lastRuntimeOutcome = control.diagnosticRuntimeOutcome
     }
     closed = true
+    scanner?.close()
+    scanner?.dismiss(animated: false)
+    scanner = nil
     NotificationCenter.default.removeObserver(self)
     catalogClient?.close()
     catalogClient = nil
@@ -313,6 +340,12 @@ import UIKit
     prompt = nil
   }
   @objc private func background() {
+    // The explicit pre-auth camera permission sheet may briefly make the app inactive.
+    // No input/control channel exists in this phase; actual background still closes below.
+    if scanner != nil, control == nil, enrollment == nil { return }
+    enteredBackground()
+  }
+  @objc private func enteredBackground() {
     guard !closed else { return }
     close()
     status("disconnected")

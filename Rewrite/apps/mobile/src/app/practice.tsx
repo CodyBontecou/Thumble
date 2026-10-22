@@ -1,9 +1,24 @@
 import { useRouter } from "expo-router";
+import { useEffect } from "react";
+import { requireNativeModule } from "expo-modules-core";
 import { Pressable, Text, View, useWindowDimensions } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { NativeController } from "../components/NativeController";
 import { colors } from "../theme/colors";
+const orientation = requireNativeModule<{
+  requestControllerLandscape(): Promise<string>;
+  restoreControllerOrientation(token: string): Promise<boolean>;
+}>("ThumbleNativeInput");
+
+function releaseOrientation(token: string) {
+  try {
+    void orientation.restoreControllerOrientation(token).catch(() => {});
+  } catch {
+    /* Actual dimensions keep the orientation gate authoritative. */
+  }
+}
+
 export function ControllerScreen({
   connected = false,
   outputMode = "recording",
@@ -11,6 +26,25 @@ export function ControllerScreen({
   connected?: boolean;
   outputMode?: "recording" | "macos-hid";
 }) {
+  useEffect(() => {
+    let disposed = false;
+    let token: string | null = null;
+    try {
+      void orientation
+        .requestControllerLandscape()
+        .then((value) => {
+          if (disposed) releaseOrientation(value);
+          else token = value;
+        })
+        .catch(() => {});
+    } catch {
+      /* Keep the visible rotate instruction when the OS refuses. */
+    }
+    return () => {
+      disposed = true;
+      if (token !== null) releaseOrientation(token);
+    };
+  }, []);
   const insets = useSafeAreaInsets();
   const router = useRouter(),
     { width, height } = useWindowDimensions();

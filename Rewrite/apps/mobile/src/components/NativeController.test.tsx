@@ -13,7 +13,17 @@ mock.module("react-native", () => ({
   Platform: { OS: "ios" },
   PlatformColor: (name: string) => name,
 }));
+let orientationRequests: Array<{ resolve: (token: string) => void }> = [];
+let orientationRestores: string[] = [];
 mock.module("expo-modules-core", () => ({
+  requireNativeModule: () => ({
+    requestControllerLandscape: () =>
+      new Promise<string>((resolve) => orientationRequests.push({ resolve })),
+    restoreControllerOrientation: async (token: string) => {
+      orientationRestores.push(token);
+      return true;
+    },
+  }),
   requireNativeViewManager: (name: string) => name,
 }));
 let navigationBacks = 0;
@@ -47,6 +57,8 @@ afterEach(async () => {
   renderer = undefined;
   routeMode = undefined;
   navigation = [];
+  orientationRequests = [];
+  orientationRestores = [];
 });
 async function mount(connected = true) {
   await act(() => {
@@ -420,4 +432,30 @@ test("malformed route intents never construct a native owner and legacy route is
   expect(
     renderer?.root.findByProps({ testID: "connection-mode" }).props.children,
   ).toBe("Test mode");
+});
+
+test("controller route restores only its resolved native orientation token on exit", async () => {
+  await act(() => {
+    renderer = create(createElement(ControllerScreen));
+  });
+  expect(orientationRequests).toHaveLength(1);
+  await act(async () => {
+    orientationRequests[0]!.resolve("route-a");
+  });
+  await act(() => renderer?.unmount());
+  renderer = undefined;
+  expect(orientationRestores).toEqual(["route-a"]);
+});
+
+test("late orientation completion after unmount releases its token without mounting controls", async () => {
+  await act(() => {
+    renderer = create(createElement(ControllerScreen));
+  });
+  const request = orientationRequests[0]!;
+  await act(() => renderer?.unmount());
+  renderer = undefined;
+  await act(async () => {
+    request.resolve("late-route");
+  });
+  expect(orientationRestores).toEqual(["late-route"]);
 });

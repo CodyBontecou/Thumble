@@ -11,6 +11,7 @@ import android.view.ViewTreeObserver
 import android.widget.FrameLayout
 import com.thumble.rewrite.input.*
 import expo.modules.kotlin.AppContext
+import expo.modules.kotlin.functions.Queues
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.kotlin.viewevent.EventDispatcher
@@ -20,6 +21,14 @@ import kotlin.math.ceil
 class ThumbleInputModule : Module() {
     override fun definition() = ModuleDefinition {
         Name("ThumbleNativeInput")
+        AsyncFunction("requestControllerLandscape") {
+                ControllerOrientation.request(appContext.currentActivity)
+            }
+            .runOnQueue(Queues.MAIN)
+        AsyncFunction("restoreControllerOrientation") { token: String ->
+                ControllerOrientation.restore(token)
+            }
+            .runOnQueue(Queues.MAIN)
         View(ThumbleInputView::class) {
             Events("onAdmission", "onCatalog", "onControlMap")
             Prop("practiceMap") { view: ThumbleInputView, value: Map<String, Any?> ->
