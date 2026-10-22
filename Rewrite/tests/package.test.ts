@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import { FileAssetStore } from "@thumble/storage/asset-files";
 import { SqliteConfigurationRepository } from "@thumble/storage";
 import { catalogFixtureSource, a, b } from "./helpers/configuration-fixture.ts";
 import { expect, test } from "bun:test";
@@ -127,17 +129,29 @@ packageTest(
       runtime,
       join(directory, `thumble-rewrite-receiver${extension}`),
     );
+    const assetBytes = new TextEncoder().encode("standalone synthetic asset");
+    const assetSHA = createHash("sha256").update(assetBytes).digest("hex");
     try {
       configuration.commit({
         operationId: "fixture-seed",
         payloadHash: "f".repeat(64),
         expectedRevision: "0",
-        source: catalogFixtureSource(),
+        source: catalogFixtureSource().set(
+          "/assetSHA256",
+          JSON.stringify(assetSHA),
+        ),
+        assets: [assetBytes],
         affectedEntities: [a, b],
       });
     } finally {
       configuration.close();
     }
+    expect(
+      new FileAssetStore(
+        runtime,
+        join(directory, `thumble-rewrite-receiver${extension}`),
+      ).read(assetSHA),
+    ).toEqual(assetBytes);
     try {
       const identity = await invoke("initialize", "identity");
       expect(identity.result.certificatePin).toMatch(/^[0-9a-f]{64}$/);

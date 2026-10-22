@@ -194,6 +194,11 @@ fn main() {
                 native_args.get(3).map(Path::new),
             )
         }
+    } else if native_args
+        .first()
+        .is_some_and(|mode| mode.starts_with("assets-"))
+    {
+        thumble_rewrite_receiver::asset_files::run(&native_args)
     } else {
         args().and_then(|(mode, root, log)| match mode.as_str() {
         "secure-directory" => security::directory(&root),

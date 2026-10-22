@@ -29,3 +29,5 @@ pub mod native_ingress;
 mod input_broker;
 
 mod input_datagram;
+
+pub mod asset_files;

@@ -1,6 +1,6 @@
 # Durable configuration ledger v1
 
-The Bun service now owns a protected SQLite source ledger through the portable `ConfigurationRepository` application port. The host adapter is `@thumble/storage`. It persists exact lossless JSON source and atomic operation receipts. This is the storage seam for the rewrite, not activation of a profile format or migration of the retained authority. The active receiver configuration remains ephemeral; typed owned-document validation, scoped CLI/MCP writes, assets and runtime publication still require implementation. No generic raw-source write tool is exposed.
+The Bun service now owns a protected SQLite source ledger through the portable `ConfigurationRepository` application port. The host adapter is `@thumble/storage`. It persists exact lossless JSON source and atomic operation receipts. This is the storage seam for the rewrite, not activation of a profile format or migration of the retained authority. The active receiver configuration remains ephemeral; owned-v5 structural inspection and scoped catalog CLI/MCP writes now have separate contracts. The [asset preparation/recovery barrier](rewrite-asset-files-v1.md) extends this ledger; full authority import, rich editing and runtime publication still require implementation. No generic raw-source write tool is exposed.
 
 ## Ownership and protection
 

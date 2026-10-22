@@ -3,7 +3,10 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "exports": "./src/configuration-sqlite.ts",
+  "exports": {
+    ".": "./src/configuration-sqlite.ts",
+    "./asset-files": "./src/asset-files.ts"
+  },
   "dependencies": {
     "@thumble/application": "workspace:*",
     "@thumble/contracts": "workspace:*"

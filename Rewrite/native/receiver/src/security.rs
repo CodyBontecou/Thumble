@@ -9,6 +9,9 @@ use std::{
 pub fn directory(path: &Path) -> Result<(), &'static str> {
     private_directory(path, "rewrite-runtime-v1", b"thumble-rewrite-runtime-v1\n")
 }
+pub(crate) fn asset_directory(path: &Path) -> Result<(), &'static str> {
+    private_directory(path, "rewrite-assets-v1", b"thumble-rewrite-assets-v1\n")
+}
 pub(crate) fn identity_directory(path: &Path) -> Result<(), &'static str> {
     private_directory(
         path,

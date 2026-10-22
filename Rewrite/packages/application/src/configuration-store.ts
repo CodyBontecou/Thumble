@@ -13,6 +13,8 @@ export type ConfigurationCommit = Readonly<{
   expectedRevision: string;
   source: LosslessJson;
   affectedEntities: readonly string[];
+  /** Trusted validated assets; the fingerprint covers their references/content. */
+  assets?: readonly Uint8Array[];
 }>;
 /** Trusted use cases validate documents/capabilities and derive payloadHash server-side.
  * Never expose this generic source port or caller-supplied fingerprints as a wire operation. */

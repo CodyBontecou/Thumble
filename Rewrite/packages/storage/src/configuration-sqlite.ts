@@ -1,3 +1,4 @@
+import { FileAssetStore } from "./asset-files.ts";
 import { Database, constants } from "bun:sqlite";
 import { createHash } from "node:crypto";
 import { lstatSync } from "node:fs";
@@ -92,7 +93,7 @@ function storageError(error: unknown): Error {
   if (error instanceof ConfigurationRevisionConflict) return error;
   if (
     error instanceof Error &&
-    /^(configuration_|operation_id_reused)/.test(error.message)
+    /^(configuration_|asset_|operation_id_reused)/.test(error.message)
   )
     return error;
   if (error && typeof error === "object" && "code" in error) {
@@ -113,6 +114,8 @@ type ReceiptRow = {
 /** Host-only single-writer store. It never grants document validity or input authority. */
 export class SqliteConfigurationRepository implements ConfigurationRepository {
   readonly #db: Database;
+  readonly #assets: FileAssetStore;
+  readonly #assetDirectory: string;
   #closed = false;
   constructor(
     root: string,
@@ -135,6 +138,8 @@ export class SqliteConfigurationRepository implements ConfigurationRepository {
       maximumPages > MAX_PAGES
     )
       fail("configuration_limit_invalid");
+    this.#assets = new FileAssetStore(root, nativeExecutable);
+    this.#assetDirectory = join(root, "assets-v1");
     const path = join(root, FILE);
     let mainExists = false;
     for (const suffix of ["", "-journal", "-wal", "-shm"]) {
@@ -293,9 +298,41 @@ export class SqliteConfigurationRepository implements ConfigurationRepository {
         )
           fail("configuration_database_invalid");
       } else if (latest) fail("configuration_database_invalid");
+      this.recoverAssets();
     } catch (error) {
       this.#db.close();
       throw storageError(error);
+    }
+  }
+  private recoverAssets(): void {
+    try {
+      lstatSync(this.#assetDirectory);
+    } catch (error) {
+      if (
+        error &&
+        typeof error === "object" &&
+        "code" in error &&
+        error.code === "ENOENT"
+      )
+        return;
+      throw error;
+    }
+    for (const stage of this.#assets.pending()) {
+      let committed = false;
+      try {
+        committed =
+          this.receipt(stage.operationId, stage.payloadHash) !== undefined;
+      } catch (error) {
+        if (
+          !(error instanceof Error) ||
+          error.message !== "operation_id_reused"
+        )
+          throw error;
+      }
+      // Only a matching durable SQLite receipt proves this stage committed.
+      // Uncommitted stages may be incomplete; retiring metadata deletes no bytes.
+      if (committed) this.#assets.manifest(stage.stageId);
+      this.#assets.retire(stage.stageId);
     }
   }
   private open(): void {
@@ -353,7 +390,19 @@ export class SqliteConfigurationRepository implements ConfigurationRepository {
     const source = command.source.text(),
       contentHash = configurationSourceHash(command.source);
     try {
-      return this.#db
+      this.recoverAssets();
+      const previous = this.receipt(operationId, payloadHash);
+      if (previous) return Object.freeze({ receipt: previous, replayed: true });
+      const revision = this.current()?.revision ?? "0";
+      if (revision !== expectedRevision)
+        throw new ConfigurationRevisionConflict(revision);
+      if (BigInt(revision) >= MAX_COUNTER)
+        fail("configuration_revision_exhausted");
+      const stage =
+        command.assets === undefined
+          ? undefined
+          : this.#assets.prepare(operationId, payloadHash, command.assets);
+      const result = this.#db
         .transaction(() => {
           const previous = this.receipt(operationId, payloadHash);
           if (previous)
@@ -385,6 +434,14 @@ export class SqliteConfigurationRepository implements ConfigurationRepository {
           return Object.freeze({ receipt, replayed: false });
         })
         .immediate();
+      if (stage) {
+        // Cleanup failure cannot erase a confirmed commit. The durable record is
+        // reconciled against the receipt on reopen/before the next write.
+        try {
+          this.#assets.retire(stage.stageId);
+        } catch {}
+      }
+      return result;
     } catch (error) {
       throw storageError(error);
     }
