@@ -129,6 +129,34 @@ packageTest(
       server: "standalone",
       serviceRequired: false,
     });
+    const importProbe = Bun.spawn(
+      [
+        "node",
+        resolve(root, "tooling/test-configuration-import-node.mjs"),
+        process.execPath,
+        join(directory, `thumble-rewrite${extension}`),
+        join(directory, `thumble-rewrite-receiver${extension}`),
+        join(directory, "import-runtime"),
+        ownedFile,
+        process.platform === "win32"
+          ? (process.env.SystemRoot ?? "C:\\Windows") + "\\System32"
+          : "/usr/bin:/bin",
+      ],
+      { stdout: "pipe", stderr: "pipe" },
+    );
+    const [importOut, importErr, importCode] = await Promise.all([
+      new Response(importProbe.stdout).text(),
+      new Response(importProbe.stderr).text(),
+      importProbe.exited,
+    ]);
+    expect(importErr).toBe("");
+    expect(importCode).toBe(0);
+    expect(JSON.parse(importOut)).toEqual({
+      ok: true,
+      scenarios: 4,
+      imports: 2,
+      server: "standalone",
+    });
     const configuration = new SqliteConfigurationRepository(
       runtime,
       join(directory, `thumble-rewrite-receiver${extension}`),
@@ -378,5 +406,5 @@ packageTest(
       }
     }
   },
-  20000,
+  30000,
 );

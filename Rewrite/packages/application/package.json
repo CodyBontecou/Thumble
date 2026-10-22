@@ -8,7 +8,8 @@
     "./pairing": "./src/pairing.ts",
     "./configuration-store": "./src/configuration-store.ts",
     "./configuration-catalog": "./src/configuration-catalog.ts",
-    "./configuration-validation": "./src/configuration-validation.ts"
+    "./configuration-validation": "./src/configuration-validation.ts",
+    "./configuration-import": "./src/configuration-import.ts"
   },
   "dependencies": {
     "@thumble/contracts": "workspace:*",

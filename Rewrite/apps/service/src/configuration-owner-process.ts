@@ -1,3 +1,6 @@
+import { ConfigurationImportOperations } from "@thumble/application/configuration-import";
+import { readConfigurationFile } from "@thumble/client/local";
+import { configurationSourceHash } from "@thumble/storage";
 import { createHash } from "node:crypto";
 import { ConfigurationCatalogOperations } from "@thumble/application/configuration-catalog";
 import { decodeConfigurationCommand } from "@thumble/contracts/configuration";
@@ -22,6 +25,12 @@ export async function runConfigurationOwner(
     (text) => createHash("sha256").update(text, "utf8").digest("hex"),
     () => Date.now().toString(),
   );
+  const imports = new ConfigurationImportOperations(repository, {
+    readFile: readConfigurationFile,
+    digest: (text) => createHash("sha256").update(text, "utf8").digest("hex"),
+    sourceHash: configurationSourceHash,
+    resourceHash: (bytes) => createHash("sha256").update(bytes).digest("hex"),
+  });
   try {
     await new Promise<void>((resolve, reject) => {
       let buffer = Buffer.alloc(0),
@@ -112,10 +121,11 @@ export async function runConfigurationOwner(
             return;
           }
           try {
-            const result = operations.execute(
-              decodeConfigurationCommand(body),
-              { read: true, write: true },
-            );
+            const command = decodeConfigurationCommand(body);
+            const result =
+              command.command === "configuration-import-file"
+                ? imports.execute(command, { read: true, write: true })
+                : operations.execute(command, { read: true, write: true });
             write({ version: 1, requestId, ok: true, result });
           } catch (error) {
             const code =

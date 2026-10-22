@@ -44,6 +44,7 @@ function options(values: string[]): Map<string, string | true> {
       ![
         "--file",
         "--operation-id",
+        "--expected-source-hash",
         "--name",
         "--offset",
         "--identity-dir",
@@ -293,6 +294,31 @@ async function main(): Promise<unknown> {
         if (!["--file", "--json"].includes(key))
           throw new Error("invalid_configuration_option");
       return inspectConfigurationFile(required(opts, "--file"));
+    }
+    if (action === "import-file" || action === "import-status") {
+      const allowed = [
+        "--runtime-dir",
+        "--receiver",
+        "--json",
+        "--operation-id",
+        "--expected-revision",
+        "--expected-source-hash",
+        ...(action === "import-file" ? ["--file"] : []),
+      ];
+      for (const key of opts.keys())
+        if (!allowed.includes(key))
+          throw new Error("invalid_configuration_option");
+      const command = decodeConfigurationCommand({
+        command:
+          action === "import-file"
+            ? "configuration-import-file"
+            : "configuration-import-status",
+        operationId: required(opts, "--operation-id"),
+        expectedRevision: required(opts, "--expected-revision"),
+        expectedSourceHash: required(opts, "--expected-source-hash"),
+        ...(action === "import-file" ? { path: required(opts, "--file") } : {}),
+      });
+      return requestConfiguration(readEndpoint(root, receiver), command);
     }
     if (action !== "list" && action !== "rename-profile")
       throw new Error("unsupported_configuration_command");

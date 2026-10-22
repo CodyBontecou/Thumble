@@ -1,7 +1,24 @@
 import { counter, identity, record } from "./receiver.ts";
 
 export const CONFIGURATION_PAGE_SIZE = 16;
+export type ConfigurationImportFileCommand = Readonly<{
+  command: "configuration-import-file";
+  operationId: string;
+  expectedRevision: string;
+  expectedSourceHash: string;
+  path: string;
+}>;
+export type ConfigurationImportStatusCommand = Readonly<{
+  command: "configuration-import-status";
+  operationId: string;
+  expectedRevision: string;
+  expectedSourceHash: string;
+}>;
+export type ConfigurationImportCommand =
+  | ConfigurationImportFileCommand
+  | ConfigurationImportStatusCommand;
 export type ConfigurationCommand =
+  | ConfigurationImportCommand
   | Readonly<{
       command: "configuration-list";
       expectedRevision: string | null;
@@ -21,7 +38,23 @@ export type ConfigurationReceipt = Readonly<{
   contentHash: string;
   affectedEntities: readonly string[];
 }>;
+export type ConfigurationImportCommitted = Readonly<{
+  version: 1;
+  kind: "import-committed";
+  receipt: ConfigurationReceipt;
+  replayed: boolean;
+  validation: "owned-v5-structural";
+  activationCompatibility: "not-evaluated";
+}>;
 export type ConfigurationReply =
+  | ConfigurationImportCommitted
+  | Readonly<{ version: 1; kind: "import-pending"; operationId: string }>
+  | Readonly<{
+      version: 1;
+      kind: "import-failed";
+      operationId: string;
+      error: string;
+    }>
   | Readonly<{
       version: 1;
       kind: "catalog";
@@ -136,6 +169,33 @@ export function decodeConfigurationCommand(
       name: configurationProfileName(v.name),
     });
   }
+  if (
+    kind === "configuration-import-file" ||
+    kind === "configuration-import-status"
+  ) {
+    const v = object(value, [
+      "command",
+      "operationId",
+      "expectedRevision",
+      "expectedSourceHash",
+      ...(kind === "configuration-import-file" ? ["path"] : []),
+    ]);
+    const fields = {
+      operationId: identity(v.operationId),
+      expectedRevision: counter(v.expectedRevision),
+      expectedSourceHash: hash(v.expectedSourceHash),
+    };
+    if (kind === "configuration-import-status")
+      return Object.freeze({ command: kind, ...fields });
+    if (
+      typeof v.path !== "string" ||
+      !v.path ||
+      v.path.length > 4096 ||
+      v.path.includes("\0")
+    )
+      invalid();
+    return Object.freeze({ command: kind, ...fields, path: v.path });
+  }
   return invalid();
 }
 export function decodeConfigurationReply(
@@ -143,6 +203,78 @@ export function decodeConfigurationReply(
   command: ConfigurationCommand,
 ): ConfigurationReply {
   const kind = Object.getOwnPropertyDescriptor(record(value), "kind")?.value;
+  const importing =
+    command.command === "configuration-import-file" ||
+    command.command === "configuration-import-status";
+  if (importing && (kind === "import-pending" || kind === "import-failed")) {
+    const v = object(value, [
+      "version",
+      "kind",
+      "operationId",
+      ...(kind === "import-failed" ? ["error"] : []),
+    ]);
+    if (v.version !== 1 || v.operationId !== command.operationId) invalid();
+    if (kind === "import-pending")
+      return Object.freeze({
+        version: 1,
+        kind,
+        operationId: command.operationId,
+      });
+    if (typeof v.error !== "string" || !/^[a-z_]{1,80}$/.test(v.error))
+      invalid();
+    return Object.freeze({
+      version: 1,
+      kind,
+      operationId: command.operationId,
+      error: v.error,
+    });
+  }
+  if (importing && kind === "import-committed") {
+    const v = object(value, [
+      "version",
+      "kind",
+      "receipt",
+      "replayed",
+      "validation",
+      "activationCompatibility",
+    ]);
+    const r = object(v.receipt, [
+      "version",
+      "operationId",
+      "resultingRevision",
+      "contentHash",
+      "affectedEntities",
+    ]);
+    if (
+      v.version !== 1 ||
+      r.version !== 1 ||
+      r.operationId !== command.operationId ||
+      typeof v.replayed !== "boolean" ||
+      r.resultingRevision !==
+        (BigInt(command.expectedRevision) + 1n).toString() ||
+      !Array.isArray(r.affectedEntities) ||
+      r.affectedEntities.length !== 1 ||
+      Object.getOwnPropertyDescriptor(r.affectedEntities, "0")?.value !==
+        "configuration" ||
+      v.validation !== "owned-v5-structural" ||
+      v.activationCompatibility !== "not-evaluated"
+    )
+      invalid();
+    return Object.freeze({
+      version: 1,
+      kind,
+      replayed: v.replayed,
+      validation: "owned-v5-structural",
+      activationCompatibility: "not-evaluated",
+      receipt: Object.freeze({
+        version: 1,
+        operationId: command.operationId,
+        resultingRevision: counter(r.resultingRevision),
+        contentHash: hash(r.contentHash),
+        affectedEntities: Object.freeze(["configuration"]),
+      }),
+    });
+  }
   if (kind === "conflict") {
     const v = object(value, ["version", "kind", "currentRevision"]);
     if (

@@ -27,6 +27,11 @@ export class ConfigurationCatalogOperations {
   ): ConfigurationReply {
     const command = decodeConfigurationCommand(input);
     if (
+      command.command === "configuration-import-file" ||
+      command.command === "configuration-import-status"
+    )
+      throw new Error("unsupported_configuration_command");
+    if (
       !access.read ||
       (command.command !== "configuration-list" && !access.write)
     )
@@ -43,7 +48,12 @@ export class ConfigurationCatalogOperations {
       throw error;
     }
   }
-  private apply(command: ConfigurationCommand): ConfigurationReply {
+  private apply(
+    command: Exclude<
+      ConfigurationCommand,
+      { command: "configuration-import-file" | "configuration-import-status" }
+    >,
+  ): ConfigurationReply {
     // A replay precedes both current-source decoding and the clock. The receipt
     // belongs to the original operation even after other edits or a restart.
     const payloadHash =

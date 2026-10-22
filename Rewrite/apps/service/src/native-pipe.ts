@@ -110,7 +110,9 @@ export class NativePipe<Ready, Reply> {
     }
     this.pending.clear();
   }
-  async request(body: unknown): Promise<Reply> {
+  async request(body: unknown, timeoutMs = 2000): Promise<Reply> {
+    if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 30000)
+      throw new Error("native_request_budget_invalid");
     await this.ready;
     if (this.failed) throw new Error(this.unavailable);
     if (this.pending.size >= 16) throw new Error("native_owner_busy");
@@ -119,7 +121,7 @@ export class NativePipe<Ready, Reply> {
     if (Buffer.byteLength(line) > FRAME_BYTES)
       throw new Error("native_request_too_large");
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => this.fail(), 2000);
+      const timer = setTimeout(() => this.fail(), timeoutMs);
       this.pending.set(requestId, { resolve, reject, timer });
       this.child.stdin.write(line);
     });

@@ -31,7 +31,13 @@ export function startMcp(
     "pairing_list",
     "configuration_list",
     "configuration_validate_file",
-    ...(allowConfigurationWrite ? ["configuration_rename_profile"] : []),
+    ...(allowConfigurationWrite
+      ? [
+          "configuration_rename_profile",
+          "configuration_import_file",
+          "configuration_import_status",
+        ]
+      : []),
     ...(allowRecordedInput ? ["receiver_activate", "receiver_sample"] : []),
   ]);
   const transport = new BoundedStdioTransport(
@@ -189,6 +195,42 @@ export function startMcp(
               ),
             ),
         );
+      if (allowConfigurationWrite) {
+        for (const action of ["file", "status"] as const)
+          server.registerTool(
+            `configuration_import_${action}`,
+            {
+              description:
+                action === "file"
+                  ? "Start an explicit replacement of the entire saved configuration from a reviewed local owned-v5 file. expectedSourceHash is returned by configuration_validate_file. Returns a bounded pending job immediately; poll configuration_import_status with the same intent. Structural storage admission only; image/value/platform/activation gates remain separate. Retry the same intent to recover its durable receipt after restart."
+                  : "Inspect a bounded import job using its exact operation ID, expected revision and reviewed source hash. Status never returns source, paths, assets or credentials. If the service restarted or its bounded cache retired the result, resubmit the original import intent for durable receipt recovery.",
+              inputSchema: z
+                .object({
+                  operationId: z.string().regex(/^[A-Za-z0-9-]{1,64}$/),
+                  expectedRevision: epoch,
+                  expectedSourceHash: z.string().regex(/^[0-9a-f]{64}$/),
+                  ...(action === "file"
+                    ? { path: z.string().min(1).max(4096) }
+                    : {}),
+                })
+                .strict(),
+              annotations: annotations(action === "status"),
+            },
+            (args) =>
+              receipt(async () =>
+                requestConfiguration(
+                  await readEndpointAsync(root, receiver),
+                  decodeConfigurationCommand({
+                    command:
+                      action === "file"
+                        ? "configuration-import-file"
+                        : "configuration-import-status",
+                    ...args,
+                  }),
+                ),
+              ),
+          );
+      }
       // Capability comes only from the launching user's flag, never tool arguments.
       if (allowRecordedInput) {
         server.registerTool(

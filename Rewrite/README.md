@@ -20,13 +20,13 @@ Development checks use Node for independent MCP SDK and TLS protocol clients. Th
 
 ## Implemented paths
 
-| Path              | Current behavior                                                                                                                                                         |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| CLI and stdio MCP | Shared local service operations, explicit configuration-write and recording-input capabilities, bounded typed replies                                                    |
-| Configuration     | Separate SQLite owner process; durable CAS receipts; lossless owned-v5 inspection; profile catalog listing/rename; immutable content-addressed assets and crash recovery |
-| Pairing and trust | Explicit native host identity, manual listener/invitation, pinned TLS enrollment, native Keychain/Keystore credential storage and revocation                             |
-| Phone input       | Native iOS/Android touch ownership outside the React root; encrypted UDP with TLS fallback; neutral reconnect; lifecycle release; bounded grant renewal                  |
-| Receiver          | Independent generation/sequence checks, owner leases, input expiry and release acknowledgment; recording backend only                                                    |
+| Path              | Current behavior                                                                                                                                                                                    |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| CLI and stdio MCP | Shared local service operations, explicit configuration-write and recording-input capabilities, bounded typed replies                                                                               |
+| Configuration     | Separate SQLite owner process; durable CAS receipts; lossless owned-v5 inspection; profile catalog listing/rename; reviewed-file import jobs; immutable content-addressed assets and crash recovery |
+| Pairing and trust | Explicit native host identity, manual listener/invitation, pinned TLS enrollment, native Keychain/Keystore credential storage and revocation                                                        |
+| Phone input       | Native iOS/Android touch ownership outside the React root; encrypted UDP with TLS fallback; neutral reconnect; lifecycle release; bounded grant renewal                                             |
+| Receiver          | Independent generation/sequence checks, owner leases, input expiry and release acknowledgment; recording backend only                                                                               |
 
 Structural file inspection does not establish image decoding, platform output support or activation compatibility. Saved configuration is separate from ephemeral recording activation. No retained authority is automatically migrated or retired.
 
@@ -46,6 +46,8 @@ Owned-v5 file inspection works offline, without a service or receiver:
 ```sh
 bun run cli configuration validate-file --file /absolute/path/configuration.json --json
 ```
+
+To initialize or replace saved configuration, inspect a local owned-v5 file first, then use the revision/hash-bound `configuration import-file` job and poll `configuration import-status`. See [the import contract](../docs/rewrite-configuration-import-v1.md). This admits saved data structurally and does not activate input or establish image/runtime compatibility.
 
 Configure an agent to launch `dist/thumble-rewrite mcp serve --runtime-dir /absolute/private/runtime` (use `.exe` on Windows). Read-only tools are the default. Add `--allow-configuration-write` for saved configuration mutations or `--allow-recorded-input` for recording-input tools. Neither flag enables OS input. MCP stdout contains protocol messages only.
 
