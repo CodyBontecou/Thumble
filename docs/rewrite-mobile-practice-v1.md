@@ -43,7 +43,10 @@ MotionEvents into all 19 regions, hold six fingers while the actual React Native
 JS queue is blocked, cancel natively before JS resumes, require native frame feedback to progress, release on
 background/sleep, wake and rotate/reopen neutral, verify absence of React-root
 ancestry for every capture region, and tap Done with a second finger while another
-control stays held. Setup wakes its synthetic emulator and captures primary
+control stays held. Real injected stick comparisons allow one signed 16-bit
+quantization unit after Float screen-coordinate conversion. Buttons/triggers and
+full neutralization remain exact; canonical protocol vectors retain exact equality.
+Setup wakes its synthetic emulator and captures primary
 failures before teardown. CI builds APKs before booting the emulator. A checker rejects missing, failed or skipped witnesses.
 
 iOS hosted tests run inside the bundled app, attach the actual native view beneath

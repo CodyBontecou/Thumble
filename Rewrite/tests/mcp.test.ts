@@ -6,7 +6,11 @@ import { join, resolve } from "node:path";
 import { Client } from "@modelcontextprotocol/client";
 import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
 import { BoundedStdioTransport } from "../apps/cli/src/mcp-transport.ts";
-import { readEndpoint, request } from "@thumble/client/local";
+import {
+  readEndpoint,
+  readEndpointAsync,
+  request,
+} from "@thumble/client/local";
 import { neutralGamepadState } from "@thumble/contracts";
 
 const root = resolve(import.meta.dir, "..");
@@ -145,6 +149,7 @@ test("SDK modern and legacy clients share CLI authority, preserve input opt-in a
     expect(JSON.parse(startupOutput).ok).toBe(true);
     phase("service-ready");
     const endpoint = readEndpoint(runtime, receiver);
+    expect(await readEndpointAsync(runtime, receiver)).toEqual(endpoint);
     for (const legacy of [false, true])
       for (const optIn of [false, true]) {
         const transport = new StdioClientTransport({
@@ -197,10 +202,12 @@ test("SDK modern and legacy clients share CLI authority, preserve input opt-in a
               ...(optIn ? ["receiver_activate", "receiver_sample"] : []),
             ].sort(),
           );
-          const status = await client.callTool({
-            name: "receiver_status",
-            arguments: {},
-          });
+          phase("status-call");
+          const status = await client.callTool(
+            { name: "receiver_status", arguments: {} },
+            { timeout: 5000 },
+          );
+          phase("status-returned");
           expect(status.structuredContent).toEqual({
             version: 1,
             ok: true,

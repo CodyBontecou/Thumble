@@ -28,6 +28,35 @@ public struct EnrollmentInvitation: Sendable, CustomStringConvertible, CustomDeb
     self.proof = secret
     self.expiresAt = expiresAt
   }
+  /// Decode the CLI offer directly in native code; never bridge bootstrap material to React.
+  public static func decode(_ data: Data) throws -> EnrollmentInvitation {
+    guard data.count <= 4096 else { throw PhoneEnrollmentError.rejected }
+    let fields: [String: EnrollmentJSON.Value]
+    do { fields = try EnrollmentJSON.parse(data) } catch { throw PhoneEnrollmentError.rejected }
+    guard
+      Set(fields.keys)
+        == Set([
+          "host", "port", "certificatePin", "authorityInstanceId", "windowId", "secret",
+          "expiresAt",
+        ]),
+      case .string(let host)? = fields["host"], !host.isEmpty, host.utf8.count <= 253,
+      host.utf8.allSatisfy({
+        (48...57).contains($0) || (65...90).contains($0) || (97...122).contains($0)
+          || [46, 58, 45].contains($0)
+      }),
+      !["0.0.0.0", "::"].contains(host),
+      case .integer(let port)? = fields["port"], let endpointPort = UInt16(exactly: port),
+      endpointPort > 0,
+      case .string(let pin)? = fields["certificatePin"],
+      case .string(let authority)? = fields["authorityInstanceId"],
+      case .string(let window)? = fields["windowId"],
+      case .string(let secret)? = fields["secret"],
+      case .integer(let expiry)? = fields["expiresAt"], expiry > 0, expiry <= 9_007_199_254_740_991
+    else { throw PhoneEnrollmentError.rejected }
+    return try EnrollmentInvitation(
+      host: host, port: endpointPort, certificatePin: pin,
+      authorityInstanceID: authority, windowID: window, secret: secret, expiresAt: expiry)
+  }
   static func identity(_ value: String) -> Bool {
     (1...64).contains(value.utf8.count)
       && value.utf8.allSatisfy {

@@ -1,6 +1,10 @@
 import { McpServer, type CallToolResult } from "@modelcontextprotocol/server";
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
-import { readEndpoint, request, requestPairing } from "@thumble/client/local";
+import {
+  readEndpointAsync,
+  request,
+  requestPairing,
+} from "@thumble/client/local";
 import { decodeLocalCommand } from "@thumble/contracts/receiver";
 import { GAMEPAD_BUTTONS } from "@thumble/contracts";
 import { z } from "zod";
@@ -59,8 +63,10 @@ export function startMcp(
           annotations: annotations(true),
         },
         () =>
-          receipt(() =>
-            request(readEndpoint(root, receiver), { command: "status" }),
+          receipt(async () =>
+            request(await readEndpointAsync(root, receiver), {
+              command: "status",
+            }),
           ),
       );
       server.registerTool(
@@ -72,8 +78,10 @@ export function startMcp(
           annotations: annotations(false),
         },
         () =>
-          receipt(() =>
-            request(readEndpoint(root, receiver), { command: "release" }),
+          receipt(async () =>
+            request(await readEndpointAsync(root, receiver), {
+              command: "release",
+            }),
           ),
       );
       for (const action of ["status", "list"] as const)
@@ -85,8 +93,8 @@ export function startMcp(
             annotations: annotations(true),
           },
           () =>
-            receipt(() =>
-              requestPairing(readEndpoint(root, receiver), {
+            receipt(async () =>
+              requestPairing(await readEndpointAsync(root, receiver), {
                 command:
                   action === "status" ? "pairing-status" : "pairing-list",
               }),
@@ -108,9 +116,9 @@ export function startMcp(
             annotations: { ...annotations(false), idempotentHint: false },
           },
           (args) =>
-            receipt(() =>
+            receipt(async () =>
               request(
-                readEndpoint(root, receiver),
+                await readEndpointAsync(root, receiver),
                 decodeLocalCommand({ command: "activate", ...args }),
               ),
             ),
@@ -142,9 +150,9 @@ export function startMcp(
             annotations: { ...annotations(false), idempotentHint: false },
           },
           (args) =>
-            receipt(() =>
+            receipt(async () =>
               request(
-                readEndpoint(root, receiver),
+                await readEndpointAsync(root, receiver),
                 decodeLocalCommand({
                   command: "sample",
                   ...args,

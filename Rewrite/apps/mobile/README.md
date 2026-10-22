@@ -53,7 +53,9 @@ Instrumentation injects actual system touch events into all 19 regions and a
 six-finger chord, blocks the actual React Native JS queue, requires native frame
 feedback to advance, and checks cancellation, background/sleep release, neutral
 waking/rotation, and Done while another finger holds a control. Seven cases are
-required. Test setup wakes only its selected synthetic emulator; APKs build before
+required. Real injected stick coordinates allow one signed 16-bit unit of
+quantization error; buttons, triggers, headers and complete neutralization remain
+exact. Test setup wakes only its selected synthetic emulator; APKs build before
 CI boots it. Failure capture preserves the original exception ahead of teardown. The
 ancestry test was observed failing before moving input outside the React root.
 The generated Android release key is a development template key, not release

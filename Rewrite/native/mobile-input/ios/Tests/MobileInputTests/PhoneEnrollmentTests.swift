@@ -66,11 +66,15 @@ private func object(_ fixture: [String: Any], _ key: String) throws -> [String: 
   try #require(fixture[key] as? [String: Any])
 }
 private func invitation() throws -> EnrollmentInvitation {
-  try EnrollmentInvitation(
-    host: "127.0.0.1", port: 1234, certificatePin: String(repeating: "1", count: 64),
-    authorityInstanceID: "authority-a", windowID: "window-a",
-    secret: String(repeating: "4", count: 64), expiresAt: 10_000)
+  let path = try #require(
+    Bundle.module.url(
+      forResource: "pairing-invitation-v1", withExtension: "json", subdirectory: "Fixtures"))
+  let fixture = try #require(
+    JSONSerialization.jsonObject(with: Data(contentsOf: path)) as? [String: Any])
+  let valid = try #require(fixture["valid"] as? [[String: Any]])
+  return try EnrollmentInvitation.decode(JSONSerialization.data(withJSONObject: valid[0]))
 }
+
 @Test private func sharedControlJSONRejectsDuplicatesUnicodeAliasesAndInvalidTypes() throws {
   let f = try enrollmentFixture()
   for raw in try #require(f["invalidJSON"] as? [String]) {
@@ -276,3 +280,31 @@ private func invitation() throws -> EnrollmentInvitation {
     #expect(process.terminationStatus == 0)
   }
 #endif
+
+@Test private func nativeInvitationIntakeUsesTheExactBoundedSharedOffer() throws {
+  let path = try #require(
+    Bundle.module.url(
+      forResource: "pairing-invitation-v1", withExtension: "json", subdirectory: "Fixtures"))
+  let fixture = try #require(
+    JSONSerialization.jsonObject(with: Data(contentsOf: path)) as? [String: Any])
+  for raw in try #require(fixture["valid"] as? [[String: Any]]) {
+    let decoded = try EnrollmentInvitation.decode(JSONSerialization.data(withJSONObject: raw))
+    #expect(decoded.host == raw["host"] as? String)
+    #expect(decoded.port == (raw["port"] as? NSNumber)?.uint16Value)
+    #expect(decoded.certificatePin == raw["certificatePin"] as? String)
+    #expect(decoded.authorityInstanceID == raw["authorityInstanceId"] as? String)
+    #expect(decoded.windowID == raw["windowId"] as? String)
+    #expect(decoded.expiresAt == (raw["expiresAt"] as? NSNumber)?.uint64Value)
+    #expect(!String(reflecting: decoded).contains(String(repeating: "4", count: 64)))
+    #expect(!String(describing: decoded.customMirror).contains(String(repeating: "4", count: 64)))
+  }
+  for raw in try #require(fixture["invalidJSON"] as? [String]) {
+    #expect(throws: (any Error).self) { try EnrollmentInvitation.decode(Data(raw.utf8)) }
+  }
+  #expect(throws: (any Error).self) {
+    try EnrollmentInvitation.decode(Data(repeating: 32, count: 4097))
+  }
+  #expect(throws: (any Error).self) {
+    try EnrollmentInvitation.decode(Data([123, 34, 97, 34, 58, 34, 255, 34, 125]))
+  }
+}

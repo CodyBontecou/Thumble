@@ -17,7 +17,10 @@ and sibling native receiver. An agent's MCP configuration can use:
 
 The adapter invokes the same authenticated local client operations as the CLI.
 It neither starts a competing authority nor requires the desktop GUI. Closing
-MCP leaves the independent service running. This snapshot uses the recording
+MCP leaves the independent service running. Windows directory protection uses an
+awaited native helper with a three-second deadline before the same restricted
+endpoint-file validation; tool handling does not synchronously wait on a child
+process in the stdio event callback. This snapshot uses the recording
 backend; no physical input is emitted.
 
 | Tool                | Capability                           | Result                                           |

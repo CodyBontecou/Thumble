@@ -413,3 +413,39 @@ test("trusted inventory exposes bounded immutable metadata and rejects executabl
     decodePairingCommand({ command: "pairing-open", phoneId: "phone-a" }),
   ).toThrow();
 });
+
+test("native invitation intake fixtures use the existing canonical CLI offer", async () => {
+  const fixture = await Bun.file(
+    new URL("../packages/fixtures/pairing-invitation-v1.json", import.meta.url),
+  ).json();
+  for (const offer of fixture.valid) {
+    const reply = decodePairingReply({
+      authorityInstanceId: offer.authorityInstanceId,
+      pairing: {
+        state: "open",
+        windowId: offer.windowId,
+        expiresAt: offer.expiresAt,
+        attemptsRemaining: 5,
+        networkEnabled: true,
+      },
+      offer,
+      transport: {
+        listening: true,
+        bindAddress: `127.0.0.1:${offer.port}`,
+        advertiseHost: offer.host,
+        port: offer.port,
+        certificatePin: offer.certificatePin,
+        certificateDER: "00",
+        persistentIdentity: true,
+        serverName: "thumble-rewrite.local",
+        controlVersion: 2,
+        inputEnabled: false,
+      },
+    });
+    expect(reply.offer).toEqual(offer);
+    expect(Object.isFrozen(reply.offer)).toBe(true);
+    expect(
+      new TextEncoder().encode(JSON.stringify(reply.offer)).byteLength,
+    ).toBeLessThanOrEqual(4096);
+  }
+});

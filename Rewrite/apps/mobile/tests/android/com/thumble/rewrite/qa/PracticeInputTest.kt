@@ -215,6 +215,29 @@ class PracticeInputTest {
 
     private fun report() = ui { GamepadReport.hex(controller.engine.state) }
 
+    // System MotionEvents carry Float screen coordinates. Across display sizes
+    // their round trip may land one signed-16-bit stick unit from the ideal
+    // normalized fixture. Buttons, triggers, header and reserved bytes stay exact;
+    // neutralization below is always an exact whole-report comparison.
+    private fun assertPhysicalReport(label: String, expected: String, actual: String) {
+        assertEquals(label, expected.length, actual.length)
+        assertEquals(label, expected.substring(0, 12), actual.substring(0, 12))
+        assertEquals(label, expected.substring(28), actual.substring(28))
+        fun axis(hex: String, offset: Int): Int {
+            val low = hex.substring(offset * 2, offset * 2 + 2).toInt(16)
+            val high = hex.substring(offset * 2 + 2, offset * 2 + 4).toInt(16)
+            return (low or (high shl 8)).toShort().toInt()
+        }
+        for (offset in listOf(6, 8, 10, 12)) {
+            val want = axis(expected, offset)
+            val got = axis(actual, offset)
+            assertTrue(
+                "$label stick@$offset expected=$want actual=$got",
+                kotlin.math.abs(want - got) <= 1,
+            )
+        }
+    }
+
     private fun neutral() = GamepadReport.hex(GamepadReport.neutral())
 
     @Test
@@ -249,7 +272,7 @@ class PracticeInputTest {
             val down = SystemClock.uptimeMillis()
             send(down, MotionEvent.ACTION_DOWN, points)
             try {
-                assertEquals(probe.getString("id"), probe.getString("reportHex"), report())
+                assertPhysicalReport(probe.getString("id"), probe.getString("reportHex"), report())
             } finally {
                 send(down, MotionEvent.ACTION_CANCEL, points)
             }
@@ -305,7 +328,7 @@ class PracticeInputTest {
             val publications = ui { controller.nativeFeedbackPublications }
             val until = SystemClock.uptimeMillis() + 2_500
             while (SystemClock.uptimeMillis() < until) {
-                assertEquals(chord.getString("reportHex"), report())
+                assertPhysicalReport("six-finger chord", chord.getString("reportHex"), report())
                 SystemClock.sleep(20)
             }
             assertTrue(

@@ -41,6 +41,56 @@ class EnrollmentInvitation(
     override fun toString() = "EnrollmentInvitation([redacted])"
 
     companion object {
+        /** Decode the CLI offer natively; bootstrap material never enters React state. */
+        fun decode(bytes: ByteArray): EnrollmentInvitation {
+            if (bytes.size > 4096) throw PhoneEnrollmentRejected()
+            val fields =
+                try {
+                    EnrollmentJSON.parse(bytes)
+                } catch (_: Exception) {
+                    throw PhoneEnrollmentRejected()
+                }
+            if (
+                fields.keys !=
+                    setOf(
+                        "host",
+                        "port",
+                        "certificatePin",
+                        "authorityInstanceId",
+                        "windowId",
+                        "secret",
+                        "expiresAt",
+                    )
+            )
+                throw PhoneEnrollmentRejected()
+            fun text(key: String) =
+                (fields[key] as? EnrollmentJSON.Value.Text)?.value
+                    ?: throw PhoneEnrollmentRejected()
+            fun integer(key: String) =
+                (fields[key] as? EnrollmentJSON.Value.Integer)?.value
+                    ?: throw PhoneEnrollmentRejected()
+            val host = text("host")
+            val port = integer("port")
+            val expiry = integer("expiresAt")
+            if (
+                host.length !in 1..253 ||
+                    !host.matches(Regex("[A-Za-z0-9.:-]+")) ||
+                    host in setOf("0.0.0.0", "::") ||
+                    port !in 1..65535 ||
+                    expiry !in 1..9007199254740991L
+            )
+                throw PhoneEnrollmentRejected()
+            return EnrollmentInvitation(
+                host,
+                port.toInt(),
+                text("certificatePin"),
+                text("authorityInstanceId"),
+                text("windowId"),
+                text("secret"),
+                expiry,
+            )
+        }
+
         internal fun scalarText(value: String): Boolean {
             var at = 0
             while (at < value.length) {

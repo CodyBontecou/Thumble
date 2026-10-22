@@ -44,7 +44,7 @@ jobs:
   android-app:
     concurrency:
       group: ${{ github.workflow }}-android-${{ github.ref }}
-      cancel-in-progress: true
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 60
     defaults:

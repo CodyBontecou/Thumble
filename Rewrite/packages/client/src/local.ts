@@ -4,7 +4,7 @@ import {
   type PairingCommand,
   type PairingReply,
 } from "@thumble/contracts/pairing";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { decodeServiceStatus } from "./index.ts";
 import { createConnection } from "node:net";
 import {
@@ -94,6 +94,39 @@ export function readEndpoint(directory: string, protector?: string): Endpoint {
       throw new Error("runtime_directory_protection_failed");
     }
   }
+  return loadEndpoint(directory);
+}
+/** Long-lived adapters must not synchronously wait for a native helper on their I/O thread. */
+export async function readEndpointAsync(
+  directory: string,
+  protector?: string,
+): Promise<Endpoint> {
+  if (process.platform === "win32") {
+    if (!protector) throw new Error("runtime_directory_protection_failed");
+    await new Promise<void>((resolve, reject) => {
+      const child = spawn(protector, ["secure-directory", directory], {
+        stdio: "ignore",
+        windowsHide: true,
+      });
+      let settled = false;
+      const finish = (ok: boolean): void => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        if (ok) resolve();
+        else reject(new Error("runtime_directory_protection_failed"));
+      };
+      const timer = setTimeout(() => {
+        child.kill();
+        finish(false);
+      }, 3000);
+      child.once("error", () => finish(false));
+      child.once("exit", (code) => finish(code === 0));
+    });
+  }
+  return loadEndpoint(directory);
+}
+function loadEndpoint(directory: string): Endpoint {
   const fd = openSync(
     join(directory, "endpoint.json"),
     constants.O_RDONLY |

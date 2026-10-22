@@ -7,6 +7,10 @@ const target = resolve(
 );
 mkdirSync(target, { recursive: true });
 for (const [source, name] of [
+  [
+    "packages/fixtures/pairing-invitation-v1.json",
+    "pairing-invitation-v1.json",
+  ],
   ["packages/fixtures/controller-layout-v1.json", "controller-layout-v1.json"],
   [
     "packages/fixtures/native-input-control-v5.json",

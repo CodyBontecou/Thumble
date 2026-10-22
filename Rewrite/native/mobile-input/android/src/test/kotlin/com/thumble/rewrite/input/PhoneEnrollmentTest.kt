@@ -19,16 +19,49 @@ class PhoneEnrollmentTest {
             JSONObject(it.readBytes().toString(Charsets.UTF_8))
         }
 
+    private fun invitationFixture() =
+        javaClass.classLoader!!.getResourceAsStream("pairing-invitation-v1.json")!!.use {
+            JSONObject(it.readBytes().toString(Charsets.UTF_8))
+        }
+
     private fun invitation() =
-        EnrollmentInvitation(
-            "127.0.0.1",
-            1234,
-            "11".repeat(32),
-            "authority-a",
-            "window-a",
-            "44".repeat(32),
-            10000,
+        EnrollmentInvitation.decode(
+            invitationFixture()
+                .getJSONArray("valid")
+                .getJSONObject(0)
+                .toString()
+                .toByteArray(Charsets.UTF_8)
         )
+
+    @Test
+    fun nativeInvitationIntakeUsesTheExactBoundedSharedOffer() {
+        val fixture =
+            javaClass.classLoader!!.getResourceAsStream("pairing-invitation-v1.json")!!.use {
+                JSONObject(it.readBytes().toString(Charsets.UTF_8))
+            }
+        val valid = fixture.getJSONArray("valid")
+        for (i in 0 until valid.length()) {
+            val raw = valid.getJSONObject(i)
+            val decoded = EnrollmentInvitation.decode(raw.toString().toByteArray(Charsets.UTF_8))
+            assertEquals(raw.getString("host"), decoded.host)
+            assertEquals(raw.getInt("port"), decoded.port)
+            assertEquals(raw.getString("certificatePin"), decoded.certificatePin)
+            assertEquals(raw.getString("authorityInstanceId"), decoded.authorityInstanceID)
+            assertEquals(raw.getString("windowId"), decoded.windowID)
+            assertEquals(raw.getLong("expiresAt"), decoded.expiresAt)
+            assertFalse(decoded.toString().contains("44".repeat(32)))
+        }
+        val invalid = fixture.getJSONArray("invalidJSON")
+        for (i in 0 until invalid.length()) rejects {
+            EnrollmentInvitation.decode(invalid.getString(i).toByteArray(Charsets.UTF_8))
+        }
+        rejects { EnrollmentInvitation.decode(ByteArray(4097) { 32 }) }
+        rejects {
+            EnrollmentInvitation.decode(
+                byteArrayOf(123, 34, 97, 34, 58, 34, (-1).toByte(), 34, 125)
+            )
+        }
+    }
 
     private class FakeIO(objects: List<JSONObject>, val events: MutableList<String>) :
         NativeFrameIO {
