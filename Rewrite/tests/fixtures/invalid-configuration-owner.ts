@@ -1,3 +1,4 @@
+import { writeFileSync } from "node:fs";
 export {};
 // Test-only peer: structurally valid private envelope, invalid typed result.
 // [DEBUG-config-peer] Bounded phases only; never print requests or their fields.
@@ -14,15 +15,16 @@ await new Promise<void>((resolve) => {
     for (let newline; (newline = buffer.indexOf(10)) >= 0; ) {
       const request = JSON.parse(buffer.subarray(0, newline).toString("utf8"));
       buffer = buffer.subarray(newline + 1);
-      process.stdout.write(
+      writeFileSync(
+        1,
         JSON.stringify({
           version: 1,
           requestId: request.requestId,
           ok: true,
           result: { version: 1, kind: "catalog", revision: "999" },
         }) + "\n",
-        () => phase("flushed"),
       );
+      phase("flushed");
       phase("reply");
     }
   });
