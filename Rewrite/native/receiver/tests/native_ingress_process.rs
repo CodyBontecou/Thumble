@@ -429,16 +429,37 @@ fn phone_grant(channel: &mut ControlChannel, receipt: &Value) -> (PacketSender, 
     .unwrap();
     (sender, grant)
 }
-fn phone_held(channel: &mut ControlChannel, receipt: &Value, sender: &mut PacketSender) {
+fn try_phone_held(
+    channel: &mut ControlChannel,
+    receipt: &Value,
+    sender: &mut PacketSender,
+) -> Result<(), &'static str> {
     channel
-        .send(FrameKind::Input, &sender.seal(&held()).unwrap())
-        .unwrap();
+        .send(
+            FrameKind::Input,
+            &sender.seal(&held()).map_err(|_| "sample_seal_failed")?,
+        )
+        .map_err(|_| "sample_input_send_failed")?;
     // A following ordered control reply proves the previous native input RPC completed.
-    control_send(
-        channel,
-        json!({"version":1,"command":"control-status","connectionId":receipt["connectionId"]}),
-    );
-    assert_eq!(control_receive(channel)["command"], "control-status");
+    let request = serde_json::to_vec(
+        &json!({"version":1,"command":"control-status","connectionId":receipt["connectionId"]}),
+    )
+    .map_err(|_| "sample_status_encoding_failed")?;
+    channel
+        .send(FrameKind::Control, &request)
+        .map_err(|_| "sample_status_send_failed")?;
+    let reply = channel
+        .receive()
+        .map_err(|_| "sample_status_receive_failed")?;
+    let value: Value =
+        serde_json::from_slice(&reply.payload).map_err(|_| "sample_status_json_failed")?;
+    if reply.kind != FrameKind::Control || value["command"] != "control-status" {
+        return Err("sample_status_invalid");
+    }
+    Ok(())
+}
+fn phone_held(channel: &mut ControlChannel, receipt: &Value, sender: &mut PacketSender) {
+    try_phone_held(channel, receipt, sender).unwrap();
 }
 #[test]
 fn authenticated_tls_input_reaches_the_independent_receiver_and_revocation_waits_for_neutral() {
@@ -599,15 +620,22 @@ fn stale_grant_receipts_and_old_generation_packets_cannot_replace_or_release_new
             let cycle = thumble_rewrite_receiver::input_io_diagnostics::Span::start(
                 thumble_rewrite_receiver::input_io_diagnostics::Metric::SampleCycle,
             );
-            phone_held(&mut channel, &sampling_receipt, &mut sender);
+            let result = try_phone_held(&mut channel, &sampling_receipt, &mut sender);
+            // Record the failed IO duration before panic hooks/backtraces can
+            // add unrelated stderr time to an active sample span.
+            #[cfg(debug_assertions)]
+            drop(cycle);
+            #[cfg(debug_assertions)]
+            if let Err(error) = &result {
+                thumble_rewrite_receiver::input_io_diagnostics::terminal("sample", 0, error);
+            }
+            result?;
             if let Some(ready) = ready.take() {
                 ready.send(()).unwrap();
             }
-            #[cfg(debug_assertions)]
-            drop(cycle);
             thread::sleep(Duration::from_millis(30));
         }
-        (channel, sender)
+        Ok::<_, &'static str>((channel, sender))
     });
     first_sample.recv_timeout(Duration::from_secs(2)).unwrap();
     phase("sampling-first-native-ack");
@@ -627,7 +655,7 @@ fn stale_grant_receipts_and_old_generation_packets_cannot_replace_or_release_new
     let observed = receiver.status();
     assert_ne!(observed["reportHex"], hex(&NEUTRAL), "{observed}");
     stop.store(true, Ordering::SeqCst);
-    let (mut channel, mut sender) = sampling.join().unwrap();
+    let (mut channel, mut sender) = sampling.join().unwrap().unwrap();
     phase("sampling-joined");
     // Drain all old-generation samples before explicitly replacing configuration.
     control_send(

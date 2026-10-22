@@ -1,0 +1,63 @@
+name: TypeScript rewrite dormant output
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "Rewrite/native/output-core/**"
+      - "Rewrite/native/windows-candidate/**"
+      - "Host/fixtures/gamepad/v2.json"
+      - "ThirdParty/SteamControllerBridge-LICENSE.txt"
+      - "docs/rewrite-native-output-core-v1.md"
+      - ".github/workflows/typescript-rewrite-output.yml"
+  pull_request:
+    paths:
+      - "Rewrite/native/output-core/**"
+      - "Rewrite/native/windows-candidate/**"
+      - "Host/fixtures/gamepad/v2.json"
+      - "ThirdParty/SteamControllerBridge-LICENSE.txt"
+      - "docs/rewrite-native-output-core-v1.md"
+      - ".github/workflows/typescript-rewrite-output.yml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  dormant-output:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        crate: [output-core, windows-candidate]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: Rewrite/native/${{ matrix.crate }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: Rewrite/native/${{ matrix.crate }}
+      - name: Check Rust formatting
+        run: cargo fmt -- --check
+      - name: Check default-off output build
+        if: matrix.crate == 'output-core'
+        run: cargo test --locked --no-default-features
+      - name: Check all targets and available features
+        run: cargo clippy --locked --all-targets --all-features -- -D warnings
+      - name: Test fake lifecycle or pure mapping
+        run: cargo test --locked --all-features
+      - name: Check optimized targets
+        run: cargo clippy --locked --release --all-targets --all-features -- -D warnings
+      - name: Test optimized fake lifecycle or pure mapping
+        run: cargo test --locked --release --all-features

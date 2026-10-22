@@ -53,9 +53,13 @@ fn read_exact(
         stream
             .set_read_timeout(Some(left))
             .map_err(|_| "native_input_transport_failed")?;
-        let n = stream
-            .read(&mut bytes[at..])
-            .map_err(|_| "native_input_transport_failed")?;
+        let n = stream.read(&mut bytes[at..]).map_err(|error| {
+            #[cfg(debug_assertions)]
+            crate::input_io_diagnostics::terminal_io("native-read", &error);
+            #[cfg(not(debug_assertions))]
+            let _ = error;
+            "native_input_transport_failed"
+        })?;
         if n == 0 {
             return Err("native_input_transport_failed");
         }
@@ -276,8 +280,20 @@ impl Client {
         bytes.push(op);
         bytes.extend_from_slice(payload);
         let result = (|| {
-            send(&mut self.stream, &bytes, OP_WAIT)?;
-            let reply = receive(&mut self.stream, OP_WAIT)?;
+            {
+                #[cfg(debug_assertions)]
+                let _io = crate::input_io_diagnostics::Span::start(
+                    crate::input_io_diagnostics::Metric::NativeClientSend,
+                );
+                send(&mut self.stream, &bytes, OP_WAIT)?;
+            }
+            let reply = {
+                #[cfg(debug_assertions)]
+                let _io = crate::input_io_diagnostics::Span::start(
+                    crate::input_io_diagnostics::Metric::NativeClientReceive,
+                );
+                receive(&mut self.stream, OP_WAIT)?
+            };
             if reply.len() < 2
                 || reply[0] > 1
                 || reply[1] != op
@@ -287,11 +303,17 @@ impl Client {
             }
             Ok(reply)
         })();
-        if result.is_err() {
+        if let Err(error) = &result {
+            #[cfg(debug_assertions)]
+            crate::input_io_diagnostics::terminal("native-client", op, error);
+            #[cfg(not(debug_assertions))]
+            let _ = error;
             let _ = self.stream.shutdown(Shutdown::Both);
         }
         let reply = result?;
         if reply[0] == 1 {
+            #[cfg(debug_assertions)]
+            crate::input_io_diagnostics::terminal("native-client", op, "native_input_rejected");
             return Err("native_input_rejected");
         }
         Ok(reply[2..].to_vec())
@@ -409,6 +431,8 @@ impl Drop for Client {
     }
 }
 struct Pending {
+    #[cfg(debug_assertions)]
+    queue_span: Option<crate::input_io_diagnostics::Span>,
     op: u8,
     payload: Vec<u8>,
     deadline: Instant,
@@ -528,6 +552,10 @@ impl Server {
                     let deadline = Instant::now() + OP_WAIT;
                     if incoming
                         .try_send(Pending {
+                            #[cfg(debug_assertions)]
+                            queue_span: crate::input_io_diagnostics::Span::start(
+                                crate::input_io_diagnostics::Metric::NativeServerQueue,
+                            ),
                             op,
                             payload,
                             deadline,
@@ -561,9 +589,36 @@ impl Server {
                             r.extend_from_slice(&payload);
                             r
                         }
-                        _ => vec![1, op],
+                        failure => {
+                            #[cfg(debug_assertions)]
+                            crate::input_io_diagnostics::terminal(
+                                "native-server-wait",
+                                op,
+                                match &failure {
+                                    Ok(Err(error)) => error,
+                                    Err(mpsc::RecvTimeoutError::Timeout) => {
+                                        "native_owner_reply_timeout"
+                                    }
+                                    _ => "native_owner_reply_closed",
+                                },
+                            );
+                            #[cfg(not(debug_assertions))]
+                            let _ = failure;
+                            vec![1, op]
+                        }
                     };
-                    if send(&mut stream, &reply, OP_WAIT).is_err() {
+                    let sent = {
+                        #[cfg(debug_assertions)]
+                        let _io = crate::input_io_diagnostics::Span::start(
+                            crate::input_io_diagnostics::Metric::NativeServerReply,
+                        );
+                        send(&mut stream, &reply, OP_WAIT)
+                    };
+                    if let Err(error) = sent {
+                        #[cfg(debug_assertions)]
+                        crate::input_io_diagnostics::terminal("native-server-send", op, error);
+                        #[cfg(not(debug_assertions))]
+                        let _ = error;
                         break;
                     }
                 }
@@ -572,6 +627,10 @@ impl Server {
                     let mut payload = binding.connection.to_vec();
                     payload.extend_from_slice(&binding.session);
                     let _ = incoming.try_send(Pending {
+                        #[cfg(debug_assertions)]
+                        queue_span: crate::input_io_diagnostics::Span::start(
+                            crate::input_io_diagnostics::Metric::NativeServerQueue,
+                        ),
                         op: RELEASE,
                         payload,
                         deadline: Instant::now() + OP_WAIT,
@@ -655,10 +714,18 @@ impl Server {
                 Err(mpsc::TryRecvError::Empty) => break,
                 Err(_) => return Err("native_input_owner_failed"),
             };
-            let result = if Instant::now() >= request.deadline {
-                Err("native_input_timeout")
-            } else {
-                self.apply(request.op, &request.payload, runtime, now, output)
+            #[cfg(debug_assertions)]
+            drop(request.queue_span);
+            let result = {
+                #[cfg(debug_assertions)]
+                let _io = crate::input_io_diagnostics::Span::start(
+                    crate::input_io_diagnostics::Metric::NativeServerApply,
+                );
+                if Instant::now() >= request.deadline {
+                    Err("native_input_timeout")
+                } else {
+                    self.apply(request.op, &request.payload, runtime, now, output)
+                }
             };
             let issued = matches!(request.op, GRANT | ROTATE) && result.is_ok();
             if request.response.try_send(result).is_err() && issued {
@@ -991,6 +1058,10 @@ mod tests {
         let (response, result) = mpsc::sync_channel(1);
         sender
             .send(Pending {
+                #[cfg(debug_assertions)]
+                queue_span: crate::input_io_diagnostics::Span::start(
+                    crate::input_io_diagnostics::Metric::NativeServerQueue,
+                ),
                 op: GRANT,
                 payload: grant_payload(),
                 deadline: Instant::now() - Duration::from_secs(1),
@@ -1005,6 +1076,10 @@ mod tests {
         drop(result);
         sender
             .send(Pending {
+                #[cfg(debug_assertions)]
+                queue_span: crate::input_io_diagnostics::Span::start(
+                    crate::input_io_diagnostics::Metric::NativeServerQueue,
+                ),
                 op: GRANT,
                 payload: grant_payload(),
                 deadline: Instant::now() + OP_WAIT,
@@ -1055,6 +1130,10 @@ mod tests {
         drop(receipt);
         incoming
             .send(Pending {
+                #[cfg(debug_assertions)]
+                queue_span: crate::input_io_diagnostics::Span::start(
+                    crate::input_io_diagnostics::Metric::NativeServerQueue,
+                ),
                 op: ROTATE,
                 payload,
                 deadline: Instant::now() + OP_WAIT,
@@ -1083,6 +1162,10 @@ mod tests {
             let (response, result) = mpsc::sync_channel(1);
             sender
                 .send(Pending {
+                    #[cfg(debug_assertions)]
+                    queue_span: crate::input_io_diagnostics::Span::start(
+                        crate::input_io_diagnostics::Metric::NativeServerQueue,
+                    ),
                     op: STATUS,
                     payload: vec![],
                     deadline: Instant::now() + OP_WAIT,

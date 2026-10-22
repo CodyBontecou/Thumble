@@ -18,6 +18,10 @@ struct Recording {
 }
 impl Output for Recording {
     fn submit(&mut self, report: [u8; 20], reason: &'static str) -> Result<(), &'static str> {
+        #[cfg(debug_assertions)]
+        let _io = thumble_rewrite_receiver::input_io_diagnostics::Span::start(
+            thumble_rewrite_receiver::input_io_diagnostics::Metric::NativeOutput,
+        );
         writeln!(
             self.file,
             "{}",

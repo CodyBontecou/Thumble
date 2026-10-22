@@ -285,6 +285,10 @@ pub(crate) fn serve(
         _ => Err("enrollment_version_unsupported"),
     })();
     channel.close();
+    #[cfg(debug_assertions)]
+    if let Err(error) = &result {
+        crate::input_io_diagnostics::terminal("phone-control", 0, error);
+    }
     result
 }
 fn begin(
