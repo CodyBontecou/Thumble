@@ -68,6 +68,12 @@ function nativeIdentity(
     windowsHide: true,
   });
   if (child.error || child.status !== 0) {
+    if (
+      child.error &&
+      "code" in child.error &&
+      child.error.code === "ETIMEDOUT"
+    )
+      throw new Error("host_identity_startup_timed_out");
     const code = child.stderr?.trim();
     throw new Error(
       code && /^[a-z_]+$/.test(code) ? code : "host_identity_unavailable",

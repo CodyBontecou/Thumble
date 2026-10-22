@@ -30,6 +30,7 @@ packageTest(
       family = "service",
       ...options: string[]
     ): Promise<any> => {
+      const startedAt = performance.now();
       const child = Bun.spawn(
         [
           join(directory, `thumble-rewrite${extension}`),
@@ -60,7 +61,27 @@ packageTest(
         child.exited,
       ]);
       expect(err).toBe("");
-      expect(code).toBe(0);
+      if (code !== 0) {
+        // Successful replies can contain enrollment secrets. Report only the
+        // bounded public error code, never raw CLI output or caller options.
+        let reason = "invalid_error_response";
+        try {
+          const reply = parseStrictJson(out);
+          if (
+            typeof reply === "object" &&
+            reply !== null &&
+            "ok" in reply &&
+            "error" in reply &&
+            reply.ok === false &&
+            typeof reply.error === "string" &&
+            /^[a-z_]{1,80}$/.test(reply.error)
+          )
+            reason = reply.error;
+        } catch {}
+        throw new Error(
+          `package ${family} ${action}: ${reason}; exit=${code}; elapsedMs=${Math.round(performance.now() - startedAt)}`,
+        );
+      }
       return parseStrictJson(out);
     };
     try {
