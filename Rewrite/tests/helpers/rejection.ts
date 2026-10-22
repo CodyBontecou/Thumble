@@ -1,8 +1,10 @@
 import { expect } from "bun:test";
 
-/** Bun 1.4.3 Windows can crash when .rejects.toThrow wraps socket rejections.
+/** Bun 1.4.3 Windows can crash on socket rejections or stall pipe reads when
+ * .rejects.toThrow awaits live I/O.
  * Capture the outcome first; retain assertions on both failure and exact code.
- * See docs/rewrite-evidence/m2/windows-runtime-diagnosis.md.
+ * See docs/rewrite-evidence/m2/windows-runtime-diagnosis.md and
+ * docs/rewrite-evidence/m4/configuration-owner/windows-peer/.
  */
 export async function expectError(
   promise: Promise<unknown>,

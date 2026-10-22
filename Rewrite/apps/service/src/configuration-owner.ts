@@ -52,10 +52,6 @@ export class ConfigurationOwner {
   get child() {
     return this.pipe.child;
   }
-  // [DEBUG-config-pipe] Temporary native stdio evidence for the synthetic test.
-  get diagnostics() {
-    return this.pipe.diagnostics;
-  }
   async request(input: ConfigurationCommand): Promise<ConfigurationReply> {
     const command = decodeConfigurationCommand(input);
     const value = await this.pipe.request(command);

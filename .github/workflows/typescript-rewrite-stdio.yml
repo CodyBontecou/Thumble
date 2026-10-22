@@ -7,8 +7,8 @@ on:
       - "Rewrite/apps/service/src/native-pipe.ts"
       - "Rewrite/apps/service/src/configuration-owner.ts"
       - "Rewrite/tests/configuration-owner.test.ts"
+      - "Rewrite/tests/helpers/rejection.ts"
       - "Rewrite/tests/fixtures/invalid-configuration-owner.ts"
-      - "Rewrite/tooling/observe-peer-stdio.mjs"
       - "Rewrite/package.json"
       - "Rewrite/bun.lock"
       - ".github/workflows/typescript-rewrite-stdio.yml"
@@ -17,8 +17,8 @@ on:
       - "Rewrite/apps/service/src/native-pipe.ts"
       - "Rewrite/apps/service/src/configuration-owner.ts"
       - "Rewrite/tests/configuration-owner.test.ts"
+      - "Rewrite/tests/helpers/rejection.ts"
       - "Rewrite/tests/fixtures/invalid-configuration-owner.ts"
-      - "Rewrite/tooling/observe-peer-stdio.mjs"
       - "Rewrite/package.json"
       - "Rewrite/bun.lock"
       - ".github/workflows/typescript-rewrite-stdio.yml"
@@ -47,10 +47,5 @@ jobs:
       - run: bun install --frozen-lockfile
       # This actual parent/peer test needs no native build or physical output.
       # Keep the strict error assertion and the existing two-second pipe deadline.
-      - name: Compare independent Node and Bun readers
-        run: |
-          $bunExecutable = (Get-Command bun).Source
-          node tooling/observe-peer-stdio.mjs "$bunExecutable" tests/fixtures/invalid-configuration-owner.ts
-          bun tooling/observe-peer-stdio.mjs "$bunExecutable" tests/fixtures/invalid-configuration-owner.ts
       - name: Exercise the real invalid typed reply path
         run: bun test tests/configuration-owner.test.ts --test-name-pattern "invalid typed configuration result"
