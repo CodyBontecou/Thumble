@@ -19,6 +19,8 @@ on:
       - "Rewrite/tooling/check_mobile_app_results.py"
       - "Rewrite/tooling/run_mobile_app_probe.py"
       - "Rewrite/tooling/test_mobile_app_probe.py"
+      - "Rewrite/tooling/collect_ios_http_diagnostic.py"
+      - "Rewrite/tooling/test_ios_http_diagnostic.py"
       - "Rewrite/native/receiver/**"
       - "Rewrite/tooling/prepare-mobile-fixtures.ts"
       - "Rewrite/tooling/generate-contracts.ts"
@@ -40,6 +42,8 @@ on:
       - "Rewrite/tooling/check_mobile_app_results.py"
       - "Rewrite/tooling/run_mobile_app_probe.py"
       - "Rewrite/tooling/test_mobile_app_probe.py"
+      - "Rewrite/tooling/collect_ios_http_diagnostic.py"
+      - "Rewrite/tooling/test_ios_http_diagnostic.py"
       - "Rewrite/native/receiver/**"
       - "Rewrite/tooling/prepare-mobile-fixtures.ts"
       - "Rewrite/tooling/generate-contracts.ts"
@@ -51,7 +55,7 @@ permissions:
 jobs:
   android-app:
     concurrency:
-      group: ${{ github.workflow }}-android-${{ github.ref }}
+      group: ${{ github.workflow }}-android-${{ github.head_ref || github.ref_name }}
       cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -87,7 +91,9 @@ jobs:
       - run: bun run mobile:prepare
       - run: bun run typecheck
       - name: Check bounded app diagnostic protocol
-        run: python3 -m unittest discover -s tooling -p test_mobile_app_probe.py -v
+        run: |
+          python3 -m unittest discover -s tooling -p test_mobile_app_probe.py -v
+          python3 -m unittest discover -s tooling -p test_ios_http_diagnostic.py -v
       - name: Generate native Android app
         working-directory: Rewrite/apps/mobile
         run: bun run prebuild --platform android
@@ -126,7 +132,7 @@ jobs:
 
   ios-app:
     concurrency:
-      group: ${{ github.workflow }}-ios-${{ github.ref }}
+      group: ${{ github.workflow }}-ios-${{ github.head_ref || github.ref_name }}
       cancel-in-progress: false
     runs-on: macos-15
     timeout-minutes: 60
@@ -155,7 +161,9 @@ jobs:
       - run: bun run mobile:prepare
       - run: bun run typecheck
       - name: Check bounded app diagnostic protocol
-        run: python3 -m unittest discover -s tooling -p test_mobile_app_probe.py -v
+        run: |
+          python3 -m unittest discover -s tooling -p test_mobile_app_probe.py -v
+          python3 -m unittest discover -s tooling -p test_ios_http_diagnostic.py -v
       - name: Identify the exact iOS compiler cache scope
         id: ios-toolchain
         run: |
@@ -194,6 +202,12 @@ jobs:
           xcrun xcresulttool get test-results summary --schema-version 0.1.0 --path "$RUNNER_TEMP/rewrite-mobile-app.xcresult" > reports/mobile-app-ios-summary.json
           xcrun xcresulttool get test-results tests --schema-version 0.1.0 --path "$RUNNER_TEMP/rewrite-mobile-app.xcresult" > reports/mobile-app-ios-tests.json
           xcrun xcresulttool get test-results test-details --schema-version 0.1.0 --path "$RUNNER_TEMP/rewrite-mobile-app.xcresult" --test-id 'NativePortalTests/testNativePairingVaultBindingAndReconnectReachRecordingReceiver()' > reports/mobile-app-ios-renewal-details.json
+          if [ "$status" -ne 0 ]; then
+            diagnostic_export="$RUNNER_TEMP/rewrite-ios-http-export"
+            if xcrun xcresulttool export attachments --schema-version 0.1.0 --path "$RUNNER_TEMP/rewrite-mobile-app.xcresult" --output-path "$diagnostic_export" --test-id 'NativePortalTests/testNativePairingVaultBindingAndReconnectReachRecordingReceiver()'; then
+              python3 tooling/collect_ios_http_diagnostic.py --export "$diagnostic_export" --output reports/mobile-app-ios-http-diagnostic.json
+            fi
+          fi
           python3 tooling/check_mobile_app_results.py ios reports/mobile-app-ios-summary.json reports/mobile-app-ios-tests.json
           exit "$status"
       - uses: actions/upload-artifact@v4
@@ -205,4 +219,5 @@ jobs:
             Rewrite/reports/mobile-app-ios-summary.json
             Rewrite/reports/mobile-app-ios-tests.json
             Rewrite/reports/mobile-app-ios-renewal-details.json
+            Rewrite/reports/mobile-app-ios-http-diagnostic.json
           if-no-files-found: error

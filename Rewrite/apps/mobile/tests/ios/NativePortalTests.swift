@@ -182,6 +182,47 @@ import XCTest
     XCTAssertEqual(GamepadReport.hex(engine.state), GamepadReport.hex(.neutral))
   }
 
+  /// Diagnostic only: a failing acceptance request is never retried or replaced.
+  /// A separate ephemeral health check distinguishes app shared-session state
+  /// from loopback reachability while the original error remains the test result.
+  private func recordBeginProbeFailure(_ error: any Error, port: Int) async {
+    let original = error as NSError
+    let session = URLSession(configuration: .ephemeral)
+    defer { session.invalidateAndCancel() }
+    var healthSucceeded = false
+    var healthErrorCode = 0
+    if (1...65535).contains(port),
+      let url = URL(string: "http://127.0.0.1:\(port)/health")
+    {
+      var request = URLRequest(url: url)
+      request.timeoutInterval = 6
+      do {
+        let (data, response) = try await session.data(for: request)
+        let value = try JSONSerialization.jsonObject(with: data) as? [String: Bool]
+        healthSucceeded = (response as? HTTPURLResponse)?.statusCode == 200 && value == ["ok": true]
+      } catch {
+        healthErrorCode = max(-100000, min(100000, (error as NSError).code))
+      }
+    }
+    let value: [String: Any] = [
+      "phase": "begin-http-failed",
+      "originalErrorIsURL": original.domain == NSURLErrorDomain,
+      "originalErrorCode": max(-100000, min(100000, original.code)),
+      "ephemeralHealthSucceeded": healthSucceeded,
+      "ephemeralHealthErrorCode": healthErrorCode,
+    ]
+    do {
+      let attachment = XCTAttachment(
+        data: try JSONSerialization.data(withJSONObject: value, options: [.sortedKeys]),
+        uniformTypeIdentifier: "public.json")
+      attachment.name = "qa-loopback-admission-failure"
+      attachment.lifetime = .keepAlways
+      add(attachment)
+    } catch {
+      XCTFail("Could not attach bounded QA loopback diagnostic")
+    }
+  }
+
   private func probe(_ path: String, body: [String: Any]? = nil) async throws -> [String: Any] {
     let resource = try XCTUnwrap(
       Bundle(for: Self.self).url(forResource: "AppProbeConfig", withExtension: "json"))
@@ -197,7 +238,14 @@ import XCTest
       request.setValue("application/json", forHTTPHeaderField: "Content-Type")
       request.httpBody = try JSONSerialization.data(withJSONObject: body)
     }
-    let (data, response) = try await URLSession.shared.data(for: request)
+    let payload: (Data, URLResponse)
+    do {
+      payload = try await URLSession.shared.data(for: request)
+    } catch {
+      if path == "/begin" { await recordBeginProbeFailure(error, port: port) }
+      throw error
+    }
+    let (data, response) = payload
     guard (response as? HTTPURLResponse)?.statusCode == 200 else {
       throw NSError(
         domain: "ThumbleAppProbe", code: 1,
