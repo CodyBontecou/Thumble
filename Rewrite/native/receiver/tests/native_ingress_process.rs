@@ -267,7 +267,21 @@ fn continuous_native_traffic_cannot_keep_a_lost_configuration_owner_alive() {
     assert!(accepted > 1);
     assert!(rejected);
     receiver.wait_neutral();
-    assert_eq!(receiver.status()["lastReleaseReason"], "lease_expired");
+    // Native IPC cleanup can issue a later idempotent release after rejecting
+    // the first post-expiry packet. Require the actual lease-expiry output event.
+    let events: Vec<Value> = fs::read_to_string(receiver.root.join("recording.jsonl"))
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    let reasons: Vec<_> = events.iter().map(|event| event["reason"].clone()).collect();
+    assert!(
+        events
+            .iter()
+            .any(|event| event["reason"] == "lease_expired" && event["reportHex"] == hex(&NEUTRAL)),
+        "missing native lease fence: {reasons:?}"
+    );
+    assert_eq!(receiver.status()["reportHex"], hex(&NEUTRAL));
 }
 #[test]
 fn stalled_ipc_clients_do_not_block_owner_commands_or_input_expiry() {
@@ -582,4 +596,248 @@ fn managed_configuration_owner_survives_slow_pairing_before_native_input() {
         receiver.status()["lastReleaseReason"],
         "native_input_released"
     );
+}
+
+fn datagram_auth(value: &Value, credential: &Value) -> (ControlChannel, Value) {
+    let mut channel = control_connect(value);
+    control_hello(&mut channel, 5);
+    control_send(
+        &mut channel,
+        json!({"version":1,"command":"authenticate","authorityInstanceId":"broker-authority","phoneId":"phone-a","credentialEpoch":credential["credentialEpoch"],"credential":credential["credential"]}),
+    );
+    let receipt = control_receive(&mut channel);
+    assert_eq!(receipt["command"], "authenticated");
+    (channel, receipt)
+}
+fn datagram_grant(
+    channel: &mut ControlChannel,
+    receipt: &Value,
+    generation: &str,
+    revision: &str,
+) -> (PacketSender, Value, std::net::UdpSocket) {
+    control_send(
+        channel,
+        json!({"version":1,"command":"input-grant","connectionId":receipt["connectionId"],"generation":generation,"revision":revision}),
+    );
+    let grant = control_receive(channel);
+    assert_eq!(grant["transport"], "udp+tls");
+    let port = u16::try_from(grant["udpPort"].as_u64().unwrap()).unwrap();
+    assert!(port > 0);
+    let sender = PacketSender::new(
+        PacketGrant::new(
+            &decode_hex(&grant["key"]),
+            decode_hex(&grant["sessionId"]),
+            decode_hex(&grant["noncePrefix"]),
+            generation.parse().unwrap(),
+        )
+        .unwrap(),
+        PACKET_LIMIT,
+    )
+    .unwrap();
+    let socket = std::net::UdpSocket::bind("127.0.0.1:0").unwrap();
+    socket.connect((Ipv4Addr::LOCALHOST, port)).unwrap();
+    (sender, grant, socket)
+}
+fn datagram_status(channel: &mut ControlChannel, receipt: &Value, grant: &Value) -> Value {
+    control_send(
+        channel,
+        json!({"version":1,"command":"input-status","connectionId":receipt["connectionId"],"sessionId":grant["sessionId"]}),
+    );
+    let status = control_receive(channel);
+    assert_eq!(status["command"], "input-status");
+    assert_eq!(status["connectionId"], receipt["connectionId"]);
+    status
+}
+fn datagram_wait(
+    channel: &mut ControlChannel,
+    receipt: &Value,
+    grant: &Value,
+    sequence: u64,
+) -> Value {
+    let deadline = Instant::now() + Duration::from_secs(1);
+    let sequence = sequence.to_string();
+    loop {
+        let status = datagram_status(channel, receipt, grant);
+        if status["lastAcceptedSequence"].as_str() == Some(sequence.as_str()) {
+            return status;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "UDP never reached receiver: {status}"
+        );
+        thread::sleep(Duration::from_millis(5));
+    }
+}
+fn datagram_deliver(
+    channel: &mut ControlChannel,
+    receipt: &Value,
+    grant: &Value,
+    socket: &std::net::UdpSocket,
+    packet: &[u8],
+) -> Value {
+    let expected = u64::from_le_bytes(packet[32..40].try_into().unwrap()).to_string();
+    let deadline = Instant::now() + Duration::from_secs(1);
+    loop {
+        // UDP can drop under contention. Resending identical ciphertext never reuses a nonce for different plaintext.
+        socket.send(packet).unwrap();
+        thread::sleep(Duration::from_millis(15));
+        let status = datagram_status(channel, receipt, grant);
+        if status["lastAcceptedSequence"].as_str() == Some(expected.as_str()) {
+            return status;
+        }
+        assert!(Instant::now() < deadline, "UDP not admitted: {status}");
+    }
+}
+#[test]
+fn udp_and_tls_share_one_authenticated_counter_and_reject_malformed_datagrams_without_losing_fallback(
+) {
+    let mut receiver = Receiver::new();
+    let _owner = receiver.maintain_owner();
+    receiver.activate();
+    let (_host, value) = listen_host(&receiver);
+    let credential = phone_enroll(&value);
+    let (mut channel, receipt) = datagram_auth(&value, &credential);
+    let (mut sender, grant, socket) = datagram_grant(&mut channel, &receipt, "1", "1");
+    let first = sender.seal(&held()).unwrap();
+    assert_eq!(
+        datagram_deliver(&mut channel, &receipt, &grant, &socket, &first)["active"],
+        true
+    );
+    assert_eq!(receiver.status()["reportHex"], hex(&held().report()));
+    let neutral: GamepadState=serde_json::from_value(json!({"buttons":[],"leftStickX":0,"leftStickY":0,"rightStickX":0,"rightStickY":0,"leftTrigger":0,"rightTrigger":0})).unwrap();
+    let reliable = sender.seal(&neutral).unwrap();
+    channel.send(FrameKind::Input, &reliable).unwrap();
+    assert_eq!(
+        datagram_wait(&mut channel, &receipt, &grant, 1)["active"],
+        true
+    );
+    assert_eq!(receiver.status()["reportHex"], hex(&NEUTRAL));
+    socket.send(&first).unwrap();
+    let mut invalid = sender.seal(&held()).unwrap();
+    invalid[107] ^= 1;
+    socket.send(&invalid).unwrap();
+    thread::sleep(Duration::from_millis(30));
+    assert_eq!(
+        datagram_status(&mut channel, &receipt, &grant)["lastAcceptedSequence"],
+        "1"
+    );
+    assert_eq!(receiver.status()["reportHex"], hex(&NEUTRAL));
+    datagram_deliver(
+        &mut channel,
+        &receipt,
+        &grant,
+        &socket,
+        &sender.seal(&held()).unwrap(),
+    );
+    channel.send(FrameKind::Input, &reliable).unwrap(); // Late TLS must not retire newer UDP state.
+    assert_eq!(
+        datagram_status(&mut channel, &receipt, &grant)["lastAcceptedSequence"],
+        "3"
+    );
+    assert_eq!(receiver.status()["reportHex"], hex(&held().report()));
+    let mut oversized = sender.seal(&neutral).unwrap();
+    oversized.push(0);
+    socket.send(&oversized).unwrap();
+    let mut unknown = first.clone();
+    unknown[8] ^= 1;
+    socket.send(&unknown).unwrap();
+    thread::sleep(Duration::from_millis(30));
+    assert_eq!(
+        datagram_status(&mut channel, &receipt, &grant)["lastAcceptedSequence"],
+        "3"
+    );
+    channel
+        .send(FrameKind::Input, &sender.seal(&neutral).unwrap())
+        .unwrap();
+    datagram_wait(&mut channel, &receipt, &grant, 5);
+    assert_eq!(receiver.status()["reportHex"], hex(&NEUTRAL));
+    control_send(
+        &mut channel,
+        json!({"version":1,"command":"input-release","connectionId":receipt["connectionId"],"sessionId":grant["sessionId"]}),
+    );
+    assert_eq!(control_receive(&mut channel)["command"], "input-released");
+    assert_eq!(
+        receiver.status()["lastReleaseReason"],
+        "native_input_released"
+    );
+}
+#[test]
+fn udp_replays_cannot_renew_input_ttl_or_resurrect_an_expired_source_with_a_live_owner() {
+    let mut receiver = Receiver::new();
+    let _owner = receiver.maintain_owner();
+    receiver.activate();
+    let (_host, value) = listen_host(&receiver);
+    let credential = phone_enroll(&value);
+    let (mut channel, receipt) = datagram_auth(&value, &credential);
+    let (mut sender, grant, socket) = datagram_grant(&mut channel, &receipt, "1", "1");
+    let packet = sender.seal(&held()).unwrap();
+    datagram_deliver(&mut channel, &receipt, &grant, &socket, &packet);
+    let deadline = Instant::now() + Duration::from_millis(430);
+    while Instant::now() < deadline {
+        socket.send(&packet).unwrap();
+        thread::sleep(Duration::from_millis(20));
+    }
+    let status = receiver.status();
+    assert_eq!(status["active"], false);
+    assert_eq!(status["lastReleaseReason"], "input_expired");
+    socket.send(&sender.seal(&held()).unwrap()).unwrap();
+    thread::sleep(Duration::from_millis(30));
+    assert_eq!(
+        datagram_status(&mut channel, &receipt, &grant)["active"],
+        false
+    );
+    assert_eq!(receiver.status()["reportHex"], hex(&NEUTRAL));
+}
+#[test]
+fn udp_revocation_and_listener_stop_acknowledge_native_neutral_and_old_keys_cannot_touch_a_new_epoch(
+) {
+    let mut receiver = Receiver::new();
+    let _owner = receiver.maintain_owner();
+    receiver.activate();
+    let (mut host, value) = listen_host(&receiver);
+    let old = phone_enroll(&value);
+    let (mut channel, receipt) = datagram_auth(&value, &old);
+    let (mut sender, grant, socket) = datagram_grant(&mut channel, &receipt, "1", "1");
+    datagram_deliver(
+        &mut channel,
+        &receipt,
+        &grant,
+        &socket,
+        &sender.seal(&held()).unwrap(),
+    );
+    host.execute(PairingCommand::PairingRevoke {
+        phone_id: "phone-a".into(),
+    })
+    .unwrap();
+    assert_eq!(receiver.status()["active"], false);
+    assert_eq!(
+        receiver.status()["lastReleaseReason"],
+        "native_input_released"
+    );
+    socket.send(&sender.seal(&held()).unwrap()).unwrap();
+    let offer = host.execute(PairingCommand::PairingOpen {}).unwrap();
+    let fresh = phone_enroll(&offer);
+    assert_ne!(old["credentialEpoch"], fresh["credentialEpoch"]);
+    assert_eq!(receiver.command(json!({"command":"activate","generation":"2","revision":"2","profileId":"new","sessionId":"service-owner","leaseMs":750,"inputTtlMs":350}))["ok"],true);
+    let (mut channel, receipt) = datagram_auth(&offer, &fresh);
+    let (mut new_sender, grant, new_socket) = datagram_grant(&mut channel, &receipt, "2", "2");
+    datagram_deliver(
+        &mut channel,
+        &receipt,
+        &grant,
+        &new_socket,
+        &new_sender.seal(&held()).unwrap(),
+    );
+    socket.send(&sender.seal(&held()).unwrap()).unwrap();
+    thread::sleep(Duration::from_millis(20));
+    assert_eq!(receiver.status()["reportHex"], hex(&held().report()));
+    host.execute(PairingCommand::PairingStopListening {})
+        .unwrap();
+    assert_eq!(receiver.status()["active"], false);
+    assert_eq!(
+        receiver.status()["lastReleaseReason"],
+        "native_input_released"
+    );
+    let port = grant["udpPort"].as_u64().unwrap() as u16;
+    let _rebound = std::net::UdpSocket::bind((Ipv4Addr::LOCALHOST, port)).unwrap();
 }

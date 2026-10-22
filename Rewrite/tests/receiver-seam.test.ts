@@ -408,6 +408,8 @@ test("pairing CLI requires secret opt-in, authenticated IPC, private status and 
         return true;
       }
     });
+    // Endpoint disappearance promises native owners released their locks.
+    expect(() => process.kill(endpoint.receiverPid, 0)).toThrow();
     expect((await command(directory, "service", "start")).code).toBe(0);
     expect(
       (await command(directory, "pairing", "status")).value.result.pairing

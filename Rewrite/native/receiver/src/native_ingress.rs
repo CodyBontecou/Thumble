@@ -120,6 +120,11 @@ pub struct GrantRef {
     connection: [u8; 16],
     session: [u8; 16],
 }
+impl GrantRef {
+    pub(crate) fn session(&self) -> [u8; 16] {
+        self.session
+    }
+}
 /// Opaque native-only secret. Deliberately no Debug, Clone, Serialize or raw key getter.
 pub struct NativeGrant {
     key: [u8; 32],
@@ -150,10 +155,24 @@ impl NativeGrant {
         &self,
         channel: &mut crate::control_tls::ControlChannel,
     ) -> Result<(), &'static str> {
+        self.send_to_datagram(channel, None)
+    }
+    pub(crate) fn send_to_datagram(
+        &self,
+        channel: &mut crate::control_tls::ControlChannel,
+        udp_port: Option<u16>,
+    ) -> Result<(), &'static str> {
         if channel.native_binding() != Some(self.binding.connection) {
             return Err("native_grant_delivery_unconfirmed");
         }
-        let value = serde_json::json!({"version":1,"command":"input-granted","connectionId":crate::gamepad::hex(&self.binding.connection),"generation":self.generation.to_string(),"revision":self.revision.to_string(),"sessionId":crate::gamepad::hex(&self.session),"key":crate::gamepad::hex(&self.key),"noncePrefix":crate::gamepad::hex(&self.prefix),"lifetimeMs":self.lifetime_ms,"packetVersion":1,"packetBytes":PACKET_BYTES,"packetLimit":PACKET_LIMIT.to_string(),"transport":"tls","inputEnabled":false});
+        let mut value = serde_json::json!({"version":1,"command":"input-granted","connectionId":crate::gamepad::hex(&self.binding.connection),"generation":self.generation.to_string(),"revision":self.revision.to_string(),"sessionId":crate::gamepad::hex(&self.session),"key":crate::gamepad::hex(&self.key),"noncePrefix":crate::gamepad::hex(&self.prefix),"lifetimeMs":self.lifetime_ms,"packetVersion":1,"packetBytes":PACKET_BYTES,"packetLimit":PACKET_LIMIT.to_string(),"transport":"tls","inputEnabled":false});
+        if let Some(port) = udp_port {
+            if port == 0 {
+                return Err("native_grant_delivery_unconfirmed");
+            }
+            value["transport"] = serde_json::json!("udp+tls");
+            value["udpPort"] = serde_json::json!(port);
+        }
         channel
             .send(
                 crate::control_tls::FrameKind::Control,

@@ -161,6 +161,11 @@ enum InputRequest {
         connection_id: String,
         session_id: String,
     },
+    InputStatus {
+        version: u8,
+        connection_id: String,
+        session_id: String,
+    },
 }
 impl InputRequest {
     fn binding(&self) -> (u8, &str) {
@@ -183,6 +188,11 @@ impl InputRequest {
                 ..
             }
             | Self::InputRelease {
+                version,
+                connection_id,
+                ..
+            }
+            | Self::InputStatus {
                 version,
                 connection_id,
                 ..
@@ -209,7 +219,7 @@ pub(crate) fn serve_after_hello(
     authority: &str,
     store: &Mutex<PhoneTrustStore>,
     mutation: &Mutex<()>,
-    input: Option<(&std::path::Path, &crate::input_broker::Registry)>,
+    input: Option<crate::input_broker::ControlInput<'_>>,
     now: &mut impl FnMut() -> Result<u64, &'static str>,
 ) -> Result<(), &'static str> {
     let request = receive(channel)?;
@@ -225,8 +235,13 @@ pub(crate) fn serve_after_hello(
             now()?,
         )?
     };
-    if let Some((root, registry)) = input {
-        let mut broker = crate::input_broker::Broker::connect(root, registry, authorized.binding)?;
+    if let Some(input) = input {
+        let mut broker = crate::input_broker::Broker::connect(
+            input.root,
+            input.registry,
+            authorized.binding,
+            input.datagram_port,
+        )?;
         // Handshake may have waited on local IPC; recheck trust before returning admission metadata.
         {
             let _gate = mutation
@@ -310,7 +325,13 @@ fn serve_input(
             continue;
         }
         controls += 1;
-        if controls > 128 {
+        if controls
+            > if broker.datagram_port().is_some() {
+                1024
+            } else {
+                128
+            }
+        {
             return Err("authenticated_control_budget_exhausted");
         }
         let request: InputRequest = serde_json::from_slice(&frame.payload)
@@ -340,6 +361,13 @@ fn serve_input(
                     crate::runtime::decimal(&generation)?,
                     crate::runtime::decimal(&revision)?,
                     grant_lifetime(authorized.expires, time)?,
+                    broker
+                        .datagram_port()
+                        .map(|_| crate::input_broker::DatagramPolicy {
+                            epoch: authorized.phone.credential_epoch.clone(),
+                            expires: authorized.expires,
+                            observed: time,
+                        }),
                 )?;
                 authorized.validate(
                     channel,
@@ -347,12 +375,17 @@ fn serve_input(
                     now()?,
                 )?;
                 drop(gate);
-                crate::input_broker::deliver(&grant, channel)?;
+                crate::input_broker::deliver(&grant, channel, broker.datagram_port())?;
                 continue;
             }
             InputRequest::InputConfiguration { .. } => {
                 let c = broker.configuration()?;
                 json!({"version":1,"command":"input-configuration","connectionId":hex(&authorized.binding),"active":c.active,"generation":c.generation.to_string(),"revision":c.revision.to_string(),"inputEnabled":false})
+            }
+            InputRequest::InputStatus { session_id, .. } => {
+                let status = broker.datagram_status(&session_id)?;
+                json!({"version":1,"command":"input-status","connectionId":hex(&authorized.binding),"sessionId":session_id,"active":status.active,
+                    "generation":status.generation.to_string(),"revision":status.revision.to_string(),"lastAcceptedSequence":status.last.map(|s|s.to_string()),"inputEnabled":false})
             }
             InputRequest::InputRelease { session_id, .. } => {
                 if session_id.len() != 32

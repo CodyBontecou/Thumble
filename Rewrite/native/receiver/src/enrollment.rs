@@ -222,21 +222,25 @@ pub(crate) fn serve(
     windows: &Mutex<PairingWindows>,
     store: &Mutex<PhoneTrustStore>,
     policy_mutation: &Mutex<()>,
-    input_grants: &crate::input_broker::Registry,
-    root: &std::path::Path,
+    input: crate::input_broker::ControlInput<'_>,
     mut now: impl FnMut() -> Result<u64, &'static str>,
 ) -> Result<(), &'static str> {
-    let result = (|| match begin(channel, windows, store, 4)? {
+    let result = (|| match begin(
+        channel,
+        windows,
+        store,
+        if input.datagram_port.is_some() { 5 } else { 4 },
+    )? {
         2 => complete(
             channel,
             windows,
             store,
             policy_mutation,
-            Some(input_grants),
+            Some(input.registry),
             &mut now,
         )
         .map(|_| ()),
-        version @ (3 | 4) => {
+        version @ 3..=5 => {
             let authority = windows
                 .lock()
                 .map_err(|_| "pairing_owner_unavailable")?
@@ -247,8 +251,16 @@ pub(crate) fn serve(
                 &authority,
                 store,
                 policy_mutation,
-                if version == 4 {
-                    Some((root, input_grants))
+                if version >= 4 {
+                    Some(crate::input_broker::ControlInput {
+                        root: input.root,
+                        registry: input.registry,
+                        datagram_port: if version == 5 {
+                            input.datagram_port
+                        } else {
+                            None
+                        },
+                    })
                 } else {
                     None
                 },

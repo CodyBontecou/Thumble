@@ -12,7 +12,7 @@ import {
   unlinkSync,
   writeFileSync,
 } from "node:fs";
-import { spawnSync } from "node:child_process";
+import { spawnSync, type ChildProcess } from "node:child_process";
 import { join } from "node:path";
 import { RuntimeController } from "@thumble/application";
 import {
@@ -38,6 +38,26 @@ export function secureDirectory(executable: string, path: string): string {
     throw new Error("runtime_directory_protection_failed");
   return directory;
 }
+async function waitForOwnerExit(child: ChildProcess): Promise<void> {
+  if (child.exitCode !== null || child.signalCode !== null) return;
+  await new Promise<void>((resolve, reject) => {
+    const finish = () => {
+      clearTimeout(terminate);
+      clearTimeout(deadline);
+      child.removeListener("exit", finish);
+      resolve();
+    };
+    const terminate = setTimeout(() => child.kill("SIGKILL"), 2000);
+    const deadline = setTimeout(() => {
+      clearTimeout(terminate);
+      child.removeListener("exit", finish);
+      reject(new Error("native_owner_shutdown_unconfirmed"));
+    }, 3000);
+    child.once("exit", finish);
+    if (child.exitCode !== null || child.signalCode !== null) finish();
+  });
+}
+
 export async function serve(
   executable: string,
   path: string,
@@ -205,6 +225,15 @@ export async function serve(
     native.disconnect();
     for (const socket of sockets) socket.destroy();
     server.close();
+    try {
+      // Endpoint disappearance is the restart barrier. Wait for native locks.
+      await Promise.all([
+        waitForOwnerExit(native.child),
+        waitForOwnerExit(pairing.child),
+      ]);
+    } catch {
+      process.exit(1);
+    }
     try {
       const saved = record(parseStrictJson(readFileSync(endpointPath, "utf8")));
       if (saved.instanceId === instanceId) unlinkSync(endpointPath);

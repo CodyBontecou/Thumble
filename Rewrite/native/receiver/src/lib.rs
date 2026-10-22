@@ -27,3 +27,5 @@ pub mod authenticated_control;
 pub mod native_ingress;
 
 mod input_broker;
+
+mod input_datagram;
