@@ -126,6 +126,25 @@ impl AuthorizedConnection {
         self.observed = now;
         Ok(())
     }
+    fn renew(
+        &mut self,
+        channel: &ControlChannel,
+        store: &mut PhoneTrustStore,
+        now: u64,
+    ) -> Result<(), &'static str> {
+        self.validate(channel, store, now)?;
+        if self.expires.saturating_sub(now) > 30_000 {
+            return Err("input_renewal_too_early");
+        }
+        let phone =
+            store.authorize_epoch(&self.phone.phone_id, &self.phone.credential_epoch, now)?;
+        self.expires = phone.expires_at.min(
+            now.checked_add(60_000)
+                .ok_or("phone_authentication_rejected")?,
+        );
+        self.phone = phone;
+        Ok(())
+    }
     fn reply(&self, command: &str, authority: &str) -> Value {
         json!({"version":1,"command":command,"authorityInstanceId":authority,"phoneId":self.phone.phone_id,"credentialEpoch":self.phone.credential_epoch,"connectionId":hex(&self.binding),"expiresAt":self.expires,"inputSessionAvailable":false,"inputEnabled":false})
     }
@@ -156,6 +175,13 @@ enum InputRequest {
         generation: String,
         revision: String,
     },
+    InputRenew {
+        version: u8,
+        connection_id: String,
+        session_id: String,
+        generation: String,
+        revision: String,
+    },
     InputRelease {
         version: u8,
         connection_id: String,
@@ -183,6 +209,11 @@ impl InputRequest {
                 connection_id,
             }
             | Self::InputGrant {
+                version,
+                connection_id,
+                ..
+            }
+            | Self::InputRenew {
                 version,
                 connection_id,
                 ..
@@ -242,6 +273,7 @@ pub(crate) fn serve_after_hello(
             authorized.binding,
             input.datagram_port,
         )?;
+        broker.renewal = input.renewal;
         // Handshake may have waited on local IPC; recheck trust before returning admission metadata.
         {
             let _gate = mutation
@@ -304,10 +336,16 @@ fn serve_input(
 ) -> Result<(), &'static str> {
     let mut controls = 0;
     let mut packets = 0;
+    let mut window = std::time::Instant::now();
     loop {
         let frame = channel
             .receive()
             .map_err(|_| "authenticated_control_transport_failed")?;
+        if broker.renewal && window.elapsed() >= std::time::Duration::from_secs(60) {
+            controls = 0;
+            packets = 0;
+            window = std::time::Instant::now();
+        }
         if frame.kind == FrameKind::Input {
             packets += 1;
             if packets > 65_536 {
@@ -316,12 +354,13 @@ fn serve_input(
             let _gate = mutation
                 .lock()
                 .map_err(|_| "phone_trust_owner_unavailable")?;
+            let time = now()?;
             authorized.validate(
                 channel,
                 &mut *store.lock().map_err(|_| "phone_trust_owner_unavailable")?,
-                now()?,
+                time,
             )?;
-            broker.packet(&frame.payload)?;
+            broker.packet(&frame.payload, time)?;
             continue;
         }
         controls += 1;
@@ -378,12 +417,51 @@ fn serve_input(
                 crate::input_broker::deliver(&grant, channel, broker.datagram_port())?;
                 continue;
             }
+            InputRequest::InputRenew {
+                session_id,
+                generation,
+                revision,
+                ..
+            } => {
+                if !broker.renewal {
+                    return Err("authenticated_control_message_invalid");
+                }
+                authorized.renew(
+                    channel,
+                    &mut *store.lock().map_err(|_| "phone_trust_owner_unavailable")?,
+                    time,
+                )?;
+                let grant = broker.rotate(
+                    &session_id,
+                    crate::runtime::decimal(&generation)?,
+                    crate::runtime::decimal(&revision)?,
+                    grant_lifetime(authorized.expires, time)?,
+                    crate::input_broker::DatagramPolicy {
+                        epoch: authorized.phone.credential_epoch.clone(),
+                        expires: authorized.expires,
+                        observed: time,
+                    },
+                )?;
+                authorized.validate(
+                    channel,
+                    &mut *store.lock().map_err(|_| "phone_trust_owner_unavailable")?,
+                    now()?,
+                )?;
+                drop(gate);
+                grant.send_renewal_to(
+                    channel,
+                    broker.datagram_port(),
+                    &session_id,
+                    authorized.expires,
+                )?;
+                continue;
+            }
             InputRequest::InputConfiguration { .. } => {
                 let c = broker.configuration()?;
                 json!({"version":1,"command":"input-configuration","connectionId":hex(&authorized.binding),"active":c.active,"generation":c.generation.to_string(),"revision":c.revision.to_string(),"inputEnabled":false})
             }
             InputRequest::InputStatus { session_id, .. } => {
-                let status = broker.datagram_status(&session_id)?;
+                let status = broker.datagram_status(&session_id, time)?;
                 json!({"version":1,"command":"input-status","connectionId":hex(&authorized.binding),"sessionId":session_id,"active":status.active,
                     "generation":status.generation.to_string(),"revision":status.revision.to_string(),"lastAcceptedSequence":status.last.map(|s|s.to_string()),"inputEnabled":false})
             }
@@ -516,4 +594,5 @@ mod tests {
             assert!(token(&bad).is_err());
         }
     }
+    include!("authenticated_control_renewal_tests.rs");
 }

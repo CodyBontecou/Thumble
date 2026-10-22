@@ -137,9 +137,6 @@ pub struct NativeGrant {
     binding: GrantRef,
 }
 impl NativeGrant {
-    pub(crate) fn session_id(&self) -> String {
-        crate::gamepad::hex(&self.session)
-    }
     pub fn binding(&self) -> GrantRef {
         self.binding
     }
@@ -163,6 +160,23 @@ impl NativeGrant {
         channel: &mut crate::control_tls::ControlChannel,
         udp_port: Option<u16>,
     ) -> Result<(), &'static str> {
+        self.send_frame(channel, udp_port, None)
+    }
+    pub(crate) fn send_renewal_to(
+        &self,
+        channel: &mut crate::control_tls::ControlChannel,
+        udp_port: Option<u16>,
+        previous: &str,
+        authorization_expires: u64,
+    ) -> Result<(), &'static str> {
+        self.send_frame(channel, udp_port, Some((previous, authorization_expires)))
+    }
+    fn send_frame(
+        &self,
+        channel: &mut crate::control_tls::ControlChannel,
+        udp_port: Option<u16>,
+        renewal: Option<(&str, u64)>,
+    ) -> Result<(), &'static str> {
         if channel.native_binding() != Some(self.binding.connection) {
             return Err("native_grant_delivery_unconfirmed");
         }
@@ -173,6 +187,18 @@ impl NativeGrant {
             }
             value["transport"] = serde_json::json!("udp+tls");
             value["udpPort"] = serde_json::json!(port);
+        }
+        if let Some((previous, expires)) = renewal {
+            if previous.len() != 32
+                || !previous
+                    .bytes()
+                    .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+            {
+                return Err("native_grant_delivery_unconfirmed");
+            }
+            value["command"] = serde_json::json!("input-renewed");
+            value["replacesSessionId"] = serde_json::json!(previous);
+            value["authorizationExpiresAt"] = serde_json::json!(expires);
         }
         channel
             .send(

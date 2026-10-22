@@ -20,9 +20,16 @@ retires both sources. Staging and peer cleanup retain constant memory, independe
 of the number of valid continuations. Ordinary installations keep their neutral
 barrier and existing reconnect budget.
 
-The implemented seam is private native IPC. Continuous phone renewal remains
-unimplemented: its negotiated control revision must renew authorization under
-current trust, bound the next grant by that authority, transfer the native sender
-and transport progress safely, retain revocation-registry reachability through staging and commit, and verify held controls across multiple real
-renewals before the app opts in. Versions 3–5 retain existing behavior. This
-decision enables neither physical output nor any launch acceptance claim.
+The receiver/private native IPC seam is implemented. Explicit control version 6
+now renews authorization under current durable trust, bounds the next native
+grant by that authority, and retains one registry entry across staging and
+commitment. Reliable packet zero commits the successor; pending keys cannot
+commit over UDP. The [protocol](../rewrite-native-input-control-v6.md) defines
+per-grant and continuous-time connection work bounds. Versions 3–5 retain their
+existing lifetime behavior.
+
+Native phone sender/transport transfer and automatic renewal remain
+unimplemented. The apps must verify held controls across multiple real renewals
+before opting in. Controlled-clock host tests prove protocol and registry
+boundaries, not real-duration phone operation. This decision enables neither
+physical output nor any launch acceptance claim.

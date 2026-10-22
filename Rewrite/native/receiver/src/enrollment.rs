@@ -229,7 +229,7 @@ pub(crate) fn serve(
         channel,
         windows,
         store,
-        if input.datagram_port.is_some() { 5 } else { 4 },
+        if input.datagram_port.is_some() { 6 } else { 4 },
     )? {
         2 => complete(
             channel,
@@ -240,7 +240,7 @@ pub(crate) fn serve(
             &mut now,
         )
         .map(|_| ()),
-        version @ 3..=5 => {
+        version @ 3..=6 => {
             let authority = windows
                 .lock()
                 .map_err(|_| "pairing_owner_unavailable")?
@@ -255,7 +255,8 @@ pub(crate) fn serve(
                     Some(crate::input_broker::ControlInput {
                         root: input.root,
                         registry: input.registry,
-                        datagram_port: if version == 5 {
+                        renewal: version == 6,
+                        datagram_port: if version >= 5 {
                             input.datagram_port
                         } else {
                             None
@@ -801,5 +802,47 @@ mod tests {
             .list()
             .unwrap()
             .is_empty());
+    }
+    #[test]
+    fn renewal_revision_is_explicit_and_requires_a_datagram_capable_host() {
+        for (version, maximum, accepted) in [
+            (4, 6, true),
+            (5, 6, true),
+            (6, 6, true),
+            (6, 4, false),
+            (7, 6, false),
+        ] {
+            let root = Root::new();
+            let identity = host_identity::load_existing(&root.0).unwrap();
+            let pin = identity.pin();
+            let windows = Mutex::new(PairingWindows::new("authority-a", pin).unwrap());
+            let store = Mutex::new(PhoneTrustStore::open(&root.0).unwrap());
+            let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+            let address = listener.local_addr().unwrap();
+            thread::scope(|scope| {
+                let worker = scope.spawn(|| {
+                    let mut channel =
+                        ControlChannel::accept_unenrolled(listener.accept().unwrap().0, &identity)
+                            .unwrap();
+                    begin(&mut channel, &windows, &store, maximum)
+                });
+                let mut channel = ControlChannel::connect_pinned(address, pin).unwrap();
+                let mut value = hello();
+                value["controlVersion"] = serde_json::json!(version);
+                send(&mut channel, value);
+                if accepted {
+                    let reply: serde_json::Value = receive(&mut channel).unwrap();
+                    assert_eq!(reply["controlVersion"], version);
+                    assert_eq!(worker.join().unwrap(), Ok(version));
+                } else {
+                    assert!(channel.receive().is_err());
+                    assert_eq!(
+                        worker.join().unwrap(),
+                        Err("enrollment_version_unsupported")
+                    );
+                }
+            });
+            assert!(store.lock().unwrap().list().unwrap().is_empty());
+        }
     }
 }

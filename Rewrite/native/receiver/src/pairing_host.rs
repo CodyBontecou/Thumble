@@ -164,6 +164,7 @@ impl Host {
                                     &policy_mutation,
                                     crate::input_broker::ControlInput {
                                         registry: &input_grants,
+                                        renewal: false,
                                         root: &runtime_directory,
                                         datagram_port: Some(job.datagram_port),
                                     },
