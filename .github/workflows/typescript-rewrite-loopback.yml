@@ -1,0 +1,38 @@
+name: TypeScript rewrite iOS loopback diagnostic
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "Rewrite/tooling/check_ios_loopback.py"
+      - "Rewrite/tooling/test_ios_loopback.py"
+      - "Rewrite/tooling/ios-loopback/**"
+      - ".github/workflows/typescript-rewrite-loopback.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ios-loopback:
+    runs-on: macos-15
+    timeout-minutes: 10
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validate bounded diagnostic results
+        run: python3 -m unittest discover -s Rewrite/tooling -p test_ios_loopback.py -v
+      - name: Compare cold simulator shared and ephemeral HTTP clients
+        run: python3 Rewrite/tooling/check_ios_loopback.py --report Rewrite/reports/ios-loopback.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rewrite-ios-loopback
+          path: Rewrite/reports/ios-loopback.json
+          if-no-files-found: error
