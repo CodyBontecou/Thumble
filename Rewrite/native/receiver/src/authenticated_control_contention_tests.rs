@@ -1,9 +1,9 @@
-// Native in-process fault injection at the real trust mutation seam. No production hook.
-// This characterizes a remaining responsiveness limitation, not a continuous-input
-// fix: contended durable trust work can stop a queued reliable frame from reaching
-// the receiver. Native expiry must still run and queued input must not revive it.
+// Fault injection at the real trust/mutation seam. The historical failing
+// characterization is preserved in commit 4aa2e98 and its evidence log. This
+// regression requires live packets and status to proceed during stalled storage,
+// then proves an exhausted reservation cannot resurrect expired held state.
 #[test]
-fn contended_trust_mutation_keeps_native_expiry_independent_and_cannot_resurrect_queued_input() {
+fn reserved_input_and_status_bypass_stalled_storage_then_fail_closed_without_resurrection() {
     use crate::{
         generated::{GamepadButton, GamepadState},
         input_broker::{Broker, Registry},
@@ -51,6 +51,7 @@ fn contended_trust_mutation_keeps_native_expiry_independent_and_cannot_resurrect
     let mut auth = AuthorizedConnection {
         binding: server.native_binding().unwrap(),
         host_pin: identity.pin().hex(),
+        authorization: store.lock().unwrap().cached_authorization(&phone).unwrap(),
         phone,
         expires: 60_100,
         observed: 100,
@@ -126,9 +127,6 @@ fn contended_trust_mutation_keeps_native_expiry_independent_and_cannot_resurrect
         client
             .send(FrameKind::Input, &sender.seal(&neutral).unwrap())
             .unwrap();
-        client
-            .send(FrameKind::Input, &sender.seal(&held).unwrap())
-            .unwrap();
         send(
             &mut client,
             json!({"version":1,"command":"control-status","connectionId":connection}),
@@ -138,36 +136,57 @@ fn contended_trust_mutation_keeps_native_expiry_independent_and_cannot_resurrect
             receive::<Value>(&mut client).unwrap()["command"],
             "control-status"
         );
-        assert_eq!(reports.lock().unwrap().last().copied(), Some(held.report()));
+        assert_eq!(
+            reports.lock().unwrap().last().copied(),
+            Some(neutral.report())
+        );
         // Model another control operation suspended in storage while it owns both
         // locks. The runtime safety owner is separate and keeps renewing normally.
         let renewal_count = renewals.load(Ordering::SeqCst);
         let gate = mutation.lock().unwrap();
         let storage = store.lock().unwrap();
         let (sent, queued) = mpsc::sync_channel(1);
+        let (resume, resumed) = mpsc::sync_channel(1);
+        let sent_held = held.clone();
         let input = scope.spawn(move || {
+            let held = sent_held;
+            // The first held packet arrives while the other operation owns the
+            // durable store: neutral admission does not defer it behind fsync.
+            for _ in 0..20 {
+                client
+                    .send(FrameKind::Input, &sender.seal(&held).unwrap())
+                    .unwrap();
+                send(
+                    &mut client,
+                    json!({"version":1,"command":"control-status","connectionId":connection}),
+                )
+                .unwrap();
+                assert_eq!(
+                    receive::<Value>(&mut client).unwrap()["command"],
+                    "control-status"
+                );
+                thread::sleep(Duration::from_millis(20));
+            }
+            sent.send(()).unwrap();
+            resumed.recv_timeout(Duration::from_secs(2)).unwrap();
             client
                 .send(FrameKind::Input, &sender.seal(&held).unwrap())
                 .unwrap();
-            sent.send(()).unwrap();
-            send(
-                &mut client,
-                json!({"version":1,"command":"control-status","connectionId":connection}),
-            )
-            .unwrap();
             receive::<Value>(&mut client)
         });
-        queued.recv_timeout(Duration::from_secs(1)).unwrap();
-        let started = Instant::now();
-        while snapshot
-            .lock()
-            .unwrap()
-            .as_ref()
-            .is_none_or(|state| state.last_release_reason != "input_expired")
-            && started.elapsed() < Duration::from_secs(1)
-        {
-            thread::sleep(Duration::from_millis(1));
-        }
+        queued.recv_timeout(Duration::from_secs(2)).unwrap();
+        let state = snapshot.lock().unwrap().clone().unwrap();
+        assert!(
+            state.active,
+            "continuous input expired behind unrelated storage"
+        );
+        assert_eq!(state.report_hex, crate::gamepad::hex(&held.report()));
+        assert!(renewals.load(Ordering::SeqCst) > renewal_count);
+        // No durable renewal can finish while storage is held. After the existing
+        // reservation and 350ms input freshness both run out, late held input is
+        // rejected. Neither the healthy 750ms owner nor a stale queued frame may
+        // extend the reservation or reanimate the released source.
+        thread::sleep(Duration::from_millis(750));
         let state = snapshot.lock().unwrap().clone().unwrap();
         assert!(!state.active);
         assert_eq!(state.last_release_reason, "input_expired");
@@ -175,14 +194,14 @@ fn contended_trust_mutation_keeps_native_expiry_independent_and_cannot_resurrect
             state.report_hex,
             crate::gamepad::hex(&crate::gamepad::NEUTRAL)
         );
-        assert!(
-            renewals.load(Ordering::SeqCst) > renewal_count,
-            "independent healthy owner did not renew during injected contention"
+        resume.send(()).unwrap();
+        assert!(input.join().unwrap().is_err());
+        assert_eq!(
+            control.join().unwrap(),
+            Err("phone_trust_reservation_expired")
         );
         drop(storage);
         drop(gate);
-        assert!(input.join().unwrap().is_err());
-        assert_eq!(control.join().unwrap(), Err("native_input_rejected"));
         assert_eq!(
             reports.lock().unwrap().last().copied(),
             Some(crate::gamepad::NEUTRAL)

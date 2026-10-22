@@ -1,11 +1,11 @@
 //! One bounded native UDP ingress per explicitly configured control listener. Never replies to UDP.
-use crate::{input_broker::Registry, phone_trust::PhoneTrustStore};
+use crate::input_broker::Registry;
 use std::{
     collections::BTreeMap,
     net::{IpAddr, SocketAddr, UdpSocket},
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc, Mutex,
+        Arc,
     },
     thread,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
@@ -18,12 +18,7 @@ pub(crate) struct Listener {
     thread: Option<thread::JoinHandle<()>>,
 }
 impl Listener {
-    pub(crate) fn bind(
-        ip: IpAddr,
-        registry: Arc<Registry>,
-        store: Arc<Mutex<PhoneTrustStore>>,
-        mutation: Arc<Mutex<()>>,
-    ) -> Result<Self, &'static str> {
+    pub(crate) fn bind(ip: IpAddr, registry: Arc<Registry>) -> Result<Self, &'static str> {
         if ip.is_multicast() {
             return Err("input_datagram_address_invalid");
         }
@@ -74,14 +69,14 @@ impl Listener {
                         break;
                     }
                     delivered += 1;
-                    let time = SystemTime::now()
-                        .duration_since(UNIX_EPOCH)
-                        .ok()
-                        .and_then(|d| u64::try_from(d.as_millis()).ok());
-                    if let Some(time) = time {
-                        let _ = registry.datagram_packet(&packet, &store, &mutation, time);
-                    }
-                    // Yield between bounded RPCs so configuration/revocation can acquire the fence.
+                    let _ = registry.datagram_packet(&packet, &mut || {
+                        SystemTime::now()
+                            .duration_since(UNIX_EPOCH)
+                            .ok()
+                            .and_then(|d| u64::try_from(d.as_millis()).ok())
+                            .ok_or("phone_trust_clock_invalid")
+                    });
+                    // Yield between bounded RPCs so epoch retirement can acquire the source.
                     thread::sleep(Duration::from_millis(2));
                 }
                 thread::sleep(Duration::from_millis(3));

@@ -107,6 +107,7 @@ pub struct Host {
     input_grants: Arc<Registry>,
     jobs: Option<mpsc::SyncSender<Job>>,
     workers: Vec<thread::JoinHandle<()>>,
+    reservation_owner: Option<crate::trust_reservation::Owner>,
     _lease: File,
 }
 impl Host {
@@ -129,6 +130,10 @@ impl Host {
             .map(PhoneTrustStore::open)
             .transpose()?
             .map(|store| Arc::new(Mutex::new(store)));
+        let reservation_owner = store
+            .as_ref()
+            .map(|store| crate::trust_reservation::Owner::start(store.clone()))
+            .transpose()?;
         let windows = Arc::new(Mutex::new(PairingWindows::new(authority, identity.pin())?));
         let policy_mutation = Arc::new(Mutex::new(()));
         let input_grants = Arc::new(Registry::default());
@@ -196,6 +201,7 @@ impl Host {
             input_grants,
             jobs: Some(jobs),
             workers,
+            reservation_owner,
             _lease: lease,
         })
     }
@@ -277,15 +283,11 @@ impl Host {
             .set_nonblocking(true)
             .map_err(|_| "pairing_bind_failed")?;
         let address = listener.local_addr().map_err(|_| "pairing_bind_failed")?;
-        let datagrams = crate::input_datagram::Listener::bind(
-            address.ip(),
-            self.input_grants.clone(),
-            self.store
-                .as_ref()
-                .ok_or("pairing_persistent_identity_required")?
-                .clone(),
-            self.policy_mutation.clone(),
-        )?;
+        self.store
+            .as_ref()
+            .ok_or("pairing_persistent_identity_required")?;
+        let datagrams =
+            crate::input_datagram::Listener::bind(address.ip(), self.input_grants.clone())?;
         let datagram_port = datagrams.port();
         let stop = Arc::new(AtomicBool::new(false));
         let peers: Peers = Arc::new(Mutex::new(BTreeMap::new()));
@@ -374,16 +376,15 @@ impl Host {
                         .policy_mutation
                         .lock()
                         .map_err(|_| "phone_trust_owner_unavailable")?;
-                    let durable = self
+                    let mut store = self
                         .store
                         .as_ref()
                         .ok_or("pairing_persistent_identity_required")?
                         .lock()
-                        .map_err(|_| "phone_trust_owner_unavailable")?
-                        .revoke(&phone_id, now()?);
-                    let retired = self.input_grants.retire_phone(&phone_id);
-                    durable?;
-                    retired
+                        .map_err(|_| "phone_trust_owner_unavailable")?;
+                    store.invalidate_scope(&phone_id)?;
+                    self.input_grants.retire_phone(&phone_id)?;
+                    store.revoke_now(&phone_id, &mut now)
                 })();
                 self.close_peers();
                 result?;
@@ -425,6 +426,7 @@ impl Drop for Host {
         for worker in self.workers.drain(..) {
             let _ = worker.join();
         }
+        self.reservation_owner.take();
     }
 }
 /// Private inherited stdio only; parent EOF/backpressure tears down the enrollment listener.

@@ -1,5 +1,7 @@
 //! Native credential ledger. Pairing admission and input-session ownership are separate ports.
 use crate::{
+    authorization_clock::{Clock, Observation, RESERVATION_MS},
+    cached_authorization::{CachedAuthorization, Scope},
     control_tls::{ControlChannel, FrameKind},
     host_identity, runtime, security,
 };
@@ -9,13 +11,19 @@ use ring::{
 };
 use rusqlite::{params, Connection, OptionalExtension, Transaction, TransactionBehavior};
 use serde::Serialize;
-use std::{fs::File, path::Path, time::Duration};
+use std::{
+    collections::BTreeMap,
+    fs::File,
+    path::Path,
+    sync::{Arc, Weak},
+    time::Duration,
+};
 use subtle::ConstantTimeEq;
 const APP_ID: i64 = 0x54485431;
 const LIFETIME_MS: u64 = 30 * 24 * 60 * 60 * 1000;
 const MAX_PHONES: i64 = 32;
 const SCHEMA: &str = "
-CREATE TABLE trust_meta(id INTEGER PRIMARY KEY CHECK(id=1),host_pin TEXT NOT NULL CHECK(length(host_pin)=64),last_time INTEGER NOT NULL CHECK(last_time>=0)) STRICT;
+CREATE TABLE trust_meta(id INTEGER PRIMARY KEY CHECK(id=1),host_pin TEXT NOT NULL CHECK(length(host_pin)=64),last_time INTEGER NOT NULL CHECK(last_time>=0),reserved_until INTEGER NOT NULL CHECK(reserved_until>=0)) STRICT;
 CREATE TABLE phones(phone_id TEXT PRIMARY KEY NOT NULL CHECK(length(phone_id) BETWEEN 1 AND 64),label TEXT NOT NULL CHECK(length(label) BETWEEN 1 AND 128),epoch INTEGER NOT NULL CHECK(epoch>0),active INTEGER NOT NULL CHECK(active IN (0,1)),verifier BLOB,expires_at INTEGER NOT NULL CHECK(expires_at>0),updated_at INTEGER NOT NULL CHECK(updated_at>=0),CHECK((active=0 AND verifier IS NULL) OR (active=1 AND length(verifier)=32))) STRICT;";
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -59,6 +67,8 @@ pub struct PhoneTrustStore {
     connection: Connection,
     _lease: File,
     host_pin: String,
+    clock: Arc<Clock>,
+    scopes: BTreeMap<String, (String, Weak<Scope>)>,
 }
 fn error(_: rusqlite::Error) -> &'static str {
     "phone_trust_storage_invalid"
@@ -86,24 +96,32 @@ fn verifier(pin: &str, id: &str, token: &[u8]) -> [u8; 32] {
         .try_into()
         .expect("SHA-256 is 32 bytes")
 }
-fn observe(tx: &Transaction<'_>, now: u64, revoking: bool) -> Result<i64, &'static str> {
-    let now = i64::try_from(now).map_err(|_| "phone_trust_clock_invalid")?;
-    let last: i64 = tx
-        .query_row("SELECT last_time FROM trust_meta WHERE id=1", [], |r| {
-            r.get(0)
-        })
+fn observe(tx: &Transaction<'_>, observation: &Observation) -> Result<u64, &'static str> {
+    let now = i64::try_from(observation.now).map_err(|_| "phone_trust_clock_invalid")?;
+    let (last, reserved): (i64, i64) = tx
+        .query_row(
+            "SELECT last_time,reserved_until FROM trust_meta WHERE id=1",
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
         .map_err(error)?;
-    if last < 0 {
+    if last < 0 || reserved < last {
         return Err("phone_trust_storage_invalid");
     }
-    if now < last && !revoking {
-        return Err("phone_trust_clock_rollback");
-    }
-    let accepted = now.max(last);
-    tx.execute("UPDATE trust_meta SET last_time=?1 WHERE id=1", [accepted])
-        .map_err(error)?;
-    Ok(accepted)
+    let ceiling = observation
+        .now
+        .checked_add(RESERVATION_MS)
+        .and_then(|n| i64::try_from(n).ok())
+        .ok_or("phone_trust_clock_invalid")?
+        .max(reserved);
+    tx.execute(
+        "UPDATE trust_meta SET last_time=?1,reserved_until=?2 WHERE id=1",
+        [now.max(last), ceiling],
+    )
+    .map_err(error)?;
+    Ok(ceiling as u64)
 }
+
 fn metadata(row: &rusqlite::Row<'_>) -> rusqlite::Result<TrustedPhone> {
     let epoch: i64 = row.get(2)?;
     let expires: i64 = row.get(4)?;
@@ -178,14 +196,21 @@ impl PhoneTrustStore {
             tx.execute_batch(SCHEMA).map_err(error)?;
             tx.pragma_update(None, "application_id", APP_ID)
                 .map_err(error)?;
-            tx.pragma_update(None, "user_version", 1).map_err(error)?;
+            tx.pragma_update(None, "user_version", 2).map_err(error)?;
             tx.execute(
-                "INSERT INTO trust_meta VALUES(1,?1,0)",
+                "INSERT INTO trust_meta VALUES(1,?1,0,0)",
                 [identity.pin().hex()],
             )
             .map_err(error)?;
             tx.commit().map_err(error)?;
-        } else if app != APP_ID || version != 1 {
+        } else if app == APP_ID && version == 1 {
+            let tx = connection
+                .transaction_with_behavior(TransactionBehavior::Immediate)
+                .map_err(error)?;
+            tx.execute_batch("ALTER TABLE trust_meta ADD COLUMN reserved_until INTEGER NOT NULL DEFAULT 0 CHECK(reserved_until>=0); UPDATE trust_meta SET reserved_until=last_time;").map_err(error)?;
+            tx.pragma_update(None, "user_version", 2).map_err(error)?;
+            tx.commit().map_err(error)?;
+        } else if app != APP_ID || version != 2 {
             return Err("phone_trust_version_unsupported");
         }
         let page_size: i64 = connection
@@ -194,9 +219,9 @@ impl PhoneTrustStore {
         if !(512..=4096).contains(&page_size) {
             return Err("phone_trust_storage_invalid");
         }
-        // Every observation still commits durably. WAL avoids deleting/syncing a
-        // rollback journal directory on every input sample. The sole store owner
-        // holds no read transaction between calls, allowing bounded checkpoints.
+        // Reservations and policy mutations still commit with full durability.
+        // Packet observations consume a previously committed short reservation;
+        // they never run filesystem work on the input forwarding path.
         connection.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=EXTRA; PRAGMA wal_autocheckpoint=16; PRAGMA journal_size_limit=262144; PRAGMA max_page_count=256; PRAGMA foreign_keys=ON;").map_err(error)?;
         let journal: String = connection
             .pragma_query_value(None, "journal_mode", |row| row.get(0))
@@ -227,11 +252,94 @@ impl PhoneTrustStore {
         if count > MAX_PHONES {
             return Err("phone_trust_storage_invalid");
         }
+        let (last, reserved): (i64, i64) = connection
+            .query_row(
+                "SELECT last_time,reserved_until FROM trust_meta WHERE id=1",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .map_err(error)?;
+        if last < 0 || reserved < last {
+            return Err("phone_trust_storage_invalid");
+        }
+        // A restart cannot reuse an unobserved portion of the last reservation.
+        // Wait only the bounded normal-clock remainder. A larger wall rollback is
+        // reported rather than hiding an unbounded startup delay.
+        let native_now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .ok()
+            .and_then(|d| u64::try_from(d.as_millis()).ok())
+            .ok_or("phone_trust_clock_invalid")?;
+        if reserved as u64 > native_now {
+            let remaining = reserved as u64 - native_now;
+            if remaining <= RESERVATION_MS {
+                std::thread::sleep(Duration::from_millis(remaining));
+            }
+            // Larger wall rollback leaves local list/revoke available; normal
+            // authentication still rejects observations below the reserved floor.
+        }
+        let clock = Arc::new(Clock::new(last as u64, reserved as u64)?);
         Ok(Self {
             connection,
             _lease: lease,
             host_pin: pin,
+            clock,
+            scopes: BTreeMap::new(),
         })
+    }
+    pub(crate) fn clock(&self) -> Arc<Clock> {
+        self.clock.clone()
+    }
+    pub(crate) fn cached_authorization(
+        &mut self,
+        phone: &TrustedPhone,
+    ) -> Result<CachedAuthorization, &'static str> {
+        if !phone.active {
+            return Err("phone_authentication_rejected");
+        }
+        let existing = self
+            .scopes
+            .get(&phone.phone_id)
+            .filter(|(epoch, _)| epoch == &phone.credential_epoch)
+            .and_then(|(_, scope)| scope.upgrade())
+            .filter(|scope| scope.is_live());
+        let scope = existing.unwrap_or_else(|| Scope::new(self.clock.clone()));
+        self.scopes.insert(
+            phone.phone_id.clone(),
+            (phone.credential_epoch.clone(), Arc::downgrade(&scope)),
+        );
+        Ok(CachedAuthorization::new(scope, self.clock.clone()))
+    }
+    pub(crate) fn invalidate_scope(&self, id: &str) -> Result<(), &'static str> {
+        if let Some(scope) = self.scopes.get(id).and_then(|(_, scope)| scope.upgrade()) {
+            scope.invalidate()?;
+        }
+        Ok(())
+    }
+    pub(crate) fn observe_now(
+        &self,
+        now: &mut impl FnMut() -> Result<u64, &'static str>,
+    ) -> Result<Observation, &'static str> {
+        self.clock.prepare(now, false)
+    }
+    pub(crate) fn reserve_clock(
+        &mut self,
+        now: &mut impl FnMut() -> Result<u64, &'static str>,
+    ) -> Result<(), &'static str> {
+        let result = (|| {
+            let observation = self.clock.prepare(now, false)?;
+            let tx = self
+                .connection
+                .transaction_with_behavior(TransactionBehavior::Immediate)
+                .map_err(error)?;
+            let reserved = observe(&tx, &observation)?;
+            tx.commit().map_err(error)?;
+            self.clock.publish(&observation, reserved)
+        })();
+        if result.is_err() {
+            self.clock.fail();
+        }
+        result
     }
     pub fn list(&self) -> Result<Vec<TrustedPhone>, &'static str> {
         let mut query = self
@@ -250,13 +358,25 @@ impl PhoneTrustStore {
     }
     /// Trusted native operation only: a pinned TLS enrollment coordinator must consume a pairing window first.
     /// `now` is native wall-clock milliseconds, never a timestamp supplied by a peer.
+    #[cfg(test)]
     pub(crate) fn enroll_after_pairing(
         &mut self,
         id: &str,
         label: &str,
         now: u64,
     ) -> Result<IssuedCredential, &'static str> {
+        self.enroll_now(id, label, &mut || Ok(now))
+    }
+    pub(crate) fn enroll_now(
+        &mut self,
+        id: &str,
+        label: &str,
+        now: &mut impl FnMut() -> Result<u64, &'static str>,
+    ) -> Result<IssuedCredential, &'static str> {
         validate_phone(id, label)?;
+        let observation = self.clock.prepare(now, false)?;
+        let now = observation.now;
+        self.invalidate_scope(id)?;
         let expires = now
             .checked_add(LIFETIME_MS)
             .and_then(|v| i64::try_from(v).ok())
@@ -270,7 +390,8 @@ impl PhoneTrustStore {
             .connection
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(error)?;
-        let now = observe(&tx, now, false)?;
+        let reserved = observe(&tx, &observation)?;
+        let now = observation.now as i64;
         let old: Option<i64> = tx
             .query_row("SELECT epoch FROM phones WHERE phone_id=?1", [id], |r| {
                 r.get(0)
@@ -291,6 +412,7 @@ impl PhoneTrustStore {
             .ok_or("phone_credential_epoch_exhausted")?;
         tx.execute("INSERT INTO phones VALUES(?1,?2,?3,1,?4,?5,?6) ON CONFLICT(phone_id) DO UPDATE SET label=excluded.label,epoch=excluded.epoch,active=1,verifier=excluded.verifier,expires_at=excluded.expires_at,updated_at=excluded.updated_at",params![id,label,epoch,hash.as_slice(),expires,now]).map_err(error)?;
         tx.commit().map_err(error)?;
+        self.clock.publish(&observation, reserved)?;
         Ok(IssuedCredential {
             host_pin: self.host_pin.clone(),
             phone: TrustedPhone {
@@ -316,12 +438,25 @@ impl PhoneTrustStore {
         if !runtime::identity(id) || token.len() != 32 {
             return Err("phone_authentication_rejected");
         }
+        let observation = self.clock.prepare(&mut || Ok(now), false)?;
+        self.authenticate_observed(id, token, observation)
+    }
+    pub(crate) fn authenticate_observed(
+        &mut self,
+        id: &str,
+        token: &[u8],
+        observation: Observation,
+    ) -> Result<TrustedPhone, &'static str> {
+        if !runtime::identity(id) || token.len() != 32 {
+            return Err("phone_authentication_rejected");
+        }
         let candidate = verifier(&self.host_pin, id, token);
         let tx = self
             .connection
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(error)?;
-        let now = observe(&tx, now, false)?;
+        let reserved = observe(&tx, &observation)?;
+        let now = observation.now as i64;
         let row:Option<(TrustedPhone,Option<Vec<u8>>)>=tx.query_row("SELECT phone_id,label,epoch,active,expires_at,verifier FROM phones WHERE phone_id=?1",[id],|r|Ok((metadata(r)?,r.get(5)?))).optional().map_err(error)?;
         let stored = row
             .as_ref()
@@ -335,14 +470,25 @@ impl PhoneTrustStore {
             .filter(|p| valid && p.active && (now as u64) < p.expires_at)
             .ok_or("phone_authentication_rejected")?;
         tx.commit().map_err(error)?;
+        self.clock.publish(&observation, reserved)?;
         Ok(phone)
     }
     /// Recheck native connection authorization without retaining its bearer credential.
+    #[cfg(test)]
     pub(crate) fn authorize_epoch(
         &mut self,
         id: &str,
         epoch: &str,
         now: u64,
+    ) -> Result<TrustedPhone, &'static str> {
+        let observation = self.clock.prepare(&mut || Ok(now), false)?;
+        self.authorize_epoch_observed(id, epoch, observation)
+    }
+    pub(crate) fn authorize_epoch_observed(
+        &mut self,
+        id: &str,
+        epoch: &str,
+        observation: Observation,
     ) -> Result<TrustedPhone, &'static str> {
         #[cfg(debug_assertions)]
         let _io_probe = crate::input_io_diagnostics::Span::start(
@@ -352,7 +498,8 @@ impl PhoneTrustStore {
             .connection
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(error)?;
-        let now = observe(&tx, now, false)?;
+        let reserved = observe(&tx, &observation)?;
+        let now = observation.now as i64;
         let phone = tx
             .query_row(
                 "SELECT phone_id,label,epoch,active,expires_at FROM phones WHERE phone_id=?1",
@@ -364,18 +511,29 @@ impl PhoneTrustStore {
             .filter(|p| p.active && p.credential_epoch == epoch && (now as u64) < p.expires_at)
             .ok_or("phone_authentication_rejected")?;
         tx.commit().map_err(error)?;
+        self.clock.publish(&observation, reserved)?;
         Ok(phone)
     }
     /// Persist revocation even if wall time moved backward. Runtime release is the native session owner's job.
     pub fn revoke(&mut self, id: &str, now: u64) -> Result<(), &'static str> {
+        self.revoke_now(id, &mut || Ok(now))
+    }
+    pub(crate) fn revoke_now(
+        &mut self,
+        id: &str,
+        now: &mut impl FnMut() -> Result<u64, &'static str>,
+    ) -> Result<(), &'static str> {
         if !runtime::identity(id) {
             return Err("phone_identity_invalid");
         }
+        let observation = self.clock.prepare(now, true)?;
+        self.invalidate_scope(id)?;
         let tx = self
             .connection
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(error)?;
-        let now = observe(&tx, now, true)?;
+        let reserved = observe(&tx, &observation)?;
+        let now = observation.now as i64;
         if tx
             .execute(
                 "UPDATE phones SET active=0,verifier=NULL,updated_at=?2 WHERE phone_id=?1",
@@ -386,7 +544,13 @@ impl PhoneTrustStore {
         {
             return Err("phone_not_found");
         }
-        tx.commit().map_err(error)
+        tx.commit().map_err(error)?;
+        // Revocation remains available after reservation failure. Never un-fail
+        // or extend packet authorization while committing that revocation.
+        match self.clock.publish(&observation, reserved) {
+            Ok(()) | Err("phone_trust_reservation_failed") => Ok(()),
+            Err(error) => Err(error),
+        }
     }
 }
 
@@ -481,7 +645,7 @@ mod tests {
         assert!(!metadata.contains(&hex));
         let mut store = PhoneTrustStore::open(&root.0).unwrap();
         assert!(store
-            .authenticate("phone-a", &credential.token, 102)
+            .authenticate("phone-a", &credential.token, 1101)
             .is_ok());
         assert!(store
             .authenticate("phone-b", &credential.token, 102)
@@ -508,11 +672,11 @@ mod tests {
         assert!(!store.list().unwrap()[0].active);
         assert!(store.authenticate("phone-a", &fresh.token, 23).is_err());
         let restored = store
-            .enroll_after_pairing("phone-a", "Restored", 24)
+            .enroll_after_pairing("phone-a", "Restored", 1022)
             .unwrap();
         assert_eq!(restored.phone().credential_epoch, "3");
-        assert!(store.authenticate("phone-a", &fresh.token, 25).is_err());
-        assert!(store.authenticate("phone-a", &restored.token, 25).is_ok());
+        assert!(store.authenticate("phone-a", &fresh.token, 1023).is_err());
+        assert!(store.authenticate("phone-a", &restored.token, 1023).is_ok());
     }
     #[test]
     fn expiry_and_native_clock_limits_fail_without_partial_mutations() {
@@ -648,13 +812,15 @@ mod tests {
             .collect::<Vec<_>>();
         server.join().unwrap();
         let mut store = PhoneTrustStore::open(&root.0).unwrap();
-        assert!(store.authenticate("phone-a", &token, 12).is_ok());
-        let credential = store.enroll_after_pairing("phone-b", "B", 13).unwrap();
+        assert!(store.authenticate("phone-a", &token, 1011).is_ok());
+        let credential = store.enroll_after_pairing("phone-b", "B", 1012).unwrap();
         assert_eq!(
             credential.send_enrollment(&mut client).err(),
             Some("phone_credential_delivery_unconfirmed")
         );
-        assert!(store.authenticate("phone-b", &credential.token, 14).is_ok());
+        assert!(store
+            .authenticate("phone-b", &credential.token, 1013)
+            .is_ok());
     }
     #[cfg(unix)]
     #[test]
@@ -702,9 +868,9 @@ mod tests {
                 Some("phone_trust_clock_rollback")
             );
             assert!(reopened
-                .authenticate("io-phone", &issued.token, 133)
+                .authenticate("io-phone", &issued.token, 1132)
                 .is_ok());
-            reopened.revoke("io-phone", 134).unwrap();
+            reopened.revoke("io-phone", 1133).unwrap();
             drop(reopened);
             assert!(PhoneTrustStore::open(&root.0)
                 .unwrap()
@@ -766,4 +932,5 @@ mod tests {
         drop(reopened);
         assert!(!PhoneTrustStore::open(&root.0).unwrap().list().unwrap()[0].active);
     }
+    include!("phone_trust_reservation_tests.rs");
 }

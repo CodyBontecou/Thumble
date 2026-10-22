@@ -14,6 +14,7 @@ fn renewal_is_bounded_by_live_socket_epoch_clock_and_credential_expiry() {
     let mut auth = AuthorizedConnection {
         binding: server.native_binding().unwrap(),
         host_pin: identity.pin().hex(),
+        authorization: store.cached_authorization(&phone).unwrap(),
         phone,
         expires: 60_100,
         observed: 100,
@@ -52,6 +53,7 @@ fn renewal_cannot_restore_a_revoked_or_replaced_phone_epoch() {
         let mut auth = AuthorizedConnection {
             binding: server.native_binding().unwrap(),
             host_pin: identity.pin().hex(),
+            authorization: store.cached_authorization(&phone).unwrap(),
             phone,
             expires: 60_100,
             observed: 100,
@@ -168,6 +170,7 @@ fn exercise_tls_renewal(scenario: RenewalScenario) {
     let mut auth = AuthorizedConnection {
         binding: server.native_binding().unwrap(),
         host_pin: identity.pin().hex(),
+        authorization: store.lock().unwrap().cached_authorization(&phone).unwrap(),
         phone,
         expires: 60_100,
         observed: 100,
@@ -303,9 +306,7 @@ fn exercise_tls_renewal(scenario: RenewalScenario) {
             let first = next.seal(&held).unwrap();
             // The prepared key is unavailable to UDP until reliable packet zero commits it.
             assert!(registry.datagram_session(&first).is_none());
-            assert!(registry
-                .datagram_packet(&first, &store, &mutation, now)
-                .is_err());
+            assert!(registry.datagram_packet(&first, &mut || Ok(now)).is_err());
             let old_packet = sender.seal(&held).unwrap();
             client.send(FrameKind::Input, &old_packet).unwrap();
             assert!(status(&mut client, &session)["active"].as_bool().unwrap());
@@ -317,12 +318,10 @@ fn exercise_tls_renewal(scenario: RenewalScenario) {
             assert!(registry.datagram_session(&first).is_some());
             assert!(registry.datagram_session(&old_packet).is_none());
             assert!(registry
-                .datagram_packet(&old_packet, &store, &mutation, now)
+                .datagram_packet(&old_packet, &mut || Ok(now))
                 .is_err());
             let udp = next.seal(&held).unwrap();
-            registry
-                .datagram_packet(&udp, &store, &mutation, now)
-                .unwrap();
+            registry.datagram_packet(&udp, &mut || Ok(now)).unwrap();
             assert_eq!(
                 status(&mut client, &next_session)["lastAcceptedSequence"],
                 "1"
@@ -360,10 +359,10 @@ fn exercise_tls_renewal(scenario: RenewalScenario) {
             }
             assert!(registry.datagram_session(&first).is_none());
             assert!(registry
-                .datagram_packet(&first, &store, &mutation, 93_100)
+                .datagram_packet(&first, &mut || Ok(93_100))
                 .is_err());
             assert!(registry
-                .datagram_packet(&sender.seal(&held).unwrap(), &store, &mutation, 93_100)
+                .datagram_packet(&sender.seal(&held).unwrap(), &mut || Ok(93_100))
                 .is_err());
             send(
                 &mut client,
@@ -403,4 +402,36 @@ fn renewal_frames_require_exact_unambiguous_native_receipts() {
     ] {
         assert!(serde_json::from_str::<InputRequest>(&bad).is_err());
     }
+}
+
+#[test]
+fn cached_packet_authorization_enforces_exact_connection_and_credential_expiry() {
+    let root = Root::new();
+    let identity = host_identity::load_existing(&root.0).unwrap();
+    let mut store = PhoneTrustStore::open(&root.0).unwrap();
+    let phone = store
+        .enroll_after_pairing("expiry-phone", "Native", 100)
+        .unwrap()
+        .phone()
+        .clone();
+    let (server, _client) = channel(&identity);
+    let mut auth = AuthorizedConnection {
+        binding: server.native_binding().unwrap(),
+        host_pin: identity.pin().hex(),
+        authorization: store.cached_authorization(&phone).unwrap(),
+        phone,
+        expires: 201,
+        observed: 100,
+    };
+    assert_eq!(auth.validate_cached(&server, &mut || Ok(200)), Ok(200));
+    assert_eq!(
+        auth.validate_cached(&server, &mut || Ok(201)),
+        Err("phone_authentication_rejected")
+    );
+    auth.expires = 1000;
+    auth.phone.expires_at = 202;
+    assert_eq!(
+        auth.validate_cached(&server, &mut || Ok(202)),
+        Err("phone_authentication_rejected")
+    );
 }

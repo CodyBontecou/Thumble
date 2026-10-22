@@ -26,6 +26,7 @@ struct Request {
 }
 // Intentionally neither constructible outside this module nor serializable/cloneable.
 struct AuthorizedConnection {
+    authorization: crate::cached_authorization::CachedAuthorization,
     binding: [u8; 16],
     host_pin: String,
     phone: TrustedPhone,
@@ -75,7 +76,7 @@ impl AuthorizedConnection {
         authority: &str,
         request: Authenticate,
         store: &mut PhoneTrustStore,
-        now: u64,
+        clock: &mut impl FnMut() -> Result<u64, &'static str>,
     ) -> Result<Self, &'static str> {
         let binding = channel
             .native_binding()
@@ -91,7 +92,13 @@ impl AuthorizedConnection {
         {
             return Err("phone_authentication_rejected");
         }
-        let phone = store.authenticate(&request.phone_id, &token(&request.credential)?, now)?;
+        let observation = store.observe_now(clock)?;
+        let now = observation.now;
+        let phone = store.authenticate_observed(
+            &request.phone_id,
+            &token(&request.credential)?,
+            observation,
+        )?;
         if phone.credential_epoch != request.credential_epoch {
             return Err("phone_authentication_rejected");
         }
@@ -99,7 +106,9 @@ impl AuthorizedConnection {
             now.checked_add(60_000)
                 .ok_or("phone_authentication_rejected")?,
         );
+        let authorization = store.cached_authorization(&phone)?;
         Ok(Self {
+            authorization,
             binding,
             host_pin,
             phone,
@@ -107,41 +116,95 @@ impl AuthorizedConnection {
             observed: now,
         })
     }
+    #[cfg(test)]
     fn validate(
         &mut self,
         channel: &ControlChannel,
         store: &mut PhoneTrustStore,
         now: u64,
     ) -> Result<(), &'static str> {
+        self.validate_now(channel, store, &mut || Ok(now))
+            .map(|_| ())
+    }
+    /// The caller holds the epoch guard through the following native operation.
+    fn validate_cached(
+        &mut self,
+        channel: &ControlChannel,
+        now: &mut impl FnMut() -> Result<u64, &'static str>,
+    ) -> Result<u64, &'static str> {
+        let time = self.authorization.clock.sample(now)?;
+        if channel.native_binding() != Some(self.binding)
+            || channel.native_server_pin().map(|p| p.hex()).as_deref()
+                != Some(self.host_pin.as_str())
+            || time < self.observed
+            || time >= self.expires
+            || time >= self.phone.expires_at
+        {
+            return Err("phone_authentication_rejected");
+        }
+        self.observed = time;
+        Ok(time)
+    }
+    fn validate_now(
+        &mut self,
+        channel: &ControlChannel,
+        store: &mut PhoneTrustStore,
+        now: &mut impl FnMut() -> Result<u64, &'static str>,
+    ) -> Result<u64, &'static str> {
+        let authorization = self.authorization.clone();
+        {
+            let _scope = authorization.guard()?;
+        }
+        let observation = store.observe_now(now)?;
+        let time = observation.now;
         if channel.native_binding() != Some(self.binding)
             || channel.native_server_pin().map(|p| p.hex()).as_deref()
                 != Some(self.host_pin.as_str())
             || store.host_pin() != self.host_pin
-            || now < self.observed
-            || now >= self.expires
+            || time < self.observed
+            || time >= self.expires
         {
             return Err("phone_authentication_rejected");
         }
-        store.authorize_epoch(&self.phone.phone_id, &self.phone.credential_epoch, now)?;
-        self.observed = now;
-        Ok(())
+        store.authorize_epoch_observed(
+            &self.phone.phone_id,
+            &self.phone.credential_epoch,
+            observation,
+        )?;
+        self.observed = time;
+        Ok(time)
     }
+    #[cfg(test)]
     fn renew(
         &mut self,
         channel: &ControlChannel,
         store: &mut PhoneTrustStore,
         now: u64,
     ) -> Result<(), &'static str> {
-        self.validate(channel, store, now)?;
-        if self.expires.saturating_sub(now) > 30_000 {
+        self.renew_now(channel, store, &mut || Ok(now))
+    }
+    fn renew_now(
+        &mut self,
+        channel: &ControlChannel,
+        store: &mut PhoneTrustStore,
+        now: &mut impl FnMut() -> Result<u64, &'static str>,
+    ) -> Result<(), &'static str> {
+        let time = self.validate_now(channel, store, now)?;
+        if self.expires.saturating_sub(time) > 30_000 {
             return Err("input_renewal_too_early");
         }
-        let phone =
-            store.authorize_epoch(&self.phone.phone_id, &self.phone.credential_epoch, now)?;
+        let observation = store.observe_now(now)?;
+        let time = observation.now;
+        let phone = store.authorize_epoch_observed(
+            &self.phone.phone_id,
+            &self.phone.credential_epoch,
+            observation,
+        )?;
         self.expires = phone.expires_at.min(
-            now.checked_add(60_000)
+            time.checked_add(60_000)
                 .ok_or("phone_authentication_rejected")?,
         );
+        self.observed = time;
         self.phone = phone;
         Ok(())
     }
@@ -244,7 +307,8 @@ fn grant_lifetime(expires: u64, now: u64) -> Result<u32, &'static str> {
         .ok_or("phone_authentication_rejected")
 }
 /// Control v3 remains metadata-only. V4 additionally uses the independent receiver's private IPC.
-/// TLS waits occur outside policy/storage locks; native grant/packet RPC is bounded under the trust gate.
+/// TLS waits occur outside locks. Durable grant RPCs hold the mutation fence;
+/// packet/status RPCs hold only their cached epoch fence and committed clock reservation.
 pub(crate) fn serve_after_hello(
     channel: &mut ControlChannel,
     authority: &str,
@@ -263,7 +327,7 @@ pub(crate) fn serve_after_hello(
             authority,
             request,
             &mut *store.lock().map_err(|_| "phone_trust_owner_unavailable")?,
-            now()?,
+            now,
         )?
     };
     if let Some(input) = input {
@@ -279,10 +343,10 @@ pub(crate) fn serve_after_hello(
             let _gate = mutation
                 .lock()
                 .map_err(|_| "phone_trust_owner_unavailable")?;
-            authorized.validate(
+            authorized.validate_now(
                 channel,
                 &mut *store.lock().map_err(|_| "phone_trust_owner_unavailable")?,
-                now()?,
+                now,
             )?;
         }
         send(
@@ -312,10 +376,10 @@ pub(crate) fn serve_after_hello(
             let _gate = mutation
                 .lock()
                 .map_err(|_| "phone_trust_owner_unavailable")?;
-            authorized.validate(
+            authorized.validate_now(
                 channel,
                 &mut *store.lock().map_err(|_| "phone_trust_owner_unavailable")?,
-                now()?,
+                now,
             )?;
         }
         if request.command == "disconnect" {
@@ -355,21 +419,15 @@ fn serve_input(
             let waiting = crate::input_io_diagnostics::Span::start(
                 crate::input_io_diagnostics::Metric::InputWait,
             );
-            let _gate = mutation
-                .lock()
-                .map_err(|_| "phone_trust_owner_unavailable")?;
+            let authorization = authorized.authorization.clone();
+            let _gate = authorization.guard()?;
             #[cfg(debug_assertions)]
             drop(waiting);
             #[cfg(debug_assertions)]
             let _held = crate::input_io_diagnostics::Span::start(
                 crate::input_io_diagnostics::Metric::InputHeld,
             );
-            let time = now()?;
-            authorized.validate(
-                channel,
-                &mut *store.lock().map_err(|_| "phone_trust_owner_unavailable")?,
-                time,
-            )?;
+            let time = authorized.validate_cached(channel, now)?;
             broker.packet(&frame.payload, time)?;
             continue;
         }
@@ -394,21 +452,40 @@ fn serve_input(
         let waiting = crate::input_io_diagnostics::Span::start(
             crate::input_io_diagnostics::Metric::ControlWait,
         );
-        let gate = mutation
-            .lock()
-            .map_err(|_| "phone_trust_owner_unavailable")?;
+        let durable = matches!(
+            request,
+            InputRequest::InputGrant { .. } | InputRequest::InputRenew { .. }
+        );
+        let gate = if durable {
+            Some(
+                mutation
+                    .lock()
+                    .map_err(|_| "phone_trust_owner_unavailable")?,
+            )
+        } else {
+            None
+        };
+        let authorization = authorized.authorization.clone();
+        let scope = if durable {
+            None
+        } else {
+            Some(authorization.guard()?)
+        };
         #[cfg(debug_assertions)]
         drop(waiting);
         #[cfg(debug_assertions)]
         let held = crate::input_io_diagnostics::Span::start(
             crate::input_io_diagnostics::Metric::ControlHeld,
         );
-        let time = now()?;
-        authorized.validate(
-            channel,
-            &mut *store.lock().map_err(|_| "phone_trust_owner_unavailable")?,
-            time,
-        )?;
+        let time = if durable {
+            authorized.validate_now(
+                channel,
+                &mut *store.lock().map_err(|_| "phone_trust_owner_unavailable")?,
+                now,
+            )?
+        } else {
+            authorized.validate_cached(channel, now)?
+        };
         let reply = match request {
             InputRequest::InputGrant {
                 generation,
@@ -424,17 +501,19 @@ fn serve_input(
                         .datagram_port()
                         .map(|_| crate::input_broker::DatagramPolicy {
                             epoch: authorized.phone.credential_epoch.clone(),
+                            authorization: authorized.authorization.clone(),
                             expires: authorized.expires,
                             observed: time,
                         }),
                 )?;
-                authorized.validate(
+                authorized.validate_now(
                     channel,
                     &mut *store.lock().map_err(|_| "phone_trust_owner_unavailable")?,
-                    now()?,
+                    now,
                 )?;
                 #[cfg(debug_assertions)]
                 drop(held);
+                drop(scope);
                 drop(gate);
                 crate::input_broker::deliver(&grant, channel, broker.datagram_port())?;
                 continue;
@@ -448,10 +527,10 @@ fn serve_input(
                 if !broker.renewal {
                     return Err("authenticated_control_message_invalid");
                 }
-                authorized.renew(
+                authorized.renew_now(
                     channel,
                     &mut *store.lock().map_err(|_| "phone_trust_owner_unavailable")?,
-                    time,
+                    now,
                 )?;
                 let grant = broker.rotate(
                     &session_id,
@@ -460,17 +539,19 @@ fn serve_input(
                     grant_lifetime(authorized.expires, time)?,
                     crate::input_broker::DatagramPolicy {
                         epoch: authorized.phone.credential_epoch.clone(),
+                        authorization: authorized.authorization.clone(),
                         expires: authorized.expires,
                         observed: time,
                     },
                 )?;
-                authorized.validate(
+                authorized.validate_now(
                     channel,
                     &mut *store.lock().map_err(|_| "phone_trust_owner_unavailable")?,
-                    now()?,
+                    now,
                 )?;
                 #[cfg(debug_assertions)]
                 drop(held);
+                drop(scope);
                 drop(gate);
                 grant.send_renewal_to(
                     channel,
@@ -504,6 +585,7 @@ fn serve_input(
                 broker.release()?;
                 #[cfg(debug_assertions)]
                 drop(held);
+                drop(scope);
                 drop(gate);
                 return send(channel, input_reply(authorized, "disconnected", authority));
             }
@@ -513,6 +595,7 @@ fn serve_input(
         };
         #[cfg(debug_assertions)]
         drop(held);
+        drop(scope);
         drop(gate);
         send(channel, reply)?;
     }
@@ -572,6 +655,7 @@ mod tests {
         let mut capability = AuthorizedConnection {
             binding: server.native_binding().unwrap(),
             host_pin: identity.pin().hex(),
+            authorization: store.cached_authorization(&phone).unwrap(),
             phone,
             expires: 60_100,
             observed: 100,

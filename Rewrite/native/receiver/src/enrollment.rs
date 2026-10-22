@@ -347,14 +347,12 @@ fn complete(
                 &request.proof,
                 proof_time,
             )?;
-        let issued = store
-            .lock()
-            .map_err(|_| "phone_trust_owner_unavailable")?
-            .enroll_after_pairing(&request.phone_id, &request.label, now()?)?;
+        let mut store = store.lock().map_err(|_| "phone_trust_owner_unavailable")?;
+        store.invalidate_scope(&request.phone_id)?;
         if let Some(grants) = input_grants {
             grants.retire_phone(&request.phone_id)?;
         }
-        issued
+        store.enroll_now(&request.phone_id, &request.label, now)?
     };
     issued.send_enrollment(channel)?;
     let ack: Acknowledgment =
@@ -564,9 +562,9 @@ mod tests {
         assert_eq!(result.unwrap().credential_epoch, "1");
         assert_eq!(status.attempts_remaining, 0);
         let mut store = PhoneTrustStore::open(&root.0).unwrap();
-        assert!(store.authenticate("phone-a", &credential, 102).is_ok());
-        store.revoke("phone-a", 103).unwrap();
-        assert!(store.authenticate("phone-a", &credential, 104).is_err());
+        assert!(store.authenticate("phone-a", &credential, 1101).is_ok());
+        store.revoke("phone-a", 1102).unwrap();
+        assert!(store.authenticate("phone-a", &credential, 1103).is_err());
     }
     #[test]
     fn unsupported_versions_and_wrong_phase_frames_never_consume_invitation() {
@@ -649,7 +647,7 @@ mod tests {
             assert_eq!(status.attempts_remaining, 0);
             assert!(PhoneTrustStore::open(&root.0)
                 .unwrap()
-                .authenticate("phone-a", &credential, 102)
+                .authenticate("phone-a", &credential, 1101)
                 .is_ok());
         }
     }

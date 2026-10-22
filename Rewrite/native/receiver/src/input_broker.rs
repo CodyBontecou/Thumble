@@ -11,6 +11,7 @@ use std::{
 };
 #[derive(Clone)]
 struct Entry {
+    authorization: Option<crate::cached_authorization::CachedAuthorization>,
     root: PathBuf,
     phone: String,
     client: Arc<Mutex<Client>>,
@@ -24,6 +25,7 @@ pub(crate) struct ControlInput<'a> {
 }
 pub(crate) struct DatagramPolicy {
     pub epoch: String,
+    pub authorization: crate::cached_authorization::CachedAuthorization,
     pub expires: u64,
     pub observed: u64,
 }
@@ -223,12 +225,9 @@ impl Registry {
     pub(crate) fn datagram_packet(
         &self,
         packet: &[u8],
-        store: &Mutex<crate::phone_trust::PhoneTrustStore>,
-        mutation: &Mutex<()>,
-        now: u64,
+        now: &mut impl FnMut() -> Result<u64, &'static str>,
     ) -> Result<(), &'static str> {
         let (session, generation, _) = packet_scope(packet).ok_or("input_packet_invalid")?;
-        let _gate = mutation.try_lock().map_err(|_| "input_broker_busy")?;
         let entries = self
             .entries
             .lock()
@@ -237,6 +236,11 @@ impl Registry {
             .cloned()
             .collect::<Vec<_>>();
         for entry in entries {
+            let Some(authorization) = entry.authorization.as_ref() else {
+                continue;
+            };
+            let _scope = authorization.guard()?;
+            let time = authorization.clock.sample(now)?;
             let mut sources = entry.sources.try_lock().map_err(|_| "input_broker_busy")?;
             if sources.closed || sources.current.reference.session() != session {
                 continue;
@@ -244,17 +248,13 @@ impl Registry {
             let source = &sources.current;
             let policy = source.policy.as_ref().ok_or("input_session_closed")?;
             if generation != source.generation
-                || now < policy.observed
-                || now >= policy.expires
+                || time < policy.observed
+                || time >= policy.expires
                 || Instant::now() >= source.deadline
             {
                 return Err("input_session_closed");
             }
-            store
-                .lock()
-                .map_err(|_| "phone_trust_owner_unavailable")?
-                .authorize_epoch(&entry.phone, &policy.epoch, now)?;
-            return sources.forward(&entry.client, packet, false, now);
+            return sources.forward(&entry.client, packet, false, time);
         }
         Err("input_session_closed")
     }
@@ -360,6 +360,7 @@ impl<'a> Broker<'a> {
             .map_err(|_| "input_broker_unavailable")?
             .grant(self.connection, generation, revision, lifetime)?;
         let entry = Entry {
+            authorization: policy.as_ref().map(|p| p.authorization.clone()),
             root: self.root.clone(),
             phone: phone.into(),
             client: self.client.clone(),
