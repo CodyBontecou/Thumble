@@ -1,0 +1,21 @@
+{
+  "cli": {
+    "appVersionSource": "local"
+  },
+  "build": {
+    "store": {
+      "distribution": "store",
+      "developmentClient": false,
+      "autoIncrement": false,
+      "env": {
+        "THUMBLE_MOBILE_VARIANT": "store"
+      },
+      "ios": {
+        "buildConfiguration": "Release"
+      },
+      "android": {
+        "buildType": "app-bundle"
+      }
+    }
+  }
+}
