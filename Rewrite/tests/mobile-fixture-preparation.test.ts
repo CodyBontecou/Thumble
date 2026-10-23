@@ -27,6 +27,7 @@ test("clean mobile fixture preparation installs exact shared saved-map vectors i
     for (const name of [
       "physical-input-control-v9.json",
       "phone-editor-journal-v1.json",
+      "phone-editor-control-v1.json",
       "saved-controller-control-v8.json",
       "saved-controller-presentation-control-v10.json",
       "saved-controller-presentation-control-v11.json",
@@ -51,6 +52,7 @@ test("clean mobile fixture preparation installs exact shared saved-map vectors i
     for (const name of [
       "physical-input-control-v9.json",
       "phone-editor-journal-v1.json",
+      "phone-editor-control-v1.json",
       "saved-controller-control-v8.json",
       "saved-controller-presentation-control-v10.json",
       "saved-controller-presentation-control-v11.json",

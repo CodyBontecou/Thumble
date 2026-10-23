@@ -114,8 +114,10 @@ jobs:
           cargo build --locked --manifest-path native/receiver/Cargo.toml --example control_tls_probe
           node tooling/test-control-tls.mjs
       - run: bun run typecheck
+      # The complete macOS suite exceeded 120s with all tests passing on 3659c3d.
+      # This runner budget does not change any fixture or product deadline.
       - run: bun run test:ci ${{ matrix.shard }}
-        timeout-minutes: 2
+        timeout-minutes: 5
       - run: bun run build
         if: matrix.primary
       - run: bun run test:package:ci

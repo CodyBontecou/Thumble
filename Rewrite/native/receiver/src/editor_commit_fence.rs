@@ -4,7 +4,7 @@
 //! reopened/replaced for queued work. Definitive completion is trusted only after
 //! correlation with an actual owner response, never a local promise rejection.
 //! Dropping a ticket, timeout, EOF, or kill issuance does not complete a write.
-use std::sync::{Arc, Condvar, Mutex};
+use std::sync::{Arc, Condvar, Mutex, Weak};
 use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -37,6 +37,9 @@ impl WriterLifetime {
             }),
         })
     }
+    pub(crate) fn identity(&self) -> [u8; 16] {
+        self.identity
+    }
     /// Future dispatch is permanently disabled, including reserved queued work.
     pub(crate) fn retire(self: &Arc<Self>) -> Result<RetiredWriter, FenceError> {
         self.state
@@ -51,10 +54,28 @@ struct Pending {
     id: u64,
     dispatched: bool,
 }
+enum Completion {
+    Definitive,
+    Orphan(Weak<DrainProof>),
+}
+/// Resource-only proof: never points back to a fence or credential scope.
+struct DrainProof {
+    #[cfg(unix)]
+    _lease: Option<Mutex<database::LeaseResource>>,
+}
+impl DrainProof {
+    fn definitive() -> Arc<Self> {
+        Arc::new(Self {
+            #[cfg(unix)]
+            _lease: None,
+        })
+    }
+}
 struct State {
     closed: bool,
     next: u64,
     pending: Option<Pending>,
+    completion: Completion,
 }
 pub(crate) struct CommitFence {
     writer: Arc<WriterLifetime>,
@@ -66,8 +87,10 @@ pub(crate) struct Ticket {
     id: u64,
 }
 /// No Drop implementation: losing this value must leave pending work fenced.
+#[derive(Clone)]
 pub(crate) struct DrainedScope {
     _fence: Arc<CommitFence>,
+    _proof: Arc<DrainProof>,
 }
 impl CommitFence {
     pub(crate) fn new(writer: Arc<WriterLifetime>) -> Arc<Self> {
@@ -77,6 +100,7 @@ impl CommitFence {
                 closed: false,
                 next: 1,
                 pending: None,
+                completion: Completion::Definitive,
             }),
             changed: Condvar::new(),
         })
@@ -155,6 +179,7 @@ impl CommitFence {
             return Err(FenceError::InvalidTicket);
         }
         state.pending = None;
+        state.completion = Completion::Definitive;
         writer.pending = false;
         self.changed.notify_all();
         Ok(())
@@ -175,6 +200,15 @@ impl CommitFence {
             self.changed.notify_all();
         }
         Ok(())
+    }
+    /// Short metadata check, never a drain proof or acknowledgement.
+    pub(crate) fn has_pending(&self) -> Result<bool, FenceError> {
+        Ok(self
+            .state
+            .lock()
+            .map_err(|_| FenceError::Unavailable)?
+            .pending
+            .is_some())
     }
     /// Pending is not an acknowledgment result. Timeout never releases a ticket.
     /// This wait holds no writer/input/trust/policy mutex while blocked.
@@ -200,8 +234,13 @@ impl CommitFence {
                 .map_err(|_| FenceError::Unavailable)?
                 .0;
         }
+        let proof = match &state.completion {
+            Completion::Definitive => DrainProof::definitive(),
+            Completion::Orphan(weak) => weak.upgrade().ok_or(FenceError::Unavailable)?,
+        };
         Ok(DrainedScope {
             _fence: self.clone(),
+            _proof: proof,
         })
     }
 }
@@ -244,10 +283,17 @@ mod database {
     }
     /// Keep this guard alive through orphan-drain acknowledgments. It holds the
     /// existing DB transaction, not any input/trust/policy/global mutex.
-    pub(crate) struct OrphanDrain {
+    pub(super) struct LeaseResource {
         _connection: Connection,
         _file: File,
-        _scope: DrainedScope,
+    }
+    pub(crate) struct OrphanDrain {
+        proof: DrainedScope,
+    }
+    impl OrphanDrain {
+        pub(crate) fn proof(&self) -> DrainedScope {
+            self.proof.clone()
+        }
     }
     impl BoundDatabase {
         pub(crate) fn existing(
@@ -394,16 +440,28 @@ mod database {
                 .lock()
                 .map_err(|_| FenceError::Unavailable)?;
             let mut state = fence.state.lock().map_err(|_| FenceError::Unavailable)?;
+            // A definitive response may have raced this probe while SQLite opened.
+            if !state.closed || !state.pending.is_some_and(|p| p.dispatched) {
+                return Err(FenceError::InvalidTicket);
+            }
+            // Publish the exact shared lease before any waiter can see drained.
+            // Its resource has no back-reference to the fence, preventing cycles.
+            let proof = Arc::new(DrainProof {
+                _lease: Some(Mutex::new(LeaseResource {
+                    _connection: connection,
+                    _file: file,
+                })),
+            });
+            state.completion = Completion::Orphan(Arc::downgrade(&proof));
             state.pending = None;
             writer.pending = false;
             fence.changed.notify_all();
             drop(state);
             drop(writer);
             Ok(OrphanDrain {
-                _connection: connection,
-                _file: file,
-                _scope: DrainedScope {
+                proof: DrainedScope {
                     _fence: fence.clone(),
+                    _proof: proof,
                 },
             })
         }
@@ -591,7 +649,11 @@ mod tests {
         drop(new);
         release.send(()).unwrap();
         worker.join().unwrap();
-        assert!(fence.wait_drained(Duration::ZERO).is_ok());
+        // No proof remains: late waiters fail closed, while the DB lease releases.
+        assert!(matches!(
+            fence.wait_drained(Duration::ZERO),
+            Err(FenceError::Unavailable)
+        ));
         let reopened = Connection::open(root.0.join("configuration-v1.sqlite3")).unwrap();
         reopened.execute_batch("BEGIN EXCLUSIVE;ROLLBACK").unwrap();
     }

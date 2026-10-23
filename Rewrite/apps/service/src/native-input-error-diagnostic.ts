@@ -25,6 +25,38 @@ const codes = new Set([
   "input_packet_invalid",
   "other",
 ]);
+const servingCodes = new Set([
+  "native_input_server_rejected",
+  ...codes,
+  "authenticated_control_transport_failed",
+  "authenticated_control_budget_exhausted",
+  "authenticated_control_message_invalid",
+  "phone_authentication_rejected",
+  "phone_trust_owner_unavailable",
+  "phone_trust_reservation_failed",
+  "phone_trust_clock_invalid",
+  "phone_trust_clock_rollback",
+  "phone_trust_reservation_expired",
+  "phone_trust_clock_unreserved",
+  "input_protocol_invalid",
+  "input_packet_budget_exhausted",
+  "input_broker_unavailable",
+  "input_renewal_too_early",
+  "native_input_release_unconfirmed",
+  "clock_unavailable",
+]);
+const controlStages = new Set([
+  "await-frame",
+  "packet",
+  "decode-control",
+  "grant",
+  "renewal",
+  "configuration",
+  "progress",
+  "release",
+  "disconnect",
+  "status",
+]);
 const kinds = new Set([
   "would-block",
   "timed-out",
@@ -72,7 +104,17 @@ export function decodeNativeInputErrorLine(line: string): string | undefined {
       .filter((k) => !["version", "role", "context"].includes(k))
       .sort()
       .join(",");
-    if (fields === "code,op") {
+    if (fields === "code,stage") {
+      if (
+        row.role !== "broker" ||
+        row.context !== "phone-control-before-cleanup" ||
+        typeof row.stage !== "string" ||
+        !controlStages.has(row.stage) ||
+        typeof row.code !== "string" ||
+        !servingCodes.has(row.code)
+      )
+        return;
+    } else if (fields === "code,op") {
       if (
         !operations.has(row.context) ||
         typeof row.op !== "number" ||

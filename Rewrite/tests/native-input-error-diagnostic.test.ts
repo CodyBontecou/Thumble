@@ -90,3 +90,57 @@ test("actual NativePipe forwards only bounded events under explicit flag", async
     expect(stderr).toBe(flag === "1" ? io + "\n" : "");
   }
 });
+
+test("first serving error is distinct from cleanup op4 and strictly bounded to fixed stages/codes", () => {
+  const original = record({
+    version: 1,
+    role: "broker",
+    context: "phone-control-before-cleanup",
+    stage: "progress",
+    code: "phone_trust_reservation_expired",
+  });
+  expect(decodeNativeInputErrorLine(original)).toBe(original);
+  const cleanup = record({
+    version: 1,
+    role: "broker",
+    context: "native-client",
+    op: 4,
+    code: "native_input_timeout",
+  });
+  const output: string[] = [];
+  const forwarder = new NativeInputErrorForwarder((line) => output.push(line));
+  forwarder.push(new TextEncoder().encode(original + "\n" + cleanup + "\n"));
+  expect(output).toEqual([original, cleanup]);
+  for (const row of [
+    {
+      version: 1,
+      role: "receiver",
+      context: "phone-control-before-cleanup",
+      stage: "progress",
+      code: "native_input_timeout",
+    },
+    {
+      version: 1,
+      role: "broker",
+      context: "phone-control-before-cleanup",
+      stage: "secret",
+      code: "native_input_timeout",
+    },
+    {
+      version: 1,
+      role: "broker",
+      context: "phone-control-before-cleanup",
+      stage: "progress",
+      code: "secret",
+    },
+    {
+      version: 1,
+      role: "broker",
+      context: "phone-control-before-cleanup",
+      stage: "progress",
+      code: "native_input_timeout",
+      op: 4,
+    },
+  ])
+    expect(decodeNativeInputErrorLine(record(row))).toBeUndefined();
+});

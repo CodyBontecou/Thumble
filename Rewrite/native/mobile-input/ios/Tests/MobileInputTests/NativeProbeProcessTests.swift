@@ -156,3 +156,41 @@
     #expect(lines.snapshot().allSatisfy { $0.hasSuffix("outcome=none") })
   }
 #endif
+
+#if os(macOS)
+
+  @Test private func syntheticConcurrentProbeReadersCannotStarveTheirOwnWatchdogs() async throws {
+    let count = min(32, ProcessInfo.processInfo.activeProcessorCount + 2)
+    let started = ContinuousClock.now
+    try await withThrowingTaskGroup(of: Void.self) { group in
+      for _ in 0..<count {
+        group.addTask {
+          let probe = NativeProbeProcess(
+            path: "/bin/sleep", arguments: ["3"], timeout: .milliseconds(100))
+          try await probe.start()
+          do { _ = try await probe.line() } catch {}
+          await probe.stop()
+        }
+      }
+      try await group.waitForAll()
+    }
+    #expect(started.duration(to: .now) < .seconds(2))
+  }
+#endif
+
+#if os(macOS)
+  @Test private func syntheticProbeCancellationDrainsItsActualBlockedReader() async throws {
+    let lines = ProbeDiagnosticLines()
+    let probe = NativeProbeProcess(
+      path: "/bin/sleep", arguments: ["3"], diagnosticsEnabled: true,
+      diagnosticSink: { lines.append($0) })
+    try await probe.start()
+    let reader = Task { try await probe.line() }
+    await Task.yield()
+    reader.cancel()
+    await #expect(throws: NativeProbeProcess.Failure.self) { try await reader.value }
+    await probe.stop()
+    #expect(await probe.wait() != 0)
+    #expect(lines.snapshot().allSatisfy { $0.hasSuffix("outcome=none") })
+  }
+#endif

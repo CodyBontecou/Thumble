@@ -446,10 +446,46 @@ fn serve_input(
     mutation: &Mutex<()>,
     now: &mut impl FnMut() -> Result<u64, &'static str>,
 ) -> Result<(), &'static str> {
+    #[cfg(debug_assertions)]
+    let mut stage = crate::input_error_diagnostics::ControlStage::AwaitFrame;
+    let result = serve_input_inner(
+        channel,
+        authority,
+        authorized,
+        broker,
+        store,
+        mutation,
+        now,
+        #[cfg(debug_assertions)]
+        &mut stage,
+    );
+    // Function-local authorization guards have dropped. The caller still owns
+    // Broker: its destructor and release IPC run only after this observation.
+    #[cfg(debug_assertions)]
+    if let Err(error) = result {
+        crate::input_error_diagnostics::control_before_cleanup(stage, error);
+    }
+    result
+}
+#[cfg_attr(debug_assertions, allow(clippy::too_many_arguments))]
+fn serve_input_inner(
+    channel: &mut ControlChannel,
+    authority: &str,
+    authorized: &mut AuthorizedConnection,
+    broker: &mut crate::input_broker::Broker<'_>,
+    store: &Mutex<PhoneTrustStore>,
+    mutation: &Mutex<()>,
+    now: &mut impl FnMut() -> Result<u64, &'static str>,
+    #[cfg(debug_assertions)] stage: &mut crate::input_error_diagnostics::ControlStage,
+) -> Result<(), &'static str> {
     let mut controls = 0;
     let mut packets = 0;
     let mut window = std::time::Instant::now();
     loop {
+        #[cfg(debug_assertions)]
+        {
+            *stage = crate::input_error_diagnostics::ControlStage::AwaitFrame;
+        }
         let frame = channel
             .receive()
             .map_err(|_| "authenticated_control_transport_failed")?;
@@ -459,6 +495,10 @@ fn serve_input(
             window = std::time::Instant::now();
         }
         if frame.kind == FrameKind::Input {
+            #[cfg(debug_assertions)]
+            {
+                *stage = crate::input_error_diagnostics::ControlStage::Packet;
+            }
             packets += 1;
             if packets > 65_536 {
                 return Err("authenticated_control_budget_exhausted");
@@ -479,6 +519,10 @@ fn serve_input(
             broker.packet(&frame.payload, time)?;
             continue;
         }
+        #[cfg(debug_assertions)]
+        {
+            *stage = crate::input_error_diagnostics::ControlStage::DecodeControl;
+        }
         controls += 1;
         if controls
             > if broker.datagram_port().is_some() {
@@ -494,6 +538,32 @@ fn serve_input(
         let (version, connection) = request.binding();
         if version != 1 || connection != hex(&authorized.binding) {
             return Err("authenticated_control_message_invalid");
+        }
+        #[cfg(debug_assertions)]
+        {
+            *stage = match &request {
+                InputRequest::InputGrant { .. } => {
+                    crate::input_error_diagnostics::ControlStage::Grant
+                }
+                InputRequest::InputRenew { .. } => {
+                    crate::input_error_diagnostics::ControlStage::Renewal
+                }
+                InputRequest::InputConfiguration { .. } => {
+                    crate::input_error_diagnostics::ControlStage::Configuration
+                }
+                InputRequest::InputStatus { .. } => {
+                    crate::input_error_diagnostics::ControlStage::Progress
+                }
+                InputRequest::InputRelease { .. } => {
+                    crate::input_error_diagnostics::ControlStage::Release
+                }
+                InputRequest::Disconnect { .. } => {
+                    crate::input_error_diagnostics::ControlStage::Disconnect
+                }
+                InputRequest::ControlStatus { .. } => {
+                    crate::input_error_diagnostics::ControlStage::Status
+                }
+            };
         }
         // Only native IPC and native trust checks run while this fence is held, never TLS I/O.
         #[cfg(debug_assertions)]
@@ -778,6 +848,7 @@ mod tests {
         }
     }
     include!("authenticated_catalog_tests.rs");
+    include!("authenticated_control_diagnostic_tests.rs");
     include!("authenticated_controls_tests.rs");
     include!("authenticated_presentation_tests.rs");
     include!("authenticated_control_renewal_tests.rs");

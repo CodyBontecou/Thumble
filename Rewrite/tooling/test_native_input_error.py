@@ -56,6 +56,21 @@ class NativeInputErrorTests(unittest.TestCase):
             self.assertEqual(sorted(os.listdir(directory)), ['report.json'])
             self.assertFalse(values.write_report(Path(directory) / 'absent' / 'report.json'))
 
+class BeforeCleanupTests(unittest.TestCase):
+    def test_original_serving_error_is_not_postcleanup_release_timeout(self):
+        from native_input_error import decode_native_input_error, NativeInputErrors, CONTROL_STAGES
+        original = {'version':1,'role':'broker','context':'phone-control-before-cleanup','stage':'progress','code':'phone_trust_reservation_expired'}
+        line = lambda value: 'native_input_error ' + json.dumps(value, separators=(',', ':'), sort_keys=True)
+        collector = NativeInputErrors()
+        collector.observe(line(original))
+        collector.observe(line({'version':1,'role':'broker','context':'native-client','op':4,'code':'native_input_timeout'}))
+        self.assertEqual(collector.snapshot()[0],original)
+        self.assertEqual(collector.snapshot()[1]['op'],4)
+        for stage in CONTROL_STAGES:
+            self.assertEqual(decode_native_input_error(line(dict(original,stage=stage)))['stage'],stage)
+        for change in [{'role':'receiver'},{'stage':'secret'},{'code':'secret/path'},{'op':4},{'extra':'secret'}]:
+            self.assertIsNone(decode_native_input_error(line(dict(original,**change))))
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -1,4 +1,8 @@
-import { decodeEditorLabelCommit } from "./editor-owner-envelope.ts";
+import { ConfigurationEditorReads } from "@thumble/application/configuration-editor-read";
+import {
+  decodeEditorReadEnvelope,
+  decodeEditorLabelCommit,
+} from "./editor-owner-envelope.ts";
 import { ConfigurationPhonePresentationOperations } from "@thumble/application/configuration-phone-presentation";
 import { decodeAnyPhonePresentationCommand } from "@thumble/contracts/phone-presentation";
 import { verifyPresentationIcon } from "./presentation-icon.ts";
@@ -63,6 +67,9 @@ export async function runConfigurationOwner(
     repository,
     (text) => createHash("sha256").update(text, "utf8").digest("hex"),
     () => Date.now().toString(),
+  );
+  const editorReads = new ConfigurationEditorReads(repository, (text) =>
+    createHash("sha256").update(text, "utf8").digest("hex"),
   );
   const imports = new ConfigurationImportOperations(repository, {
     readFile: readConfigurationFile,
@@ -276,6 +283,22 @@ export async function runConfigurationOwner(
               operation !== "configuration-saved-pin"
             )
               throw new Error("configuration_owner_busy");
+            if (operation === "editor-read") {
+              const envelope = decodeEditorReadEnvelope(body);
+              if (envelope.ownerLifetimeId !== ownerLifetimeId)
+                throw new Error("editor_owner_lifetime_mismatch");
+              const outcome = editorReads.execute(envelope.query, {
+                read: true,
+                write: false,
+              });
+              write({
+                version: 1,
+                requestId,
+                ok: true,
+                result: { envelope, outcome },
+              });
+              continue;
+            }
             if (operation === "editor-label-commit") {
               const envelope = decodeEditorLabelCommit(body);
               if (envelope.ownerLifetimeId !== ownerLifetimeId)

@@ -69,6 +69,10 @@ impl CachedAuthorization {
     pub fn new(scope: Arc<Scope>, clock: Arc<Clock>) -> Self {
         Self { scope, clock }
     }
+    /// Identity-only editor capture; no authorization or lifetime extension.
+    pub(crate) fn retains_scope(&self, scope: &Arc<Scope>) -> bool {
+        Arc::ptr_eq(&self.scope, scope)
+    }
     pub fn management_guard(&self) -> Result<MutexGuard<'_, ()>, &'static str> {
         self.scope
             .management_delivery

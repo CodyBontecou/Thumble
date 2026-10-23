@@ -111,6 +111,79 @@ pub fn server_exit(reason: &'static str, owned: usize) {
         json!({"version":1,"role":role(),"context":"native-server-exit","exit":reason,"owned":owned.min(2)}),
     );
 }
+/// Fixed serving stage, recorded only after function-local guards drop and
+/// before the outer Broker destructor can issue release IPC.
+#[derive(Clone, Copy, Debug)]
+pub enum ControlStage {
+    AwaitFrame,
+    Packet,
+    DecodeControl,
+    Grant,
+    Renewal,
+    Configuration,
+    Progress,
+    Release,
+    Disconnect,
+    Status,
+}
+impl ControlStage {
+    fn text(self) -> &'static str {
+        match self {
+            Self::AwaitFrame => "await-frame",
+            Self::Packet => "packet",
+            Self::DecodeControl => "decode-control",
+            Self::Grant => "grant",
+            Self::Renewal => "renewal",
+            Self::Configuration => "configuration",
+            Self::Progress => "progress",
+            Self::Release => "release",
+            Self::Disconnect => "disconnect",
+            Self::Status => "status",
+        }
+    }
+}
+fn serving_code(value: &'static str) -> &'static str {
+    match value {
+        "native_input_server_rejected"
+        | "authenticated_control_transport_failed"
+        | "authenticated_control_budget_exhausted"
+        | "authenticated_control_message_invalid"
+        | "phone_authentication_rejected"
+        | "phone_trust_owner_unavailable"
+        | "phone_trust_reservation_failed"
+        | "phone_trust_clock_invalid"
+        | "phone_trust_clock_rollback"
+        | "phone_trust_reservation_expired"
+        | "phone_trust_clock_unreserved"
+        | "input_protocol_invalid"
+        | "input_packet_budget_exhausted"
+        | "input_broker_unavailable"
+        | "input_renewal_too_early"
+        | "native_input_release_unconfirmed"
+        | "clock_unavailable" => value,
+        _ => code(value),
+    }
+}
+fn serving_value(stage: ControlStage, error: &'static str) -> Value {
+    json!({"version":1,"role":"broker","context":"phone-control-before-cleanup","stage":stage.text(),"code":serving_code(error)})
+}
+#[cfg(test)]
+thread_local! { static CONTROL_TEST_EVENTS: std::cell::RefCell<Option<std::sync::mpsc::SyncSender<Value>>> = const { std::cell::RefCell::new(None) }; }
+#[cfg(test)]
+pub(crate) fn capture_control_before_cleanup_for_test(sender: std::sync::mpsc::SyncSender<Value>) {
+    CONTROL_TEST_EVENTS.with(|slot| *slot.borrow_mut() = Some(sender));
+}
+pub fn control_before_cleanup(stage: ControlStage, error: &'static str) {
+    #[cfg(test)]
+    CONTROL_TEST_EVENTS.with(|slot| {
+        if let Some(sender) = slot.borrow().as_ref() {
+            let _ = sender.try_send(serving_value(stage, error));
+        }
+    });
+    if enabled() {
+        emit(serving_value(stage, error));
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -124,5 +197,44 @@ mod tests {
     fn arbitrary_error_text_is_never_reflected() {
         assert_eq!(code("secret=must-not-appear"), "other");
         assert_eq!(code("native_input_timeout"), "native_input_timeout");
+    }
+}
+
+#[cfg(test)]
+mod control_stage_tests {
+    use super::*;
+    #[test]
+    fn original_control_error_has_fixed_stage_and_is_distinct_from_cleanup_ipc() {
+        for stage in [
+            ControlStage::AwaitFrame,
+            ControlStage::Packet,
+            ControlStage::DecodeControl,
+            ControlStage::Grant,
+            ControlStage::Renewal,
+            ControlStage::Configuration,
+            ControlStage::Progress,
+            ControlStage::Release,
+            ControlStage::Disconnect,
+            ControlStage::Status,
+        ] {
+            let row = serving_value(stage, "authenticated_control_message_invalid");
+            assert_eq!(row["context"], "phone-control-before-cleanup");
+            assert_eq!(row["stage"], stage.text());
+            assert_eq!(row["code"], "authenticated_control_message_invalid");
+            assert!(row.get("op").is_none());
+            assert!(row.to_string().len() <= 256);
+        }
+        assert_eq!(
+            serving_value(ControlStage::Progress, "secret/path")["code"],
+            "other"
+        );
+        assert_eq!(
+            serving_value(ControlStage::Progress, "phone_trust_reservation_expired")["code"],
+            "phone_trust_reservation_expired"
+        );
+        assert_eq!(
+            serving_value(ControlStage::Release, "native_input_timeout")["code"],
+            "native_input_timeout"
+        );
     }
 }

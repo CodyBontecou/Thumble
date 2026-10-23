@@ -1,5 +1,9 @@
 import {
   decodeEditorLabelCommit,
+  decodeEditorReadEnvelope,
+  decodeEditorOwnerReadResponse,
+  type EditorReadEnvelope,
+  type EditorOwnerReadResponse,
   decodeEditorOwnerResponse,
   editorLifetimeId,
   type EditorLabelCommit,
@@ -207,6 +211,37 @@ export class ConfigurationOwner {
       await confirmEditorWriterExit(this.child);
       this.editorWrite = false;
       return { kind: "writer-exited", disposition: "unknown" };
+    }
+  }
+  /** Captured owner only; readonly replies cannot settle a write ticket. */
+  async readEditor(
+    input: EditorReadEnvelope,
+  ): Promise<EditorOwnerReadResponse> {
+    const envelope = decodeEditorReadEnvelope(input);
+    const lifetime = await this.editorOwnerLifetime();
+    if (this.editorDispatchClosed || lifetime !== envelope.ownerLifetimeId)
+      throw new Error("editor_owner_lifetime_mismatch");
+    if (
+      this.editorWrite ||
+      this.activeJob !== undefined ||
+      this.phoneRead ||
+      this.ordinaryReads ||
+      this.wowRequest ||
+      this.wowState.busy
+    )
+      throw new Error("configuration_owner_busy");
+    this.phoneRead = true;
+    try {
+      const result = await this.pipe.requestParsed(envelope);
+      if (result.kind !== "owner-response" || !result.ok)
+        throw new Error(
+          result.kind === "owner-response"
+            ? result.error
+            : "editor_owner_unavailable",
+        );
+      return decodeEditorOwnerReadResponse(result.result, envelope);
+    } finally {
+      this.phoneRead = false;
     }
   }
   async request(input: ConfigurationCommand): Promise<ConfigurationReply> {

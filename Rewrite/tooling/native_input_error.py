@@ -8,6 +8,8 @@ import threading
 
 PREFIX = 'native_input_error '
 CODES = frozenset({'native_input_timeout', 'native_input_transport_failed', 'native_input_frame_invalid', 'native_input_rejected', 'native_owner_reply_timeout', 'native_owner_reply_closed', 'native_input_owner_failed', 'input_session_closed', 'input_packet_invalid', 'other'})
+SERVE_CODES = CODES | frozenset({'native_input_server_rejected', 'input_broker_unavailable', 'authenticated_control_transport_failed', 'phone_trust_clock_invalid', 'phone_trust_reservation_expired', 'input_packet_budget_exhausted', 'phone_trust_owner_unavailable', 'phone_authentication_rejected', 'clock_unavailable', 'phone_trust_reservation_failed', 'input_renewal_too_early', 'native_input_release_unconfirmed', 'phone_trust_clock_rollback', 'phone_trust_clock_unreserved', 'input_protocol_invalid', 'authenticated_control_budget_exhausted', 'authenticated_control_message_invalid'})
+CONTROL_STAGES = frozenset({'release', 'disconnect', 'progress', 'packet', 'decode-control', 'renewal', 'await-frame', 'configuration', 'grant', 'status'})
 OPERATIONS = frozenset({'native-client', 'native-server-wait', 'native-server-send', 'phone-control', 'sample'})
 IO_CONTEXTS = frozenset({'native-read', 'native-write', 'native-read-options', 'native-write-options'})
 KINDS = frozenset({'would-block', 'timed-out', 'interrupted', 'unexpected-eof', 'broken-pipe', 'connection-reset', 'connection-aborted', 'not-connected', 'invalid-input', 'permission-denied', 'other'})
@@ -48,7 +50,10 @@ def decode_native_input_error(line):
             return None
         fields = set(value) - COMMON
         context = value['context']
-        if fields == {'op', 'code'}:
+        if fields == {'stage', 'code'}:
+            if value['role'] != 'broker' or context != 'phone-control-before-cleanup' or type(value['stage']) is not str or value['stage'] not in CONTROL_STAGES or type(value['code']) is not str or value['code'] not in SERVE_CODES:
+                return None
+        elif fields == {'op', 'code'}:
             if context not in OPERATIONS or type(value['op']) is not int or not 0 <= value['op'] <= 11 or type(value['code']) is not str or value['code'] not in CODES:
                 return None
         elif fields == {'ioKind', 'osCode'}:

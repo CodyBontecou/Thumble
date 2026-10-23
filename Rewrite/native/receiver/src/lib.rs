@@ -57,3 +57,7 @@ pub mod input_error_diagnostics;
 // Prerequisite only: role12 integration is deliberately not enabled yet.
 #[allow(dead_code)]
 mod editor_commit_fence;
+
+// Unconnected prerequisite: no policy or phone-role caller.
+#[allow(dead_code)]
+mod editor_pending;

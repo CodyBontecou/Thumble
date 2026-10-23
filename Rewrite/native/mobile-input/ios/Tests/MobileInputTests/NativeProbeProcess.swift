@@ -78,6 +78,8 @@
     private let process = Process()
     private let input = Pipe()
     private let output = Pipe()
+    // Blocking Foundation IO must not consume Swift cooperative executor threads.
+    private let io = DispatchQueue(label: "thumble.synthetic-probe-io")
     private let timeout: Duration
     private let diagnostics: ProbeDiagnosticState
     private var deadline: Task<Void, Never>?
@@ -112,21 +114,36 @@
         }
       }
     }
-    func line(maximum: Int = 65536) throws -> Data {
-      var data = Data()
-      while data.count < maximum {
-        guard let byte = try output.fileHandleForReading.read(upToCount: 1), !byte.isEmpty else {
-          diagnostics.eof()
-          throw Failure.closed
+    func line(maximum: Int = 65536) async throws -> Data {
+      let handle = output.fileHandleForReading
+      let diagnostics = self.diagnostics
+      let process = self.process
+      return try await withTaskCancellationHandler {
+        try await withCheckedThrowingContinuation { continuation in
+          io.async {
+            do {
+              var data = Data()
+              while data.count < maximum {
+                guard let byte = try handle.read(upToCount: 1), !byte.isEmpty else {
+                  diagnostics.eof()
+                  throw Failure.closed
+                }
+                if byte[0] == 10 {
+                  diagnostics.record("received")
+                  continuation.resume(returning: data)
+                  return
+                }
+                data.append(byte)
+              }
+              diagnostics.record("failed", outcome: "line-bounds")
+              throw Failure.lineTooLong
+            } catch { continuation.resume(throwing: error) }
+          }
         }
-        if byte[0] == 10 {
-          diagnostics.record("received")
-          return data
-        }
-        data.append(byte)
+      } onCancel: {
+        diagnostics.beginCleanup()
+        if process.isRunning { process.terminate() }
       }
-      diagnostics.record("failed", outcome: "line-bounds")
-      throw Failure.lineTooLong
     }
     func send(_ value: UInt8) throws {
       diagnostics.command(value)
@@ -136,22 +153,32 @@
       }
       diagnostics.record("sent")
     }
-    func wait() -> Int32 {
-      process.waitUntilExit()
+    private func exitStatus() async -> Int32 {
+      let process = self.process
+      return await withCheckedContinuation { continuation in
+        io.async {
+          process.waitUntilExit()
+          continuation.resume(returning: process.terminationStatus)
+        }
+      }
+    }
+    func wait() async -> Int32 {
+      let status = await exitStatus()
       deadline?.cancel()
       deadline = nil
-      if process.terminationStatus != 0 {
+      if status != 0 {
         diagnostics.record("failed", outcome: "process-exit")
       }
-      return process.terminationStatus
+      return status
     }
-    func stop() {
+    func stop() async {
       guard started else { return }
       diagnostics.beginCleanup()
       if process.isRunning { process.terminate() }
-      process.waitUntilExit()
+      _ = await exitStatus()
       deadline?.cancel()
       deadline = nil
     }
+
   }
 #endif
