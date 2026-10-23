@@ -13,11 +13,9 @@ fn enabled() -> bool {
 }
 thread_local! { static RECEIVER_THREAD: std::cell::Cell<bool> = const { std::cell::Cell::new(false) }; }
 pub fn server_thread() {
-    if enabled() {
-        RECEIVER_THREAD.with(|role| role.set(true));
-    }
+    RECEIVER_THREAD.with(|role| role.set(true));
 }
-fn role() -> &'static str {
+pub(crate) fn role() -> &'static str {
     RECEIVER_THREAD.with(|role| if role.get() { "receiver" } else { "broker" })
 }
 fn reserve(count: &AtomicU64) -> bool {
@@ -97,9 +95,6 @@ pub fn end(context: &'static str) {
     emit(json!({"version":1,"role":role(),"context":context,"exit":exit}));
 }
 pub fn server_exit(reason: &'static str, owned: usize) {
-    if !enabled() {
-        return;
-    }
     let reason = match reason {
         "stopped" | "handshake" | "read-deadline" | "read-failure" | "invalid-frame"
         | "invalid-payload" | "queue-full" | "queue-closed" | "wake-failure" | "send-failure" => {
@@ -107,9 +102,12 @@ pub fn server_exit(reason: &'static str, owned: usize) {
         }
         _ => return,
     };
-    emit(
-        json!({"version":1,"role":role(),"context":"native-server-exit","exit":reason,"owned":owned.min(2)}),
-    );
+    if enabled() {
+        emit(
+            json!({"version":1,"role":role(),"context":"native-server-exit","exit":reason,"owned":owned.min(2)}),
+        );
+    }
+    crate::input_io_diagnostics::server_exit(reason, owned);
 }
 /// Fixed serving stage, recorded only after function-local guards drop and
 /// before the outer Broker destructor can issue release IPC.
@@ -192,6 +190,16 @@ mod tests {
         let count = AtomicU64::new(0);
         assert_eq!((0..1000).filter(|_| reserve(&count)).count(), 16);
         assert_eq!(count.load(Ordering::Relaxed), 16);
+    }
+    #[test]
+    fn receiver_role_is_available_to_io_probe_without_error_probe_enablement() {
+        std::thread::spawn(|| {
+            assert_eq!(role(), "broker");
+            server_thread();
+            assert_eq!(role(), "receiver");
+        })
+        .join()
+        .unwrap();
     }
     #[test]
     fn arbitrary_error_text_is_never_reflected() {

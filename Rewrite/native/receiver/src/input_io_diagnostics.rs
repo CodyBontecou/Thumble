@@ -41,6 +41,8 @@ const NAMES: [&str; 14] = [
 ];
 static ENABLED: OnceLock<bool> = OnceLock::new();
 static ORIGIN: OnceLock<Instant> = OnceLock::new();
+static TERMINAL_COUNTS: [AtomicU64; 2] = [const { AtomicU64::new(0) }; 2];
+const TERMINALS_PER_ROLE: u64 = 4;
 fn timestamp() -> u64 {
     ORIGIN
         .get_or_init(Instant::now)
@@ -134,7 +136,10 @@ pub fn terminal(context: &'static str, operation: u8, error: &'static str) {
             } else {
                 "unclassified"
             };
-        let operation = if operation <= 6 { operation } else { 0 };
+        let operation = if operation <= 11 { operation } else { 0 };
+        emit_terminal(
+            serde_json::json!({"version":1,"role":crate::input_error_diagnostics::role(),"context":context,"op":operation,"code":error,"metrics":snapshot()}),
+        );
         eprintln!(
             "[DEBUG-native-io-terminal] context={context} op={operation} error={error} metrics={}",
             snapshot()
@@ -149,12 +154,87 @@ pub fn terminal_io(context: &'static str, error: &std::io::Error) {
         } else {
             "unclassified"
         };
+        let kind = match error.kind() {
+            std::io::ErrorKind::WouldBlock => "would-block",
+            std::io::ErrorKind::TimedOut => "timed-out",
+            std::io::ErrorKind::Interrupted => "interrupted",
+            std::io::ErrorKind::UnexpectedEof => "unexpected-eof",
+            std::io::ErrorKind::BrokenPipe => "broken-pipe",
+            std::io::ErrorKind::ConnectionReset => "connection-reset",
+            std::io::ErrorKind::ConnectionAborted => "connection-aborted",
+            std::io::ErrorKind::NotConnected => "not-connected",
+            std::io::ErrorKind::InvalidInput => "invalid-input",
+            std::io::ErrorKind::PermissionDenied => "permission-denied",
+            _ => "other",
+        };
+        emit_terminal(
+            serde_json::json!({"version":1,"role":crate::input_error_diagnostics::role(),"context":context,"ioKind":kind,"osCode":error.raw_os_error(),"metrics":snapshot()}),
+        );
         eprintln!(
             "[DEBUG-native-io-terminal] context={context} ioKind={:?} osCode={:?} metrics={}",
             error.kind(),
             error.raw_os_error(),
             snapshot()
         );
+    }
+}
+
+/// A receiver EOF may have no IO error. Capture existing aggregates at the
+/// existing abnormal-exit event, before owned binding cleanup queues more work.
+pub(crate) fn server_exit(reason: &'static str, owned: usize) {
+    if enabled() {
+        emit_terminal(
+            serde_json::json!({"version":1,"role":crate::input_error_diagnostics::role(),"context":"native-server-exit","exit":reason,"owned":owned.min(2),"metrics":snapshot()}),
+        );
+    }
+}
+
+fn reserve_terminal(count: &AtomicU64) -> bool {
+    count
+        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| {
+            (n < TERMINALS_PER_ROLE).then_some(n + 1)
+        })
+        .is_ok()
+}
+fn emit_terminal(value: serde_json::Value) {
+    let role = crate::input_error_diagnostics::role();
+    let index = usize::from(role == "receiver");
+    let text = value.to_string();
+    if text.len() <= 3840 && reserve_terminal(&TERMINAL_COUNTS[index]) {
+        // Corroborating aggregate-only evidence. Never exported as an input result.
+        use std::io::Write;
+        let line = format!("\nnative_io_terminal {text}\n");
+        let _ = std::io::stderr().lock().write_all(line.as_bytes());
+    }
+}
+#[cfg(test)]
+mod bounded_terminal_tests {
+    use super::*;
+    #[test]
+    fn terminal_limit_is_per_role_and_never_overflows() {
+        let count = AtomicU64::new(0);
+        assert_eq!((0..1000).filter(|_| reserve_terminal(&count)).count(), 4);
+        assert_eq!(count.load(Ordering::Relaxed), 4);
+    }
+    #[test]
+    fn aggregate_snapshot_has_only_fixed_names_and_numeric_fields() {
+        let rows = snapshot();
+        let rows = rows.as_array().unwrap();
+        assert_eq!(rows.len(), 14);
+        for (row, name) in rows.iter().zip(NAMES) {
+            let fields = row.as_object().unwrap();
+            assert_eq!(fields.len(), 6);
+            assert_eq!(row["metric"], name);
+            for field in [
+                "count",
+                "totalUs",
+                "maximumUs",
+                "activeCount",
+                "oldestActiveUs",
+            ] {
+                assert!(row[field].is_u64());
+            }
+        }
     }
 }
 

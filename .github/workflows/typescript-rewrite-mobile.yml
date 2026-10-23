@@ -138,7 +138,8 @@ jobs:
           python3 -m unittest discover -s tooling -p test_bank_presentation_ios_probe.py -v
           python3 -m unittest discover -s tooling -p test_native_control_terminal.py -v
           python3 -m unittest discover -s tooling -p test_native_input_error.py -v
-          python3 tooling/run_mobile_app_probe.py --platform ios --terminal-report reports/mobile-ios-control-terminal-outcomes.json --input-error-report reports/mobile-ios-input-error-events.json -- python3 tooling/check_ios_tls_runtime.py --report reports/mobile-ios-tls-runtime.json > "$RUNNER_TEMP/ios-tls-runtime-private.txt" 2>&1
+          python3 -m unittest discover -s tooling -p test_native_io_terminal.py -v
+          python3 tooling/run_mobile_app_probe.py --platform ios --terminal-report reports/mobile-ios-control-terminal-outcomes.json --input-error-report reports/mobile-ios-input-error-events.json --native-io-report reports/mobile-ios-native-io-terminals.json -- python3 tooling/check_ios_tls_runtime.py --report reports/mobile-ios-tls-runtime.json > "$RUNNER_TEMP/ios-tls-runtime-private.txt" 2>&1
       - name: Build native iOS Simulator module
         working-directory: Rewrite/native/mobile-input/ios
         run: xcodebuild -scheme ThumbleMobileInput -destination 'generic/platform=iOS Simulator' -derivedDataPath '${{ runner.temp }}/rewrite-ios-simulator' CODE_SIGNING_ALLOWED=NO build
@@ -193,7 +194,7 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: "17"
       - uses: android-actions/setup-android@v3
         with:
           packages: platform-tools
@@ -376,7 +377,7 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: "17"
       - uses: android-actions/setup-android@v3
         with:
           packages: platform-tools
@@ -421,7 +422,7 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: "17"
       - uses: android-actions/setup-android@v3
         with:
           packages: platform-tools
