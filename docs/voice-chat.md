@@ -44,10 +44,16 @@ References: [Apple Speech framework](https://developer.apple.com/documentation/s
 - Mobile lint/typecheck, the Node test suite, and native chat validation passed.
 - Initial full-screen prototype (replaced by the inline controller workflow): iOS simulator opened composer, granted microphone permission, denied speech permission, verified actionable error and typed fallback, changed channel, and returned to the controller. A local recording is saved under `.argent/recordings/` (ignored by Git). Added a modal-local safe area provider after inspecting the landscape layout.
 - Android API 35 emulator: opened composer, observed `Listening · Android on-device dictation`, observed the no-speech error, and entered an editable typed message. No message was sent to other players. The automation backend had stale landscape tap coordinates; fallback adb taps used observed accessibility frames and the measured display dimensions.
-- Physical recognition quality, the ML Kit advanced path on supported hardware, Apple's new engine on a compatible iPhone, and actual WoW channel delivery remain to be verified. Permission dialogs retain pairing; backgrounding still disconnects and releases controls.
+- Physical end-to-end dictation and WoW delivery passed on the iPhone 17 Pro and Pixel 7 (see live verification below). The exact native recognition engine used on each phone, older-iPhone fallback, and additional WoW channels still need separate verification. Permission dialogs retain pairing; backgrounding still disconnects and releases controls.
 
 ### Controller integration
 
 The Chat control now invokes dictation without routing or releasing the player’s held touches. A touch-ID set consumes duplicate responder callbacks for Chat while forwarding all other fingers to the existing touch controller. Captions use `pointerEvents="none"`; only the post-dictation review panel captures touches in its own bounds. The separate `/chat` route and menu entry were removed.
 
-The revised standalone Release builds were installed on Cody's iPhone 17 Pro and Pixel 7 for live testing, and the signed Mac receiver was rebuilt and restarted. The receiver accepts one phone at a time. The first live dictation/send test was paused to replace the full-screen prototype with controller-integrated dictation; spoken accuracy and actual WoW delivery are still pending human verification.
+The revised standalone Release builds were installed on Cody's iPhone 17 Pro and Pixel 7 for live testing, and the signed Mac receiver was rebuilt and restarted. The receiver accepts one phone at a time.
+
+### Live verification (2026-10-23)
+
+- Cody confirmed that controller-integrated dictation, transcript review, and Send delivered a message to WoW on both the Pixel 7 and iPhone 17 Pro.
+- The iPhone initially transcribed “pull” as “poll?”; the transcript was editable before sending. Speech accuracy is not guaranteed.
+- Send was disabled after the iPhone disconnected from the Mac. Re-pairing and completing the flow while Tapping stayed in the foreground succeeded. Re-pairing cleared the earlier draft, so the successful retry used a new dictation.
