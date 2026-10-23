@@ -225,3 +225,120 @@ fn strict_private_commands_are_not_accepted_by_bare_runtime() {
         assert!(serde_json::from_value::<Command>(value).is_err());
     }
 }
+
+#[test]
+fn clean_release_retains_exact_local_rearm_proof_but_other_retirements_clear_it() {
+    let mut runtime = PacketRuntime::default();
+    let mut output = Sink::default();
+    activate(&mut runtime, &mut output, 1, 0);
+    runtime
+        .release_reason(&mut output, "native_input_released")
+        .unwrap();
+    let (released, ready) = runtime.rearm_status();
+    assert_eq!(released.unwrap().generation, "1");
+    assert_eq!(released.unwrap().configuration_revision, "7");
+    assert!(!ready, "recording sink cannot prove physical retirement");
+    runtime
+        .apply_owner(Command::SavedRearmStatus {}, 1, &mut output)
+        .unwrap();
+    assert!(runtime.rearm_status().0.is_some());
+    runtime
+        .apply_owner(Command::Release {}, 2, &mut output)
+        .unwrap();
+    assert!(runtime.rearm_status().0.is_none());
+    activate(&mut runtime, &mut output, 2, 3);
+    assert!(runtime.rearm_status().0.is_none());
+    runtime
+        .release_reason(&mut output, "lease_expired")
+        .unwrap();
+    assert!(runtime.rearm_status().0.is_none());
+}
+
+#[test]
+fn first_termination_survives_cleanup_and_resets_only_after_successful_activation() {
+    let mut runtime = PacketRuntime::default();
+    let mut output = Sink::default();
+    assert!(runtime.first_termination().is_none());
+    activate(&mut runtime, &mut output, 1, 0);
+    runtime
+        .apply_owner(
+            Command::Sample {
+                generation: "1".into(),
+                session_id: "owner".into(),
+                sequence: "0".into(),
+                state: held(),
+            },
+            1,
+            &mut output,
+        )
+        .unwrap();
+    runtime.tick(351, &mut output).unwrap();
+    let first = runtime.first_termination().unwrap();
+    assert_eq!(
+        (
+            first.reason,
+            first.generation.as_str(),
+            first.revision.as_str()
+        ),
+        ("input_expired", "1", "1")
+    );
+    runtime
+        .release_reason(&mut output, "native_input_released")
+        .unwrap();
+    assert_eq!(
+        runtime.snapshot().last_release_reason,
+        "native_input_released"
+    );
+    assert_eq!(runtime.first_termination().unwrap().reason, "input_expired");
+    activate(&mut runtime, &mut output, 2, 352);
+    assert!(runtime.first_termination().is_none());
+    runtime
+        .release_reason(&mut output, "native_input_released")
+        .unwrap();
+    let first = runtime.first_termination().unwrap();
+    assert_eq!(
+        (first.reason, first.generation.as_str()),
+        ("native_input_released", "2")
+    );
+    runtime
+        .release_reason(&mut output, "owner_disconnected")
+        .unwrap();
+    assert_eq!(
+        runtime.first_termination().unwrap().reason,
+        "native_input_released"
+    );
+}
+
+#[test]
+fn first_termination_records_output_failure_and_never_exports_unknown_reason_text() {
+    let mut runtime = PacketRuntime::default();
+    let mut output = Sink::default();
+    activate(&mut runtime, &mut output, 1, 0);
+    output.fail = true;
+    assert!(runtime
+        .apply_owner(
+            Command::Sample {
+                generation: "1".into(),
+                session_id: "owner".into(),
+                sequence: "0".into(),
+                state: held(),
+            },
+            1,
+            &mut output
+        )
+        .is_err());
+    assert_eq!(runtime.first_termination().unwrap().reason, "output_failed");
+    output.fail = false;
+    runtime
+        .release_reason(&mut output, "native_input_released")
+        .unwrap();
+    assert_eq!(runtime.first_termination().unwrap().reason, "output_failed");
+    activate(&mut runtime, &mut output, 2, 2);
+    runtime
+        .release_reason(&mut output, "unrecognized_private_test_reason")
+        .unwrap();
+    assert_eq!(
+        runtime.first_termination().unwrap().reason,
+        "other_terminal"
+    );
+}

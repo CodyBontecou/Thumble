@@ -233,6 +233,7 @@ class ThumbleInputView(context: Context, appContext: AppContext) : ExpoView(cont
     }
 
     override fun onDetachedFromWindow() {
+        connection?.recordOwnerDetachDiagnostic()
         connection?.close()
         detachCapture()
         super.onDetachedFromWindow()
@@ -265,6 +266,7 @@ class ThumbleInputView(context: Context, appContext: AppContext) : ExpoView(cont
 
     internal fun syncCapture(): Boolean {
         if (liveOwned && !engine.connected) {
+            connection?.recordTerminalDiagnostic(engine.lastRelease, surface.firstReleaseOrigin)
             liveOwned = false
             connection?.close()
             onAdmission(mapOf("admission" to mapOf("version" to 1, "status" to "disconnected")))
@@ -411,6 +413,7 @@ class ThumbleInputView(context: Context, appContext: AppContext) : ExpoView(cont
         if (disposed) return
         if (reason == ReleaseReason.disposed) {
             disposed = true
+            connection?.recordOwnerDetachDiagnostic()
             connection?.close()
             detachCapture()
             surface.dispose()

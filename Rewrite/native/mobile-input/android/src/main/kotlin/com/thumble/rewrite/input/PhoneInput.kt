@@ -49,6 +49,18 @@ internal constructor(
 internal class NativeControlDelivery(raw: NativeFrameIO) : NativeFrameIO {
     private val delivery = NativeTLSDelivery(raw)
 
+    enum class WaitOutcome {
+        DELIVERY_CLOSED,
+        DEADLINE,
+    }
+
+    @Volatile
+    var waitOutcome: WaitOutcome? = null
+        private set
+
+    val terminalDiagnostic
+        get() = delivery.terminalDiagnostic
+
     fun offerInput(packet: ByteArray) = delivery.offerInput(packet)
 
     override fun send(frame: ControlTLSFrame) {
@@ -66,6 +78,9 @@ internal class NativeControlDelivery(raw: NativeFrameIO) : NativeFrameIO {
             }
             Thread.sleep(1)
         }
+        waitOutcome =
+            if (delivery.state == NativeTLSDelivery.State.CLOSED) WaitOutcome.DELIVERY_CLOSED
+            else WaitOutcome.DEADLINE
         close()
         throw PhoneControlRejected()
     }

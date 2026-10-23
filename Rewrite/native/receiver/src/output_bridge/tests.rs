@@ -201,6 +201,10 @@ fn definite_report_failure_retires_before_fresh_generation_recovers() {
     );
     assert!(!runtime.snapshot().active);
     assert!(!runtime.snapshot().input_enabled);
+    assert!(
+        !bridge.status.cleanup_ready(1),
+        "faulted retirement cannot auto-rearm"
+    );
     assert_eq!(
         runtime.apply(activate(1), 1, &mut bridge),
         Err("stale_activation")
@@ -232,6 +236,10 @@ fn blocked_creation_times_out_burns_cas_and_late_creation_is_never_admitted() {
     );
     state.clear();
     until(|| bridge.status.worker.snapshot().phase == Phase::Stopped);
+    assert!(
+        !bridge.status.cleanup_ready(1),
+        "uncertain cleanup stays ineligible"
+    );
     assert!(!runtime.snapshot().input_enabled);
     assert_eq!(state.created.load(Ordering::SeqCst), 1);
     assert!(state.reports.lock().unwrap().iter().all(|r| *r == NEUTRAL));
@@ -252,6 +260,10 @@ fn uncertain_sample_closes_admission_and_shutdown_retires_late_report() {
     assert!(!runtime.snapshot().input_enabled);
     state.clear();
     until(|| bridge.status.worker.snapshot().phase == Phase::Stopped);
+    assert!(
+        !bridge.status.cleanup_ready(1),
+        "uncertain cleanup stays ineligible"
+    );
     assert_eq!(*state.reports.lock().unwrap().last().unwrap(), NEUTRAL);
     assert_eq!(
         runtime.apply(activate(2), 0, &mut bridge),
@@ -275,6 +287,10 @@ fn replacement_cannot_acknowledge_pending_old_retirement() {
     assert_eq!(state.created.load(Ordering::SeqCst), 1);
     state.clear();
     until(|| bridge.status.worker.snapshot().phase == Phase::Stopped);
+    assert!(
+        !bridge.status.cleanup_ready(1),
+        "uncertain cleanup stays ineligible"
+    );
 }
 #[test]
 fn status_observed_clock_fault_is_latched_and_only_fresh_retired_generation_recovers() {
@@ -347,6 +363,10 @@ fn full_worker_queue_latches_restart_and_queued_reports_cannot_restore_admission
     assert!(!bridge.status.enabled(1));
     state.clear();
     until(|| bridge.status.worker.snapshot().phase == Phase::Stopped);
+    assert!(
+        !bridge.status.cleanup_ready(1),
+        "uncertain cleanup stays ineligible"
+    );
     assert_eq!(*state.reports.lock().unwrap().last().unwrap(), NEUTRAL);
     assert_eq!(
         bridge.begin(2, 750),
@@ -403,4 +423,22 @@ fn failed_saved_activation_consumes_cas_and_retires_old_pin_before_recovery() {
     assert!(runtime.saved_binding().is_some());
     assert!(runtime.snapshot().input_enabled);
     assert_eq!(state.created.load(Ordering::SeqCst), 2);
+}
+
+#[test]
+fn local_rearm_requires_confirmed_inactive_exact_generation_and_healthy_clock() {
+    let (mut bridge, clock, _) = setup();
+    assert!(bridge.status.cleanup_ready(0));
+    bridge.begin(1, 750).unwrap();
+    assert!(!bridge.status.cleanup_ready(1));
+    bridge.retire("native_input_released").unwrap();
+    assert!(bridge.status.cleanup_ready(1));
+    assert!(!bridge.status.cleanup_ready(0));
+    clock.fail.store(true, Ordering::SeqCst);
+    assert!(!bridge.status.cleanup_ready(1));
+    clock.fail.store(false, Ordering::SeqCst);
+    assert!(
+        !bridge.status.cleanup_ready(1),
+        "clock fault remains latched"
+    );
 }

@@ -41,6 +41,7 @@ import UIKit
   private var enrollment: PhoneEnrollmentClient?
   private var catalogClient: PhoneCatalogClient?
   private var savedMapClient: SavedControllerClient?
+  private var authorityResolver: PhoneAuthorityResolver?
   private var control: PhoneControlClient?
   private let storage = PhoneCredentialWorker()
   private var closed = false
@@ -220,7 +221,15 @@ import UIKit
     else { return }
     task = Task { [weak self] in
       guard let self else { return }
-      do { try await bind(endpoint, template: template) } catch { fail() }
+      do {
+        let resolver = try PhoneAuthorityResolver(endpoint: endpoint)
+        authorityResolver = resolver
+        let current = try await resolver.resolve()
+        authorityResolver = nil
+        try Task.checkCancellation()
+        guard !closed else { throw InputError.unavailable }
+        try await bind(current, template: template)
+      } catch { fail() }
     }
   }
   private func bind(_ endpoint: TrustedHostEndpoint, template: ControlMap? = nil) async throws {
@@ -325,6 +334,8 @@ import UIKit
     scanner?.dismiss(animated: false)
     scanner = nil
     NotificationCenter.default.removeObserver(self)
+    authorityResolver?.close()
+    authorityResolver = nil
     catalogClient?.close()
     catalogClient = nil
     savedMapClient?.close()

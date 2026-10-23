@@ -6,9 +6,33 @@ import android.os.Looper
 import java.io.Closeable
 import java.net.InetSocketAddress
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 import org.json.JSONObject
 
 class PhoneControlRejected : Exception("phone_control_rejected")
+
+/** Fixed first-failure taxonomy only; never carries an endpoint, payload or exception. */
+enum class PhoneCheckpointFailure {
+    CLOSED,
+    INTERRUPTED,
+    INVALID_TIME,
+    CLOCK_ROLLBACK,
+    LOCAL_DEADLINE,
+    AUTHORITY_EXPIRY,
+}
+
+enum class PhoneInputFailureStage {
+    CHECKPOINT,
+    HEARTBEAT_STATUS,
+    PROGRESS_SEND,
+    PROGRESS_RECEIVE,
+    PROGRESS_RECEIPT,
+    PROGRESS_CHECKPOINT,
+    PROGRESS_PARSE,
+    RENEWAL,
+    INPUT_SUBMIT,
+    INPUT_OFFER,
+}
 
 class TrustedHostEndpoint(
     val host: String,
@@ -59,6 +83,24 @@ internal constructor(
     private val closed = AtomicBoolean(false)
     private val busy = AtomicBoolean(false)
     private val owner = Any()
+    private val firstInputFailure = AtomicReference<PhoneInputFailureStage?>(null)
+    private val firstCheckpointFailure = AtomicReference<PhoneCheckpointFailure?>(null)
+    val checkpointFailure: PhoneCheckpointFailure?
+        get() = firstCheckpointFailure.get()
+
+    val inputFailureStage: PhoneInputFailureStage?
+        get() = firstInputFailure.get()
+
+    val inputTransportDiagnostic: NativeTLSTerminalDiagnostic?
+        get() = inputDelivery?.terminalDiagnostic
+
+    val inputTransportWaitOutcome: String?
+        get() = inputDelivery?.waitOutcome?.name
+
+    private fun recordInputFailure(stage: PhoneInputFailureStage) {
+        if (!closed.get()) firstInputFailure.compareAndSet(null, stage)
+    }
+
     private var io: NativeFrameIO? = null
     @Volatile private var admitted: PhoneControlMetadata? = null
     @Volatile private var credentialExpiresAt: Long? = null
@@ -103,13 +145,7 @@ internal constructor(
                     InetSocketAddress(endpoint.host, endpoint.port),
                     endpoint.certificatePin,
                 )
-            object : NativeFrameIO {
-                override fun send(frame: ControlTLSFrame) = client.send(frame)
-
-                override fun receive() = client.receive()
-
-                override fun close() = client.close()
-            }
+            client.nativeFrames()
         },
         PhoneCredentialVault(context)::load,
         System::currentTimeMillis,
@@ -136,15 +172,21 @@ internal constructor(
     private fun checkpoint(): Long =
         synchronized(owner) {
             val time = now()
-            if (
-                closed.get() ||
-                    Thread.currentThread().isInterrupted ||
-                    time < 0 ||
-                    time < last ||
-                    deadline?.let { time >= it } == true ||
-                    admitted?.let { time >= it.expiresAt } == true
-            )
+            val failure =
+                when {
+                    closed.get() -> PhoneCheckpointFailure.CLOSED
+                    Thread.currentThread().isInterrupted -> PhoneCheckpointFailure.INTERRUPTED
+                    time < 0 -> PhoneCheckpointFailure.INVALID_TIME
+                    time < last -> PhoneCheckpointFailure.CLOCK_ROLLBACK
+                    deadline?.let { time >= it } == true -> PhoneCheckpointFailure.LOCAL_DEADLINE
+                    admitted?.let { time >= it.expiresAt } == true ->
+                        PhoneCheckpointFailure.AUTHORITY_EXPIRY
+                    else -> null
+                }
+            if (failure != null) {
+                firstCheckpointFailure.compareAndSet(null, failure)
                 throw PhoneControlRejected()
+            }
             last = time
             time
         }
@@ -163,11 +205,21 @@ internal constructor(
             )
     }
 
-    private fun receive(): Map<String, EnrollmentJSON.Value> {
+    private fun receive(progress: Boolean = false): Map<String, EnrollmentJSON.Value> {
         val frame = transport().receive()
-        checkpoint()
-        if (frame.kind != ControlTLSFrame.Kind.CONTROL) throw PhoneControlRejected()
-        return EnrollmentJSON.parse(frame.payload, allowNull = controlVersion >= 5)
+        try {
+            checkpoint()
+        } catch (error: Exception) {
+            if (progress) recordInputFailure(PhoneInputFailureStage.PROGRESS_CHECKPOINT)
+            throw error
+        }
+        try {
+            if (frame.kind != ControlTLSFrame.Kind.CONTROL) throw PhoneControlRejected()
+            return EnrollmentJSON.parse(frame.payload, allowNull = controlVersion >= 5)
+        } catch (error: Exception) {
+            if (progress) recordInputFailure(PhoneInputFailureStage.PROGRESS_PARSE)
+            throw error
+        }
     }
 
     fun authenticate(): PhoneControlMetadata {
@@ -329,6 +381,8 @@ internal constructor(
             if (disconnect) close()
             return result
         } catch (_: Exception) {
+            if (!disconnect && inputAttempted.get())
+                recordInputFailure(PhoneInputFailureStage.HEARTBEAT_STATUS)
             close()
             throw PhoneControlRejected()
         } finally {
@@ -465,21 +519,29 @@ internal constructor(
             heartbeat =
                 Thread(
                         {
+                            var stage = PhoneInputFailureStage.CHECKPOINT
                             try {
                                 while (!closed.get()) {
                                     Thread.sleep(if (controlVersion >= 5) 100 else 1000)
                                     if (busy.get()) continue
+                                    stage = PhoneInputFailureStage.CHECKPOINT
                                     inputCheckpoint()
                                     if (controlVersion >= 5) {
-                                        if (renewalDue()) renewInput(map)
-                                        else
+                                        if (renewalDue()) {
+                                            stage = PhoneInputFailureStage.RENEWAL
+                                            renewInput(map)
+                                        } else
                                             progress(
                                                 inputSessionID ?: throw PhoneControlRejected(),
                                                 map,
                                             )
-                                    } else status()
+                                    } else {
+                                        stage = PhoneInputFailureStage.HEARTBEAT_STATUS
+                                        status()
+                                    }
                                 }
                             } catch (_: Exception) {
+                                recordInputFailure(stage)
                                 close()
                             }
                         },
@@ -630,6 +692,7 @@ internal constructor(
                 }
                 return true
             } catch (_: Exception) {
+                recordInputFailure(PhoneInputFailureStage.INPUT_SUBMIT)
                 this@PhoneControlClient.close()
                 channel.close()
                 return false
@@ -655,18 +718,26 @@ internal constructor(
     }
 
     private fun requestProgress(session: String, map: ControlMap) {
-        val connection = admitted?.connectionID ?: throw PhoneControlRejected()
-        send(
-            JSONObject()
-                .put("version", 1)
-                .put("command", "input-status")
-                .put("connectionId", connection)
-                .put("sessionId", session)
-        )
-        val value = receive()
-        inputCheckpoint()
-        if (route?.observe(value, connection, session, map, outputMode) != true)
-            throw PhoneControlRejected()
+        var stage = PhoneInputFailureStage.PROGRESS_SEND
+        try {
+            val connection = admitted?.connectionID ?: throw PhoneControlRejected()
+            send(
+                JSONObject()
+                    .put("version", 1)
+                    .put("command", "input-status")
+                    .put("connectionId", connection)
+                    .put("sessionId", session)
+            )
+            stage = PhoneInputFailureStage.PROGRESS_RECEIVE
+            val value = receive(progress = true)
+            stage = PhoneInputFailureStage.PROGRESS_RECEIPT
+            inputCheckpoint()
+            if (route?.observe(value, connection, session, map, outputMode) != true)
+                throw PhoneControlRejected()
+        } catch (error: Exception) {
+            recordInputFailure(stage)
+            throw error
+        }
     }
 
     internal fun inputThread() {
@@ -694,6 +765,7 @@ internal constructor(
             inputCheckpoint()
             route?.offer(packet) ?: (inputDelivery?.offerInput(packet) == true)
         } catch (_: Exception) {
+            recordInputFailure(PhoneInputFailureStage.INPUT_OFFER)
             close()
             false
         }

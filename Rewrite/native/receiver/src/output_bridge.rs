@@ -75,6 +75,18 @@ impl OutputStatus for Status {
     fn backend(&self) -> &'static str {
         self.backend
     }
+    fn cleanup_ready(&self, generation: u64) -> bool {
+        if self.uncertain.load(Ordering::Acquire) || self.clock.now_ms().is_err() {
+            return false;
+        }
+        let state = self.worker.snapshot();
+        state.phase == Phase::Inactive
+            && state.highest_generation == generation
+            && state.scope.is_none()
+            && state.valid_until.is_none()
+            && state.fault.is_none()
+            && state.clock_fault.is_none()
+    }
     fn enabled(&self, generation: u64) -> bool {
         if self.uncertain.load(Ordering::Acquire) {
             return false;

@@ -40,6 +40,7 @@ pub enum Command {
         source_hash: String,
     },
     SavedBindingStatus {},
+    SavedRearmStatus {},
     Renew {
         generation: String,
         session_id: String,
@@ -66,6 +67,34 @@ pub struct Snapshot {
     pub report_hex: String,
     pub last_release_reason: &'static str,
 }
+/// First active-to-inactive transition since the last successful activation.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FirstTermination {
+    pub reason: &'static str,
+    pub generation: String,
+    pub revision: String,
+}
+fn terminal_reason(reason: &'static str) -> &'static str {
+    match reason {
+        "lease_expired"
+        | "input_expired"
+        | "output_failed"
+        | "clock_failed"
+        | "clock_rollback"
+        | "grant_expired"
+        | "packet_session_released"
+        | "native_grant_delivery_failed"
+        | "native_input_released"
+        | "native_input_owner_failed"
+        | "owner_disconnected"
+        | "owner_backpressure"
+        | "activation_barrier"
+        | "explicit_release"
+        | "shutdown" => reason,
+        _ => "other_terminal",
+    }
+}
 struct Active {
     generation: u64,
     session_id: String,
@@ -82,11 +111,15 @@ pub struct Runtime {
     profile_id: Option<String>,
     report: [u8; 20],
     reason: &'static str,
+    first_termination: Option<FirstTermination>,
     output_status: Option<Arc<dyn OutputStatus>>,
 }
 pub trait OutputStatus: Send + Sync {
     fn backend(&self) -> &'static str;
     fn enabled(&self, generation: u64) -> bool;
+    fn cleanup_ready(&self, _generation: u64) -> bool {
+        false
+    }
 }
 pub trait Output {
     fn submit(&mut self, report: [u8; 20], reason: &'static str) -> Result<(), &'static str>;
@@ -148,11 +181,22 @@ impl Default for Runtime {
             profile_id: None,
             report: NEUTRAL,
             reason: "startup",
+            first_termination: None,
             output_status: None,
         }
     }
 }
 impl Runtime {
+    pub fn first_termination(&self) -> Option<&FirstTermination> {
+        self.first_termination.as_ref()
+    }
+    pub fn cleanup_ready(&self) -> bool {
+        self.active.is_none()
+            && self
+                .output_status
+                .as_ref()
+                .is_some_and(|s| s.cleanup_ready(self.generation))
+    }
     pub fn is_active(&self) -> bool {
         self.active.is_some()
     }
@@ -186,6 +230,13 @@ impl Runtime {
         reason: &'static str,
     ) -> Result<(), &'static str> {
         self.output_status = output.status();
+        if self.active.is_some() && self.first_termination.is_none() {
+            self.first_termination = Some(FirstTermination {
+                reason: terminal_reason(reason),
+                generation: self.generation.to_string(),
+                revision: self.revision.to_string(),
+            });
+        }
         // Retire session before touching output. Failures cannot restore input.
         self.active = None;
         self.report = NEUTRAL;
@@ -299,7 +350,9 @@ impl Runtime {
         self.tick(now, output)?;
         match command {
             Command::Status {} => (),
-            Command::ActivateSaved { .. } | Command::SavedBindingStatus {} => {
+            Command::ActivateSaved { .. }
+            | Command::SavedBindingStatus {}
+            | Command::SavedRearmStatus {} => {
                 return Err("saved_binding_owner_required");
             }
             Command::Activate {
@@ -332,6 +385,7 @@ impl Runtime {
                     self.reason = "output_failed";
                     return Err(error);
                 }
+                self.first_termination = None;
                 self.active = Some(Active {
                     generation,
                     session_id,

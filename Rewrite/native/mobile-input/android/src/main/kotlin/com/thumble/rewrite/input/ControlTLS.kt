@@ -2,6 +2,7 @@ package com.thumble.rewrite.input
 
 import android.annotation.TargetApi
 import java.io.Closeable
+import java.io.EOFException
 import java.io.InputStream
 import java.net.InetSocketAddress
 import java.net.Socket
@@ -12,6 +13,7 @@ import java.security.cert.X509Certificate
 import java.util.concurrent.ScheduledThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 import javax.net.ssl.SNIHostName
 import javax.net.ssl.SSLContext
 import javax.net.ssl.SSLEngine
@@ -92,15 +94,27 @@ class ControlTLSClient private constructor(private val socket: SSLSocket, privat
     private val sending = AtomicBoolean(false)
     private val receiving = AtomicBoolean(false)
     @Volatile private var closed = false
+    private val firstFailure = AtomicReference<NativeTLSExceptionCategory?>(null)
+    internal val failureCategory: NativeTLSExceptionCategory?
+        get() = firstFailure.get()
 
     private inline fun <T> operation(direction: AtomicBoolean, block: () -> T): T {
         if (!direction.compareAndSet(false, true)) throw ControlTLSRejected()
         try {
             if (closed) throw ControlTLSRejected()
-            val expiry = watchdog.schedule({ close() }, 2, TimeUnit.SECONDS)
+            val expiry =
+                watchdog.schedule(
+                    {
+                        firstFailure.compareAndSet(null, NativeTLSExceptionCategory.TIMEOUT)
+                        close()
+                    },
+                    2,
+                    TimeUnit.SECONDS,
+                )
             return try {
                 block()
-            } catch (_: Exception) {
+            } catch (error: Exception) {
+                firstFailure.compareAndSet(null, tlsExceptionCategory(error))
                 close()
                 throw ControlTLSRejected()
             } finally {
@@ -151,7 +165,7 @@ class ControlTLSClient private constructor(private val socket: SSLSocket, privat
             var offset = 0
             while (offset < length) {
                 val count = input.read(result, offset, length - offset)
-                if (count <= 0) throw ControlTLSRejected()
+                if (count <= 0) throw EOFException()
                 offset += count
             }
             return result
@@ -293,3 +307,16 @@ private class PinTrust(private val pin: String) : X509ExtendedTrustManager() {
         verifier(chain).checkServerTrusted(chain, authType, engine)
     }
 }
+
+/** Shared production adapter retains only the fixed TLS failure category. */
+internal fun ControlTLSClient.nativeFrames(): NativeFrameIO =
+    object : NativeFrameIO {
+        override val failureCategory
+            get() = this@nativeFrames.failureCategory
+
+        override fun send(frame: ControlTLSFrame) = this@nativeFrames.send(frame)
+
+        override fun receive() = this@nativeFrames.receive()
+
+        override fun close() = this@nativeFrames.close()
+    }

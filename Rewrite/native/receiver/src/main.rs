@@ -162,6 +162,9 @@ fn run_owner(root: &Path, output: &mut impl Output) -> Result<(), &'static str> 
         let parsed = serde_json::from_slice::<Request>(&bytes)
             .ok()
             .filter(|r| r.version == 1 && identity(&r.request_id));
+        let rearm_status = parsed
+            .as_ref()
+            .is_some_and(|request| matches!(request.body, runtime::Command::SavedRearmStatus {}));
         let saved_binding_status = parsed
             .as_ref()
             .is_some_and(|request| matches!(request.body, runtime::Command::SavedBindingStatus {}));
@@ -177,6 +180,10 @@ fn run_owner(root: &Path, output: &mut impl Output) -> Result<(), &'static str> 
         };
         let stopping = matches!(result, Ok(false));
         let reply = match result {
+            Ok(_) if rearm_status => {
+                let (released, cleanup) = runtime.rearm_status();
+                json!({"version":1,"requestId":request_id,"ok":true,"snapshot":runtime.snapshot(),"releasedBinding":released,"cleanupReady":cleanup,"firstTermination":runtime.first_termination()})
+            }
             Ok(_) if saved_binding_status => {
                 json!({"version":1,"requestId":request_id,"ok":true,"snapshot":runtime.snapshot(),"savedBinding":runtime.saved_binding()})
             }

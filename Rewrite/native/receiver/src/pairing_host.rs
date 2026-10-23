@@ -52,6 +52,10 @@ pub enum Command {
         bind_address: String,
         advertise_host: String,
     },
+    PairingListenAuthorized {
+        bind_address: String,
+        advertise_host: String,
+    },
     PairingStopListening {},
 }
 fn now() -> Result<u64, &'static str> {
@@ -447,6 +451,29 @@ impl Host {
                         .map_err(|_| "pairing_owner_unavailable")?
                         .open(now()?)?,
                 )
+            }
+            Command::PairingListenAuthorized {
+                bind_address,
+                advertise_host,
+            } => {
+                let address: SocketAddr = bind_address
+                    .parse()
+                    .map_err(|_| "pairing_address_invalid")?;
+                if address.port() == 0
+                    || !host(&advertise_host)
+                    || advertise_host
+                        .parse::<std::net::IpAddr>()
+                        .is_ok_and(|ip| ip.is_unspecified() || ip.is_multicast())
+                {
+                    return Err("pairing_address_invalid");
+                }
+                // Auth-only explicitly cancels any enrollment window even if replacement bind fails.
+                self.windows
+                    .lock()
+                    .map_err(|_| "pairing_owner_unavailable")?
+                    .cancel();
+                self.listen(&bind_address, &advertise_host)?;
+                None
             }
             Command::PairingStopListening {} => {
                 self.stop()?;
@@ -988,5 +1015,115 @@ mod tests {
         host.windows.lock().unwrap().cancel();
         assert_eq!(host.reply(Some(offer)).err(), Some("pairing_closed"));
         assert!(host.reply(None).unwrap()["offer"].is_null());
+    }
+    #[test]
+    fn auth_only_listener_restarts_same_port_pin_and_trust_without_opening_enrollment() {
+        let root = Root::new();
+        let runtime = root.0.join("runtime");
+        let identity = root.0.join("identity");
+        let mut host = Host::new(&runtime, "authority-a", Some(&identity)).unwrap();
+        let (initial, credential) = enrolled(&mut host);
+        let bind = format!("127.0.0.1:{}", initial["transport"]["port"]);
+        host.execute(Command::PairingStopListening {}).unwrap();
+        drop(host);
+        let mut restarted = Host::new(&runtime, "authority-b", Some(&identity)).unwrap();
+        let value = restarted
+            .execute(Command::PairingListenAuthorized {
+                bind_address: bind.clone(),
+                advertise_host: "127.0.0.1".into(),
+            })
+            .unwrap();
+        assert_eq!(
+            value["transport"]["certificatePin"],
+            initial["transport"]["certificatePin"]
+        );
+        assert_eq!(value["transport"]["bindAddress"], bind);
+        assert_eq!(value["pairing"]["state"], "closed");
+        assert!(value["offer"].is_null());
+        assert!(value["pairing"]["windowId"].is_null());
+        assert_eq!(
+            value["phones"][0]["credentialEpoch"],
+            credential["credentialEpoch"]
+        );
+        // A fresh metadata-only query identifies the new authority, never a credential or grant.
+        let mut metadata = connect(&value);
+        send(
+            &mut metadata,
+            json!({"version":1,"command":"hello","controlVersion":3,"inputVersion":1,"documentVersion":1,"capabilitiesVersion":1}),
+        );
+        let hello = receive(&mut metadata);
+        assert_eq!(hello["authorityInstanceId"], "authority-b");
+        assert!(hello.get("credential").is_none());
+        assert!(hello.get("sessionId").is_none());
+        drop(metadata);
+        let mut authenticated = connect(&value);
+        send(
+            &mut authenticated,
+            json!({"version":1,"command":"hello","controlVersion":3,"inputVersion":1,"documentVersion":1,"capabilitiesVersion":1}),
+        );
+        assert_eq!(
+            receive(&mut authenticated)["authorityInstanceId"],
+            "authority-b"
+        );
+        send(
+            &mut authenticated,
+            json!({"version":1,"command":"authenticate","authorityInstanceId":"authority-b","phoneId":"phone-a","credentialEpoch":credential["credentialEpoch"],"credential":credential["credential"]}),
+        );
+        assert_eq!(receive(&mut authenticated)["command"], "authenticated");
+        drop(authenticated);
+        let mut proof_attempt = connect(&value);
+        send(
+            &mut proof_attempt,
+            json!({"version":1,"command":"hello","controlVersion":2,"inputVersion":1,"documentVersion":1,"capabilitiesVersion":1}),
+        );
+        receive(&mut proof_attempt);
+        let mut old_proof = proof(&initial);
+        old_proof["authorityInstanceId"] = json!("authority-b");
+        send(&mut proof_attempt, old_proof);
+        assert!(proof_attempt.receive().is_err());
+        assert_eq!(
+            restarted.execute(Command::PairingStatus {}).unwrap()["pairing"]["state"],
+            "closed"
+        );
+    }
+    #[test]
+    fn auth_only_explicit_command_cancels_window_and_rejects_unsafe_addresses() {
+        let root = Root::new();
+        let mut host = Host::new(
+            &root.0.join("runtime"),
+            "authority-a",
+            Some(&root.0.join("identity")),
+        )
+        .unwrap();
+        for (bind, advertise) in [
+            ("127.0.0.1:0", "127.0.0.1"),
+            ("127.0.0.1:12", "::"),
+            ("127.0.0.1:12", "0:0:0:0:0:0:0:0"),
+            ("127.0.0.1:12", "239.0.0.1"),
+            ("127.0.0.1:12", "bad/host"),
+        ] {
+            assert_eq!(
+                host.execute(Command::PairingListenAuthorized {
+                    bind_address: bind.into(),
+                    advertise_host: advertise.into()
+                })
+                .err(),
+                Some("pairing_address_invalid")
+            );
+        }
+        let occupied = TcpListener::bind("127.0.0.1:0").unwrap();
+        host.execute(Command::PairingOpen {}).unwrap();
+        assert_eq!(
+            host.execute(Command::PairingListenAuthorized {
+                bind_address: occupied.local_addr().unwrap().to_string(),
+                advertise_host: "127.0.0.1".into()
+            })
+            .err(),
+            Some("pairing_bind_failed")
+        );
+        let status = host.execute(Command::PairingStatus {}).unwrap();
+        assert_eq!(status["pairing"]["state"], "closed");
+        assert_eq!(status["transport"]["listening"], false);
+        assert!(status["offer"].is_null());
     }
 }

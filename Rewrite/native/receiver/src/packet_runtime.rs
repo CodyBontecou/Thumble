@@ -43,6 +43,7 @@ struct Rotation {
 pub struct PacketRuntime {
     core: Runtime,
     saved_binding: Option<SavedBinding>,
+    released_binding: Option<SavedBinding>,
     admission: Option<Admission>,
     rotation: Option<Rotation>,
     last_time: Option<u64>,
@@ -51,6 +52,19 @@ pub struct PacketRuntime {
 impl PacketRuntime {
     pub fn snapshot(&self) -> Snapshot {
         self.core.snapshot()
+    }
+    pub fn first_termination(&self) -> Option<&crate::runtime::FirstTermination> {
+        self.core.first_termination()
+    }
+    pub fn rearm_status(&self) -> (Option<&SavedBinding>, bool) {
+        let snapshot = self.core.snapshot();
+        let released = self.released_binding.as_ref().filter(|pin| {
+            !snapshot.active
+                && snapshot.last_release_reason == "native_input_released"
+                && snapshot.generation == pin.generation
+                && snapshot.revision == pin.revision
+        });
+        (released, released.is_some() && self.core.cleanup_ready())
     }
     pub fn saved_binding(&self) -> Option<&SavedBinding> {
         let snapshot = self.core.snapshot();
@@ -94,7 +108,10 @@ impl PacketRuntime {
         output: &mut impl Output,
     ) -> Result<bool, &'static str> {
         self.tick(now, output)?;
-        if matches!(&command, Command::SavedBindingStatus {}) {
+        if matches!(
+            &command,
+            Command::SavedBindingStatus {} | Command::SavedRearmStatus {}
+        ) {
             return Ok(true);
         }
         let (command, saved) = match command {
@@ -147,6 +164,9 @@ impl PacketRuntime {
             Command::Activate { .. } | Command::Release {} | Command::Shutdown {}
         );
         let result = self.core.apply(command, now, output);
+        if retires {
+            self.released_binding = None;
+        }
         if activates && result.is_ok() {
             self.saved_binding = saved;
             self.used_sessions.clear();
@@ -392,6 +412,11 @@ impl PacketRuntime {
         output: &mut impl Output,
         reason: &'static str,
     ) -> Result<(), &'static str> {
+        self.released_binding = if reason == "native_input_released" {
+            self.saved_binding().cloned()
+        } else {
+            None
+        };
         self.saved_binding = None;
         self.admission = None;
         self.rotation = None;

@@ -9,6 +9,7 @@ import { PhoneControlsBridge } from "./phone-controls-bridge.ts";
 import {
   decodeSavedRuntimeCommand,
   type SavedRuntimeStatus,
+  type SavedReadinessStatus,
 } from "@thumble/contracts/saved-runtime";
 import { PhoneCatalogBridge } from "./phone-catalog-bridge.ts";
 import { ConfigurationOwner } from "./configuration-owner.ts";
@@ -19,6 +20,8 @@ import {
 import { NativePairingHost } from "./native-pairing.ts";
 import {
   decodePairingCommand,
+  decodeAuthorizedListener,
+  type AuthorizedListener,
   type PairingReply,
 } from "@thumble/contracts/pairing";
 import { createServer, type Socket } from "node:net";
@@ -31,7 +34,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { spawnSync, type ChildProcess } from "node:child_process";
-import { join } from "node:path";
+import { join, isAbsolute } from "node:path";
 import { RuntimeController } from "@thumble/application";
 import {
   decodeLocalCommand,
@@ -84,7 +87,20 @@ export async function serve(
   configurationLauncher: readonly string[],
   wowCaptureHelper?: string,
   output: ReceiverOutput = { backend: "recording" },
+  keepSavedControllerReady = false,
+  authOnlyListener?: AuthorizedListener,
 ): Promise<void> {
+  if (
+    keepSavedControllerReady &&
+    (output.backend !== "macos-hid" || !output.allowPhysicalOutput)
+  )
+    throw new Error("saved_controller_ready_requires_physical_output");
+  const listener =
+    authOnlyListener === undefined
+      ? undefined
+      : decodeAuthorizedListener(authOnlyListener);
+  if (listener && (!identityDirectory || !isAbsolute(identityDirectory)))
+    throw new Error("auth_listener_persistent_identity_required");
   const authorizedCaptureHelper =
     wowCaptureHelper === undefined
       ? undefined
@@ -116,7 +132,24 @@ export async function serve(
     ]);
     throw error;
   }
-  const controller = new RuntimeController(native, randomUUID);
+  const controller = new RuntimeController(
+    native,
+    randomUUID,
+    750,
+    350,
+    keepSavedControllerReady
+      ? {
+          readPin: (pin) =>
+            configuration.readSavedPin({
+              command: "configuration-saved-pin",
+              expectedRevision: pin.configurationRevision,
+              expectedSourceHash: pin.sourceHash,
+              profileId: pin.profileId,
+            }),
+          rearmStatus: () => native.rearmStatus(),
+        }
+      : undefined,
+  );
   const pairing = new NativePairingHost(
     executable,
     directory,
@@ -131,6 +164,26 @@ export async function serve(
   );
   try {
     await pairing.ready;
+    if (listener) {
+      const listening = await pairing.request({
+        command: "pairing-listen-authorized",
+        ...listener,
+      });
+      if (
+        !listening.transport?.listening ||
+        !listening.transport.persistentIdentity ||
+        listening.transport.advertiseHost !== listener.advertiseHost ||
+        listening.transport.port !==
+          Number(
+            listener.bindAddress.slice(
+              listener.bindAddress.lastIndexOf(":") + 1,
+            ),
+          ) ||
+        listening.pairing.state !== "closed" ||
+        listening.offer !== null
+      )
+        throw new Error("auth_listener_start_unconfirmed");
+    }
   } catch (error) {
     configuration.disconnect();
     pairing.disconnect();
@@ -231,9 +284,20 @@ export async function serve(
             | PairingReply
             | ConfigurationReply
             | SavedRuntimeStatus
+            | SavedReadinessStatus
             | WowCaptureControlStatus;
           const operation = record(envelope.body).command;
-          if (
+          if (operation === "saved-readiness-status") {
+            exact(record(envelope.body), ["command"]);
+            result = {
+              kind: "saved-readiness",
+              serviceInstanceId: instanceId,
+              servicePid: process.pid,
+              receiverPid: native.child.pid!,
+              ...controller.readiness(),
+              firstTermination: (await native.rearmStatus()).firstTermination,
+            };
+          } else if (
             typeof operation === "string" &&
             operation.startsWith("wow-capture-")
           ) {

@@ -1,3 +1,4 @@
+import { decodeAuthorizedListener } from "@thumble/contracts/pairing";
 import { exportPairingQR, validatePairingQRDestination } from "./pairing-qr.ts";
 import { outputLaunchOptions } from "./output-launch.ts";
 import { runWowCaptureOwner } from "@thumble/service/wow-capture-owner-process";
@@ -21,6 +22,7 @@ import {
   requestPairing,
   requestConfiguration,
   requestSavedRuntime,
+  requestSavedReadiness,
   requestWowCapture,
   runtimeDirectory,
 } from "@thumble/client/local";
@@ -42,6 +44,7 @@ function options(values: string[]): Map<string, string | true> {
       [
         "--json",
         "--allow-physical-output",
+        "--keep-saved-controller-ready",
         "--allow-recorded-input",
         "--reveal-secret",
         "--allow-configuration-write",
@@ -63,6 +66,7 @@ function options(values: string[]): Map<string, string | true> {
         "--offset",
         "--identity-dir",
         "--bind-address",
+        "--listen-address",
         "--advertise-host",
         "--phone-id",
         "--runtime-dir",
@@ -132,7 +136,9 @@ async function main(): Promise<unknown> {
   )
     throw new Error("invalid_pairing_qr_option");
   if (
-    (opts.has("--output") || opts.has("--allow-physical-output")) &&
+    (opts.has("--output") ||
+      opts.has("--allow-physical-output") ||
+      opts.has("--keep-saved-controller-ready")) &&
     !(
       (family === "service" && (action === "start" || action === "run")) ||
       (family === "__service" && action === "run")
@@ -143,6 +149,30 @@ async function main(): Promise<unknown> {
     family === "service" || family === "__service"
       ? outputLaunchOptions(opts)
       : ({ backend: "recording" } as const);
+  if (
+    opts.has("--keep-saved-controller-ready") &&
+    output.backend !== "macos-hid"
+  )
+    throw new Error("saved_controller_ready_requires_physical_output");
+  let authOnlyListener;
+  const serviceLaunch =
+    (family === "service" && (action === "start" || action === "run")) ||
+    (family === "__service" && action === "run");
+  if (
+    opts.has("--listen-address") ||
+    (serviceLaunch && opts.has("--advertise-host"))
+  ) {
+    if (!serviceLaunch) throw new Error("invalid_auth_listener_option");
+    authOnlyListener = decodeAuthorizedListener({
+      bindAddress: required(opts, "--listen-address"),
+      advertiseHost: required(opts, "--advertise-host"),
+    });
+    if (
+      typeof opts.get("--identity-dir") !== "string" ||
+      !isAbsolute(required(opts, "--identity-dir"))
+    )
+      throw new Error("auth_listener_persistent_identity_required");
+  }
   const configured = opts.get("--receiver");
   const receiver =
     typeof configured === "string"
@@ -257,6 +287,8 @@ async function main(): Promise<unknown> {
         ? required(opts, "--capture-helper")
         : undefined,
       output,
+      opts.has("--keep-saved-controller-ready"),
+      authOnlyListener,
     );
     return undefined;
   }
@@ -276,6 +308,8 @@ async function main(): Promise<unknown> {
         ? required(opts, "--capture-helper")
         : undefined,
       output,
+      opts.has("--keep-saved-controller-ready"),
+      authOnlyListener,
     );
     return undefined;
   }
@@ -299,6 +333,9 @@ async function main(): Promise<unknown> {
     } catch {}
     if (running) {
       if (
+        opts.has("--listen-address") ||
+        opts.has("--advertise-host") ||
+        opts.has("--keep-saved-controller-ready") ||
         opts.has("--capture-helper") ||
         opts.has("--output") ||
         opts.has("--allow-physical-output")
@@ -335,6 +372,17 @@ async function main(): Promise<unknown> {
         ...(opts.has("--capture-helper")
           ? ["--capture-helper", required(opts, "--capture-helper")]
           : []),
+        ...(authOnlyListener
+          ? [
+              "--listen-address",
+              authOnlyListener.bindAddress,
+              "--advertise-host",
+              authOnlyListener.advertiseHost,
+            ]
+          : []),
+        ...(opts.has("--keep-saved-controller-ready")
+          ? ["--keep-saved-controller-ready"]
+          : []),
         ...(output.backend === "macos-hid"
           ? ["--output", "macos-hid", "--allow-physical-output"]
           : []),
@@ -363,6 +411,7 @@ async function main(): Promise<unknown> {
         "revoke",
         "cancel",
         "listen",
+        "listen-authorized",
         "stop-listening",
       ].includes(action ?? "")
     )
@@ -384,6 +433,17 @@ async function main(): Promise<unknown> {
         command: "pairing-revoke",
         phoneId: required(opts, "--phone-id"),
       });
+    if (action === "listen-authorized") {
+      if (opts.has("--reveal-secret"))
+        throw new Error("auth_listener_has_no_pairing_offer");
+      return requestPairing(readEndpoint(root, receiver), {
+        command: "pairing-listen-authorized",
+        ...decodeAuthorizedListener({
+          bindAddress: required(opts, "--bind-address"),
+          advertiseHost: required(opts, "--advertise-host"),
+        }),
+      });
+    }
     if (action === "listen") {
       const reply = await requestPairing(readEndpoint(root, receiver), {
         command: "pairing-listen",
@@ -411,6 +471,12 @@ async function main(): Promise<unknown> {
         | "pairing-cancel"
         | "pairing-stop-listening",
     });
+  }
+  if (family === "receiver" && action === "readiness") {
+    for (const key of opts.keys())
+      if (!["--runtime-dir", "--receiver", "--json"].includes(key))
+        throw new Error("invalid_saved_runtime_option");
+    return requestSavedReadiness(readEndpoint(root, receiver));
   }
   if (family === "configuration") {
     if (action === "validate-file") {

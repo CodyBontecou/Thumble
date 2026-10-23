@@ -1,0 +1,11 @@
+# Reconnecting to a restarted receiver
+
+The saved endpoint pins the Mac certificate and a host/port. Its authority instance identifies one receiver process, not a durable host. Restarting that receiver must invalidate old grants and does not invalidate the separately persisted phone credential.
+
+`PhoneAuthorityResolver` is a one-shot native SDK query on a new certificate-pinned TLS connection. It sends the existing control-v3 hello only, accepts an exact eight-field metadata reply of at most 4 KiB, returns the same endpoint with the newly observed authority instance, and closes the connection. It has no credential storage or input interface. The hello's `inputEnabled:false` describes this legacy metadata protocol; it does not inspect or select an output backend. Physical connections still require the explicit v9 client and its strict physical admission.
+
+The query has a three-second total monotonic budget and terminal cancellation/cleanup. A late connection or result cannot revive it. Production transport retains its own bounded TLS operations and frame limits. Duplicate keys, unknown fields (including credential-like fields), null/coerced values, unsupported versions, invalid identity and oversized metadata fail closed. No endpoint, payload or secret is logged.
+
+A reconnect adapter must resolve first, then construct a fresh strict control client with that exact authority and the caller's existing explicit output mode. Authentication still loads and proves the durable credential only after the strict hello matches. Restarting again between resolution and authentication therefore fails; the resolver never permits an old grant to be replayed. Both native app reconnect adapters use this query before constructing their fresh strict client. Fresh invitation enrollment keeps its exact invitation authority. The saved bootstrap endpoint is preserved; each reconnect resolves a new ephemeral instance rather than treating its saved instance as durable.
+
+The saved host/port must still reach the same pinned host. A changed ephemeral listening port requires new discovery or pairing; this query neither discovers ports nor authorizes certificate rotation. Stable explicit listening configuration belongs to the local service. No claim of automatic reconnect after a receiver restart is made until the app and service seams are composed.

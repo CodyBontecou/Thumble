@@ -1,0 +1,9 @@
+# Receiver first-termination diagnostic
+
+`receiver readiness` and the corresponding MCP read-only tool include `firstTermination`, including when saved-controller maintenance is disabled. The native `savedRearmStatus` query carries the same field. It is either null or an exact fixed reason, generation and revision. It contains no sample, credential, endpoint, path or arbitrary error text. The existing receiver Snapshot and phone protocols are unchanged.
+
+The receiver records the first transition from active to inactive before attempting output cleanup. A later disconnect or cleanup cannot replace that first cause. For example, input expiry followed by `native_input_released` keeps `input_expired` as the diagnostic, while Snapshot retains its existing latest-release behavior. A successful new activation clears the record; startup and a failed initial activation have no active-to-inactive event. Failed replacement activation can retain the preceding generation's termination. The diagnostic is process-local and is lost on receiver restart.
+
+Known fixed reasons distinguish input/owner/grant expiry, output failure, clock failures, clean native release, explicit operator release, activation replacement, shutdown and native-owner/delivery failures. Unexpected internal reason strings become `other_terminal`. This is a transition diagnostic, not proof that cleanup succeeded: existing `cleanupReady`, exact released binding, physical worker fault/clock/uncertain checks and all activation policies remain unchanged. Reading it never renews or activates input.
+
+Inspect the record before reactivation when diagnosing a phone disconnect. An input expiry may cause a later authenticated packet or status path to close; a phone-side receive error alone does not establish which side terminated first. A new successful generation intentionally clears the record, so operators should preserve only this fixed metadata when collecting an incident.

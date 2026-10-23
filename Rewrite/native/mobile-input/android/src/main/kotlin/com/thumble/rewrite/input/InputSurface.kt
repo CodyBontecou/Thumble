@@ -13,6 +13,16 @@ import android.view.Choreographer
 import android.view.MotionEvent
 import android.view.View
 
+enum class InputReleaseOrigin {
+    PAUSE,
+    STOP,
+    SCREEN_OFF,
+    DETACH,
+    FOCUS_LOST,
+    RESIZE,
+    DISPOSE,
+}
+
 /** Transparent native overlay for the React renderer; stable pointer IDs, never indices. */
 class InputSurface(context: Context, val engine: InputEngine, haptics: TouchHapticSink? = null) :
     View(context), Choreographer.FrameCallback {
@@ -21,6 +31,14 @@ class InputSurface(context: Context, val engine: InputEngine, haptics: TouchHapt
     var configuration: ControlMap? = null
         private set
 
+    var firstReleaseOrigin: InputReleaseOrigin? = null
+        private set
+
+    private fun releaseFrom(reason: ReleaseReason, origin: InputReleaseOrigin) {
+        if (engine.connected && firstReleaseOrigin == null) firstReleaseOrigin = origin
+        release(reason)
+    }
+
     private val generations = mutableMapOf<Int, String>()
     private var installedAt = Long.MAX_VALUE
     private var registered = false
@@ -28,11 +46,13 @@ class InputSurface(context: Context, val engine: InputEngine, haptics: TouchHapt
     private val lifecycle =
         object : Application.ActivityLifecycleCallbacks {
             override fun onActivityPaused(activity: Activity) {
-                if (belongsTo(activity)) release(ReleaseReason.background)
+                if (belongsTo(activity))
+                    releaseFrom(ReleaseReason.background, InputReleaseOrigin.PAUSE)
             }
 
             override fun onActivityStopped(activity: Activity) {
-                if (belongsTo(activity)) release(ReleaseReason.background)
+                if (belongsTo(activity))
+                    releaseFrom(ReleaseReason.background, InputReleaseOrigin.STOP)
             }
 
             override fun onActivityDestroyed(activity: Activity) {
@@ -50,7 +70,8 @@ class InputSurface(context: Context, val engine: InputEngine, haptics: TouchHapt
     private val screen =
         object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
-                if (intent.action == Intent.ACTION_SCREEN_OFF) release(ReleaseReason.screenLock)
+                if (intent.action == Intent.ACTION_SCREEN_OFF)
+                    releaseFrom(ReleaseReason.screenLock, InputReleaseOrigin.SCREEN_OFF)
             }
         }
 
@@ -94,7 +115,7 @@ class InputSurface(context: Context, val engine: InputEngine, haptics: TouchHapt
 
     fun dispose() {
         if (!disposed) {
-            release(ReleaseReason.disposed)
+            releaseFrom(ReleaseReason.disposed, InputReleaseOrigin.DISPOSE)
             disposed = true
             unregister()
         }
@@ -128,19 +149,20 @@ class InputSurface(context: Context, val engine: InputEngine, haptics: TouchHapt
     }
 
     override fun onDetachedFromWindow() {
-        release(ReleaseReason.disconnected)
+        releaseFrom(ReleaseReason.disconnected, InputReleaseOrigin.DETACH)
         unregister()
         super.onDetachedFromWindow()
     }
 
     override fun onWindowFocusChanged(hasWindowFocus: Boolean) {
         super.onWindowFocusChanged(hasWindowFocus)
-        if (!hasWindowFocus) release(ReleaseReason.background)
+        if (!hasWindowFocus) releaseFrom(ReleaseReason.background, InputReleaseOrigin.FOCUS_LOST)
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
-        if (oldw > 0 && oldh > 0 && (w != oldw || h != oldh)) release(ReleaseReason.rotation)
+        if (oldw > 0 && oldh > 0 && (w != oldw || h != oldh))
+            releaseFrom(ReleaseReason.rotation, InputReleaseOrigin.RESIZE)
     }
 
     override fun doFrame(frameTimeNanos: Long) {

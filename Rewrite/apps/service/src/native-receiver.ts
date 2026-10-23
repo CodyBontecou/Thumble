@@ -1,5 +1,7 @@
 import {
   decodeSavedBinding,
+  decodeSavedRearmStatus,
+  type SavedRearmStatus,
   type SavedRuntimeBinding,
 } from "@thumble/contracts/saved-runtime";
 import {
@@ -17,7 +19,9 @@ export type ReceiverOutput =
 export class NativeReceiver implements ReceiverPort {
   private readonly pipe: NativePipe<
     Snapshot,
-    Snapshot | { snapshot: Snapshot; savedBinding: SavedRuntimeBinding | null }
+    | Snapshot
+    | SavedRearmStatus
+    | { snapshot: Snapshot; savedBinding: SavedRuntimeBinding | null }
   >;
   get child() {
     return this.pipe.child;
@@ -56,6 +60,23 @@ export class NativeReceiver implements ReceiverPort {
           return snapshot(value.snapshot);
         },
         reply(value) {
+          if (Object.hasOwn(value, "cleanupReady")) {
+            exact(value, [
+              "version",
+              "requestId",
+              "ok",
+              "snapshot",
+              "releasedBinding",
+              "cleanupReady",
+              "firstTermination",
+            ]);
+            return decodeSavedRearmStatus({
+              snapshot: snapshot(value.snapshot),
+              releasedBinding: value.releasedBinding,
+              cleanupReady: value.cleanupReady,
+              firstTermination: value.firstTermination,
+            });
+          }
           if (Object.hasOwn(value, "savedBinding")) {
             exact(value, [
               "version",
@@ -91,6 +112,18 @@ export class NativeReceiver implements ReceiverPort {
   }> {
     const reply = await this.pipe.request({ command: "savedBindingStatus" });
     if (!("snapshot" in reply)) {
+      this.pipe.disconnect();
+      throw new Error("receiver_response_invalid");
+    }
+    if (!("savedBinding" in reply)) {
+      this.pipe.disconnect();
+      throw new Error("receiver_response_invalid");
+    }
+    return reply;
+  }
+  async rearmStatus(): Promise<SavedRearmStatus> {
+    const reply = await this.pipe.request({ command: "savedRearmStatus" });
+    if (!("cleanupReady" in reply)) {
       this.pipe.disconnect();
       throw new Error("receiver_response_invalid");
     }

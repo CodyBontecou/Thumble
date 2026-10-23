@@ -8,8 +8,10 @@ import android.content.ContextWrapper
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.text.InputFilter
 import android.text.InputType
+import android.util.Log
 import android.view.View
 import android.view.WindowManager
 import android.widget.Button
@@ -36,11 +38,36 @@ internal class PhoneConnection(
     private val outputMode: PhoneOutputMode = PhoneOutputMode.RECORDING,
 ) : Closeable {
     private val gate = Any()
+    private val diagnosticStarted = SystemClock.elapsedRealtime()
+    private var lifecycleDiagnosticRecorded = false
+    private var terminalDiagnosticRecorded = false
+
+    internal fun recordTerminalDiagnostic(reason: ReleaseReason?, origin: InputReleaseOrigin?) {
+        if (terminalDiagnosticRecorded) return
+        terminalDiagnosticRecorded = true
+        Log.i(
+            "ThumblePhoneDiag",
+            "event=terminal release=${reason?.name ?: "none"} origin=${origin?.name ?: "none"} stage=${control?.inputFailureStage?.name ?: "none"} transport=${control?.inputTransportDiagnostic?.cause?.name ?: "none"} category=${control?.inputTransportDiagnostic?.category?.name ?: "none"} wait=${control?.inputTransportWaitOutcome ?: "none"} checkpoint=${control?.checkpointFailure?.name ?: "none"} elapsed_ms=${(SystemClock.elapsedRealtime() - diagnosticStarted).coerceIn(0, 86400000)}",
+        )
+    }
+
+    internal fun recordOwnerDetachDiagnostic() = recordLifecycleDiagnostic("detach")
+
+    private fun recordLifecycleDiagnostic(event: String) {
+        if (lifecycleDiagnosticRecorded) return
+        lifecycleDiagnosticRecorded = true
+        Log.i(
+            "ThumblePhoneDiag",
+            "event=$event stage=${control?.inputFailureStage?.name ?: "none"} transport=${control?.inputTransportDiagnostic?.cause?.name ?: "none"} category=${control?.inputTransportDiagnostic?.category?.name ?: "none"} wait=${control?.inputTransportWaitOutcome ?: "none"} checkpoint=${control?.checkpointFailure?.name ?: "none"} elapsed_ms=${(SystemClock.elapsedRealtime() - diagnosticStarted).coerceIn(0, 86400000)}",
+        )
+    }
+
     @Volatile private var closed = false
     private var prompt: AlertDialog? = null
     private var field: EditText? = null
     private var scanner: QrInvitationScanner? = null
     private var enrollment: PhoneEnrollmentClient? = null
+    private var authorityResolver: PhoneAuthorityResolver? = null
     private var control: PhoneControlClient? = null
     private var catalogClient: PhoneCatalogClient? = null
     private var savedMapClient: SavedControllerClient? = null
@@ -62,6 +89,7 @@ internal class PhoneConnection(
                     context = next
                 }
                 if (context === activity && !closed && scanner?.awaitingPermission != true) {
+                    recordLifecycleDiagnostic("pause")
                     close()
                     status("disconnected")
                 }
@@ -69,6 +97,7 @@ internal class PhoneConnection(
 
             override fun onActivityStopped(activity: Activity) {
                 if (!closed && activity === hostActivity()) {
+                    recordLifecycleDiagnostic("stop")
                     close()
                     status("disconnected")
                 }
@@ -237,7 +266,21 @@ internal class PhoneConnection(
                                         .commit()
                                 )
                             }
-                    } else checkNotNull(saved)
+                    } else {
+                        val resolver = PhoneAuthorityResolver(checkNotNull(saved))
+                        synchronized(gate) {
+                            check(!closed)
+                            authorityResolver = resolver
+                        }
+                        try {
+                            resolver.resolve().also { synchronized(gate) { check(!closed) } }
+                        } finally {
+                            resolver.close()
+                            synchronized(gate) {
+                                if (authorityResolver === resolver) authorityResolver = null
+                            }
+                        }
+                    }
                 val client =
                     PhoneControlClient(
                         endpoint,
@@ -346,6 +389,8 @@ internal class PhoneConnection(
         synchronized(gate) {
             if (closed) return
             closed = true
+            authorityResolver?.close()
+            authorityResolver = null
             catalogClient?.close()
             catalogClient = null
             savedMapClient?.close()

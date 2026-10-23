@@ -15,7 +15,7 @@ export type PairingCommand =
       phoneId: string;
     }>
   | Readonly<{
-      command: "pairing-listen";
+      command: "pairing-listen" | "pairing-listen-authorized";
       bindAddress: string;
       advertiseHost: string;
     }>;
@@ -133,6 +133,13 @@ export function decodePairingCommand(value: unknown): PairingCommand {
       command: "pairing-revoke",
       phoneId: identity(d.phoneId),
     });
+  }
+  if (d.command === "pairing-listen-authorized" && withAddress) {
+    const options = decodeAuthorizedListener({
+      bindAddress: d.bindAddress,
+      advertiseHost: d.advertiseHost,
+    });
+    return Object.freeze({ command: "pairing-listen-authorized", ...options });
   }
   if (d.command === "pairing-listen" && withAddress) {
     return Object.freeze({
@@ -377,4 +384,30 @@ export function decodePairingReply(value: unknown): PairingReply {
     ...(connection ? { transport: connection } : {}),
     ...(withPhones ? { phones: phones(d.phones) } : {}),
   });
+}
+
+export type AuthorizedListener = Readonly<{
+  bindAddress: string;
+  advertiseHost: string;
+}>;
+/** Explicit fixed-IP/nonzero-port listener; never implies an enrollment window. */
+export function decodeAuthorizedListener(value: unknown): AuthorizedListener {
+  const v = data(value, ["bindAddress", "advertiseHost"]),
+    address = bind(v.bindAddress),
+    advertise = host(v.advertiseHost);
+  const match =
+    /^(?:([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)|\[([0-9a-fA-F:.]+)\]):([1-9][0-9]{0,4})$/.exec(
+      address,
+    );
+  if (
+    !match ||
+    Number(match[3]) > 65535 ||
+    (match[1] &&
+      match[1]
+        .split(".")
+        .some((o) => Number(o) > 255 || (o.length > 1 && o.startsWith("0")))) ||
+    (advertise.includes(":") && /^[0:]+$/.test(advertise))
+  )
+    throw new Error("invalid_pairing_bind_address");
+  return Object.freeze({ bindAddress: address, advertiseHost: advertise });
 }

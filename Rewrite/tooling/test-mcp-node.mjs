@@ -109,6 +109,7 @@ try {
             "wow_capture_status",
             "receiver_status",
             "receiver_saved_status",
+            "receiver_readiness",
             "receiver_release",
             "pairing_status",
             "pairing_list",
@@ -160,6 +161,39 @@ try {
         assert.equal(
           doctor.structuredContent.result.osDeviceAuthorization,
           "not-inspected",
+        );
+        phase = "readiness";
+        const readiness = await call({
+          name: "receiver_readiness",
+          arguments: {},
+        });
+        assert.equal(readiness.structuredContent.ok, true);
+        assert.equal(readiness.structuredContent.result.state, "disabled");
+        assert.equal(
+          readiness.structuredContent.result.reason,
+          "policy-disabled",
+        );
+        const readinessCLI = await execute(
+          launcher[0],
+          [
+            ...launcher.slice(1),
+            "receiver",
+            "readiness",
+            "--runtime-dir",
+            runtime,
+            ...nativeOptions,
+          ],
+          {
+            timeout: 5000,
+            maxBuffer: 65536,
+            windowsHide: true,
+            env: serverEnvironment,
+          },
+        );
+        assert.equal(readinessCLI.stderr, "");
+        assert.deepEqual(
+          JSON.parse(readinessCLI.stdout).result,
+          readiness.structuredContent.result,
         );
         phase = "status";
         const status = await call({ name: "receiver_status", arguments: {} });

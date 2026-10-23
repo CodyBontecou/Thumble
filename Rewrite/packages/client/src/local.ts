@@ -7,6 +7,8 @@ import {
 import {
   decodeSavedRuntimeCommand,
   decodeSavedRuntimeStatus,
+  decodeSavedReadinessStatus,
+  type SavedReadinessStatus,
   type SavedRuntimeCommand,
   type SavedRuntimeStatus,
 } from "@thumble/contracts/saved-runtime";
@@ -311,6 +313,7 @@ function exchange<Result>(
     | PairingCommand
     | ConfigurationCommand
     | SavedRuntimeCommand
+    | Readonly<{ command: "saved-readiness-status" }>
     | WowCaptureCommand,
   decode: (value: unknown) => Result,
 ): Promise<Result> {
@@ -377,5 +380,20 @@ function exchange<Result>(
         fail("invalid_service_response");
       }
     });
+  });
+}
+
+export function requestSavedReadiness(
+  endpoint: Endpoint,
+): Promise<SavedReadinessStatus> {
+  return exchange(endpoint, { command: "saved-readiness-status" }, (value) => {
+    const status = decodeSavedReadinessStatus(value);
+    if (
+      status.serviceInstanceId !== endpoint.instanceId ||
+      status.servicePid !== endpoint.servicePid ||
+      status.receiverPid !== endpoint.receiverPid
+    )
+      throw new Error("service_identity_mismatch");
+    return status;
   });
 }

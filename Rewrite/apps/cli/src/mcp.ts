@@ -10,6 +10,7 @@ import {
   requestPairing,
   requestConfiguration,
   requestSavedRuntime,
+  requestSavedReadiness,
   requestWowCapture,
 } from "@thumble/client/local";
 import { decodeLocalCommand } from "@thumble/contracts/receiver";
@@ -37,6 +38,7 @@ export function startMcp(
       : []),
     "receiver_status",
     "receiver_saved_status",
+    "receiver_readiness",
     "receiver_release",
     "pairing_status",
     "pairing_list",
@@ -154,6 +156,19 @@ export function startMcp(
           annotations: annotations(true),
         },
         () => receipt(() => inspectOutputCapabilities(receiver)),
+      );
+      server.registerTool(
+        "receiver_readiness",
+        {
+          description:
+            "Inspect the explicit local saved-controller maintenance policy and bounded latched reason; does not activate or renew input.",
+          inputSchema: empty,
+          annotations: annotations(true),
+        },
+        () =>
+          receipt(async () =>
+            requestSavedReadiness(await readEndpointAsync(root, receiver)),
+          ),
       );
       server.registerTool(
         "receiver_saved_status",
