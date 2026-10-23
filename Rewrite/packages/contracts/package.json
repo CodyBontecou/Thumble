@@ -18,6 +18,7 @@
     "./wow-capture": "./src/wow-capture.ts",
     "./wow-capture-control": "./src/wow-capture-control.ts",
     "./wow-sync-control": "./src/wow-sync-control.ts",
-    "./phone-presentation": "./src/phone-presentation.ts"
+    "./phone-presentation": "./src/phone-presentation.ts",
+    "./control-label": "./src/control-label.ts"
   }
 }

@@ -3,8 +3,8 @@
   "platform": "ios",
   "completeCoverageVerified": false,
   "bundleFile": "ThumbleThirdPartyNotices.txt",
-  "bundleSHA256": "9cd6ab4d31d89adafd93f46060c4252fb7a367adcc66cc3cdfd40dcb8881eb9f",
-  "bundleByteCount": 29878,
+  "bundleSHA256": "a9aabd8c15957e14f45ebfc83c80660e05d060765c4b784ded0c628399f1c40f",
+  "bundleByteCount": 63751,
   "lockFile": "bun.lock",
   "lockSHA256": "b01544260ea9d76a777b7d7fb0b0544cc4154e621cb028f3b8a2788950c73592",
   "auditProvenance": {
@@ -1242,6 +1242,249 @@
           "attestationCryptographicSignatureVerified": false
         }
       ]
+    },
+    {
+      "sha256": "07580f2a3b35709ce703d523f447b242f6dfec7582a8c0df102c7fa2849375f8",
+      "offset": 29901,
+      "byteCount": 1431,
+      "origins": [
+        {
+          "kind": "rn-configured-upstream-root-license",
+          "component": "fmt",
+          "version": "12.1.0",
+          "gitCommit": "407c905e45ad75fc29bf0f9bb7c5c2fd3475976f",
+          "tag": "12.1.0",
+          "url": "https://raw.githubusercontent.com/fmtlib/fmt/407c905e45ad75fc29bf0f9bb7c5c2fd3475976f/LICENSE",
+          "configuredHelpersSHA256": "963bfd52ed990f2608c1b20c667527e9df2bcfc67075eef5248016bb182eecbd",
+          "configuredPodspecSHA256": "0131c09d7dbeec869a25c9089760d4fc3e0c3fbd1c53e6777c3628723fc6fa42",
+          "headerEvidence": {
+            "url": "https://raw.githubusercontent.com/fmtlib/fmt/407c905e45ad75fc29bf0f9bb7c5c2fd3475976f/include/fmt/format.h",
+            "localHeader": "fmt/format.h",
+            "sourceSHA256": "b4c65350362bf40e76a8e6b450587d912c7081b6eafeafaf3d7bcf53153e17fc",
+            "localSHA256": "b4c65350362bf40e76a8e6b450587d912c7081b6eafeafaf3d7bcf53153e17fc",
+            "byteEqual": true
+          },
+          "completeVendoredCoverageVerified": false
+        }
+      ]
+    },
+    {
+      "sha256": "097a889aa954d04e088b790b10a4014d6189561d0a6013935a73ce3d4ddaaf06",
+      "offset": 31363,
+      "byteCount": 10767,
+      "origins": [
+        {
+          "kind": "rn-configured-upstream-root-license",
+          "component": "fast_float",
+          "version": "8.0.0",
+          "gitCommit": "77cc847c842c49e7e3477c1e95da2b6540166d66",
+          "tag": "v8.0.0",
+          "url": "https://raw.githubusercontent.com/fastfloat/fast_float/77cc847c842c49e7e3477c1e95da2b6540166d66/LICENSE-APACHE",
+          "configuredHelpersSHA256": "963bfd52ed990f2608c1b20c667527e9df2bcfc67075eef5248016bb182eecbd",
+          "configuredPodspecSHA256": "59294099215845fb148c7bc8ce189379504aabd4abf6d31f3da892bd2198fb34",
+          "headerEvidence": {
+            "url": "https://raw.githubusercontent.com/fastfloat/fast_float/77cc847c842c49e7e3477c1e95da2b6540166d66/include/fast_float/fast_float.h",
+            "localHeader": "fast_float/fast_float.h",
+            "sourceSHA256": "2427cd297f5b4d524e696ab9c69f957ffb9f851e59262f5d0b07930ba7dae016",
+            "localSHA256": "2427cd297f5b4d524e696ab9c69f957ffb9f851e59262f5d0b07930ba7dae016",
+            "byteEqual": true
+          },
+          "completeVendoredCoverageVerified": false
+        }
+      ]
+    },
+    {
+      "sha256": "0fc497129c5c69ff6f22da6933c7e4aaef082fde8437fd57680c2780100772a4",
+      "offset": 42155,
+      "byteCount": 3215,
+      "origins": [
+        {
+          "kind": "rn-configured-upstream-root-license",
+          "component": "glog",
+          "version": "0.3.5",
+          "gitCommit": "a6a166db069520dbbd653c97c2e5b12e08a8bb26",
+          "tag": "v0.3.5",
+          "url": "https://raw.githubusercontent.com/google/glog/a6a166db069520dbbd653c97c2e5b12e08a8bb26/COPYING",
+          "configuredHelpersSHA256": "963bfd52ed990f2608c1b20c667527e9df2bcfc67075eef5248016bb182eecbd",
+          "configuredPodspecSHA256": "45d03a6b948bd0d81112b1958bd7a2511c91aebf233e404e05b888648ba49c01",
+          "headerEvidence": {
+            "url": "https://raw.githubusercontent.com/google/glog/a6a166db069520dbbd653c97c2e5b12e08a8bb26/src/glog/log_severity.h",
+            "localHeader": "glog/log_severity.h",
+            "sourceSHA256": "4d208e76bfd345e6b198ccb24a864bc11bb3a151d13964caeb4fb9fcd81feeb6",
+            "localSHA256": "4d208e76bfd345e6b198ccb24a864bc11bb3a151d13964caeb4fb9fcd81feeb6",
+            "byteEqual": true
+          },
+          "completeVendoredCoverageVerified": false
+        }
+      ]
+    },
+    {
+      "sha256": "2206c00af7013581ae0d7c8c8a0089f02fab621913daac019b32336bd4d1e1db",
+      "offset": 45404,
+      "byteCount": 11350,
+      "origins": [
+        {
+          "kind": "rn-configured-upstream-root-license",
+          "component": "folly",
+          "version": "2024.11.18.00",
+          "gitCommit": "0660ead5b610047a279cc291129e98e3f2a1fc37",
+          "tag": "v2024.11.18.00",
+          "url": "https://raw.githubusercontent.com/facebook/folly/0660ead5b610047a279cc291129e98e3f2a1fc37/LICENSE",
+          "configuredHelpersSHA256": "963bfd52ed990f2608c1b20c667527e9df2bcfc67075eef5248016bb182eecbd",
+          "configuredPodspecSHA256": "869c583e9d17c0d3689b70b7b11f772767ceec2d20412f28f147b29b9218f24e",
+          "headerEvidence": {
+            "url": "https://raw.githubusercontent.com/facebook/folly/0660ead5b610047a279cc291129e98e3f2a1fc37/folly/Portability.h",
+            "localHeader": "folly/Portability.h",
+            "sourceSHA256": "3cfdbbf7de751d13b66cd9ff5d2a9cfacda8f80bc46dceda3a4f2c85768389d0",
+            "localSHA256": "3cfdbbf7de751d13b66cd9ff5d2a9cfacda8f80bc46dceda3a4f2c85768389d0",
+            "byteEqual": true
+          },
+          "completeVendoredCoverageVerified": false
+        }
+      ]
+    },
+    {
+      "sha256": "41c74b84758ab303b091b0afbf958de909559556c8f1591dc4d687ea184356ab",
+      "offset": 56787,
+      "byteCount": 1532,
+      "origins": [
+        {
+          "kind": "rn-configured-upstream-root-license",
+          "component": "SocketRocket",
+          "version": "0.7.1",
+          "gitCommit": "21ac000390781823dd4bd87fdc419976e05dd7a6",
+          "tag": "0.7.1",
+          "url": "https://raw.githubusercontent.com/facebookincubator/SocketRocket/21ac000390781823dd4bd87fdc419976e05dd7a6/LICENSE",
+          "configuredHelpersSHA256": "963bfd52ed990f2608c1b20c667527e9df2bcfc67075eef5248016bb182eecbd",
+          "configuredPodspecSHA256": null,
+          "headerEvidence": {
+            "url": "https://raw.githubusercontent.com/facebookincubator/SocketRocket/21ac000390781823dd4bd87fdc419976e05dd7a6/SocketRocket/SRWebSocket.h",
+            "localHeader": "SocketRocket/SRWebSocket.h",
+            "sourceSHA256": "92fdd9c14c1c9a64fc77f8b342c53ec9ac0cb9ff6a423666e1f136b7665b50b0",
+            "localSHA256": "92fdd9c14c1c9a64fc77f8b342c53ec9ac0cb9ff6a423666e1f136b7665b50b0",
+            "byteEqual": true
+          },
+          "completeVendoredCoverageVerified": false
+        }
+      ]
+    },
+    {
+      "sha256": "4af93c12062c58058378de2397dc1c92bbff9ddfb1d583a01c84127557ce97ca",
+      "offset": 58356,
+      "byteCount": 1527,
+      "origins": [
+        {
+          "kind": "rn-configured-upstream-root-license",
+          "component": "DoubleConversion",
+          "version": "1.1.6",
+          "gitCommit": "361924fb61c043627d4179e941a102d543f6efa0",
+          "tag": "v1.1.6",
+          "url": "https://raw.githubusercontent.com/google/double-conversion/361924fb61c043627d4179e941a102d543f6efa0/COPYING",
+          "configuredHelpersSHA256": "963bfd52ed990f2608c1b20c667527e9df2bcfc67075eef5248016bb182eecbd",
+          "configuredPodspecSHA256": "807a5e38ab23d4c1bfdaf347c9a5440c943003f37e858a8484616a318af698e0",
+          "headerEvidence": {
+            "url": "https://raw.githubusercontent.com/google/double-conversion/361924fb61c043627d4179e941a102d543f6efa0/src/double-conversion.h",
+            "localHeader": "double-conversion/double-conversion.h",
+            "sourceSHA256": "d4776089b9e760cfd819a86a9b10c69998b956f8f2102ac3b4361d775e0edcbe",
+            "localSHA256": "d4776089b9e760cfd819a86a9b10c69998b956f8f2102ac3b4361d775e0edcbe",
+            "byteEqual": true
+          },
+          "completeVendoredCoverageVerified": false
+        },
+        {
+          "kind": "rn-configured-upstream-root-license",
+          "component": "DoubleConversion",
+          "version": "1.1.6",
+          "gitCommit": "361924fb61c043627d4179e941a102d543f6efa0",
+          "tag": "v1.1.6",
+          "url": "https://raw.githubusercontent.com/google/double-conversion/361924fb61c043627d4179e941a102d543f6efa0/LICENSE",
+          "configuredHelpersSHA256": "963bfd52ed990f2608c1b20c667527e9df2bcfc67075eef5248016bb182eecbd",
+          "configuredPodspecSHA256": "807a5e38ab23d4c1bfdaf347c9a5440c943003f37e858a8484616a318af698e0",
+          "headerEvidence": {
+            "url": "https://raw.githubusercontent.com/google/double-conversion/361924fb61c043627d4179e941a102d543f6efa0/src/double-conversion.h",
+            "localHeader": "double-conversion/double-conversion.h",
+            "sourceSHA256": "d4776089b9e760cfd819a86a9b10c69998b956f8f2102ac3b4361d775e0edcbe",
+            "localSHA256": "d4776089b9e760cfd819a86a9b10c69998b956f8f2102ac3b4361d775e0edcbe",
+            "byteEqual": true
+          },
+          "completeVendoredCoverageVerified": false
+        }
+      ]
+    },
+    {
+      "sha256": "8d8291caf1cee26d23acf3eb67c9f9a2d58f1c681b16a4fbe8cbfb9e3c0b5a9b",
+      "offset": 59914,
+      "byteCount": 1337,
+      "origins": [
+        {
+          "kind": "rn-configured-upstream-root-license",
+          "component": "fast_float",
+          "version": "8.0.0",
+          "gitCommit": "77cc847c842c49e7e3477c1e95da2b6540166d66",
+          "tag": "v8.0.0",
+          "url": "https://raw.githubusercontent.com/fastfloat/fast_float/77cc847c842c49e7e3477c1e95da2b6540166d66/LICENSE-BOOST",
+          "configuredHelpersSHA256": "963bfd52ed990f2608c1b20c667527e9df2bcfc67075eef5248016bb182eecbd",
+          "configuredPodspecSHA256": "59294099215845fb148c7bc8ce189379504aabd4abf6d31f3da892bd2198fb34",
+          "headerEvidence": {
+            "url": "https://raw.githubusercontent.com/fastfloat/fast_float/77cc847c842c49e7e3477c1e95da2b6540166d66/include/fast_float/fast_float.h",
+            "localHeader": "fast_float/fast_float.h",
+            "sourceSHA256": "2427cd297f5b4d524e696ab9c69f957ffb9f851e59262f5d0b07930ba7dae016",
+            "localSHA256": "2427cd297f5b4d524e696ab9c69f957ffb9f851e59262f5d0b07930ba7dae016",
+            "byteEqual": true
+          },
+          "completeVendoredCoverageVerified": false
+        }
+      ]
+    },
+    {
+      "sha256": "beb8e42e9d6b4284e03304d05a81a0755200a965fc8d0a5e0aea1e84cf805d6e",
+      "offset": 61278,
+      "byteCount": 1361,
+      "origins": [
+        {
+          "kind": "rn-configured-upstream-root-license",
+          "component": "boost",
+          "version": "1.84.0",
+          "gitCommit": "59ed9e589e222fb6d54b3e0a81d510190801b1d9",
+          "tag": "v1.84.0",
+          "url": "https://raw.githubusercontent.com/react-native-community/boost-for-react-native/59ed9e589e222fb6d54b3e0a81d510190801b1d9/LICENSE_1_0.txt",
+          "configuredHelpersSHA256": "963bfd52ed990f2608c1b20c667527e9df2bcfc67075eef5248016bb182eecbd",
+          "configuredPodspecSHA256": "b2e45fe8e2ea15e9a6c9013bb9bf92c094ff0986de0420568a52523b009c177a",
+          "headerEvidence": {
+            "url": "https://raw.githubusercontent.com/react-native-community/boost-for-react-native/59ed9e589e222fb6d54b3e0a81d510190801b1d9/boost/version.hpp",
+            "localHeader": "boost/version.hpp",
+            "sourceSHA256": "7a84c97e69cd84db4a000759f3cae5a86e49952dca103d389ba212a24c4a652b",
+            "localSHA256": "7a84c97e69cd84db4a000759f3cae5a86e49952dca103d389ba212a24c4a652b",
+            "byteEqual": true
+          },
+          "completeVendoredCoverageVerified": false
+        }
+      ]
+    },
+    {
+      "sha256": "e562f3f974ced7e69dd1db77b820b36bcf8f30377f1aa105723fba449c53c4e6",
+      "offset": 62670,
+      "byteCount": 1079,
+      "origins": [
+        {
+          "kind": "rn-configured-upstream-root-license",
+          "component": "fast_float",
+          "version": "8.0.0",
+          "gitCommit": "77cc847c842c49e7e3477c1e95da2b6540166d66",
+          "tag": "v8.0.0",
+          "url": "https://raw.githubusercontent.com/fastfloat/fast_float/77cc847c842c49e7e3477c1e95da2b6540166d66/LICENSE-MIT",
+          "configuredHelpersSHA256": "963bfd52ed990f2608c1b20c667527e9df2bcfc67075eef5248016bb182eecbd",
+          "configuredPodspecSHA256": "59294099215845fb148c7bc8ce189379504aabd4abf6d31f3da892bd2198fb34",
+          "headerEvidence": {
+            "url": "https://raw.githubusercontent.com/fastfloat/fast_float/77cc847c842c49e7e3477c1e95da2b6540166d66/include/fast_float/fast_float.h",
+            "localHeader": "fast_float/fast_float.h",
+            "sourceSHA256": "2427cd297f5b4d524e696ab9c69f957ffb9f851e59262f5d0b07930ba7dae016",
+            "localSHA256": "2427cd297f5b4d524e696ab9c69f957ffb9f851e59262f5d0b07930ba7dae016",
+            "byteEqual": true
+          },
+          "completeVendoredCoverageVerified": false
+        }
+      ]
     }
   ],
   "unresolved": [
@@ -1254,7 +1497,7 @@
     {
       "kind": "vendored_component_provenance",
       "component": "ReactNativeDependencies 0.88.0",
-      "reason": "Prebuilt framework contains boost/folly/glog/SocketRocket bundles; facade podspec MIT declarations do not establish each vendored license/NOTICE. fmt/fast_float/DoubleConversion and linked/static components also require build-source attribution audit."
+      "reason": "Configured upstream root legal texts for Boost, Folly, glog, fmt, fast_float, DoubleConversion and SocketRocket are now included with exact commit and representative prebuilt-header byte matches. One header per component is not complete build-source, transitive vendored copyright/NOTICE or static-link coverage proof."
     },
     {
       "kind": "vendored_component_provenance",
@@ -1294,6 +1537,87 @@
       "tarSHA256": "309b2fcea39fb4cdeb434144e735bc4065ac0dd8720e4f35ffee55fb3be54093",
       "shippedExecutableSHA256": "23f8e28b1ac6edecdc87709c45cd995f9604b1bc69be5875414720be5292742d",
       "tarExecutableMatchesShipped": true
+    }
+  ],
+  "nativeConfiguredComponents": [
+    {
+      "name": "boost",
+      "configuredVersion": "1.84.0",
+      "upstreamCommit": "59ed9e589e222fb6d54b3e0a81d510190801b1d9",
+      "selectedRootTextSHA256s": [
+        "beb8e42e9d6b4284e03304d05a81a0755200a965fc8d0a5e0aea1e84cf805d6e"
+      ],
+      "representativePrebuiltHeaderMatches": true,
+      "completeSourceAndVendoredCoverageVerified": false,
+      "associatedPrebuiltFrameworkExecutableSHA256": "23f8e28b1ac6edecdc87709c45cd995f9604b1bc69be5875414720be5292742d"
+    },
+    {
+      "name": "folly",
+      "configuredVersion": "2024.11.18.00",
+      "upstreamCommit": "0660ead5b610047a279cc291129e98e3f2a1fc37",
+      "selectedRootTextSHA256s": [
+        "2206c00af7013581ae0d7c8c8a0089f02fab621913daac019b32336bd4d1e1db"
+      ],
+      "representativePrebuiltHeaderMatches": true,
+      "completeSourceAndVendoredCoverageVerified": false,
+      "associatedPrebuiltFrameworkExecutableSHA256": "23f8e28b1ac6edecdc87709c45cd995f9604b1bc69be5875414720be5292742d"
+    },
+    {
+      "name": "glog",
+      "configuredVersion": "0.3.5",
+      "upstreamCommit": "a6a166db069520dbbd653c97c2e5b12e08a8bb26",
+      "selectedRootTextSHA256s": [
+        "0fc497129c5c69ff6f22da6933c7e4aaef082fde8437fd57680c2780100772a4"
+      ],
+      "representativePrebuiltHeaderMatches": true,
+      "completeSourceAndVendoredCoverageVerified": false,
+      "associatedPrebuiltFrameworkExecutableSHA256": "23f8e28b1ac6edecdc87709c45cd995f9604b1bc69be5875414720be5292742d"
+    },
+    {
+      "name": "fmt",
+      "configuredVersion": "12.1.0",
+      "upstreamCommit": "407c905e45ad75fc29bf0f9bb7c5c2fd3475976f",
+      "selectedRootTextSHA256s": [
+        "07580f2a3b35709ce703d523f447b242f6dfec7582a8c0df102c7fa2849375f8"
+      ],
+      "representativePrebuiltHeaderMatches": true,
+      "completeSourceAndVendoredCoverageVerified": false,
+      "associatedPrebuiltFrameworkExecutableSHA256": "23f8e28b1ac6edecdc87709c45cd995f9604b1bc69be5875414720be5292742d"
+    },
+    {
+      "name": "fast_float",
+      "configuredVersion": "8.0.0",
+      "upstreamCommit": "77cc847c842c49e7e3477c1e95da2b6540166d66",
+      "selectedRootTextSHA256s": [
+        "097a889aa954d04e088b790b10a4014d6189561d0a6013935a73ce3d4ddaaf06",
+        "8d8291caf1cee26d23acf3eb67c9f9a2d58f1c681b16a4fbe8cbfb9e3c0b5a9b",
+        "e562f3f974ced7e69dd1db77b820b36bcf8f30377f1aa105723fba449c53c4e6"
+      ],
+      "representativePrebuiltHeaderMatches": true,
+      "completeSourceAndVendoredCoverageVerified": false,
+      "associatedPrebuiltFrameworkExecutableSHA256": "23f8e28b1ac6edecdc87709c45cd995f9604b1bc69be5875414720be5292742d"
+    },
+    {
+      "name": "DoubleConversion",
+      "configuredVersion": "1.1.6",
+      "upstreamCommit": "361924fb61c043627d4179e941a102d543f6efa0",
+      "selectedRootTextSHA256s": [
+        "4af93c12062c58058378de2397dc1c92bbff9ddfb1d583a01c84127557ce97ca"
+      ],
+      "representativePrebuiltHeaderMatches": true,
+      "completeSourceAndVendoredCoverageVerified": false,
+      "associatedPrebuiltFrameworkExecutableSHA256": "23f8e28b1ac6edecdc87709c45cd995f9604b1bc69be5875414720be5292742d"
+    },
+    {
+      "name": "SocketRocket",
+      "configuredVersion": "0.7.1",
+      "upstreamCommit": "21ac000390781823dd4bd87fdc419976e05dd7a6",
+      "selectedRootTextSHA256s": [
+        "41c74b84758ab303b091b0afbf958de909559556c8f1591dc4d687ea184356ab"
+      ],
+      "representativePrebuiltHeaderMatches": true,
+      "completeSourceAndVendoredCoverageVerified": false,
+      "associatedPrebuiltFrameworkExecutableSHA256": "23f8e28b1ac6edecdc87709c45cd995f9604b1bc69be5875414720be5292742d"
     }
   ]
 }

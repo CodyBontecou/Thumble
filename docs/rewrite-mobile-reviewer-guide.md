@@ -2,7 +2,7 @@
 
 This is a review-candidate walkthrough, not a released product or store
 acceptance certificate. The current draft still has intermittent receiver
-failures and open iOS bank, physical gameplay, optical live-sync and distribution
+failures and open physical bank/gameplay, optical live-sync and distribution
 gates. Final reviewer instructions need the exact approved signed/notarized Mac
 package and corresponding phone builds. Do not substitute development signing
 for distribution evidence.
@@ -54,6 +54,45 @@ The starter contains 18 controls including both sticks and independent analog
 triggers. Existing configuration is refused, not overwritten. An exact retry of
 the same operation recovers its receipt. Saved selection does not activate input.
 
+## Saved control labels
+
+Use the typed command through the local CLI or agent to edit one saved label.
+For the fresh starter above, the Movement control has ID
+`ce000000-0000-0000-0000-000000000001`. Use the actual control ID from owned
+configuration for other profiles. The first example assumes the starter is still
+at configuration revision `1`; read `configuration list` and use its current
+revision after other edits.
+
+```sh
+"$THUMBLE_BIN" configuration set-control-label --help --json
+"$THUMBLE_BIN" configuration set-control-label \
+  --runtime-dir "$THUMBLE_STATE/runtime" --operation-id reviewer-movement-label \
+  --expected-revision 1 --profile-id e1000000-0000-0000-0000-000000000001 \
+  --control-id ce000000-0000-0000-0000-000000000001 --label 'Move' --json
+```
+
+The result uses the normal configuration receipt. Repeating the same operation
+ID and exact intent recovers that receipt; a stale revision with a new operation
+returns a conflict without overwriting a newer edit. Use the committed receipt's
+resulting revision for the next change. To remove this override after the example
+commits revision `2`:
+
+```sh
+"$THUMBLE_BIN" configuration set-control-label \
+  --runtime-dir "$THUMBLE_STATE/runtime" --operation-id reviewer-movement-label-clear \
+  --expected-revision 2 --profile-id e1000000-0000-0000-0000-000000000001 \
+  --control-id ce000000-0000-0000-0000-000000000001 --clear-label --json
+```
+
+Labels preserve exact Unicode up to 128 UTF-8 bytes. `--label ''` stores an
+explicit blank, whereas `--clear-label` removes the customization and restores
+the generated label. Use `--label=--text` for a label beginning with two hyphens.
+These two intents are mutually exclusive. The edit preserves the generated label,
+control geometry, bindings and current input generation. It does not activate or
+retire input; an installed compatible controller can receive the cosmetic change
+through its separate presentation connection. Live-sync freshness and gameplay
+acceptance still have their own gates.
+
 ## Explicit connected setup
 
 Choose a fixed Mac LAN address and free port reachable by the phone. The sample
@@ -98,8 +137,10 @@ With the optional QR helper packaged, open a bounded invitation privately:
   > "$THUMBLE_STATE/pairing-offer.json"
 ```
 
-The destination PNG must not already exist. Show it privately, then use the
-phone's Scan QR route. Keep the phone unlocked and reachable on the LAN.
+The destination PNG must not already exist. On the phone Home screen, choose
+**Test a connection** for this recording-only rehearsal, then Scan QR. Reserve
+**Connect to Mac** for the explicit physical-output setup described above. Show
+the PNG privately and keep the phone unlocked and reachable on the LAN.
 Treat the offer JSON and PNG as temporary credentials: never attach them to
 review notes, screenshots, issues or CI artifacts. After pairing, cancel the
 window and remove those two private files. Trusted-phone reconnect does not
@@ -107,8 +148,9 @@ require an open enrollment window.
 
 ## Phone and recovery checks
 
-Use Practice first to exercise the local layout. Connect to the paired Mac and
-check its truthful connection and game-data status. Test both sticks, independent
+Use Practice first to exercise the local layout. Use **Test a connection** to
+reconnect to this recording receiver and check its truthful connection and
+game-data status. Test both sticks, independent
 triggers, simultaneous controls and Done; Done should return home and release
 held input. The current unattended synthetic Android test covers bank/theme
 refresh with three held pointers, but physical multitouch and latency acceptance

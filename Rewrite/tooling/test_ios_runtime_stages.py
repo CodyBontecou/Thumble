@@ -87,25 +87,23 @@ class StageJournalTests(unittest.TestCase):
                         raise OSError('private diagnostic write failure')
                     original(stage, event)
                 with mock.patch.object(journal, '_record', side_effect=record), mock.patch('check_ios_tls_runtime.subprocess.run') as run:
-                    cleanup_runtime('owned-synthetic-device', journal)
+                    self.assertFalse(cleanup_runtime('owned-synthetic-device', journal))
                 self.assertEqual(run.call_args_list, [
-                    mock.call(['xcrun', 'simctl', 'shutdown', 'owned-synthetic-device'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL),
-                    mock.call(['xcrun', 'simctl', 'delete', 'owned-synthetic-device'], check=True),
+                    mock.call(['xcrun', 'simctl', 'shutdown', 'owned-synthetic-device'], check=True, timeout=15, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL),
+                    mock.call(['xcrun', 'simctl', 'delete', 'owned-synthetic-device'], check=True, timeout=15, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL),
                 ])
 
-    def test_cleanup_preserves_external_command_failure_and_no_false_completion(self):
+    def test_cleanup_reports_external_command_failure_and_no_false_completion(self):
         with tempfile.TemporaryDirectory() as directory:
             path = pathlib.Path(directory) / 'stage.json'
             journal = IOSRuntimeStages(path, now=lambda: 0)
             failure = subprocess.CalledProcessError(1, ['synthetic-delete'])
             with mock.patch('check_ios_tls_runtime.subprocess.run', side_effect=[None, failure]) as run:
-                with self.assertRaises(subprocess.CalledProcessError) as caught:
-                    cleanup_runtime('owned-synthetic-device', journal)
-            self.assertIs(caught.exception, failure)
+                self.assertTrue(cleanup_runtime('owned-synthetic-device', journal))
             self.assertEqual(run.call_count, 2)
             self.assertEqual(json.loads(path.read_text())['events'][-1], {'stage': 'delete', 'event': 'started', 'elapsedMs': 0})
             with mock.patch('check_ios_tls_runtime.subprocess.run') as absent:
-                cleanup_runtime(None, journal)
+                self.assertFalse(cleanup_runtime(None, journal))
             absent.assert_not_called()
 
 

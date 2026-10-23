@@ -53,6 +53,7 @@ export function startMcp(
     ...(allowConfigurationWrite
       ? [
           "configuration_rename_profile",
+          "configuration_set_control_label",
           "configuration_select_profiles",
           "configuration_duplicate_profile",
           "configuration_initialize_starter",
@@ -335,6 +336,42 @@ export function startMcp(
             ),
           ),
       );
+      if (allowConfigurationWrite)
+        server.registerTool(
+          "configuration_set_control_label",
+          {
+            description:
+              "Set one control's user label override at expectedRevision. Empty text deliberately blanks the label; null clears the override and restores the generated label. Retry identical operationId and payload for the durable receipt. Preserves other edits and input configuration.",
+            inputSchema: z
+              .object({
+                operationId: z.string().regex(/^[A-Za-z0-9-]{1,64}$/),
+                expectedRevision: epoch,
+                profileId: z
+                  .string()
+                  .regex(
+                    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+                  ),
+                controlId: z
+                  .string()
+                  .regex(
+                    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+                  ),
+                label: z.string().max(128).nullable(),
+              })
+              .strict(),
+            annotations: annotations(false),
+          },
+          (args) =>
+            receipt(async () =>
+              requestConfiguration(
+                await readEndpointAsync(root, receiver),
+                decodeConfigurationCommand({
+                  command: "configuration-set-control-label",
+                  ...args,
+                }),
+              ),
+            ),
+        );
       if (allowConfigurationWrite)
         server.registerTool(
           "configuration_rename_profile",

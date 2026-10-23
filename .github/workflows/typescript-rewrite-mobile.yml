@@ -122,6 +122,7 @@ jobs:
           set -euo pipefail
           python3 -m unittest discover -s tooling -p test_ios_tls_runtime.py -v
           python3 -m unittest discover -s tooling -p test_ios_runtime_stages.py -v
+          python3 -m unittest discover -s tooling -p test_ios_runtime_orchestration.py -v
           python3 -m unittest discover -s tooling -p test_native_control_terminal.py -v
           python3 -m unittest discover -s tooling -p test_native_input_error.py -v
           python3 tooling/run_mobile_app_probe.py --platform ios --terminal-report reports/mobile-ios-control-terminal-outcomes.json --input-error-report reports/mobile-ios-input-error-events.json -- python3 tooling/check_ios_tls_runtime.py --report reports/mobile-ios-tls-runtime.json > "$RUNNER_TEMP/ios-tls-runtime-private.txt" 2>&1

@@ -1,2 +1,6 @@
 * text eol=lf
 *.png -text
+
+# Preserve verified upstream notice bytes, including mixed line endings.
+apps/mobile/assets/legal/ThumbleThirdPartyNotices.txt -text -whitespace
+apps/mobile/assets/legal/android/ThumbleAndroidSelectedNotices.txt -text -whitespace

@@ -1,3 +1,8 @@
+import {
+  decodeConfigurationSetControlLabelCommand,
+  type ConfigurationSetControlLabelCommand,
+} from "./control-label.ts";
+export type { ConfigurationSetControlLabelCommand } from "./control-label.ts";
 import { counter, identity, record } from "./receiver.ts";
 
 export const CONFIGURATION_PAGE_SIZE = 16;
@@ -62,6 +67,7 @@ export type ConfigurationInitializeStarterCommand = Readonly<{
   name: string;
 }>;
 export type ConfigurationCommand =
+  | ConfigurationSetControlLabelCommand
   | ConfigurationInitializeStarterCommand
   | ConfigurationDuplicateProfileCommand
   | ConfigurationSelectProfilesCommand
@@ -199,6 +205,8 @@ export function decodeConfigurationCommand(
   value: unknown,
 ): ConfigurationCommand {
   const kind = Object.getOwnPropertyDescriptor(record(value), "command")?.value;
+  if (kind === "configuration-set-control-label")
+    return decodeConfigurationSetControlLabelCommand(value);
   if (kind === "configuration-list") {
     const v = object(value, ["command", "expectedRevision", "offset"]);
     if (v.offset !== 0 && v.expectedRevision === null) invalid();
@@ -466,7 +474,8 @@ export function decodeConfigurationReply(
   }
   if (
     kind === "committed" &&
-    (command.command === "configuration-rename-profile" ||
+    (command.command === "configuration-set-control-label" ||
+      command.command === "configuration-rename-profile" ||
       command.command === "configuration-select-profiles" ||
       command.command === "configuration-duplicate-profile" ||
       command.command === "configuration-initialize-starter")
@@ -481,16 +490,18 @@ export function decodeConfigurationReply(
     ]);
     const affected = r.affectedEntities;
     const expectedEntities =
-      command.command === "configuration-rename-profile"
-        ? [command.profileId]
-        : command.command === "configuration-select-profiles"
-          ? ["configuration"]
-          : [
-              "configuration",
-              command.command === "configuration-initialize-starter"
-                ? command.profileId
-                : command.newProfileId,
-            ];
+      command.command === "configuration-set-control-label"
+        ? [command.profileId, command.controlId]
+        : command.command === "configuration-rename-profile"
+          ? [command.profileId]
+          : command.command === "configuration-select-profiles"
+            ? ["configuration"]
+            : [
+                "configuration",
+                command.command === "configuration-initialize-starter"
+                  ? command.profileId
+                  : command.newProfileId,
+              ];
     if (
       v.version !== 1 ||
       r.version !== 1 ||

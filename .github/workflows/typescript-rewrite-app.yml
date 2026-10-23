@@ -315,20 +315,15 @@ jobs:
           # contain the synthetic invitation. Publish only validated fixed outcomes.
           for mode in corner unsupported; do
             saved_status=0
+            saved_export_status=0
             saved_result="$RUNNER_TEMP/rewrite-saved-$mode.xcresult"
             python3 tooling/run_mobile_app_probe.py --platform ios --saved-controller "$mode" -- xcodebuild -quiet -workspace apps/mobile/ios/ThumbleRewrite.xcworkspace -scheme SavedControllerUITests -configuration Release -destination "platform=iOS Simulator,id=$device_id" -derivedDataPath "$RUNNER_TEMP/rewrite-mobile-app" -resultBundlePath "$saved_result" -parallel-testing-enabled NO -test-timeouts-enabled YES -default-test-execution-time-allowance 180 -maximum-test-execution-time-allowance 240 -collect-test-diagnostics never ONLY_ACTIVE_ARCH=YES ENABLE_TESTABILITY=YES test > "$RUNNER_TEMP/saved-app-ios-$mode.log" 2>&1 || saved_status=$?
-            xcrun xcresulttool get test-results summary --schema-version 0.1.0 --path "$saved_result" > "$RUNNER_TEMP/saved-ios-$mode-summary.json" || saved_status=1
-            xcrun xcresulttool get test-results tests --schema-version 0.1.0 --path "$saved_result" > "$RUNNER_TEMP/saved-ios-$mode-cases.json" || saved_status=1
-            if [[ "$saved_status" == 0 ]]; then
-              python3 tooling/check_saved_app_results.py ios "$mode" "reports/mobile-app-ios-saved-$mode.json" "$RUNNER_TEMP/saved-ios-$mode-summary.json" "$RUNNER_TEMP/saved-ios-$mode-cases.json" || saved_status=1
-            else
-              python3 - "$mode" "reports/mobile-app-ios-saved-$mode.json" <<'PYCODE'
-          import json, pathlib, sys
-          mode, destination = sys.argv[1:]
-          assert mode in ("corner", "unsupported")
-          pathlib.Path(destination).write_text(json.dumps({"platform": "ios", "mode": mode, "scope": "actual-react-saved-map", "status": "failed"}, sort_keys=True) + "\n")
-          PYCODE
-            fi
+            xcrun xcresulttool get test-results summary --schema-version 0.1.0 --path "$saved_result" > "$RUNNER_TEMP/saved-ios-$mode-summary.json" || saved_export_status=1
+            xcrun xcresulttool get test-results tests --schema-version 0.1.0 --path "$saved_result" > "$RUNNER_TEMP/saved-ios-$mode-cases.json" || saved_export_status=1
+            saved_diagnostic_args=()
+            if [[ "$saved_status" != 0 ]]; then saved_diagnostic_args+=(--command-failed); fi
+            if [[ "$saved_export_status" != 0 ]]; then saved_diagnostic_args+=(--export-failed); fi
+            python3 tooling/check_saved_app_results.py ios "$mode" "reports/mobile-app-ios-saved-$mode.json" "$RUNNER_TEMP/saved-ios-$mode-summary.json" "$RUNNER_TEMP/saved-ios-$mode-cases.json" "${saved_diagnostic_args[@]}" || saved_status=1
             if [[ "$saved_status" != 0 ]]; then status=1; fi
           done
           exit "$status"

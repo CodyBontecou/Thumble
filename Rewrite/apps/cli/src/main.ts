@@ -1,3 +1,4 @@
+import { controlLabelCommand, controlLabelHelp } from "./control-label.ts";
 import { decodeWowSyncCommand } from "@thumble/contracts/wow-sync-control";
 import { decodeAuthorizedListener } from "@thumble/contracts/pairing";
 import { exportPairingQR, validatePairingQRDestination } from "./pairing-qr.ts";
@@ -40,6 +41,11 @@ function options(values: string[]): Map<string, string | true> {
   const result = new Map<string, string | true>();
   for (let i = 0; i < values.length; i++) {
     const key = values[i]!;
+    if (key.startsWith("--label=")) {
+      if (result.has("--label")) throw new Error("invalid_arguments");
+      result.set("--label", key.slice("--label=".length));
+      continue;
+    }
     if (!key.startsWith("--") || result.has(key))
       throw new Error("invalid_arguments");
     if (
@@ -53,6 +59,7 @@ function options(values: string[]): Map<string, string | true> {
         "--allow-wow-capture",
         "--select",
         "--keep-selection",
+        "--clear-label",
       ].includes(key)
     ) {
       result.set(key, true);
@@ -65,6 +72,8 @@ function options(values: string[]): Map<string, string | true> {
         "--operation-id",
         "--expected-source-hash",
         "--name",
+        "--control-id",
+        "--label",
         "--offset",
         "--identity-dir",
         "--bind-address",
@@ -92,7 +101,11 @@ function options(values: string[]): Map<string, string | true> {
     )
       throw new Error("unknown_option");
     const value = values[++i];
-    if (!value || value.startsWith("--"))
+    if (
+      value === undefined ||
+      (value === "" && key !== "--label") ||
+      value.startsWith("--")
+    )
       throw new Error("missing_option_value");
     result.set(key, value);
   }
@@ -130,7 +143,16 @@ function nativeIdentity(
 }
 async function main(): Promise<unknown> {
   const [family, action, ...rest] = arguments_;
+  if (family === "configuration" && action === "set-control-label") {
+    const help = controlLabelHelp(rest);
+    if (help) return help;
+  }
   const opts = options(rest);
+  if (
+    ["--control-id", "--label", "--clear-label"].some((key) => opts.has(key)) &&
+    !(family === "configuration" && action === "set-control-label")
+  )
+    throw new Error("invalid_configuration_option");
   if (
     (opts.has("--qr-output") || opts.has("--qr-helper")) &&
     (family !== "pairing" ||
@@ -597,6 +619,10 @@ async function main(): Promise<unknown> {
           ? { path: required(opts, "--file") }
           : {}),
       });
+      return requestConfiguration(readEndpoint(root, receiver), command);
+    }
+    if (action === "set-control-label") {
+      const command = controlLabelCommand(opts);
       return requestConfiguration(readEndpoint(root, receiver), command);
     }
     if (action === "initialize-starter") {

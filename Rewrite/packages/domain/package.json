@@ -16,7 +16,8 @@
     "./wow-capture-receipt": "./src/wow-capture-receipt.ts",
     "./starter-configuration": "./src/starter-configuration.ts",
     "./owned-projection-merge": "./src/owned-projection-merge.ts",
-    "./saved-presentation": "./src/saved-presentation.ts"
+    "./saved-presentation": "./src/saved-presentation.ts",
+    "./owned-control-label": "./src/owned-control-label.ts"
   },
   "dependencies": {
     "@thumble/contracts": "workspace:*"

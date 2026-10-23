@@ -8,6 +8,7 @@ import {
 } from "@thumble/contracts/configuration";
 import { counter } from "@thumble/contracts/receiver";
 import { ConfigurationCatalog } from "@thumble/domain/configuration-catalog";
+import { setOwnedControlLabel } from "@thumble/domain/owned-control-label";
 import {
   ConfigurationRevisionConflict,
   type ConfigurationRepository,
@@ -74,18 +75,20 @@ export class ConfigurationCatalogOperations {
               "thumble-catalog-operation-v1",
               command.command,
               command.expectedRevision,
-              ...(command.command === "configuration-rename-profile"
-                ? [command.profileId, command.name]
-                : command.command === "configuration-initialize-starter"
-                  ? ["starter-v1", command.profileId, command.name]
-                  : command.command === "configuration-select-profiles"
-                    ? [command.activeProfileId, command.defaultProfileId]
-                    : [
-                        command.profileId,
-                        command.newProfileId,
-                        command.name,
-                        command.select,
-                      ]),
+              ...(command.command === "configuration-set-control-label"
+                ? [command.profileId, command.controlId, command.label]
+                : command.command === "configuration-rename-profile"
+                  ? [command.profileId, command.name]
+                  : command.command === "configuration-initialize-starter"
+                    ? ["starter-v1", command.profileId, command.name]
+                    : command.command === "configuration-select-profiles"
+                      ? [command.activeProfileId, command.defaultProfileId]
+                      : [
+                          command.profileId,
+                          command.newProfileId,
+                          command.name,
+                          command.select,
+                        ]),
             ]),
           );
     if (command.command !== "configuration-list") {
@@ -192,7 +195,19 @@ export class ConfigurationCatalogOperations {
       const clock = counter(this.now());
       if (BigInt(clock) > 9223372036854775807n)
         throw new Error("configuration_clock_invalid");
-      if (command.command === "configuration-duplicate-profile") {
+      if (command.command === "configuration-set-control-label") {
+        const updatedAt =
+          BigInt(clock) > BigInt(profile.updatedAt) ? clock : profile.updatedAt;
+        candidate = setOwnedControlLabel(
+          current.source,
+          {
+            profileId: command.profileId,
+            controlId: command.controlId,
+            label: command.label,
+          },
+          updatedAt,
+        );
+      } else if (command.command === "configuration-duplicate-profile") {
         candidate = authority
           ? authority.duplicateProfile(
               command.profileId,
@@ -228,9 +243,11 @@ export class ConfigurationCatalogOperations {
       affectedEntities:
         command.command === "configuration-select-profiles"
           ? ["configuration"]
-          : command.command === "configuration-duplicate-profile"
-            ? ["configuration", command.newProfileId]
-            : [command.profileId],
+          : command.command === "configuration-set-control-label"
+            ? [command.profileId, command.controlId]
+            : command.command === "configuration-duplicate-profile"
+              ? ["configuration", command.newProfileId]
+              : [command.profileId],
     });
     return Object.freeze({ version: 1, kind: "committed", ...result });
   }
