@@ -1,0 +1,27 @@
+{
+  "name": "@thumble/application",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/runtime-controller.ts",
+    "./pairing": "./src/pairing.ts",
+    "./configuration-store": "./src/configuration-store.ts",
+    "./configuration-catalog": "./src/configuration-catalog.ts",
+    "./configuration-validation": "./src/configuration-validation.ts",
+    "./configuration-import": "./src/configuration-import.ts",
+    "./configuration-export": "./src/configuration-export.ts",
+    "./wow-live-observer": "./src/wow-live-observer.ts",
+    "./configuration-saved-pin": "./src/configuration-saved-pin.ts",
+    "./configuration-phone-controls": "./src/configuration-phone-controls.ts",
+    "./wow-capture-supervisor": "./src/wow-capture-supervisor.ts",
+    "./wow-profile-refresh": "./src/wow-profile-refresh.ts",
+    "./wow-sync-session": "./src/wow-sync-session.ts",
+    "./configuration-phone-presentation": "./src/configuration-phone-presentation.ts",
+    "./configuration-editor-read": "./src/configuration-editor-read.ts"
+  },
+  "dependencies": {
+    "@thumble/contracts": "workspace:*",
+    "@thumble/domain": "workspace:*"
+  }
+}

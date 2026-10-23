@@ -1,0 +1,413 @@
+import {
+  decodeWowSyncCommand,
+  decodeWowSyncStatus,
+  type WowSyncCommand,
+  type WowSyncStatus,
+} from "@thumble/contracts/wow-sync-control";
+import {
+  decodeWowCaptureCommand,
+  decodeWowCaptureControlStatus,
+  type WowCaptureCommand,
+  type WowCaptureControlStatus,
+} from "@thumble/contracts/wow-capture-control";
+import {
+  decodeSavedRuntimeCommand,
+  decodeSavedRuntimeStatus,
+  decodeSavedReadinessStatus,
+  type SavedReadinessStatus,
+  type SavedRuntimeCommand,
+  type SavedRuntimeStatus,
+} from "@thumble/contracts/saved-runtime";
+import { LosslessJson, LOSSLESS_JSON_LIMITS } from "@thumble/contracts/json";
+import {
+  decodeConfigurationCommand,
+  decodeConfigurationReply,
+  type ConfigurationCommand,
+  type ConfigurationReply,
+} from "@thumble/contracts/configuration";
+import { decodePairingResponse } from "./pairing.ts";
+import {
+  decodePairingCommand,
+  type PairingCommand,
+  type PairingReply,
+} from "@thumble/contracts/pairing";
+import { spawn, spawnSync } from "node:child_process";
+import { decodeServiceStatus } from "./index.ts";
+import { createConnection } from "node:net";
+import {
+  constants,
+  closeSync,
+  fstatSync,
+  openSync,
+  readSync,
+  lstatSync,
+  realpathSync,
+} from "node:fs";
+import { dirname, isAbsolute, join, resolve } from "node:path";
+import { randomUUID } from "node:crypto";
+import {
+  FRAME_BYTES,
+  counter,
+  decodeSnapshot,
+  decodeLocalCommand,
+  exact,
+  identity,
+  parseStrictJson,
+  record,
+  type LocalCommand,
+  type ServiceStatus,
+} from "@thumble/contracts/receiver";
+
+export type Endpoint = {
+  version: 1;
+  instanceId: string;
+  servicePid: number;
+  receiverPid: number;
+  port: number;
+  token: string;
+  recordingLog: string;
+};
+export function runtimeDirectory(path: string): string {
+  if (!isAbsolute(path)) throw new Error("runtime_directory_must_be_absolute");
+  return join(
+    realpathSync(dirname(path)),
+    resolve(path).split(/[\\/]/).at(-1)!,
+  );
+}
+function boundedRead(fd: number, maximum: number): string {
+  const buffer = Buffer.alloc(maximum + 1);
+  let count = 0;
+  while (count < buffer.length) {
+    const read = readSync(fd, buffer, count, buffer.length - count, null);
+    if (read === 0) break;
+    count += read;
+  }
+  if (count > maximum) throw new Error("file_too_large");
+  return new TextDecoder("utf-8", { fatal: true }).decode(
+    buffer.subarray(0, count),
+  );
+}
+export function readStateFile(path: string): unknown {
+  return parseStrictJson(readInputText(path, FRAME_BYTES));
+}
+export function readConfigurationFile(path: string): LosslessJson {
+  if (
+    typeof path !== "string" ||
+    !isAbsolute(path) ||
+    path.includes("\0") ||
+    path.length > 4096
+  )
+    throw new Error("configuration_file_path_invalid");
+  try {
+    return LosslessJson.parse(readInputText(path, LOSSLESS_JSON_LIMITS.bytes));
+  } catch (error) {
+    if (
+      error &&
+      typeof error === "object" &&
+      "code" in error &&
+      ["ENOENT", "EACCES", "EPERM", "EISDIR"].includes(String(error.code))
+    )
+      throw new Error("configuration_file_unavailable");
+    if (error instanceof Error) {
+      const codes: Record<string, string> = {
+        state_too_large: "configuration_file_too_large",
+        file_too_large: "configuration_file_too_large",
+        unsafe_state_file: "unsafe_configuration_file",
+        state_file_changed: "configuration_file_changed",
+      };
+      if (Object.hasOwn(codes, error.message))
+        throw new Error(codes[error.message]);
+    }
+    throw error;
+  }
+}
+function readInputText(path: string, maximumBytes: number): string {
+  const before = lstatSync(path);
+  if (!before.isFile() || before.isSymbolicLink())
+    throw new Error("unsafe_state_file");
+  const fd = openSync(
+    path,
+    constants.O_RDONLY |
+      (process.platform === "win32" ? 0 : constants.O_NOFOLLOW),
+  );
+  try {
+    const metadata = fstatSync(fd);
+    if (
+      !metadata.isFile() ||
+      before.dev !== metadata.dev ||
+      before.ino !== metadata.ino
+    )
+      throw new Error("unsafe_state_file");
+    if (metadata.size > maximumBytes) throw new Error("state_too_large");
+    const text = boundedRead(fd, maximumBytes);
+    const after = fstatSync(fd);
+    if (metadata.size !== after.size || metadata.mtimeMs !== after.mtimeMs)
+      throw new Error("state_file_changed");
+    return text;
+  } finally {
+    closeSync(fd);
+  }
+}
+export function readEndpoint(directory: string, protector?: string): Endpoint {
+  if (process.platform === "win32") {
+    if (
+      !protector ||
+      spawnSync(protector, ["secure-directory", directory], {
+        stdio: "ignore",
+        windowsHide: true,
+      }).status !== 0
+    ) {
+      throw new Error("runtime_directory_protection_failed");
+    }
+  }
+  return loadEndpoint(directory);
+}
+/** Long-lived adapters must not synchronously wait for a native helper on their I/O thread. */
+export async function readEndpointAsync(
+  directory: string,
+  protector?: string,
+): Promise<Endpoint> {
+  if (process.platform === "win32") {
+    if (!protector) throw new Error("runtime_directory_protection_failed");
+    await new Promise<void>((resolve, reject) => {
+      const child = spawn(protector, ["secure-directory", directory], {
+        stdio: "ignore",
+        windowsHide: true,
+      });
+      let settled = false;
+      const finish = (ok: boolean): void => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        if (ok) resolve();
+        else reject(new Error("runtime_directory_protection_failed"));
+      };
+      const timer = setTimeout(() => {
+        child.kill();
+        finish(false);
+      }, 3000);
+      child.once("error", () => finish(false));
+      child.once("exit", (code) => finish(code === 0));
+    });
+  }
+  return loadEndpoint(directory);
+}
+function loadEndpoint(directory: string): Endpoint {
+  const fd = openSync(
+    join(directory, "endpoint.json"),
+    constants.O_RDONLY |
+      (process.platform === "win32" ? 0 : constants.O_NOFOLLOW),
+  );
+  try {
+    const stat = fstatSync(fd);
+    if (
+      !stat.isFile() ||
+      stat.nlink !== 1 ||
+      stat.size > 8192 ||
+      (process.platform !== "win32" &&
+        ((stat.mode & 0o077) !== 0 || stat.uid !== process.getuid?.()))
+    )
+      throw new Error("unsafe_endpoint");
+    const value = record(parseStrictJson(boundedRead(fd, 8192)));
+    exact(value, [
+      "version",
+      "instanceId",
+      "servicePid",
+      "receiverPid",
+      "port",
+      "token",
+      "recordingLog",
+    ]);
+    if (
+      value.version !== 1 ||
+      !Number.isInteger(value.port) ||
+      Number(value.port) < 1 ||
+      Number(value.port) > 65535 ||
+      typeof value.token !== "string" ||
+      !/^[0-9a-f]{64}$/.test(value.token) ||
+      typeof value.recordingLog !== "string" ||
+      ![value.servicePid, value.receiverPid].every(
+        (p) => Number.isSafeInteger(p) && Number(p) > 0,
+      )
+    )
+      throw new Error("invalid_endpoint");
+    return {
+      version: 1,
+      instanceId: identity(value.instanceId),
+      servicePid: Number(value.servicePid),
+      receiverPid: Number(value.receiverPid),
+      port: Number(value.port),
+      token: value.token,
+      recordingLog: value.recordingLog,
+    };
+  } finally {
+    closeSync(fd);
+  }
+}
+export function request(
+  endpoint: Endpoint,
+  body: LocalCommand,
+): Promise<ServiceStatus> {
+  return exchange(endpoint, decodeLocalCommand(body), (value) => {
+    const status = decodeServiceStatus(value);
+    if (
+      status.service.instanceId !== endpoint.instanceId ||
+      status.service.pid !== endpoint.servicePid ||
+      status.receiver.pid !== endpoint.receiverPid
+    )
+      throw new Error("service_identity_mismatch");
+    return status;
+  });
+}
+export function requestSavedRuntime(
+  endpoint: Endpoint,
+  input: SavedRuntimeCommand,
+): Promise<SavedRuntimeStatus> {
+  const command = decodeSavedRuntimeCommand(input);
+  return exchange(endpoint, command, (value) => {
+    const status = decodeSavedRuntimeStatus(value);
+    if (
+      status.serviceInstanceId !== endpoint.instanceId ||
+      status.servicePid !== endpoint.servicePid ||
+      status.receiverPid !== endpoint.receiverPid
+    )
+      throw new Error("service_identity_mismatch");
+    if (
+      command.command === "activate-saved" &&
+      (!status.savedBinding ||
+        status.savedBinding.configurationRevision !==
+          command.expectedConfigurationRevision ||
+        status.savedBinding.sourceHash !== command.expectedSourceHash ||
+        status.savedBinding.profileId !== command.profileId)
+    )
+      throw new Error("saved_activation_unconfirmed");
+    return status;
+  });
+}
+export function requestWowCapture(
+  endpoint: Endpoint,
+  body: WowCaptureCommand,
+): Promise<WowCaptureControlStatus> {
+  return exchange(
+    endpoint,
+    decodeWowCaptureCommand(body),
+    decodeWowCaptureControlStatus,
+  );
+}
+export function requestPairing(
+  endpoint: Endpoint,
+  body: PairingCommand,
+): Promise<PairingReply> {
+  body = decodePairingCommand(body);
+  return exchange(endpoint, body, (value) => {
+    return decodePairingResponse(value, endpoint.instanceId, body);
+  });
+}
+export function requestConfiguration(
+  endpoint: Endpoint,
+  input: ConfigurationCommand,
+): Promise<ConfigurationReply> {
+  const command = decodeConfigurationCommand(input);
+  return exchange(endpoint, command, (value) =>
+    decodeConfigurationReply(value, command),
+  );
+}
+function exchange<Result>(
+  endpoint: Endpoint,
+  body:
+    | LocalCommand
+    | PairingCommand
+    | ConfigurationCommand
+    | SavedRuntimeCommand
+    | Readonly<{ command: "saved-readiness-status" }>
+    | WowCaptureCommand
+    | WowSyncCommand,
+  decode: (value: unknown) => Result,
+): Promise<Result> {
+  const requestId = randomUUID();
+  return new Promise((resolve, reject) => {
+    const socket = createConnection({ host: "127.0.0.1", port: endpoint.port });
+    let buffer = Buffer.alloc(0);
+    let settled = false;
+    const fail = (code: string): void => {
+      if (settled) return;
+      settled = true;
+      socket.destroy();
+      reject(new Error(code));
+    };
+    socket.setTimeout(3000, () => fail("service_timeout"));
+    socket.on("error", () => fail("service_unavailable"));
+    socket.on("end", () => {
+      if (!settled) fail("service_disconnected");
+    });
+    socket.on("connect", () =>
+      socket.write(
+        JSON.stringify({ version: 1, requestId, token: endpoint.token, body }) +
+          "\n",
+      ),
+    );
+    socket.on("data", (chunk) => {
+      if (settled) return;
+      buffer = Buffer.concat([
+        buffer,
+        typeof chunk === "string" ? Buffer.from(chunk) : chunk,
+      ]);
+      if (buffer.length > FRAME_BYTES) return fail("response_too_large");
+      const newline = buffer.indexOf(10);
+      if (newline < 0) return;
+      try {
+        const response = record(
+          parseStrictJson(
+            new TextDecoder("utf-8", { fatal: true }).decode(
+              buffer.subarray(0, newline),
+            ),
+          ),
+        );
+        if (
+          response.version !== 1 ||
+          response.requestId !== requestId ||
+          typeof response.ok !== "boolean"
+        )
+          throw new Error("invalid_service_response");
+        if (response.ok === false) {
+          exact(response, ["version", "requestId", "ok", "error"]);
+          if (
+            typeof response.error !== "string" ||
+            !/^[a-z_]+$/.test(response.error)
+          )
+            throw new Error("invalid_service_response");
+          return fail(response.error);
+        }
+        exact(response, ["version", "requestId", "ok", "result"]);
+        const result = decode(response.result);
+        settled = true;
+        socket.destroy();
+        resolve(result);
+      } catch {
+        fail("invalid_service_response");
+      }
+    });
+  });
+}
+
+export function requestSavedReadiness(
+  endpoint: Endpoint,
+): Promise<SavedReadinessStatus> {
+  return exchange(endpoint, { command: "saved-readiness-status" }, (value) => {
+    const status = decodeSavedReadinessStatus(value);
+    if (
+      status.serviceInstanceId !== endpoint.instanceId ||
+      status.servicePid !== endpoint.servicePid ||
+      status.receiverPid !== endpoint.receiverPid
+    )
+      throw new Error("service_identity_mismatch");
+    return status;
+  });
+}
+
+export function requestWowSync(
+  endpoint: Endpoint,
+  body: WowSyncCommand,
+): Promise<WowSyncStatus> {
+  return exchange(endpoint, decodeWowSyncCommand(body), decodeWowSyncStatus);
+}

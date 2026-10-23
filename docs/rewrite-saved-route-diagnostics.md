@@ -1,0 +1,13 @@
+# Saved-route failure evidence
+
+The actual saved-controller app checks publish a bounded diagnostic object when a route fails. Raw UI logs, screenshots, XML, exception text and xcresult attachments remain private because they may contain a synthetic pairing invitation.
+
+Both platform wrappers now inspect result files even when the app command exits unsuccessfully. A failed command or failed result export always remains a failed witness, including when an older result claims success. Android suppresses assertion attribution when the XML predates that command's start. The iOS workflow uses its existing separate xcresult path for each mode.
+
+The diagnostic reports only fixed stage, case and failure-category values. The sole admitted case is the existing saved-controller test. A small allowlist of exact source-authored assertion prefixes may produce a fixed assertion category, such as `orientation`, `connection-ready` or `unsupported-result`. Arbitrary messages, stack frames, attachment references and URLs never become fields. Unknown assertions retain only `test-failed`. Missing, malformed, wrong-case, stale and failed-export results have distinct fixed outcomes. Each input retains the existing 2 MiB bound and iOS tree traversal retains its 256-node bound.
+
+These fields identify the test boundary where evidence exists. They do not identify a native first termination, establish input expiry or certify a platform bug. A failing unsupported route can occur before an input grant exists. Native first-error diagnostics remain a separate opt-in artifact.
+
+For public commit `eca50a73e6950f10dd0cdae7fa96ab24d872cbb0`, the existing iOS native app witnesses passed, including 75.037 seconds held through two renewals; its saved corner route failed and unsupported route passed. Android's ten legacy witnesses passed, while both saved routes failed. Their previous sanitized saved reports contained only `status:failed`, and the job logs did not retain those private test details. The underlying causes cannot be reconstructed from those reports. No app rerun, production behavior change, deadline change or success-criteria relaxation is part of this diagnostic change.
+
+Seven parser tests cover exact pass requirements, fixed assertion admission only for a failed case with consistent iOS failure counts, contradictory-summary rejection, unknown/private message suppression, failed-command handling, stale XML, failed exports, missing/malformed results and incorrect case identities. The public-base checker lacks the new failure diagnostics; the augmented test set fails against it and passes against the supplement. The workflow passes actionlint. These are headless parser/orchestration checks, not new device acceptance.

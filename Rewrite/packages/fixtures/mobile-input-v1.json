@@ -1,0 +1,2198 @@
+{
+  "version": 1,
+  "map": {
+    "version": 1,
+    "generation": "1",
+    "revision": "1",
+    "controls": [
+      {
+        "id": "left-stick",
+        "action": "leftStick",
+        "x": 0,
+        "y": 0.4,
+        "width": 0.3,
+        "height": 0.6
+      },
+      {
+        "id": "right-stick",
+        "action": "rightStick",
+        "x": 0.7,
+        "y": 0.4,
+        "width": 0.3,
+        "height": 0.6
+      },
+      {
+        "id": "south-a",
+        "action": "south",
+        "x": 0.6,
+        "y": 0,
+        "width": 0.15,
+        "height": 0.2
+      },
+      {
+        "id": "south-b",
+        "action": "south",
+        "x": 0.4,
+        "y": 0,
+        "width": 0.15,
+        "height": 0.2
+      },
+      {
+        "id": "left-trigger",
+        "action": "leftTrigger",
+        "x": 0,
+        "y": 0,
+        "width": 0.2,
+        "height": 0.2
+      },
+      {
+        "id": "right-trigger",
+        "action": "rightTrigger",
+        "x": 0.8,
+        "y": 0,
+        "width": 0.2,
+        "height": 0.2
+      }
+    ]
+  },
+  "scenarios": [
+    {
+      "name": "both triggers and a face button remain independently held",
+      "events": [
+        {
+          "type": "connect",
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 1,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "begin",
+          "id": 1,
+          "x": 0.1,
+          "y": 0.1,
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 1,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 2,
+            "reportHex": "00140000ff000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "begin",
+          "id": 2,
+          "x": 0.9,
+          "y": 0.1,
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 1,
+              "rightTrigger": 1
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 3,
+            "reportHex": "00140000ffff0000000000000000000000000000"
+          }
+        },
+        {
+          "type": "begin",
+          "id": 3,
+          "x": 0.67,
+          "y": 0.1,
+          "expected": {
+            "state": {
+              "buttons": ["south"],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 1,
+              "rightTrigger": 1
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 4,
+            "reportHex": "00140010ffff0000000000000000000000000000"
+          }
+        },
+        {
+          "type": "end",
+          "id": 1,
+          "expected": {
+            "state": {
+              "buttons": ["south"],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 1
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 5,
+            "reportHex": "0014001000ff0000000000000000000000000000"
+          }
+        },
+        {
+          "type": "end",
+          "id": 3,
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 1
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 6,
+            "reportHex": "0014000000ff0000000000000000000000000000"
+          }
+        },
+        {
+          "type": "end",
+          "id": 2,
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 7,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        }
+      ]
+    },
+    {
+      "name": "two sticks capture and release independently",
+      "events": [
+        {
+          "type": "connect",
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 1,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "begin",
+          "id": 1,
+          "x": 0.15,
+          "y": 0.7,
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 2,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "move",
+          "id": 1,
+          "x": 0.3,
+          "y": 0.7,
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 1,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 3,
+            "reportHex": "001400000000ff7f000000000000000000000000"
+          }
+        },
+        {
+          "type": "begin",
+          "id": 2,
+          "x": 0.85,
+          "y": 0.7,
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 1,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 4,
+            "reportHex": "001400000000ff7f000000000000000000000000"
+          }
+        },
+        {
+          "type": "move",
+          "id": 2,
+          "x": 0.85,
+          "y": 0.4,
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 1,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": -1,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 5,
+            "reportHex": "001400000000ff7f00000000ff7f000000000000"
+          }
+        },
+        {
+          "type": "end",
+          "id": 1,
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": -1,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 6,
+            "reportHex": "001400000000000000000000ff7f000000000000"
+          }
+        },
+        {
+          "type": "end",
+          "id": 2,
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 7,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        }
+      ]
+    },
+    {
+      "name": "duplicate semantic buttons are reference counted",
+      "events": [
+        {
+          "type": "connect",
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 1,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "begin",
+          "id": 1,
+          "x": 0.67,
+          "y": 0.1,
+          "expected": {
+            "state": {
+              "buttons": ["south"],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 2,
+            "reportHex": "0014001000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "begin",
+          "id": 2,
+          "x": 0.47,
+          "y": 0.1,
+          "expected": {
+            "state": {
+              "buttons": ["south"],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 3,
+            "reportHex": "0014001000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "end",
+          "id": 1,
+          "expected": {
+            "state": {
+              "buttons": ["south"],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 4,
+            "reportHex": "0014001000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "end",
+          "id": 2,
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 5,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        }
+      ]
+    },
+    {
+      "name": "practice releases host input and never replays held touches",
+      "events": [
+        {
+          "type": "connect",
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 1,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "begin",
+          "id": 1,
+          "x": 0.67,
+          "y": 0.1,
+          "expected": {
+            "state": {
+              "buttons": ["south"],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 2,
+            "reportHex": "0014001000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "practice",
+          "enabled": true,
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": false,
+            "practice": true,
+            "hostSamples": 3,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "begin",
+          "id": 2,
+          "x": 0.47,
+          "y": 0.1,
+          "expected": {
+            "state": {
+              "buttons": ["south"],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": false,
+            "practice": true,
+            "hostSamples": 3,
+            "reportHex": "0014001000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "tick",
+          "expected": {
+            "state": {
+              "buttons": ["south"],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": false,
+            "practice": true,
+            "hostSamples": 3,
+            "reportHex": "0014001000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "practice",
+          "enabled": false,
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": false,
+            "practice": false,
+            "hostSamples": 3,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "connect",
+          "error": "fresh_generation_required",
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": false,
+            "practice": false,
+            "hostSamples": 3,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "activate",
+          "generation": "2",
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": false,
+            "practice": false,
+            "hostSamples": 3,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "connect",
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 4,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "move",
+          "id": 2,
+          "x": 0.47,
+          "y": 0.1,
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 4,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        }
+      ]
+    },
+    {
+      "name": "touchCancelled retires touches before reconnect",
+      "events": [
+        {
+          "type": "connect",
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 1,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "begin",
+          "id": 7,
+          "x": 0.67,
+          "y": 0.1,
+          "expected": {
+            "state": {
+              "buttons": ["south"],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 2,
+            "reportHex": "0014001000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "cancel",
+          "reason": "touchCancelled",
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": false,
+            "practice": false,
+            "hostSamples": 3,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "move",
+          "id": 7,
+          "x": 0.67,
+          "y": 0.1,
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": false,
+            "practice": false,
+            "hostSamples": 3,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "activate",
+          "generation": "2",
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": false,
+            "practice": false,
+            "hostSamples": 3,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "connect",
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 4,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "move",
+          "id": 7,
+          "x": 0.67,
+          "y": 0.1,
+          "generation": "1",
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 4,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "tick",
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 5,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        }
+      ]
+    },
+    {
+      "name": "background retires touches before reconnect",
+      "events": [
+        {
+          "type": "connect",
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 1,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "begin",
+          "id": 7,
+          "x": 0.67,
+          "y": 0.1,
+          "expected": {
+            "state": {
+              "buttons": ["south"],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 2,
+            "reportHex": "0014001000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "cancel",
+          "reason": "background",
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": false,
+            "practice": false,
+            "hostSamples": 3,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "move",
+          "id": 7,
+          "x": 0.67,
+          "y": 0.1,
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": false,
+            "practice": false,
+            "hostSamples": 3,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "activate",
+          "generation": "2",
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": false,
+            "practice": false,
+            "hostSamples": 3,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "connect",
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 4,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "move",
+          "id": 7,
+          "x": 0.67,
+          "y": 0.1,
+          "generation": "1",
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 4,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "tick",
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 5,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        }
+      ]
+    },
+    {
+      "name": "screenLock retires touches before reconnect",
+      "events": [
+        {
+          "type": "connect",
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 1,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "begin",
+          "id": 7,
+          "x": 0.67,
+          "y": 0.1,
+          "expected": {
+            "state": {
+              "buttons": ["south"],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 2,
+            "reportHex": "0014001000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "cancel",
+          "reason": "screenLock",
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": false,
+            "practice": false,
+            "hostSamples": 3,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "move",
+          "id": 7,
+          "x": 0.67,
+          "y": 0.1,
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": false,
+            "practice": false,
+            "hostSamples": 3,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "activate",
+          "generation": "2",
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": false,
+            "practice": false,
+            "hostSamples": 3,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "connect",
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 4,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "move",
+          "id": 7,
+          "x": 0.67,
+          "y": 0.1,
+          "generation": "1",
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 4,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "tick",
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 5,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rotation retires touches before reconnect",
+      "events": [
+        {
+          "type": "connect",
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 1,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "begin",
+          "id": 7,
+          "x": 0.67,
+          "y": 0.1,
+          "expected": {
+            "state": {
+              "buttons": ["south"],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 2,
+            "reportHex": "0014001000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "cancel",
+          "reason": "rotation",
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": false,
+            "practice": false,
+            "hostSamples": 3,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "move",
+          "id": 7,
+          "x": 0.67,
+          "y": 0.1,
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": false,
+            "practice": false,
+            "hostSamples": 3,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "activate",
+          "generation": "2",
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": false,
+            "practice": false,
+            "hostSamples": 3,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "connect",
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 4,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "move",
+          "id": 7,
+          "x": 0.67,
+          "y": 0.1,
+          "generation": "1",
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 4,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "tick",
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 5,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        }
+      ]
+    },
+    {
+      "name": "disconnected retires touches before reconnect",
+      "events": [
+        {
+          "type": "connect",
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 1,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "begin",
+          "id": 7,
+          "x": 0.67,
+          "y": 0.1,
+          "expected": {
+            "state": {
+              "buttons": ["south"],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 2,
+            "reportHex": "0014001000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "cancel",
+          "reason": "disconnected",
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": false,
+            "practice": false,
+            "hostSamples": 3,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "move",
+          "id": 7,
+          "x": 0.67,
+          "y": 0.1,
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": false,
+            "practice": false,
+            "hostSamples": 3,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "activate",
+          "generation": "2",
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": false,
+            "practice": false,
+            "hostSamples": 3,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "connect",
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 4,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "move",
+          "id": 7,
+          "x": 0.67,
+          "y": 0.1,
+          "generation": "1",
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 4,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "tick",
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 5,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        }
+      ]
+    },
+    {
+      "name": "profile replacement is a neutral generation barrier",
+      "events": [
+        {
+          "type": "connect",
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 1,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "begin",
+          "id": 1,
+          "x": 0.1,
+          "y": 0.1,
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 1,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 2,
+            "reportHex": "00140000ff000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "activate",
+          "generation": "2",
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": false,
+            "practice": false,
+            "hostSamples": 3,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "connect",
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 4,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "begin",
+          "id": 2,
+          "x": 0.9,
+          "y": 0.1,
+          "generation": "1",
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 4,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "activate",
+          "generation": "1",
+          "error": "stale_map",
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 4,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "tick",
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 5,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        }
+      ]
+    },
+    {
+      "name": "disposal cannot reconnect",
+      "events": [
+        {
+          "type": "connect",
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 1,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "begin",
+          "id": 1,
+          "x": 0.67,
+          "y": 0.1,
+          "expected": {
+            "state": {
+              "buttons": ["south"],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 2,
+            "reportHex": "0014001000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "cancel",
+          "reason": "disposed",
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": false,
+            "practice": false,
+            "hostSamples": 3,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "activate",
+          "generation": "2",
+          "error": "unavailable",
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": false,
+            "practice": false,
+            "hostSamples": 3,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "connect",
+          "error": "unavailable",
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": false,
+            "practice": false,
+            "hostSamples": 3,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "begin",
+          "id": 2,
+          "x": 0.67,
+          "y": 0.1,
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": false,
+            "practice": false,
+            "hostSamples": 3,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        }
+      ]
+    },
+    {
+      "name": "duplicate pointer fails closed",
+      "events": [
+        {
+          "type": "connect",
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 1,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "begin",
+          "id": 1,
+          "x": 0.67,
+          "y": 0.1,
+          "expected": {
+            "state": {
+              "buttons": ["south"],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 2,
+            "reportHex": "0014001000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "begin",
+          "id": 1,
+          "x": 0.47,
+          "y": 0.1,
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": false,
+            "practice": false,
+            "hostSamples": 3,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "move",
+          "id": 1,
+          "x": 0.47,
+          "y": 0.1,
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": false,
+            "practice": false,
+            "hostSamples": 3,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        }
+      ]
+    },
+    {
+      "name": "stick ownership never transfers to a previously rejected finger",
+      "events": [
+        {
+          "type": "connect",
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 1,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "begin",
+          "id": 1,
+          "x": 0.15,
+          "y": 0.7,
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 2,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "move",
+          "id": 1,
+          "x": 0.3,
+          "y": 0.7,
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 1,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 3,
+            "reportHex": "001400000000ff7f000000000000000000000000"
+          }
+        },
+        {
+          "type": "begin",
+          "id": 2,
+          "x": 0.15,
+          "y": 0.7,
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 1,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 3,
+            "reportHex": "001400000000ff7f000000000000000000000000"
+          }
+        },
+        {
+          "type": "end",
+          "id": 1,
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 4,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "move",
+          "id": 2,
+          "x": 0.3,
+          "y": 0.7,
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 4,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        }
+      ]
+    },
+    {
+      "name": "last hit region wins overlaps",
+      "controls": [
+        {
+          "id": "left-stick",
+          "action": "leftStick",
+          "x": 0,
+          "y": 0.4,
+          "width": 0.3,
+          "height": 0.6
+        },
+        {
+          "id": "right-stick",
+          "action": "rightStick",
+          "x": 0.7,
+          "y": 0.4,
+          "width": 0.3,
+          "height": 0.6
+        },
+        {
+          "id": "south-a",
+          "action": "south",
+          "x": 0.6,
+          "y": 0,
+          "width": 0.15,
+          "height": 0.2
+        },
+        {
+          "id": "south-b",
+          "action": "south",
+          "x": 0.4,
+          "y": 0,
+          "width": 0.15,
+          "height": 0.2
+        },
+        {
+          "id": "left-trigger",
+          "action": "leftTrigger",
+          "x": 0,
+          "y": 0,
+          "width": 0.2,
+          "height": 0.2
+        },
+        {
+          "id": "right-trigger",
+          "action": "rightTrigger",
+          "x": 0.8,
+          "y": 0,
+          "width": 0.2,
+          "height": 0.2
+        },
+        {
+          "id": "overlay",
+          "action": "east",
+          "x": 0.6,
+          "y": 0,
+          "width": 0.15,
+          "height": 0.2
+        }
+      ],
+      "events": [
+        {
+          "type": "connect",
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 1,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "begin",
+          "id": 1,
+          "x": 0.67,
+          "y": 0.1,
+          "expected": {
+            "state": {
+              "buttons": ["east"],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 2,
+            "reportHex": "0014002000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "move",
+          "id": 1,
+          "x": 0.8,
+          "y": 0.3,
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 3,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "move",
+          "id": 1,
+          "x": 0.67,
+          "y": 0.1,
+          "expected": {
+            "state": {
+              "buttons": ["east"],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 4,
+            "reportHex": "0014002000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "end",
+          "id": 1,
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 5,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        }
+      ]
+    },
+    {
+      "name": "stick diagonals remain circular and saturate outside the control",
+      "events": [
+        {
+          "type": "connect",
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 1,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "begin",
+          "id": 1,
+          "x": 0.15,
+          "y": 0.7,
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 2,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        },
+        {
+          "type": "move",
+          "id": 1,
+          "x": 0.3,
+          "y": 1,
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0.7071067811865475,
+              "leftStickY": 0.7071067811865475,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 3,
+            "reportHex": "001400000000825a7ea500000000000000000000"
+          }
+        },
+        {
+          "type": "move",
+          "id": 1,
+          "x": -0.15,
+          "y": 0.7,
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": -1,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 4,
+            "reportHex": "0014000000000080000000000000000000000000"
+          }
+        },
+        {
+          "type": "end",
+          "id": 1,
+          "expected": {
+            "state": {
+              "buttons": [],
+              "leftStickX": 0,
+              "leftStickY": 0,
+              "rightStickX": 0,
+              "rightStickY": 0,
+              "leftTrigger": 0,
+              "rightTrigger": 0
+            },
+            "connected": true,
+            "practice": false,
+            "hostSamples": 5,
+            "reportHex": "0014000000000000000000000000000000000000"
+          }
+        }
+      ]
+    }
+  ]
+}

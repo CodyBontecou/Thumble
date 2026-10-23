@@ -1,0 +1,89 @@
+name: TypeScript rewrite Windows data API subset
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "Rewrite/native/windows-sdk-conformance/**"
+      - "Rewrite/native/windows-candidate/**"
+      - "Rewrite/tooling/windows-candidate-api-conformance.ps1"
+      - "Host/fixtures/gamepad/v2.json"
+      - ".github/workflows/typescript-rewrite-windows-data-api.yml"
+  pull_request:
+    paths:
+      - "Rewrite/native/windows-sdk-conformance/**"
+      - "Rewrite/native/windows-candidate/**"
+      - "Rewrite/tooling/windows-candidate-api-conformance.ps1"
+      - "Host/fixtures/gamepad/v2.json"
+      - ".github/workflows/typescript-rewrite-windows-data-api.yml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  DOTNET_NOLOGO: "1"
+  DOTNET_GENERATE_ASPNET_CERTIFICATE: "false"
+  DOTNET_ADD_GLOBAL_TOOLS_TO_PATH: "false"
+  DOTNET_MULTILEVEL_LOOKUP: "0"
+
+jobs:
+  data-type-subset:
+    runs-on: windows-2022
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@1.88.0
+      - name: Fetch exact data sources without credentials
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $pin = Get-Content -Raw Rewrite/native/windows-sdk-conformance/pin.json | ConvertFrom-Json
+          if ($pin.repository -cne 'https://github.com/hifihedgehog/HIDMaestro.git' -or $pin.commit -cne '63cc6481f9e82fc8600bda8aaa65cb3271113a19' -or $pin.sdkVersion -cne '10.0.402') { throw 'Unreviewed data API pin' }
+          $source = Join-Path $env:RUNNER_TEMP 'hidmaestro-data-source'
+          git init $source
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git -C $source config core.autocrlf false
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git -C $source config core.eol lf
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git -C $source -c credential.helper= fetch --depth=1 $pin.repository $pin.commit
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git -C $source checkout --detach FETCH_HEAD
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ./Rewrite/tooling/windows-candidate-api-conformance.ps1 -Mode ValidateOnly -SourceRoot $source
+      - name: Extract the exact portable dotnet SDK without an installer
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # Official .NET 10 release metadata pins this exact Windows x64 SDK archive.
+          $url = 'https://builds.dotnet.microsoft.com/dotnet/Sdk/10.0.402/dotnet-sdk-10.0.402-win-x64.zip'
+          $expected = 'ae4fd528cb7e9f6af6aaf7de36715a69f761f183744f1bb3025d19f5a92447090ec561410e46266c1d10a63781ed6f3de771760bc76c876d87daabc367b898cd'
+          $archive = Join-Path $env:RUNNER_TEMP 'dotnet-10.0.402-win-x64.zip'
+          Invoke-WebRequest -Uri $url -OutFile $archive
+          if ((Get-Item $archive).Length -gt 1GB -or (Get-FileHash -Algorithm SHA512 $archive).Hash.ToLowerInvariant() -cne $expected) { throw 'dotnet SDK archive rejected' }
+          $sdk = Join-Path $env:RUNNER_TEMP 'dotnet-data-api-10.0.402'
+          Expand-Archive -LiteralPath $archive -DestinationPath $sdk
+          $sdk | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          "DOTNET_ROOT=$sdk" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+      - name: Compile and test only the pinned data declaration subset
+        run: |
+          $ErrorActionPreference = 'Stop'
+          ./Rewrite/tooling/windows-candidate-api-conformance.ps1 -Mode Run -SourceRoot (Join-Path $env:RUNNER_TEMP 'hidmaestro-data-source') -WorkRoot (Join-Path $env:RUNNER_TEMP 'data-api-work') -EvidenceRoot (Join-Path $env:RUNNER_TEMP 'data-api-evidence') -ConfirmDataOnly
+      - name: Upload bounded text evidence only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rewrite-windows-data-api-subset-evidence
+          path: |
+            ${{ runner.temp }}/data-api-evidence/*.txt
+            ${{ runner.temp }}/data-api-evidence/*.json
+          if-no-files-found: warn
+          retention-days: 7

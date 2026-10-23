@@ -17,10 +17,34 @@ final class StackSafetyRegressionTests: XCTestCase {
         case generationPlanDecodeMismatch
     }
 
+    /// Structural regression data only; no authored/community skin or private artwork dependency.
+    private static func syntheticStackSkinArchive() throws -> Data {
+        let image = try XCTUnwrap(Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAIAAABMXPacAAAA+UlEQVR4nO3RMQ0AMAzAsN5DPNiDMBg9YikAInnOfVps1g/iAQDQDgCAdgAAtAMAoB0AAO0AAGgHAEA7AADaAQDQDgCAdgAAtAMAoB0AAO0AAGgHAEA7AADaAQDQDgCAdgAAtAMAoB0AAO0AAGgHAEA7AADaAQDQDgCAdgAAtAMAoB0AAO0AAGgHAEA7AADaAQDQDgCAdgAAtAMAoB0AAO0AAGgHAEA7AADaAQDQDgCAdgAAtAMAoB0AAO0AAGgHAEA7AADaAQDQDgCAdgAAtAMAoB0AAO0AAGgHAEA7AADaAQDQDgCAdgAAtAMAoB0AAO0AAGgHAEC7DwafhWXtIJ+sAAAAAElFTkSuQmCC"))
+        let style = GamepadStyleToken(id: "stack-control", name: "Stack control",
+            visualStyle: GamepadControlVisualStyle(
+                normal: GamepadControlStateStyle(fillStyle: .image(GamepadImageFill(assetID: "stack-image"))),
+                pressed: GamepadControlStateStyle(scale: 0.94),
+                hapticFeedback: GamepadHapticFeedback(style: .rigid)))
+        let skin = ThumbleSkin(base: ThumbleSkinAppearance(
+            backgroundFillStyle: .image(GamepadImageFill(assetID: "stack-image")),
+            accentStyle: .purple, showsButtonLabels: true,
+            defaultControl: ThumbleSkinControlAppearance(styleID: style.id),
+            styleLibrary: GamepadStyleLibrary(styles: [style])),
+            variants: [ThumbleSkinVariant(id: "stack-portrait-dark", orientation: .portrait,
+                colorScheme: .dark, appearance: ThumbleSkinAppearance(showsButtonLabels: false))])
+        let manifest = ThumbleSkinManifest(identifier: "com.example.stack-regression", version: "1.0.0",
+            name: "Synthetic stack regression", author: ThumbleSkinAuthor(name: "Test fixture"),
+            summary: "Generated structural regression data.", license: "CC0-1.0", tags: ["test"],
+            assets: [ThumbleSkinResourceDescriptor(id: "stack-image", path: "assets/stack-image.png",
+                contentType: "image/png", role: .texture, byteCount: 0, sha256: "")])
+        return try ThumbleSkinPackageCodec.encode(ThumbleSkinPackage(
+            manifest: manifest, skin: skin, assets: ["stack-image": image]))
+    }
+
     func testPureRuntimeSkinBridgeFitsConstrainedThread() throws {
         try runOnThread(stackSize: 512 * 1024, timeout: 30) {
             let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
-            let archive = try Data(contentsOf: root.appendingPathComponent("Website/skins/packages/solar-sumi-1.0.0-edbecde5b708.pocketpad"))
+            let archive = try Self.syntheticStackSkinArchive()
             let fixture = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: root.appendingPathComponent("Host/fixtures/controller-templates/v1/productivityStarter.json"))) as? [String: Any])
             let payload: [String: Any] = ["schemaVersion": 1, "invocationID": UUID().uuidString, "skinCommand": "apply", "packageData": archive.base64EncodedString(), "profile": try XCTUnwrap(fixture["profile"]), "nowMillis": 123]
             let request = try JSONDecoder().decodeUnique(ThumbleSkinBridgeRequest.self, from: JSONSerialization.data(withJSONObject: payload))

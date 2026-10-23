@@ -155,7 +155,7 @@ async fn native_receiver_authenticates_skin_changes_and_never_acknowledges_faile
         .unwrap()
         .is_empty());
     let archive = include_bytes!(
-        "../../../../Website/skins/packages/solar-sumi-1.0.0-edbecde5b708.pocketpad"
+        "../../../../docs/skins/examples/css-first-light/dist/css-first-light-1.0.0.pocketpad"
     );
     let (mut ws, _) = connect_async(format!("ws://127.0.0.1:{}", initial.port))
         .await

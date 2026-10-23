@@ -1,0 +1,12 @@
+{
+  "fixtureVersion": 1,
+  "caseCount": 41,
+  "files": {
+    "document.json": "0b0cd5d4335e278358e9320be05c882891fb8a305cb3f30d19f6f2c6b905fa3f",
+    "cases.json": "08b78eb7069e10a95e26c2b50c12c7720883de4002b6346b659c00ab0420cef0"
+  },
+  "sources": {
+    "Host/fixtures/profile-resources/v1/fixture.json": "000f202c01424fc7d50001c5d17ebae782b3db4ec8b659d22939d0870878fc6a",
+    "Host/fixtures/controller-templates/v1/arcadeStick.json": "94707982417174d6fb84d751a4933cef1e624bb21e024bed06ce4acc2d399661"
+  }
+}

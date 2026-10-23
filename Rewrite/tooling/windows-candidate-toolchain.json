@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "upstream": {
+    "repository": "https://github.com/hifihedgehog/HIDMaestro.git",
+    "commit": "63cc6481f9e82fc8600bda8aaa65cb3271113a19",
+    "version": "2.0.3",
+    "auditedFiles": {
+      "LICENSE": "1b637c35922ac7a519d208afb8b45e278597d896f7ff799eff375f0753470790",
+      "sdk/HIDMaestro.Core/THIRD-PARTY-NOTICES.txt": "5bd9d1b1a5d52b142d3b0bcc6263dddfaaf5fe6173c12b18dc983dd1a294f8a2",
+      "scripts/build.cmd": "a7e53367d0a7f05bc41863d8db22add9623f29d5e5f23f56e40b35fbe80f261a",
+      "scripts/native_env.cmd": "58d50ac9c4e798c9d61f4c7ec1d6235feb449cb39306f09c23e5fdfd8c389e8a",
+      "scripts/stamp_inf.ps1": "acbef30c21495e3a60ca79ad8b9ac6da33b75dd35dba917093599bf254890449",
+      "scripts/gen_version.ps1": "3da6b00a4fc2d5976ba4004e4a6f2de0c066c6f546db9f28ade5a4afc899ad03",
+      "scripts/build_companion.cmd": "9e19f79764e59431c3fcd4c01ddc46462167599bdf7becf192a420d6881a7029"
+    }
+  },
+  "architecture": "x64",
+  "kitVersion": "10.0.26100.0",
+  "umdfVersion": "2.15",
+  "packageVersion": "10.0.26100.6584",
+  "packages": [
+    {
+      "id": "microsoft.windows.wdk.x64",
+      "bytes": 110872506,
+      "sha512Base64": "jhddaBnhMDqt3GVr32RVTtaR0KHmZDjY0JCTMn10OQpk4+AShXCK9QA09vBazp8ni1Mju84qM5SGXfIfnyOJ+g==",
+      "url": "https://api.nuget.org/v3-flatcontainer/microsoft.windows.wdk.x64/10.0.26100.6584/microsoft.windows.wdk.x64.10.0.26100.6584.nupkg"
+    },
+    {
+      "id": "microsoft.windows.sdk.cpp",
+      "bytes": 160036542,
+      "sha512Base64": "KrHXNRT0sr3BqmvVBir0Z/cr1I66MvmZ6YTwBazi0Tz7P356uRCCynjl3/rZwsS0JLYCdD/+flTSN101rcmm+g==",
+      "url": "https://api.nuget.org/v3-flatcontainer/microsoft.windows.sdk.cpp/10.0.26100.6584/microsoft.windows.sdk.cpp.10.0.26100.6584.nupkg"
+    },
+    {
+      "id": "microsoft.windows.sdk.cpp.x64",
+      "bytes": 52245405,
+      "sha512Base64": "+5EwELwOvsSzgGrHDQ0stdaOtYZHGfJ9cvx9bN6D88KzOU+JLsFL1bEKE4K7U0kd99rva/uv1P5aDvQWRCg7OQ==",
+      "url": "https://api.nuget.org/v3-flatcontainer/microsoft.windows.sdk.cpp.x64/10.0.26100.6584/microsoft.windows.sdk.cpp.x64.10.0.26100.6584.nupkg"
+    }
+  ],
+  "expectedOutputs": [
+    "HIDMaestro.dll",
+    "HIDMaestroCompanion.dll",
+    "HMXInput.dll",
+    "hmswd.exe",
+    "hidmaestro.inf",
+    "hidmaestro_xusb.inf"
+  ],
+  "evidenceOnly": true
+}

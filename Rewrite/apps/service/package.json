@@ -1,0 +1,22 @@
+{
+  "name": "@thumble/service",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/service.ts",
+    "./configuration-files": "./src/configuration-files.ts",
+    "./configuration-owner-process": "./src/configuration-owner-process.ts",
+    "./wow-capture-owner-process": "./src/wow-capture-owner-process.ts",
+    "./wow-capture-permission": "./src/wow-capture-permission.ts",
+    "./native-output-options": "./src/native-receiver.ts",
+    "./wow-profile-preparer": "./src/wow-profile-preparer.ts"
+  },
+  "dependencies": {
+    "@thumble/contracts": "workspace:*",
+    "@thumble/application": "workspace:*",
+    "@thumble/client": "workspace:*",
+    "@thumble/storage": "workspace:*",
+    "@thumble/domain": "workspace:*"
+  }
+}

@@ -39,13 +39,32 @@ jobs:
           sudo udevadm control --reload-rules
           sudo setfacl -m "u:$(id -u):rw" /dev/uinput
       - name: Verify native OS delivery through the receiver WebSocket
+        if: runner.os == 'Linux'
         shell: bash
         env:
           THUMBLE_NATIVE_EVIDENCE: ${{ runner.temp }}/thumble-native-evidence.json
         run: cargo test --locked -p thumble-receiver --test native_delivery -- --ignored --nocapture 2>&1 | tee "$RUNNER_TEMP/thumble-native-test.log"
+      - name: Verify read-only Windows witness
+        if: runner.os == 'Windows'
+        run: cargo test --locked -p thumble-receiver --example probe_gamepad
+      - name: Record headless XInput availability (not gameplay acceptance)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          cargo run --locked -p thumble-receiver --example probe_gamepad -- --duration-ms 0 | Out-File -Encoding utf8 "$env:RUNNER_TEMP/thumble-xinput-observation.json"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - run: cargo build --locked --release -p thumble-receiver
+      - name: Build Windows witness for beta testing
+        if: runner.os == 'Windows'
+        run: cargo build --locked --release -p thumble-receiver --example probe_gamepad
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: runner.os == 'Windows'
+        with:
+          name: windows-xinput-observation
+          path: ${{ runner.temp }}/thumble-xinput-observation.json
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always() && runner.os == 'Linux'
         with:
           name: native-delivery-${{ matrix.os }}
           path: |
@@ -58,6 +77,7 @@ jobs:
           path: |
             Host/target/release/thumble-receiver
             Host/target/release/thumble-receiver.exe
+            Host/target/release/examples/probe_gamepad.exe
             docs/cross-platform-receiver.md
             packaging/receiver/
           if-no-files-found: error

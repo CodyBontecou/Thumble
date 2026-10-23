@@ -55,7 +55,7 @@ struct AndroidLayoutEditOracleTests {
     }
     @Test func phoneLayoutDehydratesOnlyMatchingInstalledPackageAssets() throws {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
-        let data = try Data(contentsOf: root.appendingPathComponent("Website/skins/packages/solar-sumi-1.0.0-edbecde5b708.pocketpad"))
+        let data = try Data(contentsOf: root.appendingPathComponent("docs/skins/examples/indigo-pocket/dist/indigo-pocket-1.0.0.pocketpad"))
         let package = try ThumbleSkinPackageCodec.decode(data)
         let assetID = try #require(package.assets.keys.sorted().first)
         let assetData = try #require(package.assets[assetID])

@@ -1,0 +1,6 @@
+ios/.build/
+ios/.swiftpm/
+ios/Tests/MobileInputTests/Fixtures/
+android/.gradle/
+android/build/
+android/local.properties

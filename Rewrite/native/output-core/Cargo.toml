@@ -1,0 +1,23 @@
+[package]
+name = "thumble-rewrite-output-core"
+version = "0.0.0"
+edition = "2021"
+rust-version = "1.88"
+publish = false
+
+[workspace]
+
+[features]
+default = []
+macos-hid = ["dep:block2", "dep:core-foundation", "dep:dispatch2", "dep:objc2-core-foundation", "dep:objc2-io-kit", "dep:libc"]
+
+[target.'cfg(target_os = "macos")'.dependencies]
+block2 = { version = "=0.6.2", optional = true, default-features = false, features = ["std"] }
+core-foundation = { version = "=0.10.1", optional = true }
+dispatch2 = { version = "=0.3.1", optional = true, default-features = false, features = ["std", "block2"] }
+objc2-core-foundation = { version = "=0.3.2", optional = true, default-features = false, features = ["std", "CFDictionary", "CFNumber", "CFString", "CFData"] }
+objc2-io-kit = { version = "=0.3.2", optional = true, default-features = false, features = ["std", "hid", "hidsystem", "block2", "dispatch2", "objc2"] }
+libc = { version = "=0.2.175", optional = true }
+
+[dev-dependencies]
+serde_json = "=1.0.145"

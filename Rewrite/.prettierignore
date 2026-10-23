@@ -1,0 +1,23 @@
+node_modules/
+dist/
+reports/
+packages/contracts/src/gamepad.generated.ts
+native/
+packages/contracts/schema/mobile-input-v1.schema.json
+
+# Generated exact crypto fixtures; checked by generate-contracts.ts.
+packages/fixtures/input-packet-v1.json
+
+# Generated Expo native projects and SDK state; module sources stay checked.
+apps/mobile/ios/
+apps/mobile/android/
+apps/mobile/.expo/
+apps/mobile/expo-env.d.ts
+apps/mobile/modules/**/build/
+apps/mobile/modules/**/.gradle/
+
+# Exact retained owned-v5 compatibility fixtures; hashes checked by tests.
+packages/fixtures/owned-configuration-v1/
+
+# Exact number lexemes and opaque source spans in the authority format vector.
+packages/fixtures/owned-authority-v1/

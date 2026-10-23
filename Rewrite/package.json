@@ -1,0 +1,45 @@
+{
+  "name": "thumble-rewrite",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "packageManager": "bun@1.4.3",
+  "engines": {
+    "bun": "1.4.3"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "generate": "bun tooling/generate-contracts.ts",
+    "check:generated": "bun tooling/generate-contracts.ts --check",
+    "check:boundaries": "bun tooling/check-boundaries.ts",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.portable.json && tsc --noEmit -p apps/mobile/tsconfig.json",
+    "test": "bun test",
+    "verify": "bun run check:generated && bun run check:boundaries && bun tooling/check-cli-notices.ts && bun run format:check && bun run typecheck && bun test",
+    "test:ci": "bun tooling/ci-test.ts",
+    "native:notices": "bun tooling/native-notices.ts",
+    "native:build": "cargo +1.88.0 build --locked --manifest-path native/receiver/Cargo.toml",
+    "native:test": "cargo +1.88.0 test --locked --manifest-path native/receiver/Cargo.toml",
+    "cli": "bun apps/cli/src/main.ts",
+    "build": "bun tooling/build.ts",
+    "test:package": "THUMBLE_REWRITE_PACKAGE_TEST=1 bun test tests/package.test.ts",
+    "test:package:ci": "bun tooling/ci-test.ts --package",
+    "mobile:prepare": "bun tooling/prepare-mobile-fixtures.ts",
+    "mobile:ios:sdk": "bun tooling/check-mobile-ios.ts",
+    "format:check": "bun x --no-install prettier --check ."
+  },
+  "devDependencies": {
+    "@thumble/application": "workspace:*",
+    "@thumble/client": "workspace:*",
+    "@thumble/contracts": "workspace:*",
+    "@thumble/domain": "workspace:*",
+    "@thumble/service": "workspace:*",
+    "@types/bun": "1.4.3",
+    "prettier": "3.6.2",
+    "typescript": "6.0.3",
+    "@thumble/storage": "workspace:*",
+    "@modelcontextprotocol/client": "2.3.1"
+  }
+}

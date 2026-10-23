@@ -1,0 +1,46 @@
+{
+  "scope": "synthetic-public-test-constants",
+  "hello": {
+    "version": 1,
+    "command": "hello",
+    "authorityInstanceId": "authority-a",
+    "controlVersion": 3,
+    "inputVersion": 1,
+    "documentVersion": 1,
+    "capabilitiesVersion": 1,
+    "inputEnabled": false
+  },
+  "authenticated": {
+    "version": 1,
+    "command": "authenticated",
+    "authorityInstanceId": "authority-a",
+    "phoneId": "phone-a",
+    "credentialEpoch": "1",
+    "connectionId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "expiresAt": 61000,
+    "inputSessionAvailable": false,
+    "inputEnabled": false
+  },
+  "status": {
+    "version": 1,
+    "command": "control-status",
+    "authorityInstanceId": "authority-a",
+    "phoneId": "phone-a",
+    "credentialEpoch": "1",
+    "connectionId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "expiresAt": 61000,
+    "inputSessionAvailable": false,
+    "inputEnabled": false
+  },
+  "disconnected": {
+    "version": 1,
+    "command": "disconnected",
+    "authorityInstanceId": "authority-a",
+    "phoneId": "phone-a",
+    "credentialEpoch": "1",
+    "connectionId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "expiresAt": 61000,
+    "inputSessionAvailable": false,
+    "inputEnabled": false
+  }
+}

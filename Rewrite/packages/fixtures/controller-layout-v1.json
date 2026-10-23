@@ -1,0 +1,289 @@
+{
+  "version": 1,
+  "map": {
+    "version": 1,
+    "generation": "1",
+    "revision": "0",
+    "controls": [
+      {
+        "id": "standard-leftStick",
+        "action": "leftStick",
+        "x": 0.05,
+        "y": 0.56,
+        "width": 0.24,
+        "height": 0.38
+      },
+      {
+        "id": "standard-rightStick",
+        "action": "rightStick",
+        "x": 0.71,
+        "y": 0.56,
+        "width": 0.24,
+        "height": 0.38
+      },
+      {
+        "id": "standard-dpadUp",
+        "action": "dpadUp",
+        "x": 0.12,
+        "y": 0.08,
+        "width": 0.07,
+        "height": 0.12
+      },
+      {
+        "id": "standard-dpadLeft",
+        "action": "dpadLeft",
+        "x": 0.04,
+        "y": 0.21,
+        "width": 0.07,
+        "height": 0.12
+      },
+      {
+        "id": "standard-dpadRight",
+        "action": "dpadRight",
+        "x": 0.2,
+        "y": 0.21,
+        "width": 0.07,
+        "height": 0.12
+      },
+      {
+        "id": "standard-dpadDown",
+        "action": "dpadDown",
+        "x": 0.12,
+        "y": 0.34,
+        "width": 0.07,
+        "height": 0.12
+      },
+      {
+        "id": "standard-north",
+        "action": "north",
+        "x": 0.81,
+        "y": 0.08,
+        "width": 0.07,
+        "height": 0.12
+      },
+      {
+        "id": "standard-west",
+        "action": "west",
+        "x": 0.73,
+        "y": 0.21,
+        "width": 0.07,
+        "height": 0.12
+      },
+      {
+        "id": "standard-east",
+        "action": "east",
+        "x": 0.89,
+        "y": 0.21,
+        "width": 0.07,
+        "height": 0.12
+      },
+      {
+        "id": "standard-south",
+        "action": "south",
+        "x": 0.81,
+        "y": 0.34,
+        "width": 0.07,
+        "height": 0.12
+      },
+      {
+        "id": "standard-leftShoulder",
+        "action": "leftShoulder",
+        "x": 0.3,
+        "y": 0.08,
+        "width": 0.12,
+        "height": 0.12
+      },
+      {
+        "id": "standard-rightShoulder",
+        "action": "rightShoulder",
+        "x": 0.58,
+        "y": 0.08,
+        "width": 0.12,
+        "height": 0.12
+      },
+      {
+        "id": "standard-leftTrigger",
+        "action": "leftTrigger",
+        "x": 0.3,
+        "y": 0.25,
+        "width": 0.12,
+        "height": 0.18
+      },
+      {
+        "id": "standard-rightTrigger",
+        "action": "rightTrigger",
+        "x": 0.58,
+        "y": 0.25,
+        "width": 0.12,
+        "height": 0.18
+      },
+      {
+        "id": "standard-select",
+        "action": "select",
+        "x": 0.43,
+        "y": 0.3,
+        "width": 0.06,
+        "height": 0.12
+      },
+      {
+        "id": "standard-start",
+        "action": "start",
+        "x": 0.51,
+        "y": 0.3,
+        "width": 0.06,
+        "height": 0.12
+      },
+      {
+        "id": "standard-home",
+        "action": "home",
+        "x": 0.465,
+        "y": 0.08,
+        "width": 0.07,
+        "height": 0.12
+      },
+      {
+        "id": "standard-leftStickPress",
+        "action": "leftStickPress",
+        "x": 0.33,
+        "y": 0.7,
+        "width": 0.1,
+        "height": 0.14
+      },
+      {
+        "id": "standard-rightStickPress",
+        "action": "rightStickPress",
+        "x": 0.57,
+        "y": 0.7,
+        "width": 0.1,
+        "height": 0.14
+      }
+    ]
+  },
+  "probes": [
+    {
+      "id": "standard-leftStick",
+      "x": 0.266,
+      "y": 0.75,
+      "reportHex": "0014000000006666000000000000000000000000"
+    },
+    {
+      "id": "standard-rightStick",
+      "x": 0.9259999999999999,
+      "y": 0.75,
+      "reportHex": "0014000000000000000066660000000000000000"
+    },
+    {
+      "id": "standard-dpadUp",
+      "x": 0.155,
+      "y": 0.14,
+      "reportHex": "0014010000000000000000000000000000000000"
+    },
+    {
+      "id": "standard-dpadLeft",
+      "x": 0.07500000000000001,
+      "y": 0.27,
+      "reportHex": "0014040000000000000000000000000000000000"
+    },
+    {
+      "id": "standard-dpadRight",
+      "x": 0.23500000000000001,
+      "y": 0.27,
+      "reportHex": "0014080000000000000000000000000000000000"
+    },
+    {
+      "id": "standard-dpadDown",
+      "x": 0.155,
+      "y": 0.4,
+      "reportHex": "0014020000000000000000000000000000000000"
+    },
+    {
+      "id": "standard-north",
+      "x": 0.8450000000000001,
+      "y": 0.14,
+      "reportHex": "0014008000000000000000000000000000000000"
+    },
+    {
+      "id": "standard-west",
+      "x": 0.765,
+      "y": 0.27,
+      "reportHex": "0014004000000000000000000000000000000000"
+    },
+    {
+      "id": "standard-east",
+      "x": 0.925,
+      "y": 0.27,
+      "reportHex": "0014002000000000000000000000000000000000"
+    },
+    {
+      "id": "standard-south",
+      "x": 0.8450000000000001,
+      "y": 0.4,
+      "reportHex": "0014001000000000000000000000000000000000"
+    },
+    {
+      "id": "standard-leftShoulder",
+      "x": 0.36,
+      "y": 0.14,
+      "reportHex": "0014000100000000000000000000000000000000"
+    },
+    {
+      "id": "standard-rightShoulder",
+      "x": 0.6399999999999999,
+      "y": 0.14,
+      "reportHex": "0014000200000000000000000000000000000000"
+    },
+    {
+      "id": "standard-leftTrigger",
+      "x": 0.36,
+      "y": 0.33999999999999997,
+      "reportHex": "00140000ff000000000000000000000000000000"
+    },
+    {
+      "id": "standard-rightTrigger",
+      "x": 0.6399999999999999,
+      "y": 0.33999999999999997,
+      "reportHex": "0014000000ff0000000000000000000000000000"
+    },
+    {
+      "id": "standard-select",
+      "x": 0.45999999999999996,
+      "y": 0.36,
+      "reportHex": "0014200000000000000000000000000000000000"
+    },
+    {
+      "id": "standard-start",
+      "x": 0.54,
+      "y": 0.36,
+      "reportHex": "0014100000000000000000000000000000000000"
+    },
+    {
+      "id": "standard-home",
+      "x": 0.5,
+      "y": 0.14,
+      "reportHex": "0014000400000000000000000000000000000000"
+    },
+    {
+      "id": "standard-leftStickPress",
+      "x": 0.38,
+      "y": 0.77,
+      "reportHex": "0014400000000000000000000000000000000000"
+    },
+    {
+      "id": "standard-rightStickPress",
+      "x": 0.62,
+      "y": 0.77,
+      "reportHex": "0014800000000000000000000000000000000000"
+    }
+  ],
+  "chord": {
+    "ids": [
+      "standard-leftStick",
+      "standard-rightStick",
+      "standard-leftTrigger",
+      "standard-rightTrigger",
+      "standard-south",
+      "standard-leftShoulder"
+    ],
+    "reportHex": "00140011ffff6666000066660000000000000000"
+  }
+}

@@ -1,0 +1,86 @@
+{
+  "scope": "Exact locked optional Objective-C dependencies whose published crate archives omit license files. Upstream license declaration retained verbatim; MIT alternative selected where offered. SPDX MIT template retains literal copyright placeholders; no project-specific copyright is invented.",
+  "packages": [
+    {
+      "name": "block2",
+      "version": "0.6.2",
+      "repository": "https://github.com/madsmtm/objc2",
+      "vcsCommit": "b4167b582b2f75f9a1be75495c41b765344fd03c",
+      "license": "MIT",
+      "declarationUrl": "https://raw.githubusercontent.com/madsmtm/objc2/b4167b582b2f75f9a1be75495c41b765344fd03c/LICENSE.md",
+      "sourceHashes": {
+        "Cargo.toml": "e325c51f01145af3e11f2ee5ce7c47f10697d936c1d90b9ee81a0cf4f700f6d7",
+        ".cargo_vcs_info.json": "5b87885cad87999d141e83cc8af4b073192f584b2b92cea77e2d87636621a264"
+      }
+    },
+    {
+      "name": "objc2",
+      "version": "0.6.5",
+      "repository": "https://github.com/madsmtm/objc2",
+      "vcsCommit": "d7d2fa23ceaa5e6096c923b081040e5d81b3b9df",
+      "license": "MIT",
+      "declarationUrl": "https://raw.githubusercontent.com/madsmtm/objc2/d7d2fa23ceaa5e6096c923b081040e5d81b3b9df/LICENSE.md",
+      "sourceHashes": {
+        "Cargo.toml": "5556dba493fc18e98ebf82f587011f76df6c8c26532613e4c8f904ee586d7cf0",
+        ".cargo_vcs_info.json": "5f7c8e095d3933c477ff1f71021b551cbfe497a62346a1dc8615debd9846e257"
+      }
+    },
+    {
+      "name": "objc2-encode",
+      "version": "4.1.0",
+      "repository": "https://github.com/madsmtm/objc2",
+      "vcsCommit": "8d214f5477365ffcbcbb7de058c86ed9a518efb7",
+      "license": "MIT",
+      "declarationUrl": "https://raw.githubusercontent.com/madsmtm/objc2/8d214f5477365ffcbcbb7de058c86ed9a518efb7/LICENSE.md",
+      "sourceHashes": {
+        "Cargo.toml": "cf9a8cc812710344d7fe618a5e615530baeeceae5c2826b9d5bb557dc419f159",
+        ".cargo_vcs_info.json": "b23c761215887d90ac44e18b18c8b386f93139c65a4a14f110e22405830cb3f1"
+      }
+    },
+    {
+      "name": "dispatch2",
+      "version": "0.3.1",
+      "repository": "https://github.com/madsmtm/objc2",
+      "vcsCommit": "8852b424193ca41602281b3d7540d7c8ed51e49a",
+      "license": "Zlib OR Apache-2.0 OR MIT",
+      "declarationUrl": "https://raw.githubusercontent.com/madsmtm/objc2/8852b424193ca41602281b3d7540d7c8ed51e49a/LICENSE.md",
+      "sourceHashes": {
+        "Cargo.toml": "f246cf8997c346fdcabb8925ad5be967f397fd8b92630ef7bcc9bdce5d33f775",
+        ".cargo_vcs_info.json": "26f5e6d699ba3ce13b8eea253ad7a7f7feb9345e9da3c01bb9b9bd911a6a7dba"
+      }
+    },
+    {
+      "name": "objc2-core-foundation",
+      "version": "0.3.2",
+      "repository": "https://github.com/madsmtm/objc2",
+      "vcsCommit": "7b1abfd750a2cacaea71d6a56ecfb83cb7de560b",
+      "license": "Zlib OR Apache-2.0 OR MIT",
+      "declarationUrl": "https://raw.githubusercontent.com/madsmtm/objc2/7b1abfd750a2cacaea71d6a56ecfb83cb7de560b/LICENSE.md",
+      "sourceHashes": {
+        "Cargo.toml": "c0f54260fa1396923f2db4edf1e2d54e8ab09dea214af4b8ce37aaefa7185e60",
+        ".cargo_vcs_info.json": "1c1a87985a2bd25015f5e2413f4041379bea0172b2fce88dae3e6482b50aab26"
+      }
+    },
+    {
+      "name": "objc2-io-kit",
+      "version": "0.3.2",
+      "repository": "https://github.com/madsmtm/objc2",
+      "vcsCommit": "7b1abfd750a2cacaea71d6a56ecfb83cb7de560b",
+      "license": "Zlib OR Apache-2.0 OR MIT",
+      "declarationUrl": "https://raw.githubusercontent.com/madsmtm/objc2/7b1abfd750a2cacaea71d6a56ecfb83cb7de560b/LICENSE.md",
+      "sourceHashes": {
+        "Cargo.toml": "116aba27ef95c53958cf8373de72ee6e939c5042d992d3c3c9936c6dd3e51071",
+        ".cargo_vcs_info.json": "f9cd70629de590df57227fdc11d9eb1d6cde8d9a35013ecf20950449c0cf176f"
+      }
+    }
+  ],
+  "declaration": {
+    "sha256": "7f976f7e9cb2d87df7230606feb932c3f21ac0e664045a775b600046ff850c54",
+    "text": "# License\n\nThe licensing of these crates is a bit complicated:\n- The crates `objc2`, `block2`, `objc2-foundation` and `objc2-encode` are\n  [currently][#23] licensed under [the MIT license][MIT].\n- All other crates are trio-licensed under the [Zlib], [Apache-2.0] or [MIT]\n  license, at your option.\n\nFurthermore, the crates are (usually automatically) derived from Apple SDKs,\nand that may have implications for licensing, see below for details.\n\n[#23]: https://github.com/madsmtm/objc2/issues/23\n[MIT]: https://opensource.org/license/MIT\n[Zlib]: https://zlib.net/zlib_license.html\n[Apache-2.0]: https://www.apache.org/licenses/LICENSE-2.0\n\n\n## Apple SDKs\n\nThese crates are derived from Apple SDKs shipped with Xcode. You can obtain a\ncopy of the Xcode license at:\n\nhttps://www.apple.com/legal/sla/docs/xcode.pdf\n\nOr by typing `xcodebuild -license` in your terminal.\n\nFrom reading the license, it is unclear whether distributing derived works\nsuch as these crates are allowed?\n\nBut in any case, to practically use these crates, you will have to link, and\nthat only works when you have the correct Xcode SDK available to provide the\nrequired `.tbd` files, which is why we choose to still use the normal SPDX\nidentifiers in the crates (Xcode is required to use the crates, and when using\nXcode you have already agreed to the Xcode license).\n"
+  },
+  "mitTemplate": {
+    "url": "https://raw.githubusercontent.com/spdx/license-list-data/main/text/MIT.txt",
+    "sha256": "b05785f9f18e6716bab63424b11454513b9943a222595b70411009202fc592b5",
+    "text": "MIT License\n\nCopyright (c) <year> <copyright holders>\n\nPermission is hereby granted, free of charge, to any person obtaining a copy of this software and\nassociated documentation files (the \"Software\"), to deal in the Software without restriction, including\nwithout limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the\nfollowing conditions:\n\nThe above copyright notice and this permission notice shall be included in all copies or substantial\nportions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT\nLIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO\nEVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER\nIN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE\nUSE OR OTHER DEALINGS IN THE SOFTWARE.\n"
+  }
+}

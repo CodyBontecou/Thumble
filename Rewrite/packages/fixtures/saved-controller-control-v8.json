@@ -1,0 +1,92 @@
+{
+  "scope": "synthetic-contract-only-no-real-credential",
+  "request": {
+    "version": 1,
+    "command": "configuration-controls",
+    "connectionId": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+    "expectedConfigurationRevision": "3",
+    "expectedSourceHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "profileId": "aaaaaaaa-0000-0000-0000-000000000001",
+    "generation": "7",
+    "revision": "2",
+    "viewportWidth": "874",
+    "viewportHeight": "393"
+  },
+  "reply": {
+    "version": 1,
+    "command": "configuration-controls-result",
+    "connectionId": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+    "kind": "controls",
+    "authorityInstanceId": "synthetic-authority",
+    "configurationRevision": "3",
+    "sourceHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "configurationSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "profileId": "aaaaaaaa-0000-0000-0000-000000000001",
+    "generation": "7",
+    "revision": "2",
+    "viewportWidth": "874",
+    "viewportHeight": "393",
+    "controlCount": 2,
+    "control0Id": "synthetic-south",
+    "control0Action": "south",
+    "control0X": "0.1",
+    "control0Y": "0.2",
+    "control0Width": "0.15",
+    "control0Height": "0.3",
+    "control0HapticStyle": "light",
+    "control0HapticPattern": "single",
+    "control0HapticIntensity": "0.5",
+    "control0HapticSharpness": "0.4",
+    "control0HapticDuration": "0.06",
+    "control1Id": "synthetic-east",
+    "control1Action": "east",
+    "control1X": "0.6",
+    "control1Y": "0.2",
+    "control1Width": "0.15",
+    "control1Height": "0.3"
+  },
+  "errors": [
+    {
+      "version": 1,
+      "command": "configuration-controls-result",
+      "connectionId": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+      "kind": "error",
+      "error": "saved_map_busy"
+    },
+    {
+      "version": 1,
+      "command": "configuration-controls-result",
+      "connectionId": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+      "kind": "error",
+      "error": "saved_map_timeout"
+    },
+    {
+      "version": 1,
+      "command": "configuration-controls-result",
+      "connectionId": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+      "kind": "error",
+      "error": "saved_map_unavailable"
+    },
+    {
+      "version": 1,
+      "command": "configuration-controls-result",
+      "connectionId": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+      "kind": "error",
+      "error": "saved_map_reactivation_required"
+    },
+    {
+      "version": 1,
+      "command": "configuration-controls-result",
+      "connectionId": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+      "kind": "error",
+      "error": "saved_map_unsupported_profile"
+    },
+    {
+      "version": 1,
+      "command": "configuration-controls-result",
+      "connectionId": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+      "kind": "error",
+      "error": "saved_map_response_too_large"
+    }
+  ]
+}

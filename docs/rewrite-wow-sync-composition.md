@@ -1,0 +1,32 @@
+# Headless WoW refresh and live synchronization
+
+The service must be explicitly launched with two locally authorized absolute executable paths:
+
+```sh
+thumble-rewrite service start --capture-helper /absolute/wow-capture-helper --wow-profile-helper /absolute/retained-profile-helper --runtime-dir /absolute/private/runtime
+```
+
+The capture helper is the separately built native optical helper. The profile helper is the retained headless Swift bridge implementing `wowProfileCommand:prepare-owned`; it is not a desktop GUI or a guessed executable. Both paths must resolve to regular executable files and cannot themselves be symbolic links. No IPC or MCP operation can select an executable, arbitrary file, process, window or screen. Startup validates the paths but does not start capture, prompt for permission or activate input. A normal service launch creates neither helper.
+
+Production capture now lives inside the sole configuration child, together with verified PNG decoding, the portable observer, retained profile preparation and revision-checked storage. The old standalone capture process entry remains available internally for its isolated tests; the service does not start a second capture owner. Whole-window pixels stay inside the native helper. The bounded512-byte optical frame and matching256-square PNG never cross the configuration-child-to-input-parent boundary. The parent caches only fixed capture and synchronization metadata; status queries do not wait for image decoding, a helper or SQLite fsync.
+
+Read `configuration list` for the current revision/hash, then explicitly request a manual refresh:
+
+```sh
+thumble-rewrite wow refresh --operation-id manual-one --expected-revision 0 --runtime-dir /absolute/private/runtime
+thumble-rewrite wow sync-status --operation-id manual-one --runtime-dir /absolute/private/runtime
+```
+
+Revision0 has no source hash. Existing storage requires `--expected-source-hash` matching the reviewed catalog content hash. A manual job uses a30-second observation budget to capture successive pages until it observes a complete, live snapshot and commits one refresh; a bounded helper or cleanup already in progress can settle afterward. The acknowledgement follows the actual successful authority CAS, not capture or helper completion. A frozen transport repeat cannot establish game freshness. Invalid/incomplete source, invalid PNG/helper output, stale receipts, cancellation and conflicts cannot authorize an observer acknowledgement. A durable commit whose observation expires afterward remains reported as committed with `acknowledged:false`. Profile/revision/hash and `acknowledged` describe the last committed intent; cached acknowledgement is never a claim that the game is currently live. Current capture receipt availability and transport/game freshness remain separate.
+
+For continuous synchronization, use `wow sync-start` with the same operation/review fields; stop that exact job with `wow sync-stop --operation-id ID`. Each live job has one capture→observe→prepare→commit pipeline. It requests another frame only after the preceding pipeline settles, with a100ms interval; ticks cannot queue overlapping preparation or attach a new atlas to an older message. Missing-panel/visibility statuses invalidate the previous capture receipt without creating game freshness or writes, and preserve the observer’s last acknowledged character identity. Native provider unavailability or unconfirmed cleanup fails closed. No replacement provider is authorized by a timeout. Stop cancels the observer/preparer immediately and reports `busy:true` while confirmed helper/provider retirement is pending. An unconfirmed retirement fences future jobs until service restart.
+
+Existing capture-start/request/status/stop commands retain their public metadata shape and explicit opt-in. They share the configuration child's single capture session and cannot replace its source during a refresh/live job. Configuration writes return `configuration_owner_busy` while a job is active; read-only catalog/pin/controller projection remains available. Native input sampling, packet TTLs and owner renewal remain in their separate process. The service does not hold a repository/trust/global input lock across native helper I/O.
+
+The operation ID identifies an ephemeral job, with an exact command/revision/hash binding. Duplicate starts return its cached status rather than dispatching a second pipeline; reuse with a different intent fails while the job remains retained. The child and parent each retain at most32 jobs; an evicted ID has no top-level replay guarantee and may be treated as a new job. Job status/history is process-local and is not a durable import receipt or a guarantee of historical snapshot replay after restart. Stored configuration and its normal durable authority receipts remain separate. A live job advances its expected storage revision/hash only after its own successful commit; it does not silently rebase onto an unrelated writer.
+
+MCP always offers `wow_sync_status`. `wow_refresh`, `wow_sync_start` and `wow_sync_stop` require both `--allow-wow-capture` and `--allow-configuration-write` on `mcp serve`, plus both helper launch authorizations on the service. Their semantics match the CLI. Existing permission inspection/request stays a separate explicit native operation; synchronization never prompts automatically.
+
+Saved-configuration/presentation revision and the active input pin are different identities. Refresh does not activate, retire, rearm or change an input generation or grant. The currently installed controller may continue using its immutable activated snapshot while saved presentation changes. The existing strict phone map read may require explicit reactivation after a saved-source change. A future presentation-only delivery must separately pin the installed profile/control identities, geometry/bindings and native generation/revision, and reject structural changes; it must not send a full atlas through the64KiB phone control frame. That phone presentation seam is not implemented here.
+
+Headless tests use synthetic optical frames, verified PNGs and explicit fake helper processes. They establish composition, storage/CAS/cancellation/ACK ordering and input-owner independence; real-game capture, permission/signing acceptance, retained presentation equivalence and physical gameplay/live-sync launch acceptance remain separate required evidence.

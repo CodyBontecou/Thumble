@@ -1,0 +1,233 @@
+{
+  "schema": "com.codybontecou.pocketpad.keypad-configuration",
+  "version": 5,
+  "profiles": [
+    {
+      "id": "aaaaaaaa-0000-0000-0000-000000000001",
+      "name": "First saved North",
+      "updatedAt": 1,
+      "profileFormatVersion": 5,
+      "outputMode": "controller",
+      "customization": {
+        "deviceCanvas": {
+          "frameID": "iphone-16-landscape"
+        },
+        "controlScale": "standard",
+        "elements": [
+          {
+            "id": "ca000000-0000-0000-0000-000000000001",
+            "kind": "button",
+            "label": "North",
+            "output": {
+              "gamepadButtons": ["north"]
+            },
+            "layout": {
+              "centerX": 0.5,
+              "centerY": 0.5,
+              "widthScale": 1,
+              "heightScale": 1,
+              "shape": "rectangle",
+              "isHidden": false,
+              "rotationDegrees": 0,
+              "zIndex": 0,
+              "hitInsets": {
+                "top": 0,
+                "leading": 0,
+                "bottom": 0,
+                "trailing": 0
+              }
+            }
+          }
+        ],
+        "customButtons": []
+      }
+    },
+    {
+      "id": "bbbbbbbb-0000-0000-0000-000000000002",
+      "name": "Selected movement camera and independent triggers",
+      "updatedAt": 2,
+      "profileFormatVersion": 5,
+      "outputMode": "controller",
+      "customization": {
+        "deviceCanvas": {
+          "frameID": "iphone-16-landscape"
+        },
+        "controlScale": "standard",
+        "elements": [
+          {
+            "id": "de000000-0000-0000-0000-000000000001",
+            "kind": "joystick",
+            "label": "Movement",
+            "layout": {
+              "centerX": 0.2,
+              "centerY": 0.6,
+              "widthScale": 1,
+              "heightScale": 1,
+              "shape": "circle",
+              "isHidden": false,
+              "rotationDegrees": 0,
+              "zIndex": 0,
+              "hitInsets": {
+                "top": 0,
+                "leading": 0,
+                "bottom": 0,
+                "trailing": 0
+              }
+            },
+            "joystickOutputSettings": {
+              "analogTarget": "left_stick",
+              "sendsDigitalDirections": false,
+              "deadZone": 0.12,
+              "sensitivity": 1,
+              "invertX": false,
+              "invertY": false,
+              "snapToCardinal": false
+            },
+            "futureControllerMetadata": {
+              "owner": "preserve exact opaque source"
+            }
+          },
+          {
+            "id": "de000000-0000-0000-0000-000000000002",
+            "kind": "joystick",
+            "label": "Camera",
+            "layout": {
+              "centerX": 0.8,
+              "centerY": 0.6,
+              "widthScale": 1,
+              "heightScale": 1,
+              "shape": "circle",
+              "isHidden": false,
+              "rotationDegrees": 0,
+              "zIndex": 0,
+              "hitInsets": {
+                "top": 0,
+                "leading": 0,
+                "bottom": 0,
+                "trailing": 0
+              }
+            },
+            "joystickOutputSettings": {
+              "analogTarget": "right_stick",
+              "sendsDigitalDirections": false,
+              "deadZone": 0.12,
+              "sensitivity": 1,
+              "invertX": false,
+              "invertY": false,
+              "snapToCardinal": false
+            }
+          },
+          {
+            "id": "de000000-0000-0000-0000-000000000003",
+            "kind": "trigger",
+            "label": "Left trigger",
+            "layout": {
+              "centerX": 0.35,
+              "centerY": 0.15,
+              "widthScale": 1,
+              "heightScale": 1,
+              "shape": "rectangle",
+              "isHidden": false,
+              "rotationDegrees": 0,
+              "zIndex": 0,
+              "hitInsets": {
+                "top": 0,
+                "leading": 0,
+                "bottom": 0,
+                "trailing": 0
+              }
+            },
+            "triggerSettings": {
+              "target": "left",
+              "orientation": "vertical",
+              "deadZone": 0.03,
+              "sensitivity": 1,
+              "sendsDigitalButton": false,
+              "digitalThreshold": 0.5
+            }
+          },
+          {
+            "id": "de000000-0000-0000-0000-000000000004",
+            "kind": "trigger",
+            "label": "Right trigger",
+            "layout": {
+              "centerX": 0.65,
+              "centerY": 0.15,
+              "widthScale": 1,
+              "heightScale": 1,
+              "shape": "rectangle",
+              "isHidden": false,
+              "rotationDegrees": 0,
+              "zIndex": 0,
+              "hitInsets": {
+                "top": 0,
+                "leading": 0,
+                "bottom": 0,
+                "trailing": 0
+              }
+            },
+            "triggerSettings": {
+              "target": "right",
+              "orientation": "horizontal",
+              "deadZone": 0.03,
+              "sensitivity": 1,
+              "sendsDigitalButton": false,
+              "digitalThreshold": 0.5
+            }
+          },
+          {
+            "id": "db000000-0000-0000-0000-000000000002",
+            "kind": "button",
+            "label": "South",
+            "output": {
+              "gamepadButtons": ["south"]
+            },
+            "layout": {
+              "centerX": 0.5,
+              "centerY": 0.82,
+              "widthScale": 1,
+              "heightScale": 1,
+              "shape": "rectangle",
+              "isHidden": false,
+              "rotationDegrees": 0,
+              "zIndex": 0,
+              "hitInsets": {
+                "top": 0,
+                "leading": 0,
+                "bottom": 0,
+                "trailing": 0
+              }
+            }
+          }
+        ],
+        "customButtons": []
+      }
+    }
+  ],
+  "activeProfileID": "bbbbbbbb-0000-0000-0000-000000000002",
+  "defaultProfileID": null,
+  "keyBindings": {},
+  "outputBindings": {
+    "db000000-0000-0000-0000-000000000002": {
+      "gamepadButtons": ["south"]
+    }
+  },
+  "profileKeyBindings": {
+    "aaaaaaaa-0000-0000-0000-000000000001": {},
+    "bbbbbbbb-0000-0000-0000-000000000002": {}
+  },
+  "profileOutputBindings": {
+    "aaaaaaaa-0000-0000-0000-000000000001": {
+      "ca000000-0000-0000-0000-000000000001": {
+        "gamepadButtons": ["north"]
+      }
+    },
+    "bbbbbbbb-0000-0000-0000-000000000002": {
+      "db000000-0000-0000-0000-000000000002": {
+        "gamepadButtons": ["south"]
+      }
+    }
+  },
+  "fixtureScope": "Synthetic selected saved analog controls, no credentials; gamepad right stick only, not pointer mouse-look.",
+  "futureExactNumber": 9007199254740993.0
+}

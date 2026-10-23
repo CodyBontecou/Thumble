@@ -1,0 +1,60 @@
+{
+  "scope": "synthetic-contract-only-no-real-credential",
+  "hello": {
+    "version": 1,
+    "command": "hello",
+    "authorityInstanceId": "authority-a",
+    "controlVersion": 4,
+    "inputVersion": 1,
+    "documentVersion": 1,
+    "capabilitiesVersion": 1,
+    "inputEnabled": false
+  },
+  "authenticated": {
+    "version": 1,
+    "authorityInstanceId": "authority-a",
+    "phoneId": "phone-a",
+    "credentialEpoch": "1",
+    "connectionId": "abababababababababababababababab",
+    "expiresAt": 100000,
+    "inputSessionAvailable": true,
+    "inputEnabled": false,
+    "command": "authenticated"
+  },
+  "status": {
+    "version": 1,
+    "authorityInstanceId": "authority-a",
+    "phoneId": "phone-a",
+    "credentialEpoch": "1",
+    "connectionId": "abababababababababababababababab",
+    "expiresAt": 100000,
+    "inputSessionAvailable": true,
+    "inputEnabled": false,
+    "command": "control-status"
+  },
+  "configuration": {
+    "version": 1,
+    "command": "input-configuration",
+    "connectionId": "abababababababababababababababab",
+    "active": true,
+    "generation": "1",
+    "revision": "1",
+    "inputEnabled": false
+  },
+  "grant": {
+    "version": 1,
+    "command": "input-granted",
+    "connectionId": "abababababababababababababababab",
+    "generation": "1",
+    "revision": "1",
+    "sessionId": "33333333333333333333333333333333",
+    "key": "4444444444444444444444444444444444444444444444444444444444444444",
+    "noncePrefix": "55555555",
+    "lifetimeMs": 1000,
+    "packetVersion": 1,
+    "packetBytes": 108,
+    "packetLimit": "1048576",
+    "transport": "tls",
+    "inputEnabled": false
+  }
+}

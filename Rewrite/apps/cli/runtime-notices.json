@@ -1,0 +1,39 @@
+{
+  "noticesSha256": "7aa52083d6e9bfefc4be85fd74f5b3f1cc6bb9b313d0aa7ad0c27b7e2cda45f8",
+  "packages": [
+    {
+      "name": "@modelcontextprotocol/server",
+      "version": "2.3.1",
+      "files": {
+        "dist/ajvProvider-CEoC__sr.mjs": "218157a99879a59cdea0b720a484dfe9989fa768f3d05318c2803b61705373fa",
+        "dist/chunk-Br0eD_fh.mjs": "d4a000980e7c6a8a2ee04c12d80cf538b11e5040e8487dad7661b09d85894e74",
+        "dist/dialects-DoSzNhcb.mjs": "9340570968ae24904805bbb0ee637f9aa1a17f7d2b87c26ba8290809b4cc7080",
+        "dist/index.mjs": "60fca0c96c38d4e64df281ae22d85b3f9edf43306cc857c390054a5e4c3cf2fb",
+        "dist/mcp-DIH4cS6P.mjs": "2657fbeaebe76ef461e8d0860308da4c3404d2d3b6b1f06960b8ffc578fec1b4",
+        "dist/shimsBrowser.mjs": "3415fca8dc53c749b71099a6147aec421001d8e4bb9ded4779c70729536035d0",
+        "dist/shimsNode.mjs": "efa8ef680135a81cd4b3dadaa765ad5cf506523e410c8a9702ab6d9095869d8f",
+        "dist/shimsWorkerd.mjs": "7d6c1428e2a549928cdc38a488280f611fb2980aa728e986cb214ec3cfe35910",
+        "dist/src-Cqbh3MYc.mjs": "bc81a674f25546e2a631a5f3c9cb1829654bbfcdd40cb89823aab5fb719211e5",
+        "dist/stdio.mjs": "43a68ba2ed4569e6b35d436a7dd94ab32a31d49d6c00df8337e244f8b0a4f956",
+        "dist/validators/ajv.mjs": "e796c631ef9148179ed20996066dfd2b717232a5443483aeb89284c3780e1e00",
+        "dist/validators/cfWorker.mjs": "e239ec4fc26053480699af8f649f78d63a160539f0a0e255cee3010a65065d36"
+      }
+    },
+    {
+      "name": "@modelcontextprotocol/core",
+      "version": "2.3.1",
+      "files": {
+        "dist/auth-BNDyLTqp.mjs": "4a93aaa8765ce5ec8a2fc0b946881124568a2b118d56fa1408f43e4d952d988c",
+        "dist/index.mjs": "dcf5e4173148f276be335db8a85fadf417a8728634be5ec3ef5159bd18a6ab8f",
+        "dist/internal.mjs": "848b06134a52cd2f95fe71c897a41bf80e2f2335bd60751e53bf854692ec4892"
+      }
+    },
+    {
+      "name": "zod",
+      "version": "4.6.7",
+      "files": {
+        "LICENSE": "3f1189b28e3866e0d979968d466b78f813f76827cfdca1fbb124cc0a5c8841f8"
+      }
+    }
+  ]
+}

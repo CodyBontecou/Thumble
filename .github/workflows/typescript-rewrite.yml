@@ -1,0 +1,169 @@
+name: TypeScript rewrite (headless)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      [
+        "Rewrite/**",
+        "Host/fixtures/gamepad/v2.json",
+        ".github/workflows/typescript-rewrite.yml",
+      ]
+  pull_request:
+    paths:
+      [
+        "Rewrite/**",
+        "Host/fixtures/gamepad/v2.json",
+        ".github/workflows/typescript-rewrite.yml",
+      ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  portable:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, id: ubuntu, shard: "", primary: true }
+          - { os: macos-latest, id: macos, shard: "", primary: true }
+          - { os: windows-latest, id: windows-1, shard: "--shard 1/3", primary: true }
+          - { os: windows-latest, id: windows-2, shard: "--shard 2/3", primary: false }
+          - { os: windows-latest, id: windows-3, shard: "--shard 3/3", primary: false }
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: Rewrite
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.3
+      - uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: Rewrite/native/receiver
+      - run: bun install --frozen-lockfile
+      - name: Verify independent Node AES-GCM packet oracle
+        run: node tooling/verify-input-packet-oracle.mjs
+      - run: bun run check:generated
+      - run: bun run check:boundaries
+      - run: bun tooling/check-cli-notices.ts
+      - run: bun x --no-install prettier --check .
+      - run: cargo fmt --manifest-path native/receiver/Cargo.toml -- --check
+      - run: cargo clippy --locked --manifest-path native/receiver/Cargo.toml --all-targets -- -D warnings
+      - name: Compile read-only macOS signed-claim doctor
+        if: runner.os == 'macOS'
+        run: cargo clippy --locked --manifest-path native/receiver/Cargo.toml --all-targets --features output-doctor-macos -- -D warnings
+      - name: Verify inspection-only macOS doctor
+        if: runner.os == 'macOS'
+        run: cargo test --locked --manifest-path native/receiver/Cargo.toml --features output-doctor-macos --lib output_doctor
+
+      - name: Isolate Windows malformed catalog-child response
+        shell: pwsh
+        if: runner.os == 'Windows' && matrix.primary
+        env:
+          THUMBLE_REWRITE_PIPE_PROBE: "1"
+        run: |
+          New-Item -ItemType Directory -Force reports | Out-Null
+          foreach ($attempt in 1..8) {
+            "catalog-child iteration=$attempt" | Tee-Object -FilePath reports/private-pipe-probe.log -Append
+            bun test tests/phone-catalog.test.ts -t "malformed phone catalog child result terminates its poisoned owner" 2>&1 | Tee-Object -FilePath reports/private-pipe-probe.log -Append
+            $testExit = $LASTEXITCODE
+            if ($testExit -ne 0) { exit $testExit }
+          }
+      - name: Isolate Windows stale-grant regression with phase diagnostics
+        shell: pwsh
+        if: runner.os == 'Windows' && matrix.primary
+        env:
+          RUST_BACKTRACE: "1"
+          THUMBLE_REWRITE_INPUT_IO_PROBE: "1"
+        run: |
+          New-Item -ItemType Directory -Force reports | Out-Null
+          cargo test --locked --manifest-path native/receiver/Cargo.toml --lib phone_trust::tests::durable_authorization_observations_remain_monotonic_across_journal_recovery -- --exact --nocapture 2>&1 | Tee-Object -FilePath reports/native-stale-grant.log
+          $testExit = $LASTEXITCODE
+          if ($testExit -ne 0) { exit $testExit }
+          foreach ($attempt in 1..8) {
+            "native-stale-grant iteration=$attempt" | Tee-Object -FilePath reports/native-stale-grant.log -Append
+            cargo test --locked --manifest-path native/receiver/Cargo.toml --test native_ingress_process stale_grant_receipts_and_old_generation_packets_cannot_replace_or_release_new_configuration -- --exact --nocapture 2>&1 | Tee-Object -FilePath reports/native-stale-grant.log -Append
+            $testExit = $LASTEXITCODE
+            if ($testExit -ne 0) { exit $testExit }
+          }
+      # Bound concurrent fixture processes on hosted runners. Concurrency within
+      # each native scenario and all safety deadlines remain unchanged.
+      - run: bun run native:test
+        if: matrix.primary
+        env:
+          RUST_TEST_THREADS: "2"
+          THUMBLE_REWRITE_INPUT_IO_PROBE: ${{ runner.os == 'Windows' && '1' || '0' }}
+      - run: bun run native:build
+      - name: Verify native TLS with independent Node/OpenSSL client
+        if: matrix.primary
+        run: |
+          cargo build --locked --manifest-path native/receiver/Cargo.toml --example control_tls_probe
+          node tooling/test-control-tls.mjs
+      - run: bun run typecheck
+      # The complete macOS suite exceeded 120s with all tests passing on 3659c3d.
+      # This runner budget does not change any fixture or product deadline.
+      - run: bun run test:ci ${{ matrix.shard }}
+        timeout-minutes: 5
+      - run: bun run build
+        if: matrix.primary
+      - run: bun run test:package:ci
+        if: matrix.primary && runner.os != 'Windows'
+        timeout-minutes: 2
+      - name: Capture Windows standalone package phase diagnostics
+        if: matrix.primary && runner.os == 'Windows'
+        shell: bash
+        timeout-minutes: 2
+        run: |
+          mkdir -p reports
+          set +e
+          THUMBLE_REWRITE_PACKAGE_STAGE_PROBE=1 bun run test:package:ci > reports/package-stage-private.txt 2>&1
+          package_status=$?
+          cat reports/package-stage-private.txt
+          bun tooling/collect-package-stage.ts
+          collector_status=$?
+          rm -f reports/package-stage-private.txt
+          if [ "$package_status" -ne 0 ]; then exit "$package_status"; fi
+          exit "$collector_status"
+      - uses: actions/upload-artifact@v4
+        if: matrix.primary
+        with:
+          name: rewrite-m2-recording-${{ matrix.id }}
+          path: Rewrite/dist/
+          if-no-files-found: error
+      - name: Typecheck generated Swift DTOs
+        if: runner.os == 'macOS'
+        run: swiftc -typecheck packages/contracts/generated/swift/GamepadStateV1.swift
+      - uses: actions/upload-artifact@v4
+        if: always() && runner.os == 'Windows' && matrix.primary && hashFiles('Rewrite/reports/private-pipe-probe.log') != ''
+        with:
+          name: rewrite-private-pipe-${{ matrix.id }}
+          path: Rewrite/reports/private-pipe-probe.log
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always() && runner.os == 'Windows' && matrix.primary && hashFiles('Rewrite/reports/native-stale-grant.log') != ''
+        with:
+          name: rewrite-native-stale-grant-${{ matrix.id }}
+          path: Rewrite/reports/native-stale-grant.log
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always() && hashFiles('Rewrite/reports/*junit.xml') != ''
+        with:
+          name: rewrite-portable-tests-${{ matrix.id }}
+          path: |
+            Rewrite/reports/*junit.xml
+            Rewrite/reports/package-stage.jsonl
+          if-no-files-found: error

@@ -1,0 +1,5 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": { "modules": ["ThumbleInputModule"] },
+  "android": { "modules": ["com.thumble.rewrite.bridge.ThumbleInputModule"] }
+}

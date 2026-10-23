@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType><TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>Thumble.CandidateApiConformance.Types</AssemblyName>
+    <Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors><NuGetAudit>false</NuGetAudit>
+    <NoWarn>CS1574;CS1591</NoWarn>
+  </PropertyGroup>
+  <ItemGroup><Compile Include="Program.cs" /><Compile Include="StateAdapter.cs" /><Compile Include="$(PinnedDataTypesPath)" Link="PinnedDataTypes.cs" /></ItemGroup>
+</Project>
