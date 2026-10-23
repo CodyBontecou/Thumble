@@ -1,0 +1,103 @@
+{
+  "bounds": {
+    "wss": {
+      "count": 1496,
+      "validBounds": 1496,
+      "invalidBounds": 0,
+      "nativeRtt": {
+        "p50": 12.738,
+        "p95": 21.295,
+        "p99": 128.645,
+        "max": 1071.163
+      },
+      "macReceiveToHidP95": 0.118,
+      "forwardMs": {
+        "p50Lower": 2.3694981932640076,
+        "p50Upper": 10.022802829742432,
+        "p95Lower": 8.28101298213005,
+        "p95Upper": 16.147088021039963
+      },
+      "returnMs": {
+        "p50Lower": 2.3827505707740784,
+        "p50Upper": 10.049941003322601,
+        "p95Lower": 5.830229967832565,
+        "p95Upper": 13.586320012807846
+      },
+      "nativeSendToHidMs": {
+        "p50Lower": 2.467168578878045,
+        "p50Upper": 10.110058385878801,
+        "p95Lower": 8.395012982189655,
+        "p95Upper": 16.26408801972866
+      },
+      "offsetWidthP95": 8.458658427000046,
+      "spikesOver40ms": {
+        "forwardSpikes": 41,
+        "returnSpikes": 13,
+        "bothSpikes": 0,
+        "ambiguousSpikes": 0
+      },
+      "model": {
+        "windowMs": 2000,
+        "driftPpm": 200,
+        "warmupMs": 5000,
+        "durationMs": 60000
+      }
+    }
+  },
+  "sensitivity": {
+    "wss": {
+      "count": 1496,
+      "validBounds": 1496,
+      "invalidBounds": 0,
+      "nativeRtt": {
+        "p50": 12.738,
+        "p95": 21.295,
+        "p99": 128.645,
+        "max": 1071.163
+      },
+      "macReceiveToHidP95": 0.118,
+      "forwardMs": {
+        "p50Lower": 2.0991694927215576,
+        "p50Upper": 10.233761966228485,
+        "p95Lower": 8.11303249001503,
+        "p95Upper": 16.291220039129257
+      },
+      "returnMs": {
+        "p50Lower": 2.1727240085601807,
+        "p50Upper": 10.334998995065689,
+        "p95Lower": 5.562664985656738,
+        "p95Upper": 13.822997003793716
+      },
+      "nativeSendToHidMs": {
+        "p50Lower": 2.187698496505618,
+        "p50Upper": 10.326589504256845,
+        "p95Lower": 8.227032490074635,
+        "p95Upper": 16.408220037817955
+      },
+      "offsetWidthP95": 9.069022506475449,
+      "spikesOver40ms": {
+        "forwardSpikes": 41,
+        "returnSpikes": 13,
+        "bothSpikes": 0,
+        "ambiguousSpikes": 0
+      },
+      "model": {
+        "windowMs": 1000,
+        "driftPpm": 500,
+        "warmupMs": 5000,
+        "durationMs": 60000
+      }
+    }
+  },
+  "counts": {
+    "superseded": 22,
+    "acked": 2940,
+    "pauses": 199,
+    "sent": 3729
+  },
+  "receiverCounts": {
+    "wssExpiredLease": 757,
+    "wssAccepted": 2968,
+    "pauses": 182
+  }
+}

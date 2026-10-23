@@ -1,0 +1,8 @@
+{
+  "name": "@tapping/entitlements",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": { "start": "node src/server.js" },
+  "dependencies": { "@apple/app-store-server-library": "^3.0.0" }
+}

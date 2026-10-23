@@ -1,0 +1,22 @@
+steps:
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Down
+          x: 0.337
+          y: 0.086
+        - type: Up
+          x: 0.337
+          y: 0.086
+          delayMs: 5000
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: Thumble menu
+executionPrerequisite: Physical iPhone 13 Pro Max foreground Tapping, built-in
+  Xbox layout, connected to isolated-profile QA Mac receiver. LT AX center
+  (.337,.086). Input audit enabled; reset audit cursor before replay, then
+  independently assert one uninterrupted 5000ms hold with
+  tools/assert-input-hold.mjs. This fragment alone checks controller screen
+  presence only.

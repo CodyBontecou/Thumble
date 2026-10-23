@@ -1,0 +1,35 @@
+{
+  "name": "@tapping/mobile",
+  "version": "1.0.0",
+  "main": "index.js",
+  "dependencies": {
+    "@tapping/controller": "0.1.0",
+    "expo": "~58.0.17",
+    "expo-build-properties": "~58.0.11",
+    "expo-camera": "~58.0.12",
+    "expo-dev-client": "~58.0.14",
+    "expo-keep-awake": "~58.0.3",
+    "expo-linking": "~58.0.14",
+    "expo-router": "~58.0.25",
+    "expo-status-bar": "~58.0.4",
+    "react": "19.3.0",
+    "react-native": "0.88.0",
+    "react-native-safe-area-context": "~5.10.1",
+    "react-native-screens": "~4.30.0"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "start": "expo start --dev-client --port 8088",
+    "android": "expo run:android --port 8088",
+    "ios": "expo run:ios --port 8088",
+    "web": "expo start --web"
+  },
+  "private": true,
+  "devDependencies": {
+    "@types/react": "~19.3.0",
+    "eslint": "^9.0.0",
+    "eslint-config-expo": "~58.0.4",
+    "typescript": "~6.0.3"
+  }
+}

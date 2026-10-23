@@ -1,0 +1,12 @@
+{
+  "timestamp_ms": 160386495,
+  "rssi": -61,
+  "link_speed_mbps": 408,
+  "total_tx_success": 299448,
+  "total_tx_retries": 34845,
+  "total_tx_bad": 8,
+  "total_rx_success": 407405,
+  "total_cca_busy_freq_time_ms": 2989238,
+  "total_radio_on_freq_time_ms": 4205157,
+  "rx_link_speed_mbps": 816
+}

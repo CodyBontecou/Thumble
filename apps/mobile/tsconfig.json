@@ -1,0 +1,12 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "strict": false,
+    "strictNullChecks": true
+  },
+  "include": ["index.js", "src/**/*.js", "src/**/*.d.ts", "../../packages/controller/src/**/*.js"],
+  "exclude": ["node_modules", "ios", "android"]
+}

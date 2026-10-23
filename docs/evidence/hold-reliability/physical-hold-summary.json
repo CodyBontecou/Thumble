@@ -1,0 +1,22 @@
+{
+  "device": "iPhone 13 Pro Max, iOS 26.3.1",
+  "transport": "TLS WebSocket, isolated receiver, all inputs discarded",
+  "gesture": "LT down, 5000 ms hold, up via physical iOS automation",
+  "baseline": {
+    "watchdogMs": 150,
+    "leaseMs": 150,
+    "observedHeldDurationMs": 2274.506125,
+    "note": "Watchdog cleared ownership before finger release. Original baseline raw probe log was overwritten when starting the comparison; measured result was captured in tool output."
+  },
+  "comparison": {
+    "watchdogMs": 300,
+    "leaseMs": 500,
+    "watchdogs": 0,
+    "expired": 0,
+    "heldRunsMs": [
+      5001.088416999999
+    ],
+    "heldPackets": 148
+  },
+  "limits": "One controlled gesture per timing setting on shared Wi-Fi; demonstrates this failure and successful comparison, not a soak or gameplay qualification."
+}

@@ -1,0 +1,4 @@
+PASS forged counter/tag discarded without advancing replay window; authenticated UDP reaches HID
+PASS replay and reordered older datagrams ignored without disconnecting
+PASS wrong key, expired lease and non-neutral recovery rejected; fresh neutral UDP resumes
+PASS disconnect revokes UDP capability; previous-session key cannot control a new session

@@ -1,0 +1,71 @@
+
+> test
+> node --test packages/controller/test/*.test.js packages/profile-tools/test/*.test.js tools/test/*.test.js
+
+✔ the shipped controller template has a mapping for every control (2.266292ms)
+✔ concurrent movement, camera, modifier and action remain independent (0.632042ms)
+✔ releasing one of two touch controls mapped to A does not release the other (0.346125ms)
+✔ stick deadzone is radial and diagonal input cannot exceed unit magnitude (0.14075ms)
+✔ disconnect or background release clears every held control (0.371875ms)
+✔ profile replacement clears held input and takes an isolated copy (1.77125ms)
+✔ an invalid MCP profile edit does not alter the active profile or held state (0.569083ms)
+✔ profiles reject duplicate IDs, missing mappings, oversized geometry and code fields (0.543666ms)
+✔ profiles reject ambiguous analog ownership and mismatched control types (0.51325ms)
+✔ malformed profile payloads produce validation errors without throwing (0.153583ms)
+✔ non-finite inputs never enter controller state (0.286834ms)
+✔ receiver watchdog releases movement and buttons after 150ms without valid input (0.23575ms)
+✔ invalid packets cannot refresh the receiver watchdog (0.189625ms)
+✔ QR retains exact TLS identity and expiring local capability (1.493833ms)
+✔ QR rejects public, cleartext, credentials, stale and malformed invitations (2.426958ms)
+✔ separate fingers can move, hold a modifier, and press an action concurrently (1.39525ms)
+✔ moving outside a captured button releases it without pressing a neighboring button (0.758667ms)
+✔ releasing one finger on the same button preserves the other hold (0.245042ms)
+✔ a second finger cannot steal a stick, and cancellation neutralizes every input (0.2075ms)
+✔ replacing a touched layout releases old touch ownership and uses the new geometry (2.185917ms)
+✔ SavedVariables extraction decodes only strings and never evaluates Lua (1.072666ms)
+✔ disk import accepts only the named addon SavedVariables file (27.410291ms)
+✔ import reads learned spells and automatic proposals map profile outputs to WoW keys without changing the profile (36.062333ms)
+✔ unlearned and ambiguous spells remain unresolved instead of fabricating abilities (25.672791ms)
+✔ explicit proposals reject passive spells, macros, duplicate keys, modifiers and overrides (29.633708ms)
+✔ result confirmation is exact and labels require the original unchanged profile revision (30.126208ms)
+✔ results for another character, plan or duplicated key cannot confirm a proposal (19.832917ms)
+✔ malformed or conflicting character snapshots never replace a prior export (12.131416ms)
+✔ recognized ConsolePort action proxies can be proposed, but pending receipts cannot confirm them (23.259416ms)
+✔ saved revisions persist, invalid edits are atomic, and saving never changes an active layout (38.15975ms)
+✔ two independent agents cannot overwrite each other or corrupt the store (38.409833ms)
+✔ delivery status requires a fresh phone acknowledgement for the exact activation (22.941291ms)
+✔ tool surface has no input execution tools, rejects extra arguments, and validates semantics (2.029042ms)
+✔ MCP stdio initializes, lists tools, saves and activates, and reports conflicts as tool errors (83.403083ms)
+(node:61330) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/codybontecou/dev/tapping/apps/mobile/src/connection-core.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/codybontecou/dev/tapping/apps/mobile/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ late callbacks from an old socket cannot affect a replacement (2.995584ms)
+✔ disconnect cancels an asynchronous pairing preparation (0.387041ms)
+✔ overlapping preparation only opens the latest requested pairing (0.301542ms)
+✔ pause releases held controls and uses the replacement lease immediately (1.203958ms)
+✔ duplicate acknowledgements cannot keep a dead receiver alive (0.833958ms)
+✔ failed initial input does not leave a heartbeat running (0.926458ms)
+✔ handshake timeout and invalid future acknowledgements disconnect safely (0.724542ms)
+✔ touch timing context never leaks into heartbeats or neutral resets (0.520708ms)
+✔ layout activation releases input, blocks old geometry, and waits for fresh receiver lease (0.771875ms)
+✔ invalid or stale layout disconnects and reconnect can receive the same active revision (1.206209ms)
+✔ superseded renders cannot acknowledge a more recent layout (1.290583ms)
+✔ UDP input requires the encrypted native handshake; blocked handshake keeps WebSocket input (0.455041ms)
+✔ UDP send failure releases controls and closes the control session (0.316959ms)
+(node:61331) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/codybontecou/dev/tapping/apps/mobile/src/latency-recorder.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/codybontecou/dev/tapping/apps/mobile/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ timing recorder separates clock domains and batches bounded duration-only exports (0.969375ms)
+✔ invalid or reversed timing never becomes a plausible measurement (0.099708ms)
+✔ clock bounds distinguish forward and return spikes without symmetric-delay assumptions (0.723792ms)
+✔ inconsistent clocks are reported rather than silently producing a one-way claim (0.783167ms)
+ℹ tests 51
+ℹ suites 0
+ℹ pass 51
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 261.97925

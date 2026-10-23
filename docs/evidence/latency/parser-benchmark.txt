@@ -1,0 +1,6 @@
+round=0 old_us=4.862 direct_us=0.591 speedup=8.23
+round=1 old_us=4.660 direct_us=0.556 speedup=8.38
+round=2 old_us=4.638 direct_us=0.573 speedup=8.10
+round=3 old_us=4.699 direct_us=0.576 speedup=8.16
+round=4 old_us=4.832 direct_us=0.582 speedup=8.30
+checksum=3400000

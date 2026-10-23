@@ -1,0 +1,104 @@
+{
+  "bounds": {
+    "udp": {
+      "count": 1673,
+      "validBounds": 1673,
+      "invalidBounds": 0,
+      "nativeRtt": {
+        "p50": 9.302,
+        "p95": 84.343,
+        "p99": 135.226,
+        "max": 880.532
+      },
+      "macReceiveToHidP95": 0.109,
+      "forwardMs": {
+        "p50Lower": 1.8399975895881653,
+        "p50Upper": 7.240931391716003,
+        "p95Lower": 48.6703370064497,
+        "p95Upper": 54.135032787919044
+      },
+      "returnMs": {
+        "p50Lower": 1.7300769984722137,
+        "p50Upper": 7.213020205497742,
+        "p95Lower": 13.430674195289612,
+        "p95Upper": 18.734143778681755
+      },
+      "nativeSendToHidMs": {
+        "p50Lower": 1.9148156102746725,
+        "p50Upper": 7.322674805298448,
+        "p95Lower": 48.70233700610697,
+        "p95Upper": 54.185658210888505
+      },
+      "offsetWidthP95": 5.989349201321602,
+      "spikesOver40ms": {
+        "forwardSpikes": 109,
+        "returnSpikes": 16,
+        "bothSpikes": 3,
+        "ambiguousSpikes": 0
+      },
+      "model": {
+        "windowMs": 2000,
+        "driftPpm": 200,
+        "warmupMs": 5000,
+        "durationMs": 60000
+      }
+    }
+  },
+  "sensitivity": {
+    "udp": {
+      "count": 1673,
+      "validBounds": 1673,
+      "invalidBounds": 0,
+      "nativeRtt": {
+        "p50": 9.302,
+        "p95": 84.343,
+        "p99": 135.226,
+        "max": 880.532
+      },
+      "macReceiveToHidP95": 0.109,
+      "forwardMs": {
+        "p50Lower": 1.5539824962615967,
+        "p50Upper": 7.401393994688988,
+        "p95Lower": 48.63034251332283,
+        "p95Upper": 54.23005399107933
+      },
+      "returnMs": {
+        "p50Lower": 1.5585464984178543,
+        "p50Upper": 7.422068506479263,
+        "p95Lower": 13.217679500579834,
+        "p95Upper": 18.99669848382473
+      },
+      "nativeSendToHidMs": {
+        "p50Lower": 1.6348870042711496,
+        "p50Upper": 7.479372998699546,
+        "p95Lower": 48.6623425129801,
+        "p95Upper": 54.26705399155617
+      },
+      "offsetWidthP95": 6.536737501621246,
+      "spikesOver40ms": {
+        "forwardSpikes": 109,
+        "returnSpikes": 16,
+        "bothSpikes": 3,
+        "ambiguousSpikes": 0
+      },
+      "model": {
+        "windowMs": 1000,
+        "driftPpm": 500,
+        "warmupMs": 5000,
+        "durationMs": 60000
+      }
+    }
+  },
+  "counts": {
+    "pauses": 128,
+    "superseded": 42,
+    "sent": 3511,
+    "acked": 2757
+  },
+  "receiverCounts": {
+    "udpAccepted": 2767,
+    "pauses": 119,
+    "udpExpiredLease": 736,
+    "wssAccepted": 6
+  }
+}

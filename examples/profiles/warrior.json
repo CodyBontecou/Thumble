@@ -1,0 +1,204 @@
+{
+  "schemaVersion": 1,
+  "id": "warrior",
+  "name": "Warrior",
+  "controls": [
+    {
+      "id": "move",
+      "type": "stick",
+      "label": "Move",
+      "frame": {
+        "x": 0.07,
+        "y": 0.32,
+        "width": 0.25,
+        "height": 0.55
+      }
+    },
+    {
+      "id": "look",
+      "type": "stick",
+      "label": "Look",
+      "frame": {
+        "x": 0.43,
+        "y": 0.66,
+        "width": 0.17,
+        "height": 0.32
+      }
+    },
+    {
+      "id": "charge",
+      "type": "button",
+      "label": "Charge",
+      "color": "#efc849",
+      "frame": {
+        "x": 0.69,
+        "y": 0.38,
+        "width": 0.14,
+        "height": 0.33
+      }
+    },
+    {
+      "id": "execute",
+      "type": "button",
+      "label": "Execute",
+      "color": "#ed625a",
+      "frame": {
+        "x": 0.84,
+        "y": 0.38,
+        "width": 0.14,
+        "height": 0.33
+      }
+    },
+    {
+      "id": "chat",
+      "type": "button",
+      "label": "Chat",
+      "frame": {
+        "x": 0.45,
+        "y": 0.02,
+        "width": 0.12,
+        "height": 0.17
+      }
+    },
+    {
+      "id": "jump",
+      "type": "button",
+      "label": "Jump",
+      "frame": {
+        "x": 0.85,
+        "y": 0.79,
+        "width": 0.1,
+        "height": 0.18
+      }
+    },
+    {
+      "id": "target",
+      "type": "button",
+      "label": "Target",
+      "frame": {
+        "x": 0.69,
+        "y": 0.79,
+        "width": 0.1,
+        "height": 0.18
+      }
+    },
+    {
+      "id": "lb",
+      "type": "button",
+      "label": "LB",
+      "frame": {
+        "x": 0.05,
+        "y": 0.02,
+        "width": 0.14,
+        "height": 0.17
+      }
+    },
+    {
+      "id": "lt",
+      "type": "trigger",
+      "label": "LT",
+      "frame": {
+        "x": 0.22,
+        "y": 0.02,
+        "width": 0.14,
+        "height": 0.17
+      }
+    },
+    {
+      "id": "rb",
+      "type": "button",
+      "label": "RB",
+      "frame": {
+        "x": 0.81,
+        "y": 0.02,
+        "width": 0.14,
+        "height": 0.17
+      }
+    },
+    {
+      "id": "rt",
+      "type": "trigger",
+      "label": "RT",
+      "frame": {
+        "x": 0.64,
+        "y": 0.02,
+        "width": 0.14,
+        "height": 0.17
+      }
+    }
+  ],
+  "mappings": [
+    {
+      "controlId": "move",
+      "outputs": [
+        "lx",
+        "ly"
+      ],
+      "deadzone": 0.12,
+      "sensitivity": 1
+    },
+    {
+      "controlId": "look",
+      "outputs": [
+        "rx",
+        "ry"
+      ],
+      "deadzone": 0.12,
+      "sensitivity": 1
+    },
+    {
+      "controlId": "charge",
+      "outputs": [
+        "x"
+      ]
+    },
+    {
+      "controlId": "execute",
+      "outputs": [
+        "y"
+      ]
+    },
+    {
+      "controlId": "chat",
+      "outputs": [
+        "back"
+      ]
+    },
+    {
+      "controlId": "jump",
+      "outputs": [
+        "a"
+      ]
+    },
+    {
+      "controlId": "target",
+      "outputs": [
+        "b"
+      ]
+    },
+    {
+      "controlId": "lb",
+      "outputs": [
+        "lb"
+      ]
+    },
+    {
+      "controlId": "lt",
+      "outputs": [
+        "lt"
+      ]
+    },
+    {
+      "controlId": "rb",
+      "outputs": [
+        "rb"
+      ]
+    },
+    {
+      "controlId": "rt",
+      "outputs": [
+        "rt"
+      ]
+    }
+  ]
+}

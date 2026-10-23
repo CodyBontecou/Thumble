@@ -1,0 +1,2 @@
+FIXTURE 000000010000000000000001df72b7ba610ef8fc5cb4b111ebee8e57fd7110ea
+PASS Java AES-GCM, replay, forged-counter rejection

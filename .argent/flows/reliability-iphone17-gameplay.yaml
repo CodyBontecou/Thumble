@@ -1,0 +1,91 @@
+steps:
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Down
+          x: 0.344
+          y: 0.0855
+        - type: Up
+          x: 0.344
+          y: 0.0855
+          delayMs: 5000
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Down
+          x: 0.2395
+          y: 0.26615
+        - type: Up
+          x: 0.2395
+          y: 0.26615
+          delayMs: 2000
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Down
+          x: 0.2395
+          y: 0.53285
+        - type: Up
+          x: 0.2395
+          y: 0.53285
+          delayMs: 2000
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Down
+          x: 0.17475
+          y: 0.3995
+        - type: Up
+          x: 0.17475
+          y: 0.3995
+          delayMs: 2000
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Down
+          x: 0.30425
+          y: 0.3995
+        - type: Up
+          x: 0.30425
+          y: 0.3995
+          delayMs: 2000
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Down
+          x: 0.72425
+          y: 0.7315
+        - type: Up
+          x: 0.72425
+          y: 0.7315
+          delayMs: 500
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Down
+          x: 0.59475
+          y: 0.7315
+        - type: Up
+          x: 0.59475
+          y: 0.7315
+          delayMs: 500
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Down
+          x: 0.7945
+          y: 0.5415
+        - type: Up
+          x: 0.7945
+          y: 0.5415
+          delayMs: 100
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        identifier: controller-menu
+executionPrerequisite: Physical iPhone 17 Pro foreground Tapping, built-in Xbox
+  layout connected to QA receiver, no held touches. WoW Classic with ConsolePort
+  foreground, character alive in Northshire. Device-specific AX coordinates.
+  Actual movement and jump inputs; no chat or combat. Independent HID audit
+  required after replay.

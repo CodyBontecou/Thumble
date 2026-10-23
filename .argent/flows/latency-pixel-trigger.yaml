@@ -1,0 +1,424 @@
+steps:
+  - echo: Exercise LT analog changes, then release to neutral. Raw custom gesture is
+      intentional for a continuous analog trace; Pixel Argent transform
+      injectedX=1-treeY, injectedY=treeX. No movement or attack buttons.
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Down
+          x: 0.816
+          y: 0.3565
+        - type: Move
+          x: 0.8
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.83
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.8
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.83
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.8
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.83
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.8
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.83
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.8
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.83
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.8
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.83
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.8
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.83
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.8
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.83
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.8
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.83
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.8
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.83
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.8
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.83
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.8
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.83
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.8
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.83
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.8
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.83
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.8
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.83
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.8
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.83
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.8
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.83
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.8
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.83
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.8
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.83
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.8
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.83
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.8
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.83
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.8
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.83
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.8
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.83
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.8
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.83
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.8
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.83
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.8
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.83
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.8
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.83
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.8
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.83
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.8
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.83
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.8
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.83
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.8
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.83
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.8
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.83
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.8
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.83
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.8
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.83
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.8
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.83
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.8
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.83
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.8
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.83
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.8
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.83
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.8
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.83
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.8
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.83
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.8
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.83
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.8
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.83
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.8
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.83
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.8
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.83
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.8
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.83
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.8
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.83
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.8
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.83
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.8
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.83
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.8
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.83
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.8
+          y: 0.3565
+          delayMs: 33
+        - type: Move
+          x: 0.83
+          y: 0.3565
+          delayMs: 33
+        - type: Up
+          x: 0.816
+          y: 0.3565
+          delayMs: 33
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: LT 0.00  RT 0.00
+executionPrerequisite: Pixel 7, landscape orientation 1, Tapping controller
+  foreground and connected to opt-in latency receiver. No held touches. LT frame
+  from AX x .287 y .131 width .139 height .106. Raw custom gesture retains
+  transformed portrait injection coordinates for Argent 0.25; not portable
+  across devices.

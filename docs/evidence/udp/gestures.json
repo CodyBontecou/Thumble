@@ -1,0 +1,25 @@
+{
+  "iphoneWss": {
+    "pass": 16,
+    "miss": 4
+  },
+  "iphoneUdp": {
+    "pass": 15,
+    "miss": 5
+  },
+  "pixelWss": {
+    "pass": 14,
+    "miss": 6,
+    "flowFailures": 0
+  },
+  "pixelUdp": {
+    "pass": 17,
+    "miss": 3,
+    "flowFailures": 0
+  },
+  "pixelWssReversal": {
+    "pass": 14,
+    "miss": 6,
+    "flowFailures": 0
+  }
+}

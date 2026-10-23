@@ -1,0 +1,155 @@
+{
+  "bridgeVersion": 1,
+  "kind": "character",
+  "snapshotId": "Player-Test-1:1792780000:1:100",
+  "exportedAt": 1792780000,
+  "character": {
+    "guid": "Player-Test-1",
+    "name": "Testwarrior",
+    "realm": "Test Realm",
+    "class": "WARRIOR",
+    "classId": 1,
+    "specId": 0,
+    "level": 60
+  },
+  "gameVersion": "1.15.9",
+  "build": "63829",
+  "interface": 11509,
+  "locale": "enUS",
+  "bindingSet": 2,
+  "actionPage": 1,
+  "consolePortVersion": "3.3.11",
+  "modifiers": {
+    "GamePadEmulateShift": "PADLTRIGGER",
+    "GamePadEmulateCtrl": "PADRTRIGGER",
+    "GamePadEmulateAlt": "none",
+    "GamePadCursorLeftClick": "none",
+    "GamePadCursorRightClick": "none"
+  },
+  "reserved": {
+    "PADLTRIGGER": "GamePadEmulateShift",
+    "PADRTRIGGER": "GamePadEmulateCtrl"
+  },
+  "bindings": [
+    {
+      "key": "PAD1",
+      "base": "",
+      "effective": ""
+    },
+    {
+      "key": "PAD2",
+      "base": "",
+      "effective": ""
+    },
+    {
+      "key": "PAD3",
+      "base": "ACTIONBUTTON3",
+      "effective": "ACTIONBUTTON3"
+    },
+    {
+      "key": "PAD4",
+      "base": "",
+      "effective": ""
+    },
+    {
+      "key": "PADLSHOULDER",
+      "base": "",
+      "effective": ""
+    },
+    {
+      "key": "PADRSHOULDER",
+      "base": "",
+      "effective": ""
+    },
+    {
+      "key": "PADBACK",
+      "base": "",
+      "effective": ""
+    },
+    {
+      "key": "PADFORWARD",
+      "base": "",
+      "effective": ""
+    },
+    {
+      "key": "PADLSTICK",
+      "base": "",
+      "effective": ""
+    },
+    {
+      "key": "PADRSTICK",
+      "base": "",
+      "effective": ""
+    },
+    {
+      "key": "PADDUP",
+      "base": "",
+      "effective": ""
+    },
+    {
+      "key": "PADDDOWN",
+      "base": "",
+      "effective": ""
+    },
+    {
+      "key": "PADDLEFT",
+      "base": "",
+      "effective": ""
+    },
+    {
+      "key": "PADDRIGHT",
+      "base": "",
+      "effective": ""
+    },
+    {
+      "key": "PADSYSTEM",
+      "base": "",
+      "effective": ""
+    },
+    {
+      "key": "PADLTRIGGER",
+      "base": "",
+      "effective": ""
+    },
+    {
+      "key": "PADRTRIGGER",
+      "base": "",
+      "effective": ""
+    }
+  ],
+  "actions": [
+    {
+      "slot": 3,
+      "type": "spell",
+      "id": 100,
+      "name": "Charge",
+      "binding": "ACTIONBUTTON3"
+    }
+  ],
+  "spells": [
+    {
+      "id": 100,
+      "name": "Charge",
+      "rank": "Rank 1",
+      "passive": false
+    },
+    {
+      "id": 5308,
+      "name": "Execute",
+      "rank": "Rank 1",
+      "passive": false
+    },
+    {
+      "id": 78,
+      "name": "Heroic Strike",
+      "rank": "Rank 1",
+      "passive": false
+    },
+    {
+      "id": 20572,
+      "name": "Passive example",
+      "rank": "",
+      "passive": true
+    }
+  ]
+}

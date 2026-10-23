@@ -1,0 +1,22 @@
+steps:
+  - echo: Hold LT at the AX-derived center for 150ms, then release. Raw custom
+      Down/Up preserves exact hold timing; expect neutral controller readout.
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Down
+          x: 0.337
+          y: 0.182
+        - type: Up
+          x: 0.337
+          y: 0.182
+          delayMs: 150
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: LT 0.00  RT 0.00
+executionPrerequisite: Physical iPhone 13 Pro Max in landscape, Tapping
+  controller foreground connected to opt-in timing receiver, no held input. LT
+  AX frame x .271 y .128 width .132 height .108. Press-hold trace uses that
+  frame center.

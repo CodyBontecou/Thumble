@@ -1,0 +1,6 @@
+PASS invalid pairing token rejected
+PASS authenticated TLS hello / input / ack / disconnect
+PASS duplicate sequence rejected
+PASS expired/unknown leases discarded; paused input requires fresh lease and neutral recovery
+PASS receiver pauses then closes an idle session
+PASS invalid state rejected

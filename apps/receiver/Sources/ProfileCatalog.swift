@@ -1,0 +1,78 @@
+import Foundation
+import CoreFoundation
+
+// Same atomic store and directory lock as the agent tools. Phone requests select
+// existing revisions only; they never supply a profile body or executable input.
+enum ProfileCatalog {
+    enum Failure: LocalizedError {
+        case invalid, conflict, busy
+        var errorDescription: String? {
+            switch self {
+            case .invalid: return "The saved profiles could not be loaded."
+            case .conflict: return "Profiles changed. Refresh the list and try again."
+            case .busy: return "Profiles are busy. Try again shortly."
+            }
+        }
+    }
+    static func revision(_ value: Any?) -> Int? {
+        guard let n = value as? NSNumber, CFGetTypeID(n) != CFBooleanGetTypeID(), n.doubleValue >= 0, n.doubleValue <= 9_007_199_254_740_991, n.doubleValue.rounded() == n.doubleValue else { return nil }
+        return n.intValue
+    }
+    static func read(_ directory: URL) throws -> [String: Any] {
+        let url = directory.appendingPathComponent("store.json")
+        let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+        guard let size = attributes[.size] as? NSNumber, size.intValue <= 8 * 1024 * 1024 else { throw Failure.invalid }
+        let data = try Data(contentsOf: url)
+        guard let store = try JSONSerialization.jsonObject(with: data) as? [String: Any], revision(store["version"]) == 1,
+              let entries = store["profiles"] as? [[String: Any]], entries.count <= 256 else { throw Failure.invalid }
+        var ids = Set<String>()
+        for entry in entries {
+            guard let rev = revision(entry["revision"]), rev > 0, let p = entry["profile"] as? [String: Any],
+                  let id = p["id"] as? String, id.range(of: "^[a-z0-9][a-z0-9-]{0,63}$", options: .regularExpression) != nil,
+                  ids.insert(id).inserted, let name = p["name"] as? String, !name.isEmpty, name.utf16.count <= 80,
+                  revision(p["schemaVersion"]) == 1, try JSONSerialization.data(withJSONObject: p).count <= 60000 else { throw Failure.invalid }
+        }
+        if let active = store["active"], !(active is NSNull) {
+            guard let a = active as? [String: Any], let rev = revision(a["revision"]), rev > 0,
+                  let profileRev = revision(a["profileRevision"]), profileRev > 0,
+                  a["profile"] is [String: Any] else { throw Failure.invalid }
+        }
+        return store
+    }
+    static func summary(_ store: [String: Any]) throws -> [String: Any] {
+        guard let entries = store["profiles"] as? [[String: Any]] else { throw Failure.invalid }
+        let active = store["active"] as? [String: Any]
+        return ["profiles": entries.map { e -> [String: Any] in
+            let p = e["profile"] as! [String: Any]
+            return ["id": p["id"]!, "name": p["name"]!, "revision": e["revision"]!]
+        }, "activationRevision": revision(active?["revision"]) ?? 0]
+    }
+    static func activate(_ directory: URL, id: String, profileRevision: Int, expectedActivationRevision: Int) throws -> [String: Any] {
+        let manager = FileManager.default, lock = directory.appendingPathComponent("write.lock", isDirectory: true)
+        let deadline = ProcessInfo.processInfo.systemUptime + 3
+        while true {
+            do { try manager.createDirectory(at: lock, withIntermediateDirectories: false); break }
+            catch {
+                guard manager.fileExists(atPath: lock.path) else { throw error }
+                guard ProcessInfo.processInfo.systemUptime < deadline else { throw Failure.busy }
+                Thread.sleep(forTimeInterval: 0.025)
+            }
+        }
+        defer { try? manager.removeItem(at: lock) }
+        var store = try read(directory)
+        let active = store["active"] as? [String: Any]
+        guard let entries = store["profiles"] as? [[String: Any]],
+              let entry = entries.first(where: { ($0["profile"] as? [String: Any])?["id"] as? String == id }),
+              revision(entry["revision"]) == profileRevision,
+              revision(active?["revision"]) ?? 0 == expectedActivationRevision,
+              expectedActivationRevision < 9_007_199_254_740_991 else { throw Failure.conflict }
+        let next = expectedActivationRevision + 1
+        store["active"] = ["revision": next, "profileRevision": profileRevision, "profile": entry["profile"]!]
+        let data = try JSONSerialization.data(withJSONObject: store)
+        guard data.count <= 8 * 1024 * 1024 else { throw Failure.invalid }
+        let path = directory.appendingPathComponent("store.json")
+        try data.write(to: path, options: .atomic)
+        try manager.setAttributes([.posixPermissions: 0o600], ofItemAtPath: path.path)
+        return try summary(store)
+    }
+}

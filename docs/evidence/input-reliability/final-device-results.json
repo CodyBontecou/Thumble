@@ -1,0 +1,492 @@
+{
+  "date": "2026-10-23",
+  "transport": "wss",
+  "receiver": "immutable signed QA bundle, isolated built-in Xbox profile",
+  "devices": {
+    "iPhone 17 Pro": {
+      "cycles": 6,
+      "expectedControlRuns": 48,
+      "failedCycles": 0,
+      "recoveredPausesOutsideCycles": 1,
+      "observedSeconds": 311.791,
+      "backgroundDisconnectNeutral": true,
+      "recordedWalkthrough": {
+        "LT": 5085.958,
+        "A": 96.757
+      },
+      "replayAudits": [
+        [
+          {
+            "pass": true,
+            "holdMs": 4996.881541665643,
+            "submissions": 2368,
+            "finalNeutral": true
+          },
+          {
+            "gameplayPass": true,
+            "runs": [
+              {
+                "control": "LT",
+                "ms": 4996.881541665643
+              },
+              {
+                "control": "up",
+                "ms": 2049.7284166663885
+              },
+              {
+                "control": "down",
+                "ms": 1960.0347500033677
+              },
+              {
+                "control": "left",
+                "ms": 1994.4330833293498
+              },
+              {
+                "control": "right",
+                "ms": 2021.8681250028312
+              },
+              {
+                "control": "look-right",
+                "ms": 522.5878750011325
+              },
+              {
+                "control": "look-left",
+                "ms": 531.7455833368003
+              },
+              {
+                "control": "A",
+                "ms": 31.559374999254942
+              }
+            ]
+          }
+        ],
+        [
+          {
+            "pass": true,
+            "holdMs": 4900.352708335966,
+            "submissions": 576,
+            "finalNeutral": true
+          },
+          {
+            "gameplayPass": true,
+            "runs": [
+              {
+                "control": "LT",
+                "ms": 4900.352708335966
+              },
+              {
+                "control": "up",
+                "ms": 2000.7550416700542
+              },
+              {
+                "control": "down",
+                "ms": 2003.8735000006855
+              },
+              {
+                "control": "left",
+                "ms": 2073.741833332926
+              },
+              {
+                "control": "right",
+                "ms": 1910.3220000006258
+              },
+              {
+                "control": "look-right",
+                "ms": 499.3817916624248
+              },
+              {
+                "control": "look-left",
+                "ms": 504.97695833444595
+              },
+              {
+                "control": "A",
+                "ms": 238.67470833286643
+              }
+            ]
+          }
+        ],
+        [
+          {
+            "pass": true,
+            "holdMs": 4905.961458329111,
+            "submissions": 577,
+            "finalNeutral": true
+          },
+          {
+            "gameplayPass": true,
+            "runs": [
+              {
+                "control": "LT",
+                "ms": 4905.961458329111
+              },
+              {
+                "control": "up",
+                "ms": 1997.0344999991357
+              },
+              {
+                "control": "down",
+                "ms": 2008.062625002116
+              },
+              {
+                "control": "left",
+                "ms": 2076.876166667789
+              },
+              {
+                "control": "right",
+                "ms": 1903.7885833345354
+              },
+              {
+                "control": "look-right",
+                "ms": 497.42424999922514
+              },
+              {
+                "control": "look-left",
+                "ms": 498.13249999657273
+              },
+              {
+                "control": "A",
+                "ms": 109.82016666978598
+              }
+            ]
+          }
+        ],
+        [
+          {
+            "pass": true,
+            "holdMs": 5130.573333330452,
+            "submissions": 573,
+            "finalNeutral": true
+          },
+          {
+            "gameplayPass": true,
+            "runs": [
+              {
+                "control": "LT",
+                "ms": 5130.573333330452
+              },
+              {
+                "control": "up",
+                "ms": 1865.4057499989867
+              },
+              {
+                "control": "down",
+                "ms": 1999.2434583306313
+              },
+              {
+                "control": "left",
+                "ms": 1998.0113749988377
+              },
+              {
+                "control": "right",
+                "ms": 2000.918208334595
+              },
+              {
+                "control": "look-right",
+                "ms": 539.0159166678786
+              },
+              {
+                "control": "look-left",
+                "ms": 521.2294166646898
+              },
+              {
+                "control": "A",
+                "ms": 69.64983333274722
+              }
+            ]
+          }
+        ],
+        [
+          {
+            "pass": true,
+            "holdMs": 5002.213666670024,
+            "submissions": 655,
+            "finalNeutral": true
+          },
+          {
+            "gameplayPass": true,
+            "runs": [
+              {
+                "control": "LT",
+                "ms": 5002.213666670024
+              },
+              {
+                "control": "up",
+                "ms": 2012.6037500016391
+              },
+              {
+                "control": "down",
+                "ms": 2098.366875000298
+              },
+              {
+                "control": "left",
+                "ms": 1887.9207499995828
+              },
+              {
+                "control": "right",
+                "ms": 1999.2275833301246
+              },
+              {
+                "control": "look-right",
+                "ms": 497.6127499975264
+              },
+              {
+                "control": "look-left",
+                "ms": 496.0928333327174
+              },
+              {
+                "control": "A",
+                "ms": 115.10604166612029
+              }
+            ]
+          }
+        ]
+      ]
+    },
+    "Pixel 7": {
+      "cycles": 6,
+      "expectedControlRuns": 48,
+      "failedCycles": 0,
+      "recoveredPauses": 0,
+      "observedSeconds": 185.042,
+      "backgroundWhileLTHeldReleased": true,
+      "recordedWalkthrough": {
+        "LT": 4982.367,
+        "A": 88.279
+      },
+      "replayAudits": [
+        [
+          {
+            "pass": true,
+            "holdMs": 5147.680916666985,
+            "submissions": 407,
+            "finalNeutral": true
+          },
+          {
+            "gameplayPass": true,
+            "runs": [
+              {
+                "control": "LT",
+                "ms": 5147.680916666985
+              },
+              {
+                "control": "up",
+                "ms": 1897.5339583307505
+              },
+              {
+                "control": "down",
+                "ms": 1987.291916668415
+              },
+              {
+                "control": "left",
+                "ms": 1983.9290000014007
+              },
+              {
+                "control": "right",
+                "ms": 2017.4560000002384
+              },
+              {
+                "control": "look-right",
+                "ms": 479.2748333364725
+              },
+              {
+                "control": "look-left",
+                "ms": 511.25104166567326
+              },
+              {
+                "control": "A",
+                "ms": 70.30491666868329
+              }
+            ]
+          }
+        ],
+        [
+          {
+            "pass": true,
+            "holdMs": 5008.550708331168,
+            "submissions": 407,
+            "finalNeutral": true
+          },
+          {
+            "gameplayPass": true,
+            "runs": [
+              {
+                "control": "LT",
+                "ms": 5008.550708331168
+              },
+              {
+                "control": "up",
+                "ms": 2073.1408750005066
+              },
+              {
+                "control": "down",
+                "ms": 1970.2798333354294
+              },
+              {
+                "control": "left",
+                "ms": 2066.6240000016987
+              },
+              {
+                "control": "right",
+                "ms": 1919.2277916669846
+              },
+              {
+                "control": "look-right",
+                "ms": 511.10754166543484
+              },
+              {
+                "control": "look-left",
+                "ms": 329.2484166659415
+              },
+              {
+                "control": "A",
+                "ms": 182.35100000351667
+              }
+            ]
+          }
+        ],
+        [
+          {
+            "pass": true,
+            "holdMs": 5015.714291669428,
+            "submissions": 412,
+            "finalNeutral": true
+          },
+          {
+            "gameplayPass": true,
+            "runs": [
+              {
+                "control": "LT",
+                "ms": 5015.714291669428
+              },
+              {
+                "control": "up",
+                "ms": 1990.3528750017285
+              },
+              {
+                "control": "down",
+                "ms": 2007.9801666662097
+              },
+              {
+                "control": "left",
+                "ms": 2068.3443749956787
+              },
+              {
+                "control": "right",
+                "ms": 1963.702291663736
+              },
+              {
+                "control": "look-right",
+                "ms": 525.3322916701436
+              },
+              {
+                "control": "look-left",
+                "ms": 515.8585416674614
+              },
+              {
+                "control": "A",
+                "ms": 78.11495833471417
+              }
+            ]
+          }
+        ],
+        [
+          {
+            "pass": true,
+            "holdMs": 5010.122333332896,
+            "submissions": 398,
+            "finalNeutral": true
+          },
+          {
+            "gameplayPass": true,
+            "runs": [
+              {
+                "control": "LT",
+                "ms": 5010.122333332896
+              },
+              {
+                "control": "up",
+                "ms": 1952.5152500011027
+              },
+              {
+                "control": "down",
+                "ms": 2016.7717083320022
+              },
+              {
+                "control": "left",
+                "ms": 2097.392791669816
+              },
+              {
+                "control": "right",
+                "ms": 1929.1423749998212
+              },
+              {
+                "control": "look-right",
+                "ms": 520.7286249995232
+              },
+              {
+                "control": "look-left",
+                "ms": 352.4278333336115
+              },
+              {
+                "control": "A",
+                "ms": 149.574333332479
+              }
+            ]
+          }
+        ],
+        [
+          {
+            "pass": true,
+            "holdMs": 5011.2058333307505,
+            "submissions": 407,
+            "finalNeutral": true
+          },
+          {
+            "gameplayPass": true,
+            "runs": [
+              {
+                "control": "LT",
+                "ms": 5011.2058333307505
+              },
+              {
+                "control": "up",
+                "ms": 1964.5188333317637
+              },
+              {
+                "control": "down",
+                "ms": 1984.4879166670144
+              },
+              {
+                "control": "left",
+                "ms": 2065.6910833343863
+              },
+              {
+                "control": "right",
+                "ms": 1922.9857916645706
+              },
+              {
+                "control": "look-right",
+                "ms": 516.5332083366811
+              },
+              {
+                "control": "look-left",
+                "ms": 341.65087500214577
+              },
+              {
+                "control": "A",
+                "ms": 164.53583333268762
+              }
+            ]
+          }
+        ]
+      ]
+    }
+  },
+  "limitations": [
+    "HID submission evidence, not game-frame latency",
+    "WoW Classic Era 1.15.9 / ConsolePort 3.3.11 only",
+    "short shared-Wi-Fi sessions with idle intervals, not continuous combat soak",
+    "RF spikes remain",
+    "no claim of physical UDP sustained gameplay qualification"
+  ]
+}

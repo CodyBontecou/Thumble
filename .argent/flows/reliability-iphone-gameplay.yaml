@@ -1,0 +1,93 @@
+steps:
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Down
+          x: 0.337
+          y: 0.086
+        - type: Up
+          x: 0.337
+          y: 0.086
+          delayMs: 5000
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Down
+          x: 0.227
+          y: 0.267
+        - type: Up
+          x: 0.227
+          y: 0.267
+          delayMs: 2000
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Down
+          x: 0.227
+          y: 0.535
+        - type: Up
+          x: 0.227
+          y: 0.535
+          delayMs: 2000
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Down
+          x: 0.159
+          y: 0.401
+        - type: Up
+          x: 0.159
+          y: 0.401
+          delayMs: 2000
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Down
+          x: 0.295
+          y: 0.401
+        - type: Up
+          x: 0.295
+          y: 0.401
+          delayMs: 2000
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Down
+          x: 0.736
+          y: 0.7345
+        - type: Up
+          x: 0.736
+          y: 0.7345
+          delayMs: 500
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Down
+          x: 0.6
+          y: 0.7345
+        - type: Up
+          x: 0.6
+          y: 0.7345
+          delayMs: 500
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Down
+          x: 0.809
+          y: 0.5435
+        - type: Up
+          x: 0.809
+          y: 0.5435
+          delayMs: 100
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: Thumble menu
+executionPrerequisite: Physical iPhone 13 Pro Max foreground Tapping, built-in
+  Xbox layout connected to QA receiver, no held touches. WoW Classic with
+  ConsolePort foreground, character alive in safe Northshire field.
+  Device-specific AX positions for movement, camera, A and LT. This sends actual
+  gameplay; all controls must be neutral at end. Independent receiver audit
+  enabled; record one uninterrupted 5000ms LT hold per replay and inspect WoW
+  between batches. No chat or combat actions.

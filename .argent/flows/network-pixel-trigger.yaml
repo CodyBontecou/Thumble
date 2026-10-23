@@ -1,0 +1,21 @@
+steps:
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Down
+          x: 0.816
+          y: 0.3565
+        - type: Up
+          x: 0.816
+          y: 0.3565
+          delayMs: 150
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: Disconnect
+executionPrerequisite: Physical Pixel 7 foreground Tapping, standard Xbox
+  layout, connected. No held touches. Independent Mac observer
+  build/network-hid.log running; cursor reset before run. After each replay run
+  node tools/assert-network-hid.mjs to verify LT press and full HID neutral;
+  this fragment alone checks the connection only.

@@ -1,0 +1,24 @@
+steps:
+  - echo: LT center from AX x .271 y .128 width .132 height .108. Raw Down/Up
+      preserves a 150ms trigger hold. Follow replay with the independent Mac HID
+      assertion; numeric readout is intentionally hidden while connected.
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Down
+          x: 0.337
+          y: 0.182
+        - type: Up
+          x: 0.337
+          y: 0.182
+          delayMs: 150
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: Disconnect
+executionPrerequisite: Physical iPhone 13 Pro Max foreground Tapping, standard
+  Xbox layout, connected. No held touches. Independent Mac observer
+  build/network-hid.log running; cursor reset before run. After each replay run
+  node tools/assert-network-hid.mjs to verify LT press and full HID neutral;
+  this fragment alone checks the connection only.

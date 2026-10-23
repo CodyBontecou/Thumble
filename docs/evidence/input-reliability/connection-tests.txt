@@ -1,0 +1,37 @@
+(node:42076) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/codybontecou/dev/tapping/apps/mobile/src/connection-core.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/codybontecou/dev/tapping/apps/mobile/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ late callbacks from an old socket cannot affect a replacement (1.48975ms)
+✔ disconnect cancels an asynchronous pairing preparation (0.166ms)
+✔ overlapping preparation only opens the latest requested pairing (0.188458ms)
+✔ pause releases held controls and uses the replacement lease immediately (0.435167ms)
+✔ duplicate acknowledgements cannot keep a dead receiver alive (0.312417ms)
+✔ failed initial input does not leave a heartbeat running (0.211709ms)
+✔ handshake timeout and invalid future acknowledgements disconnect safely (0.362916ms)
+✔ touch timing context never leaks into heartbeats or neutral resets (0.245542ms)
+✔ layout activation releases input, blocks old geometry, and waits for fresh receiver lease (0.420958ms)
+✔ invalid or stale layout disconnects and reconnect can receive the same active revision (0.812792ms)
+✔ superseded renders cannot acknowledge a more recent layout (0.282ms)
+✔ UDP input requires the encrypted native handshake; blocked handshake keeps WebSocket input (0.233958ms)
+✔ UDP send failure releases controls and closes the control session (0.197333ms)
+✔ a burst of analog updates cannot disconnect a healthy but temporarily backpressured session (0.237125ms)
+✔ backpressure preserves press/release edges while merging intermediate motion (0.198084ms)
+✔ an expired queued press is cancelled, never replayed when ACK delivery resumes (0.131333ms)
+✔ heartbeats coalesce to the current held state without falsely cancelling a sustained hold (0.119084ms)
+✔ slow ACK return does not stop forward heartbeats when native writes are available (0.144958ms)
+✔ native backpressure coalesces motion, preserves edges, and retries without waiting for network ACK (0.347417ms)
+✔ pause blocks held input until fresh neutral is acknowledged and clears queued edges (0.113125ms)
+✔ chat requires receiver support and never enters the datagram input path (0.486791ms)
+✔ chat matches acknowledgement IDs and surfaces receiver errors without disconnecting (0.132417ms)
+✔ chat disconnect rejects pending delivery and clears its timer (0.13275ms)
+✔ chat rejects commands with newlines, control characters, excessive UTF-8 bytes and unknown channels (0.151625ms)
+✔ unconfirmed chat times out without automatically resending (0.11725ms)
+ℹ tests 25
+ℹ suites 0
+ℹ pass 25
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 49.008292

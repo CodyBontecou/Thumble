@@ -1,0 +1,20 @@
+{
+  "platforms": [
+    "apple",
+    "android"
+  ],
+  "apple": {
+    "modules": [
+      "TappingLinkModule",
+      "TappingSpeechModule",
+      "TappingPurchasesModule"
+    ]
+  },
+  "android": {
+    "modules": [
+      "expo.modules.tappinglink.TappingLinkModule",
+      "expo.modules.tappinglink.TappingSpeechModule",
+      "expo.modules.tappinglink.TappingPurchasesModule"
+    ]
+  }
+}

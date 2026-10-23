@@ -1,0 +1,92 @@
+steps:
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Down
+          x: 0.915
+          y: 0.3565
+        - type: Up
+          x: 0.915
+          y: 0.3565
+          delayMs: 5000
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Down
+          x: 0.73645
+          y: 0.242
+        - type: Up
+          x: 0.73645
+          y: 0.242
+          delayMs: 2000
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Down
+          x: 0.47255
+          y: 0.242
+        - type: Up
+          x: 0.47255
+          y: 0.242
+          delayMs: 2000
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Down
+          x: 0.6045
+          y: 0.1706
+        - type: Up
+          x: 0.6045
+          y: 0.1706
+          delayMs: 2000
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Down
+          x: 0.6045
+          y: 0.3134
+        - type: Up
+          x: 0.6045
+          y: 0.3134
+          delayMs: 2000
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Down
+          x: 0.275
+          y: 0.7764
+        - type: Up
+          x: 0.275
+          y: 0.7764
+          delayMs: 500
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Down
+          x: 0.275
+          y: 0.6336
+        - type: Up
+          x: 0.275
+          y: 0.6336
+          delayMs: 500
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Down
+          x: 0.4635
+          y: 0.8525
+        - type: Up
+          x: 0.4635
+          y: 0.8525
+          delayMs: 100
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        identifier: controller-menu
+executionPrerequisite: "Physical Pixel 7 foreground Tapping, built-in Xbox
+  layout connected to immutable QA receiver, no held touches. WoW Classic
+  ConsolePort foreground, alive in Northshire. AX-derived screen coordinates
+  transformed for observed Android landscape injection: x=1-treeY,y=treeX. Raw
+  hold gestures preserve measured durations. Independent HID audit required
+  after replay; no chat or combat."

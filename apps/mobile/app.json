@@ -1,0 +1,61 @@
+{
+  "expo": {
+    "name": "Tapping",
+    "slug": "tapping",
+    "scheme": "tapping",
+    "plugins": [
+      "expo-router",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Scan the QR code on your Mac to pair your controller.",
+          "recordAudioAndroid": false
+        }
+      ],
+      "./plugins/with-scene-delegate.cjs",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "extraProguardRules": "# ML Kit discovers these registrars and their constructors through manifest metadata.\n-keep class com.google.mlkit.** implements com.google.firebase.components.ComponentRegistrar { *; }",
+            "minSdkVersion": 26
+          }
+        }
+      ],
+      "./plugins/with-speech.cjs"
+    ],
+    "version": "1.0.0",
+    "orientation": "landscape",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.codybontecou.PocketPad.iOS.tappingdev",
+      "appleTeamId": "67KC823C9A",
+      "infoPlist": {
+        "NSLocalNetworkUsageDescription": "Tapping connects to your Mac on local Wi-Fi to send game controller input.",
+        "NSAppTransportSecurity": {
+          "NSAllowsLocalNetworking": true
+        },
+        "NSMicrophoneUsageDescription": "Dictate a message to review and send to World of Warcraft.",
+        "NSSpeechRecognitionUsageDescription": "Turn your voice into editable World of Warcraft chat messages."
+      }
+    },
+    "android": {
+      "package": "com.thumble.android.tappingdev",
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "permissions": [
+        "android.permission.ACCESS_LOCAL_NETWORK",
+        "android.permission.RECORD_AUDIO"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    }
+  }
+}

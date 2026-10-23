@@ -1,0 +1,4 @@
+ConsolePort utility artwork, unmodified, from ConsolePort 3.3.11.
+Copyright (c) 2022 Sebastian Lindfors. Artistic License 2.0; see LICENSE.md.
+Source: https://github.com/seblindfors/ConsolePort/tree/master/ConsolePort_Bar/Assets/Textures/Icons
+Thumble is a separate controller application, not a modified ConsolePort distribution.
