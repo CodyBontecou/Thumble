@@ -279,11 +279,36 @@ test("live pipeline has one pending observation, deduplicates unchanged advancin
     expect(h.wow.status().state).toBe("running");
     expect(h.calls).toBe(1);
     expect(h.repository.commits).toBe(1);
+    const applied = h.wow.status();
+    expect(
+      h.wow.presentationFreshness(
+        applied.profileId!,
+        applied.revision!,
+        applied.contentHash!,
+      ),
+    ).toBe("observed");
+    expect(
+      h.wow.presentationFreshness(
+        applied.profileId!,
+        applied.revision!,
+        "a".repeat(64),
+      ),
+    ).toBe("stale");
+    expect(h.wow.presentationFreshness("unknown", "1", "a".repeat(64))).toBe(
+      "not-evaluated",
+    );
     h.wow.execute({
       command: "wow-sync-stop",
       operationId: command.operationId,
     });
     await until(() => !h.wow.busy);
+    expect(
+      h.wow.presentationFreshness(
+        applied.profileId!,
+        applied.revision!,
+        applied.contentHash!,
+      ),
+    ).toBe("stale");
   } finally {
     await h.wow.close();
   }

@@ -131,6 +131,7 @@ fn controls_v8_is_management_only_and_fences_revocation_and_native_replacement_a
                     ManagementBridges {
                         catalog: &catalog,
                         controls: Some(&bridge),
+                        presentation: None,
                     },
                     || Ok(wall_time()),
                 )

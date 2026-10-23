@@ -1,3 +1,6 @@
+import { ConfigurationPhonePresentationOperations } from "@thumble/application/configuration-phone-presentation";
+import { decodePhonePresentationCommand } from "@thumble/contracts/phone-presentation";
+import { verifyPresentationIcon } from "./presentation-icon.ts";
 import { ConfigurationWowOperations } from "./configuration-wow.ts";
 import { RetainedWowProfilePreparer } from "./wow-profile-preparer.ts";
 import { WowCaptureSession } from "./wow-capture-session.ts";
@@ -31,8 +34,9 @@ import {
 } from "@thumble/contracts/receiver";
 import { SqliteConfigurationRepository } from "@thumble/storage";
 
-/** Internal stdio endpoint. Only scoped commands cross this boundary, never raw
- * source, asset bytes, claimed receipts or caller-selected fingerprints. */
+/** Internal stdio endpoint. No raw source, arbitrary asset reads, claimed
+ * receipts or caller-selected fingerprints. Presentation icons are small,
+ * independently verified replies scoped to a served map and current metadata. */
 export async function runConfigurationOwner(
   directory: string,
   executable: string,
@@ -64,13 +68,6 @@ export async function runConfigurationOwner(
     resourceHash: (bytes) => createHash("sha256").update(bytes).digest("hex"),
   });
   const assets = new FileAssetStore(directory, executable);
-  const phoneControls = new ConfigurationPhoneControlsOperations(repository, {
-    sourceHash: configurationSourceHash,
-    documentHash: (text) =>
-      createHash("sha256").update(text, "utf8").digest("hex"),
-    resourceHash: (bytes) => createHash("sha256").update(bytes).digest("hex"),
-    readAsset: (hash) => assets.read(hash),
-  });
   const exports = new ConfigurationExportOperations(repository, {
     encode: (text) => Buffer.from(text, "utf8"),
     readAsset: (hash) => assets.read(hash),
@@ -111,6 +108,27 @@ export async function runConfigurationOwner(
       : {}),
     readAsset: (hash) => assets.read(hash),
     publish: (capture, sync) => emit(capture, sync),
+  });
+  const presentations = new ConfigurationPhonePresentationOperations(
+    repository,
+    {
+      sourceHash: configurationSourceHash,
+      documentHash: (text) =>
+        createHash("sha256").update(text, "utf8").digest("hex"),
+      resourceHash: (bytes) => createHash("sha256").update(bytes).digest("hex"),
+      readAsset: (hash) => assets.read(hash),
+      verifyIcon: verifyPresentationIcon,
+      freshness: (profile, revision, hash) =>
+        wow.presentationFreshness(profile, revision, hash),
+    },
+  );
+  const phoneControls = new ConfigurationPhoneControlsOperations(repository, {
+    sourceHash: configurationSourceHash,
+    documentHash: (text) =>
+      createHash("sha256").update(text, "utf8").digest("hex"),
+    resourceHash: (bytes) => createHash("sha256").update(bytes).digest("hex"),
+    readAsset: (hash) => assets.read(hash),
+    served: (query, hash, map) => presentations.remember(query, hash, map),
   });
   try {
     await new Promise<void>((resolve, reject) => {
@@ -251,9 +269,17 @@ export async function runConfigurationOwner(
               wow.busy &&
               operation !== "configuration-list" &&
               operation !== "configuration-phone-controls" &&
+              operation !== "configuration-phone-presentation" &&
               operation !== "configuration-saved-pin"
             )
               throw new Error("configuration_owner_busy");
+            if (operation === "configuration-phone-presentation") {
+              const result = presentations.execute(
+                decodePhonePresentationCommand(body),
+              );
+              write({ version: 1, requestId, ok: true, result });
+              continue;
+            }
             if (operation === "configuration-phone-controls") {
               const result = phoneControls.execute(
                 decodePhoneControlsCommand(body),

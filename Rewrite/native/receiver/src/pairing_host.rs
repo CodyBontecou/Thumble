@@ -41,6 +41,7 @@ struct Request {
 pub enum Command {
     PhoneCatalogEnable {},
     PhoneControlsEnable {},
+    PhonePresentationEnable {},
     PairingOpen {},
     PairingStatus {},
     PairingList {},
@@ -115,6 +116,7 @@ pub struct Host {
     workers: Vec<thread::JoinHandle<()>>,
     catalog: Arc<crate::authenticated_control::catalog::Bridge>,
     controls: Arc<crate::authenticated_control::controls::Bridge>,
+    presentation: Arc<crate::authenticated_control::presentation::Bridge>,
     reservation_owner: Option<crate::trust_reservation::Owner>,
     _lease: File,
 }
@@ -151,6 +153,11 @@ impl Host {
         let controls = Arc::new(crate::authenticated_control::controls::Bridge::new(
             authority, root,
         ));
+        let presentation = Arc::new(crate::authenticated_control::presentation::Bridge::new(
+            authority,
+            root,
+            controls.operation_gate(),
+        ));
         let (jobs, incoming) = mpsc::sync_channel::<Job>(4);
         let incoming = Arc::new(Mutex::new(incoming));
         let mut workers = Vec::new();
@@ -165,6 +172,7 @@ impl Host {
                 let runtime_directory = root.to_path_buf();
                 let catalog = catalog.clone();
                 let controls = controls.clone();
+                let presentation = presentation.clone();
                 workers.push(thread::spawn(move || loop {
                     let job = match incoming.lock() {
                         Ok(receiver) => match receiver.recv() {
@@ -178,7 +186,7 @@ impl Host {
                             ControlChannel::accept_unenrolled(job.stream, &identity)
                         {
                             if !job.stop.load(Ordering::SeqCst) {
-                                let _ = enrollment::serve(
+                                let outcome = enrollment::serve(
                                     &mut channel,
                                     &windows,
                                     &store,
@@ -193,6 +201,7 @@ impl Host {
                                     crate::authenticated_control::ManagementBridges {
                                         catalog: &catalog,
                                         controls: Some(&controls),
+                                        presentation: Some(&presentation),
                                     },
                                     || {
                                         if job.stop.load(Ordering::SeqCst) {
@@ -202,6 +211,12 @@ impl Host {
                                         }
                                     },
                                 );
+                                #[cfg(debug_assertions)]
+                                if let Err(error) = outcome {
+                                    crate::input_io_diagnostics::terminal_outcome(error);
+                                }
+                                #[cfg(not(debug_assertions))]
+                                let _ = outcome;
                             }
                             channel.close();
                         }
@@ -225,6 +240,7 @@ impl Host {
             reservation_owner,
             catalog,
             controls,
+            presentation,
             _lease: lease,
         })
     }
@@ -377,6 +393,12 @@ impl Host {
         {
             self.stop()?;
         }
+        if matches!(command, Command::PhonePresentationEnable {}) {
+            if !self.presentation.enabled() {
+                return Err("presentation_unavailable");
+            }
+            return Ok(json!({"kind":"phone-presentation-enabled"}));
+        }
         if matches!(command, Command::PhoneControlsEnable {}) {
             if !self.controls.enabled() {
                 return Err("saved_map_unavailable");
@@ -390,7 +412,9 @@ impl Host {
             return Ok(json!({"kind":"phone-catalog-enabled"}));
         }
         let offer = match command {
-            Command::PhoneCatalogEnable {} | Command::PhoneControlsEnable {} => unreachable!(),
+            Command::PhoneCatalogEnable {}
+            | Command::PhoneControlsEnable {}
+            | Command::PhonePresentationEnable {} => unreachable!(),
             Command::PairingOpen {} => Some(
                 self.windows
                     .lock()
@@ -566,6 +590,7 @@ pub fn run(
             {
                 Some("phone-catalog-reply") => host.catalog.deliver(&bytes)?,
                 Some("phone-controls-reply") => host.controls.deliver(&bytes)?,
+                Some("phone-presentation-reply") => host.presentation.deliver(&bytes)?,
                 _ => return Err("pairing_parent_event_invalid"),
             }
             continue;
@@ -577,6 +602,9 @@ pub fn run(
             Some(request) => {
                 if matches!(request.body, Command::PhoneCatalogEnable {}) {
                     host.catalog.attach(outgoing.clone())?;
+                }
+                if matches!(request.body, Command::PhonePresentationEnable {}) {
+                    host.presentation.attach(outgoing.clone())?;
                 }
                 if matches!(request.body, Command::PhoneControlsEnable {}) {
                     host.controls.attach(outgoing.clone())?;

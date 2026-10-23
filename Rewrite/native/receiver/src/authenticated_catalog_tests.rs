@@ -43,6 +43,7 @@ fn management_is_explicit_never_input_capable_and_rechecks_revoke_after_parent_w
                     ManagementBridges {
                         catalog: &bridge,
                         controls: None,
+                        presentation: None,
                     },
                     || Ok(100),
                 )

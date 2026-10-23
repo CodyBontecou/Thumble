@@ -73,6 +73,25 @@ export class WowLiveObserver {
   isLive(nowMs: number): boolean {
     return this.#current(nowMs);
   }
+  /** A read-only transport correlation, never a storage ACK or game authenticity claim. */
+  matchesAppliedMessage(
+    identity: Readonly<{
+      source: number;
+      generation: string;
+      digest: number;
+      messageBytes: number;
+      pageCount: number;
+    }>,
+    nowMs: number,
+  ): boolean {
+    return (
+      this.#current(nowMs) &&
+      identity.source === this.#source &&
+      identity.generation === this.#generation.toString() &&
+      this.#message ===
+        `${identity.digest}/${identity.messageBytes}/${identity.pageCount}`
+    );
+  }
   pending(nowMs: number): PendingWowObservation | undefined {
     return this.#current(nowMs) ? this.#pending : undefined;
   }

@@ -1,4 +1,10 @@
 import {
+  decodePhonePresentationCommand,
+  decodePhonePresentationResult,
+  type PhonePresentationCommand,
+  type PhonePresentationResult,
+} from "@thumble/contracts/phone-presentation";
+import {
   decodeWowSyncCommand,
   decodeWowSyncStatus,
   disabledWowSyncStatus,
@@ -400,6 +406,40 @@ export class ConfigurationOwner {
       const value = await this.pipe.request(command, 30000);
       try {
         return decodePhoneControlsResult(value, command);
+      } catch {
+        this.pipe.disconnect();
+        this.child.kill("SIGKILL");
+        throw new Error("configuration_response_invalid");
+      }
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        error.message === "configuration_owner_unavailable"
+      ) {
+        this.pipe.disconnect();
+        this.child.kill("SIGKILL");
+      }
+      throw error;
+    } finally {
+      this.phoneRead = false;
+    }
+  }
+  async readPresentationForPhone(
+    input: PhonePresentationCommand,
+  ): Promise<PhonePresentationResult> {
+    const command = decodePhonePresentationCommand(input);
+    await this.ready;
+    if (
+      this.phoneRead ||
+      this.activeJob !== undefined ||
+      this.ordinaryReads !== 0
+    )
+      throw new Error("configuration_owner_busy");
+    this.phoneRead = true;
+    try {
+      const value = await this.pipe.request(command, 30000);
+      try {
+        return decodePhonePresentationResult(value, command);
       } catch {
         this.pipe.disconnect();
         this.child.kill("SIGKILL");

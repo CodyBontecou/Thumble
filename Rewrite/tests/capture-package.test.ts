@@ -128,7 +128,24 @@ packageTest(
       try {
         await invoke("service", "stop");
       } finally {
-        rmSync(directory, { recursive: true, force: true });
+        // Windows may retain an executable mapping briefly after the service
+        // stop reply. Require actual removal within a bounded cleanup window.
+        const deadline = performance.now() + 3000;
+        for (;;) {
+          try {
+            rmSync(directory, { recursive: true, force: true });
+            break;
+          } catch (error) {
+            const code = (error as NodeJS.ErrnoException).code;
+            if (
+              process.platform !== "win32" ||
+              !["EPERM", "EBUSY", "ENOTEMPTY"].includes(code ?? "") ||
+              performance.now() >= deadline
+            )
+              throw error;
+            await Bun.sleep(20);
+          }
+        }
       }
     }
   },

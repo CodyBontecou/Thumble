@@ -142,3 +142,21 @@ private func nativeInputCreditsRejectStaleQueuedHeldAndNeutralIncludingClockRoll
   }
   try queue.completeControl()
 }
+
+@MainActor private final class WeakCreditClock {
+  weak var value: CreditClock?
+}
+@MainActor private func ownedClockQueue(_ weakClock: WeakCreditClock) throws
+  -> NativeInputWriteQueue
+{
+  let clock = CreditClock()
+  weakClock.value = clock
+  return try clock.queue()
+}
+@Test @MainActor private func nativeInputCreditsCloseReleasesInjectedClockOwner() throws {
+  let weakClock = WeakCreditClock()
+  let queue = try ownedClockQueue(weakClock)
+  #expect(weakClock.value != nil)
+  queue.close()
+  #expect(weakClock.value == nil)
+}

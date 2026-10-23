@@ -11,7 +11,7 @@ use std::{
     path::{Path, PathBuf},
     sync::{
         atomic::{AtomicU64, Ordering},
-        mpsc, Mutex,
+        mpsc, Arc, Mutex,
     },
     time::Duration,
 };
@@ -29,7 +29,7 @@ pub(crate) struct Bridge {
     root: PathBuf,
     // Held before any native IPC opens, including both source checks. Input
     // never acquires this gate; parent delivery uses the separate pending lock.
-    operation: Mutex<()>,
+    operation: Arc<Mutex<()>>,
     output: Mutex<Option<mpsc::SyncSender<String>>>,
     pending: Mutex<Option<Pending>>,
     next: AtomicU64,
@@ -39,11 +39,14 @@ impl Bridge {
         Self {
             authority: authority.into(),
             root: root.into(),
-            operation: Mutex::new(()),
+            operation: Arc::new(Mutex::new(())),
             output: Mutex::new(None),
             pending: Mutex::new(None),
             next: AtomicU64::new(1),
         }
+    }
+    pub(crate) fn operation_gate(&self) -> Arc<Mutex<()>> {
+        self.operation.clone()
     }
     pub(crate) fn attach(&self, output: mpsc::SyncSender<String>) -> Result<(), &'static str> {
         let mut slot = self.output.lock().map_err(|_| "saved_map_unavailable")?;

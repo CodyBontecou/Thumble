@@ -28,6 +28,21 @@ export class WowSyncSession {
       refresh: Pick<WowProfileRefresh, "execute">;
     }>,
   ) {}
+  matchesAppliedMessage(
+    identity: Readonly<{
+      source: number;
+      generation: string;
+      digest: number;
+      messageBytes: number;
+      pageCount: number;
+    }>,
+  ): boolean {
+    if (this.#stopped) return false;
+    const now = this.#now();
+    return (
+      now !== undefined && this.#observer.matchesAppliedMessage(identity, now)
+    );
+  }
   get busy(): boolean {
     return this.#busy;
   }

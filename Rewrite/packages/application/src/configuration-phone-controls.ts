@@ -3,8 +3,10 @@ import {
   phoneControlNumber,
   projectPhoneControlsMap,
   type PhoneControlsCommand,
+  type PhoneControlsQuery,
   type PhoneControlsResult,
 } from "@thumble/contracts/phone-controls";
+import type { ControlMap } from "@thumble/contracts/mobile-input";
 import { OwnedAuthorityDocument } from "@thumble/domain/owned-authority";
 import {
   OwnedConfigurationDocument,
@@ -22,6 +24,11 @@ export class ConfigurationPhoneControlsOperations {
       documentHash: (text: string) => string;
       resourceHash: ResourceDigest;
       readAsset: (hash: string) => Uint8Array;
+      served?: (
+        command: PhoneControlsQuery,
+        configurationSha256: string,
+        map: ControlMap,
+      ) => void;
     }>,
   ) {}
   execute(input: PhoneControlsCommand): PhoneControlsResult {
@@ -64,11 +71,14 @@ export class ConfigurationPhoneControlsOperations {
         },
         this.ports.documentHash,
       );
-      return projectPhoneControlsMap(
+      const result = projectPhoneControlsMap(
         command,
         configurationSha256,
         projection.map,
       );
+      const { command: _command, ...query } = command;
+      this.ports.served?.(query, configurationSha256, projection.map);
+      return result;
     } catch (error) {
       const code = error instanceof Error ? error.message : "";
       return {

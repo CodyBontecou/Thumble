@@ -15,7 +15,8 @@
     "./saved-controller-map": "./src/saved-controller-map.ts",
     "./wow-capture-receipt": "./src/wow-capture-receipt.ts",
     "./starter-configuration": "./src/starter-configuration.ts",
-    "./owned-projection-merge": "./src/owned-projection-merge.ts"
+    "./owned-projection-merge": "./src/owned-projection-merge.ts",
+    "./saved-presentation": "./src/saved-presentation.ts"
   },
   "dependencies": {
     "@thumble/contracts": "workspace:*"

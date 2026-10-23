@@ -7,13 +7,17 @@ use crate::{
 pub(crate) mod catalog;
 #[path = "phone_controls.rs"]
 pub(crate) mod controls;
+#[path = "phone_presentation.rs"]
+pub(crate) mod presentation;
 pub(crate) struct ManagementBridges<'a> {
     pub catalog: &'a catalog::Bridge,
     pub controls: Option<&'a controls::Bridge>,
+    pub presentation: Option<&'a presentation::Bridge>,
 }
 pub(crate) enum ManagementRole<'a> {
     Catalog(&'a catalog::Bridge),
     Controls(&'a controls::Bridge),
+    Presentation(&'a presentation::Bridge),
 }
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -355,6 +359,9 @@ pub(crate) fn serve_after_hello(
     };
     if let Some(management) = management {
         return match management {
+            ManagementRole::Presentation(presentation) => {
+                presentation::serve(channel, authority, &mut authorized, presentation, now)
+            }
             ManagementRole::Controls(controls) => {
                 controls::serve(channel, authority, &mut authorized, controls, now)
             }
@@ -767,6 +774,7 @@ mod tests {
     }
     include!("authenticated_catalog_tests.rs");
     include!("authenticated_controls_tests.rs");
+    include!("authenticated_presentation_tests.rs");
     include!("authenticated_control_renewal_tests.rs");
     include!("authenticated_control_contention_tests.rs");
 }

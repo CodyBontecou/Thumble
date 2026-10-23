@@ -1,3 +1,7 @@
+import { ConfigurationPhoneControlsOperations } from "@thumble/application/configuration-phone-controls";
+import { ConfigurationPhonePresentationOperations } from "@thumble/application/configuration-phone-presentation";
+import type { PhonePresentationCommand } from "@thumble/contracts/phone-presentation";
+import { verifyPresentationIcon } from "../apps/service/src/presentation-icon.ts";
 import { expect, test } from "bun:test";
 import { mkdtempSync, rmSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -47,6 +51,25 @@ const helper = process.env.THUMBLE_TEST_RETAINED_WOW_HELPER;
           "utf8",
         ),
       );
+      const presentations = new ConfigurationPhonePresentationOperations(
+        repository,
+        {
+          sourceHash: configurationSourceHash,
+          documentHash: digest,
+          resourceHash: digest,
+          readAsset: (hash) => assets.read(hash),
+          verifyIcon: verifyPresentationIcon,
+          freshness: () => "not-evaluated",
+        },
+      );
+      const controls = new ConfigurationPhoneControlsOperations(repository, {
+        sourceHash: configurationSourceHash,
+        documentHash: digest,
+        resourceHash: digest,
+        readAsset: (hash) => assets.read(hash),
+        served: (query, hash, map) => presentations.remember(query, hash, map),
+      });
+      let oldPresentation: PhonePresentationCommand | undefined;
       let now = 100,
         receipt = 0,
         operation = 0;
@@ -172,6 +195,53 @@ const helper = process.env.THUMBLE_TEST_RETAINED_WOW_HELPER;
             : "wow-live-icon-132282",
         );
         expect(document.source.text()).toBe(before);
+        if (operation === 1) {
+          const query = {
+            authorityInstanceId: "retained-authority",
+            expectedConfigurationRevision: current.revision,
+            expectedSourceHash: current.contentHash,
+            profileId: result.profileID,
+            generation: "7",
+            revision: "2",
+            viewportWidth: "874",
+            viewportHeight: "393",
+          };
+          const served = controls.execute({
+            command: "configuration-phone-controls",
+            ...query,
+          });
+          if (served.kind !== "controls") throw Error("actual_map_missing");
+          oldPresentation = {
+            command: "configuration-phone-presentation",
+            kind: "metadata",
+            ...query,
+            configurationSha256: String(served.configurationSha256),
+            colorScheme: "light",
+          };
+        }
+        const metadata = presentations.execute(oldPresentation!);
+        if (snapshot === b)
+          expect(metadata).toEqual({
+            kind: "error",
+            error: "presentation_reactivation_required",
+          });
+        else {
+          expect(metadata.kind).toBe("presentation");
+          if (metadata.kind !== "presentation")
+            throw Error("actual_presentation_missing");
+          expect(metadata.expectedConfigurationRevision).toBe("1");
+          expect(metadata.presentationRevision).toBe(current.revision);
+          expect(metadata.controlCount).toBe(18);
+          const icon = presentations.execute({
+            ...oldPresentation!,
+            kind: "icon",
+            presentationRevision: String(metadata.presentationRevision),
+            presentationSourceHash: String(metadata.presentationSourceHash),
+            controlId: "ce000000-0000-0000-0000-000000000008",
+            iconSHA256: String(metadata.control7IconSHA256),
+          });
+          expect(icon.kind).toBe("icon");
+        }
         if (operation === 1) {
           const edited = current.source
             .set("/document/profiles/0/manualOpaque", '{"number":1e+03}')

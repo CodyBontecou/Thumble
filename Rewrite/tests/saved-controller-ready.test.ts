@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { fileURLToPath } from "node:url";
 import {
   RuntimeController,
   type ReceiverPort,
@@ -352,7 +353,9 @@ test("operator release eagerly disarms maintenance blocked on catalog before any
 });
 
 test("readiness policy requires explicit physical launch and inspection replies are strictly bounded", () => {
-  const cli = new URL("../apps/cli/src/main.ts", import.meta.url).pathname;
+  const cli = fileURLToPath(
+    new URL("../apps/cli/src/main.ts", import.meta.url),
+  );
   const child = Bun.spawnSync(
     [
       process.execPath,

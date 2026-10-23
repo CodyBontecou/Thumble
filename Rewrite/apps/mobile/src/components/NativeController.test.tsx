@@ -7,6 +7,8 @@ import { act, create, type ReactTestRenderer } from "react-test-renderer";
 mock.module("react-native", () => ({
   View: "View",
   Text: "Text",
+  Image: "Image",
+  useColorScheme: () => "light",
   Pressable: "Pressable",
   ScrollView: "ScrollView",
   useWindowDimensions: () => ({ width: 874, height: 393 }),
@@ -458,4 +460,192 @@ test("late orientation completion after unmount releases its token without mount
     request.resolve("late-route");
   });
   expect(orientationRestores).toEqual(["late-route"]);
+});
+
+const presentationPin = {
+  generation: "1",
+  revision: "0",
+  configurationSha256: "c".repeat(64),
+  expectedConfigurationRevision: "1",
+  expectedSourceHash: "a".repeat(64),
+  profileId: "aaaaaaaa-0000-0000-0000-000000000001",
+};
+const presentationVersion = {
+  presentationRevision: "2",
+  presentationSourceHash: "b".repeat(64),
+  colorScheme: "light",
+  bank: "base",
+};
+function metadata(extra: Record<string, unknown> = {}) {
+  return {
+    kind: "presentation",
+    ...presentationPin,
+    ...presentationVersion,
+    profileName: "Mage",
+    freshness: "observed",
+    controls: [{ id: "saved-only-east", label: "Fireball" }],
+    ...extra,
+  };
+}
+async function present(value: unknown) {
+  await act(() =>
+    native().props.onPresentation({ nativeEvent: { presentation: value } }),
+  );
+}
+async function pinnedMap() {
+  await act(() =>
+    native().props.onControlMap({
+      nativeEvent: {
+        map: deliveredMap,
+        configurationSha256: presentationPin.configurationSha256,
+      },
+    }),
+  );
+}
+function presentationStatus() {
+  return renderer?.root.findAllByProps({ testID: "presentation-status" })[0]
+    ?.props.children;
+}
+
+test("live labels require installed native map hash, current admission and exact control IDs", async () => {
+  await mount();
+  await admission("ready");
+  await layout(deliveredMap);
+  await present(metadata());
+  expect(controllerLabels()).not.toContain("Fireball");
+  await pinnedMap();
+  await present(metadata({ controls: [{ id: "foreign", label: "Foreign" }] }));
+  expect(controllerLabels()).not.toContain("Foreign");
+  await present(metadata());
+  expect(controllerLabels()).toContain("Fireball");
+  expect(presentationStatus()).toBe("Game data live");
+  expect(native().props.pointerEvents).toBe("auto");
+  expect(native().props.connectionMap).toBeUndefined();
+});
+
+test("stale, foreign, rollback and changed-source callbacks never replace current presentation or affect input", async () => {
+  await mount();
+  await admission("ready");
+  await pinnedMap();
+  await present(metadata());
+  for (const extra of [
+    { generation: "2" },
+    { configurationSha256: "d".repeat(64) },
+    { colorScheme: "dark" },
+    { expectedSourceHash: "d".repeat(64) },
+    { profileId: "aaaaaaaa-0000-0000-0000-000000000002" },
+    { presentationRevision: "1" },
+    { presentationSourceHash: "d".repeat(64) },
+  ]) {
+    await present(
+      metadata({
+        ...extra,
+        controls: [{ id: "saved-only-east", label: "Wrong" }],
+      }),
+    );
+    expect(controllerLabels()).toContain("Fireball");
+    expect(controllerLabels()).not.toContain("Wrong");
+    expect(native().props.pointerEvents).toBe("auto");
+  }
+  await present(
+    metadata({
+      presentationRevision: "3",
+      presentationSourceHash: "d".repeat(64),
+      freshness: "stale",
+      controls: [{ id: "saved-only-east", label: "Frostbolt" }],
+    }),
+  );
+  expect(controllerLabels()).toContain("Frostbolt");
+  expect(presentationStatus()).toBe("Game data stale");
+  await present({
+    kind: "error",
+    error: "presentation_timeout",
+    generation: "1",
+    revision: "0",
+    configurationSha256: presentationPin.configurationSha256,
+  });
+  expect(controllerLabels()).toContain("Frostbolt");
+  expect(native().props.pointerEvents).toBe("auto");
+  await admission("disconnected");
+  await admission("ready");
+  await present(metadata());
+  expect(controllerLabels()).not.toContain("Fireball");
+  expect(controllerLabels()).not.toContain("Frostbolt");
+  expect(presentationStatus()).toBeUndefined();
+});
+
+test("verified icon notifications need exact metadata revision, source and control hash and stay cosmetic", async () => {
+  await mount();
+  await admission("ready");
+  await pinnedMap();
+  const png =
+    "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAL0lEQVR4nO3OIQEAAAgDMKIQhWg0hxg3E/Ornr2kEhAQEBAQEBAQEBAQEBAQSAcenxt8avMpgHIAAAAASUVORK5CYII=";
+  const control = {
+    id: "saved-only-east",
+    label: "Fireball",
+    iconSHA256: "e".repeat(64),
+    iconByteCount: 104,
+    iconName: "spell",
+  };
+  const icon = {
+    kind: "icon",
+    ...presentationPin,
+    ...presentationVersion,
+    controlId: control.id,
+    iconSHA256: control.iconSHA256,
+    pngBase64: png,
+  };
+  const images = () =>
+    renderer?.root.findAllByProps({
+      testID: "presentation-icon-saved-only-east",
+    }) ?? [];
+  await present(icon);
+  expect(images()).toHaveLength(0);
+  await present(metadata({ controls: [control] }));
+  await present({ ...icon, presentationRevision: "1" });
+  expect(images()).toHaveLength(0);
+  await present({ ...icon, iconSHA256: "f".repeat(64) });
+  expect(images()).toHaveLength(0);
+  await present(icon);
+  expect(images()).toHaveLength(1);
+  expect(images()[0]?.props.source.uri).toBe(`data:image/png;base64,${png}`);
+  await present(metadata({ controls: [control] }));
+  expect(images()).toHaveLength(1);
+  await present(
+    metadata({
+      controls: [{ id: control.id, label: "Changed" }],
+      presentationRevision: "3",
+    }),
+  );
+  expect(images()).toHaveLength(0);
+  expect(controllerLabels()).toContain("Changed");
+  await present(icon);
+  expect(images()).toHaveLength(0);
+  await present({ ...metadata(), credential: "not-allowed" });
+  expect(presentationStatus()).toBe("Game data stale");
+  expect(native().props.pointerEvents).toBe("auto");
+});
+
+test("replacement map installed before ready admission retains its native presentation pin", async () => {
+  await mount();
+  await admission("ready");
+  await pinnedMap();
+  await present(metadata());
+  const replacement = { ...deliveredMap, generation: "2" };
+  await act(() =>
+    native().props.onControlMap({
+      nativeEvent: { map: replacement, configurationSha256: "d".repeat(64) },
+    }),
+  );
+  await admission("ready", "2");
+  await present(
+    metadata({
+      generation: "2",
+      configurationSha256: "d".repeat(64),
+      controls: [{ id: "saved-only-east", label: "Replacement" }],
+    }),
+  );
+  expect(controllerLabels()).toContain("Replacement");
+  expect(controllerLabels()).not.toContain("Fireball");
+  expect(native().props.pointerEvents).toBe("auto");
 });

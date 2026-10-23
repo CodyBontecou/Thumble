@@ -34,6 +34,40 @@ export class ConfigurationWowOperations {
   private inflight: Promise<void> | undefined;
   private active = false;
   private fenced = false;
+  private readonly applied = new Map<
+    string,
+    Readonly<{
+      revision: string;
+      sourceHash: string;
+      acknowledged: boolean;
+      source: number;
+      generation: string;
+      digest: number;
+      messageBytes: number;
+      pageCount: number;
+    }>
+  >();
+  presentationFreshness(
+    profileId: string,
+    revision: string,
+    sourceHash: string,
+  ): "observed" | "stale" | "not-evaluated" {
+    const applied = this.applied.get(profileId);
+    if (!applied) return "not-evaluated";
+    const receipt = this.captureStatus().receipt;
+    if (
+      !applied.acknowledged ||
+      applied.revision !== revision ||
+      applied.sourceHash !== sourceHash ||
+      receipt?.kind !== "frame" ||
+      receipt.source !== applied.source ||
+      receipt.generation !== applied.generation ||
+      !this.session?.matchesAppliedMessage(applied)
+    )
+      return "stale";
+    return "observed";
+  }
+
   private readonly clock: () => number;
   constructor(
     private readonly ports: Readonly<{
@@ -227,6 +261,28 @@ export class ConfigurationWowOperations {
             if (outcome.kind === "committed") {
               revision = outcome.receipt.resultingRevision;
               hash = outcome.receipt.contentHash;
+              const bytes = frame.frame(),
+                view = new DataView(
+                  bytes.buffer,
+                  bytes.byteOffset,
+                  bytes.byteLength,
+                );
+              this.applied.delete(outcome.profileID);
+              this.applied.set(
+                outcome.profileID,
+                Object.freeze({
+                  revision,
+                  sourceHash: hash,
+                  acknowledged: outcome.acknowledged,
+                  source: frame.source,
+                  generation: frame.generation,
+                  digest: view.getUint32(9, true),
+                  messageBytes: view.getUint16(19, true),
+                  pageCount: view.getUint16(15, true),
+                }),
+              );
+              while (this.applied.size > 8)
+                this.applied.delete(this.applied.keys().next().value!);
               if (this.state.commitCount === Number.MAX_SAFE_INTEGER)
                 throw new Error("wow_sync_failed");
               this.update({

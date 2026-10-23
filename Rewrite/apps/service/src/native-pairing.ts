@@ -1,3 +1,5 @@
+import { decodePhonePresentationEvent } from "@thumble/contracts/phone-presentation";
+import { PhonePresentationBridge } from "./phone-presentation-bridge.ts";
 import { decodePhoneControlsEvent } from "@thumble/contracts/phone-controls";
 import { PhoneControlsBridge } from "./phone-controls-bridge.ts";
 import { decodePhoneCatalogEvent } from "@thumble/contracts/phone-catalog";
@@ -13,7 +15,13 @@ import { NativePipe } from "./native-pipe.ts";
 export class NativePairingHost {
   private readonly pipe: NativePipe<
     void,
-    PairingReply | { kind: "phone-catalog-enabled" | "phone-controls-enabled" }
+    | PairingReply
+    | {
+        kind:
+          | "phone-catalog-enabled"
+          | "phone-controls-enabled"
+          | "phone-presentation-enabled";
+      }
   >;
   get child() {
     return this.pipe.child;
@@ -26,13 +34,20 @@ export class NativePairingHost {
     identityDirectory?: string,
     catalog?: PhoneCatalogBridge,
     controls?: PhoneControlsBridge,
+    presentation?: PhonePresentationBridge,
   ) {
     let lastEvent = 0n,
-      lastControlsEvent = 0n;
+      lastControlsEvent = 0n,
+      lastPresentationEvent = 0n;
     this.pipe = new NativePipe<
       void,
       | PairingReply
-      | { kind: "phone-catalog-enabled" | "phone-controls-enabled" }
+      | {
+          kind:
+            | "phone-catalog-enabled"
+            | "phone-controls-enabled"
+            | "phone-presentation-enabled";
+        }
     >(
       executable,
       [
@@ -53,6 +68,27 @@ export class NativePairingHost {
             throw new Error("invalid_pairing_ready");
         },
         event: (value) => {
+          if (value.event === "phone-presentation") {
+            if (!presentation)
+              throw new Error("unexpected_phone_presentation_event");
+            const event = decodePhonePresentationEvent(value, authority);
+            if (BigInt(event.eventId) <= lastPresentationEvent)
+              throw new Error("phone_presentation_event_replayed");
+            lastPresentationEvent = BigInt(event.eventId);
+            void presentation
+              .execute(event)
+              .then((outcome) => {
+                this.pipe.writeEvent({
+                  version: 1,
+                  event: "phone-presentation-reply",
+                  eventId: event.eventId,
+                  authorityInstanceId: authority,
+                  ...outcome,
+                });
+              })
+              .catch(() => this.pipe.disconnect());
+            return;
+          }
           if (value.event === "phone-controls") {
             if (!controls) throw new Error("unexpected_phone_controls_event");
             const event = decodePhoneControlsEvent(value, authority);
@@ -115,6 +151,16 @@ export class NativePairingHost {
             exact(value.result as Record<string, unknown>, ["kind"]);
             return { kind: "phone-controls-enabled" };
           }
+          if (
+            presentation &&
+            value.result &&
+            typeof value.result === "object" &&
+            "kind" in value.result &&
+            value.result.kind === "phone-presentation-enabled"
+          ) {
+            exact(value.result as Record<string, unknown>, ["kind"]);
+            return { kind: "phone-presentation-enabled" };
+          }
           const reply = decodePairingReply(value.result);
           if (reply.authorityInstanceId !== authority)
             throw new Error("pairing_authority_mismatch");
@@ -140,6 +186,15 @@ export class NativePairingHost {
         if (!("kind" in reply) || reply.kind !== "phone-controls-enabled") {
           this.pipe.disconnect();
           throw new Error("phone_controls_enable_invalid");
+        }
+      }
+      if (presentation) {
+        const reply = await this.pipe.request({
+          command: "phone-presentation-enable",
+        });
+        if (!("kind" in reply) || reply.kind !== "phone-presentation-enabled") {
+          this.pipe.disconnect();
+          throw new Error("phone_presentation_enable_invalid");
         }
       }
     });

@@ -1,6 +1,16 @@
 import { decodePhoneCatalogNotification } from "@thumble/contracts/phone-catalog";
-import { useCallback, useRef, useState } from "react";
-import { Text, View, type ViewProps } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  decodePhonePresentationNotification,
+  type PhonePresentationNotification,
+} from "@thumble/contracts/phone-presentation";
+import {
+  Image,
+  Text,
+  View,
+  useColorScheme,
+  type ViewProps,
+} from "react-native";
 import { requireNativeViewManager } from "expo-modules-core";
 import { standardControllerMap } from "@thumble/domain/controller-layout";
 import { colors } from "../theme/colors";
@@ -17,7 +27,10 @@ const NativeView = requireNativeViewManager<
     practiceMap?: ControlMap;
     connect?: boolean;
     outputMode?: "recording" | "macos-hid";
-    onControlMap: (event: { nativeEvent: { map: unknown } }) => void;
+    onControlMap: (event: {
+      nativeEvent: { map: unknown; configurationSha256?: unknown };
+    }) => void;
+    onPresentation: (event: { nativeEvent: { presentation: unknown } }) => void;
     onAdmission: (event: { nativeEvent: { admission: unknown } }) => void;
   }
 >("ThumbleNativeInput");
@@ -49,6 +62,16 @@ const labels: Record<string, string> = {
   dpadRight: "→",
 };
 const map = standardControllerMap("1", "0");
+type Presented = Extract<
+  PhonePresentationNotification,
+  { kind: "presentation" }
+>;
+type Visuals = Readonly<{
+  metadata: Presented;
+  icons: Readonly<Record<string, string>>;
+  receivedAt: number;
+  stale: boolean;
+}>;
 export function NativeController({
   connected = false,
   outputMode = "recording",
@@ -57,15 +80,153 @@ export function NativeController({
   outputMode?: "recording" | "macos-hid";
 }) {
   const admittedSession = useRef<string | null>(null);
+  const installed = useRef<{ map: ControlMap; hash: string | null } | null>(
+    null,
+  );
+  const visuals = useRef<Visuals | null>(null);
+  const [presentation, setPresentation] = useState<Visuals | null>(null);
+  const scheme = useColorScheme() === "dark" ? "dark" : "light";
+  const publishVisuals = useCallback((value: Visuals | null) => {
+    visuals.current = value;
+    setPresentation(value);
+  }, []);
+  useEffect(() => {
+    publishVisuals(null);
+  }, [connected, scheme, publishVisuals]);
+  useEffect(() => {
+    if (!presentation || presentation.stale) return;
+    const timer = setInterval(() => {
+      const current = visuals.current;
+      if (!current) return;
+      const age = performance.now() - current.receivedAt;
+      if (age < 0 || age >= 6000) publishVisuals({ ...current, stale: true });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [presentation?.metadata, presentation?.stale, publishVisuals]);
+  const receivePresentation = useCallback(
+    (event: { nativeEvent: { presentation: unknown } }) => {
+      try {
+        const value = decodePhonePresentationNotification(
+          event.nativeEvent.presentation,
+        );
+        const pin = installed.current;
+        if (
+          !connected ||
+          !pin ||
+          !pin.hash ||
+          admittedSession.current !== `${value.generation}:${value.revision}` ||
+          pin.map.generation !== value.generation ||
+          pin.map.revision !== value.revision ||
+          pin.hash !== value.configurationSha256
+        )
+          return;
+        const previous = visuals.current;
+        if (value.kind === "error") {
+          if (previous) publishVisuals({ ...previous, stale: true });
+          return;
+        }
+        if (value.colorScheme !== scheme) return;
+        if (value.kind === "presentation") {
+          if (
+            previous &&
+            (value.expectedConfigurationRevision !==
+              previous.metadata.expectedConfigurationRevision ||
+              value.expectedSourceHash !==
+                previous.metadata.expectedSourceHash ||
+              value.profileId !== previous.metadata.profileId)
+          )
+            return;
+          const ids = new Set(pin.map.controls.map((c) => c.id));
+          if (
+            value.controls.length !== ids.size ||
+            value.controls.some((c) => !ids.has(c.id))
+          )
+            return;
+          if (
+            previous &&
+            (BigInt(value.presentationRevision) <
+              BigInt(previous.metadata.presentationRevision) ||
+              (value.presentationRevision ===
+                previous.metadata.presentationRevision &&
+                value.presentationSourceHash !==
+                  previous.metadata.presentationSourceHash))
+          )
+            return;
+          const icons: Record<string, string> = Object.create(null);
+          for (const control of value.controls) {
+            const old = previous?.metadata.controls.find(
+              (c) => c.id === control.id,
+            );
+            if (
+              old?.iconSHA256 &&
+              old.iconSHA256 === control.iconSHA256 &&
+              previous?.icons[control.id]
+            )
+              icons[control.id] = previous.icons[control.id]!;
+          }
+          publishVisuals({
+            metadata: value,
+            icons,
+            receivedAt: performance.now(),
+            stale: false,
+          });
+        } else if (
+          previous &&
+          value.presentationRevision ===
+            previous.metadata.presentationRevision &&
+          value.presentationSourceHash ===
+            previous.metadata.presentationSourceHash &&
+          value.colorScheme === previous.metadata.colorScheme &&
+          value.expectedConfigurationRevision ===
+            previous.metadata.expectedConfigurationRevision &&
+          value.expectedSourceHash === previous.metadata.expectedSourceHash &&
+          value.profileId === previous.metadata.profileId &&
+          previous.metadata.controls.some(
+            (c) =>
+              c.id === value.controlId && c.iconSHA256 === value.iconSHA256,
+          )
+        ) {
+          publishVisuals({
+            ...previous,
+            icons: {
+              ...previous.icons,
+              [value.controlId]: `data:image/png;base64,${value.pngBase64}`,
+            },
+          });
+        }
+      } catch {
+        const previous = visuals.current;
+        if (previous) publishVisuals({ ...previous, stale: true });
+      }
+    },
+    [connected, scheme, publishVisuals],
+  );
   const [admissionEpoch, setAdmissionEpoch] = useState<string | null>(null);
   const [installedMap, setInstalledMap] = useState<ControlMap | null>(null);
-  const receiveMap = useCallback((event: { nativeEvent: { map: unknown } }) => {
-    try {
-      setInstalledMap(decodeControlMap(event.nativeEvent.map));
-    } catch {
-      setInstalledMap(null);
-    }
-  }, []);
+  const receiveMap = useCallback(
+    (event: {
+      nativeEvent: { map: unknown; configurationSha256?: unknown };
+    }) => {
+      try {
+        const next = decodeControlMap(event.nativeEvent.map);
+        const hash = event.nativeEvent.configurationSha256;
+        installed.current = {
+          map: next,
+          hash:
+            typeof hash === "string" && /^[a-f0-9]{64}$/.test(hash)
+              ? hash
+              : null,
+        };
+        publishVisuals(null);
+        setInstalledMap(next);
+      } catch {
+        installed.current = null;
+        publishVisuals(null);
+        setInstalledMap(null);
+      }
+    },
+    [publishVisuals],
+  );
   const [catalogSummary, setCatalogSummary] = useState<string | null>(null);
   const receiveCatalog = useCallback(
     (event: { nativeEvent: { catalog: unknown } }) => {
@@ -100,8 +261,16 @@ export function NativeController({
             if (
               admittedSession.current !== null &&
               admittedSession.current !== session
-            )
+            ) {
               setCatalogSummary(null);
+              const incoming = installed.current?.map;
+              if (
+                !incoming ||
+                `${incoming.generation}:${incoming.revision}` !== session
+              )
+                installed.current = null;
+              publishVisuals(null);
+            }
             admittedSession.current = session;
             setAdmissionEpoch(session);
             setInstalledMap((previous) =>
@@ -112,6 +281,8 @@ export function NativeController({
             );
           } else {
             admittedSession.current = null;
+            installed.current = null;
+            publishVisuals(null);
             setAdmissionEpoch(null);
             setInstalledMap(null);
             setCatalogSummary(null);
@@ -129,13 +300,15 @@ export function NativeController({
         setPhase("ready");
       } catch {
         admittedSession.current = null;
+        installed.current = null;
+        publishVisuals(null);
         setAdmissionEpoch(null);
         setInstalledMap(null);
         setCatalogSummary(null);
         setPhase("error");
       }
     },
-    [connected],
+    [connected, publishVisuals],
   );
   const renderMap = connected
     ? phase === "ready" &&
@@ -168,19 +341,41 @@ export function NativeController({
               justifyContent: "center",
             }}
           >
-            <Text
-              numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={0.8}
-              maxFontSizeMultiplier={1.2}
-              style={{
-                color: colors.label,
-                fontSize: 14,
-                fontWeight: "600",
-              }}
-            >
-              {labels[control.action]}
-            </Text>
+            {presentation?.icons[control.id] ? (
+              <Image
+                testID={`presentation-icon-${control.id}`}
+                source={{ uri: presentation.icons[control.id] }}
+                resizeMode="contain"
+                accessible={false}
+                style={{
+                  width: 32,
+                  height: 32,
+                  maxWidth: "80%",
+                  maxHeight: "80%",
+                  opacity:
+                    presentation.stale ||
+                    presentation.metadata.freshness === "stale"
+                      ? 0.5
+                      : 1,
+                }}
+              />
+            ) : (
+              <Text
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.8}
+                maxFontSizeMultiplier={1.2}
+                style={{
+                  color: colors.label,
+                  fontSize: 14,
+                  fontWeight: "600",
+                }}
+              >
+                {presentation?.metadata.controls.find(
+                  (c) => c.id === control.id,
+                )?.label || labels[control.action]}
+              </Text>
+            )}
           </View>
         ))}
       </View>
@@ -190,6 +385,7 @@ export function NativeController({
         onAdmission={admit}
         onCatalog={receiveCatalog}
         onControlMap={receiveMap}
+        onPresentation={receivePresentation}
         testID="controller-surface"
         pointerEvents={phase === "ready" ? "auto" : "none"}
         accessibilityLabel={
@@ -230,6 +426,29 @@ export function NativeController({
             : phase === "ready"
               ? "Practice ready"
               : "Starting practice…"}
+        </Text>
+      )}
+      {connected && phase === "ready" && presentation && (
+        <Text
+          testID="presentation-status"
+          pointerEvents="none"
+          numberOfLines={1}
+          maxFontSizeMultiplier={1.3}
+          style={{
+            position: "absolute",
+            top: 20,
+            left: "30%",
+            right: "30%",
+            textAlign: "center",
+            fontSize: 12,
+            color: colors.secondaryLabel,
+          }}
+        >
+          {presentation.stale || presentation.metadata.freshness === "stale"
+            ? "Game data stale"
+            : presentation.metadata.freshness === "observed"
+              ? "Game data live"
+              : "Game data not checked"}
         </Text>
       )}
       {connected && phase === "ready" && catalogSummary !== null && (

@@ -120,6 +120,7 @@ import Foundation
     latest = nil
     pending.removeAll()
     scope = nil
+    clock = nil
     barrier = true
   }
 }

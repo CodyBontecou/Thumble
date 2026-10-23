@@ -155,3 +155,44 @@ pub fn terminal_io(context: &'static str, error: &std::io::Error) {
         );
     }
 }
+
+// A bounded terminal outcome supplements timing aggregates on synthetic debug
+// probes. It is recorded after control-owner cleanup, not as a first-cause claim.
+static TERMINALS: AtomicU64 = AtomicU64::new(0);
+pub fn terminal_outcome(error: &'static str) {
+    static TERMINAL_ENABLED: OnceLock<bool> = OnceLock::new();
+    if !*TERMINAL_ENABLED.get_or_init(|| {
+        std::env::var("THUMBLE_REWRITE_CONTROL_TERMINAL_PROBE").as_deref() == Ok("1")
+    }) || TERMINALS.fetch_add(1, Ordering::Relaxed) >= 64
+    {
+        return;
+    }
+    let code = terminal_code(error);
+    eprintln!(
+        "native_control_terminal code={code} elapsed_us={}",
+        timestamp()
+    );
+}
+fn terminal_code(error: &'static str) -> &'static str {
+    if !error.is_empty()
+        && error.len() <= 96
+        && error.bytes().all(|b| b.is_ascii_lowercase() || b == b'_')
+    {
+        error
+    } else {
+        "other"
+    }
+}
+#[cfg(test)]
+mod terminal_tests {
+    #[test]
+    fn terminal_code_retains_only_bounded_static_symbols() {
+        assert_eq!(
+            super::terminal_code("input_session_closed"),
+            "input_session_closed"
+        );
+        for value in ["", "host:1234", "Private label", "input_failure\nsecret", "123", "abcdefghijklmnopqrstuvwxyz_abcdefghijklmnopqrstuvwxyz_abcdefghijklmnopqrstuvwxyz_abcdefghijklmnopqrstuvwxyz"] {
+            assert_eq!(super::terminal_code(value), "other");
+        }
+    }
+}

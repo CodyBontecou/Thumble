@@ -1,3 +1,4 @@
+import { PhonePresentationBridge } from "./phone-presentation-bridge.ts";
 import {
   decodeWowSyncCommand,
   type WowSyncStatus,
@@ -177,6 +178,9 @@ export async function serve(
     ),
     new PhoneControlsBridge((command) =>
       configuration.readControlsForPhone(command),
+    ),
+    new PhonePresentationBridge((command) =>
+      configuration.readPresentationForPhone(command),
     ),
   );
   try {

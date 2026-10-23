@@ -16,7 +16,8 @@
     "./configuration-phone-controls": "./src/configuration-phone-controls.ts",
     "./wow-capture-supervisor": "./src/wow-capture-supervisor.ts",
     "./wow-profile-refresh": "./src/wow-profile-refresh.ts",
-    "./wow-sync-session": "./src/wow-sync-session.ts"
+    "./wow-sync-session": "./src/wow-sync-session.ts",
+    "./configuration-phone-presentation": "./src/configuration-phone-presentation.ts"
   },
   "dependencies": {
     "@thumble/contracts": "workspace:*",
