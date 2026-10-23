@@ -22,11 +22,14 @@ and reviewed for visible connected state, trigger labels, artwork and Done.
 Cleanup independently attempts gesture cancellation, provider reset, theme and
 orientation restoration, retaining the primary failure.
 
-`run_bank_presentation_app_probe.py` requires the owned emulator-5580, starts a
+`run_bank_presentation_app_probe.py` requires an explicitly selected owned emulator (emulator-5580 locally or
+emulator-5554 in its CI job), starts a
 loopback-only synthetic service, configures only its own adb reverse mappings,
 and admits exactly one named, unskipped JUnit case with zero failures/errors.
 Both Gradle aggregate and direct suite roots require exact counters; nested or
 extra suites/cases fail. Four parser tests cover positive and rejected reports.
+An optional absolute executable `--service-probe` selects an isolated service/native
+build without replacing shared binaries; the default remains the local probe.
 Private reports stay under RUNNER_TEMP. Failure-only native diagnostics contain
 bounded state and reason fields; invitations and raw native logs are excluded
 from the runner stdout summary.
@@ -39,7 +42,10 @@ parser that rejected Gradle's valid testsuites wrapper. After correcting that
 parser and adding aggregate admission coverage, the complete runner passed
 with one case, zero skips/failures, and all five service phases. These results
 show the route works; they do not establish disconnect-free endurance or
-physical-device acceptance. Earlier failed evidence is retained privately.
+physical-device acceptance. Earlier failed evidence is retained privately. A subsequent
+complete runner pass used the explicit isolated service probe and its aligned
+native build, rather than the shared development receiver binary. It again
+admitted one case, zero skips/failures and all five service phases.
 
 From Rewrite, use pinned Bun on PATH, JAVA_HOME for JDK 17, ANDROID_HOME,
 ANDROID_SERIAL=emulator-5580 and a private RUNNER_TEMP, then run:

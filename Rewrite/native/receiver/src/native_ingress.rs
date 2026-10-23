@@ -64,6 +64,15 @@ fn random<const N: usize>() -> Result<[u8; N], &'static str> {
         .map_err(|_| "native_input_entropy_failed")?;
     Ok(bytes)
 }
+// A socket deadline may surface as WouldBlock (including macOS EAGAIN) or
+// TimedOut. Keep its failure category consistent with an elapsed frame deadline.
+// This does not retry, extend the deadline, or change transport cleanup.
+fn io_failure(error: &std::io::Error) -> &'static str {
+    match error.kind() {
+        std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut => "native_input_timeout",
+        _ => "native_input_transport_failed",
+    }
+}
 fn read_exact(
     stream: &mut TcpStream,
     bytes: &mut [u8],
@@ -75,17 +84,21 @@ fn read_exact(
             .checked_duration_since(Instant::now())
             .filter(|d| !d.is_zero())
             .ok_or("native_input_timeout")?;
-        stream
-            .set_read_timeout(Some(left))
-            .map_err(|_| "native_input_transport_failed")?;
-        let n = stream.read(&mut bytes[at..]).map_err(|error| {
+        stream.set_read_timeout(Some(left)).map_err(|error| {
             #[cfg(debug_assertions)]
-            crate::input_io_diagnostics::terminal_io("native-read", &error);
+            crate::input_error_diagnostics::io("native-read-options", &error);
             #[cfg(not(debug_assertions))]
             let _ = error;
             "native_input_transport_failed"
         })?;
+        let n = stream.read(&mut bytes[at..]).map_err(|error| {
+            #[cfg(debug_assertions)]
+            crate::input_io_diagnostics::terminal_io("native-read", &error);
+            io_failure(&error)
+        })?;
         if n == 0 {
+            #[cfg(debug_assertions)]
+            crate::input_error_diagnostics::end("native-read");
             return Err("native_input_transport_failed");
         }
         at += n;
@@ -118,13 +131,21 @@ fn send(stream: &mut TcpStream, bytes: &[u8], wait: Duration) -> Result<(), &'st
             .checked_duration_since(Instant::now())
             .filter(|d| !d.is_zero())
             .ok_or("native_input_timeout")?;
-        stream
-            .set_write_timeout(Some(left))
-            .map_err(|_| "native_input_transport_failed")?;
-        let n = stream
-            .write(&frame[at..])
-            .map_err(|_| "native_input_transport_failed")?;
+        stream.set_write_timeout(Some(left)).map_err(|error| {
+            #[cfg(debug_assertions)]
+            crate::input_error_diagnostics::io("native-write-options", &error);
+            #[cfg(not(debug_assertions))]
+            let _ = error;
+            "native_input_transport_failed"
+        })?;
+        let n = stream.write(&frame[at..]).map_err(|error| {
+            #[cfg(debug_assertions)]
+            crate::input_error_diagnostics::io("native-write", &error);
+            io_failure(&error)
+        })?;
         if n == 0 {
+            #[cfg(debug_assertions)]
+            crate::input_error_diagnostics::end("native-write");
             return Err("native_input_transport_failed");
         }
         at += n;
@@ -652,6 +673,8 @@ impl Server {
             let incoming = incoming.clone();
             let wake = wake.clone();
             workers.push(thread::spawn(move || loop {
+                #[cfg(debug_assertions)]
+                crate::input_error_diagnostics::server_thread();
                 let (id, mut stream) = match work.lock() {
                     Ok(work) => match work.recv() {
                         Ok(job) => job,
@@ -673,12 +696,34 @@ impl Server {
                 })()
                 .is_ok();
                 let mut owned_physical = false;
+                #[cfg(debug_assertions)]
+                let mut exit_reason = if authenticated_server {
+                    "stopped"
+                } else {
+                    "handshake"
+                };
                 while authenticated_server && !stop.load(Ordering::SeqCst) {
                     let b = match receive(&mut stream, FRAME_WAIT) {
                         Ok(b) => b,
-                        Err(_) => break,
+                        Err(error) => {
+                            #[cfg(debug_assertions)]
+                            {
+                                exit_reason = if error == "native_input_timeout" {
+                                    "read-deadline"
+                                } else {
+                                    "read-failure"
+                                };
+                            }
+                            #[cfg(not(debug_assertions))]
+                            let _ = error;
+                            break;
+                        }
                     };
                     if b.len() < 34 || b[0] != 1 || !bool::from(b[1..33].ct_eq(&token)) {
+                        #[cfg(debug_assertions)]
+                        {
+                            exit_reason = "invalid-frame";
+                        }
                         break;
                     }
                     let op = b[33];
@@ -692,6 +737,10 @@ impl Server {
                             | (RELEASE, 32)
                             | (ROTATE, 52)
                     ) {
+                        #[cfg(debug_assertions)]
+                        {
+                            exit_reason = "invalid-payload";
+                        }
                         break;
                     }
                     let old_reference = if matches!(canonical, ROTATE | PACKET | RELEASE) {
@@ -709,22 +758,32 @@ impl Server {
                     };
                     let (response, result) = mpsc::sync_channel(1);
                     let deadline = Instant::now() + OP_WAIT;
-                    if incoming
-                        .try_send(Pending {
-                            #[cfg(debug_assertions)]
-                            queue_span: crate::input_io_diagnostics::Span::start(
-                                crate::input_io_diagnostics::Metric::NativeServerQueue,
-                            ),
-                            op,
-                            payload,
-                            deadline,
-                            response,
-                        })
-                        .is_err()
-                    {
+                    if let Err(error) = incoming.try_send(Pending {
+                        #[cfg(debug_assertions)]
+                        queue_span: crate::input_io_diagnostics::Span::start(
+                            crate::input_io_diagnostics::Metric::NativeServerQueue,
+                        ),
+                        op,
+                        payload,
+                        deadline,
+                        response,
+                    }) {
+                        #[cfg(debug_assertions)]
+                        {
+                            exit_reason = match error {
+                                mpsc::TrySendError::Full(_) => "queue-full",
+                                mpsc::TrySendError::Disconnected(_) => "queue-closed",
+                            };
+                        }
+                        #[cfg(not(debug_assertions))]
+                        let _ = error;
                         break;
                     }
                     if wake.as_ref().is_some_and(|wake| wake.notify().is_err()) {
+                        #[cfg(debug_assertions)]
+                        {
+                            exit_reason = "wake-failure";
+                        }
                         break;
                     }
                     let reply = match result.recv_timeout(OP_WAIT) {
@@ -782,9 +841,15 @@ impl Server {
                         crate::input_io_diagnostics::terminal("native-server-send", op, error);
                         #[cfg(not(debug_assertions))]
                         let _ = error;
+                        #[cfg(debug_assertions)]
+                        {
+                            exit_reason = "send-failure";
+                        }
                         break;
                     }
                 }
+                #[cfg(debug_assertions)]
+                crate::input_error_diagnostics::server_exit(exit_reason, owned.len());
                 for binding in owned {
                     let (response, _) = mpsc::sync_channel(1);
                     let mut payload = binding.connection.to_vec();
@@ -1483,6 +1548,65 @@ mod tests {
         wake.wait(Duration::from_secs(1)).unwrap();
         server.drain(&mut runtime, 3, &mut sink).unwrap();
         assert_eq!(results.iter().filter(|r| r.try_recv().is_ok()).count(), 4);
+    }
+    #[test]
+    fn socket_deadline_categories_do_not_hide_other_io_failures() {
+        use std::io::ErrorKind;
+        for kind in [ErrorKind::WouldBlock, ErrorKind::TimedOut] {
+            assert_eq!(
+                io_failure(&std::io::Error::from(kind)),
+                "native_input_timeout"
+            );
+        }
+        for kind in [
+            ErrorKind::Interrupted,
+            ErrorKind::UnexpectedEof,
+            ErrorKind::BrokenPipe,
+            ErrorKind::ConnectionReset,
+            ErrorKind::InvalidInput,
+            ErrorKind::Other,
+        ] {
+            assert_eq!(
+                io_failure(&std::io::Error::from(kind)),
+                "native_input_transport_failed"
+            );
+        }
+        #[cfg(unix)]
+        assert_eq!(
+            io_failure(&std::io::Error::from_raw_os_error(libc::EAGAIN)),
+            "native_input_timeout"
+        );
+    }
+    #[test]
+    fn response_deadline_closes_the_transport_without_replaying_a_request() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let peer = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let frame = receive(&mut stream, Duration::from_secs(2)).unwrap();
+            let mut expected = vec![1];
+            expected.extend_from_slice(&[8; 32]);
+            expected.push(STATUS);
+            assert_eq!(frame, expected);
+            // Never send a response. The client's unchanged OP_WAIT must cause
+            // socket shutdown; a retry would instead appear as another frame.
+            stream
+                .set_read_timeout(Some(Duration::from_secs(2)))
+                .unwrap();
+            let mut unexpected = [0];
+            assert_eq!(stream.read(&mut unexpected).unwrap(), 0);
+        });
+        let mut client = Client {
+            stream: TcpStream::connect(address).unwrap(),
+            token: [8; 32],
+            physical: false,
+        };
+        assert!(matches!(
+            client.configuration(),
+            Err("native_input_timeout")
+        ));
+        assert!(client.configuration().is_err());
+        peer.join().unwrap();
     }
     #[cfg(unix)]
     #[test]

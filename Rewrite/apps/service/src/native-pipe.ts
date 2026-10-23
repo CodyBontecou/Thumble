@@ -1,3 +1,4 @@
+import { NativeInputErrorForwarder } from "./native-input-error-diagnostic.ts";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import {
@@ -45,7 +46,12 @@ export class NativePipe<Ready, Reply> {
       windowsHide: true,
       detached: process.platform === "win32",
     });
-    this.child.stderr.resume();
+    if (process.env.THUMBLE_REWRITE_INPUT_ERROR_PROBE === "1") {
+      const errors = new NativeInputErrorForwarder((line) =>
+        process.stderr.write(line + "\n", () => {}),
+      );
+      this.child.stderr.on("data", (chunk: Buffer) => errors.push(chunk));
+    } else this.child.stderr.resume();
     this.child.on("error", () => this.fail("child-error"));
     this.child.on("exit", () => this.fail("child-exit"));
     this.child.stdin.on("error", () => this.fail("stdin-error"));

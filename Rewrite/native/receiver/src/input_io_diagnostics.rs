@@ -121,6 +121,7 @@ pub fn snapshot() -> serde_json::Value {
 /// Debug-only terminal evidence: callers supply fixed operation/error names,
 /// never frame payloads, identities, credentials, paths or arbitrary IO text.
 pub fn terminal(context: &'static str, operation: u8, error: &'static str) {
+    crate::input_error_diagnostics::operation(context, operation, error);
     if enabled() {
         let context = match context {
             "native-client" | "native-server-wait" | "native-server-send" | "phone-control"
@@ -141,6 +142,7 @@ pub fn terminal(context: &'static str, operation: u8, error: &'static str) {
     }
 }
 pub fn terminal_io(context: &'static str, error: &std::io::Error) {
+    crate::input_error_diagnostics::io(context, error);
     if enabled() {
         let context = if context == "native-read" {
             context

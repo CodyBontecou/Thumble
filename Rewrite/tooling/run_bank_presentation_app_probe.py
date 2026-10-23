@@ -45,10 +45,12 @@ def verify_android_results(directory):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--platform', choices=['android'], required=True)
+    parser.add_argument('--service-probe', type=Path, default=ROOT/'tooling/presentation-service-probe.ts')
     parser.add_argument('command', nargs=argparse.REMAINDER)
     args = parser.parse_args()
+    assert args.service_probe.is_absolute() and args.service_probe.is_file() and os.access(args.service_probe, os.X_OK), 'absolute_executable_service_probe_required'
     serial = os.environ['ANDROID_SERIAL']
-    assert serial == 'emulator-5580', 'select_owned_presentation_emulator'
+    assert serial in ('emulator-5580', 'emulator-5554'), 'select_owned_presentation_emulator'
     adb = str(Path(os.environ['ANDROID_HOME']) / 'platform-tools/adb')
     private = Path(os.environ['RUNNER_TEMP']); private.mkdir(parents=True, exist_ok=True, mode=0o700)
     lines = queue.Queue(maxsize=32)
@@ -80,7 +82,7 @@ def main():
                     if self.path == '/begin':
                         assert process is None
                         stderr=(private/'presentation-native-private.log').open('wb')
-                        process=subprocess.Popen([str(ROOT/'tooling/presentation-service-probe.ts'),'--bank-presentation'],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=stderr)
+                        process=subprocess.Popen([str(args.service_probe),'--bank-presentation'],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=stderr)
                         def read():
                             for line in process.stdout:
                                 if len(line)>16384: break

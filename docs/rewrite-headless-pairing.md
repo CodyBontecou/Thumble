@@ -1,5 +1,12 @@
 # Headless native pairing owner
 
+> Historical implementation snapshot: references below to control-v2/v3-only
+> behavior, pending phone/input work and per-snapshot CI approvals describe that
+> stage. Current setup and review limitations are in the
+> [reviewer walkthrough](rewrite-mobile-reviewer-guide.md),
+> [auth-only listener contract](rewrite-auth-only-listener.md) and current
+> input/presentation protocol documents.
+
 The service now forwards pairing operations to a separate native owner through private inherited stdio. The TypeScript pairing state machine remains a fixture oracle and is not elected as a runtime fallback. Default service startup creates local-only native bootstrap windows, preserving the existing CLI behavior. Listening requires an explicitly initialized persistent identity and an explicit manual bind/advertisement request. Controller output remains recording-only and disabled for real input.
 
 Initialize once, then configure service startup with the same absolute identity directory:

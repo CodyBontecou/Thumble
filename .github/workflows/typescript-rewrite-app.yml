@@ -26,6 +26,19 @@ on:
       - "Rewrite/tooling/test_saved_app_results.py"
       - "Rewrite/tooling/run_saved_android_app.py"
       - "Rewrite/tooling/run_mobile_app_probe.py"
+      - "Rewrite/tooling/presentation-service-probe.ts"
+      - "Rewrite/tooling/ios-bank-presentation-service-probe.ts"
+      - "Rewrite/tooling/run_bank_presentation_app_probe.py"
+      - "Rewrite/tooling/test_bank_presentation_app_probe.py"
+      - "Rewrite/tooling/run_bank_presentation_ios_probe.py"
+      - "Rewrite/tooling/test_bank_presentation_ios_probe.py"
+      - "Rewrite/tooling/check-mobile-store-artifact.py"
+      - "Rewrite/tooling/test_mobile_store_artifact.py"
+      - "Rewrite/tooling/test_ios_store_notices.cjs"
+      - "Rewrite/tooling/test_android_store_notices.cjs"
+      - "Rewrite/tooling/android-release-notices.py"
+      - "Rewrite/tooling/test_android_release_notices.py"
+      - "Rewrite/tooling/capture-android-release-notices.gradle"
       - "Rewrite/tooling/test_mobile_app_probe.py"
       - "Rewrite/tooling/native_hold_diagnostic.py"
       - "Rewrite/tooling/test_native_hold_diagnostic.py"
@@ -58,6 +71,19 @@ on:
       - "Rewrite/tooling/test_saved_app_results.py"
       - "Rewrite/tooling/run_saved_android_app.py"
       - "Rewrite/tooling/run_mobile_app_probe.py"
+      - "Rewrite/tooling/presentation-service-probe.ts"
+      - "Rewrite/tooling/ios-bank-presentation-service-probe.ts"
+      - "Rewrite/tooling/run_bank_presentation_app_probe.py"
+      - "Rewrite/tooling/test_bank_presentation_app_probe.py"
+      - "Rewrite/tooling/run_bank_presentation_ios_probe.py"
+      - "Rewrite/tooling/test_bank_presentation_ios_probe.py"
+      - "Rewrite/tooling/check-mobile-store-artifact.py"
+      - "Rewrite/tooling/test_mobile_store_artifact.py"
+      - "Rewrite/tooling/test_ios_store_notices.cjs"
+      - "Rewrite/tooling/test_android_store_notices.cjs"
+      - "Rewrite/tooling/android-release-notices.py"
+      - "Rewrite/tooling/test_android_release_notices.py"
+      - "Rewrite/tooling/capture-android-release-notices.gradle"
       - "Rewrite/tooling/test_mobile_app_probe.py"
       - "Rewrite/tooling/native_hold_diagnostic.py"
       - "Rewrite/tooling/test_native_hold_diagnostic.py"
@@ -115,6 +141,11 @@ jobs:
           python3 -m unittest discover -s tooling -p test_ios_http_diagnostic.py -v
           python3 -m unittest discover -s tooling -p test_saved_app_results.py -v
           python3 -m unittest discover -s tooling -p test_native_hold_diagnostic.py -v
+          python3 -m unittest discover -s tooling -p test_bank_presentation_app_probe.py -v
+          python3 -m unittest discover -s tooling -p test_bank_presentation_ios_probe.py -v
+          python3 -m unittest discover -s tooling -p test_mobile_store_artifact.py -v
+          python3 -m unittest discover -s tooling -p test_android_release_notices.py -v
+          node --test tooling/test_ios_store_notices.cjs tooling/test_android_store_notices.cjs
       - name: Generate native Android app
         working-directory: Rewrite/apps/mobile
         run: bun run prebuild --platform android
@@ -159,6 +190,18 @@ jobs:
       - name: Build production-shaped Android app
         working-directory: Rewrite/apps/mobile/android
         run: bash ./gradlew --no-daemon :app:assembleRelease -PreactNativeArchitectures=x86_64
+      - name: Require actual Android bank presentation and held-input refresh
+        if: always() && steps.android-apks.outcome == 'success'
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
+          script: |
+            mkdir -p "$GITHUB_WORKSPACE/Rewrite/reports"
+            env ANDROID_SERIAL=emulator-5554 RUNNER_TEMP="$RUNNER_TEMP/bank-android" python3 "$GITHUB_WORKSPACE/Rewrite/tooling/run_bank_presentation_app_probe.py" --platform android -- bash "$GITHUB_WORKSPACE/Rewrite/apps/mobile/android/gradlew" -p "$GITHUB_WORKSPACE/Rewrite/apps/mobile/android" --no-daemon :app:connectedNativeQaAndroidTest -PreactNativeArchitectures=x86_64 -Pandroid.testInstrumentationRunnerArguments.class=com.thumble.rewrite.qa.BankPresentationAppTest > "$GITHUB_WORKSPACE/Rewrite/reports/mobile-app-android-bank.json"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -167,6 +210,7 @@ jobs:
             ${{ runner.temp }}/legacy-android-results/
             ${{ runner.temp }}/legacy-android-reports/
             Rewrite/reports/mobile-app-android-saved-*.json
+            Rewrite/reports/mobile-app-android-bank.json
           if-no-files-found: error
 
   ios-app:
@@ -205,6 +249,11 @@ jobs:
           python3 -m unittest discover -s tooling -p test_ios_http_diagnostic.py -v
           python3 -m unittest discover -s tooling -p test_saved_app_results.py -v
           python3 -m unittest discover -s tooling -p test_native_hold_diagnostic.py -v
+          python3 -m unittest discover -s tooling -p test_bank_presentation_app_probe.py -v
+          python3 -m unittest discover -s tooling -p test_bank_presentation_ios_probe.py -v
+          python3 -m unittest discover -s tooling -p test_mobile_store_artifact.py -v
+          python3 -m unittest discover -s tooling -p test_android_release_notices.py -v
+          node --test tooling/test_ios_store_notices.cjs tooling/test_android_store_notices.cjs
       - name: Identify the exact iOS compiler cache scope
         id: ios-toolchain
         run: |
@@ -234,6 +283,12 @@ jobs:
         run: |
           xcodebuild -quiet -workspace apps/mobile/ios/ThumbleRewrite.xcworkspace -scheme NativePortalTests -configuration Release -destination 'generic/platform=iOS Simulator' -derivedDataPath "$RUNNER_TEMP/rewrite-mobile-app" ONLY_ACTIVE_ARCH=YES ENABLE_TESTABILITY=YES build-for-testing > "$RUNNER_TEMP/native-portal-app-build.log" 2>&1
           xcodebuild -quiet -workspace apps/mobile/ios/ThumbleRewrite.xcworkspace -scheme SavedControllerUITests -configuration Release -destination 'generic/platform=iOS Simulator' -derivedDataPath "$RUNNER_TEMP/rewrite-mobile-app" ONLY_ACTIVE_ARCH=YES ENABLE_TESTABILITY=YES build-for-testing > "$RUNNER_TEMP/saved-controller-app-build.log" 2>&1
+      - name: Build separate iOS bank app QA target
+        id: ios-bank-build
+        if: always() && steps.ios-app-build.outcome == 'success'
+        run: |
+          ruby apps/mobile/tests/prepare-ios-bank.rb
+          xcodebuild -quiet -workspace apps/mobile/ios/ThumbleRewrite.xcworkspace -scheme BankPresentationUITests -configuration Release -destination 'generic/platform=iOS Simulator' -derivedDataPath "$RUNNER_TEMP/rewrite-mobile-app" ONLY_ACTIVE_ARCH=YES ENABLE_TESTABILITY=YES build-for-testing > "$RUNNER_TEMP/bank-presentation-app-build.log" 2>&1
       - name: Exercise bundled app's native UIKit portal and actual saved-map routes headlessly
         if: always() && steps.ios-app-build.outcome == 'success'
         run: |
@@ -277,6 +332,26 @@ jobs:
             if [[ "$saved_status" != 0 ]]; then status=1; fi
           done
           exit "$status"
+      - name: Require actual iOS bank artwork and held-input refresh
+        if: always() && steps.ios-bank-build.outcome == 'success'
+        run: |
+          set -o pipefail
+          mkdir -p reports
+          runtime_id="$(xcrun simctl list runtimes available -j | python3 -c 'import json,sys; r=[x for x in json.load(sys.stdin)["runtimes"] if x.get("isAvailable") and ".iOS-" in x["identifier"]]; print(sorted(r,key=lambda x:tuple(map(int,x["version"].split("."))))[-1]["identifier"])')"
+          bank_device_id="$(xcrun simctl create "Thumble Rewrite Bank CI $GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro "$runtime_id")"
+          cleanup_bank_simulator() {
+            bank_primary_status=$?
+            trap - EXIT
+            bank_cleanup_status=0
+            if ! xcrun simctl shutdown "$bank_device_id"; then bank_cleanup_status=1; fi
+            if ! xcrun simctl delete "$bank_device_id"; then bank_cleanup_status=1; fi
+            if [[ "$bank_primary_status" -ne 0 ]]; then exit "$bank_primary_status"; fi
+            exit "$bank_cleanup_status"
+          }
+          trap cleanup_bank_simulator EXIT
+          xcrun simctl boot "$bank_device_id"
+          xcrun simctl bootstatus "$bank_device_id" -b
+          env RUNNER_TEMP="$RUNNER_TEMP/bank-ios" python3 tooling/run_bank_presentation_ios_probe.py --device "$bank_device_id" --derived-data "$RUNNER_TEMP/rewrite-mobile-app" > reports/mobile-app-ios-bank.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -288,4 +363,5 @@ jobs:
             Rewrite/reports/mobile-app-ios-renewal-details.json
             Rewrite/reports/mobile-app-ios-http-diagnostic.json
             Rewrite/reports/mobile-app-ios-saved-*.json
+            Rewrite/reports/mobile-app-ios-bank.json
           if-no-files-found: error

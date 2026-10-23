@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import { NativeInputErrorForwarder } from "../apps/service/src/native-input-error-diagnostic.ts";
 import { ProbePhaseGate } from "./probe-phase-gate.ts";
 /** Synthetic QA: real CLI service/native TLS/saved authority; recording output only. */
 import assert from "node:assert/strict";
@@ -163,6 +164,7 @@ export class RealServicePhoneProbe {
       (process.platform === "win32" ? ".exe" : ""),
   );
   private service?: ReturnType<typeof Bun.spawn>;
+  private errorReader?: { cancel(): Promise<unknown> };
   private endpoint?: ReturnType<typeof readEndpoint>;
   private activationOffset = 0;
   private watch:
@@ -237,8 +239,39 @@ export class RealServicePhoneProbe {
         "--identity-dir",
         identity,
       ],
-      { stdout: "ignore", stderr: "ignore" },
+      {
+        stdout: "ignore",
+        stderr:
+          process.env.THUMBLE_REWRITE_INPUT_ERROR_PROBE === "1"
+            ? "pipe"
+            : "ignore",
+      },
     );
+    if (process.env.THUMBLE_REWRITE_INPUT_ERROR_PROBE === "1") {
+      assert(
+        this.service.stderr instanceof ReadableStream,
+        "probe_error_stream_missing",
+      );
+      const reader = this.service.stderr.getReader();
+      this.errorReader = reader;
+      const errors = new NativeInputErrorForwarder(
+        (line) => process.stderr.write(line + "\n", () => {}),
+        32,
+      );
+      void (async () => {
+        try {
+          for (;;) {
+            const result = await reader.read();
+            if (result.done) break;
+            errors.push(result.value);
+          }
+        } catch {
+          /* Optional diagnostics never change input or primary errors. */
+        } finally {
+          reader.releaseLock();
+        }
+      })();
+    }
     void this.service.exited.then((code) =>
       this.diagnose(code === 0 ? "service_exit_zero" : "service_exit_nonzero"),
     );
@@ -651,6 +684,11 @@ export class RealServicePhoneProbe {
           assert(killed, "probe_service_cleanup_timeout");
         }
       }
+    }
+    if (this.errorReader) {
+      try {
+        void this.errorReader.cancel().catch(() => {});
+      } catch {}
     }
     rmSync(this.parent, { recursive: true, force: true });
   }

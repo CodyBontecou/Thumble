@@ -25,7 +25,7 @@ function object(value: unknown): Record<string, unknown> {
   );
   return value as Record<string, unknown>;
 }
-function png(color: number): Uint8Array {
+function png(color: number, blue = 192 - color): Uint8Array {
   function chunk(name: string, data: Buffer): Buffer {
     const out = Buffer.alloc(data.length + 12);
     out.writeUInt32BE(data.length);
@@ -51,7 +51,7 @@ function png(color: number): Uint8Array {
       const at = y * 129 + 1 + x * 4;
       scan[at] = color;
       scan[at + 1] = 64;
-      scan[at + 2] = 192 - color;
+      scan[at + 2] = blue;
       scan[at + 3] = 255;
     }
   return Buffer.concat([
@@ -127,7 +127,10 @@ export function syntheticSource(
   profile.appearanceBank = { schemaVersion: 1, variants };
   return JSON.stringify(source);
 }
-export function syntheticBankSource(refreshed = false): string {
+export function syntheticBankSource(
+  refreshed = false,
+  palette: "standard" | "ios-wide" = "standard",
+): string {
   const source = JSON.parse(
     syntheticSource(
       refreshed ? 144 : 24,
@@ -146,7 +149,14 @@ export function syntheticBankSource(refreshed = false): string {
   const variants = profile.appearanceBank.variants;
   for (let index = 0; index < variants.length; index++) {
     const variant = variants[index];
-    const bytes = png((refreshed ? 112 : 16) + index * 8);
+    // The iOS visible-pixel oracle composites a 30% native highlight. Sixteen
+    // raw levels leave >10 composite levels between every tolerance-five box.
+    // Other SDK/Android fixtures retain their original byte-identical palette.
+    const red =
+      palette === "ios-wide"
+        ? (Number(refreshed) * 8 + index) * 16
+        : (refreshed ? 112 : 16) + index * 8;
+    const bytes = png(red, palette === "ios-wide" ? 255 - red : 192 - red);
     const asset = variant.appearance.assetLibrary.assets[0];
     asset.name = `${refreshed ? "Refreshed" : "Initial"} ${variant.colorScheme} ${variant.actionSet}`;
     asset.byteCount = bytes.length;
@@ -170,7 +180,7 @@ export class PresentationServiceProbe {
   diagnosticPhase() {
     return this.phase;
   }
-  constructor() {
+  constructor(private readonly options: { bankPalette?: "ios-wide" } = {}) {
     // Existing public probe's saved-mode selector is fixed synthetic QA input only.
     if (!process.argv.includes("--saved-controller"))
       process.argv.push("--saved-controller");
@@ -235,7 +245,7 @@ export class PresentationServiceProbe {
       path,
       bankRefresh === undefined
         ? syntheticSource(color, name, centerX)
-        : syntheticBankSource(bankRefresh),
+        : syntheticBankSource(bankRefresh, this.options.bankPalette),
       { mode: 0o600 },
     );
     const inspected = this.cli("configuration", "validate-file", [

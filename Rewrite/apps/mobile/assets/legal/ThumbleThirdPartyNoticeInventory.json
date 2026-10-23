@@ -1,0 +1,1299 @@
+{
+  "schemaVersion": 1,
+  "platform": "ios",
+  "completeCoverageVerified": false,
+  "bundleFile": "ThumbleThirdPartyNotices.txt",
+  "bundleSHA256": "9cd6ab4d31d89adafd93f46060c4252fb7a367adcc66cc3cdfd40dcb8881eb9f",
+  "bundleByteCount": 29878,
+  "lockFile": "bun.lock",
+  "lockSHA256": "b01544260ea9d76a777b7d7fb0b0544cc4154e621cb028f3b8a2788950c73592",
+  "auditProvenance": {
+    "sourceCommit": "9c0d42ef4f147a16421a449e35afb9d641b164ae",
+    "artifact": "Thumble-unsigned-with-map.xcarchive",
+    "sourceMapSHA256": "e7d906e352db412d463d63cc5a2447fce8704e801d8098b9b00b45ae914ad35a",
+    "hermesBundleSHA256": "ba65ac439f9c5e34cd52fecd832b3bac744d881f187e1f83d1374c5ab9641c8c",
+    "sourceEntryCount": 1142,
+    "referencedSourceEntryCount": 1142,
+    "originalArchiveCoverageClaimed": false,
+    "runtimeExecutionCoverageClaimed": false
+  },
+  "javascriptComponents": [
+    {
+      "name": "@expo/cli",
+      "version": "58.1.14",
+      "packageRoot": "node_modules/.bun/@expo+cli@58.1.14+2e25e4b3db2daf9e/node_modules/@expo/cli",
+      "packageJsonSHA256": "85a1d6cddeec3b258657a86e690d8bb93d4e3a6917e639ac5abce423596ab7c7",
+      "status": "local_texts_found",
+      "sourceEntryCount": 1,
+      "sourcePathsSHA256": "5f0a95bc81f089f63ba529d967cacd93649e5404a69da902c78df7cf8139035b",
+      "textSHA256s": [
+        "fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4",
+        "377f1a9763b9dd9dad730c1534fe2f215496eda131553a16f3f9251f559e3a59"
+      ]
+    },
+    {
+      "name": "@expo/log-box-utils",
+      "version": "58.0.2",
+      "packageRoot": "node_modules/.bun/@expo+log-box-utils@58.0.2/node_modules/@expo/log-box-utils",
+      "packageJsonSHA256": "a30b58aaf90c3ec9210dba94ce4e619978fbef799ab9a4d3b8770c755cd94ee9",
+      "status": "local_texts_found",
+      "sourceEntryCount": 4,
+      "sourcePathsSHA256": "a086ba229ae5432a07b4d33b11bbcbe3d817720b68150dea318816bbde06180b",
+      "textSHA256s": [
+        "fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4"
+      ]
+    },
+    {
+      "name": "@expo/metro",
+      "version": "58.0.0",
+      "packageRoot": "node_modules/.bun/@expo+metro@58.0.0+759ce506b1ed1a42/node_modules/@expo/metro",
+      "packageJsonSHA256": "2892f82b55f62c61a046cd85e98747b4810207e31a505ba152b9679b8e6fca21",
+      "status": "local_texts_found",
+      "sourceEntryCount": 1,
+      "sourcePathsSHA256": "4b0e6d361b3862d48fa7190b7ddec1ea4061a8f54e8df8a0816c435a03de5698",
+      "textSHA256s": [
+        "0c0fc06d178272faaf09281aff0cb014d52c56fb0d9516b964808d4cccb65c93"
+      ]
+    },
+    {
+      "name": "@expo/metro-runtime",
+      "version": "58.0.15",
+      "packageRoot": "node_modules/.bun/@expo+metro-runtime@58.0.15+2af591cc3124777f/node_modules/@expo/metro-runtime",
+      "packageJsonSHA256": "ec7ccfabf66bd582fb8fbc5fd1a07f57b463c7c706643ff9fb87ae03bafa847f",
+      "status": "local_texts_found",
+      "sourceEntryCount": 4,
+      "sourcePathsSHA256": "37a3a79fd650ad83e147df232cb9db164f772a59c25a2ab3bd89304aee8335fc",
+      "textSHA256s": [
+        "fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4"
+      ]
+    },
+    {
+      "name": "@radix-ui/react-compose-refs",
+      "version": "1.1.5",
+      "packageRoot": "node_modules/.bun/@radix-ui+react-compose-refs@1.1.5+0ac650c021fb1b59/node_modules/@radix-ui/react-compose-refs",
+      "packageJsonSHA256": "9422da6cb4b0004d394d5f9f521ebd5ede2018400c857abf222dfe2061cfed0e",
+      "status": "local_texts_found",
+      "sourceEntryCount": 1,
+      "sourcePathsSHA256": "30162cf44b8b2c58ada64f012c29d36c7a34be58997407fe993021224ca34c26",
+      "textSHA256s": [
+        "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138"
+      ]
+    },
+    {
+      "name": "@radix-ui/react-slot",
+      "version": "1.5.0",
+      "packageRoot": "node_modules/.bun/@radix-ui+react-slot@1.5.0+0ac650c021fb1b59/node_modules/@radix-ui/react-slot",
+      "packageJsonSHA256": "904847542040d15d407ef35e21e782c0082453b504ac25c209c18164042f5dc6",
+      "status": "local_texts_found",
+      "sourceEntryCount": 1,
+      "sourcePathsSHA256": "87344a7d39828a297dc6deaa842d23acf1822c8a9a95bc005074726094729a0f",
+      "textSHA256s": [
+        "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138"
+      ]
+    },
+    {
+      "name": "@react-native-masked-view/masked-view",
+      "version": "0.3.2",
+      "packageRoot": "node_modules/.bun/@react-native-masked-view+masked-view@0.3.2+1ce689159cd6796e/node_modules/@react-native-masked-view/masked-view",
+      "packageJsonSHA256": "0ba91122588091da58e02f3b58ed093ba7710e0166f7e829a4db403cac8539cd",
+      "status": "local_texts_found",
+      "sourceEntryCount": 2,
+      "sourcePathsSHA256": "7b82985fe4395d5d8970aebbe9f81dfd2765767272414294ddf037a2184ebfa8",
+      "textSHA256s": [
+        "22a28f29cff8f5ecf9f463301d9c03b8245a2952ebae0bcab633fd654c0792fb"
+      ]
+    },
+    {
+      "name": "@react-native/asset-utils",
+      "version": "0.88.0",
+      "packageRoot": "node_modules/.bun/@react-native+asset-utils@0.88.0/node_modules/@react-native/asset-utils",
+      "packageJsonSHA256": "9c80edf4429b6ac8dd7b4f52adea1017c148ba6cfafc0d9b071e035303d3c2db",
+      "status": "exact_release_upstream_text_found",
+      "sourceEntryCount": 2,
+      "sourcePathsSHA256": "6f88b0c26536e9e36ab4b345d7ed29d5dc21fc4ec001b3dc7cc884f9ebd53ed8",
+      "textSHA256s": [
+        "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93"
+      ]
+    },
+    {
+      "name": "@react-native/js-polyfills",
+      "version": "0.88.0",
+      "packageRoot": "node_modules/.bun/@react-native+js-polyfills@0.88.0/node_modules/@react-native/js-polyfills",
+      "packageJsonSHA256": "b6d6fcb90f91450121c21139428dc77bc423a20326417b02d58a04e89331fd9f",
+      "status": "exact_release_upstream_text_found",
+      "sourceEntryCount": 2,
+      "sourcePathsSHA256": "4cdb289beaf259a72bc4f8ecdc71750bd0694ddb3f8dd5bad8af9828f5c06a0c",
+      "textSHA256s": [
+        "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93"
+      ]
+    },
+    {
+      "name": "@react-native/normalize-colors",
+      "version": "0.88.0",
+      "packageRoot": "node_modules/.bun/@react-native+normalize-colors@0.88.0/node_modules/@react-native/normalize-colors",
+      "packageJsonSHA256": "29dc36d61f1d661df3de6614c402ec20cfc085f5735ca1577ad8cb90ea5fad78",
+      "status": "exact_release_upstream_text_found",
+      "sourceEntryCount": 1,
+      "sourcePathsSHA256": "9ced5ae595f1a4c0e7f8be62a7999fee62df309d402f61619ec8962d1b1a9d48",
+      "textSHA256s": [
+        "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93"
+      ]
+    },
+    {
+      "name": "@react-native/virtualized-lists",
+      "version": "0.88.0",
+      "packageRoot": "node_modules/.bun/@react-native+virtualized-lists@0.88.0+c4fe011fe8ab1ca0/node_modules/@react-native/virtualized-lists",
+      "packageJsonSHA256": "b64e257879ecd206fadf845d38acc3b6f5931f921a68eed3b2ade937b6741c82",
+      "status": "exact_release_upstream_text_found",
+      "sourceEntryCount": 15,
+      "sourcePathsSHA256": "56e49de3515c81092e2cf5aca56f3ce9524a9dc14e6df87e2e1029f5b47eae20",
+      "textSHA256s": [
+        "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93"
+      ]
+    },
+    {
+      "name": "@ungap/structured-clone",
+      "version": "1.4.0",
+      "packageRoot": "node_modules/.bun/@ungap+structured-clone@1.4.0/node_modules/@ungap/structured-clone",
+      "packageJsonSHA256": "8f931c21e4c0b37c35d5ffef35e0bc057f3cbd0224b026b21a5bdb82a98cbd8f",
+      "status": "local_texts_found",
+      "sourceEntryCount": 4,
+      "sourcePathsSHA256": "a15ee5e1c8bc90227a9f7630ded2711ecb11f4740f435a0e445ebb92c802c58c",
+      "textSHA256s": [
+        "dc6d4961d8b6ee747231582ae9c53ce1d66bf76bc9f5a28f554c0e97210953bf"
+      ]
+    },
+    {
+      "name": "ansi-styles",
+      "version": "5.2.0",
+      "packageRoot": "node_modules/.bun/ansi-styles@5.2.0/node_modules/ansi-styles",
+      "packageJsonSHA256": "c4b717d4808738c3a8270e8485df6cdbf0cd4f7abb523784dca883b94c212e79",
+      "status": "local_texts_found",
+      "sourceEntryCount": 1,
+      "sourcePathsSHA256": "b3a072c452642de1b7dbcba3f6b91b756deedf725114034642543b40a5164554",
+      "textSHA256s": [
+        "48da2f39e100d4085767e94966b43f4fa95ff6a0698fba57ed460914e35f94a0"
+      ]
+    },
+    {
+      "name": "base64-js",
+      "version": "1.5.1",
+      "packageRoot": "node_modules/.bun/base64-js@1.5.1/node_modules/base64-js",
+      "packageJsonSHA256": "9758f3ab8c45e07bb9a368e32f9a8b3729623bbf47cbbb205b32d674ab2a91f0",
+      "status": "local_texts_found",
+      "sourceEntryCount": 1,
+      "sourcePathsSHA256": "538b59fe94abbad2f8cfc4e95d85422bda41f43e6eb05db70a3b0fadca1b446c",
+      "textSHA256s": [
+        "5b37224c080cdcc97c871ada971c224e9926370fe74f11b539aa1cf9f3b1aca1"
+      ]
+    },
+    {
+      "name": "expo",
+      "version": "58.0.17",
+      "packageRoot": "node_modules/.bun/expo@58.0.17+1e4d4fb561c61f96/node_modules/expo",
+      "packageJsonSHA256": "7424d7f47dbdadf57f33120db7be1e1340c279600d475de4cf4d0d6b0c0b256d",
+      "status": "local_texts_found",
+      "sourceEntryCount": 46,
+      "sourcePathsSHA256": "c28ed5832ec74a5bca96aaecb59d4fff7eb3cfa4bcb9483b92d5e344d4be05fd",
+      "textSHA256s": [
+        "fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4"
+      ]
+    },
+    {
+      "name": "expo-asset",
+      "version": "58.0.18",
+      "packageRoot": "node_modules/.bun/expo-asset@58.0.18+e1422b306df66f51/node_modules/expo-asset",
+      "packageJsonSHA256": "1d3d0bd22c3316779e99253e10bc8c11f68b4d17b8f7a2a4aa9d50939c2379c2",
+      "status": "local_texts_found",
+      "sourceEntryCount": 12,
+      "sourcePathsSHA256": "c8cd98be6a14b9925b363edb2f2a74456bd42a59507fc75b36ccf8257b5b81f9",
+      "textSHA256s": [
+        "fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4"
+      ]
+    },
+    {
+      "name": "expo-constants",
+      "version": "58.0.13",
+      "packageRoot": "node_modules/.bun/expo-constants@58.0.13+e1422b306df66f51/node_modules/expo-constants",
+      "packageJsonSHA256": "b1a13b0a908b2403d09bfe59921a19727002f2e265dd053384943f84e3ae8649",
+      "status": "local_texts_found",
+      "sourceEntryCount": 3,
+      "sourcePathsSHA256": "7920ac9b5ca4d58e1c98613030452cb5cf93de23505a0b28eb87762772037359",
+      "textSHA256s": [
+        "fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4"
+      ]
+    },
+    {
+      "name": "expo-glass-effect",
+      "version": "58.0.4",
+      "packageRoot": "node_modules/.bun/expo-glass-effect@58.0.4+f0002801ccf41f74/node_modules/expo-glass-effect",
+      "packageJsonSHA256": "2208349a31bbf3140edcafe80c0ee1db7293e458b3a8b9be56e1a1c45cc425af",
+      "status": "local_texts_found",
+      "sourceEntryCount": 5,
+      "sourcePathsSHA256": "3dbe1be78d74b356d0c0af9841bda38271192cb71c5881ad726af2994050754e",
+      "textSHA256s": [
+        "fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4"
+      ]
+    },
+    {
+      "name": "expo-linking",
+      "version": "58.0.14",
+      "packageRoot": "node_modules/.bun/expo-linking@58.0.14+e1422b306df66f51/node_modules/expo-linking",
+      "packageJsonSHA256": "050bbe4058bc331e4badba4320ec7d8aa22b19b573a1bb45b7e3bb4eb08d40ef",
+      "status": "local_texts_found",
+      "sourceEntryCount": 7,
+      "sourcePathsSHA256": "a71965cf01aa201ce8846aa907b8beed3852553693fb049133d4e215e9a0e850",
+      "textSHA256s": [
+        "fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4"
+      ]
+    },
+    {
+      "name": "expo-modules-core",
+      "version": "58.0.24",
+      "packageRoot": "node_modules/.bun/expo-modules-core@58.0.24+c1c56a507c186acf/node_modules/expo-modules-core",
+      "packageJsonSHA256": "f1567c8587431e3e419ac2e41d5df76e37ba9579183af793b33058826e572b32",
+      "status": "local_texts_found",
+      "sourceEntryCount": 28,
+      "sourcePathsSHA256": "4c85e929aaf160a52a62b38a299d9374aaeb63872a0a1053e95c42fb43a9d8ff",
+      "textSHA256s": [
+        "fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4"
+      ]
+    },
+    {
+      "name": "expo-router",
+      "version": "58.0.25",
+      "packageRoot": "node_modules/.bun/expo-router@58.0.25+38b7a22c7476f183/node_modules/expo-router",
+      "packageJsonSHA256": "8f4b352bc61f2ec74c95ee73abc9f5c96e78ece0c96a4b9aa8b0a7ab5bc7cca3",
+      "status": "exact_release_attestation_content_match_text_found",
+      "sourceEntryCount": 384,
+      "sourcePathsSHA256": "6835483fdadd37d82feb02ee30711f96e35085fd40ac89367014820966739902",
+      "textSHA256s": [
+        "fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4"
+      ]
+    },
+    {
+      "name": "expo-status-bar",
+      "version": "58.0.4",
+      "packageRoot": "node_modules/.bun/expo-status-bar@58.0.4+1e4d4fb561c61f96/node_modules/expo-status-bar",
+      "packageJsonSHA256": "8d18508afaea5f3de3dc99aa837fd4acc385b176506812200cebc2ba9fa7d133",
+      "status": "local_texts_found",
+      "sourceEntryCount": 3,
+      "sourcePathsSHA256": "74a81dd6ee0b5f4f43b71f0cc8d013f0e98969e430c32c7f2fbf85ea48b48ddb",
+      "textSHA256s": [
+        "fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4"
+      ]
+    },
+    {
+      "name": "flow-enums-runtime",
+      "version": "0.0.6",
+      "packageRoot": "node_modules/.bun/flow-enums-runtime@0.0.6/node_modules/flow-enums-runtime",
+      "packageJsonSHA256": "a9d83154145ed1bf98a1bb5b52ec7cac031537f6e8e47e726aa0b6f16a551c8b",
+      "status": "local_texts_found",
+      "sourceEntryCount": 1,
+      "sourcePathsSHA256": "883b73333370cf4d2c277f0abe999889ecb4cee7fd0d6ba79cc03bdd61af2856",
+      "textSHA256s": [
+        "52412d7bc7ce4157ea628bbaacb8829e0a9cb3c58f57f99176126bc8cf2bfc85"
+      ]
+    },
+    {
+      "name": "invariant",
+      "version": "2.2.4",
+      "packageRoot": "node_modules/.bun/invariant@2.2.4/node_modules/invariant",
+      "packageJsonSHA256": "ef0c08d9f91029e247bb570a04903f3a9bd646c1f2128d29e69ee171794cd2a3",
+      "status": "local_texts_found",
+      "sourceEntryCount": 1,
+      "sourcePathsSHA256": "871b2de94d4d3d8506cc9c5b2314c130f5cabc7fffd2d3560d1c0333ad623b72",
+      "textSHA256s": [
+        "f657f99d3fb9647db92628e96007aabb46e5f04f33e49999075aab8e250ca7ce"
+      ]
+    },
+    {
+      "name": "memoize-one",
+      "version": "5.2.1",
+      "packageRoot": "node_modules/.bun/memoize-one@5.2.1/node_modules/memoize-one",
+      "packageJsonSHA256": "42f75cce8e78478ae86f07c881c8f52073c2698aaf17b2fdae916bea56fc3925",
+      "status": "local_texts_found",
+      "sourceEntryCount": 1,
+      "sourcePathsSHA256": "6093255cdb8e78943f13c8f1fd685b173e9d7fdd4303cf78fc50bb5a623b38e6",
+      "textSHA256s": [
+        "b1c501095de70182748cb8e8d97ac5577701a4ef3b755ba30d59fd87b24bdb0f"
+      ]
+    },
+    {
+      "name": "metro-runtime",
+      "version": "0.87.1",
+      "packageRoot": "node_modules/.bun/metro-runtime@0.87.1/node_modules/metro-runtime",
+      "packageJsonSHA256": "26eed1885b7589f22eb2073c71a4bc7925db90fe60426e78842aa99c614252b0",
+      "status": "exact_release_upstream_text_found",
+      "sourceEntryCount": 2,
+      "sourcePathsSHA256": "e6cc82605d220cc7f381eb04b7c0bc27d35e34e89c50d9ded04ffe30d3f2f306",
+      "textSHA256s": [
+        "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93"
+      ]
+    },
+    {
+      "name": "nanoid",
+      "version": "3.3.20",
+      "packageRoot": "node_modules/.bun/nanoid@3.3.20/node_modules/nanoid",
+      "packageJsonSHA256": "e2a77185ded1c006171e4e2f8b316d0e3b4c51a135a190851cfc888ea428f6bf",
+      "status": "local_texts_found",
+      "sourceEntryCount": 1,
+      "sourcePathsSHA256": "0bb87aa395525aeb1293c49b51921695ad8dde39c901f1f377c4c06fc3b10c07",
+      "textSHA256s": [
+        "da4db1480d9beea3483a2eda5c53b22238d0827d57da162b48f122e04d2d9987"
+      ]
+    },
+    {
+      "name": "nullthrows",
+      "version": "1.1.1",
+      "packageRoot": "node_modules/.bun/nullthrows@1.1.1/node_modules/nullthrows",
+      "packageJsonSHA256": "e1baeb08c11213a4434f0e0001c4358c9b42f4efd1fc817d0b2185568b9f12a0",
+      "status": "local_texts_found",
+      "sourceEntryCount": 1,
+      "sourcePathsSHA256": "b04f692378ad3b739657f4aefa7d70a97cfff3e6c53e7564c33f41b2585daa93",
+      "textSHA256s": [
+        "dd5f97aa25431e25fea6654f12f4ce167dc19b3148ab515cc271aa8efe6eb0be"
+      ]
+    },
+    {
+      "name": "pretty-format",
+      "version": "29.7.0",
+      "packageRoot": "node_modules/.bun/pretty-format@29.7.0/node_modules/pretty-format",
+      "packageJsonSHA256": "05dc4d4a3b4ad3659b9909f45be39b7ada56dba05c30327770fefdfd0f1f8316",
+      "status": "local_texts_found",
+      "sourceEntryCount": 10,
+      "sourcePathsSHA256": "21695ed7a571e9a2e83509e87b2300e0b52a4f815785952e4166ede49206c09d",
+      "textSHA256s": [
+        "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93"
+      ]
+    },
+    {
+      "name": "promise",
+      "version": "8.3.0",
+      "packageRoot": "node_modules/.bun/promise@8.3.0/node_modules/promise",
+      "packageJsonSHA256": "28417b7401d8242ac8889384d1028326012e88ab131b0c8cda17b8b3e0aeb4b0",
+      "status": "local_texts_found",
+      "sourceEntryCount": 3,
+      "sourcePathsSHA256": "683d58b57c1e46f2d5f4f9c3585d61f27153d1745117f6e5f86c5a12abf3ca6a",
+      "textSHA256s": [
+        "5e733eb92ed0c571da3f27c5da203e0a9f975b4f96e7692c9fa3660ca54820ec"
+      ]
+    },
+    {
+      "name": "react",
+      "version": "19.3.0",
+      "packageRoot": "node_modules/.bun/react@19.3.0/node_modules/react",
+      "packageJsonSHA256": "6e003e4e9ed25afa7fdd55613f8aa877cefa9b359d9c13f81ee704030248e24e",
+      "status": "local_texts_found",
+      "sourceEntryCount": 4,
+      "sourcePathsSHA256": "f3a11b885d7c9e8347189b68213501b43534a91ff21da44803dedc367c2c97f6",
+      "textSHA256s": [
+        "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93"
+      ]
+    },
+    {
+      "name": "react-fast-compare",
+      "version": "3.2.2",
+      "packageRoot": "node_modules/.bun/react-fast-compare@3.2.2/node_modules/react-fast-compare",
+      "packageJsonSHA256": "00f283f5487240c6a8aa07ec0e21269c4cf810316a8d4ff95d6cadd9d076c079",
+      "status": "local_texts_found",
+      "sourceEntryCount": 1,
+      "sourcePathsSHA256": "1002142ae629dde603dfd2f0f6caa4de2ebeb6bfca8e1ca3e72767bed4d31367",
+      "textSHA256s": [
+        "1e187eec147d04bcbb3b7aef9f3b0ea82228961fa7d390d3efb9e57751dbe0cb"
+      ]
+    },
+    {
+      "name": "react-freeze",
+      "version": "1.0.4",
+      "packageRoot": "node_modules/.bun/react-freeze@1.0.4+62547eec5a2188e3/node_modules/react-freeze",
+      "packageJsonSHA256": "334a0487ac979ace7a94987714c5ad768b678243d37fe3b6f356d5bf2b5f9f34",
+      "status": "local_texts_found",
+      "sourceEntryCount": 1,
+      "sourcePathsSHA256": "f88516b72cc0f5ebcb87642aef6d2eb60391982615c70d3e90e8de7157d8c2ec",
+      "textSHA256s": [
+        "19ba4296d3501ae3a71920bc9872a5c50ce94105bbf4c2a21d5172658cedd6ae"
+      ]
+    },
+    {
+      "name": "react-is",
+      "version": "18.3.1",
+      "packageRoot": "node_modules/.bun/react-is@18.3.1/node_modules/react-is",
+      "packageJsonSHA256": "8d8b7b3d6df8fa36fcd2fbee3561faea9bfa488c2318dabef4cfeaf275aee7f3",
+      "status": "local_texts_found",
+      "sourceEntryCount": 2,
+      "sourcePathsSHA256": "017889787a891fdfa6c1a60723c498b83a1e304b7f9c85457691fc524892c81e",
+      "textSHA256s": [
+        "52412d7bc7ce4157ea628bbaacb8829e0a9cb3c58f57f99176126bc8cf2bfc85"
+      ]
+    },
+    {
+      "name": "react-native",
+      "version": "0.88.0",
+      "packageRoot": "node_modules/.bun/react-native@0.88.0+1ce689159cd6796e/node_modules/react-native",
+      "packageJsonSHA256": "658a7a2efb7f02bc5ff1aa3d6a4f95f832d68a6b71c444ac5e14c16b86d63f71",
+      "status": "local_texts_found",
+      "sourceEntryCount": 463,
+      "sourcePathsSHA256": "e2f5f115d8e3f1f8bfe7a9b6fa91c59b75a21e15f06f740395fd97db0fa8f52e",
+      "textSHA256s": [
+        "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93"
+      ]
+    },
+    {
+      "name": "react-native-safe-area-context",
+      "version": "5.10.1",
+      "packageRoot": "node_modules/.bun/react-native-safe-area-context@5.10.1+1ce689159cd6796e/node_modules/react-native-safe-area-context",
+      "packageJsonSHA256": "2ac8132723f5f6fe0ea24ab902724583908ca1f63837def85fa3c3ad19143ac6",
+      "status": "local_texts_found",
+      "sourceEntryCount": 8,
+      "sourcePathsSHA256": "3ef04fb543fafb861977a16ffe987a5346572079e5b9d9a8ced1b46b4c98b72b",
+      "textSHA256s": [
+        "f5c7a4d527258e11fdfe3d84eb73cd14fe6d64224ef051e59f6ee21fe378800c"
+      ]
+    },
+    {
+      "name": "react-native-screens",
+      "version": "4.30.0",
+      "packageRoot": "node_modules/.bun/react-native-screens@4.30.0+1ce689159cd6796e/node_modules/react-native-screens",
+      "packageJsonSHA256": "21e2c5a31e8d4e52473efa2f1d7a4d94780411d5be00f3d96ba8993ad7ae2a25",
+      "status": "local_texts_found",
+      "sourceEntryCount": 87,
+      "sourcePathsSHA256": "8eba60c1d9944d9b0f35b0fd36ce37f2f6a2b7f6114ae66ab098b507ff767d28",
+      "textSHA256s": [
+        "95b52e497653b738fd50e4bd3a8197dc41593c63129acb4f8069dbf49530ef82"
+      ]
+    },
+    {
+      "name": "regenerator-runtime",
+      "version": "0.13.11",
+      "packageRoot": "node_modules/.bun/regenerator-runtime@0.13.11/node_modules/regenerator-runtime",
+      "packageJsonSHA256": "438ba14ad7859f5e16914e174e425afa8f5d9c21cf5ab208699a28454c4618ee",
+      "status": "local_texts_found",
+      "sourceEntryCount": 1,
+      "sourcePathsSHA256": "2b8089a0558c5ec5e42c0d488813206efa7d2207bf39d01f8fae7465f3de3e98",
+      "textSHA256s": [
+        "51887a3d47051ac2fce1210562e5b9fe0830a8a8fabeb272c2d586eeb18a05fd"
+      ]
+    },
+    {
+      "name": "scheduler",
+      "version": "0.28.0",
+      "packageRoot": "node_modules/.bun/scheduler@0.28.0/node_modules/scheduler",
+      "packageJsonSHA256": "06290718f22bcd93f29eaa1ac8d2ec9a7592ba4fec12bf1230e7cdd9a871b324",
+      "status": "local_texts_found",
+      "sourceEntryCount": 2,
+      "sourcePathsSHA256": "e336270e653c1aec3420d46241322a17b627f69a3069f36157e0ba0ca2b68808",
+      "textSHA256s": [
+        "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93"
+      ]
+    },
+    {
+      "name": "stacktrace-parser",
+      "version": "0.1.11",
+      "packageRoot": "node_modules/.bun/stacktrace-parser@0.1.11/node_modules/stacktrace-parser",
+      "packageJsonSHA256": "e074abdd6fd9da17db51b0eacc14c7a1b7f4a069e9786e15e8069fedb833b430",
+      "status": "local_texts_found",
+      "sourceEntryCount": 1,
+      "sourcePathsSHA256": "5bf5023c12aea5f37fff815488a06b7326aea60ee3775c6d244dc6352ed4524f",
+      "textSHA256s": [
+        "e1898814043cb5500483d9c8517edda824b352f696d35e5043fcfb537c221531"
+      ]
+    },
+    {
+      "name": "standard-navigation",
+      "version": "0.0.5",
+      "packageRoot": "node_modules/.bun/standard-navigation@0.0.5/node_modules/standard-navigation",
+      "packageJsonSHA256": "f55d0f57acdd9ce93c954453abd3a09abd4497e0dcdc141bed945b9e6fbb1760",
+      "status": "missing_local_text",
+      "sourceEntryCount": 1,
+      "sourcePathsSHA256": "accf7f2666ccd2f823f0411f0e68a38b499a6e4e5e1d12e80d79a3cf0ef91cb3",
+      "textSHA256s": []
+    },
+    {
+      "name": "warn-once",
+      "version": "0.1.1",
+      "packageRoot": "node_modules/.bun/warn-once@0.1.1/node_modules/warn-once",
+      "packageJsonSHA256": "e73140add64b5f830676ebe96e47fb7797d233fdf1749ecb1f707e0b3c185c4e",
+      "status": "local_texts_found",
+      "sourceEntryCount": 1,
+      "sourcePathsSHA256": "bec9e82d1a45515bf5657ede90969cbffa7cc1c8320ef210048280f2b2f1c7d2",
+      "textSHA256s": [
+        "f9a72660f8b9b8a9ae3773ecaab64f61d1412a4f1c9eb945e455d22608fdc348"
+      ]
+    },
+    {
+      "name": "whatwg-fetch",
+      "version": "3.6.20",
+      "packageRoot": "node_modules/.bun/whatwg-fetch@3.6.20/node_modules/whatwg-fetch",
+      "packageJsonSHA256": "773f705e4e3f83dc4758188878c4db45478df953a10bceeb14e4aafbbe7847bc",
+      "status": "local_texts_found",
+      "sourceEntryCount": 1,
+      "sourcePathsSHA256": "e89e5f9952378867ea6365d08f6812f684351e5183b0085968053b243d8326fe",
+      "textSHA256s": [
+        "c887d1c97797646dbb216925ab44a93c6b3e7f03bbe6ef6e0f92b8b8ade63014"
+      ]
+    },
+    {
+      "name": "whatwg-url-minimum",
+      "version": "0.2.0",
+      "packageRoot": "node_modules/.bun/whatwg-url-minimum@0.2.0/node_modules/whatwg-url-minimum",
+      "packageJsonSHA256": "bf04cfa304e4e421b426525ba7511c29a521048728a90c887072c9cb06b6b1a0",
+      "status": "local_texts_found",
+      "sourceEntryCount": 1,
+      "sourcePathsSHA256": "1e8f673412fdd704c588c39d2aaa436187d5f2123673cc5266c7e37fca63bb03",
+      "textSHA256s": [
+        "c2ecf83f830f226f662c99d003162002c78edd8b59f1105621bdcc2c44043a7d"
+      ]
+    }
+  ],
+  "workspaceAndVirtualSourceEntryCount": 20,
+  "workspaceAttribution": "Application and @thumble workspace sources are internal; not third-party license entries. One generated Metro polyfill and one generated app context are separately classified, not npm packages.",
+  "shippedFrameworks": [
+    {
+      "name": "ExpoFileSystem.framework",
+      "bundleId": "expofilesystem.ExpoFileSystem",
+      "version": "1.0",
+      "executableSHA256": "7848066e6f8ee1f7abebdefd98530d4e4f04b07f0c7da9c3dcd6fa18b15fafac"
+    },
+    {
+      "name": "ExpoFont.framework",
+      "bundleId": "expofont.ExpoFont",
+      "version": "1.0",
+      "executableSHA256": "d6076bc4b97b1104e4e920c75c6196c30d87636d29dda498eb8c52bae67fd061"
+    },
+    {
+      "name": "ExpoModulesCore.framework",
+      "bundleId": "expomodulescore.ExpoModulesCore",
+      "version": "1.0",
+      "executableSHA256": "3069c752cccdd6bd8b99f5600f78405516dde757422af8c10bf60d518783c498"
+    },
+    {
+      "name": "ExpoModulesJSI.framework",
+      "bundleId": "apple.ExpoModulesJSI",
+      "version": "1.0",
+      "executableSHA256": "1dacf476bce9522878c4f8564b70a4bcbd1a9d9f6b4ab089ed6ea8891c687553"
+    },
+    {
+      "name": "ExpoModulesWorklets.framework",
+      "bundleId": "expomodulesworklets.ExpoModulesWorklets",
+      "version": "1.0",
+      "executableSHA256": "57ea193df22805396026fbfa7ac45427bf508f707aa3a8247a26bf60986f82bf"
+    },
+    {
+      "name": "React.framework",
+      "bundleId": "react-native.React",
+      "version": "1.0",
+      "executableSHA256": "dc16aee474e8860bf01d5dd7075bb6f2c6a77956cd60f036385be82eafd09af6"
+    },
+    {
+      "name": "ReactNativeDependencies.framework",
+      "bundleId": "third-party.ReactNativeDependencies",
+      "version": "1.0",
+      "executableSHA256": "23f8e28b1ac6edecdc87709c45cd995f9604b1bc69be5875414720be5292742d"
+    },
+    {
+      "name": "hermesvm.framework",
+      "bundleId": "dev.hermesengine.iphoneos",
+      "version": "1.0.0",
+      "executableSHA256": "3286edc49457c19c7cae2bbd30dd0ff883065d59085cc8a0b8388b8235fb4cb7"
+    }
+  ],
+  "podAcknowledgementsSHA256": "c47b65814fe0eebcd50a881178fdae057096f532b2384657575389b90f85f8bc",
+  "selectedTexts": [
+    {
+      "sha256": "0c0fc06d178272faaf09281aff0cb014d52c56fb0d9516b964808d4cccb65c93",
+      "offset": 296,
+      "byteCount": 1147,
+      "origins": [
+        {
+          "kind": "npm-package-file",
+          "component": "@expo/metro",
+          "version": "58.0.0",
+          "path": "node_modules/.bun/@expo+metro@58.0.0+759ce506b1ed1a42/node_modules/@expo/metro/LICENSE",
+          "packageJsonSHA256": "2892f82b55f62c61a046cd85e98747b4810207e31a505ba152b9679b8e6fca21",
+          "publicVersionMetadataURL": "https://registry.npmjs.org/%40expo%2Fmetro/58.0.0"
+        }
+      ]
+    },
+    {
+      "sha256": "0e80a2d229d2fd4fc7e8636142ec5d0ff0bc031f14c15b682e2ac01dfd5b5138",
+      "offset": 1520,
+      "byteCount": 1063,
+      "origins": [
+        {
+          "kind": "npm-package-file",
+          "component": "@radix-ui/react-compose-refs",
+          "version": "1.1.5",
+          "path": "node_modules/.bun/@radix-ui+react-compose-refs@1.1.5+0ac650c021fb1b59/node_modules/@radix-ui/react-compose-refs/LICENSE",
+          "packageJsonSHA256": "9422da6cb4b0004d394d5f9f521ebd5ede2018400c857abf222dfe2061cfed0e",
+          "publicVersionMetadataURL": "https://registry.npmjs.org/%40radix-ui%2Freact-compose-refs/1.1.5"
+        },
+        {
+          "kind": "npm-package-file",
+          "component": "@radix-ui/react-slot",
+          "version": "1.5.0",
+          "path": "node_modules/.bun/@radix-ui+react-slot@1.5.0+0ac650c021fb1b59/node_modules/@radix-ui/react-slot/LICENSE",
+          "packageJsonSHA256": "904847542040d15d407ef35e21e782c0082453b504ac25c209c18164042f5dc6",
+          "publicVersionMetadataURL": "https://registry.npmjs.org/%40radix-ui%2Freact-slot/1.5.0"
+        }
+      ]
+    },
+    {
+      "sha256": "19ba4296d3501ae3a71920bc9872a5c50ce94105bbf4c2a21d5172658cedd6ae",
+      "offset": 2616,
+      "byteCount": 1083,
+      "origins": [
+        {
+          "kind": "npm-package-file",
+          "component": "react-freeze",
+          "version": "1.0.4",
+          "path": "node_modules/.bun/react-freeze@1.0.4+62547eec5a2188e3/node_modules/react-freeze/LICENSE",
+          "packageJsonSHA256": "334a0487ac979ace7a94987714c5ad768b678243d37fe3b6f356d5bf2b5f9f34",
+          "publicVersionMetadataURL": "https://registry.npmjs.org/react-freeze/1.0.4"
+        }
+      ]
+    },
+    {
+      "sha256": "1e187eec147d04bcbb3b7aef9f3b0ea82228961fa7d390d3efb9e57751dbe0cb",
+      "offset": 3738,
+      "byteCount": 1109,
+      "origins": [
+        {
+          "kind": "npm-package-file",
+          "component": "react-fast-compare",
+          "version": "3.2.2",
+          "path": "node_modules/.bun/react-fast-compare@3.2.2/node_modules/react-fast-compare/LICENSE",
+          "packageJsonSHA256": "00f283f5487240c6a8aa07ec0e21269c4cf810316a8d4ff95d6cadd9d076c079",
+          "publicVersionMetadataURL": "https://registry.npmjs.org/react-fast-compare/3.2.2"
+        }
+      ]
+    },
+    {
+      "sha256": "22a28f29cff8f5ecf9f463301d9c03b8245a2952ebae0bcab633fd654c0792fb",
+      "offset": 4926,
+      "byteCount": 1080,
+      "origins": [
+        {
+          "kind": "npm-package-file",
+          "component": "@react-native-masked-view/masked-view",
+          "version": "0.3.2",
+          "path": "node_modules/.bun/@react-native-masked-view+masked-view@0.3.2+1ce689159cd6796e/node_modules/@react-native-masked-view/masked-view/LICENSE",
+          "packageJsonSHA256": "0ba91122588091da58e02f3b58ed093ba7710e0166f7e829a4db403cac8539cd",
+          "publicVersionMetadataURL": "https://registry.npmjs.org/%40react-native-masked-view%2Fmasked-view/0.3.2"
+        },
+        {
+          "kind": "generated-pod-acknowledgement",
+          "component": "RNCMaskedView",
+          "version": "0.3.2",
+          "podspecSHA256": "8ad5856a8fa6c948d5d15cfc3102e79ba9fdc1faaac658f0abfdef039bd94fea",
+          "acknowledgementsSHA256": "c47b65814fe0eebcd50a881178fdae057096f532b2384657575389b90f85f8bc"
+        }
+      ]
+    },
+    {
+      "sha256": "377f1a9763b9dd9dad730c1534fe2f215496eda131553a16f3f9251f559e3a59",
+      "offset": 6038,
+      "byteCount": 1076,
+      "origins": [
+        {
+          "kind": "npm-package-file",
+          "component": "@expo/cli",
+          "version": "58.1.14",
+          "path": "node_modules/.bun/@expo+cli@58.1.14+2e25e4b3db2daf9e/node_modules/@expo/cli/LICENSE-third-party",
+          "packageJsonSHA256": "85a1d6cddeec3b258657a86e690d8bb93d4e3a6917e639ac5abce423596ab7c7",
+          "publicVersionMetadataURL": "https://registry.npmjs.org/%40expo%2Fcli/58.1.14"
+        }
+      ]
+    },
+    {
+      "sha256": "48da2f39e100d4085767e94966b43f4fa95ff6a0698fba57ed460914e35f94a0",
+      "offset": 7146,
+      "byteCount": 1109,
+      "origins": [
+        {
+          "kind": "npm-package-file",
+          "component": "ansi-styles",
+          "version": "5.2.0",
+          "path": "node_modules/.bun/ansi-styles@5.2.0/node_modules/ansi-styles/license",
+          "packageJsonSHA256": "c4b717d4808738c3a8270e8485df6cdbf0cd4f7abb523784dca883b94c212e79",
+          "publicVersionMetadataURL": "https://registry.npmjs.org/ansi-styles/5.2.0"
+        }
+      ]
+    },
+    {
+      "sha256": "51887a3d47051ac2fce1210562e5b9fe0830a8a8fabeb272c2d586eeb18a05fd",
+      "offset": 8297,
+      "byteCount": 1080,
+      "origins": [
+        {
+          "kind": "npm-package-file",
+          "component": "regenerator-runtime",
+          "version": "0.13.11",
+          "path": "node_modules/.bun/regenerator-runtime@0.13.11/node_modules/regenerator-runtime/LICENSE",
+          "packageJsonSHA256": "438ba14ad7859f5e16914e174e425afa8f5d9c21cf5ab208699a28454c4618ee",
+          "publicVersionMetadataURL": "https://registry.npmjs.org/regenerator-runtime/0.13.11"
+        }
+      ]
+    },
+    {
+      "sha256": "52412d7bc7ce4157ea628bbaacb8829e0a9cb3c58f57f99176126bc8cf2bfc85",
+      "offset": 9433,
+      "byteCount": 1086,
+      "origins": [
+        {
+          "kind": "npm-package-file",
+          "component": "flow-enums-runtime",
+          "version": "0.0.6",
+          "path": "node_modules/.bun/flow-enums-runtime@0.0.6/node_modules/flow-enums-runtime/LICENSE",
+          "packageJsonSHA256": "a9d83154145ed1bf98a1bb5b52ec7cac031537f6e8e47e726aa0b6f16a551c8b",
+          "publicVersionMetadataURL": "https://registry.npmjs.org/flow-enums-runtime/0.0.6"
+        },
+        {
+          "kind": "npm-package-file",
+          "component": "react-is",
+          "version": "18.3.1",
+          "path": "node_modules/.bun/react-is@18.3.1/node_modules/react-is/LICENSE",
+          "packageJsonSHA256": "8d8b7b3d6df8fa36fcd2fbee3561faea9bfa488c2318dabef4cfeaf275aee7f3",
+          "publicVersionMetadataURL": "https://registry.npmjs.org/react-is/18.3.1"
+        }
+      ]
+    },
+    {
+      "sha256": "5b37224c080cdcc97c871ada971c224e9926370fe74f11b539aa1cf9f3b1aca1",
+      "offset": 10549,
+      "byteCount": 1081,
+      "origins": [
+        {
+          "kind": "npm-package-file",
+          "component": "base64-js",
+          "version": "1.5.1",
+          "path": "node_modules/.bun/base64-js@1.5.1/node_modules/base64-js/LICENSE",
+          "packageJsonSHA256": "9758f3ab8c45e07bb9a368e32f9a8b3729623bbf47cbbb205b32d674ab2a91f0",
+          "publicVersionMetadataURL": "https://registry.npmjs.org/base64-js/1.5.1"
+        }
+      ]
+    },
+    {
+      "sha256": "5e733eb92ed0c571da3f27c5da203e0a9f975b4f96e7692c9fa3660ca54820ec",
+      "offset": 11658,
+      "byteCount": 1059,
+      "origins": [
+        {
+          "kind": "npm-package-file",
+          "component": "promise",
+          "version": "8.3.0",
+          "path": "node_modules/.bun/promise@8.3.0/node_modules/promise/LICENSE",
+          "packageJsonSHA256": "28417b7401d8242ac8889384d1028326012e88ab131b0c8cda17b8b3e0aeb4b0",
+          "publicVersionMetadataURL": "https://registry.npmjs.org/promise/8.3.0"
+        }
+      ]
+    },
+    {
+      "sha256": "92c22d327a6644efda43527bfa6f136f4382359f40bc288eda0764f67be9c269",
+      "offset": 12749,
+      "byteCount": 1062,
+      "origins": [
+        {
+          "kind": "generated-pod-acknowledgement",
+          "component": "RNWorklets",
+          "version": "0.13.0",
+          "podspecSHA256": "bf1ae62d1c34b973225bfe549a33bfbe59fec3d9502c2aa3c24a0b55af74f604",
+          "acknowledgementsSHA256": "c47b65814fe0eebcd50a881178fdae057096f532b2384657575389b90f85f8bc"
+        }
+      ]
+    },
+    {
+      "sha256": "95b52e497653b738fd50e4bd3a8197dc41593c63129acb4f8069dbf49530ef82",
+      "offset": 13871,
+      "byteCount": 1099,
+      "origins": [
+        {
+          "kind": "npm-package-file",
+          "component": "react-native-screens",
+          "version": "4.30.0",
+          "path": "node_modules/.bun/react-native-screens@4.30.0+1ce689159cd6796e/node_modules/react-native-screens/LICENSE",
+          "packageJsonSHA256": "21e2c5a31e8d4e52473efa2f1d7a4d94780411d5be00f3d96ba8993ad7ae2a25",
+          "publicVersionMetadataURL": "https://registry.npmjs.org/react-native-screens/4.30.0"
+        },
+        {
+          "kind": "generated-pod-acknowledgement",
+          "component": "RNScreens",
+          "version": "4.30.0",
+          "podspecSHA256": "bceac4500aa2d82d6e8d6a81e415e7a3ead072ad27a4da8f2ed0595d6257068b",
+          "acknowledgementsSHA256": "c47b65814fe0eebcd50a881178fdae057096f532b2384657575389b90f85f8bc"
+        }
+      ]
+    },
+    {
+      "sha256": "b1c501095de70182748cb8e8d97ac5577701a4ef3b755ba30d59fd87b24bdb0f",
+      "offset": 15002,
+      "byteCount": 1073,
+      "origins": [
+        {
+          "kind": "npm-package-file",
+          "component": "memoize-one",
+          "version": "5.2.1",
+          "path": "node_modules/.bun/memoize-one@5.2.1/node_modules/memoize-one/LICENSE",
+          "packageJsonSHA256": "42f75cce8e78478ae86f07c881c8f52073c2698aaf17b2fdae916bea56fc3925",
+          "publicVersionMetadataURL": "https://registry.npmjs.org/memoize-one/5.2.1"
+        }
+      ]
+    },
+    {
+      "sha256": "c2ecf83f830f226f662c99d003162002c78edd8b59f1105621bdcc2c44043a7d",
+      "offset": 16114,
+      "byteCount": 1143,
+      "origins": [
+        {
+          "kind": "npm-package-file",
+          "component": "whatwg-url-minimum",
+          "version": "0.2.0",
+          "path": "node_modules/.bun/whatwg-url-minimum@0.2.0/node_modules/whatwg-url-minimum/LICENSE.md",
+          "packageJsonSHA256": "bf04cfa304e4e421b426525ba7511c29a521048728a90c887072c9cb06b6b1a0",
+          "publicVersionMetadataURL": "https://registry.npmjs.org/whatwg-url-minimum/0.2.0"
+        }
+      ]
+    },
+    {
+      "sha256": "c887d1c97797646dbb216925ab44a93c6b3e7f03bbe6ef6e0f92b8b8ade63014",
+      "offset": 17291,
+      "byteCount": 1061,
+      "origins": [
+        {
+          "kind": "npm-package-file",
+          "component": "whatwg-fetch",
+          "version": "3.6.20",
+          "path": "node_modules/.bun/whatwg-fetch@3.6.20/node_modules/whatwg-fetch/LICENSE",
+          "packageJsonSHA256": "773f705e4e3f83dc4758188878c4db45478df953a10bceeb14e4aafbbe7847bc",
+          "publicVersionMetadataURL": "https://registry.npmjs.org/whatwg-fetch/3.6.20"
+        }
+      ]
+    },
+    {
+      "sha256": "da4db1480d9beea3483a2eda5c53b22238d0827d57da162b48f122e04d2d9987",
+      "offset": 18380,
+      "byteCount": 1095,
+      "origins": [
+        {
+          "kind": "npm-package-file",
+          "component": "nanoid",
+          "version": "3.3.20",
+          "path": "node_modules/.bun/nanoid@3.3.20/node_modules/nanoid/LICENSE",
+          "packageJsonSHA256": "e2a77185ded1c006171e4e2f8b316d0e3b4c51a135a190851cfc888ea428f6bf",
+          "publicVersionMetadataURL": "https://registry.npmjs.org/nanoid/3.3.20"
+        }
+      ]
+    },
+    {
+      "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93",
+      "offset": 19776,
+      "byteCount": 1088,
+      "origins": [
+        {
+          "kind": "npm-release-gitHead-upstream-license",
+          "component": "@react-native/asset-utils",
+          "version": "0.88.0",
+          "gitHead": "5c35c82cf7dd322bf94d47501508c3de975c077b",
+          "url": "https://raw.githubusercontent.com/react/react-native/5c35c82cf7dd322bf94d47501508c3de975c077b/LICENSE",
+          "packageJsonSHA256": "9c80edf4429b6ac8dd7b4f52adea1017c148ba6cfafc0d9b071e035303d3c2db"
+        },
+        {
+          "kind": "npm-release-gitHead-upstream-license",
+          "component": "@react-native/js-polyfills",
+          "version": "0.88.0",
+          "gitHead": "5c35c82cf7dd322bf94d47501508c3de975c077b",
+          "url": "https://raw.githubusercontent.com/react/react-native/5c35c82cf7dd322bf94d47501508c3de975c077b/LICENSE",
+          "packageJsonSHA256": "b6d6fcb90f91450121c21139428dc77bc423a20326417b02d58a04e89331fd9f"
+        },
+        {
+          "kind": "npm-release-gitHead-upstream-license",
+          "component": "@react-native/normalize-colors",
+          "version": "0.88.0",
+          "gitHead": "5c35c82cf7dd322bf94d47501508c3de975c077b",
+          "url": "https://raw.githubusercontent.com/react/react-native/5c35c82cf7dd322bf94d47501508c3de975c077b/LICENSE",
+          "packageJsonSHA256": "29dc36d61f1d661df3de6614c402ec20cfc085f5735ca1577ad8cb90ea5fad78"
+        },
+        {
+          "kind": "npm-release-gitHead-upstream-license",
+          "component": "@react-native/virtualized-lists",
+          "version": "0.88.0",
+          "gitHead": "5c35c82cf7dd322bf94d47501508c3de975c077b",
+          "url": "https://raw.githubusercontent.com/react/react-native/5c35c82cf7dd322bf94d47501508c3de975c077b/LICENSE",
+          "packageJsonSHA256": "b64e257879ecd206fadf845d38acc3b6f5931f921a68eed3b2ade937b6741c82"
+        },
+        {
+          "kind": "npm-release-gitHead-upstream-license",
+          "component": "metro-runtime",
+          "version": "0.87.1",
+          "gitHead": "c7597f88c3e5b2a0d5e5915dfed2413aadcdfcce",
+          "url": "https://raw.githubusercontent.com/react/metro/c7597f88c3e5b2a0d5e5915dfed2413aadcdfcce/LICENSE",
+          "packageJsonSHA256": "26eed1885b7589f22eb2073c71a4bc7925db90fe60426e78842aa99c614252b0"
+        },
+        {
+          "kind": "npm-package-file",
+          "component": "pretty-format",
+          "version": "29.7.0",
+          "path": "node_modules/.bun/pretty-format@29.7.0/node_modules/pretty-format/LICENSE",
+          "packageJsonSHA256": "05dc4d4a3b4ad3659b9909f45be39b7ada56dba05c30327770fefdfd0f1f8316",
+          "publicVersionMetadataURL": "https://registry.npmjs.org/pretty-format/29.7.0"
+        },
+        {
+          "kind": "npm-package-file",
+          "component": "react",
+          "version": "19.3.0",
+          "path": "node_modules/.bun/react@19.3.0/node_modules/react/LICENSE",
+          "packageJsonSHA256": "6e003e4e9ed25afa7fdd55613f8aa877cefa9b359d9c13f81ee704030248e24e",
+          "publicVersionMetadataURL": "https://registry.npmjs.org/react/19.3.0"
+        },
+        {
+          "kind": "npm-package-file",
+          "component": "react-native",
+          "version": "0.88.0",
+          "path": "node_modules/.bun/react-native@0.88.0+1ce689159cd6796e/node_modules/react-native/LICENSE",
+          "packageJsonSHA256": "658a7a2efb7f02bc5ff1aa3d6a4f95f832d68a6b71c444ac5e14c16b86d63f71",
+          "publicVersionMetadataURL": "https://registry.npmjs.org/react-native/0.88.0"
+        },
+        {
+          "kind": "npm-package-file",
+          "component": "scheduler",
+          "version": "0.28.0",
+          "path": "node_modules/.bun/scheduler@0.28.0/node_modules/scheduler/LICENSE",
+          "packageJsonSHA256": "06290718f22bcd93f29eaa1ac8d2ec9a7592ba4fec12bf1230e7cdd9a871b324",
+          "publicVersionMetadataURL": "https://registry.npmjs.org/scheduler/0.28.0"
+        },
+        {
+          "kind": "generated-pod-acknowledgement",
+          "component": "React",
+          "version": "0.88.0",
+          "podspecSHA256": "b527d2f0852d9c5286f7c2a0e31d16b40418e31b62efba9efd5b36e83a11685c",
+          "acknowledgementsSHA256": "c47b65814fe0eebcd50a881178fdae057096f532b2384657575389b90f85f8bc"
+        },
+        {
+          "kind": "generated-pod-acknowledgement",
+          "component": "hermes-engine",
+          "version": "260318099.0.4",
+          "podspecSHA256": "b2ff825cbc3695e0d983e4d2838158448a0719b8ee8ca42c1b3ede2fb1cf9942",
+          "acknowledgementsSHA256": "c47b65814fe0eebcd50a881178fdae057096f532b2384657575389b90f85f8bc"
+        }
+      ]
+    },
+    {
+      "sha256": "dc6d4961d8b6ee747231582ae9c53ce1d66bf76bc9f5a28f554c0e97210953bf",
+      "offset": 20908,
+      "byteCount": 765,
+      "origins": [
+        {
+          "kind": "npm-package-file",
+          "component": "@ungap/structured-clone",
+          "version": "1.4.0",
+          "path": "node_modules/.bun/@ungap+structured-clone@1.4.0/node_modules/@ungap/structured-clone/LICENSE",
+          "packageJsonSHA256": "8f931c21e4c0b37c35d5ffef35e0bc057f3cbd0224b026b21a5bdb82a98cbd8f",
+          "publicVersionMetadataURL": "https://registry.npmjs.org/%40ungap%2Fstructured-clone/1.4.0"
+        }
+      ]
+    },
+    {
+      "sha256": "dd5f97aa25431e25fea6654f12f4ce167dc19b3148ab515cc271aa8efe6eb0be",
+      "offset": 21704,
+      "byteCount": 1079,
+      "origins": [
+        {
+          "kind": "npm-package-file",
+          "component": "nullthrows",
+          "version": "1.1.1",
+          "path": "node_modules/.bun/nullthrows@1.1.1/node_modules/nullthrows/LICENSE",
+          "packageJsonSHA256": "e1baeb08c11213a4434f0e0001c4358c9b42f4efd1fc817d0b2185568b9f12a0",
+          "publicVersionMetadataURL": "https://registry.npmjs.org/nullthrows/1.1.1"
+        }
+      ]
+    },
+    {
+      "sha256": "e1898814043cb5500483d9c8517edda824b352f696d35e5043fcfb537c221531",
+      "offset": 22822,
+      "byteCount": 1076,
+      "origins": [
+        {
+          "kind": "npm-package-file",
+          "component": "stacktrace-parser",
+          "version": "0.1.11",
+          "path": "node_modules/.bun/stacktrace-parser@0.1.11/node_modules/stacktrace-parser/LICENSE",
+          "packageJsonSHA256": "e074abdd6fd9da17db51b0eacc14c7a1b7f4a069e9786e15e8069fedb833b430",
+          "publicVersionMetadataURL": "https://registry.npmjs.org/stacktrace-parser/0.1.11"
+        }
+      ]
+    },
+    {
+      "sha256": "f1ae22eddd3a96c3b7b8a494ef03749ae6a1e19574bacc9c195d83c916de09e2",
+      "offset": 23955,
+      "byteCount": 1099,
+      "origins": [
+        {
+          "kind": "generated-pod-acknowledgement",
+          "component": "RNGestureHandler",
+          "version": "3.3.0",
+          "podspecSHA256": "ad84ceb038554c33eff88795e4f6ed0b1fa45f746279e8b963ae1f343ce9dbf3",
+          "acknowledgementsSHA256": "c47b65814fe0eebcd50a881178fdae057096f532b2384657575389b90f85f8bc"
+        },
+        {
+          "kind": "generated-pod-acknowledgement",
+          "component": "RNReanimated",
+          "version": "4.7.1",
+          "podspecSHA256": "ca24659320d13f3cdc23778ddca823371b4f1e875eac15babe975e0e11a20275",
+          "acknowledgementsSHA256": "c47b65814fe0eebcd50a881178fdae057096f532b2384657575389b90f85f8bc"
+        }
+      ]
+    },
+    {
+      "sha256": "f5c7a4d527258e11fdfe3d84eb73cd14fe6d64224ef051e59f6ee21fe378800c",
+      "offset": 25106,
+      "byteCount": 1067,
+      "origins": [
+        {
+          "kind": "npm-package-file",
+          "component": "react-native-safe-area-context",
+          "version": "5.10.1",
+          "path": "node_modules/.bun/react-native-safe-area-context@5.10.1+1ce689159cd6796e/node_modules/react-native-safe-area-context/LICENSE",
+          "packageJsonSHA256": "2ac8132723f5f6fe0ea24ab902724583908ca1f63837def85fa3c3ad19143ac6",
+          "publicVersionMetadataURL": "https://registry.npmjs.org/react-native-safe-area-context/5.10.1"
+        },
+        {
+          "kind": "generated-pod-acknowledgement",
+          "component": "react-native-safe-area-context",
+          "version": "5.10.1",
+          "podspecSHA256": "c1e51c24cc386ca41b0c3d6fdcb8ec80062ed1cb8d6049d2caebeb6002860ca3",
+          "acknowledgementsSHA256": "c47b65814fe0eebcd50a881178fdae057096f532b2384657575389b90f85f8bc"
+        }
+      ]
+    },
+    {
+      "sha256": "f657f99d3fb9647db92628e96007aabb46e5f04f33e49999075aab8e250ca7ce",
+      "offset": 26203,
+      "byteCount": 1080,
+      "origins": [
+        {
+          "kind": "npm-package-file",
+          "component": "invariant",
+          "version": "2.2.4",
+          "path": "node_modules/.bun/invariant@2.2.4/node_modules/invariant/LICENSE",
+          "packageJsonSHA256": "ef0c08d9f91029e247bb570a04903f3a9bd646c1f2128d29e69ee171794cd2a3",
+          "publicVersionMetadataURL": "https://registry.npmjs.org/invariant/2.2.4"
+        }
+      ]
+    },
+    {
+      "sha256": "f9a72660f8b9b8a9ae3773ecaab64f61d1412a4f1c9eb945e455d22608fdc348",
+      "offset": 27313,
+      "byteCount": 1071,
+      "origins": [
+        {
+          "kind": "npm-package-file",
+          "component": "warn-once",
+          "version": "0.1.1",
+          "path": "node_modules/.bun/warn-once@0.1.1/node_modules/warn-once/LICENSE",
+          "packageJsonSHA256": "e73140add64b5f830676ebe96e47fb7797d233fdf1749ecb1f707e0b3c185c4e",
+          "publicVersionMetadataURL": "https://registry.npmjs.org/warn-once/0.1.1"
+        }
+      ]
+    },
+    {
+      "sha256": "fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4",
+      "offset": 28770,
+      "byteCount": 1106,
+      "origins": [
+        {
+          "kind": "npm-package-file",
+          "component": "@expo/cli",
+          "version": "58.1.14",
+          "path": "node_modules/.bun/@expo+cli@58.1.14+2e25e4b3db2daf9e/node_modules/@expo/cli/LICENSE",
+          "packageJsonSHA256": "85a1d6cddeec3b258657a86e690d8bb93d4e3a6917e639ac5abce423596ab7c7",
+          "publicVersionMetadataURL": "https://registry.npmjs.org/%40expo%2Fcli/58.1.14"
+        },
+        {
+          "kind": "npm-package-file",
+          "component": "@expo/log-box-utils",
+          "version": "58.0.2",
+          "path": "node_modules/.bun/@expo+log-box-utils@58.0.2/node_modules/@expo/log-box-utils/LICENSE",
+          "packageJsonSHA256": "a30b58aaf90c3ec9210dba94ce4e619978fbef799ab9a4d3b8770c755cd94ee9",
+          "publicVersionMetadataURL": "https://registry.npmjs.org/%40expo%2Flog-box-utils/58.0.2"
+        },
+        {
+          "kind": "npm-package-file",
+          "component": "@expo/metro-runtime",
+          "version": "58.0.15",
+          "path": "node_modules/.bun/@expo+metro-runtime@58.0.15+2af591cc3124777f/node_modules/@expo/metro-runtime/LICENSE",
+          "packageJsonSHA256": "ec7ccfabf66bd582fb8fbc5fd1a07f57b463c7c706643ff9fb87ae03bafa847f",
+          "publicVersionMetadataURL": "https://registry.npmjs.org/%40expo%2Fmetro-runtime/58.0.15"
+        },
+        {
+          "kind": "npm-package-file",
+          "component": "expo",
+          "version": "58.0.17",
+          "path": "node_modules/.bun/expo@58.0.17+1e4d4fb561c61f96/node_modules/expo/LICENSE",
+          "packageJsonSHA256": "7424d7f47dbdadf57f33120db7be1e1340c279600d475de4cf4d0d6b0c0b256d",
+          "publicVersionMetadataURL": "https://registry.npmjs.org/expo/58.0.17"
+        },
+        {
+          "kind": "npm-package-file",
+          "component": "expo-asset",
+          "version": "58.0.18",
+          "path": "node_modules/.bun/expo-asset@58.0.18+e1422b306df66f51/node_modules/expo-asset/LICENSE",
+          "packageJsonSHA256": "1d3d0bd22c3316779e99253e10bc8c11f68b4d17b8f7a2a4aa9d50939c2379c2",
+          "publicVersionMetadataURL": "https://registry.npmjs.org/expo-asset/58.0.18"
+        },
+        {
+          "kind": "npm-package-file",
+          "component": "expo-constants",
+          "version": "58.0.13",
+          "path": "node_modules/.bun/expo-constants@58.0.13+e1422b306df66f51/node_modules/expo-constants/LICENSE",
+          "packageJsonSHA256": "b1a13b0a908b2403d09bfe59921a19727002f2e265dd053384943f84e3ae8649",
+          "publicVersionMetadataURL": "https://registry.npmjs.org/expo-constants/58.0.13"
+        },
+        {
+          "kind": "npm-package-file",
+          "component": "expo-glass-effect",
+          "version": "58.0.4",
+          "path": "node_modules/.bun/expo-glass-effect@58.0.4+f0002801ccf41f74/node_modules/expo-glass-effect/LICENSE",
+          "packageJsonSHA256": "2208349a31bbf3140edcafe80c0ee1db7293e458b3a8b9be56e1a1c45cc425af",
+          "publicVersionMetadataURL": "https://registry.npmjs.org/expo-glass-effect/58.0.4"
+        },
+        {
+          "kind": "npm-package-file",
+          "component": "expo-linking",
+          "version": "58.0.14",
+          "path": "node_modules/.bun/expo-linking@58.0.14+e1422b306df66f51/node_modules/expo-linking/LICENSE",
+          "packageJsonSHA256": "050bbe4058bc331e4badba4320ec7d8aa22b19b573a1bb45b7e3bb4eb08d40ef",
+          "publicVersionMetadataURL": "https://registry.npmjs.org/expo-linking/58.0.14"
+        },
+        {
+          "kind": "npm-package-file",
+          "component": "expo-modules-core",
+          "version": "58.0.24",
+          "path": "node_modules/.bun/expo-modules-core@58.0.24+c1c56a507c186acf/node_modules/expo-modules-core/LICENSE",
+          "packageJsonSHA256": "f1567c8587431e3e419ac2e41d5df76e37ba9579183af793b33058826e572b32",
+          "publicVersionMetadataURL": "https://registry.npmjs.org/expo-modules-core/58.0.24"
+        },
+        {
+          "kind": "npm-package-file",
+          "component": "expo-status-bar",
+          "version": "58.0.4",
+          "path": "node_modules/.bun/expo-status-bar@58.0.4+1e4d4fb561c61f96/node_modules/expo-status-bar/LICENSE",
+          "packageJsonSHA256": "8d18508afaea5f3de3dc99aa837fd4acc385b176506812200cebc2ba9fa7d133",
+          "publicVersionMetadataURL": "https://registry.npmjs.org/expo-status-bar/58.0.4"
+        },
+        {
+          "kind": "generated-pod-acknowledgement",
+          "component": "Expo",
+          "version": "58.0.17",
+          "podspecSHA256": "aacf6f0fcbc301e4f185c81bf4739a32c9f866e64fc44219c3cb0a9d3a1a7614",
+          "acknowledgementsSHA256": "c47b65814fe0eebcd50a881178fdae057096f532b2384657575389b90f85f8bc"
+        },
+        {
+          "kind": "generated-pod-acknowledgement",
+          "component": "ExpoLogBox",
+          "version": "58.0.13",
+          "podspecSHA256": "97dde8b85b3c32848089bcc3583e0ff74f1db8c2536a3100dbb6e2f1ce854bbd",
+          "acknowledgementsSHA256": "c47b65814fe0eebcd50a881178fdae057096f532b2384657575389b90f85f8bc"
+        },
+        {
+          "kind": "generated-pod-acknowledgement",
+          "component": "ExpoModulesWorkletsAdapter",
+          "version": "58.0.24",
+          "podspecSHA256": "cf26325fa269daa1fb7ef9417addc6e5082de19acd932430f1f326bf36f42d42",
+          "acknowledgementsSHA256": "c47b65814fe0eebcd50a881178fdae057096f532b2384657575389b90f85f8bc"
+        },
+        {
+          "kind": "shipped-framework-source-package-file",
+          "component": "expo-font",
+          "version": "58.0.9",
+          "path": "node_modules/.bun/expo-font@58.0.9+f636f31dcfe65c1f/node_modules/expo-font/LICENSE",
+          "packageJsonSHA256": "f8e9ccd38f7d07bed710c67a876c41da91782df14f491965e28512c90c6474d9",
+          "publicVersionMetadataURL": "https://registry.npmjs.org/expo-font/58.0.9"
+        },
+        {
+          "kind": "shipped-framework-source-package-file",
+          "component": "expo-file-system",
+          "version": "58.0.10",
+          "path": "node_modules/.bun/expo-file-system@58.0.10+f636f31dcfe65c1f/node_modules/expo-file-system/LICENSE",
+          "packageJsonSHA256": "b4895782ed78a1012c9154009248abdcec2053d5736c15b2283359ff901c2fb6",
+          "publicVersionMetadataURL": "https://registry.npmjs.org/expo-file-system/58.0.10"
+        },
+        {
+          "kind": "shipped-framework-source-package-file",
+          "component": "expo-modules-jsi",
+          "version": "58.0.17",
+          "path": "node_modules/.bun/expo-modules-jsi@58.0.17+75342c570f989648/node_modules/expo-modules-jsi/LICENSE",
+          "packageJsonSHA256": "c651e12c5c7fbe417150f66d963132c6c08ba098629f1b182e7ab279ab3ba57e",
+          "publicVersionMetadataURL": "https://registry.npmjs.org/expo-modules-jsi/58.0.17"
+        },
+        {
+          "kind": "npm-release-attestation-content-match-upstream-license",
+          "component": "expo-router",
+          "version": "58.0.25",
+          "packageJsonSHA256": "8f4b352bc61f2ec74c95ee73abc9f5c96e78ece0c96a4b9aa8b0a7ab5bc7cca3",
+          "publicAttestationsURL": "https://registry.npmjs.org/-/npm/v1/attestations/expo-router@58.0.25",
+          "attestationsSHA256": "913910a7242bfe2aab2963b1bfca99d1070d103b4ebfe2798de1a2635c689dd2",
+          "tarSHA512": "b05ba617ac946f17127e261c77ee6f2638c86d5374c28e57d05f52127a0d9669afce823d8c3ea4f5d712327a1ee72c2ab96a2750401d7077297ec6b4f3bffcb1",
+          "npmIntegrityMatchedLock": true,
+          "attestationSubjectSHA512Matched": true,
+          "upstreamCommit": "a248d78e3b9260e6f39b320ed25ae65e90acff7d",
+          "licenseURL": "https://raw.githubusercontent.com/expo/expo/a248d78e3b9260e6f39b320ed25ae65e90acff7d/LICENSE",
+          "mappedIOSFilesMatched": 384,
+          "sourceMapSHA256": "e7d906e352db412d463d63cc5a2447fce8704e801d8098b9b00b45ae914ad35a",
+          "attestationCryptographicSignatureVerified": false
+        }
+      ]
+    }
+  ],
+  "unresolved": [
+    {
+      "kind": "missing_package_license_text",
+      "component": "standard-navigation",
+      "version": "0.0.5",
+      "reason": "No root license file in exact npm package; exact-release upstream text not yet verified."
+    },
+    {
+      "kind": "vendored_component_provenance",
+      "component": "ReactNativeDependencies 0.88.0",
+      "reason": "Prebuilt framework contains boost/folly/glog/SocketRocket bundles; facade podspec MIT declarations do not establish each vendored license/NOTICE. fmt/fast_float/DoubleConversion and linked/static components also require build-source attribution audit."
+    },
+    {
+      "kind": "vendored_component_provenance",
+      "component": "hermes-engine 260318099.0.4",
+      "reason": "Exact downloaded Release tarball/executable provenance is recorded. Local engine LICENSE is included. Native runtime source commit/vendored legal mapping is not established by the compiler npm gitHead; LLVM/Unicode/Boost/regex and other runtime vendored texts remain unverified."
+    },
+    {
+      "kind": "vendored_javascript_text",
+      "component": "metro-runtime/src/modules/vendor/eventemitter3.js",
+      "reason": "Mapped vendored source has no local complete attribution/license text; upstream vendored version and corresponding text unresolved."
+    },
+    {
+      "kind": "native_static_link_inventory",
+      "component": "iOS Pods/static/native source",
+      "reason": "Eight embedded frameworks and generated acknowledgements are inventoried, but dead-stripped symbol reachability and all compiled static source attribution are not proven by Pod installation alone."
+    },
+    {
+      "kind": "complete_notice_coverage",
+      "component": "store artifact",
+      "reason": "Presence of these verified selected texts is incremental only; distribution/release notice clearance remains blocked pending unresolved inventory."
+    }
+  ],
+  "nativePrebuiltArtifacts": [
+    {
+      "component": "hermes-engine",
+      "version": "260318099.0.4",
+      "url": "https://repo.reactnative.dev/maven2/com/facebook/hermes/hermes-ios/260318099.0.4/hermes-ios-260318099.0.4-release.tar.gz",
+      "tarSHA256": "b0db43628abc20b5eccb7ed1161801f418830f47b1ac1b5946cf532a886841f6",
+      "shippedExecutableSHA256": "3286edc49457c19c7cae2bbd30dd0ff883065d59085cc8a0b8388b8235fb4cb7",
+      "tarExecutableMatchesShipped": true,
+      "sourceSelection": "Pinned podspec reads HERMES_VERSION_NAME=260318099.0.4 for downloaded prebuilt; .hermesv1version tag0.2 is source-build fallback, not proof of a bad artifact."
+    },
+    {
+      "component": "ReactNativeDependencies",
+      "version": "0.88.0",
+      "url": "https://repo.reactnative.dev/maven2/com/facebook/react/react-native-artifacts/0.88.0/react-native-artifacts-0.88.0-reactnative-dependencies-release.tar.gz",
+      "tarSHA256": "309b2fcea39fb4cdeb434144e735bc4065ac0dd8720e4f35ffee55fb3be54093",
+      "shippedExecutableSHA256": "23f8e28b1ac6edecdc87709c45cd995f9604b1bc69be5875414720be5292742d",
+      "tarExecutableMatchesShipped": true
+    }
+  ]
+}

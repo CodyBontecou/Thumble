@@ -50,3 +50,6 @@ pub mod clock;
 pub mod output_bridge;
 
 pub mod owner_wake;
+
+#[cfg(debug_assertions)]
+pub mod input_error_diagnostics;

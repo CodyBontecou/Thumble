@@ -1,0 +1,42 @@
+// Private provenance capture only; never changes signing, packaging, or dependencies.
+import groovy.json.JsonOutput
+import org.gradle.api.artifacts.component.ModuleComponentIdentifier
+import org.gradle.api.artifacts.component.ProjectComponentIdentifier
+
+gradle.projectsEvaluated {
+    def app = gradle.rootProject.findProject(':app')
+    if (app == null) return
+    app.tasks.register('thumbleNoticeGraph') {
+        doLast {
+            def key = { id ->
+                if (id instanceof ModuleComponentIdentifier) return "m:${id.group}:${id.module}:${id.version}"
+                if (id instanceof ProjectComponentIdentifier) return "p:${id.projectPath}"
+                throw new GradleException('notice_component_kind_unsupported')
+            }
+            def configuration = app.configurations.getByName('releaseRuntimeClasspath')
+            def components = configuration.incoming.resolutionResult.allComponents.collect { component ->
+                def id = component.id
+                def project = id instanceof ProjectComponentIdentifier ? gradle.rootProject.findProject(id.projectPath) : null
+                [key: key(id), group: id instanceof ModuleComponentIdentifier ? id.group : null,
+                 name: id instanceof ModuleComponentIdentifier ? id.module : id.projectPath,
+                 version: id instanceof ModuleComponentIdentifier ? id.version : null,
+                 projectDirectory: project?.projectDir?.canonicalPath,
+                 dependencies: component.dependencies.collect { dependency ->
+                     if (dependency instanceof org.gradle.api.artifacts.result.ResolvedDependencyResult) return [selected: key(dependency.selected.id)]
+                     return [unresolved: dependency.requested.displayName]
+                 }.sort { JsonOutput.toJson(it) }]
+            }.sort { it.key }
+            def artifacts = configuration.incoming.artifactView { attributes { attribute(org.gradle.api.attributes.Attribute.of("artifactType", String), "android-classes-jar") } }.artifacts.artifacts.collect { artifact ->
+                [component: key(artifact.id.componentIdentifier), format: "android-classes-jar",
+                 file: artifact.file.canonicalPath, exists: artifact.file.isFile()]
+            }.sort { it.component + ':' + it.file }
+            def archives = configuration.incoming.artifactView { lenient = true; attributes { attribute(org.gradle.api.attributes.Attribute.of('artifactType', String), 'aar') } }.artifacts.artifacts.collect { artifact -> [component: key(artifact.id.componentIdentifier), file: artifact.file.canonicalPath] }.sort { it.component + ':' + it.file }
+            def output = app.providers.gradleProperty('thumbleNoticeGraphOutput').orNull
+            if (output == null) throw new GradleException('notice_graph_output_required')
+            def destination = new File(output)
+            if (!destination.isAbsolute() || destination.exists()) throw new GradleException('notice_graph_output_must_be_new_absolute_file')
+            destination.text = JsonOutput.prettyPrint(JsonOutput.toJson([schema: 1, configuration: 'releaseRuntimeClasspath', components: components, artifacts: artifacts, archives: archives])) + '\n'
+            logger.lifecycle("THUMBLE_RELEASE_GRAPH_CAPTURED components=${components.size()} artifacts=${artifacts.size()}")
+        }
+    }
+}

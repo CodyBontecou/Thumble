@@ -1,0 +1,11 @@
+# Native IPC timeout classification
+
+The native receiver reports `native_input_timeout` when a blocking socket read or write returns `WouldBlock` or `TimedOut` under its configured operation deadline. macOS can report an expired socket read timeout as `WouldBlock` (`EAGAIN`, OS code 35). This now matches the existing result when the frame deadline has already elapsed before another read or write begins.
+
+This changes the error category only. The 250 ms native operation budget, framing, shutdown on a failed client request, owned-grant cleanup, input expiry, owner lease, and neutralization behavior are unchanged. There is no retry or recovery. EOF, zero-byte writes, interrupted operations, connection failures, and failures configuring socket options remain transport failures.
+
+A deterministic category test covers both timeout variants and non-timeout failures. A loopback peer deliberately withholds its response: the actual client must report a timeout, shut down its socket, and send no repeated request. The peer's outer watchdog bounds a broken test; it does not change the client's operation budget.
+
+The diagnostic investigation also used an explicitly induced stop of one verified, owned synthetic receiver for about 280 ms. With the previous category, the broker reported `WouldBlock` followed by `native_input_transport_failed`; stream cleanup then recorded `native_input_released` before the 350 ms input TTL elapsed. After classification, the same induced control reports `native_input_timeout` for the first packet failure and retains the same release outcome. Later operations on the closed client, including the final phone-control error, can still report a transport failure. This demonstrates why a clean-release first-termination record can follow an earlier IPC timeout. It does not establish the cause of an intermittent, uninjected failure. Separate induced 400 ms coverage reaches `input_expired`.
+
+These witnesses use recording output and a synthetic local connection. They do not exercise physical output or game capture. The cause of the intermittent host scheduling/transport interruption remains under investigation; this classification change is not a runtime stability fix.

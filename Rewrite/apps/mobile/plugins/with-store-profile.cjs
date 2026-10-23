@@ -28,7 +28,7 @@ module.exports = (config) => {
     mod.modResults.contents = stripStoreDebugSigning(mod.modResults.contents);
     return mod;
   });
-  return withXcodeProject(config, (mod) => {
+  config = withXcodeProject(config, (mod) => {
     const sections = mod.modResults.pbxXCBuildConfigurationSection();
     let count = 0;
     for (const section of Object.values(sections)) {
@@ -48,6 +48,12 @@ module.exports = (config) => {
     }
     if (count !== 2) throw new Error("store_xcode_template_changed");
     return mod;
+  });
+  config = require("./with-ios-store-notices.cjs")(config, {
+    variant: "store",
+  });
+  return require("./with-android-store-notices.cjs")(config, {
+    variant: "store",
   });
 };
 module.exports.stripStoreDebugSigning = stripStoreDebugSigning;
