@@ -31,6 +31,16 @@ import UIKit
   private(set) var diagnosticConnectOutcome: ControlTLSConnectOutcome = .idle
   #if DEBUG
     private enum SavedReadDiagnostic: String { case none, catalog, controls }
+    private enum SavedReadFailure: String {
+      case none, rejected, transport, other
+      case busy = "saved_map_busy"
+      case timeout = "saved_map_timeout"
+      case unavailable = "saved_map_unavailable"
+      case reactivation = "saved_map_reactivation_required"
+      case unsupported = "saved_map_unsupported_profile"
+      case oversized = "saved_map_response_too_large"
+    }
+    private var savedReadFailure: SavedReadFailure = .none
     private var savedReadDiagnostic: SavedReadDiagnostic = .none
   #endif
   private var lastControlFailure: PhoneControlFailureStage = .none
@@ -294,7 +304,23 @@ import UIKit
       #if DEBUG
         savedReadDiagnostic = .controls
       #endif
-      let resultMap = try await maps.read(request)
+      let resultMap: SavedControllerMap
+      do { resultMap = try await maps.read(request) } catch {
+        #if DEBUG
+          if let error = error as? SavedControllerError {
+            switch error {
+            case .rejected: savedReadFailure = .rejected
+            case .unavailable(let code):
+              savedReadFailure = SavedReadFailure(rawValue: code) ?? .rejected
+            }
+          } else if error is ControlTLSError {
+            savedReadFailure = .transport
+          } else {
+            savedReadFailure = .other
+          }
+        #endif
+        throw error
+      }
       savedMapClient = nil
       try Task.checkCancellation()
       #if DEBUG
@@ -378,7 +404,7 @@ import UIKit
     }
     #if DEBUG
       Logger(subsystem: "com.thumble.rewrite", category: "PhoneAdmission").error(
-        "phone_admission_failed phase=\(self.diagnosticPhase.rawValue, privacy: .public) savedRead=\(self.savedReadDiagnostic.rawValue, privacy: .public) connect=\(self.diagnosticConnectOutcome.rawValue, privacy: .public) control=\(self.diagnosticControlFailure.rawValue, privacy: .public) runtime=\(self.diagnosticRuntimeOutcome.rawValue, privacy: .public)"
+        "phone_admission_failed phase=\(self.diagnosticPhase.rawValue, privacy: .public) savedRead=\(self.savedReadDiagnostic.rawValue, privacy: .public) mapStage=\(self.savedMapClient?.diagnosticReadStage.rawValue ?? "none", privacy: .public) mapFailure=\(self.savedReadFailure.rawValue, privacy: .public) connect=\(self.diagnosticConnectOutcome.rawValue, privacy: .public) control=\(self.diagnosticControlFailure.rawValue, privacy: .public) runtime=\(self.diagnosticRuntimeOutcome.rawValue, privacy: .public)"
       )
     #endif
     close()

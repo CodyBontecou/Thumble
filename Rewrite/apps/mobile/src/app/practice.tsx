@@ -5,7 +5,7 @@ import { Pressable, Text, View, useWindowDimensions } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { NativeController } from "../components/NativeController";
-import { colors } from "../theme/colors";
+import { useColors } from "../theme/colors";
 const orientation = requireNativeModule<{
   requestControllerLandscape(): Promise<string>;
   restoreControllerOrientation(token: string): Promise<boolean>;
@@ -26,6 +26,7 @@ export function ControllerScreen({
   connected?: boolean;
   outputMode?: "recording" | "macos-hid";
 }) {
+  const colors = useColors();
   useEffect(() => {
     let disposed = false;
     let token: string | null = null;

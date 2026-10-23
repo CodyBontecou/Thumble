@@ -14,7 +14,7 @@ test("actual React controller admission/catalog lifecycle integration passes in 
   );
   expect(result.exitCode).toBe(0);
   const report = new TextDecoder().decode(result.stderr);
-  expect(report).toMatch(/^\s*21 pass$/m);
+  expect(report).toMatch(/^\s*22 pass$/m);
   expect(report).toMatch(/^\s*0 fail$/m);
   expect(report).not.toMatch(/\d+ skip/);
 });

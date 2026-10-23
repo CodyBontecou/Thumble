@@ -13,7 +13,7 @@ import {
 } from "react-native";
 import { requireNativeViewManager } from "expo-modules-core";
 import { standardControllerMap } from "@thumble/domain/controller-layout";
-import { colors } from "../theme/colors";
+import { useColors } from "../theme/colors";
 import {
   decodePracticeAdmission,
   decodeControlMap,
@@ -79,6 +79,7 @@ export function NativeController({
   connected?: boolean;
   outputMode?: "recording" | "macos-hid";
 }) {
+  const colors = useColors();
   const admittedSession = useRef<string | null>(null);
   const installed = useRef<{ map: ControlMap; hash: string | null } | null>(
     null,

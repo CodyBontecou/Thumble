@@ -1,6 +1,7 @@
 package com.thumble.rewrite.qa
 
 import android.content.Intent
+import android.content.pm.ActivityInfo
 import android.os.SystemClock
 import android.view.InputDevice
 import android.view.MotionEvent
@@ -163,10 +164,9 @@ class PracticeInputTest {
         device.setOrientationNatural()
         awaitRotation(0)
         checkNotNull(device.wait(Until.findObject(By.res("home-practice")), 15_000)).click()
-        awaitText("Turn your phone sideways")
-        device.setOrientationLeft()
-        awaitRotation(1)
+        // The product route requests sensor landscape itself; portrait guidance may never paint.
         awaitText("Practice ready")
+        assertTrue("Practice did not enter landscape", device.displayRotation in setOf(1, 3))
         device.waitForIdle()
         controller = ui {
             val activity =
@@ -787,32 +787,47 @@ class PracticeInputTest {
         val down = SystemClock.uptimeMillis()
         send(down, MotionEvent.ACTION_DOWN, points)
         assertEquals(probe.getString("reportHex"), report())
-        device.setOrientationNatural()
-        awaitRotation(0)
-        awaitText("Turn your phone sideways")
-        assertEquals(neutral(), report())
-        assertNull(ui { old.surface.parent })
-        device.setOrientationLeft()
-        awaitRotation(1)
-        awaitText("Practice ready")
-        controller = ui {
-            val activity =
-                ActivityLifecycleMonitorRegistry.getInstance()
-                    .getActivitiesInStage(Stage.RESUMED)
-                    .single()
-            checkNotNull(find(activity.window.decorView))
+        // Test-only fault injection: release the product landscape policy while forcing portrait.
+        val activity = ui {
+            ActivityLifecycleMonitorRegistry.getInstance()
+                .getActivitiesInStage(Stage.RESUMED)
+                .single()
         }
-        assertNotSame(old, controller)
-        assertEquals(neutral(), report())
-        val fresh = listOf(point(probe))
-        val freshDown = SystemClock.uptimeMillis()
-        send(freshDown, MotionEvent.ACTION_DOWN, fresh)
+        val previousPolicy = ui {
+            activity.requestedOrientation.also {
+                activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            }
+        }
         try {
-            assertEquals(probe.getString("reportHex"), report())
+            device.setOrientationNatural()
+            awaitRotation(0)
+            awaitText("Turn your phone sideways")
+            assertEquals(neutral(), report())
+            assertNull(ui { old.surface.parent })
+            ui { activity.requestedOrientation = previousPolicy }
+            awaitText("Practice ready")
+            assertTrue("Practice did not return to landscape", device.displayRotation in setOf(1, 3))
+            controller = ui {
+                val activity =
+                    ActivityLifecycleMonitorRegistry.getInstance()
+                        .getActivitiesInStage(Stage.RESUMED)
+                        .single()
+                checkNotNull(find(activity.window.decorView))
+            }
+            assertNotSame(old, controller)
+            assertEquals(neutral(), report())
+            val fresh = listOf(point(probe))
+            val freshDown = SystemClock.uptimeMillis()
+            send(freshDown, MotionEvent.ACTION_DOWN, fresh)
+            try {
+                assertEquals(probe.getString("reportHex"), report())
+            } finally {
+                send(freshDown, MotionEvent.ACTION_CANCEL, fresh)
+            }
+            assertEquals(neutral(), report())
         } finally {
-            send(freshDown, MotionEvent.ACTION_CANCEL, fresh)
+            ui { activity.requestedOrientation = previousPolicy }
         }
-        assertEquals(neutral(), report())
     }
 
     @Test

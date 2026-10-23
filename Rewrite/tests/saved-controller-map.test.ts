@@ -408,3 +408,59 @@ test("declared starter controls use retained landscape grid centers per axis wit
     ),
   ).toThrow("saved_controller_unbound_control");
 });
+
+test("saved corner rectangles remain within strict normalized bounds across phone viewports", () => {
+  const seed = JSON.parse(
+    readFileSync(
+      resolve(import.meta.dir, "../packages/fixtures/saved-controller-v1.json"),
+      "utf8",
+    ),
+  );
+  const profileId = seed.activeProfileID;
+  for (const [centerX, centerY] of [
+    [0, 0],
+    [1, 0],
+    [0, 1],
+    [1, 1],
+  ]) {
+    Object.assign(seed.profiles[1].customization.elements[0].layout, {
+      centerX,
+      centerY,
+    });
+    const source = LosslessJson.parse(JSON.stringify(seed));
+    const before = source.text();
+    const document = OwnedConfigurationDocument.read(source, hash);
+    for (const [width, height] of [
+      [750, 338],
+      [800, 316],
+      [844, 390],
+      [1000, 400],
+      [4096, 240],
+    ]) {
+      const result = projectSavedController(
+        { document, authorityRevision: "1" },
+        { profileId, authorityRevision: "1", sourceSha256: hash(before) },
+        { generation: "1", revision: "1" },
+        { width: width!, height: height! },
+        hash,
+      );
+      const control = result.map.controls[0]!;
+      expect(control.action).toBe("south");
+      const side = Math.min(86, Math.max(50, Math.min(width!, height!) * 0.24));
+      expect(control.width * width!).toBeCloseTo(side, 10);
+      expect(control.height * height!).toBeCloseTo(side, 10);
+      expect(control.x).toBeGreaterThanOrEqual(0);
+      expect(control.y).toBeGreaterThanOrEqual(0);
+      expect(control.x + control.width).toBeLessThanOrEqual(1);
+      expect(control.y + control.height).toBeLessThanOrEqual(1);
+      expect(centerX === 0 ? control.x : control.x + control.width).toBeCloseTo(
+        centerX!,
+        14,
+      );
+      expect(
+        centerY === 0 ? control.y : control.y + control.height,
+      ).toBeCloseTo(centerY!, 14);
+      expect(source.text()).toBe(before);
+    }
+  }
+});

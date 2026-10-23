@@ -49,14 +49,13 @@ private enum SavedAppHTTP {
     let enabled = XCTNSPredicateExpectation(
       predicate: NSPredicate(format: "enabled == true"), object: field)
     XCTAssertEqual(XCTWaiter.wait(for: [enabled], timeout: 10), .completed)
-    // Exercise the product's intended native Paste flow instead of spending the
-    // test budget switching software-keyboard layouts for each JSON character.
-    UIPasteboard.general.setItems(
-      [[UIPasteboard.typeAutomatic: text]],
-      options: [.localOnly: true, .expirationDate: Date().addingTimeInterval(60)])
-    defer { if UIPasteboard.general.string == text { UIPasteboard.general.items = [] } }
+    // Standard native keyboard entry avoids simulator shortcut/paste-menu behavior.
+    // Raw XCTest logs remain private because they may record the synthetic invitation.
     field.tap()
-    field.typeKey("v", modifierFlags: .command)
+    print("saved_ui_entry_stage typing")
+    field.typeText(text)
+    print("saved_ui_entry_stage typed")
+    XCTAssertNotEqual(field.value as? String, "Pairing invitation", "invitation_entry_empty")
     field.typeText("\n")
     let pair = app.alerts.buttons["Pair"]
     guard pair.waitForExistence(timeout: 10) else {

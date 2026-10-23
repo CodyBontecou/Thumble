@@ -2,6 +2,12 @@ import Foundation
 
 /// A one-page, dedicated MANAGEMENT connection. It cannot create or access input sessions.
 @MainActor public final class SavedControllerClient {
+  #if DEBUG
+    public enum ReadDiagnostic: String {
+      case idle, connecting, hello, credential, authentication, query, decoding, complete
+    }
+    public private(set) var diagnosticReadStage: ReadDiagnostic = .idle
+  #endif
   private let endpoint: TrustedHostEndpoint
   private let io: any EnrollmentFrameIO
   private let storage: any ControlCredentialSource
@@ -59,12 +65,18 @@ import Foundation
     defer { close() }
     return try await withTaskCancellationHandler {
       try checkpoint()
+      #if DEBUG
+        diagnosticReadStage = .connecting
+      #endif
       try await io.connect()
       try checkpoint()
       let hello: [String: Any] = [
         "version": 1, "command": "hello", "controlVersion": 8, "role": "management",
         "inputVersion": 1, "documentVersion": 1, "capabilitiesVersion": 1,
       ]
+      #if DEBUG
+        diagnosticReadStage = .hello
+      #endif
       try send(hello)
       let reply = try await receive()
       guard
@@ -76,8 +88,14 @@ import Foundation
           "inputEnabled": .boolean(false),
         ]
       else { throw SavedControllerError.rejected }
+      #if DEBUG
+        diagnosticReadStage = .credential
+      #endif
       let credential = try await storage.load(hostPin: endpoint.certificatePin, now: checkpoint())
       try checkpoint()
+      #if DEBUG
+        diagnosticReadStage = .authentication
+      #endif
       guard let credential, credential.metadata.hostPin == endpoint.certificatePin,
         last < credential.metadata.expiresAt,
         io.offer(try credential.authenticationFrame(authority: endpoint.authorityInstanceID))
@@ -101,10 +119,20 @@ import Foundation
           hostExpiry: end, credentialExpiry: credential.metadata.expiresAt, now: last)
       else { throw SavedControllerError.rejected }
       expires = localDeadline
+      #if DEBUG
+        diagnosticReadStage = .query
+      #endif
       try send(request.fields(connection: connection))
-      return try SavedControllerWire.decode(
-        try await receive(), request: request, authority: endpoint.authorityInstanceID,
-        connection: connection)
+      let fields = try await receive()
+      #if DEBUG
+        diagnosticReadStage = .decoding
+      #endif
+      let result = try SavedControllerWire.decode(
+        fields, request: request, authority: endpoint.authorityInstanceID, connection: connection)
+      #if DEBUG
+        diagnosticReadStage = .complete
+      #endif
+      return result
     } onCancel: {
       Task { @MainActor [weak self] in self?.close() }
     }

@@ -1,7 +1,8 @@
 import { useRouter } from "expo-router";
 import { Pressable, ScrollView, Text } from "react-native";
-import { colors } from "../theme/colors";
+import { useColors } from "../theme/colors";
 export default function Home() {
+  const colors = useColors();
   const router = useRouter();
   return (
     <ScrollView

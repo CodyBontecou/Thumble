@@ -3,16 +3,22 @@ import { afterEach, beforeAll, expect, mock, test } from "bun:test";
 import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 
+let systemScheme: "light" | "dark" | null = "light";
+let systemPlatform: "ios" | "android" = "ios";
 // Substitute only platform host components; real hooks, contracts and TSX run.
 mock.module("react-native", () => ({
   View: "View",
   Text: "Text",
   Image: "Image",
-  useColorScheme: () => "light",
+  useColorScheme: () => systemScheme,
   Pressable: "Pressable",
   ScrollView: "ScrollView",
   useWindowDimensions: () => ({ width: 874, height: 393 }),
-  Platform: { OS: "ios" },
+  Platform: {
+    get OS() {
+      return systemPlatform;
+    },
+  },
   PlatformColor: (name: string) => name,
 }));
 let orientationRequests: Array<{ resolve: (token: string) => void }> = [];
@@ -55,6 +61,8 @@ beforeAll(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 });
 afterEach(async () => {
+  systemScheme = "light";
+  systemPlatform = "ios";
   await act(() => renderer?.unmount());
   renderer = undefined;
   routeMode = undefined;
@@ -648,4 +656,33 @@ test("replacement map installed before ready admission retains its native presen
   expect(controllerLabels()).toContain("Replacement");
   expect(controllerLabels()).not.toContain("Fireball");
   expect(native().props.pointerEvents).toBe("auto");
+});
+
+test("Android semantic palette follows system appearance without remounting native input", async () => {
+  systemPlatform = "android";
+  systemScheme = "light";
+  await act(() => {
+    renderer = create(createElement(ControllerScreen, { connected: true }));
+  });
+  const screen = () =>
+    renderer!.root.findByProps({ testID: "connection-screen" });
+  const mode = () => renderer!.root.findByProps({ testID: "connection-mode" });
+  const before = native();
+  expect(screen().props.style.backgroundColor).toBe("#FAFAFA");
+  expect(mode().props.style.color).toBe("#1C1B1F");
+  systemScheme = "dark";
+  await act(() =>
+    renderer!.update(createElement(ControllerScreen, { connected: true })),
+  );
+  expect(screen().props.style.backgroundColor).toBe("#303030");
+  expect(mode().props.style.color).toBe("#E6E1E5");
+  expect(native()).toBe(before);
+  expect(native().props.connect).toBe(true);
+  expect(native().props.outputMode).toBe("recording");
+  systemScheme = null;
+  await act(() =>
+    renderer!.update(createElement(ControllerScreen, { connected: true })),
+  );
+  expect(screen().props.style.backgroundColor).toBe("#FAFAFA");
+  expect(native()).toBe(before);
 });

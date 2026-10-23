@@ -1,10 +1,11 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Pressable, Text } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { colors } from "../theme/colors";
+import { useColors } from "../theme/colors";
 import { ControllerScreen } from "./practice";
 
 export default function Connect() {
+  const colors = useColors();
   const { outputMode } = useLocalSearchParams<{ outputMode?: string }>();
   const router = useRouter();
   // Missing intent preserves existing diagnostic routes; malformed intent never

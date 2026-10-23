@@ -187,11 +187,15 @@ function rectangle(
       viewport.height - halfHeight,
     ) -
     height / 2;
+  const normalizedX = x / viewport.width,
+    normalizedY = y / viewport.height;
+  // Division can round a clamped far edge past one by a single ULP. Keep
+  // strict wire bounds while preserving the retained rectangle in points.
   return {
-    x: x / viewport.width,
-    y: y / viewport.height,
-    width: width / viewport.width,
-    height: height / viewport.height,
+    x: normalizedX,
+    y: normalizedY,
+    width: Math.min(width / viewport.width, 1 - normalizedX),
+    height: Math.min(height / viewport.height, 1 - normalizedY),
   };
 }
 function action(binding: LosslessJson | undefined): GamepadButton {
