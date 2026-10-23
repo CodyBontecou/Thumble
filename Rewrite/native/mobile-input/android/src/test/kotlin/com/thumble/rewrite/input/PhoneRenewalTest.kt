@@ -178,6 +178,11 @@ class PhoneRenewalTest {
             assertTrue(engine.begin(1L, "1", 0.1, 0.1))
             assertTrue(engine.begin(2L, "1", 0.6, 0.1))
             val held = engine.state
+            until {
+                io.inputs().any {
+                    ByteBuffer.wrap(it, 32, 8).order(ByteOrder.LITTLE_ENDIAN).long == 2L
+                }
+            }
             for (count in 1..2) {
                 io.wall.set(1000L + count * 35_000L)
                 io.elapsed.set(TimeUnit.MILLISECONDS.toNanos(count * 35_000L))
@@ -229,6 +234,13 @@ class PhoneRenewalTest {
                 client.authenticate()
                 val engine = client.prepareInput(map()).bind()
                 assertTrue(engine.begin(1L, "1", 0.1, 0.1))
+                // Drain the emitted held sample before a synthetic 35-second clock jump.
+                // Otherwise this exercises stale queued-state rejection, not late renewal.
+                until {
+                    io.inputs().any {
+                        ByteBuffer.wrap(it, 32, 8).order(ByteOrder.LITTLE_ENDIAN).long == 1L
+                    }
+                }
                 io.wall.set(36_000)
                 io.elapsed.set(TimeUnit.MILLISECONDS.toNanos(35_000))
                 assertTrue(io.paused.await(2, TimeUnit.SECONDS))
@@ -267,6 +279,13 @@ class PhoneRenewalTest {
                 client.authenticate()
                 val engine = client.prepareInput(map()).bind()
                 assertTrue(engine.begin(1L, "1", 0.1, 0.1))
+                // Drain the emitted held sample before a synthetic 35-second clock jump.
+                // Otherwise this exercises stale queued-state rejection, not late renewal.
+                until {
+                    io.inputs().any {
+                        ByteBuffer.wrap(it, 32, 8).order(ByteOrder.LITTLE_ENDIAN).long == 1L
+                    }
+                }
                 io.wall.set(36_000)
                 io.elapsed.set(TimeUnit.MILLISECONDS.toNanos(35_000))
                 until({ engine.tick() }) { io.closed.count == 0L }

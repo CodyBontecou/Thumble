@@ -48,3 +48,5 @@ pub mod output_doctor;
 pub mod clock;
 #[cfg(feature = "output-bridge")]
 pub mod output_bridge;
+
+pub mod owner_wake;

@@ -94,18 +94,31 @@ class ControlTLSClient private constructor(private val socket: SSLSocket, privat
     private val sending = AtomicBoolean(false)
     private val receiving = AtomicBoolean(false)
     @Volatile private var closed = false
-    private val firstFailure = AtomicReference<NativeTLSExceptionCategory?>(null)
+    private val firstFailure = AtomicReference<NativeTLSOperationFailure?>(null)
     internal val failureCategory: NativeTLSExceptionCategory?
+        get() = firstFailure.get()?.category
+
+    internal val operationFailure: NativeTLSOperationFailure?
         get() = firstFailure.get()
 
     private inline fun <T> operation(direction: AtomicBoolean, block: () -> T): T {
         if (!direction.compareAndSet(false, true)) throw ControlTLSRejected()
         try {
             if (closed) throw ControlTLSRejected()
+            val operationDirection =
+                if (direction === sending) NativeTLSOperationDirection.SEND
+                else NativeTLSOperationDirection.RECEIVE
             val expiry =
                 watchdog.schedule(
                     {
-                        firstFailure.compareAndSet(null, NativeTLSExceptionCategory.TIMEOUT)
+                        firstFailure.compareAndSet(
+                            null,
+                            NativeTLSOperationFailure(
+                                operationDirection,
+                                NativeTLSOperationFailureKind.DEADLINE,
+                                NativeTLSExceptionCategory.TIMEOUT,
+                            ),
+                        )
                         close()
                     },
                     2,
@@ -114,7 +127,14 @@ class ControlTLSClient private constructor(private val socket: SSLSocket, privat
             return try {
                 block()
             } catch (error: Exception) {
-                firstFailure.compareAndSet(null, tlsExceptionCategory(error))
+                firstFailure.compareAndSet(
+                    null,
+                    NativeTLSOperationFailure(
+                        operationDirection,
+                        NativeTLSOperationFailureKind.IO,
+                        tlsExceptionCategory(error),
+                    ),
+                )
                 close()
                 throw ControlTLSRejected()
             } finally {
@@ -313,6 +333,9 @@ internal fun ControlTLSClient.nativeFrames(): NativeFrameIO =
     object : NativeFrameIO {
         override val failureCategory
             get() = this@nativeFrames.failureCategory
+
+        override val operationFailure
+            get() = this@nativeFrames.operationFailure
 
         override fun send(frame: ControlTLSFrame) = this@nativeFrames.send(frame)
 

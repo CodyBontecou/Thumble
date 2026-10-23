@@ -47,7 +47,7 @@ internal class PhoneConnection(
         terminalDiagnosticRecorded = true
         Log.i(
             "ThumblePhoneDiag",
-            "event=terminal release=${reason?.name ?: "none"} origin=${origin?.name ?: "none"} stage=${control?.inputFailureStage?.name ?: "none"} transport=${control?.inputTransportDiagnostic?.cause?.name ?: "none"} category=${control?.inputTransportDiagnostic?.category?.name ?: "none"} wait=${control?.inputTransportWaitOutcome ?: "none"} checkpoint=${control?.checkpointFailure?.name ?: "none"} elapsed_ms=${(SystemClock.elapsedRealtime() - diagnosticStarted).coerceIn(0, 86400000)}",
+            "event=terminal release=${reason?.name ?: "none"} origin=${origin?.name ?: "none"} stage=${control?.inputFailureStage?.name ?: "none"} transport=${control?.inputTransportDiagnostic?.cause?.name ?: "none"} category=${control?.inputTransportDiagnostic?.category?.name ?: "none"} wait=${control?.inputTransportWaitOutcome ?: "none"} checkpoint=${control?.checkpointFailure?.name ?: "none"} tlsOp=${control?.inputTransportDiagnostic?.operation?.direction?.name ?: "none"} tlsFailure=${control?.inputTransportDiagnostic?.operation?.kind?.name ?: "none"} cq=${control?.inputTransportActivity?.queued ?: 0} ws=${control?.inputTransportActivity?.writeStarted ?: 0} wc=${control?.inputTransportActivity?.writeCompleted ?: 0} cr=${control?.inputTransportActivity?.received ?: 0} qa=${control?.inputTransportActivity?.queuedAgeMs ?: -1} wsa=${control?.inputTransportActivity?.writeStartedAgeMs ?: -1} wca=${control?.inputTransportActivity?.writeCompletedAgeMs ?: -1} ra=${control?.inputTransportActivity?.receivedAgeMs ?: -1} qd=${control?.inputTransportActivity?.queueDepth ?: 0} elapsed_ms=${(SystemClock.elapsedRealtime() - diagnosticStarted).coerceIn(0, 86400000)}",
         )
     }
 
@@ -58,7 +58,7 @@ internal class PhoneConnection(
         lifecycleDiagnosticRecorded = true
         Log.i(
             "ThumblePhoneDiag",
-            "event=$event stage=${control?.inputFailureStage?.name ?: "none"} transport=${control?.inputTransportDiagnostic?.cause?.name ?: "none"} category=${control?.inputTransportDiagnostic?.category?.name ?: "none"} wait=${control?.inputTransportWaitOutcome ?: "none"} checkpoint=${control?.checkpointFailure?.name ?: "none"} elapsed_ms=${(SystemClock.elapsedRealtime() - diagnosticStarted).coerceIn(0, 86400000)}",
+            "event=$event stage=${control?.inputFailureStage?.name ?: "none"} transport=${control?.inputTransportDiagnostic?.cause?.name ?: "none"} category=${control?.inputTransportDiagnostic?.category?.name ?: "none"} wait=${control?.inputTransportWaitOutcome ?: "none"} checkpoint=${control?.checkpointFailure?.name ?: "none"} tlsOp=${control?.inputTransportDiagnostic?.operation?.direction?.name ?: "none"} tlsFailure=${control?.inputTransportDiagnostic?.operation?.kind?.name ?: "none"} cq=${control?.inputTransportActivity?.queued ?: 0} ws=${control?.inputTransportActivity?.writeStarted ?: 0} wc=${control?.inputTransportActivity?.writeCompleted ?: 0} cr=${control?.inputTransportActivity?.received ?: 0} qa=${control?.inputTransportActivity?.queuedAgeMs ?: -1} wsa=${control?.inputTransportActivity?.writeStartedAgeMs ?: -1} wca=${control?.inputTransportActivity?.writeCompletedAgeMs ?: -1} ra=${control?.inputTransportActivity?.receivedAgeMs ?: -1} qd=${control?.inputTransportActivity?.queueDepth ?: 0} elapsed_ms=${(SystemClock.elapsedRealtime() - diagnosticStarted).coerceIn(0, 86400000)}",
         )
     }
 

@@ -46,8 +46,12 @@ internal constructor(
 }
 
 /** Bound existing TLS ownership to one writer and one reader before accepting UI samples. */
-internal class NativeControlDelivery(raw: NativeFrameIO) : NativeFrameIO {
-    private val delivery = NativeTLSDelivery(raw)
+internal class NativeControlDelivery(
+    raw: NativeFrameIO,
+    boundedInput: Boolean = false,
+    inputClock: () -> Long = System::nanoTime,
+) : NativeFrameIO {
+    private val delivery = NativeTLSDelivery(raw, boundedInput, inputClock)
 
     enum class WaitOutcome {
         DELIVERY_CLOSED,
@@ -61,12 +65,22 @@ internal class NativeControlDelivery(raw: NativeFrameIO) : NativeFrameIO {
     val terminalDiagnostic
         get() = delivery.terminalDiagnostic
 
+    val terminalActivity
+        get() = delivery.terminalActivity
+
     fun offerInput(packet: ByteArray) = delivery.offerInput(packet)
+
+    fun acknowledgeInput(scope: ByteArray, sequence: ULong, offered: ULong) =
+        delivery.acknowledgeInput(scope, sequence, offered)
+
+    fun completeControl() = delivery.completeControl()
+
+    fun validatedRenewalReply() = delivery.validatedRenewalReply()
 
     override fun send(frame: ControlTLSFrame) {
         val ok =
             if (frame.kind == ControlTLSFrame.Kind.INPUT) delivery.offerInput(frame.payload)
-            else delivery.offerControl(frame.payload)
+            else delivery.offerControl(frame.payload, awaitValidatedReply = true)
         if (!ok) throw PhoneControlRejected()
     }
 

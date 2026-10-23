@@ -30,7 +30,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        include:
+          - { os: ubuntu-latest, id: ubuntu, shard: "", primary: true }
+          - { os: macos-latest, id: macos, shard: "", primary: true }
+          - { os: windows-latest, id: windows-1, shard: "--shard 1/3", primary: true }
+          - { os: windows-latest, id: windows-2, shard: "--shard 2/3", primary: false }
+          - { os: windows-latest, id: windows-3, shard: "--shard 3/3", primary: false }
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     defaults:
@@ -67,7 +72,7 @@ jobs:
 
       - name: Isolate Windows malformed catalog-child response
         shell: pwsh
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && matrix.primary
         env:
           THUMBLE_REWRITE_PIPE_PROBE: "1"
         run: |
@@ -80,7 +85,7 @@ jobs:
           }
       - name: Isolate Windows stale-grant regression with phase diagnostics
         shell: pwsh
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && matrix.primary
         env:
           RUST_BACKTRACE: "1"
           THUMBLE_REWRITE_INPUT_IO_PROBE: "1"
@@ -98,43 +103,48 @@ jobs:
       # Bound concurrent fixture processes on hosted runners. Concurrency within
       # each native scenario and all safety deadlines remain unchanged.
       - run: bun run native:test
+        if: matrix.primary
         env:
           RUST_TEST_THREADS: "2"
           THUMBLE_REWRITE_INPUT_IO_PROBE: ${{ runner.os == 'Windows' && '1' || '0' }}
       - run: bun run native:build
       - name: Verify native TLS with independent Node/OpenSSL client
+        if: matrix.primary
         run: |
           cargo build --locked --manifest-path native/receiver/Cargo.toml --example control_tls_probe
           node tooling/test-control-tls.mjs
       - run: bun run typecheck
-      - run: bun run test:ci
+      - run: bun run test:ci ${{ matrix.shard }}
         timeout-minutes: 2
       - run: bun run build
+        if: matrix.primary
       - run: bun run test:package:ci
+        if: matrix.primary
         timeout-minutes: 2
       - uses: actions/upload-artifact@v4
+        if: matrix.primary
         with:
-          name: rewrite-m2-recording-${{ matrix.os }}
+          name: rewrite-m2-recording-${{ matrix.id }}
           path: Rewrite/dist/
           if-no-files-found: error
       - name: Typecheck generated Swift DTOs
         if: runner.os == 'macOS'
         run: swiftc -typecheck packages/contracts/generated/swift/GamepadStateV1.swift
       - uses: actions/upload-artifact@v4
-        if: always() && runner.os == 'Windows' && hashFiles('Rewrite/reports/private-pipe-probe.log') != ''
+        if: always() && runner.os == 'Windows' && matrix.primary && hashFiles('Rewrite/reports/private-pipe-probe.log') != ''
         with:
-          name: rewrite-private-pipe-${{ matrix.os }}
+          name: rewrite-private-pipe-${{ matrix.id }}
           path: Rewrite/reports/private-pipe-probe.log
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
-        if: always() && runner.os == 'Windows' && hashFiles('Rewrite/reports/native-stale-grant.log') != ''
+        if: always() && runner.os == 'Windows' && matrix.primary && hashFiles('Rewrite/reports/native-stale-grant.log') != ''
         with:
-          name: rewrite-native-stale-grant-${{ matrix.os }}
+          name: rewrite-native-stale-grant-${{ matrix.id }}
           path: Rewrite/reports/native-stale-grant.log
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
         if: always() && hashFiles('Rewrite/reports/*junit.xml') != ''
         with:
-          name: rewrite-portable-tests-${{ matrix.os }}
+          name: rewrite-portable-tests-${{ matrix.id }}
           path: Rewrite/reports/*junit.xml
           if-no-files-found: error

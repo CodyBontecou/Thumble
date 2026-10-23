@@ -76,8 +76,11 @@ fn run(root: &Path, log: Option<&Path>) -> Result<(), &'static str> {
 fn run_owner(root: &Path, output: &mut impl Output) -> Result<(), &'static str> {
     let mut runtime = PacketRuntime::default();
     runtime.release_reason(output, "startup")?;
-    let mut ingress = thumble_rewrite_receiver::native_ingress::Server::bind(root)?;
+    let wake = std::sync::Arc::new(thumble_rewrite_receiver::owner_wake::OwnerWake::default());
+    let mut ingress =
+        thumble_rewrite_receiver::native_ingress::Server::bind_with_wake(root, Some(wake.clone()))?;
     let (incoming, received) = mpsc::sync_channel::<Option<Vec<u8>>>(16);
+    let input_wake = wake.clone();
     std::thread::spawn(move || {
         let mut input = BufReader::new(std::io::stdin());
         loop {
@@ -88,11 +91,13 @@ fn run_owner(root: &Path, output: &mut impl Output) -> Result<(), &'static str> 
                     Ok(b) => b,
                     Err(_) => {
                         let _ = incoming.send(None);
+                        let _ = input_wake.notify();
                         return;
                     }
                 };
                 if buffer.is_empty() {
                     let _ = incoming.send(None);
+                    let _ = input_wake.notify();
                     return;
                 }
                 let newline = buffer.iter().position(|b| *b == b'\n');
@@ -111,6 +116,9 @@ fn run_owner(root: &Path, output: &mut impl Output) -> Result<(), &'static str> 
                 bytes.clear();
             }
             if incoming.send(Some(bytes)).is_err() {
+                return;
+            }
+            if input_wake.notify().is_err() {
                 return;
             }
         }
@@ -151,13 +159,19 @@ fn run_owner(root: &Path, output: &mut impl Output) -> Result<(), &'static str> 
             let _ = runtime.release_reason(output, "native_input_owner_failed");
             return Err(error);
         }
-        let bytes = match received.recv_timeout(Duration::from_millis(10)) {
+        let bytes = match received.try_recv() {
             Ok(Some(bytes)) => bytes,
-            Ok(None) | Err(mpsc::RecvTimeoutError::Disconnected) => {
+            Ok(None) | Err(mpsc::TryRecvError::Disconnected) => {
                 runtime.release_reason(output, "owner_disconnected")?;
                 break;
             }
-            Err(mpsc::RecvTimeoutError::Timeout) => continue,
+            Err(mpsc::TryRecvError::Empty) => {
+                if let Err(error) = wake.wait(Duration::from_millis(10)) {
+                    let _ = runtime.release_reason(output, "owner_wake_failed");
+                    return Err(error);
+                }
+                continue;
+            }
         };
         let parsed = serde_json::from_slice::<Request>(&bytes)
             .ok()

@@ -91,6 +91,9 @@ internal constructor(
     val inputFailureStage: PhoneInputFailureStage?
         get() = firstInputFailure.get()
 
+    val inputTransportActivity: NativeTLSControlActivity?
+        get() = inputDelivery?.terminalActivity
+
     val inputTransportDiagnostic: NativeTLSTerminalDiagnostic?
         get() = inputDelivery?.terminalDiagnostic
 
@@ -378,7 +381,7 @@ internal constructor(
                     .put("connectionId", receipt.connectionID)
             )
             val result = decode(receive(), if (disconnect) "disconnected" else "control-status")
-            if (disconnect) close()
+            if (disconnect) close() else inputDelivery?.completeControl()
             return result
         } catch (_: Exception) {
             if (!disconnect && inputAttempted.get())
@@ -470,7 +473,8 @@ internal constructor(
             inputUDPPort = grant.udpPort
             inputCheckpoint()
             val raw = transport()
-            val delivery = NativeControlDelivery(raw)
+            val delivery =
+                NativeControlDelivery(raw, boundedInput = controlVersion >= 5, inputClock = elapsed)
             synchronized(owner) {
                 if (closed.get() || io !== raw) {
                     delivery.close()
@@ -486,6 +490,7 @@ internal constructor(
                         { elapsed() / 1_000_000 },
                         { datagram?.offer(it) ?: false },
                         delivery::offerInput,
+                        acknowledgeTLS = delivery::acknowledgeInput,
                     )
                 // DNS/socket setup runs independently. The UI can immediately
                 // start neutral and use TLS even if UDP setup never completes.
@@ -595,6 +600,7 @@ internal constructor(
                     checkpoint(),
                     outputMode,
                 )
+            (inputDelivery ?: throw PhoneControlRejected()).validatedRenewalReply()
             val pending = PendingRenewal(renewal, session, requested, startedAt)
             synchronized(owner) {
                 inputCheckpoint()
@@ -674,6 +680,7 @@ internal constructor(
                                     { datagram?.offer(it) ?: false },
                                     delivery::offerInput,
                                     initiallyReliable = reliable,
+                                    acknowledgeTLS = delivery::acknowledgeInput,
                                 )
                             inputCheckpoint()
                         }
@@ -688,6 +695,7 @@ internal constructor(
                         // for progress.
                         pending.committed = true
                         pendingRenewal = null
+                        inputDelivery?.completeControl()
                     }
                 }
                 return true
@@ -734,6 +742,7 @@ internal constructor(
             inputCheckpoint()
             if (route?.observe(value, connection, session, map, outputMode) != true)
                 throw PhoneControlRejected()
+            inputDelivery?.completeControl()
         } catch (error: Exception) {
             recordInputFailure(stage)
             throw error

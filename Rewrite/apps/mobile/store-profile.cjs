@@ -1,3 +1,4 @@
+const { storeReviewConfiguration } = require("./store-review-policy.cjs");
 /** Pure configuration policy. Never provisions, signs, installs or uploads. */
 function mobileProfile(config, env) {
   const variant = env.THUMBLE_MOBILE_VARIANT;
@@ -31,7 +32,7 @@ function mobileProfile(config, env) {
   ])
     if (!plugins.some((p) => pluginName(p) === required))
       throw new Error("store_required_plugin_missing");
-  return {
+  return storeReviewConfiguration({
     ...config,
     name: "Thumble",
     slug: "thumble",
@@ -58,6 +59,6 @@ function mobileProfile(config, env) {
       ),
       "./plugins/with-store-profile.cjs",
     ],
-  };
+  });
 }
 module.exports.mobileProfile = mobileProfile;

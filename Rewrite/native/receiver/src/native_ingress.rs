@@ -600,9 +600,16 @@ pub struct Server {
     path: PathBuf,
     binding: Option<Binding>,
     staged: Option<Binding>,
+    wake: Option<Arc<crate::owner_wake::OwnerWake>>,
 }
 impl Server {
     pub fn bind(root: &Path) -> Result<Self, &'static str> {
+        Self::bind_with_wake(root, None)
+    }
+    pub fn bind_with_wake(
+        root: &Path,
+        wake: Option<Arc<crate::owner_wake::OwnerWake>>,
+    ) -> Result<Self, &'static str> {
         security::directory(root)?;
         let lease = security::file(&root.join("native-input.lock"), false)?;
         fs2::FileExt::try_lock_exclusive(&lease).map_err(|_| "native_input_owner_exists")?;
@@ -643,6 +650,7 @@ impl Server {
             let stop = stop.clone();
             let peers = peers.clone();
             let incoming = incoming.clone();
+            let wake = wake.clone();
             workers.push(thread::spawn(move || loop {
                 let (id, mut stream) = match work.lock() {
                     Ok(work) => match work.recv() {
@@ -716,6 +724,9 @@ impl Server {
                     {
                         break;
                     }
+                    if wake.as_ref().is_some_and(|wake| wake.notify().is_err()) {
+                        break;
+                    }
                     let reply = match result.recv_timeout(OP_WAIT) {
                         Ok(Ok(payload)) => {
                             if let Some(connection) = grant_connection {
@@ -778,20 +789,27 @@ impl Server {
                     let (response, _) = mpsc::sync_channel(1);
                     let mut payload = binding.connection.to_vec();
                     payload.extend_from_slice(&binding.session);
-                    let _ = incoming.try_send(Pending {
-                        #[cfg(debug_assertions)]
-                        queue_span: crate::input_io_diagnostics::Span::start(
-                            crate::input_io_diagnostics::Metric::NativeServerQueue,
-                        ),
-                        op: if owned_physical {
-                            PHYSICAL_RELEASE
-                        } else {
-                            RELEASE
-                        },
-                        payload,
-                        deadline: Instant::now() + OP_WAIT,
-                        response,
-                    });
+                    let queued = incoming
+                        .try_send(Pending {
+                            #[cfg(debug_assertions)]
+                            queue_span: crate::input_io_diagnostics::Span::start(
+                                crate::input_io_diagnostics::Metric::NativeServerQueue,
+                            ),
+                            op: if owned_physical {
+                                PHYSICAL_RELEASE
+                            } else {
+                                RELEASE
+                            },
+                            payload,
+                            deadline: Instant::now() + OP_WAIT,
+                            response,
+                        })
+                        .is_ok();
+                    if queued {
+                        if let Some(wake) = &wake {
+                            let _ = wake.notify();
+                        }
+                    }
                 }
                 let _ = stream.shutdown(Shutdown::Both);
                 if let Ok(mut peers) = peers.lock() {
@@ -852,6 +870,7 @@ impl Server {
             path,
             binding: None,
             staged: None,
+            wake,
         })
     }
     pub fn drain(
@@ -864,12 +883,14 @@ impl Server {
             return Err("native_input_owner_failed");
         }
         // Bounded work preserves owner-pipe progress and the independent 10ms safety tick.
+        let mut drained = 0;
         for _ in 0..4 {
             let request = match self.pending.try_recv() {
                 Ok(r) => r,
                 Err(mpsc::TryRecvError::Empty) => break,
                 Err(_) => return Err("native_input_owner_failed"),
             };
+            drained += 1;
             #[cfg(debug_assertions)]
             drop(request.queue_span);
             let result = {
@@ -888,6 +909,13 @@ impl Server {
                 self.binding = None;
                 self.staged = None;
                 runtime.release_reason(output, "native_grant_delivery_failed")?;
+            }
+        }
+        // A coalesced notification may cover more than one bounded batch.
+        // Revisit after checking stdin and the authoritative safety clock.
+        if drained == 4 {
+            if let Some(wake) = &self.wake {
+                wake.notify()?;
             }
         }
         Ok(())
@@ -1400,9 +1428,36 @@ mod tests {
         assert!(runtime.rotation_session().is_none());
     }
     #[test]
+    fn actual_native_status_wakes_parked_owner_without_renewing_lease() {
+        let root = Root::new();
+        let wake = Arc::new(crate::owner_wake::OwnerWake::default());
+        let mut server = Server::bind_with_wake(&root.0, Some(wake.clone())).unwrap();
+        let (mut runtime, mut sink) = runtime();
+        let (started, ready) = mpsc::sync_channel(1);
+        thread::scope(|scope| {
+            let request = scope.spawn(|| {
+                let mut client = Client::connect(&root.0).unwrap();
+                started.send(()).unwrap();
+                // configuration uses the unchanged 250ms operation budget.
+                assert!(client.configuration().unwrap().active);
+            });
+            ready.recv().unwrap();
+            // TEST-only long park proves native enqueue wakes us, rather than
+            // depending on the production 10ms fallback polling interval.
+            wake.wait(Duration::from_secs(1)).unwrap();
+            server.drain(&mut runtime, 2, &mut sink).unwrap();
+            request.join().unwrap();
+        });
+        runtime.tick(751, &mut sink).unwrap();
+        assert!(!runtime.snapshot().active);
+        assert_eq!(sink.0, NEUTRAL);
+        assert_eq!(runtime.snapshot().last_release_reason, "lease_expired");
+    }
+    #[test]
     fn draining_native_requests_is_bounded_for_owner_progress() {
         let root = Root::new();
-        let mut server = Server::bind(&root.0).unwrap();
+        let wake = Arc::new(crate::owner_wake::OwnerWake::default());
+        let mut server = Server::bind_with_wake(&root.0, Some(wake.clone())).unwrap();
         let (sender, pending) = mpsc::sync_channel(8);
         server.pending = pending;
         let (mut runtime, mut sink) = runtime();
@@ -1425,6 +1480,7 @@ mod tests {
         }
         server.drain(&mut runtime, 2, &mut sink).unwrap();
         assert_eq!(results.iter().filter(|r| r.try_recv().is_ok()).count(), 4);
+        wake.wait(Duration::from_secs(1)).unwrap();
         server.drain(&mut runtime, 3, &mut sink).unwrap();
         assert_eq!(results.iter().filter(|r| r.try_recv().is_ok()).count(), 4);
     }

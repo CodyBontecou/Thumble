@@ -40,6 +40,16 @@ def command(*args):
     return subprocess.check_output(args, text=True).strip()
 
 
+def runtime_sources():
+    # Pure native dependencies of PhoneConnection must also be linked into this
+    # isolated host; no Expo module, React view or product app is compiled here.
+    return tuple(ROOT / path for path in (
+        'tooling/ios-tls-runtime/Probe.swift',
+        'apps/mobile/modules/thumble-input/ios/PhoneConnection.swift',
+        'apps/mobile/modules/thumble-input/ios/PairingQRScanner.swift',
+    ))
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--report', type=Path, required=True)
@@ -67,7 +77,7 @@ def main():
             runner_phase = 'runner-compiling'
             sdk = command('xcrun', '--sdk', 'iphonesimulator', '--show-sdk-path')
             libraries = ROOT / 'reports/mobile-ios-iphonesimulator'
-            subprocess.run(['xcrun', '--sdk', 'iphonesimulator', 'swiftc', '-swift-version', '6', '-parse-as-library', '-sdk', sdk, '-target', 'arm64-apple-ios17.0-simulator', '-I', str(libraries), '-L', str(libraries), '-lMobileInputUIKit', '-lMobileInputCore', '-lThumbleContracts', '-Xlinker', '-sectcreate', '-Xlinker', '__TEXT', '-Xlinker', '__entitlements', '-Xlinker', str(entitlement_path), str(ROOT / 'tooling/ios-tls-runtime/Probe.swift'), str(ROOT / 'apps/mobile/modules/thumble-input/ios/PhoneConnection.swift'), '-o', str(app / 'TLSRuntimeProbe')], check=True)
+            subprocess.run(['xcrun', '--sdk', 'iphonesimulator', 'swiftc', '-swift-version', '6', '-parse-as-library', '-sdk', sdk, '-target', 'arm64-apple-ios17.0-simulator', '-I', str(libraries), '-L', str(libraries), '-lMobileInputUIKit', '-lMobileInputCore', '-lThumbleContracts', '-Xlinker', '-sectcreate', '-Xlinker', '__TEXT', '-Xlinker', '__entitlements', '-Xlinker', str(entitlement_path), *[str(source) for source in runtime_sources()], '-o', str(app / 'TLSRuntimeProbe')], check=True)
             (app / 'controller-layout-v1.json').write_bytes((ROOT / 'packages/fixtures/controller-layout-v1.json').read_bytes())
             runner_phase = 'runner-signing'
             subprocess.run(['codesign', '--force', '--sign', '-', str(app)], check=True, stdout=subprocess.DEVNULL)

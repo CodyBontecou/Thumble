@@ -1,14 +1,34 @@
-import { mkdirSync, statSync } from "node:fs";
+import { mkdirSync, rmSync, statSync } from "node:fs";
 import { resolve } from "node:path";
+import { parseTestSelection, selectTestFiles } from "./ci-test-options";
+const selection = parseTestSelection(process.argv.slice(2));
 const root = resolve(import.meta.dir, "..");
 mkdirSync(resolve(root, "reports"), { recursive: true });
-const packageMode = process.argv.includes("--package");
-const report = packageMode ? "reports/package-junit.xml" : "reports/junit.xml";
+const { packageMode, shard } = selection;
+const inventory = [
+  ...new Bun.Glob("**/*").scanSync({
+    cwd: resolve(root, "tests"),
+    onlyFiles: true,
+    followSymlinks: false,
+  }),
+]
+  .filter((file) => /(?:^|[._])(?:test|spec)\.[cm]?[jt]sx?$/.test(file))
+  .map((file) => `./tests/${file.replaceAll("\\", "/")}`);
+const files = selectTestFiles(inventory, selection);
+const report = packageMode
+  ? "reports/package-junit.xml"
+  : shard
+    ? `reports/shard-${shard.index}-of-${shard.count}-junit.xml`
+    : "reports/junit.xml";
+console.log(
+  `CI test selection: ${files.length} files${shard ? `; shard ${shard.index}/${shard.count}` : ""}`,
+);
+rmSync(resolve(root, report), { force: true });
 const result = Bun.spawnSync(
   [
     process.execPath,
     "test",
-    ...(packageMode ? ["tests/package.test.ts"] : []),
+    ...files,
     "--reporter=junit",
     `--reporter-outfile=${report}`,
   ],

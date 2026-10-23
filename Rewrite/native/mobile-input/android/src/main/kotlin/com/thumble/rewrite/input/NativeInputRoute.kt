@@ -6,6 +6,7 @@ internal class NativeInputRoute(
     private val udp: (ByteArray) -> Boolean,
     private val tls: (ByteArray) -> Boolean,
     initiallyReliable: Boolean = false,
+    private val acknowledgeTLS: (ByteArray, ULong, ULong) -> Boolean = { _, _, _ -> true },
 ) {
     private var scope: ByteArray? = null
     private var next = 0uL
@@ -121,6 +122,11 @@ internal class NativeInputRoute(
                     sequence > lastOffered!! ||
                     acknowledged?.let { sequence < it } == true
             ) {
+                close()
+                return false
+            }
+            val header = scope ?: return false
+            if (!acknowledgeTLS(header.copyOf(), sequence, lastOffered!!)) {
                 close()
                 return false
             }

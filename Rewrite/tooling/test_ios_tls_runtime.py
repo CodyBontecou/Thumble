@@ -1,8 +1,14 @@
 import unittest
-from check_ios_tls_runtime import validate_result
+from check_ios_tls_runtime import validate_result, runtime_sources
 
 
 class RuntimeResultTests(unittest.TestCase):
+    def test_fixed_pure_native_source_inventory(self):
+        sources = runtime_sources()
+        self.assertEqual([source.name for source in sources], ['Probe.swift', 'PhoneConnection.swift', 'PairingQRScanner.swift'])
+        self.assertTrue(all(source.is_file() for source in sources))
+        self.assertEqual(len(set(sources)), len(sources))
+
     def test_strict_fixed_result(self):
         value = dict(version=1, scope='explicit-map-ios-runtime', passed=True, phase='finish', generation='2', elapsedMs=75000, publications=4500, maximumPublicationGapMs=18, tlsRuntimeOutcome='ready', controlFailureStage='none')
         self.assertEqual(validate_result(value), value)

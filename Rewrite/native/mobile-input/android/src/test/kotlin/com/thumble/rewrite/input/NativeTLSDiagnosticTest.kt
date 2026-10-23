@@ -177,8 +177,11 @@ class NativeTLSDiagnosticTest {
     private class SyntheticSocket(
         private val input: java.io.InputStream,
         private val released: CountDownLatch,
+        private val output: java.io.OutputStream,
     ) : javax.net.ssl.SSLSocket() {
         override fun getInputStream() = input
+
+        override fun getOutputStream() = output
 
         override fun close() {
             released.countDown()
@@ -225,7 +228,11 @@ class NativeTLSDiagnosticTest {
         override fun getEnableSessionCreation() = false
     }
 
-    private fun client(input: java.io.InputStream, released: CountDownLatch): ControlTLSClient {
+    private fun client(
+        input: java.io.InputStream,
+        released: CountDownLatch,
+        output: java.io.OutputStream = java.io.ByteArrayOutputStream(),
+    ): ControlTLSClient {
         val constructor =
             ControlTLSClient::class
                 .java
@@ -235,7 +242,7 @@ class NativeTLSDiagnosticTest {
                 )
         constructor.isAccessible = true
         return constructor.newInstance(
-            SyntheticSocket(input, released),
+            SyntheticSocket(input, released, output),
             object : java.net.Socket() {
                 override fun close() {
                     released.countDown()
@@ -260,7 +267,15 @@ class NativeTLSDiagnosticTest {
             val delivery = NativeTLSDelivery(client.nativeFrames())
             until { delivery.state == NativeTLSDelivery.State.CLOSED }
             assertEquals(
-                NativeTLSTerminalDiagnostic(NativeTLSCloseCause.READ_FAILED, category),
+                NativeTLSTerminalDiagnostic(
+                    NativeTLSCloseCause.READ_FAILED,
+                    category,
+                    NativeTLSOperationFailure(
+                        NativeTLSOperationDirection.RECEIVE,
+                        NativeTLSOperationFailureKind.IO,
+                        category,
+                    ),
+                ),
                 delivery.terminalDiagnostic,
             )
             try {
@@ -291,11 +306,79 @@ class NativeTLSDiagnosticTest {
             NativeTLSTerminalDiagnostic(
                 NativeTLSCloseCause.READ_FAILED,
                 NativeTLSExceptionCategory.TIMEOUT,
+                NativeTLSOperationFailure(
+                    NativeTLSOperationDirection.RECEIVE,
+                    NativeTLSOperationFailureKind.DEADLINE,
+                    NativeTLSExceptionCategory.TIMEOUT,
+                ),
             ),
             delivery.terminalDiagnostic,
         )
         client.close()
         delivery.close()
         assertEquals(NativeTLSExceptionCategory.TIMEOUT, client.failureCategory)
+    }
+
+    @Test
+    fun productionWriterDeadlineRetainsSendDirectionDespitePublicRejection() {
+        val released = CountDownLatch(1)
+        val output =
+            object : java.io.OutputStream() {
+                override fun write(value: Int) {
+                    check(released.await(3, TimeUnit.SECONDS))
+                    throw SocketException()
+                }
+            }
+        val client = client(java.io.ByteArrayInputStream(byteArrayOf()), released, output)
+        try {
+            client.send(ControlTLSFrame(ControlTLSFrame.Kind.CONTROL, byteArrayOf(1)))
+            fail("stalled_writer_accepted")
+        } catch (_: ControlTLSRejected) {}
+        assertEquals(
+            NativeTLSOperationFailure(
+                NativeTLSOperationDirection.SEND,
+                NativeTLSOperationFailureKind.DEADLINE,
+                NativeTLSExceptionCategory.TIMEOUT,
+            ),
+            client.operationFailure,
+        )
+    }
+
+    @Test
+    fun terminalControlActivityDistinguishesQueuedStartedAndCompletedWrites() {
+        val entered = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val delivery =
+            NativeTLSDelivery(
+                object : NativeFrameIO {
+                    override fun send(frame: ControlTLSFrame) {
+                        entered.countDown()
+                        check(release.await(3, TimeUnit.SECONDS))
+                    }
+
+                    override fun receive(): ControlTLSFrame {
+                        check(release.await(3, TimeUnit.SECONDS))
+                        throw SocketException()
+                    }
+
+                    override fun close() {
+                        release.countDown()
+                    }
+                }
+            )
+        assertTrue(delivery.offerControl(byteArrayOf(1)))
+        assertTrue(entered.await(1, TimeUnit.SECONDS))
+        delivery.close()
+        val activity = requireNotNull(delivery.terminalActivity)
+        assertEquals(1L, activity.queued)
+        assertEquals(1L, activity.writeStarted)
+        assertEquals(0L, activity.writeCompleted)
+        assertEquals(0L, activity.received)
+        assertTrue(requireNotNull(activity.queuedAgeMs) in 0..86_400_000L)
+        assertTrue(requireNotNull(activity.writeStartedAgeMs) in 0..86_400_000L)
+        assertNull(activity.writeCompletedAgeMs)
+        assertNull(activity.receivedAgeMs)
+        assertEquals(0, activity.queueDepth)
+        assertEquals(activity, delivery.terminalActivity)
     }
 }
