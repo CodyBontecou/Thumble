@@ -1,4 +1,4 @@
-const CONSENT_TEXT = "Send me Thumble launch updates. No spam, unsubscribe anytime.";
+const CONSENT_TEXT = "By joining, you agree to receive launch updates.";
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i;
 
 const securityHeaders = {
@@ -34,7 +34,7 @@ function jsonResponse(request, body, status = 200) {
 }
 
 function htmlResponse(message, status = 200) {
-  return new Response(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Thumble waitlist</title><link rel="stylesheet" href="/styles.css"></head><body class="privacy-page"><main class="section-shell privacy-copy"><section class="pixel-panel"><p class="eyebrow">Thumble waitlist</p><h1>${escapeHtml(message)}</h1><p><a class="pixel-button" href="/">Back to site</a></p></section></main></body></html>`, {
+  return new Response(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Thumble waitlist</title><link rel="stylesheet" href="/styles.css"></head><body class="privacy-page"><main class="section-shell privacy-copy"><section class="pixel-panel"><p class="eyebrow">Thumble waitlist</p><h1>${escapeHtml(message)}</h1><p><a class="pixel-button" href="https://thumble.io/">Back to site</a></p></section></main></body></html>`, {
     status,
     headers: {
       ...securityHeaders,
@@ -49,7 +49,7 @@ function fail(request, message, status = 400) {
 }
 
 function ok(request, message = "You're on the launch list. 🕹️") {
-  if (wantsHtml(request)) return Response.redirect(new URL("/thanks.html", request.url), 303);
+  if (wantsHtml(request)) return Response.redirect(new URL("https://thumble.io/thanks"), 303);
   return jsonResponse(request, { ok: true, message });
 }
 

@@ -148,7 +148,7 @@ for (const form of document.querySelectorAll(".waitlist-form")) {
     }
 
     if (!payload.consent) {
-      setStatus(form, "Please check the consent box so we can email you.", "error");
+      setStatus(form, "Please confirm you want Thumble launch updates.", "error");
       return;
     }
 

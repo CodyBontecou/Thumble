@@ -3,13 +3,22 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="canonical" href="https://thumble.io/docs">
+  <meta property="og:url" content="https://thumble.io/docs">
+  <meta property="og:site_name" content="Thumble">
+  <meta property="og:image:alt" content="Thumble app icon">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Thumble Docs: Setup, keypad editor, CLI, and AI agents">
+  <meta name="twitter:description" content="Thumble documentation for pairing iPhone and Mac, customizing keypad profiles, using controller output, automating with the CLI, and guiding AI agents.">
+  <meta name="twitter:image" content="https://thumble.io/assets/app-icon.png">
+  <meta name="twitter:image:alt" content="Thumble app icon">
   <title>Thumble Docs: Setup, keypad editor, CLI, and AI agents</title>
   <meta name="description" content="Thumble documentation for pairing iPhone and Mac, customizing keypad profiles, using controller output, automating with the CLI, and guiding AI agents.">
   <meta name="theme-color" content="#080909">
   <meta property="og:title" content="Thumble Docs">
   <meta property="og:description" content="Set up and customize Thumble on macOS and iOS, use its CLI, and delegate keypad work to an AI agent.">
   <meta property="og:type" content="article">
-  <meta property="og:image" content="/assets/app-icon.png">
+  <meta property="og:image" content="https://thumble.io/assets/app-icon.png">
   <link rel="icon" href="/assets/favicon.png" type="image/png">
   <link rel="apple-touch-icon" href="/assets/app-icon.png">
   <link rel="stylesheet" href="/styles.css?v=c61718e97179">
@@ -17,16 +26,16 @@
 </head>
 <body class="docs-page">
   <header class="site-header">
-    <a class="brand" href="/" aria-label="Thumble home">
+    <a class="brand" href="https://thumble.io/" aria-label="Thumble home">
       <img src="/assets/app-icon.png" width="30" height="30" alt="">
       <span>Thumble</span>
     </a>
     <nav aria-label="Primary navigation">
-      <a href="/">Home</a>
-      <a href="/#screens">Screens</a>
-      <a href="/docs.html">Docs</a>
-      <a href="/blog.html">Blog</a>
-      <a class="nav-cta" href="/#waitlist">Waitlist</a>
+      <a href="https://thumble.io/">Home</a>
+      <a href="https://thumble.io/#screens">Screens</a>
+      <a href="https://thumble.io/docs">Docs</a>
+      <a href="https://thumble.io/blog">Blog</a>
+      <a class="nav-cta" href="https://thumble.io/#waitlist">Waitlist</a>
     </nav>
   </header>
 
@@ -311,8 +320,8 @@ thumble element add joystick --label "Right Stick" --up custom1 --down custom2 -
 thumble element set jump --label A --shape circle --width 1.2 --height 1.2</code></pre>
 
           <h3>Runtime helper commands</h3>
-          <pre><code>thumble app open
-thumble app screenshot -o /tmp/thumble-window.png --json
+          <pre><code>thumble server start
+thumble layout preview -o /tmp/keypad-preview.png
 thumble status --json
 thumble server restart
 thumble pairing payload
@@ -320,7 +329,7 @@ thumble accessibility status
 thumble test tap jump
 thumble release-all</code></pre>
 
-          <p>When Thumble Mac is running, CLI profile, customization, and binding changes are pushed to the app via distributed notifications and then synced to the paired iPhone. <code>app screenshot</code> captures only the largest visible Thumble window without activating the app or sending input events; it requires Screen Recording access for the terminal or agent host.</p>
+          <p>Use the local receiver for pairing and input, and CLI/MCP for saved configuration. <code>layout preview</code> renders the saved layout to an artifact without a desktop window or Screen Recording access. Desktop window, editor-view and onboarding replay commands have been retired.</p>
         </section>
 
         <section id="agents" class="doc-section">
@@ -366,13 +375,13 @@ could be confirmed. Do not use UI automation.</code></pre>
           <h3>Safe boundaries to include</h3>
           <ul>
             <li>Use the CLI instead of clicking through the Mac or iPhone UI.</li>
-            <li>Use <code>thumble app screenshot</code> for visual checks; do not activate the app or send keyboard/mouse events.</li>
+            <li>Use <code>thumble layout preview -o preview.png</code> for visual checks of the saved design.</li>
             <li>Ask before launching apps, opening System Settings, triggering permission prompts, restarting the server, or sending test input.</li>
             <li>Treat <code>test tap|down|up</code> as real output to the currently focused Mac app, and use <code>release-all</code> if a test is interrupted.</li>
             <li>Inspect before deleting/resetting profiles, clearing bindings, or replacing output modes. Export all profiles before a broad migration or reset.</li>
           </ul>
 
-          <p>See the complete <a href="https://github.com/CodyBontecou/Thumble/blob/main/docs/agents.md" rel="noreferrer">Using Thumble with an AI agent</a> guide for reusable instruction-file snippets and copy-paste prompts for games, productivity pads, layout repair, diagnostics, and appearance editing. Hosted connectors are retired; see the <a href="/blog/connect-chatgpt-claude.html">local controller tools guide</a>.</p>
+          <p>See the complete <a href="https://github.com/CodyBontecou/Thumble/blob/main/docs/agents.md" rel="noreferrer">Using Thumble with an AI agent</a> guide for reusable instruction-file snippets and copy-paste prompts for games, productivity pads, layout repair, diagnostics, and appearance editing. Hosted connectors are retired; see the <a href="https://thumble.io/blog/connect-chatgpt-claude">local controller tools guide</a>.</p>
         </section>
 
         <section id="troubleshooting" class="doc-section">
@@ -422,7 +431,7 @@ could be confirmed. Do not use UI automation.</code></pre>
           </details>
           <details>
             <summary>Can I use it without the Mac app open?</summary>
-            <p>The iPhone can view saved keypads offline, but controlling the Mac requires Thumble Mac to be running and connected.</p>
+            <p>The iPhone can view saved keypads offline. Controlling the Mac requires the local receiver to be running and connected; start it with <code>thumble server start</code>. A desktop window is not required.</p>
           </details>
           <details>
             <summary>Can I back up my layouts?</summary>
@@ -443,7 +452,7 @@ could be confirmed. Do not use UI automation.</code></pre>
 
   <footer class="site-footer section-shell">
     <span>© <span id="year">2026</span> Thumble</span>
-    <span class="footer-links"><a href="/">home</a><a href="/blog.html">blog</a><a href="/privacy.html">privacy</a></span>
+    <span class="footer-links"><a href="https://thumble.io/">home</a><a href="https://thumble.io/blog">blog</a><a href="https://thumble.io/privacy">privacy</a></span>
   </footer>
 
   <script src="/script.js" defer></script>

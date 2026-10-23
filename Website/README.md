@@ -2,9 +2,30 @@
 
 Dark, product-focused site for Thumble, inspired by myself.md, with a Cloudflare Pages Function that saves launch-list emails into Cloudflare D1.
 
+## Production domain
+
+`thumble.io` was registered with Cloudflare on October 23, 2026 and added to the
+existing `pocketpad-site` Pages project. Its proxied apex CNAME points to
+`pocketpad-site.pages.dev`; the existing D1 and R2 bindings remain on that project.
+
+The `isolated.tech` zone has a saved Single Redirect named
+`Thumble website to thumble.io`. It matches only
+`http.host eq "thumble.isolated.tech"` and redirects with status 301 to
+`concat("https://thumble.io", http.request.uri.path)`, preserving query strings.
+The rule was enabled on October 23, 2026 after verifying that `https://thumble.io`
+serves the site with a valid certificate. Both HTTP and HTTPS old-domain requests
+were verified to return 301 redirects preserving the path and query string; the
+new domain's homepage and `/docs` returned 200. Some resolvers may temporarily
+retain a negative DNS cache from before the registration's delegation appeared.
+
+Public navigation, canonical URLs, Open Graph and Twitter image URLs use
+`https://thumble.io`. Canonical page paths omit `.html`, matching Pages' redirects.
+`sitemap.xml` lists indexable pages and is advertised by `robots.txt`; the 404,
+signup confirmation and retired skin notice remain excluded from the sitemap.
+
 ## Files
 
-- `index.html` / `home.js` — landing page and accessible controller showcase tabs.
+- `index.html` / `waitlist.html` / `landing.css` — shared visual direction: a centered headline, native controller preview, and compact signup card.
 - `styles.css` / `design.css` — existing content layouts and the shared dark visual theme across every page.
 - `script.js` — release availability, Turnstile, and launch-list forms.
 - `docs.html` — comprehensive Thumble documentation for setup, pairing, editor workflows, outputs, CLI, troubleshooting, and safety behavior.
@@ -20,10 +41,10 @@ Dark, product-focused site for Thumble, inspired by myself.md, with a Cloudflare
 ## Static design preview
 
 Run `python3 -m http.server 8174 --directory Website` from the repository root.
-The static preview covers the page layouts, tabs, FAQ, and direct appearance editing. Release
+The static preview covers the page layouts, FAQ, and direct appearance editing. Release
 metadata and signup submission require the Cloudflare Pages runtime and bindings
-described below. The controller tabs support arrow-key navigation and Enter/Space
-activation; reduced-motion preferences disable decorative transitions.
+described below. The launch hero keeps the controller and signup form in the first viewport on
+small phones and desktop displays. Reduced-motion preferences disable decorative transitions.
 
 ## Cloudflare setup
 
@@ -142,3 +163,36 @@ Everyday Play uses its reviewed clean native controller render.
 These images show configured controller UI, not live game recognition or input
 acceptance. No controls or icons were composited onto the captures or render. Asset
 filenames include SHA-256 prefixes because `/assets/*` is cached immutably.
+
+## Waitlist landing page and sharing
+
+The homepage includes a compact signup card beneath the controller showcase. Share
+`https://thumble.io/waitlist` for the dedicated signup page, with the same card beneath its controller preview. The hero, dedicated
+page, and footer all use `script.js` and `POST /api/subscribe`, with consent given by joining beneath a visible launch-update notice,
+honeypot protection, inline feedback, and native HTML submission when
+JavaScript is unavailable. Their source values are `hero`, `waitlist`, and `footer`.
+Existing subscribers are updated rather than duplicated by the email constraint.
+
+Both the homepage and `/waitlist` declare the 1200 × 630 PNG social card at
+`/assets/og/waitlist-v5.png`, including Open Graph dimensions, alt text, and
+Twitter's large-image card. Its editable HTML at `scripts/website/waitlist-og.html` and reproducible renderer are retained:
+
+```bash
+node scripts/website/render-waitlist-og.cjs
+```
+
+Run from the repository root with `playwright` available in Node's module resolution
+and Chromium installed. The card uses the unchanged Warband Command native render
+with the hero’s CSS perspective tilt; it does not author or
+modify a controller skin. Change the versioned filename when updating the card,
+because `/assets/*` uses immutable caching.
+
+The waitlist and landing page describe the cross-platform rebuild targeting iOS,
+Android, macOS, Windows, and Linux. These are development targets, not a claim
+that every platform or native input backend is currently released. The existing
+macOS download and editor screenshot are current preview artifacts.
+
+The refined launch hero uses the existing Warband Command native render with a
+CSS perspective tilt. Its screenshot is unchanged; the hero removes layout tabs,
+preview captions, and secondary calls to action. Both landing URLs retain
+platform development targets and the same accessible email form.

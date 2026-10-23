@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Thumble social card source</title>
+<style>
+* { box-sizing: border-box; }
+body { margin: 0; width: 1200px; height: 630px; overflow: hidden; background: #050505; color: #ededed; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+.canvas { width: 100%; height: 100%; position: relative; isolation: isolate; text-align: center; }
+.canvas::before { content: ""; position: absolute; z-index: -2; inset: 65px 0 0; background: radial-gradient(ellipse at 50% 42%, #24242468, transparent 54%); }
+.canvas::after { content: ""; position: absolute; z-index: -1; inset: 25px 0 0; opacity: .3; background: radial-gradient(#686868 .8px, transparent 1px); background-size: 7px 7px; mask-image: radial-gradient(ellipse at 50% 48%, transparent 18%, #000 53%, transparent 73%); }
+h1 { position: absolute; top: 76px; width: 100%; margin: 0; font-size: 59px; line-height: 1.13; font-weight: 500; letter-spacing: -.045em; }h1 span { color: #929292; }
+.phone { position: absolute; top: 205px; left: 260px; width: 680px; padding: 5px; border: 1px solid #656565; border-radius: 45px; background: linear-gradient(145deg, #707070, #252525 32%, #161616 75%, #424242); box-shadow: 0 26px 45px #000c, inset 0 0 0 2px #292929; transform: perspective(1500px) rotateX(8deg) rotateY(-8deg) rotateZ(-3deg); }
+.phone img { display: block; width: 100%; height: auto; border: 1px solid #0a0a0a; border-radius: 39px; }
+.url { position: absolute; top: 568px; margin: 0; width: 100%; color: #e0e0e0; font: 22px/1.5 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+</style>
+</head>
+<body>
+<div class="canvas">
+  <h1>Your phone. <span>Your controls.</span></h1>
+  <div class="phone"><img src="../../Website/assets/screenshots/warband-command-1.0.2-67ae6f7fd33d.png" width="1748" height="804" alt="Thumble Warband Command controller"></div>
+  <p class="url">thumble.io/waitlist</p>
+</div>
+</body>
+</html>

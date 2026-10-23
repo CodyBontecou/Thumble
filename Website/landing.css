@@ -1,0 +1,53 @@
+/* The launch surface: one product, one invitation. */
+.launch-page { background: #050505; }
+.launch-page .site-header { max-width: 1440px; width: 100%; min-height: 88px; padding: 20px 48px; margin: 0 auto; background: transparent; backdrop-filter: none; }
+.launch-page .site-header .brand { font-size: 23px; letter-spacing: -1.1px; }
+.launch-page .site-header nav { gap: 28px; }
+.launch-page .site-header nav a { color: #929292; font-size: 13px; text-decoration: none; }
+.launch-page .site-header nav a:hover { color: #ededed; }
+.launch-hero { position: relative; isolation: isolate; max-width: 1440px; min-height: calc(100svh - 88px); margin: 0 auto; padding: 42px 32px 42px; text-align: center; overflow: clip; }
+.launch-hero::before { content: ""; position: absolute; z-index: -2; inset: 100px 0 0; background: radial-gradient(ellipse at 50% 42%, #24242468, transparent 54%); pointer-events: none; }
+.launch-hero::after { content: ""; position: absolute; z-index: -1; inset: 20px 0 0; opacity: .3; background: radial-gradient(#686868 .8px, transparent 1px); background-size: 7px 7px; mask-image: radial-gradient(ellipse at 50% 48%, transparent 18%, #000 53%, transparent 73%); pointer-events: none; }
+.launch-heading h1 { max-width: none; margin: 0; color: #ededed; font-size: clamp(42px, 5vw, 68px); font-weight: 500; line-height: 1.13; letter-spacing: -.045em; text-wrap: balance; }
+.launch-heading h1 span { color: #929292; }
+.launch-heading > p { margin: 16px 0 0; color: #969696; font: 14px/1.7 var(--mono); letter-spacing: -.025em; }
+.launch-product { width: min(100%, 700px); margin: 45px auto 42px; padding: 4px 15px 8px; }
+.launch-phone { padding: 6px; border: 1px solid #656565; border-radius: 48px; background: linear-gradient(145deg, #707070, #252525 32%, #161616 75%, #424242); box-shadow: 0 26px 45px #000c, inset 0 0 0 2px #292929; transform: perspective(1500px) rotateX(8deg) rotateY(-8deg) rotateZ(-3deg); }
+.launch-phone img { width: 100%; height: auto; border: 1px solid #0a0a0a; border-radius: 40px; }
+.launch-hero .signup-card { position: relative; width: min(100%, 550px); margin: 0 auto; padding: 9px; border-color: #333; border-radius: 21px; background: #090909; }
+.launch-hero .signup-card .form-row { padding: 7px; border-radius: 14px; }
+.launch-hero .signup-card .form-row input { height: 44px; font-size: 14px; }
+.launch-hero .signup-card .form-row button { display: inline-flex; gap: 15px; min-height: 44px; font-weight: 450; }
+.launch-hero .signup-card .form-row button:active { transform: scale(.98); }
+.launch-hero .signup-consent { margin: 9px 4px 2px; font-size: 10px; color: #8f8f8f; }
+.launch-platforms { margin: 18px 0 0; color: #777; font: 10px/1.8 var(--mono); }
+.launch-page .site-footer { border-color: #1d1d1d; }
+@media (min-width: 641px) and (max-height: 800px) {
+  .launch-page .site-header { min-height: 72px; padding-block: 16px; }
+  .launch-hero { min-height: calc(100svh - 72px); padding-block: 22px 32px; }
+  .launch-heading h1 { font-size: clamp(42px, 4.5vw, 58px); }
+  .launch-heading > p { margin-top: 12px; }
+  .launch-product { max-width: 610px; margin-block: 28px 30px; }
+}
+@media (max-width: 640px) {
+  .launch-page .site-header { min-height: 74px; padding: 18px 22px; flex-wrap: nowrap; }
+  .launch-page .site-header nav { gap: 20px; }
+  .launch-page .site-header nav a { font-size: 12px; }
+  .launch-hero { min-height: calc(100svh - 74px); padding: 25px 20px 44px; }
+  .launch-heading h1 { font-size: clamp(38px, 10.5vw, 56px); letter-spacing: -.045em; }
+  .launch-heading h1 span { display: block; }
+  .launch-heading > p { margin-top: 15px; font-size: 12px; }
+  .launch-product { width: calc(100% + 12px); margin: 37px -6px 33px; padding: 4px 9px 8px; }
+  .launch-phone { padding: 4px; border-radius: 29px; transform: perspective(1000px) rotateX(5deg) rotateY(-6deg) rotateZ(-4deg); }
+  .launch-phone img { border-radius: 23px; }
+  .launch-hero .signup-card { padding: 7px; border-radius: 18px; }
+  .launch-hero .signup-card .form-row { padding: 5px; border-radius: 12px; }
+  .launch-hero .signup-card .form-row input { font-size: 16px; }
+  .launch-hero .signup-card .form-row button { gap: 7px; padding-inline: 11px; font-size: 12px; }
+  .launch-platforms { max-width: 280px; margin: 17px auto 0; font-size: 9px; }
+}
+@media (max-width: 640px) and (max-height: 650px) {
+  .launch-hero { padding-top: 12px; padding-bottom: 28px; }
+  .launch-heading h1 { font-size: 36px; }
+  .launch-product { margin-block: 22px 23px; }
+}
