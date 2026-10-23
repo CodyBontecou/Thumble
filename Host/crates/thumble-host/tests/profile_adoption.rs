@@ -57,7 +57,7 @@ impl Drop for Receiver {
         let _ = self.0.wait();
     }
 }
-fn spawn(bin: &Path, paths: &HostPaths) -> Receiver {
+fn spawn(bin: &Path, paths: &HostPaths, fixture_home: &Path) -> Receiver {
     Receiver(
         Command::new(bin.join("thumble-host"))
             .args([
@@ -68,6 +68,7 @@ fn spawn(bin: &Path, paths: &HostPaths) -> Receiver {
                 "--no-bonjour",
                 "--allow-config-write",
             ])
+            .env("HOME", fixture_home)
             .env("THUMBLE_HOST_STATE_DIR", &paths.state_dir)
             .env("THUMBLE_HOST_CONTROL_SOCKET", &paths.control_socket)
             .stdin(Stdio::null())
@@ -187,9 +188,10 @@ async fn operation(ws: &mut Ws, kind: Kind, m: &AdoptionMetadata) {
 fn saved(paths: &HostPaths) -> Value {
     serde_json::from_slice(&std::fs::read(&paths.state_file).unwrap()).unwrap()
 }
-fn cli(bin: &Path, paths: &HostPaths, args: &[&str], success: bool) -> Value {
+fn cli(bin: &Path, paths: &HostPaths, fixture_home: &Path, args: &[&str], success: bool) -> Value {
     let output = Command::new(bin.join("thumble"))
         .arg("shared-build")
+        .env("HOME", fixture_home)
         .args(args)
         .env("THUMBLE_HOST_STATE_DIR", &paths.state_dir)
         .env("THUMBLE_HOST_CONTROL_SOCKET", &paths.control_socket)
@@ -210,14 +212,21 @@ fn cli(bin: &Path, paths: &HostPaths, args: &[&str], success: bool) -> Value {
 #[ignore = "requires THUMBLE_TEST_ARTIFACT_RUNTIME_BIN with current native bridge and public Swift CLI"]
 async fn native_adoption_is_atomic_replayed_after_restart_and_shared_with_the_public_cli() {
     let bin = PathBuf::from(std::env::var_os("THUMBLE_TEST_ARTIFACT_RUNTIME_BIN").unwrap());
-    let directory = tempfile::tempdir().unwrap();
-    let paths = HostPaths::new(
-        directory.path().into(),
-        directory.path().join("control.sock"),
-    );
+    // Use a private child of the trusted account home: /tmp ancestry is
+    // intentionally rejected by the public runtime bridge.
+    let directory = tempfile::Builder::new()
+        .prefix(".th-")
+        .tempdir_in(std::env::var_os("HOME").expect("account home required"))
+        .unwrap();
+    // The trusted Swift runtime bridge intentionally forwards HOME only.
+    // A canonical fixture root lets the public CLI discover this receiver
+    // without inheriting custom socket overrides or touching the real user home.
+    let fixture_home = directory.path().to_path_buf();
+    let state_dir = fixture_home.join("Library/Application Support/ThumbleHost");
+    let paths = HostPaths::new(state_dir.clone(), state_dir.join("control.sock"));
     paths.ensure_state_dir().unwrap();
     let bytes = include_bytes!("../../../fixtures/profile-artifact/v1.json");
-    let mut receiver = spawn(&bin, &paths);
+    let mut receiver = spawn(&bin, &paths, &fixture_home);
     let (mut ws, paired) = pair(&paths, None).await;
     let trust = paired.auth_token.unwrap();
     let initial = saved(&paths);
@@ -361,7 +370,7 @@ async fn native_adoption_is_atomic_replayed_after_restart_and_shared_with_the_pu
     let _ = receiver.0.kill();
     let _ = receiver.0.wait();
     drop(receiver);
-    receiver = spawn(&bin, &paths);
+    receiver = spawn(&bin, &paths, &fixture_home);
     let (mut ws, _) = pair(&paths, Some(trust)).await;
     assert_eq!(begin(&mut ws, &m).await.status, AdoptionStatus::Replayed);
     let reconnected = saved(&paths);
@@ -381,6 +390,7 @@ async fn native_adoption_is_atomic_replayed_after_restart_and_shared_with_the_pu
     let replay = cli(
         &bin,
         &paths,
+        &fixture_home,
         &[
             "adopt",
             artifact.to_str().unwrap(),
@@ -395,7 +405,13 @@ async fn native_adoption_is_atomic_replayed_after_restart_and_shared_with_the_pu
     assert_eq!(replay["status"], "replayed");
     assert_eq!(saved(&paths), reconnected);
     assert_eq!(
-        cli(&bin, &paths, &["status", &op, "--json"], true)["status"],
+        cli(
+            &bin,
+            &paths,
+            &fixture_home,
+            &["status", &op, "--json"],
+            true
+        )["status"],
         "replayed"
     );
     let new_op = Uuid::new_v4().to_string();
@@ -403,6 +419,7 @@ async fn native_adoption_is_atomic_replayed_after_restart_and_shared_with_the_pu
         cli(
             &bin,
             &paths,
+            &fixture_home,
             &[
                 "adopt",
                 artifact.to_str().unwrap(),
@@ -420,6 +437,7 @@ async fn native_adoption_is_atomic_replayed_after_restart_and_shared_with_the_pu
         cli(
             &bin,
             &paths,
+            &fixture_home,
             &[
                 "adopt",
                 artifact.to_str().unwrap(),
@@ -439,11 +457,23 @@ async fn native_adoption_is_atomic_replayed_after_restart_and_shared_with_the_pu
     );
     let cancel_id = cancel.operation_id.to_string();
     assert_eq!(
-        cli(&bin, &paths, &["status", &cancel_id, "--json"], true)["status"],
+        cli(
+            &bin,
+            &paths,
+            &fixture_home,
+            &["status", &cancel_id, "--json"],
+            true
+        )["status"],
         "accepted"
     );
     assert_eq!(
-        cli(&bin, &paths, &["cancel", &cancel_id, "--json"], false)["errorCode"],
+        cli(
+            &bin,
+            &paths,
+            &fixture_home,
+            &["cancel", &cancel_id, "--json"],
+            false
+        )["errorCode"],
         "disconnected"
     );
     assert_eq!(saved(&paths), after);
@@ -455,7 +485,12 @@ async fn native_adoption_is_atomic_replayed_after_restart_and_shared_with_the_pu
 #[ignore = "requires THUMBLE_TEST_ARTIFACT_RUNTIME_BIN with current native bridge and public Swift CLI"]
 async fn cancellation_during_native_validation_keeps_authority_unchanged_and_cli_responsive() {
     let source = PathBuf::from(std::env::var_os("THUMBLE_TEST_ARTIFACT_RUNTIME_BIN").unwrap());
-    let directory = tempfile::tempdir().unwrap();
+    // Use a private child of the trusted account home: /tmp ancestry is
+    // intentionally rejected by the public runtime bridge.
+    let directory = tempfile::Builder::new()
+        .prefix(".th-")
+        .tempdir_in(std::env::var_os("HOME").expect("account home required"))
+        .unwrap();
     std::fs::set_permissions(directory.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
     let bin = directory.path().join("bin");
     std::fs::create_dir(&bin).unwrap();
@@ -473,12 +508,11 @@ async fn cancellation_during_native_validation_keeps_authority_unchanged_and_cli
     let bridge = bin.join("thumble-bridge");
     std::fs::write(&bridge, wrapper).unwrap();
     std::fs::set_permissions(&bridge, std::fs::Permissions::from_mode(0o700)).unwrap();
-    let paths = HostPaths::new(
-        directory.path().join("state"),
-        directory.path().join("control.sock"),
-    );
+    let fixture_home = directory.path().to_path_buf();
+    let state_dir = fixture_home.join("Library/Application Support/ThumbleHost");
+    let paths = HostPaths::new(state_dir.clone(), state_dir.join("control.sock"));
     paths.ensure_state_dir().unwrap();
-    let receiver = spawn(&bin, &paths);
+    let receiver = spawn(&bin, &paths, &fixture_home);
     let (mut ws, _) = pair(&paths, None).await;
     let before = saved(&paths);
     let bytes = include_bytes!("../../../fixtures/profile-artifact/v1.json");
@@ -509,7 +543,13 @@ async fn cancellation_during_native_validation_keeps_authority_unchanged_and_cli
         AdoptionStatus::Accepted
     );
     assert_eq!(
-        cli(&bin, &paths, &["cancel", &op, "--json"], false)["errorCode"],
+        cli(
+            &bin,
+            &paths,
+            &fixture_home,
+            &["cancel", &op, "--json"],
+            false
+        )["errorCode"],
         "disconnected"
     );
     // Both the immediate cancellation and the completing native worker report

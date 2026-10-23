@@ -1487,6 +1487,15 @@
           ],
           "status": "planned",
           "mcpTool": "legacy_mac_app_action"
+        },
+        {
+          "id": "app.editor-view",
+          "cli": [
+            "app editor-view"
+          ],
+          "status": "host-cli-only",
+          "mcpTool": "legacy_mac_app_action",
+          "notes": "Controls the local Mac editor clean/edit presentation or reads its status. MCP does not expose this app action."
         }
       ]
     },
@@ -1574,6 +1583,44 @@
           ],
           "status": "host-cli-only",
           "mcpTool": "edit_configuration_draft"
+        }
+      ]
+    },
+    {
+      "id": "shared-build",
+      "executor": "rust-host",
+      "gate": "configuration-write",
+      "phoneEffect": "adoption appends portable profile copies through the receiver; status and cancellation track the durable operation",
+      "operations": [
+        {
+          "id": "shared-build.adopt",
+          "cli": [
+            "shared-build adopt"
+          ],
+          "status": "host-cli-only",
+          "mcpTool": "adopt_shared_build",
+          "gate": "configuration-write",
+          "notes": "Validates a portable artifact and submits receiver-owned adoption. The named MCP tool is not implemented."
+        },
+        {
+          "id": "shared-build.status",
+          "cli": [
+            "shared-build status"
+          ],
+          "status": "host-cli-only",
+          "mcpTool": "shared_build_adoption_status",
+          "gate": "none",
+          "notes": "Reads a durable adoption operation. The named MCP tool is not implemented."
+        },
+        {
+          "id": "shared-build.cancel",
+          "cli": [
+            "shared-build cancel"
+          ],
+          "status": "host-cli-only",
+          "mcpTool": "cancel_shared_build_adoption",
+          "gate": "configuration-write",
+          "notes": "Requests cancellation of a durable adoption operation. The named MCP tool is not implemented."
         }
       ]
     }

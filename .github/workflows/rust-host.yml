@@ -42,6 +42,7 @@ on:
       - "plugins/thumble/**"
       - "scripts/verify-plugin-skill-sync.sh"
       - "scripts/verify-mcp-cli-parity.py"
+      - "scripts/test_verify_mcp_cli_parity.py"
       - "scripts/verify-cli-profile-persistence-allowlist.py"
       - "scripts/verify-hosted-builder-capabilities.py"
       - "scripts/verify-hosted-builder-local.sh"
@@ -97,6 +98,7 @@ on:
       - "plugins/thumble/**"
       - "scripts/verify-plugin-skill-sync.sh"
       - "scripts/verify-mcp-cli-parity.py"
+      - "scripts/test_verify_mcp_cli_parity.py"
       - "scripts/verify-cli-profile-persistence-allowlist.py"
       - "scripts/verify-hosted-builder-capabilities.py"
       - "scripts/verify-hosted-builder-local.sh"
@@ -130,6 +132,7 @@ jobs:
         with:
           workspaces: Host
       - run: python3 ../scripts/verify-mcp-cli-parity.py
+      - run: python3 ../scripts/test_verify_mcp_cli_parity.py
       - run: python3 ../scripts/verify-hosted-builder-capabilities.py
       - run: python3 ../scripts/test_verify_controller_template_fixtures.py
       - run: ../scripts/verify-plugin-skill-sync.sh
