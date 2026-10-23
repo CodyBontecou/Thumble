@@ -54,6 +54,7 @@ export function startMcp(
       ? [
           "configuration_rename_profile",
           "configuration_set_control_label",
+          "configuration_delete_profile",
           "configuration_select_profiles",
           "configuration_duplicate_profile",
           "configuration_initialize_starter",
@@ -336,6 +337,47 @@ export function startMcp(
             ),
           ),
       );
+      if (allowConfigurationWrite)
+        server.registerTool(
+          "configuration_delete_profile",
+          {
+            description:
+              "Delete one saved profile with explicit remaining active/default selections and revision CAS. Refuses the last profile. Does not replace or retire installed input; release and activate separately when needed. Reuse the same operation ID and exact intent for durable replay.",
+            inputSchema: z
+              .object({
+                operationId: z.string().regex(/^[A-Za-z0-9-]{1,64}$/),
+                expectedRevision: epoch,
+                profileId: z
+                  .string()
+                  .regex(
+                    /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i,
+                  ),
+                activeProfileId: z
+                  .string()
+                  .regex(
+                    /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i,
+                  ),
+                defaultProfileId: z
+                  .string()
+                  .regex(
+                    /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i,
+                  )
+                  .nullable(),
+              })
+              .strict(),
+            annotations: annotations(false),
+          },
+          (args) =>
+            receipt(async () =>
+              requestConfiguration(
+                await readEndpointAsync(root, receiver),
+                decodeConfigurationCommand({
+                  command: "configuration-delete-profile",
+                  ...args,
+                }),
+              ),
+            ),
+        );
       if (allowConfigurationWrite)
         server.registerTool(
           "configuration_set_control_label",

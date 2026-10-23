@@ -1,4 +1,9 @@
 import {
+  decodeConfigurationDeleteProfileCommand,
+  type ConfigurationDeleteProfileCommand,
+} from "./profile-delete.ts";
+export type { ConfigurationDeleteProfileCommand } from "./profile-delete.ts";
+import {
   decodeConfigurationSetControlLabelCommand,
   type ConfigurationSetControlLabelCommand,
 } from "./control-label.ts";
@@ -67,6 +72,7 @@ export type ConfigurationInitializeStarterCommand = Readonly<{
   name: string;
 }>;
 export type ConfigurationCommand =
+  | ConfigurationDeleteProfileCommand
   | ConfigurationSetControlLabelCommand
   | ConfigurationInitializeStarterCommand
   | ConfigurationDuplicateProfileCommand
@@ -205,6 +211,8 @@ export function decodeConfigurationCommand(
   value: unknown,
 ): ConfigurationCommand {
   const kind = Object.getOwnPropertyDescriptor(record(value), "command")?.value;
+  if (kind === "configuration-delete-profile")
+    return decodeConfigurationDeleteProfileCommand(value);
   if (kind === "configuration-set-control-label")
     return decodeConfigurationSetControlLabelCommand(value);
   if (kind === "configuration-list") {
@@ -474,7 +482,8 @@ export function decodeConfigurationReply(
   }
   if (
     kind === "committed" &&
-    (command.command === "configuration-set-control-label" ||
+    (command.command === "configuration-delete-profile" ||
+      command.command === "configuration-set-control-label" ||
       command.command === "configuration-rename-profile" ||
       command.command === "configuration-select-profiles" ||
       command.command === "configuration-duplicate-profile" ||
@@ -498,7 +507,8 @@ export function decodeConfigurationReply(
             ? ["configuration"]
             : [
                 "configuration",
-                command.command === "configuration-initialize-starter"
+                command.command === "configuration-initialize-starter" ||
+                command.command === "configuration-delete-profile"
                   ? command.profileId
                   : command.newProfileId,
               ];

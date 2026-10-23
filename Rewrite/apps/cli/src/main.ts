@@ -1,3 +1,4 @@
+import { deleteProfileCommand, deleteProfileHelp } from "./delete-profile.ts";
 import { controlLabelCommand, controlLabelHelp } from "./control-label.ts";
 import { decodeWowSyncCommand } from "@thumble/contracts/wow-sync-control";
 import { decodeAuthorizedListener } from "@thumble/contracts/pairing";
@@ -145,6 +146,10 @@ async function main(): Promise<unknown> {
   const [family, action, ...rest] = arguments_;
   if (family === "configuration" && action === "set-control-label") {
     const help = controlLabelHelp(rest);
+    if (help) return help;
+  }
+  if (family === "configuration" && action === "delete-profile") {
+    const help = deleteProfileHelp(rest);
     if (help) return help;
   }
   const opts = options(rest);
@@ -619,6 +624,10 @@ async function main(): Promise<unknown> {
           ? { path: required(opts, "--file") }
           : {}),
       });
+      return requestConfiguration(readEndpoint(root, receiver), command);
+    }
+    if (action === "delete-profile") {
+      const command = deleteProfileCommand(opts);
       return requestConfiguration(readEndpoint(root, receiver), command);
     }
     if (action === "set-control-label") {

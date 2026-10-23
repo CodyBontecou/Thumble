@@ -9,6 +9,7 @@ import {
 import { counter } from "@thumble/contracts/receiver";
 import { ConfigurationCatalog } from "@thumble/domain/configuration-catalog";
 import { setOwnedControlLabel } from "@thumble/domain/owned-control-label";
+import { deleteOwnedProfile } from "@thumble/domain/owned-profile-delete";
 import {
   ConfigurationRevisionConflict,
   type ConfigurationRepository,
@@ -75,20 +76,26 @@ export class ConfigurationCatalogOperations {
               "thumble-catalog-operation-v1",
               command.command,
               command.expectedRevision,
-              ...(command.command === "configuration-set-control-label"
-                ? [command.profileId, command.controlId, command.label]
-                : command.command === "configuration-rename-profile"
-                  ? [command.profileId, command.name]
-                  : command.command === "configuration-initialize-starter"
-                    ? ["starter-v1", command.profileId, command.name]
-                    : command.command === "configuration-select-profiles"
-                      ? [command.activeProfileId, command.defaultProfileId]
-                      : [
-                          command.profileId,
-                          command.newProfileId,
-                          command.name,
-                          command.select,
-                        ]),
+              ...(command.command === "configuration-delete-profile"
+                ? [
+                    command.profileId,
+                    command.activeProfileId,
+                    command.defaultProfileId,
+                  ]
+                : command.command === "configuration-set-control-label"
+                  ? [command.profileId, command.controlId, command.label]
+                  : command.command === "configuration-rename-profile"
+                    ? [command.profileId, command.name]
+                    : command.command === "configuration-initialize-starter"
+                      ? ["starter-v1", command.profileId, command.name]
+                      : command.command === "configuration-select-profiles"
+                        ? [command.activeProfileId, command.defaultProfileId]
+                        : [
+                            command.profileId,
+                            command.newProfileId,
+                            command.name,
+                            command.select,
+                          ]),
             ]),
           );
     if (command.command !== "configuration-list") {
@@ -179,7 +186,13 @@ export class ConfigurationCatalogOperations {
     const catalog =
       authority?.catalog ?? ConfigurationCatalog.read(current.source);
     let candidate;
-    if (command.command === "configuration-select-profiles") {
+    if (command.command === "configuration-delete-profile") {
+      candidate = deleteOwnedProfile(current.source, {
+        profileId: command.profileId,
+        activeProfileId: command.activeProfileId,
+        defaultProfileId: command.defaultProfileId,
+      });
+    } else if (command.command === "configuration-select-profiles") {
       candidate = authority
         ? authority.selectProfiles(
             command.activeProfileId,
@@ -241,13 +254,15 @@ export class ConfigurationCatalogOperations {
       expectedRevision: command.expectedRevision,
       source: candidate,
       affectedEntities:
-        command.command === "configuration-select-profiles"
-          ? ["configuration"]
-          : command.command === "configuration-set-control-label"
-            ? [command.profileId, command.controlId]
-            : command.command === "configuration-duplicate-profile"
-              ? ["configuration", command.newProfileId]
-              : [command.profileId],
+        command.command === "configuration-delete-profile"
+          ? ["configuration", command.profileId]
+          : command.command === "configuration-select-profiles"
+            ? ["configuration"]
+            : command.command === "configuration-set-control-label"
+              ? [command.profileId, command.controlId]
+              : command.command === "configuration-duplicate-profile"
+                ? ["configuration", command.newProfileId]
+                : [command.profileId],
     });
     return Object.freeze({ version: 1, kind: "committed", ...result });
   }

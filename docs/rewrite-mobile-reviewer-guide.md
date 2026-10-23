@@ -146,6 +146,30 @@ review notes, screenshots, issues or CI artifacts. After pairing, cancel the
 window and remove those two private files. Trusted-phone reconnect does not
 require an open enrollment window.
 
+## Delete a saved profile explicitly
+
+Read `configuration list` first and use its current revision. Deletion requires
+an explicit remaining active profile and an explicit default (a remaining UUID
+or `none`); it refuses deleting the last profile. For example:
+
+```sh
+"$THUMBLE_BIN" configuration delete-profile --runtime-dir "$THUMBLE_STATE/runtime" \
+  --operation-id review-delete-1 --expected-revision CURRENT_REVISION \
+  --profile-id DELETE_UUID --active-profile-id KEEP_UUID \
+  --default-profile-id none --json
+```
+
+Reuse the same operation ID and exact selections to recover the durable receipt;
+use a new operation ID for changed intent. A stale revision returns a conflict.
+The MCP equivalent `configuration_delete_profile` is available only when the
+agent explicitly starts MCP with `--allow-configuration-write`; its
+`defaultProfileId` is a UUID or JSON `null`.
+
+This edits the saved catalog and its selections. It does not replace or retire a
+currently installed input pin, including one whose saved profile was deleted.
+Release and explicitly activate a remaining saved profile when needed. Deletion
+does not garbage-collect underlying asset bytes.
+
 ## Phone and recovery checks
 
 Use Practice first to exercise the local layout. Use **Test a connection** to
