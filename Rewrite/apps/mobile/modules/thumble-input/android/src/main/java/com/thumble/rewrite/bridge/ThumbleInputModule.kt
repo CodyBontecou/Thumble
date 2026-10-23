@@ -10,6 +10,7 @@ import android.view.View
 import android.view.ViewTreeObserver
 import android.widget.FrameLayout
 import com.thumble.rewrite.input.*
+import expo.modules.kotlin.Promise
 import expo.modules.kotlin.AppContext
 import expo.modules.kotlin.functions.Queues
 import expo.modules.kotlin.modules.Module
@@ -29,6 +30,33 @@ class ThumbleInputModule : Module() {
                 ControllerOrientation.restore(token)
             }
             .runOnQueue(Queues.MAIN)
+        AsyncFunction("editorOpen") { NativeEditorSession.open(requireNotNull(appContext.reactContext)) }
+        AsyncFunction("editorSnapshot") { id: String, promise: Promise ->
+            editorComplete(NativeEditorSession.get(id).snapshot(), promise) { it.editorBridge() }
+        }
+        AsyncFunction("editorCachePage") { id: String, contextID: String, offset: Int, promise: Promise ->
+            editorComplete(NativeEditorSession.get(id).cachePage(contextID, offset), promise) { it.editorBridge() }
+        }
+        AsyncFunction("editorRead") { id: String, profileID: String, revision: String, hash: String, promise: Promise ->
+            editorComplete(NativeEditorSession.get(id).read(profileID, revision, hash), promise) { it.editorBridge() }
+        }
+        AsyncFunction("editorCatalog") { id: String, revision: String?, offset: Int, promise: Promise ->
+            editorComplete(NativeEditorSession.get(id).catalog(requireNotNull(appContext.reactContext), revision, offset), promise) { it.bridgeMetadata() }
+        }
+        AsyncFunction("editorSelect") { id: String, contextID: String?, promise: Promise ->
+            editorComplete(NativeEditorSession.get(id).select(contextID), promise) { null }
+        }
+        AsyncFunction("editorEnqueue") { id: String, contextID: String, revision: String, hash: String, controlID: String, operationID: String, label: String?, promise: Promise ->
+            editorComplete(NativeEditorSession.get(id).enqueue(contextID, revision, hash, controlID, operationID, label), promise) { null }
+        }
+        AsyncFunction("editorSubmit") { id: String, operationID: String, promise: Promise ->
+            editorComplete(NativeEditorSession.get(id).submit(operationID), promise) { it }
+        }
+        AsyncFunction("editorReconcile") { id: String, operationID: String, promise: Promise ->
+            editorComplete(NativeEditorSession.get(id).reconcile(operationID), promise) { it }
+        }
+        AsyncFunction("editorCancel") { id: String -> NativeEditorSession.get(id).cancel() }
+        AsyncFunction("editorClose") { id: String -> NativeEditorSession.close(id) }
         View(ThumbleInputView::class) {
             Events("onAdmission", "onCatalog", "onControlMap", "onPresentation")
             Prop("practiceMap") { view: ThumbleInputView, value: Map<String, Any?> ->

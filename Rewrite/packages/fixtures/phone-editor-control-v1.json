@@ -800,5 +800,17 @@
       },
       "utf8": "{\"version\":1,\"connectionId\":\"abababababababababababababababab\",\"authorityInstanceId\":\"11111111-1111-1111-1111-111111111111\",\"command\":\"configuration-set-control-label-result\",\"kind\":\"error\",\"error\":\"secret-in-error\"}"
     }
-  ]
+  ],
+  "helloReply": {
+    "version": 1,
+    "command": "hello",
+    "authorityInstanceId": "11111111-1111-1111-1111-111111111111",
+    "controlVersion": 12,
+    "role": "management",
+    "inputVersion": 1,
+    "documentVersion": 1,
+    "capabilitiesVersion": 1,
+    "inputEnabled": false,
+    "inputSessionAvailable": false
+  }
 }

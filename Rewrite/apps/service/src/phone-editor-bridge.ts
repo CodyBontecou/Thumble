@@ -17,6 +17,7 @@ type Owner = Pick<
   | "commitEditorLabel"
   | "readEditor"
   | "closeEditorDispatch"
+  | "retireEditorOwner"
 >;
 export type PhoneEditorEvent =
   | Readonly<{
@@ -63,11 +64,12 @@ function fixedError(value: unknown): string {
     ? value
     : "editor_unavailable";
 }
-/** Unregistered private preparation. One immutable actual owner, no replacement
+/** Private stdio bridge. One immutable actual owner, no replacement
  * lookup, write timeout race, raw source or public caller-selected lifetime. */
 export class PhoneEditorBridge {
   private lastEvent = 0n;
   private closed = false;
+  private retirement: Promise<void> | undefined;
   private writeBusy = false;
   private readBusy = false;
   private constructor(
@@ -88,6 +90,15 @@ export class PhoneEditorBridge {
   close(): void {
     this.closed = true;
     this.owner.closeEditorDispatch();
+  }
+  /** Pairing pipe loss also retires an idle actual writer. No replacement is
+   * looked up; native orphan proof still independently verifies SQLite drain. */
+  retireWriter(): Promise<void> {
+    if (!this.retirement) {
+      this.close();
+      this.retirement = this.owner.retireEditorOwner();
+    }
+    return this.retirement;
   }
   async execute(input: unknown): Promise<unknown> {
     const event = decodePhoneEditorEvent(input),

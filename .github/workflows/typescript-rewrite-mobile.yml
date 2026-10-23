@@ -85,6 +85,16 @@ jobs:
         run: |
           set -o pipefail
           THUMBLE_NATIVE_INPUT_PROBE="$PWD/native/receiver/target/debug/examples/phone_input_probe" THUMBLE_NATIVE_AUTH_PROBE="$PWD/native/receiver/target/debug/examples/phone_control_probe" THUMBLE_NATIVE_ENROLLMENT_PROBE="$PWD/native/receiver/target/debug/examples/enrollment_probe" THUMBLE_NATIVE_TLS_PROBE="$PWD/native/receiver/target/debug/examples/control_tls_probe" swift test --package-path native/mobile-input/ios 2>&1 | tee reports/mobile-swift.txt
+      - name: Require actual phone editor service and Swift SDK witness
+        env:
+          THUMBLE_REWRITE_EDITOR_CROSS_LAYER: "1"
+          THUMBLE_EDITOR_EVIDENCE: reports/mobile-editor-cross-layer.json
+          THUMBLE_EDITOR_SWIFT_COMMAND: '["swift","test","--package-path","native/mobile-input/ios","--filter","realServiceEditorUsesPinnedTLSAndExactReceipt"]'
+        run: |
+          set -euo pipefail
+          export THUMBLE_EDITOR_PYTHON="$(command -v python3)"
+          "$THUMBLE_EDITOR_PYTHON" -c 'import ssl; assert ssl.HAS_TLSv1_3'
+          bun test tests/editor-cross-layer.test.ts 2>&1 | tee reports/mobile-editor-cross-layer.txt
       - name: Require real-service Swift catalog and five-mode input witnesses
         run: |
           set -euo pipefail
@@ -203,6 +213,20 @@ jobs:
           mkdir -p build/synthetic-native-results build/synthetic-native-reports
           if [[ -d build/test-results ]]; then cp -R build/test-results/. build/synthetic-native-results/; fi
           if [[ -d build/reports ]]; then cp -R build/reports/. build/synthetic-native-reports/; fi
+      - name: Require actual phone editor service and Kotlin SDK witness
+        working-directory: Rewrite
+        env:
+          THUMBLE_REWRITE_EDITOR_CROSS_LAYER: "1"
+          THUMBLE_EDITOR_EVIDENCE: reports/mobile-real-service-kotlin-editor.json
+          THUMBLE_EDITOR_ANDROID_COMMAND: '["./native/mobile-input/android/gradlew","-p","native/mobile-input/android","--no-daemon","--rerun-tasks","testDebugUnitTest","--tests","com.thumble.rewrite.input.PhoneEditorRealServiceTest"]'
+        run: |
+          set -euo pipefail
+          mkdir -p reports
+          export THUMBLE_EDITOR_PYTHON="$(command -v python3)"
+          "$THUMBLE_EDITOR_PYTHON" -c 'import ssl; assert ssl.HAS_TLSv1_3'
+          bun test tests/editor-cross-layer.test.ts 2>&1 | tee reports/mobile-real-service-kotlin-editor.txt
+          mkdir -p native/mobile-input/android/build/synthetic-native-results/editor-service
+          cp native/mobile-input/android/build/test-results/testDebugUnitTest/TEST-com.thumble.rewrite.input.PhoneEditorRealServiceTest.xml native/mobile-input/android/build/synthetic-native-results/editor-service/
       - name: Require real-service Kotlin catalog and five-mode input witnesses
         run: |
           set -euo pipefail

@@ -25,17 +25,11 @@ class PhoneEditorRPCTest {
     private fun credential() =
         PhoneCredential(PhoneCredentialMetadata(pin, "phone-a", 1, 100000), ByteArray(32) { 34 })
 
-    private fun hello(version: Int = 12) =
-        JSONObject()
-            .put("version", 1)
-            .put("command", "hello")
-            .put("authorityInstanceId", authority)
-            .put("controlVersion", version)
-            .put("role", "management")
-            .put("inputVersion", 1)
-            .put("documentVersion", 1)
-            .put("capabilitiesVersion", 1)
-            .put("inputEnabled", false)
+    private fun hello(version: Int = 12): JSONObject {
+        val fixture = javaClass.classLoader!!.getResourceAsStream("Fixtures/phone-editor-control-v1.json")!!
+            .use { JSONObject(it.bufferedReader().readText()) }
+        return fixture.getJSONObject("helloReply").put("controlVersion", version)
+    }
 
     private fun admission(input: Boolean = false) =
         JSONObject()
@@ -119,6 +113,10 @@ class PhoneEditorRPCTest {
             listOf(
                 hello(11),
                 hello().put("private", "not-allowed"),
+                hello().apply { remove("inputSessionAvailable") },
+                hello().put("inputSessionAvailable", true),
+                hello().apply { remove("inputEnabled") },
+                hello().put("inputEnabled", true),
                 hello().put("authorityInstanceId", "22222222-2222-2222-2222-222222222222"),
             )) {
             val io = Frames(listOf(bad))
@@ -141,13 +139,18 @@ class PhoneEditorRPCTest {
             assertEquals(listOf("hello"), io.commands)
             assertTrue(io.closed)
         }
-        val io = Frames(listOf(hello(), admission(true)))
-        val client = PhoneEditorRPC(endpoint(), { io }, { _, _ -> credential() }, { 100 })
-        try {
-            client.exchange(EditorRequest.Label(intent()))
-            fail("editor_input_authority_accepted")
-        } catch (_: PhoneEditorException) {}
-        assertEquals(listOf("hello", "authenticate"), io.commands)
+        for (bad in listOf(
+            admission(true),
+            admission().put("inputSessionAvailable", true),
+            admission().apply { remove("inputSessionAvailable") },
+            admission().apply { remove("inputEnabled") },
+            admission().put("private", "not-allowed"),
+        )) {
+            val io = Frames(listOf(hello(), bad))
+            val client = PhoneEditorRPC(endpoint(), { io }, { _, _ -> credential() }, { 100 })
+            assertThrows(PhoneEditorException::class.java) { client.exchange(EditorRequest.Label(intent())) }
+            assertEquals(listOf("hello", "authenticate"), io.commands)
+        }
     }
 
     @Test

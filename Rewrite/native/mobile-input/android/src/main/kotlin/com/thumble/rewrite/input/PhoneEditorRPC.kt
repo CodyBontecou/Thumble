@@ -19,7 +19,7 @@ internal interface EditorRPCTransport {
     fun cancel()
 }
 
-/** Internal frame adapter. No public/default role12 network factory is enabled. */
+/** Internal frame adapter, constructed only by the explicit editor SDK factory. */
 internal class PhoneEditorRPC(
     private val endpoint: TrustedHostEndpoint,
     private val connect: () -> NativeFrameIO,
@@ -106,6 +106,7 @@ internal class PhoneEditorRPC(
                         "documentVersion" to 1L,
                         "capabilitiesVersion" to 1L,
                         "inputEnabled" to false,
+                        "inputSessionAvailable" to false,
                     )
             )
                 throw PhoneEditorException()

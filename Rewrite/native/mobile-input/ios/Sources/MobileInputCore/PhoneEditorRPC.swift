@@ -1,6 +1,6 @@
 import Foundation
 
-/// Frame adapter only. No default/published constructor connects to role12 in this slice.
+/// Internal frame adapter, constructed only by the explicit editor SDK factory.
 /// Existing TLS IO runs on its native Network queue; journal and full DTO decoding stay off UI.
 @MainActor final class PhoneEditorRPC: EditorRPCTransport {
   private let endpoint: TrustedHostEndpoint
@@ -80,6 +80,7 @@ import Foundation
             "controlVersion": .integer(12), "role": .string("management"),
             "inputVersion": .integer(1), "documentVersion": .integer(1),
             "capabilitiesVersion": .integer(1), "inputEnabled": .boolean(false),
+            "inputSessionAvailable": .boolean(false),
           ]
         else { throw PhoneEditorError.rejected }
         let credential = try await credentials.load(

@@ -54,10 +54,15 @@ pub mod owner_wake;
 #[cfg(debug_assertions)]
 pub mod input_error_diagnostics;
 
-// Prerequisite only: role12 integration is deliberately not enabled yet.
+// Captured editor lifetimes are enabled only by an explicit private parent command.
 #[allow(dead_code)]
 mod editor_commit_fence;
 
-// Unconnected prerequisite: no policy or phone-role caller.
+// Shared edit ownership spans native phone dispatch and policy acknowledgements.
 #[allow(dead_code)]
 mod editor_pending;
+
+/// Strict bounded phone editor DTOs.
+pub mod editor_codec;
+
+mod editor_policy;

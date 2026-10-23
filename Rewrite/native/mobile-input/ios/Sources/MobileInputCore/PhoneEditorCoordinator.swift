@@ -17,26 +17,39 @@ enum EditorDispatchOutcome: Sendable, Equatable {
   case conflict(String)
 }
 
-/// Preparatory SDK owner. There is deliberately no production transport/UI factory yet.
+/// Native journal owner. Only authenticated replies can retire durable entries.
 actor PhoneEditorCoordinator {
   private let journal: EditorJournal
   private let transport: any EditorRPCTransport
   private var active: UInt64?
   private var canceled: UInt64?
   private var next: UInt64 = 0
+  private var canceledFence: UInt64?
+  private var cancellationsActive = 0
   init(journal: sending EditorJournal, transport: any EditorRPCTransport) {
     self.journal = journal
     self.transport = transport
   }
   func snapshot() -> EditorJournalSnapshot { journal.snapshot }
   func enqueue(_ intent: EditorLabelIntent) throws { try journal.enqueue(intent) }
+  func enqueueCached(_ profile: EditorCachedProfile, intent: EditorLabelIntent) throws {
+    guard journal.snapshot.profiles.contains(profile), profile.scope == intent.scope,
+      profile.id == intent.profileID, profile.revision == intent.expectedRevision,
+      profile.controls.contains(where: { $0.id == intent.controlID })
+    else { throw PhoneEditorError.rejected }
+    try journal.enqueue(intent)
+  }
   func select(_ selection: EditorSelection?) throws { try journal.select(selection) }
-  func cancel() async {
+  func cancel(fence: UInt64? = nil) async {
+    cancellationsActive += 1
+    defer { cancellationsActive -= 1 }
+    if let fence { canceledFence = max(canceledFence ?? 0, fence) }
     canceled = active
     await transport.cancel()
   }
-  private func begin() throws -> UInt64 {
-    guard active == nil else { throw PhoneEditorError.busy }
+  private func begin(fence: UInt64? = nil) throws -> UInt64 {
+    if let fence, let canceledFence, fence <= canceledFence { throw PhoneEditorError.unavailable }
+    guard active == nil, cancellationsActive == 0 else { throw PhoneEditorError.busy }
     guard next < UInt64.max else { throw PhoneEditorError.unavailable }
     next += 1
     active = next
@@ -51,8 +64,8 @@ actor PhoneEditorCoordinator {
       result.credentialEpoch > 0, EditorWire.hex(result.connectionID, count: 32)
     else { throw PhoneEditorError.rejected }
   }
-  func readProfile(_ pin: EditorReadPin) async throws -> EditorCachedProfile {
-    let token = try begin()
+  func readProfile(_ pin: EditorReadPin, fence: UInt64? = nil) async throws -> EditorCachedProfile {
+    let token = try begin(fence: fence)
     defer { if active == token { active = nil } }
     var controls: [EditorCachedControl] = []
     var seen: Set<String> = []
@@ -95,10 +108,11 @@ actor PhoneEditorCoordinator {
     }
     throw PhoneEditorError.rejected
   }
-  func submit(_ operationID: String, endpointScope: EditorHostScope) async throws
+  func submit(_ operationID: String, endpointScope: EditorHostScope, fence: UInt64? = nil)
+    async throws
     -> EditorDispatchOutcome
   {
-    let token = try begin()
+    let token = try begin(fence: fence)
     defer { if active == token { active = nil } }
     let entry = try pending(operationID, endpointScope: endpointScope)
     guard entry.status == .queued else { return .retained }
@@ -110,10 +124,11 @@ actor PhoneEditorCoordinator {
     try validate(result, scope: entry.intent.scope)
     return try consume(result, intent: entry.intent)
   }
-  func reconcile(_ operationID: String, endpointScope: EditorHostScope) async throws
+  func reconcile(_ operationID: String, endpointScope: EditorHostScope, fence: UInt64? = nil)
+    async throws
     -> EditorDispatchOutcome
   {
-    let token = try begin()
+    let token = try begin(fence: fence)
     defer { if active == token { active = nil } }
     let entry = try pending(operationID, endpointScope: endpointScope)
     try current(token)

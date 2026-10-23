@@ -1,8 +1,11 @@
 # Captured configuration-owner editor bridge
 
-This preparation is private and unregistered. It does not enable phone role12,
-register a NativePairingHost handler, install an editor UI, grant a CLI/MCP write
-capability, or bypass the independent native policy/commit fence.
+Unix service startup captures the actual configuration owner and registers the
+strict private NativePairingHost editor bridge. Native role12 remains management
+only; editor writes never activate an input map or grant input. Windows keeps its
+existing CLI/runtime path while its orphan-drain provider remains separately
+gated. The independent native policy/commit fence is required before replying to
+revocation or enrollment.
 
 `PhoneEditorBridge.capture` binds one actual `ConfigurationOwner` object and the
 UUID minted by its child after acquiring SQLite ownership. The private enable
@@ -21,6 +24,13 @@ they are not additional fields accepted from a phone frame.
 Writes use the existing `editor-label-commit` envelope. The bridge retains its
 single write slot until the actual owner call returns, including confirmation of
 child exit after uncertain transport. A read completion cannot release it.
+An accepted write reserves the sole parent editor slot before waiting for
+already-started CLI reads or configuration work. New operations cannot overtake
+it. The original 30-second owner health budget includes this wait and actual
+dispatch. Persistent live-sync busy state is checked by the actual child, whose
+parsed busy error ends the call; it cannot strand the queue waiting for a stop
+command blocked by its own reservation.
+
 Closing the bridge prevents future admissions and closes captured-owner editor
 dispatch; it does not resolve an outstanding call. There is no write timeout race.
 
@@ -46,5 +56,16 @@ profile read, absent receipt, label commit, repeat original-intent receipt reads
 and unchanged resulting revision. Synthetic tests hold a write open across a
 read and bridge close, reject replay/context/accessor/extra-key attacks, and
 retain unknown disposition on malformed replies. Full TypeScript validation and
-standalone packaging are checked independently. Actual native dispatch and
-policy acknowledgements still require their cross-layer integration gate.
+standalone packaging are checked independently. The actual cross-layer witness
+runs pinned TLS, native role12/policy, the Bun service and its child-owned SQLite;
+it checks receipt replay and concurrent revocation while the exact owned child is
+stopped and resumed. This recording-only evidence does not establish physical
+phone/gameplay or release acceptance.
+
+Pairing-pipe failure or stdout EOF permanently closes admission and begins
+`retireWriter` on the same captured owner, even when it is idle. The shared
+retirement promise disconnects that child and confirms its actual exit before a
+native orphan recovery can finish; timeout/kill issuance remains an error, never
+proof. The generic NativePipe failure callback runs once after the pipe is
+permanently failed. An owned Node fixture closes its actual stdout descriptor to
+verify the idle path without waiting for an outstanding request deadline.

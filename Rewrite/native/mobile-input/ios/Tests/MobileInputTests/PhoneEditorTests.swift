@@ -238,12 +238,10 @@ private actor EditorTestCredentials: ControlCredentialSource {
   }
   func close() { closed = true }
 }
-private func editorClientHello(version: Int = 12) -> [String: Any] {
-  [
-    "version": 1, "command": "hello", "controlVersion": version, "role": "management",
-    "authorityInstanceId": editorClientAuthority, "inputVersion": 1, "documentVersion": 1,
-    "capabilitiesVersion": 1, "inputEnabled": false,
-  ]
+private func editorClientHello(version: Int = 12) throws -> [String: Any] {
+  var value = try #require(editorClientFixture()["helloReply"] as? [String: Any])
+  value["controlVersion"] = version
+  return value
 }
 private func editorClientAdmission(input: Bool = false) -> [String: Any] {
   [
@@ -298,7 +296,7 @@ extension PhoneEditorTests {
     let admitted = try #require(
       JSONSerialization.jsonObject(with: editorClientVector("label-admitted")) as? [String: Any])
     let source = try EditorTestCredentials()
-    let io = try EditorFrameScript([editorClientHello(), editorClientAdmission(), admitted])
+    let io = try EditorFrameScript([try editorClientHello(), editorClientAdmission(), admitted])
     let client = PhoneEditorRPC(
       endpoint: endpoint, credentials: source, makeIO: { io }, now: { 100 })
     let result = try await client.exchange(.label(editorClientIntent()))
@@ -307,8 +305,12 @@ extension PhoneEditorTests {
     #expect(io.commands == ["hello", "authenticate", "configuration-set-control-label"])
     #expect(io.closed)
     for wrongHello in [
-      editorClientHello(version: 11),
-      editorClientHello().merging(["private": "not-allowed"]) { _, b in b },
+      try editorClientHello(version: 11),
+      try editorClientHello().merging(["private": "not-allowed"]) { _, b in b },
+      try editorClientHello().filter { $0.key != "inputSessionAvailable" },
+      try editorClientHello().merging(["inputSessionAvailable": true]) { _, b in b },
+      try editorClientHello().filter { $0.key != "inputEnabled" },
+      try editorClientHello().merging(["inputEnabled": true]) { _, b in b },
     ] {
       let storage = try EditorTestCredentials()
       let badIO = try EditorFrameScript([wrongHello])
@@ -321,13 +323,21 @@ extension PhoneEditorTests {
       #expect(badIO.commands == ["hello"])
       #expect(badIO.closed)
     }
-    let badIO = try EditorFrameScript([editorClientHello(), editorClientAdmission(input: true)])
-    let rejected = PhoneEditorRPC(
-      endpoint: endpoint, credentials: source, makeIO: { badIO }, now: { 100 })
-    await #expect(throws: (any Error).self) {
-      _ = try await rejected.exchange(.label(editorClientIntent()))
+    for wrongAdmission in [
+      editorClientAdmission(input: true),
+      editorClientAdmission().merging(["inputSessionAvailable": true]) { _, b in b },
+      editorClientAdmission().filter { $0.key != "inputSessionAvailable" },
+      editorClientAdmission().filter { $0.key != "inputEnabled" },
+      editorClientAdmission().merging(["private": "not-allowed"]) { _, b in b },
+    ] {
+      let badIO = try EditorFrameScript([try editorClientHello(), wrongAdmission])
+      let rejected = PhoneEditorRPC(
+        endpoint: endpoint, credentials: source, makeIO: { badIO }, now: { 100 })
+      await #expect(throws: (any Error).self) {
+        _ = try await rejected.exchange(.label(editorClientIntent()))
+      }
+      #expect(badIO.commands == ["hello", "authenticate"])
     }
-    #expect(badIO.commands == ["hello", "authenticate"])
   }
 }
 private actor EditorPausedCredentials: ControlCredentialSource {
@@ -353,7 +363,7 @@ extension PhoneEditorTests {
       host: "127.0.0.1", port: 1234, certificatePin: editorClientPin,
       authorityInstanceID: editorClientAuthority)
     let source = EditorPausedCredentials()
-    let io = try EditorFrameScript([editorClientHello(), editorClientAdmission()])
+    let io = try EditorFrameScript([try editorClientHello(), editorClientAdmission()])
     let client = PhoneEditorRPC(
       endpoint: endpoint, credentials: source, makeIO: { io }, now: { 100 })
     let task = Task { try await client.exchange(.label(editorClientIntent())) }

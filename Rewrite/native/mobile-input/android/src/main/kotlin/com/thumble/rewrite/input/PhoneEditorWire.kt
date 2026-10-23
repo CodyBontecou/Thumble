@@ -6,7 +6,7 @@ import java.nio.charset.CodingErrorAction
 import org.json.JSONArray
 import org.json.JSONObject
 
-internal class PhoneEditorException(val code: Code = Code.REJECTED) :
+class PhoneEditorException(val code: Code = Code.REJECTED) :
     Exception("phone_editor_${code.name.lowercase()}") {
     enum class Code {
         REJECTED,

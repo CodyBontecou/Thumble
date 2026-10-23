@@ -40,6 +40,15 @@ impl WriterLifetime {
     pub(crate) fn identity(&self) -> [u8; 16] {
         self.identity
     }
+    /// Inspect permanent retirement without retiring a healthy writer.
+    pub(crate) fn retired_if_any(self: &Arc<Self>) -> Result<Option<RetiredWriter>, FenceError> {
+        let retired = self
+            .state
+            .lock()
+            .map_err(|_| FenceError::Unavailable)?
+            .retired;
+        Ok(retired.then(|| RetiredWriter(self.clone())))
+    }
     /// Future dispatch is permanently disabled, including reserved queued work.
     pub(crate) fn retire(self: &Arc<Self>) -> Result<RetiredWriter, FenceError> {
         self.state

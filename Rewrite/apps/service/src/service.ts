@@ -1,3 +1,4 @@
+import { PhoneEditorBridge } from "./phone-editor-bridge.ts";
 import { PhonePresentationBridge } from "./phone-presentation-bridge.ts";
 import {
   decodeWowSyncCommand,
@@ -139,8 +140,12 @@ export async function serve(
       ...(authorizedProfileHelper ? { profile: authorizedProfileHelper } : {}),
     },
   );
+  let editor: PhoneEditorBridge | undefined;
   try {
     await configuration.ready;
+    // Windows orphan-drain provider remains a separately gated platform slice.
+    if (process.platform !== "win32")
+      editor = await PhoneEditorBridge.capture(configuration);
   } catch (error) {
     configuration.disconnect();
     native.disconnect();
@@ -182,6 +187,7 @@ export async function serve(
     new PhonePresentationBridge((command) =>
       configuration.readPresentationForPhone(command),
     ),
+    editor,
   );
   try {
     await pairing.ready;

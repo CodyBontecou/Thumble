@@ -227,3 +227,20 @@ fn shared_hostile_vectors_and_depth_budget_reject_without_io() {
     page["controls"].as_array_mut().unwrap().push(ninth);
     assert!(Reply::parse(&bytes(&page), &request).is_err());
 }
+
+#[test]
+fn private_parent_json_preserves_duplicate_depth_node_and_byte_bounds() {
+    use editor_codec::parent_json;
+    assert_eq!(
+        parent_json(br#"{"outer":{"inner":1}}"#).unwrap(),
+        json!({"outer":{"inner":1}})
+    );
+    assert!(parent_json(br#"{"same":1,"same":2}"#).is_err());
+    let mut nested = json!(0);
+    for _ in 0..10 {
+        nested = json!({"nested":nested});
+    }
+    assert!(parent_json(&bytes(&nested)).is_err());
+    assert!(parent_json(&bytes(&json!(vec![0; 513]))).is_err());
+    assert!(parent_json(&vec![b' '; 20481]).is_err());
+}

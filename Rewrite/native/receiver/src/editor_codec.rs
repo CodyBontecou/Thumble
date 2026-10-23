@@ -8,11 +8,12 @@ const INVALID: &str = "editor_invalid_request";
 struct Seed<'a> {
     remaining: &'a mut usize,
     depth: usize,
+    max_depth: usize,
 }
 impl<'de> DeserializeSeed<'de> for Seed<'_> {
     type Value = Value;
     fn deserialize<D: serde::Deserializer<'de>>(self, d: D) -> Result<Value, D::Error> {
-        if self.depth > 4 || *self.remaining == 0 {
+        if self.depth > self.max_depth || *self.remaining == 0 {
             return Err(D::Error::custom(INVALID));
         }
         *self.remaining -= 1;
@@ -55,6 +56,7 @@ impl<'de> Visitor<'de> for Seed<'_> {
         while let Some(v) = a.next_element_seed(Seed {
             remaining: self.remaining,
             depth: self.depth + 1,
+            max_depth: self.max_depth,
         })? {
             if out.len() == 8 {
                 return Err(A::Error::custom(INVALID));
@@ -72,6 +74,7 @@ impl<'de> Visitor<'de> for Seed<'_> {
             let v = a.next_value_seed(Seed {
                 remaining: self.remaining,
                 depth: self.depth + 1,
+                max_depth: self.max_depth,
             })?;
             out.insert(k, v);
         }
@@ -79,14 +82,26 @@ impl<'de> Visitor<'de> for Seed<'_> {
     }
 }
 fn json(bytes: &[u8], limit: usize) -> Result<Value, &'static str> {
+    bounded_json(bytes, limit, 4, 128)
+}
+pub(crate) fn parent_json(bytes: &[u8]) -> Result<Value, &'static str> {
+    bounded_json(bytes, REPLY_BYTES + 4096, 9, 512)
+}
+fn bounded_json(
+    bytes: &[u8],
+    limit: usize,
+    max_depth: usize,
+    nodes: usize,
+) -> Result<Value, &'static str> {
     if bytes.is_empty() || bytes.len() > limit {
         return Err(INVALID);
     }
-    let mut remaining = 128;
+    let mut remaining = nodes;
     let mut d = serde_json::Deserializer::from_slice(bytes);
     let value = Seed {
         remaining: &mut remaining,
         depth: 0,
+        max_depth,
     }
     .deserialize(&mut d)
     .map_err(|_| INVALID)?;
@@ -291,7 +306,7 @@ impl Request {
             operation,
         })
     }
-    fn command(&self) -> &'static str {
+    pub(crate) fn command(&self) -> &'static str {
         match self.operation {
             Operation::Profile { .. } => "editor-profile-result",
             Operation::SetLabel(_) => "configuration-set-control-label-result",

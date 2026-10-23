@@ -36,6 +36,12 @@ The [real-service phone witness](tooling/real-service-phone-probe.md) runs the a
 
 The source paths above are relative to `Rewrite/`, except the root workflow directory. The retained product remains in place while these seams are implemented.
 
+## Phone editor ownership
+
+Unix startup now registers [the captured-owner editor bridge](../docs/rewrite-phone-editor-parent-bridge.md) and management-only role12. Review `phone-editor-bridge.ts`, native `phone_editor.rs`, `editor_pending.rs` and `editor_policy.rs` together: pending edits strongly retain their authenticated scope after TLS loss, parent replies bind the exact original child/envelope, and policy guards survive every success/error write and flush. The bounded deferred policy worker leaves stdin available for the owner reply it awaits. Native read timeouts retain bounded strict tombstones so a late valid read cannot retire a healthy writer or consume a newer request.
+
+Pairing-pipe failure retires the exact captured configuration child, including an idle writer holding SQLite. Actual exit and the independently held native orphan lease are separate facts; no local timeout or kill issuance substitutes for either. Windows editor activation remains gated on its native drain provider; existing recording CLI/receiver checks remain supported. The new SDK/app editor API uses protected per-host journals, opaque cache contexts and displayed revision/hash checks. Cross-restart origin recovery and richer editor operations remain open; component tests are not physical or release acceptance.
+
 ## Reproduce the host checks
 
 From `Rewrite/`, with the pinned toolchains installed:

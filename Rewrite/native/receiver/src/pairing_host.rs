@@ -1,6 +1,7 @@
 //! Agent-facing native pairing owner. Enrollment sockets never share the receiver safety loop.
 use crate::{
     control_tls::{ControlChannel, ServerIdentity, CONTROL_SERVER_NAME},
+    editor_policy::{AckGuard, CapturedPolicy, GuardedLine, PolicyEditor},
     enrollment::{self, PairingOffer, PairingWindows},
     host_identity,
     input_broker::Registry,
@@ -12,7 +13,7 @@ use serde_json::{json, Value};
 use std::{
     collections::BTreeMap,
     fs::File,
-    io::{BufRead, BufReader, Write},
+    io::{BufRead, BufReader},
     net::{Shutdown, SocketAddr, TcpListener, TcpStream},
     path::Path,
     sync::{
@@ -40,6 +41,9 @@ struct Request {
 )]
 pub enum Command {
     PhoneCatalogEnable {},
+    PhoneEditorEnable {
+        owner_lifetime_id: String,
+    },
     PhoneControlsEnable {},
     PhonePresentationEnable {},
     PairingOpen {},
@@ -117,8 +121,33 @@ pub struct Host {
     catalog: Arc<crate::authenticated_control::catalog::Bridge>,
     controls: Arc<crate::authenticated_control::controls::Bridge>,
     presentation: Arc<crate::authenticated_control::presentation::Bridge>,
+    editor: Arc<crate::authenticated_control::editor::Bridge>,
     reservation_owner: Option<crate::trust_reservation::Owner>,
     _lease: File,
+}
+struct PreparedPolicy {
+    captured: CapturedPolicy,
+    result: Result<Value, &'static str>,
+}
+impl PreparedPolicy {
+    fn finish(self) -> Result<(Result<Value, &'static str>, AckGuard), &'static str> {
+        let guard = self
+            .captured
+            .drain(Duration::from_millis(100))
+            .map_err(|_| "editor_policy_undrained")?;
+        Ok((self.result, guard))
+    }
+}
+struct PolicyJob {
+    id: String,
+    prepared: PreparedPolicy,
+}
+fn response(id: Option<&str>, result: Result<Value, &'static str>) -> String {
+    match result {
+        Ok(result) => json!({"version":1,"requestId":id,"ok":true,"result":result}),
+        Err(code) => json!({"version":1,"requestId":id,"ok":false,"error":code}),
+    }
+    .to_string()
 }
 impl Host {
     pub fn new(
@@ -158,6 +187,9 @@ impl Host {
             root,
             controls.operation_gate(),
         ));
+        let editor = Arc::new(crate::authenticated_control::editor::Bridge::new(
+            authority, root,
+        ));
         let (jobs, incoming) = mpsc::sync_channel::<Job>(4);
         let incoming = Arc::new(Mutex::new(incoming));
         let mut workers = Vec::new();
@@ -173,6 +205,7 @@ impl Host {
                 let catalog = catalog.clone();
                 let controls = controls.clone();
                 let presentation = presentation.clone();
+                let editor = editor.clone();
                 workers.push(thread::spawn(move || loop {
                     let job = match incoming.lock() {
                         Ok(receiver) => match receiver.recv() {
@@ -200,6 +233,7 @@ impl Host {
                                     },
                                     crate::authenticated_control::ManagementBridges {
                                         catalog: &catalog,
+                                        editor: Some(&editor),
                                         controls: Some(&controls),
                                         presentation: Some(&presentation),
                                     },
@@ -238,6 +272,7 @@ impl Host {
             jobs: Some(jobs),
             workers,
             reservation_owner,
+            editor,
             catalog,
             controls,
             presentation,
@@ -385,6 +420,50 @@ impl Host {
         });
         Ok(())
     }
+    fn prepare_revoke(&mut self, phone_id: String) -> Result<PreparedPolicy, &'static str> {
+        if !runtime::identity(&phone_id) {
+            return Err("phone_identity_invalid");
+        }
+        self.windows
+            .lock()
+            .map_err(|_| "pairing_owner_unavailable")?
+            .cancel();
+        self.close_peers();
+        let (result, captured) = {
+            let _mutation = self
+                .policy_mutation
+                .lock()
+                .map_err(|_| "phone_trust_owner_unavailable")?;
+            let mut store = self
+                .store
+                .as_ref()
+                .ok_or("pairing_persistent_identity_required")?
+                .lock()
+                .map_err(|_| "phone_trust_owner_unavailable")?;
+            let retired = store
+                .detach_scope(&phone_id)
+                .map_err(|_| "editor_policy_undrained")?;
+            // Capture the old scope BEFORE durable mutation can replace/remove it.
+            let captured = CapturedPolicy::capture(
+                retired,
+                &phone_id,
+                self.policy_editor()
+                    .map_err(|_| "editor_policy_undrained")?,
+            )
+            .map_err(|_| "editor_policy_undrained")?;
+            let result = (|| {
+                self.input_grants.retire_phone(&phone_id)?;
+                store.revoke_now(&phone_id, &mut now)
+            })();
+            (result, captured)
+        };
+        self.close_peers();
+        let result = result.and_then(|_| self.reply(None));
+        Ok(PreparedPolicy { captured, result })
+    }
+    fn policy_editor(&self) -> Result<Option<PolicyEditor>, &'static str> {
+        PolicyEditor::for_bridge(&self.editor)
+    }
     pub fn execute(&mut self, command: Command) -> Result<Value, &'static str> {
         if self
             .listener
@@ -392,6 +471,15 @@ impl Host {
             .is_some_and(|listener| listener.stop.load(Ordering::SeqCst))
         {
             self.stop()?;
+        }
+        if let Command::PhoneEditorEnable {
+            ref owner_lifetime_id,
+        } = command
+        {
+            if !self.editor.enabled_for(owner_lifetime_id) {
+                return Err("editor_unavailable");
+            }
+            return Ok(json!({"kind":"phone-editor-enabled"}));
         }
         if matches!(command, Command::PhonePresentationEnable {}) {
             if !self.presentation.enabled() {
@@ -412,7 +500,8 @@ impl Host {
             return Ok(json!({"kind":"phone-catalog-enabled"}));
         }
         let offer = match command {
-            Command::PhoneCatalogEnable {}
+            Command::PhoneEditorEnable { .. }
+            | Command::PhoneCatalogEnable {}
             | Command::PhoneControlsEnable {}
             | Command::PhonePresentationEnable {} => unreachable!(),
             Command::PairingOpen {} => Some(
@@ -423,39 +512,24 @@ impl Host {
             ),
             Command::PairingStatus {} | Command::PairingList {} => None,
             Command::PairingRevoke { phone_id } => {
-                if !runtime::identity(&phone_id) {
-                    return Err("phone_identity_invalid");
+                // Production stdio uses prepare_revoke and transfers its guard
+                // to the real writer. Direct execution is only a test helper.
+                #[cfg(test)]
+                {
+                    let (result, _guard) = self.prepare_revoke(phone_id)?.finish()?;
+                    return result;
                 }
-                self.windows
-                    .lock()
-                    .map_err(|_| "pairing_owner_unavailable")?
-                    .cancel();
-                self.close_peers();
-                let result = (|| {
-                    let _mutation = self
-                        .policy_mutation
-                        .lock()
-                        .map_err(|_| "phone_trust_owner_unavailable")?;
-                    let mut store = self
-                        .store
-                        .as_ref()
-                        .ok_or("pairing_persistent_identity_required")?
-                        .lock()
-                        .map_err(|_| "phone_trust_owner_unavailable")?;
-                    let retired = store.detach_scope(&phone_id)?;
-                    let result = (|| {
-                        self.input_grants.retire_phone(&phone_id)?;
-                        store.revoke_now(&phone_id, &mut now)
-                    })();
-                    Ok((result, retired))
-                })();
-                self.close_peers();
-                let (result, retired) = result?;
-                if let Some(retired) = retired {
-                    retired.wait_management_delivery()?;
+                #[cfg(not(test))]
+                {
+                    // The legacy direct API can complete only when no editor
+                    // owner has ever been captured. Its proof-free path retains
+                    // existing input/management drain behavior.
+                    if self.editor.try_coordinator()?.is_none() {
+                        let (result, _guard) = self.prepare_revoke(phone_id)?.finish()?;
+                        return result;
+                    }
+                    return Err("policy_requires_guarded_delivery");
                 }
-                result?;
-                None
             }
             Command::PairingCancel {} => {
                 self.windows
@@ -509,6 +583,7 @@ impl Host {
 }
 impl Drop for Host {
     fn drop(&mut self) {
+        self.editor.parent_lost();
         let _ = self.stop();
         // Listener stop closes peer sockets. Closing the queue wakes idle workers;
         // join before releasing host/trust leases so an immediate restart is safe.
@@ -560,23 +635,63 @@ pub fn run(
             }
         }
     });
-    let (outgoing, responses) = mpsc::sync_channel::<String>(16);
+    // Existing bridge String queues feed one bounded forwarder. Guarded policy
+    // replies go directly to the same actual writer and retain ownership there.
+    let (outgoing, bridge_responses) = mpsc::sync_channel::<String>(16);
+    let (guarded, responses) = mpsc::sync_channel::<GuardedLine>(16);
+    let forward = guarded.clone();
     thread::spawn(move || {
-        let mut stdout = std::io::stdout().lock();
-        for line in responses {
-            if writeln!(stdout, "{line}")
-                .and_then(|_| stdout.flush())
-                .is_err()
-            {
+        for line in bridge_responses {
+            if forward.send(GuardedLine::plain(line)).is_err() {
                 break;
             }
         }
     });
-    outgoing.try_send(json!({"version":1,"ready":true,"pid":std::process::id(),"authorityInstanceId":authority}).to_string()).map_err(|_|"pairing_owner_output_unavailable")?;
+    let output_failed = Arc::new(AtomicBool::new(false));
+    let failed = output_failed.clone();
+    thread::spawn(move || {
+        let mut stdout = std::io::stdout().lock();
+        for line in responses {
+            if line.write(&mut stdout).is_err() {
+                failed.store(true, Ordering::SeqCst);
+                break;
+            }
+        }
+    });
+    let (policy_jobs, policy_incoming) = mpsc::sync_channel::<PolicyJob>(4);
+    let policy_busy = Arc::new(AtomicU64::new(0));
+    let busy = policy_busy.clone();
+    let policy_output = guarded.clone();
+    let policy_failed = output_failed.clone();
+    let policy_worker = thread::spawn(move || {
+        for job in policy_incoming {
+            // An undrained result gets NO definitive success or error ACK.
+            // The parent's existing timeout retains its unknown-outcome meaning.
+            if let Ok((result, guard)) = job.prepared.finish() {
+                let line = GuardedLine {
+                    line: response(Some(&job.id), result),
+                    guard: Some(guard),
+                };
+                if policy_output.try_send(line).is_err() {
+                    policy_failed.store(true, Ordering::SeqCst);
+                    break;
+                }
+            }
+            busy.fetch_sub(1, Ordering::SeqCst);
+        }
+    });
+    guarded.try_send(GuardedLine::plain(json!({"version":1,"ready":true,"pid":std::process::id(),"authorityInstanceId":authority}).to_string())).map_err(|_|"pairing_owner_output_unavailable")?;
     loop {
+        if output_failed.load(Ordering::SeqCst) {
+            host.editor.parent_lost();
+            return Err("pairing_owner_output_unavailable");
+        }
         let bytes = match received.recv_timeout(Duration::from_millis(10)) {
             Ok(Some(bytes)) => bytes,
-            Ok(None) | Err(mpsc::RecvTimeoutError::Disconnected) => break,
+            Ok(None) | Err(mpsc::RecvTimeoutError::Disconnected) => {
+                host.editor.parent_lost();
+                break;
+            }
             Err(mpsc::RecvTimeoutError::Timeout) => continue,
         };
         if serde_json::from_slice::<Value>(&bytes)
@@ -591,6 +706,9 @@ pub fn run(
                 Some("phone-catalog-reply") => host.catalog.deliver(&bytes)?,
                 Some("phone-controls-reply") => host.controls.deliver(&bytes)?,
                 Some("phone-presentation-reply") => host.presentation.deliver(&bytes)?,
+                Some("phone-editor-write-reply" | "phone-editor-read-reply") => {
+                    host.editor.deliver(&bytes)?
+                }
                 _ => return Err("pairing_parent_event_invalid"),
             }
             continue;
@@ -600,6 +718,12 @@ pub fn run(
             .filter(|request| request.version == 1 && runtime::identity(&request.request_id));
         let (id, result) = match parsed {
             Some(request) => {
+                if let Command::PhoneEditorEnable {
+                    ref owner_lifetime_id,
+                } = request.body
+                {
+                    host.editor.enable(owner_lifetime_id, outgoing.clone())?;
+                }
                 if matches!(request.body, Command::PhoneCatalogEnable {}) {
                     host.catalog.attach(outgoing.clone())?;
                 }
@@ -609,18 +733,50 @@ pub fn run(
                 if matches!(request.body, Command::PhoneControlsEnable {}) {
                     host.controls.attach(outgoing.clone())?;
                 }
-                (Some(request.request_id), host.execute(request.body))
+                if let Command::PairingRevoke { phone_id } = request.body {
+                    // Reserve one of four deferred slots BEFORE policy mutation.
+                    // Busy requests fail closed by withholding any definitive ACK.
+                    if policy_busy
+                        .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |count| {
+                            (count < 4).then_some(count + 1)
+                        })
+                        .is_err()
+                    {
+                        continue;
+                    }
+                    match host.prepare_revoke(phone_id) {
+                        Ok(prepared) => {
+                            policy_jobs
+                                .try_send(PolicyJob {
+                                    id: request.request_id,
+                                    prepared,
+                                })
+                                .map_err(|_| "editor_policy_queue_unavailable")?;
+                            continue;
+                        }
+                        Err("editor_policy_undrained") => {
+                            policy_busy.fetch_sub(1, Ordering::SeqCst);
+                            continue;
+                        }
+                        Err(error) => {
+                            policy_busy.fetch_sub(1, Ordering::SeqCst);
+                            (Some(request.request_id), Err(error))
+                        }
+                    }
+                } else {
+                    (Some(request.request_id), host.execute(request.body))
+                }
             }
             None => (None, Err("invalid_request")),
         };
-        let reply = match result {
-            Ok(result) => json!({"version":1,"requestId":id,"ok":true,"result":result}),
-            Err(code) => json!({"version":1,"requestId":id,"ok":false,"error":code}),
-        };
-        outgoing
-            .try_send(reply.to_string())
+        guarded
+            .try_send(GuardedLine::plain(response(id.as_deref(), result)))
             .map_err(|_| "pairing_owner_output_unavailable")?;
     }
+    // Close sockets before joining policy work that may be waiting on delivery.
+    host.close_peers();
+    drop(policy_jobs);
+    let _ = policy_worker.join();
     Ok(())
 }
 
@@ -630,9 +786,9 @@ mod tests {
     use crate::control_tls::{CertificatePin, FrameKind};
     use std::{fs, path::PathBuf, sync::atomic::AtomicU64, time::Instant};
     static NEXT: AtomicU64 = AtomicU64::new(0);
-    struct Root(PathBuf);
+    pub(super) struct Root(pub(super) PathBuf);
     impl Root {
-        fn new() -> Self {
+        pub(super) fn new() -> Self {
             let root = Self(std::env::temp_dir().canonicalize().unwrap().join(format!(
                 "thumble-pairing-owner-{}-{}",
                 std::process::id(),
@@ -653,14 +809,14 @@ mod tests {
             }
         }
     }
-    fn listen(host: &mut Host) -> Value {
+    pub(super) fn listen(host: &mut Host) -> Value {
         host.execute(Command::PairingListen {
             bind_address: "127.0.0.1:0".into(),
             advertise_host: "127.0.0.1".into(),
         })
         .unwrap()
     }
-    fn connect(value: &Value) -> ControlChannel {
+    pub(super) fn connect(value: &Value) -> ControlChannel {
         ControlChannel::connect_pinned(
             format!("127.0.0.1:{}", value["transport"]["port"])
                 .parse()
@@ -670,12 +826,12 @@ mod tests {
         )
         .unwrap()
     }
-    fn send(channel: &mut ControlChannel, value: Value) {
+    pub(super) fn send(channel: &mut ControlChannel, value: Value) {
         channel
             .send(FrameKind::Control, &serde_json::to_vec(&value).unwrap())
             .unwrap();
     }
-    fn receive(channel: &mut ControlChannel) -> Value {
+    pub(super) fn receive(channel: &mut ControlChannel) -> Value {
         let frame = channel.receive().unwrap();
         assert_eq!(frame.kind, FrameKind::Control);
         serde_json::from_slice(&frame.payload).unwrap()
@@ -1155,3 +1311,11 @@ mod tests {
         assert!(status["offer"].is_null());
     }
 }
+
+#[cfg(all(test, unix))]
+#[path = "phone_editor_tls_tests.rs"]
+mod editor_tls_tests;
+
+#[cfg(all(test, unix))]
+#[path = "editor_policy_tls_tests.rs"]
+mod editor_policy_tls_tests;

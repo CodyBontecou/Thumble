@@ -7,14 +7,18 @@ use crate::{
 pub(crate) mod catalog;
 #[path = "phone_controls.rs"]
 pub(crate) mod controls;
+#[path = "phone_editor.rs"]
+pub(crate) mod editor;
 #[path = "phone_presentation.rs"]
 pub(crate) mod presentation;
 pub(crate) struct ManagementBridges<'a> {
     pub catalog: &'a catalog::Bridge,
+    pub editor: Option<&'a std::sync::Arc<editor::Bridge>>,
     pub controls: Option<&'a controls::Bridge>,
     pub presentation: Option<&'a presentation::Bridge>,
 }
 pub(crate) enum ManagementRole<'a> {
+    Editor(&'a editor::Bridge),
     Catalog(&'a catalog::Bridge),
     Controls(&'a controls::Bridge),
     Presentation(&'a presentation::Bridge, presentation::Protocol),
@@ -359,6 +363,9 @@ pub(crate) fn serve_after_hello(
     };
     if let Some(management) = management {
         return match management {
+            ManagementRole::Editor(editor) => {
+                editor::serve(channel, authority, &mut authorized, editor, now)
+            }
             ManagementRole::Presentation(presentation, protocol) => presentation::serve(
                 channel,
                 authority,

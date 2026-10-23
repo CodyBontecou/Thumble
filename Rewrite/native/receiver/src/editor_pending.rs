@@ -208,6 +208,61 @@ impl EditorCoordinator {
             retained: Some(edit),
         }))
     }
+    /// Snapshot first, then inspect the input gate outside the coordinator lock.
+    /// Matching live/poisoned authorization cannot become a no-edit proof.
+    pub(crate) fn close_retired_phone(
+        self: &Arc<Self>,
+        phone: &str,
+    ) -> Result<Option<ClosedEditorScope>, FenceError> {
+        let edit = {
+            let state = self.state.lock().map_err(|_| FenceError::Unavailable)?;
+            state
+                .pending
+                .as_ref()
+                .filter(|e| e.context.phone_id == phone)
+                .cloned()
+                .or_else(|| {
+                    state
+                        .completed
+                        .upgrade()
+                        .filter(|e| e.context.phone_id == phone)
+                })
+        };
+        let Some(edit) = edit else { return Ok(None) };
+        match edit.authorization.guard() {
+            Err("phone_authentication_rejected") => {}
+            _ => return Err(FenceError::Closed),
+        }
+        edit.fence.close_admission()?;
+        Ok(Some(ClosedEditorScope {
+            authorization: edit.authorization.clone(),
+            fence: edit.fence.clone(),
+            coordinator: self.clone(),
+            retained: Some(edit),
+        }))
+    }
+    pub(crate) fn retired_writer_if_any(&self) -> Result<Option<RetiredWriter>, FenceError> {
+        self.writer.retired_if_any()
+    }
+    /// Only a stored orphan lease on this exact writer/entry is a reaping proof.
+    pub(crate) fn orphan_completion_proof(
+        &self,
+        edit: &Arc<PendingEdit>,
+    ) -> Result<Option<EditAckProof>, FenceError> {
+        if !Arc::ptr_eq(&edit.writer, &self.writer) {
+            return Err(FenceError::InvalidTicket);
+        }
+        let proof = edit
+            .proof
+            .lock()
+            .map_err(|_| FenceError::Unavailable)?
+            .clone();
+        Ok(proof.map(|proof| EditAckProof {
+            _authorization: edit.authorization.clone(),
+            _drained: proof,
+            _retained: Some(edit.clone()),
+        }))
+    }
     /// Includes parent `not-dispatched`: after native publication this is still
     /// uncertain, not a definitive owner response. Never clears the registry.
     pub(crate) fn uncertain_dispatch(
@@ -295,6 +350,9 @@ impl EditorAttachment {
     }
 }
 impl ClosedEditorScope {
+    pub(crate) fn retained_edit(&self) -> Option<&Arc<PendingEdit>> {
+        self.retained.as_ref()
+    }
     pub(crate) fn wait_for_ack(&self, budget: Duration) -> Result<EditAckProof, FenceError> {
         let proof = self.fence.wait_drained(budget)?;
         Ok(EditAckProof {

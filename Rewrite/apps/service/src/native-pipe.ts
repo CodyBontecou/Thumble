@@ -46,6 +46,7 @@ export class NativePipe<Ready, Reply> {
       ready: (value: Record<string, unknown>, pid: number | undefined) => Ready;
       reply: (value: Record<string, unknown>) => Reply;
       event?: (value: Record<string, unknown>) => void;
+      failure?: () => void;
     },
     private readonly unavailable: string,
   ) {
@@ -67,6 +68,7 @@ export class NativePipe<Ready, Reply> {
     this.child.on("error", () => this.fail("child-error"));
     this.child.on("exit", () => this.fail("child-exit"));
     this.child.stdin.on("error", () => this.fail("stdin-error"));
+    this.child.stdout.on("end", () => this.fail("stdout-end"));
     const startup = setTimeout(() => this.fail("startup-timeout"), 3000);
     void this.ready.finally(() => clearTimeout(startup)).catch(() => {});
     this.child.stdout.on("data", (chunk: Buffer) => {
@@ -142,6 +144,7 @@ export class NativePipe<Ready, Reply> {
       | "child-error"
       | "child-exit"
       | "stdin-error"
+      | "stdout-end"
       | "startup-timeout"
       | "frame-too-large"
       | "receive-invalid"
@@ -164,6 +167,13 @@ export class NativePipe<Ready, Reply> {
       request.reject(new Error(this.unavailable));
     }
     this.pending.clear();
+    // Notify once after transport admission is permanently closed. The owner
+    // starts its own actual shutdown; no callback result is a drain proof.
+    try {
+      this.codec.failure?.();
+    } catch {
+      /* transport remains failed */
+    }
   }
   async request(body: unknown, timeoutMs = 2000): Promise<Reply> {
     if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 30000)

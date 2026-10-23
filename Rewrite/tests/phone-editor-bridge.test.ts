@@ -68,6 +68,7 @@ function fake() {
   let closed = 0;
   const owner = {
     editorOwnerLifetime: async () => id,
+    retireEditorOwner: async () => {},
     closeEditorDispatch: () => {
       closed++;
     },

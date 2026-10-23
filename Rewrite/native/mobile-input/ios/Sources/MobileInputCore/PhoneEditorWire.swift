@@ -1,8 +1,21 @@
 import Foundation
 
-// Internal preparatory codec: no role registration, network factory or JS trust boundary.
-enum PhoneEditorError: Error, Equatable {
-  case rejected, busy, unavailable, originReconciliationRequired
+// Strict internal codec. The explicit SDK factory owns transport and trust.
+public enum PhoneEditorError: String, Error, Equatable, CustomNSError {
+  case rejected = "editor_rejected"
+  case busy = "editor_busy"
+  case unavailable = "editor_unavailable"
+  case originReconciliationRequired = "origin-reconciliation-required"
+  public static var errorDomain: String { "ThumblePhoneEditor" }
+  public var errorCode: Int {
+    switch self {
+    case .rejected: 1
+    case .busy: 2
+    case .unavailable: 3
+    case .originReconciliationRequired: 4
+    }
+  }
+  public var errorUserInfo: [String: Any] { [NSLocalizedDescriptionKey: rawValue] }
 }
 indirect enum EditorJSON: Sendable, Equatable {
   case object([String: EditorJSON])

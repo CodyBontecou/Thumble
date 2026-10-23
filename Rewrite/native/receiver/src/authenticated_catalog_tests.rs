@@ -41,6 +41,7 @@ fn management_is_explicit_never_input_capable_and_rechecks_revoke_after_parent_w
                         physical: false,
                     },
                     ManagementBridges {
+                        editor: None,
                         catalog: &bridge,
                         controls: None,
                         presentation: None,

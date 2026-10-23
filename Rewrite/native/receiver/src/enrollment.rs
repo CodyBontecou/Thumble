@@ -217,7 +217,15 @@ pub fn enroll(
 ) -> Result<TrustedPhone, &'static str> {
     let result = (|| {
         begin(channel, windows, store, 2)?;
-        complete(channel, windows, store, policy_mutation, None, &mut now)
+        complete(
+            channel,
+            windows,
+            store,
+            policy_mutation,
+            None,
+            None,
+            &mut now,
+        )
     })();
     if result.is_err() {
         channel.close();
@@ -237,12 +245,15 @@ pub(crate) fn serve(
         catalog,
         controls,
         presentation,
+        editor,
     } = management;
     let result = (|| match begin(
         channel,
         windows,
         store,
-        if presentation.is_some_and(|bridge| bridge.enabled()) {
+        if editor.is_some_and(|bridge| bridge.enabled()) {
+            12
+        } else if presentation.is_some_and(|bridge| bridge.enabled()) {
             11
         } else if input.datagram_port.is_some() {
             9
@@ -262,6 +273,10 @@ pub(crate) fn serve(
             store,
             policy_mutation,
             Some(input.registry),
+            editor
+                .map(crate::editor_policy::PolicyEditor::for_bridge)
+                .transpose()?
+                .flatten(),
             &mut now,
         )
         .map(|_| ()),
@@ -273,7 +288,10 @@ pub(crate) fn serve(
         10 | 11 if !presentation.is_some_and(|bridge| bridge.enabled()) => {
             Err("enrollment_version_unsupported")
         }
-        version @ 3..=11 => {
+        12 if !editor.is_some_and(|bridge| bridge.enabled()) => {
+            Err("enrollment_version_unsupported")
+        }
+        version @ 3..=12 => {
             let authority = windows
                 .lock()
                 .map_err(|_| "pairing_owner_unavailable")?
@@ -300,6 +318,9 @@ pub(crate) fn serve(
                     None
                 },
                 match version {
+                    12 => editor.map(|bridge| {
+                        crate::authenticated_control::ManagementRole::Editor(bridge.as_ref())
+                    }),
                     7 => Some(crate::authenticated_control::ManagementRole::Catalog(
                         catalog,
                     )),
@@ -354,7 +375,7 @@ fn begin(
         || (if hello.control_version == 9 {
             hello.role.as_deref() != Some("physical-input")
                 || hello.required_output_backend.as_deref() != Some("macos-hid")
-        } else if matches!(hello.control_version, 7 | 8 | 10 | 11) {
+        } else if matches!(hello.control_version, 7 | 8 | 10 | 11 | 12) {
             hello.role.as_deref() != Some("management") || hello.required_output_backend.is_some()
         } else {
             hello.role.is_some() || hello.required_output_backend.is_some()
@@ -370,8 +391,11 @@ fn begin(
         reply.as_object_mut().unwrap().remove("inputEnabled");
         reply["role"] = serde_json::json!("physical-input");
         reply["requiredOutputBackend"] = serde_json::json!("macos-hid");
-    } else if matches!(hello.control_version, 7 | 8 | 10 | 11) {
+    } else if matches!(hello.control_version, 7 | 8 | 10 | 11 | 12) {
         reply["role"] = serde_json::json!("management");
+    }
+    if hello.control_version == 12 {
+        reply["inputSessionAvailable"] = serde_json::json!(false);
     }
     channel
         .send(
@@ -387,6 +411,7 @@ fn complete(
     store: &Mutex<PhoneTrustStore>,
     policy_mutation: &Mutex<()>,
     input_grants: Option<&crate::input_broker::Registry>,
+    editor: Option<crate::editor_policy::PolicyEditor>,
     now: &mut impl FnMut() -> Result<u64, &'static str>,
 ) -> Result<TrustedPhone, &'static str> {
     let request: Enroll = receive(channel)?;
@@ -419,18 +444,23 @@ fn complete(
             )?;
         let mut store = store.lock().map_err(|_| "phone_trust_owner_unavailable")?;
         let retired = store.detach_scope(&request.phone_id)?;
+        let captured =
+            crate::editor_policy::CapturedPolicy::capture(retired, &request.phone_id, editor)
+                .map_err(|_| "editor_policy_undrained")?;
         let result = (|| {
             if let Some(grants) = input_grants {
                 grants.retire_phone(&request.phone_id)?;
             }
             store.enroll_now(&request.phone_id, &request.label, now)
         })();
-        (result, retired)
+        (result, captured)
     };
     // No global store/policy lock covers a backpressured old management send.
-    if let Some(retired) = retired {
-        retired.wait_management_delivery()?;
-    }
+    // The guard spans BOTH enrollment sends and all error unwinds. No global
+    // policy/store/input lock covers the drain or any network IO.
+    let _ack_guard = retired
+        .drain(std::time::Duration::from_millis(100))
+        .map_err(|_| "editor_policy_undrained")?;
     let issued = issued?;
     issued.send_enrollment(channel)?;
     let ack: Acknowledgment =

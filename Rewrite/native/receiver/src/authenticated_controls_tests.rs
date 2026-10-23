@@ -129,6 +129,7 @@ fn controls_v8_is_management_only_and_fences_revocation_and_native_replacement_a
                         physical: false,
                     },
                     ManagementBridges {
+                        editor: None,
                         catalog: &catalog,
                         controls: Some(&bridge),
                         presentation: None,

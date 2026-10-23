@@ -1,3 +1,7 @@
+import {
+  PhoneEditorBridge,
+  decodePhoneEditorEvent,
+} from "./phone-editor-bridge.ts";
 import { decodeAnyPhonePresentationEvent } from "@thumble/contracts/phone-presentation";
 import { PhonePresentationBridge } from "./phone-presentation-bridge.ts";
 import { decodePhoneControlsEvent } from "@thumble/contracts/phone-controls";
@@ -20,13 +24,15 @@ export class NativePairingHost {
         kind:
           | "phone-catalog-enabled"
           | "phone-controls-enabled"
-          | "phone-presentation-enabled";
+          | "phone-presentation-enabled"
+          | "phone-editor-enabled";
       }
   >;
   get child() {
     return this.pipe.child;
   }
   readonly ready: Promise<void>;
+  private editorRetirement: Promise<void> | undefined;
   constructor(
     executable: string,
     directory: string,
@@ -35,6 +41,7 @@ export class NativePairingHost {
     catalog?: PhoneCatalogBridge,
     controls?: PhoneControlsBridge,
     presentation?: PhonePresentationBridge,
+    private readonly editor?: PhoneEditorBridge,
   ) {
     let lastEvent = 0n,
       lastControlsEvent = 0n,
@@ -46,7 +53,8 @@ export class NativePairingHost {
           kind:
             | "phone-catalog-enabled"
             | "phone-controls-enabled"
-            | "phone-presentation-enabled";
+            | "phone-presentation-enabled"
+            | "phone-editor-enabled";
         }
     >(
       executable,
@@ -67,7 +75,22 @@ export class NativePairingHost {
           )
             throw new Error("invalid_pairing_ready");
         },
+        failure: () => this.retireCapturedEditor(),
         event: (value) => {
+          if (
+            value.event === "phone-editor-write" ||
+            value.event === "phone-editor-read"
+          ) {
+            if (!editor) throw new Error("unexpected_phone_editor_event");
+            const event = decodePhoneEditorEvent(value);
+            if (event.envelope.authorityInstanceId !== authority)
+              throw new Error("editor_authority_mismatch");
+            void editor
+              .execute(event)
+              .then((reply) => this.pipe.writeEvent(reply))
+              .catch(() => this.pipe.disconnect());
+            return;
+          }
           if (value.event === "phone-presentation") {
             if (!presentation)
               throw new Error("unexpected_phone_presentation_event");
@@ -161,6 +184,16 @@ export class NativePairingHost {
             exact(value.result as Record<string, unknown>, ["kind"]);
             return { kind: "phone-presentation-enabled" };
           }
+          if (
+            editor &&
+            value.result &&
+            typeof value.result === "object" &&
+            "kind" in value.result &&
+            value.result.kind === "phone-editor-enabled"
+          ) {
+            exact(value.result as Record<string, unknown>, ["kind"]);
+            return { kind: "phone-editor-enabled" };
+          }
           const reply = decodePairingReply(value.result);
           if (reply.authorityInstanceId !== authority)
             throw new Error("pairing_authority_mismatch");
@@ -169,35 +202,58 @@ export class NativePairingHost {
       },
       "pairing_host_unavailable",
     );
-    this.ready = this.pipe.ready.then(async () => {
-      if (catalog) {
-        const reply = await this.pipe.request({
-          command: "phone-catalog-enable",
-        });
-        if (!("kind" in reply) || reply.kind !== "phone-catalog-enabled") {
-          this.pipe.disconnect();
-          throw new Error("phone_catalog_enable_invalid");
+    this.ready = this.pipe.ready
+      .then(async () => {
+        if (catalog) {
+          const reply = await this.pipe.request({
+            command: "phone-catalog-enable",
+          });
+          if (!("kind" in reply) || reply.kind !== "phone-catalog-enabled") {
+            this.pipe.disconnect();
+            throw new Error("phone_catalog_enable_invalid");
+          }
         }
-      }
-      if (controls) {
-        const reply = await this.pipe.request({
-          command: "phone-controls-enable",
-        });
-        if (!("kind" in reply) || reply.kind !== "phone-controls-enabled") {
-          this.pipe.disconnect();
-          throw new Error("phone_controls_enable_invalid");
+        if (controls) {
+          const reply = await this.pipe.request({
+            command: "phone-controls-enable",
+          });
+          if (!("kind" in reply) || reply.kind !== "phone-controls-enabled") {
+            this.pipe.disconnect();
+            throw new Error("phone_controls_enable_invalid");
+          }
         }
-      }
-      if (presentation) {
-        const reply = await this.pipe.request({
-          command: "phone-presentation-enable",
-        });
-        if (!("kind" in reply) || reply.kind !== "phone-presentation-enabled") {
-          this.pipe.disconnect();
-          throw new Error("phone_presentation_enable_invalid");
+        if (presentation) {
+          const reply = await this.pipe.request({
+            command: "phone-presentation-enable",
+          });
+          if (
+            !("kind" in reply) ||
+            reply.kind !== "phone-presentation-enabled"
+          ) {
+            this.pipe.disconnect();
+            throw new Error("phone_presentation_enable_invalid");
+          }
         }
-      }
-    });
+        if (editor) {
+          const reply = await this.pipe.request(editor.enableCommand());
+          if (!("kind" in reply) || reply.kind !== "phone-editor-enabled")
+            throw new Error("phone_editor_enable_invalid");
+        }
+      })
+      .catch((error) => {
+        this.pipe.disconnect();
+        throw error;
+      });
+  }
+  private retireCapturedEditor(): void {
+    if (!this.editor || this.editorRetirement) return;
+    this.editorRetirement = this.editor.retireWriter();
+    // Keep the rejected confirmation observable without an unhandled rejection.
+    void this.editorRetirement.catch(() => {});
+  }
+  waitForEditorWriterExit(): Promise<void> {
+    this.retireCapturedEditor();
+    return this.editorRetirement ?? Promise.resolve();
   }
   async request(command: PairingCommand): Promise<PairingReply> {
     await this.ready;

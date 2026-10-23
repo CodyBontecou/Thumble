@@ -57,7 +57,9 @@ import {
 export class ConfigurationOwner {
   private readonly pipe: NativePipe<string | undefined, unknown>;
   private editorDispatchClosed = false;
+  private editorRetirement: Promise<void> | undefined;
   private editorWrite = false;
+  private editorTurnChanged: (() => void) | undefined;
   private wowState = disabledWowSyncStatus();
   private captureState = disabledWowCaptureStatus();
   private readonly wowJobs = new Map<string, WowSyncStatus>();
@@ -65,6 +67,7 @@ export class ConfigurationOwner {
   private wowRequest = false;
   private cacheWow(sync: WowSyncStatus): void {
     this.wowState = sync;
+    this.notifyEditorTurn();
     if (sync.operationId) this.wowJobs.set(sync.operationId, sync);
     while (this.wowJobs.size > 32) {
       const id = this.wowJobs.keys().next().value!;
@@ -158,8 +161,19 @@ export class ConfigurationOwner {
   }
   closeEditorDispatch(): void {
     this.editorDispatchClosed = true;
+    this.notifyEditorTurn();
   }
-  /** Unconnected private seam. Native must retain its independent ticket until
+  /** Retire this exact captured child, including idle writers holding SQLite.
+   * Idempotence shares actual exit confirmation with an in-flight write loss. */
+  retireEditorOwner(): Promise<void> {
+    this.closeEditorDispatch();
+    if (!this.editorRetirement) {
+      this.pipe.disconnect();
+      this.editorRetirement = confirmEditorWriterExit(this.child);
+    }
+    return this.editorRetirement;
+  }
+  /** Private label seam. Native must retain its independent ticket until
    * this definitive result; pending/timeout is never a no-op acknowledgement. */
   async commitEditorLabel(
     input: EditorLabelCommit,
@@ -181,18 +195,19 @@ export class ConfigurationOwner {
         kind: "not-dispatched",
         error: "editor_owner_lifetime_mismatch",
       };
-    if (
-      this.editorWrite ||
-      this.activeJob !== undefined ||
-      this.phoneRead ||
-      this.ordinaryReads ||
-      this.wowRequest ||
-      this.wowState.busy
-    )
+    if (this.editorWrite)
       return { kind: "not-dispatched", error: "configuration_owner_busy" };
+    // Reserve the only write before awaiting preexisting work. New operations
+    // cannot overtake this exact pinned intent, and no replacement child is used.
     this.editorWrite = true;
+    const deadline = performance.now() + 30000;
     try {
-      const result = await this.pipe.requestParsed(envelope);
+      await this.waitForEditorTurn();
+      if (this.editorDispatchClosed)
+        throw new Error("editor_owner_unavailable");
+      const remaining = Math.floor(deadline - performance.now());
+      if (remaining < 1) throw new Error("editor_owner_unavailable");
+      const result = await this.pipe.requestParsed(envelope, remaining);
       if (result.kind === "not-dispatched") {
         this.editorWrite = false;
         return result;
@@ -206,12 +221,42 @@ export class ConfigurationOwner {
       return { kind: "owner-response", response };
     } catch {
       // Close admission BEFORE disconnect/await; no future queue may target this child.
-      this.closeEditorDispatch();
-      this.pipe.disconnect();
-      await confirmEditorWriterExit(this.child);
+      await this.retireEditorOwner();
       this.editorWrite = false;
       return { kind: "writer-exited", disposition: "unknown" };
     }
+  }
+  private editorTurnAvailable(): boolean {
+    return !(
+      this.activeJob !== undefined ||
+      this.phoneRead ||
+      this.ordinaryReads ||
+      this.wowRequest
+    );
+  }
+  private notifyEditorTurn(): void {
+    if (this.editorDispatchClosed || this.editorTurnAvailable())
+      this.editorTurnChanged?.();
+  }
+  /** One reserved editor operation waits on the captured owner's existing
+   * work. A health timeout retires that child; it never proves a no-op. */
+  private waitForEditorTurn(): Promise<void> {
+    if (this.editorDispatchClosed)
+      return Promise.reject(new Error("editor_owner_unavailable"));
+    if (this.editorTurnAvailable()) return Promise.resolve();
+    return new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.editorTurnChanged = undefined;
+        reject(new Error("editor_owner_unavailable"));
+      }, 30000);
+      this.editorTurnChanged = () => {
+        clearTimeout(timer);
+        this.editorTurnChanged = undefined;
+        if (this.editorDispatchClosed)
+          reject(new Error("editor_owner_unavailable"));
+        else resolve();
+      };
+    });
   }
   /** Captured owner only; readonly replies cannot settle a write ticket. */
   async readEditor(
@@ -242,6 +287,7 @@ export class ConfigurationOwner {
       return decodeEditorOwnerReadResponse(result.result, envelope);
     } finally {
       this.phoneRead = false;
+      this.notifyEditorTurn();
     }
   }
   async request(input: ConfigurationCommand): Promise<ConfigurationReply> {
@@ -356,6 +402,7 @@ export class ConfigurationOwner {
         })
         .finally(() => {
           this.activeJob = undefined;
+          this.notifyEditorTurn();
         });
       return pending;
     }
@@ -372,6 +419,7 @@ export class ConfigurationOwner {
       }
     } finally {
       this.ordinaryReads--;
+      this.notifyEditorTurn();
     }
   }
   /** The phone abandons after 2s; this single underlying read retains its 30s owner health budget. */
@@ -413,6 +461,7 @@ export class ConfigurationOwner {
       throw error;
     } finally {
       this.phoneRead = false;
+      this.notifyEditorTurn();
     }
   }
   async requestWowCapture(
@@ -439,6 +488,7 @@ export class ConfigurationOwner {
       return this.captureState;
     } finally {
       this.wowRequest = false;
+      this.notifyEditorTurn();
     }
   }
   async requestWowSync(input: WowSyncCommand): Promise<WowSyncStatus> {
@@ -484,6 +534,7 @@ export class ConfigurationOwner {
       throw error;
     } finally {
       this.wowRequest = false;
+      this.notifyEditorTurn();
     }
   }
   async readSavedPin(input: SavedPinCommand): Promise<SavedConfigurationPin> {
@@ -510,6 +561,7 @@ export class ConfigurationOwner {
       }
     } finally {
       this.ordinaryReads--;
+      this.notifyEditorTurn();
     }
   }
   async readControlsForPhone(
@@ -545,6 +597,7 @@ export class ConfigurationOwner {
       throw error;
     } finally {
       this.phoneRead = false;
+      this.notifyEditorTurn();
     }
   }
   async readPresentationForPhone(
@@ -580,6 +633,7 @@ export class ConfigurationOwner {
       throw error;
     } finally {
       this.phoneRead = false;
+      this.notifyEditorTurn();
     }
   }
   disconnect(): void {
