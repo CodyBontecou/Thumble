@@ -67,7 +67,8 @@ import Foundation
         try await io.connect()
         try checkpoint()
         try send([
-          "version": 1, "command": "hello", "controlVersion": 10, "role": "management",
+          "version": 1, "command": "hello", "controlVersion": request.controlVersion,
+          "role": "management",
           "inputVersion": 1, "documentVersion": 1, "capabilitiesVersion": 1,
         ])
         let hello = try await receive(limit: 4096)
@@ -75,7 +76,7 @@ import Foundation
           hello == [
             "version": .integer(1), "command": .string("hello"),
             "authorityInstanceId": .string(endpoint.authorityInstanceID),
-            "controlVersion": .integer(10),
+            "controlVersion": .integer(request.controlVersion),
             "role": .string("management"), "inputVersion": .integer(1),
             "documentVersion": .integer(1),
             "capabilitiesVersion": .integer(1), "inputEnabled": .boolean(false),

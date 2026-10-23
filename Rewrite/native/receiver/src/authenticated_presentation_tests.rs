@@ -1,5 +1,16 @@
 #[test]
 fn presentation_v10_is_read_only_and_fences_revocation_replacement_timeout_and_reuse() {
+    presentation_management_witness(presentation::Protocol::BaseV1, "base");
+}
+#[test]
+fn presentation_v11_banks_preserve_management_fences_bounds_and_legacy_isolation() {
+    for bank in ["base", "left-trigger", "right-trigger", "both-triggers"] {
+        presentation_management_witness(presentation::Protocol::BanksV2, bank);
+    }
+}
+fn presentation_management_witness(protocol: presentation::Protocol, bank: &str) {
+    let control_version = if protocol == presentation::Protocol::BanksV2 {11} else {10};
+    let wire_version = if protocol == presentation::Protocol::BanksV2 {2} else {1};
     use crate::{
         enrollment::{self, PairingWindows},
         input_broker::{ControlInput, Registry},
@@ -37,7 +48,10 @@ fn presentation_v10_is_read_only_and_fences_revocation_replacement_timeout_and_r
             .unwrap()
             .as_millis() as u64
     }
-    for outcome in [
+    // Shared lifecycle/fence/65-command coverage runs once per negotiated protocol;
+    // every bank still crosses actual TLS metadata and icon request/reply boundaries.
+    let full = protocol == presentation::Protocol::BaseV1 || bank == "both-triggers";
+    let mut outcomes = if full {vec![
         "success",
         "replace",
         "revoke",
@@ -46,7 +60,11 @@ fn presentation_v10_is_read_only_and_fences_revocation_replacement_timeout_and_r
         "wrong-role",
         "missing-role",
         "timeout",
-    ] {
+    ]} else {vec!["success"]};
+    if protocol == presentation::Protocol::BanksV2 {
+        outcomes.extend(["wrong-wire", "missing-bank", "invalid-bank"]);
+    }
+    for outcome in outcomes {
         let root = Root::new();
         let identity = host_identity::load_existing(&root.0).unwrap();
         let mut trust = PhoneTrustStore::open(&root.0).unwrap();
@@ -139,7 +157,7 @@ fn presentation_v10_is_read_only_and_fences_revocation_replacement_timeout_and_r
                     || Ok(wall_time()),
                 )
             });
-            let mut hello = json!({"version":1,"command":"hello","controlVersion":10,"role":"management","inputVersion":1,"documentVersion":1,"capabilitiesVersion":1});
+            let mut hello = json!({"version":1,"command":"hello","controlVersion":control_version,"role":"management","inputVersion":1,"documentVersion":1,"capabilitiesVersion":1});
             if outcome == "wrong-role" { hello["role"]=json!("physical-input"); hello["requiredOutputBackend"]=json!("macos-hid"); }
             if outcome == "missing-role" {
                 hello.as_object_mut().unwrap().remove("role");
@@ -154,7 +172,7 @@ fn presentation_v10_is_read_only_and_fences_revocation_replacement_timeout_and_r
                 return;
             }
             let hello: Value = receive(&mut client).unwrap();
-            assert_eq!(hello["controlVersion"], 10);
+            assert_eq!(hello["controlVersion"], control_version);
             assert_eq!(hello["role"], "management");
             assert_eq!(hello["inputEnabled"], false);
             send(&mut client,json!({"version":1,"command":"authenticate","authorityInstanceId":"authority-a","phoneId":"controls-phone","credentialEpoch":"1","credential":credential["credential"]})).unwrap();
@@ -215,11 +233,26 @@ fn presentation_v10_is_read_only_and_fences_revocation_replacement_timeout_and_r
             .unwrap();
             let mut request = fixture["request"].clone();
             request["connectionId"] = admission["connectionId"].clone();
+            request["version"] = json!(wire_version);
+            if protocol == presentation::Protocol::BanksV2 {request["bank"] = json!(bank);}
+            if matches!(outcome,"wrong-wire"|"missing-bank"|"invalid-bank") {
+                if outcome=="wrong-wire" {request["version"]=json!(1);}
+                if outcome=="missing-bank" {request.as_object_mut().unwrap().remove("bank");}
+                if outcome=="invalid-bank" {request["bank"]=json!("shift");}
+                send(&mut client,request).unwrap();
+                assert!(receive::<Value>(&mut client).is_err());
+                assert_eq!(worker.join().unwrap(),Err("presentation_request_invalid"));
+                assert!(events.try_recv().is_err());
+                return;
+            }
             send(&mut client, request.clone()).unwrap();
             let event: Value =
                 serde_json::from_str(&events.recv_timeout(Duration::from_secs(1)).unwrap())
                     .unwrap();
             assert_eq!(event["event"], "phone-presentation");
+            assert_eq!(event["version"], wire_version);
+            if protocol == presentation::Protocol::BanksV2 {assert_eq!(event["bank"],bank);} else {assert!(event.get("bank").is_none());}
+            assert!(event.get("presentationProtocol").is_none());
             assert_eq!(event["authorityInstanceId"], "authority-a");
             assert!(event.get("connectionId").is_none());
             assert!(event.get("credential").is_none());
@@ -240,11 +273,18 @@ fn presentation_v10_is_read_only_and_fences_revocation_replacement_timeout_and_r
                 result.as_object_mut().unwrap().remove(key);
             }
             result["authorityInstanceId"] = json!("authority-a");
+            result["bank"] = json!(bank);
+            if outcome=="success" {
+                let mut wrong=result.clone();wrong["bank"]=json!(if bank=="base" {"left-trigger"}else{"base"});
+                assert_eq!(bridge.deliver(&serde_json::to_vec(&json!({"version":1,"event":"phone-presentation-reply","eventId":event["eventId"],"authorityInstanceId":"authority-a","result":wrong})).unwrap()),Err("presentation_parent_invalid"));
+                // A rejected wrong-bank result cannot consume the pending correct request.
+            }
             if outcome == "timeout" {
                 thread::sleep(Duration::from_millis(2200));
                 let reply: Value = receive(&mut client).unwrap();
                 assert_eq!(reply["kind"], "error");
                 assert_eq!(reply["error"], "presentation_timeout");
+                assert_eq!(reply["version"], wire_version);
                 client.close();
                 assert_eq!(worker.join().unwrap(), Ok(()));
                 let (snapshot, pin) = observed.lock().unwrap().clone().unwrap();
@@ -269,12 +309,14 @@ fn presentation_v10_is_read_only_and_fences_revocation_replacement_timeout_and_r
             } else {
                 let reply: Value = receive(&mut client).unwrap();
                 assert_eq!(reply["command"], "configuration-presentation-result");
+                assert_eq!(reply["version"], wire_version);
                 assert_eq!(reply["connectionId"], admission["connectionId"]);
                 if outcome == "replace" {
                     assert_eq!(reply["kind"], "error");
                     assert_eq!(reply["error"], "presentation_reactivation_required");
                 } else {
                     assert_eq!(reply["kind"], "presentation");
+                    assert_eq!(reply["bank"], bank);
                     assert_eq!(reply["controlCount"], 2);
                     assert_eq!(reply["control0IconName"], "Synthetic spell");
                     assert_eq!(reply["generation"], "7");
@@ -282,24 +324,38 @@ fn presentation_v10_is_read_only_and_fences_revocation_replacement_timeout_and_r
                     assert!(reply.get("inputEnabled").is_none());
                 }
                 if outcome == "success" {
-                  for _ in 0..64 {
+                  let icon_reads = if full {64} else {1};
+                  for _ in 0..icon_reads {
                     let mut icon = fixture["iconRequest"].clone();
                     icon["connectionId"] = admission["connectionId"].clone();
+                    icon["version"] = json!(wire_version);
+                    if protocol == presentation::Protocol::BanksV2 {icon["bank"] = json!(bank);}
                     send(&mut client, icon).unwrap();
                     let event:Value = serde_json::from_str(&events.recv_timeout(Duration::from_secs(1)).unwrap()).unwrap();
                     assert_eq!(event["kind"], "icon");
+                    assert_eq!(event["version"], wire_version);
+                    if protocol == presentation::Protocol::BanksV2 {assert_eq!(event["bank"],bank);} else {assert!(event.get("bank").is_none());}
                     let mut icon = fixture["iconReply"].clone();
                     for key in ["version", "command", "connectionId"] { icon.as_object_mut().unwrap().remove(key); }
                     icon["authorityInstanceId"] = json!("authority-a");
+                    if protocol == presentation::Protocol::BanksV2 {icon["bank"] = json!(bank);}
+                    if protocol == presentation::Protocol::BanksV2 {
+                        let mut wrong=icon.clone();wrong["bank"]=json!(if bank=="base" {"left-trigger"}else{"base"});
+                        assert_eq!(bridge.deliver(&serde_json::to_vec(&json!({"version":1,"event":"phone-presentation-reply","eventId":event["eventId"],"authorityInstanceId":"authority-a","result":wrong})).unwrap()),Err("presentation_parent_invalid"));
+                    }
                     bridge.deliver(&serde_json::to_vec(&json!({"version":1,"event":"phone-presentation-reply","eventId":event["eventId"],"authorityInstanceId":"authority-a","result":icon})).unwrap()).unwrap();
                     let reply:Value=receive(&mut client).unwrap();
                     assert_eq!(reply["kind"], "icon");
+                    assert_eq!(reply["version"], wire_version);
+                    if protocol == presentation::Protocol::BanksV2 {assert_eq!(reply["bank"],bank);} else {assert!(reply.get("bank").is_none());}
                     assert_eq!(reply["command"], "configuration-presentation-icon-result");
                     assert_eq!(reply["byteCount"], fixture["iconReply"]["byteCount"]);
                     assert!(reply.get("controlCount").is_none());
                   }
-                  // One metadata plus64iconreads exhausts this management connection.
-                  assert!(receive::<Value>(&mut client).is_err());
+                  if full {
+                    // One metadata plus64iconreads exhausts this management connection.
+                    assert!(receive::<Value>(&mut client).is_err());
+                  }
                 }
                 client.close();
                 assert_eq!(worker.join().unwrap(), Ok(()));

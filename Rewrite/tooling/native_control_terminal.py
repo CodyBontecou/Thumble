@@ -7,6 +7,8 @@ CODES = frozenset({
     'input_packet_invalid', 'input_packet_budget_exhausted', 'input_broker_unavailable',
     'input_protocol_invalid', 'input_renewal_too_early', 'phone_authentication_rejected',
     'phone_trust_owner_unavailable', 'native_input_unavailable',
+    'native_input_transport_failed', 'native_input_timeout',
+    'native_input_frame_invalid', 'native_input_server_rejected',
     'native_input_rejected', 'native_input_release_unconfirmed', 'pairing_closed', 'other',
 })
 _PATTERN = re.compile(r'native_control_terminal code=([a-z_]{1,96}) elapsed_us=(0|[1-9][0-9]{0,19})')
@@ -39,3 +41,33 @@ class NativeControlTerminals:
 
     def snapshot(self):
         return [dict(value) for value in self._values]
+
+    def write_report(self, path):
+        """Best-effort atomic diagnostics; failure must never bypass owned cleanup."""
+        import json
+        import os
+        from pathlib import Path
+        import tempfile
+        staged = None
+        try:
+            target = Path(path)
+            payload = (json.dumps({'version': 1, 'scope': 'native-control-terminal-outcomes',
+                                   'events': self.snapshot()}, sort_keys=True) + '\n').encode('ascii')
+            if len(payload) > 8192:
+                return False
+            target.parent.mkdir(parents=True, exist_ok=True)
+            with tempfile.NamedTemporaryFile(dir=target.parent, prefix='.' + target.name + '.', delete=False) as output:
+                staged = Path(output.name)
+                output.write(payload)
+                output.flush()
+                os.fsync(output.fileno())
+            os.replace(staged, target)
+            return True
+        except OSError:
+            return False
+        finally:
+            if staged is not None:
+                try:
+                    staged.unlink(missing_ok=True)
+                except OSError:
+                    pass

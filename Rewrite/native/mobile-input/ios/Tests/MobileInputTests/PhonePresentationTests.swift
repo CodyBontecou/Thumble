@@ -11,7 +11,9 @@ private func presentationFixture() throws -> [String: Any] {
       withExtension: "json", subdirectory: "Fixtures"))
   return try #require(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
 }
-private func presentationRequest(count: Int = 2) throws -> PhonePresentationRequest {
+private func presentationRequest(count: Int = 2, bank: PhonePresentationBank? = nil) throws
+  -> PhonePresentationRequest
+{
   let ids =
     count == 2 ? ["synthetic-south", "synthetic-east"] : (0..<count).map { "synthetic-\($0)" }
   let regions = ids.enumerated().map { index, id in
@@ -27,7 +29,7 @@ private func presentationRequest(count: Int = 2) throws -> PhonePresentationRequ
       generation: "7", revision: "2", viewportWidth: "874", viewportHeight: "393"),
     map: SavedControllerMap(
       map: ControlMap(generation: "7", revision: "2", controls: regions),
-      configurationSha256: String(repeating: "b", count: 64)), colorScheme: "light")
+      configurationSha256: String(repeating: "b", count: 64)), colorScheme: "light", bank: bank)
 }
 private func presentationFields(_ value: [String: Any]) throws -> [String: EnrollmentJSON.Value] {
   try EnrollmentJSON.parse(JSONSerialization.data(withJSONObject: value))
@@ -383,6 +385,8 @@ private final class PresentationStackResult: @unchecked Sendable {
     if fail { throw PhonePresentationError.unavailable("presentation_stale") }
     var fields = try #require(presentationFixture()["reply"] as? [String: Any])
     fields["colorScheme"] = request.colorScheme
+    fields["version"] = request.protocolVersion
+    if let bank = request.bank { fields["bank"] = bank.rawValue }
     let result = try presentationMetadata(fields, request: request)
     metadata = result
     beforeReturn?()
@@ -394,6 +398,8 @@ private final class PresentationStackResult: @unchecked Sendable {
     let metadata = try #require(metadata)
     var fields = try #require(presentationFixture()["iconReply"] as? [String: Any])
     fields["colorScheme"] = metadata.request.colorScheme
+    fields["version"] = metadata.request.protocolVersion
+    if let bank = metadata.request.bank { fields["bank"] = bank.rawValue }
     return try PhonePresentationWire.icon(
       presentationFields(fields), metadata: metadata, control: control,
       authority: "synthetic-authority", connection: String(repeating: "cd", count: 16))
@@ -526,4 +532,70 @@ private func
   #expect(batches.count == 2 && batches.allSatisfy(\.closed))
   if mode == "in-flight" { #expect(events.allSatisfy { $0["colorScheme"] as? String == "dark" }) }
   #expect(!events.contains(where: { $0["kind"] as? String == "error" }))
+}
+
+@Test @MainActor private func presentationBankRefreshFencesOldBatchAndAnnouncesBeforeEveryCallback()
+  async throws
+{
+  var selected = PhonePresentationBank.base
+  var active = true
+  var batches: [PresentationBatchFake] = []
+  var events: [[String: Any]] = []
+  let poller = PhonePresentationPoller(
+    request: try presentationRequest(bank: .base),
+    factory: {
+      let batch = PresentationBatchFake()
+      batch.paused = batches.isEmpty
+      batches.append(batch)
+      return batch
+    }, colorScheme: { "light" }, active: { active },
+    notification: { event in
+      events.append(event)
+      if event["kind"] as? String == "icon" { active = false }
+    }, pause: { await Task.yield() }, authority: "synthetic-authority", bank: { selected })
+  defer { poller.close() }
+  poller.start()
+  try await awaitPresentation { batches.first?.waiting == true }
+  selected = .leftTrigger
+  poller.refreshBank()
+  try await awaitPresentation { events.contains { $0["kind"] as? String == "icon" } }
+  #expect(batches.count == 2 && batches.allSatisfy(\.closed))
+  #expect(events.compactMap { $0["kind"] as? String } == ["bank", "presentation", "bank", "icon"])
+  #expect(
+    events.allSatisfy {
+      $0["bank"] as? String == "left-trigger"
+        && $0["authorityInstanceId"] as? String == "synthetic-authority"
+        && $0["viewportWidth"] as? String == "874"
+    })
+}
+
+@Test @MainActor private func presentationBankErrorIsFullPinnedAndObserverCloseCannotLeakMetadata()
+  async throws
+{
+  for closeAtBank in [false, true] {
+    var active = true
+    var events: [[String: Any]] = []
+    let batch = PresentationBatchFake()
+    batch.fail = !closeAtBank
+    let poller = PhonePresentationPoller(
+      request: try presentationRequest(bank: .rightTrigger), factory: { batch },
+      colorScheme: { "dark" }, active: { active },
+      notification: { event in
+        events.append(event)
+        if closeAtBank || event["kind"] as? String == "error" { active = false }
+      }, pause: { await Task.yield() }, authority: "synthetic-authority", bank: { .rightTrigger })
+    poller.start()
+    try await awaitPresentation { !events.isEmpty && batch.closed }
+    #expect(events.first?["kind"] as? String == "bank")
+    if closeAtBank {
+      #expect(events.count == 1)
+    } else {
+      #expect(events.count == 2 && events.last?["kind"] as? String == "error")
+      #expect(events.last?["authorityInstanceId"] as? String == "synthetic-authority")
+      #expect(events.last?["bank"] as? String == "right-trigger")
+      #expect(events.last?["colorScheme"] as? String == "dark")
+      #expect(events.last?["presentationRevision"] == nil)
+    }
+    poller.close()
+  }
 }

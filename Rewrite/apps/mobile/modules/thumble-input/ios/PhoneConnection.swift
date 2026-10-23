@@ -60,6 +60,11 @@ import UIKit
   private var catalogClient: PhoneCatalogClient?
   private var savedMapClient: SavedControllerClient?
   private var presentationPoller: PhonePresentationPoller?
+  private var presentationBank: PhonePresentationBank = .base
+  private var presentationBaseline: PhonePresentationRequest?
+  private var presentationAuthority: String?
+  private var bankAnnouncement: Task<Void, Never>?
+  private var pendingBankRefresh = false
   private var authorityResolver: PhoneAuthorityResolver?
   private var control: PhoneControlClient?
   private let storage = PhoneCredentialWorker()
@@ -334,7 +339,15 @@ import UIKit
       UIApplication.shared.applicationState == .active
     else { throw InputError.unavailable }
     diagnosticPhase = .input
-    let engine = try await client.bindInput(map, feedback: feedback)
+    let engine = try await client.bindInput(
+      map,
+      acceptedState: { [weak self, weak client] state in
+        guard let self, let client else { return }
+        self.acceptedPresentation(state, client: client)
+      },
+      released: { [weak self, weak client] _ in
+        if let self, let client { self.selectPresentationBank(.base, client: client) }
+      }, feedback: feedback)
     diagnosticPhase = .installing
     try Task.checkCancellation()
     guard !closed, anchor.window?.isKeyWindow == true,
@@ -354,7 +367,10 @@ import UIKit
       do {
         let request = try PhonePresentationRequest(
           saved: savedRequest, map: delivered,
-          colorScheme: anchor.traitCollection.userInterfaceStyle == .dark ? "dark" : "light")
+          colorScheme: anchor.traitCollection.userInterfaceStyle == .dark ? "dark" : "light",
+          bank: presentationBank)
+        presentationBaseline = request
+        presentationAuthority = endpoint.authorityInstanceID
         let poller = PhonePresentationPoller(
           endpoint: endpoint, storage: storage, request: request,
           colorScheme: { [weak anchor] in
@@ -369,21 +385,59 @@ import UIKit
           notification: { [weak self, weak client] value in
             guard let self, let client, !self.closed, self.control === client else { return }
             self.presentationResult(value)
-          })
+          }, bank: { [weak self] in self?.presentationBank ?? .base })
         presentationPoller = poller
         poller.start()
+        scheduleBankAnnouncement(client: client, refresh: false)
       } catch {
-        presentationResult([
-          "kind": "error", "error": "presentation_unavailable",
-          "generation": map.generation, "revision": map.revision,
-          "configurationSha256": delivered.configurationSha256,
-        ])
+        if let request = try? PhonePresentationRequest(
+          saved: savedRequest, map: delivered,
+          colorScheme: anchor.traitCollection.userInterfaceStyle == .dark ? "dark" : "light",
+          bank: presentationBank),
+          var event = try? request.bankNotification(authority: endpoint.authorityInstanceID)
+        {
+          event["kind"] = "error"
+          event["error"] = "presentation_unavailable"
+          presentationResult(event)
+        }
       }
     }
     if let catalogPage { catalogResult(catalogPage.bridgeMetadata) }
     diagnosticPhase = .connected
   }
-  func refreshPresentation() { presentationPoller?.refreshTheme() }
+  func refreshPresentation() {
+    presentationPoller?.refreshTheme()
+    if let control { scheduleBankAnnouncement(client: control, refresh: false) }
+  }
+  private func acceptedPresentation(_ state: GamepadStateV1, client: PhoneControlClient) {
+    selectPresentationBank(PhonePresentationBank(accepted: state), client: client)
+  }
+  private func selectPresentationBank(_ bank: PhonePresentationBank, client: PhoneControlClient) {
+    guard !closed, control === client, bank != presentationBank else { return }
+    presentationBank = bank
+    scheduleBankAnnouncement(client: client)
+  }
+  private func scheduleBankAnnouncement(client: PhoneControlClient, refresh: Bool = true) {
+    guard !closed, control === client else { return }
+    pendingBankRefresh = pendingBankRefresh || refresh
+    guard bankAnnouncement == nil else { return }
+    // The accepted-input callback only coalesces local state; management IO runs later.
+    bankAnnouncement = Task { [weak self, weak client] in
+      guard let self else { return }
+      self.bankAnnouncement = nil
+      let refresh = self.pendingBankRefresh
+      self.pendingBankRefresh = false
+      guard let client, !self.closed, self.control === client,
+        self.anchor?.window?.isKeyWindow == true, UIApplication.shared.applicationState == .active,
+        let baseline = self.presentationBaseline, let authority = self.presentationAuthority,
+        let request = try? baseline.withBank(self.presentationBank).withColorScheme(
+          self.anchor?.traitCollection.userInterfaceStyle == .dark ? "dark" : "light"),
+        let event = try? request.bankNotification(authority: authority)
+      else { return }
+      self.presentationResult(event)
+      if refresh { self.presentationPoller?.refreshBank() }
+    }
+  }
 
   private func fail() {
     guard !closed else { return }
@@ -427,6 +481,12 @@ import UIKit
     catalogClient = nil
     savedMapClient?.close()
     savedMapClient = nil
+    bankAnnouncement?.cancel()
+    bankAnnouncement = nil
+    pendingBankRefresh = false
+    presentationBaseline = nil
+    presentationAuthority = nil
+    presentationBank = .base
     presentationPoller?.close()
     presentationPoller = nil
     task?.cancel()

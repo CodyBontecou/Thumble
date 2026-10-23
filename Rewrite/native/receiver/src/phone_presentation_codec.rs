@@ -1,3 +1,4 @@
+use super::Protocol;
 use crate::{packet_runtime::saved_profile, runtime};
 use serde::Deserialize;
 use serde_json::{Map, Value};
@@ -139,6 +140,7 @@ fn label(v: Option<&str>) -> bool {
 #[derive(Clone)]
 pub(super) struct Request {
     pub row: Map<String, Value>,
+    protocol: Protocol,
 }
 impl Request {
     pub fn text(&self, k: &str) -> &str {
@@ -147,7 +149,14 @@ impl Request {
     pub fn icon(&self) -> bool {
         self.text("command") == "configuration-presentation-icon"
     }
-    pub fn parse(bytes: &[u8], connection: &str) -> Result<Self, &'static str> {
+    fn bank(&self) -> &str {
+        if self.protocol == Protocol::BanksV2 {
+            self.text("bank")
+        } else {
+            "base"
+        }
+    }
+    pub fn parse(bytes: &[u8], connection: &str, protocol: Protocol) -> Result<Self, &'static str> {
         if bytes.len() > 2048 {
             return Err("presentation_request_invalid");
         }
@@ -157,18 +166,26 @@ impl Request {
             .as_object()
             .cloned()
             .ok_or("presentation_request_invalid")?;
-        let r = Self { row };
+        let r = Self { row, protocol };
         let mut keys: BTreeSet<&str> = BASE
             .into_iter()
             .filter(|k| *k != "authorityInstanceId")
             .chain(["version", "command", "connectionId"])
             .collect();
+        if protocol == Protocol::BanksV2 {
+            keys.insert("bank");
+        }
         if r.icon() {
             keys.extend(ICON)
         }
         if r.row.len() != keys.len()
             || keys.iter().any(|k| !r.row.contains_key(*k))
-            || r.row.get("version").and_then(Value::as_u64) != Some(1)
+            || r.row.get("version").and_then(Value::as_u64) != Some(protocol.wire_version().into())
+            || (protocol == Protocol::BanksV2
+                && !matches!(
+                    r.bank(),
+                    "base" | "left-trigger" | "right-trigger" | "both-triggers"
+                ))
             || !matches!(
                 r.text("command"),
                 "configuration-presentation" | "configuration-presentation-icon"
@@ -296,6 +313,12 @@ pub(super) fn result(value: &Value, r: &Request, authority: &str) -> bool {
         .map(str::to_owned)
         .chain(["kind".into()])
         .collect();
+    if r.protocol == Protocol::BanksV2 {
+        keys.insert("bank".into());
+        if text(row, "bank") != Some(r.bank()) {
+            return false;
+        }
+    }
     if r.icon() {
         for k in ICON {
             if text(row, k) != Some(r.text(k)) {
@@ -325,7 +348,7 @@ pub(super) fn result(value: &Value, r: &Request, authority: &str) -> bool {
             ]
             .map(str::to_owned),
         );
-        if text(row, "bank") != Some("base")
+        if text(row, "bank") != Some(r.bank())
             || !label(text(row, "profileName"))
             || !positive(text(row, "presentationRevision"))
             || !text(row, "presentationSourceHash").is_some_and(hash)
@@ -394,6 +417,7 @@ mod tests {
         Request::parse(
             &serde_json::to_vec(&f[if icon { "iconRequest" } else { "request" }]).unwrap(),
             "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+            Protocol::BaseV1,
         )
         .unwrap()
     }
@@ -416,6 +440,43 @@ mod tests {
         assert!(!result(&v, &request(true), "synthetic-authority"));
     }
     #[test]
+    fn shared_banked_fixture_covers_all_banks_and_themes() {
+        let fixture: Value = serde_json::from_str(include_str!(
+            "../../../packages/fixtures/saved-controller-presentation-control-v11.json"
+        ))
+        .unwrap();
+        let variants = fixture["variants"].as_array().unwrap();
+        assert_eq!(variants.len(), 8);
+        let mut scopes = std::collections::BTreeSet::new();
+        for variant in variants {
+            for icon in [false, true] {
+                let wire = &variant[if icon { "iconRequest" } else { "request" }];
+                let request = Request::parse(
+                    &serde_json::to_vec(wire).unwrap(),
+                    "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+                    Protocol::BanksV2,
+                )
+                .unwrap();
+                let mut reply = variant[if icon { "iconReply" } else { "reply" }].clone();
+                for key in ["version", "command", "connectionId"] {
+                    reply.as_object_mut().unwrap().remove(key);
+                }
+                assert!(result(&reply, &request, "synthetic-authority"));
+                assert!(Request::parse(
+                    &serde_json::to_vec(wire).unwrap(),
+                    "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+                    Protocol::BaseV1,
+                )
+                .is_err());
+            }
+            scopes.insert((
+                variant["request"]["bank"].as_str().unwrap(),
+                variant["request"]["colorScheme"].as_str().unwrap(),
+            ));
+        }
+        assert_eq!(scopes.len(), 8);
+    }
+    #[test]
     fn strict_request_rejects_null_icon_fields_duplicates_unknowns_and_noncanonical_pins() {
         let f = fixture();
         for (key, value) in [
@@ -430,7 +491,8 @@ mod tests {
             v[key] = value;
             assert!(Request::parse(
                 &serde_json::to_vec(&v).unwrap(),
-                "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+                "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+                Protocol::BaseV1
             )
             .is_err());
         }
@@ -438,12 +500,18 @@ mod tests {
             serde_json::to_string(&f["request"])
                 .unwrap()
                 .replacen("{", "{\"version\":1,", 1);
-        assert!(Request::parse(text.as_bytes(), "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd").is_err());
+        assert!(Request::parse(
+            text.as_bytes(),
+            "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+            Protocol::BaseV1
+        )
+        .is_err());
         let mut v = f["iconRequest"].clone();
         v["presentationRevision"] = json!("2");
         assert!(Request::parse(
             &serde_json::to_vec(&v).unwrap(),
-            "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+            "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+            Protocol::BaseV1
         )
         .is_err());
     }
@@ -477,5 +545,120 @@ mod tests {
         for s in ["", "AA=A", "A===", "AAAA"] {
             assert!(icon_bytes(s).is_none());
         }
+    }
+    #[test]
+    fn banked_protocol_requires_exact_bank_and_negotiated_wire_version() {
+        let f = fixture();
+        for bank in ["base", "left-trigger", "right-trigger", "both-triggers"] {
+            for icon in [false, true] {
+                let mut v = f[if icon { "iconRequest" } else { "request" }].clone();
+                v["version"] = json!(2);
+                v["bank"] = json!(bank);
+                let r = Request::parse(
+                    &serde_json::to_vec(&v).unwrap(),
+                    "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+                    Protocol::BanksV2,
+                )
+                .unwrap();
+                let event = r.event("synthetic-authority", "1");
+                assert_eq!(event["version"], 2);
+                assert_eq!(event["bank"], bank);
+                assert!(event.get("presentationProtocol").is_none());
+                assert!(Request::parse(
+                    &serde_json::to_vec(&v).unwrap(),
+                    "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+                    Protocol::BaseV1
+                )
+                .is_err());
+                let mut response = reply(icon);
+                response["bank"] = json!(bank);
+                assert!(result(&response, &r, "synthetic-authority"));
+                for bad in [
+                    json!("shift"),
+                    json!("left_trigger"),
+                    json!(""),
+                    json!(1),
+                    Value::Null,
+                ] {
+                    let mut bad_request = v.clone();
+                    bad_request["bank"] = bad;
+                    assert!(Request::parse(
+                        &serde_json::to_vec(&bad_request).unwrap(),
+                        "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+                        Protocol::BanksV2
+                    )
+                    .is_err());
+                }
+                for key in ["bank", "version"] {
+                    let mut missing = v.clone();
+                    missing.as_object_mut().unwrap().remove(key);
+                    assert!(Request::parse(
+                        &serde_json::to_vec(&missing).unwrap(),
+                        "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+                        Protocol::BanksV2
+                    )
+                    .is_err());
+                }
+                let mut old = v.clone();
+                old["version"] = json!(1);
+                assert!(Request::parse(
+                    &serde_json::to_vec(&old).unwrap(),
+                    "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+                    Protocol::BanksV2
+                )
+                .is_err());
+                let mut wrong = response.clone();
+                wrong["bank"] = json!(if bank == "base" {
+                    "left-trigger"
+                } else {
+                    "base"
+                });
+                assert!(!result(&wrong, &r, "synthetic-authority"));
+                let mut missing = response.clone();
+                missing.as_object_mut().unwrap().remove("bank");
+                assert!(!result(&missing, &r, "synthetic-authority"));
+                let mut extra = response;
+                extra["presentationProtocol"] = json!(2);
+                assert!(!result(&extra, &r, "synthetic-authority"));
+                let duplicate =
+                    serde_json::to_string(&v)
+                        .unwrap()
+                        .replacen("{", "{\"bank\":\"base\",", 1);
+                assert!(Request::parse(
+                    duplicate.as_bytes(),
+                    "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+                    Protocol::BanksV2
+                )
+                .is_err());
+            }
+        }
+    }
+    #[test]
+    fn legacy_base_protocol_rejects_bank_in_requests_and_icon_results() {
+        let f = fixture();
+        for icon in [false, true] {
+            let v = f[if icon { "iconRequest" } else { "request" }].clone();
+            assert!(Request::parse(
+                &serde_json::to_vec(&v).unwrap(),
+                "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+                Protocol::BanksV2
+            )
+            .is_err());
+            let mut extra = v;
+            extra["bank"] = json!("base");
+            assert!(Request::parse(
+                &serde_json::to_vec(&extra).unwrap(),
+                "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+                Protocol::BaseV1
+            )
+            .is_err());
+        }
+        let mut icon = reply(true);
+        icon["bank"] = json!("base");
+        assert!(!result(&icon, &request(true), "synthetic-authority"));
+        assert!(request(false)
+            .event("synthetic-authority", "1")
+            .get("bank")
+            .is_none());
     }
 }

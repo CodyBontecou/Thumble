@@ -2,6 +2,8 @@ import { decodePhoneCatalogNotification } from "@thumble/contracts/phone-catalog
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   decodePhonePresentationNotification,
+  decodeBankPhonePresentationNotification,
+  type BankPhonePresentationNotification,
   type PhonePresentationNotification,
 } from "@thumble/contracts/phone-presentation";
 import {
@@ -12,6 +14,7 @@ import {
   type ViewProps,
 } from "react-native";
 import { requireNativeViewManager } from "expo-modules-core";
+import { BankPresentationState } from "./bank-presentation-state";
 import { standardControllerMap } from "@thumble/domain/controller-layout";
 import { useColors } from "../theme/colors";
 import {
@@ -63,7 +66,7 @@ const labels: Record<string, string> = {
 };
 const map = standardControllerMap("1", "0");
 type Presented = Extract<
-  PhonePresentationNotification,
+  PhonePresentationNotification | BankPhonePresentationNotification,
   { kind: "presentation" }
 >;
 type Visuals = Readonly<{
@@ -84,6 +87,10 @@ export function NativeController({
   const installed = useRef<{ map: ControlMap; hash: string | null } | null>(
     null,
   );
+  const bankState = useRef<BankPresentationState | null>(null);
+  const [bankStatus, setBankStatus] = useState<"pending" | "stale" | null>(
+    null,
+  );
   const visuals = useRef<Visuals | null>(null);
   const [presentation, setPresentation] = useState<Visuals | null>(null);
   const scheme = useColorScheme() === "dark" ? "dark" : "light";
@@ -91,9 +98,14 @@ export function NativeController({
     visuals.current = value;
     setPresentation(value);
   }, []);
-  useEffect(() => {
+  const resetPresentation = useCallback(() => {
+    bankState.current = null;
+    setBankStatus(null);
     publishVisuals(null);
-  }, [connected, scheme, publishVisuals]);
+  }, [publishVisuals]);
+  useEffect(() => {
+    resetPresentation();
+  }, [connected, scheme, resetPresentation]);
   useEffect(() => {
     if (!presentation || presentation.stale) return;
     const timer = setInterval(() => {
@@ -106,6 +118,45 @@ export function NativeController({
   }, [presentation?.metadata, presentation?.stale, publishVisuals]);
   const receivePresentation = useCallback(
     (event: { nativeEvent: { presentation: unknown } }) => {
+      // Try the separately versioned bank protocol before the strict legacy codec.
+      // A native bank selection never grants input or changes the installed map.
+      let bank: BankPhonePresentationNotification | undefined;
+      try {
+        bank = decodeBankPhonePresentationNotification(
+          event.nativeEvent.presentation,
+        );
+      } catch {
+        /* The legacy codec below remains authoritative for role10. */
+      }
+      if (bank) {
+        const pin = installed.current;
+        if (
+          !connected ||
+          !pin?.hash ||
+          bank.colorScheme !== scheme ||
+          admittedSession.current !== `${bank.generation}:${bank.revision}` ||
+          pin.map.generation !== bank.generation ||
+          pin.map.revision !== bank.revision ||
+          pin.hash !== bank.configurationSha256
+        )
+          return;
+        if (!bankState.current) {
+          if (bank.kind !== "bank") return;
+          bankState.current = new BankPresentationState(
+            new Set(pin.map.controls.map((c) => c.id)),
+          );
+        }
+        const display = bankState.current.accept(bank, performance.now());
+        if (display) {
+          setBankStatus(
+            display.pending ? (display.stale ? "stale" : "pending") : null,
+          );
+          publishVisuals(display.visuals);
+        }
+        return;
+      }
+      // A role10 callback cannot overwrite a selected role11 bank.
+      if (bankState.current) return;
       try {
         const value = decodePhonePresentationNotification(
           event.nativeEvent.presentation,
@@ -218,15 +269,15 @@ export function NativeController({
               ? hash
               : null,
         };
-        publishVisuals(null);
+        resetPresentation();
         setInstalledMap(next);
       } catch {
         installed.current = null;
-        publishVisuals(null);
+        resetPresentation();
         setInstalledMap(null);
       }
     },
-    [publishVisuals],
+    [resetPresentation],
   );
   const [catalogSummary, setCatalogSummary] = useState<string | null>(null);
   const receiveCatalog = useCallback(
@@ -270,7 +321,7 @@ export function NativeController({
                 `${incoming.generation}:${incoming.revision}` !== session
               )
                 installed.current = null;
-              publishVisuals(null);
+              resetPresentation();
             }
             admittedSession.current = session;
             setAdmissionEpoch(session);
@@ -283,7 +334,7 @@ export function NativeController({
           } else {
             admittedSession.current = null;
             installed.current = null;
-            publishVisuals(null);
+            resetPresentation();
             setAdmissionEpoch(null);
             setInstalledMap(null);
             setCatalogSummary(null);
@@ -302,14 +353,14 @@ export function NativeController({
       } catch {
         admittedSession.current = null;
         installed.current = null;
-        publishVisuals(null);
+        resetPresentation();
         setAdmissionEpoch(null);
         setInstalledMap(null);
         setCatalogSummary(null);
         setPhase("error");
       }
     },
-    [connected, publishVisuals],
+    [connected, resetPresentation],
   );
   const renderMap = connected
     ? phase === "ready" &&
@@ -429,6 +480,28 @@ export function NativeController({
               : "Starting practice…"}
         </Text>
       )}
+      {connected &&
+        phase === "ready" &&
+        bankStatus !== null &&
+        !presentation && (
+          <Text
+            testID="presentation-status"
+            pointerEvents="none"
+            numberOfLines={1}
+            maxFontSizeMultiplier={1.3}
+            style={{
+              position: "absolute",
+              top: 20,
+              left: "30%",
+              right: "30%",
+              textAlign: "center",
+              fontSize: 12,
+              color: colors.secondaryLabel,
+            }}
+          >
+            {bankStatus === "stale" ? "Game data stale" : "Updating game data…"}
+          </Text>
+        )}
       {connected && phase === "ready" && presentation && (
         <Text
           testID="presentation-status"

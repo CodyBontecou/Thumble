@@ -1,7 +1,7 @@
 import {
-  decodePhonePresentationResult,
-  type PhonePresentationEvent,
-  type PhonePresentationCommand,
+  decodeAnyPhonePresentationResult,
+  type AnyPhonePresentationEvent,
+  type AnyPhonePresentationCommand,
   type PhonePresentationResult,
   type PresentationError,
 } from "@thumble/contracts/phone-presentation";
@@ -13,15 +13,17 @@ export class PhonePresentationBridge {
   private pending = false;
   constructor(
     private readonly read: (
-      command: PhonePresentationCommand,
+      command: AnyPhonePresentationCommand,
     ) => Promise<unknown>,
   ) {}
   async execute(
-    event: PhonePresentationEvent,
+    event: AnyPhonePresentationEvent,
   ): Promise<PhonePresentationOutcome> {
     if (this.pending) return { error: "presentation_busy" };
     this.pending = true;
-    const { version: _version, event: _event, eventId: _id, ...query } = event;
+    const { version, event: _event, eventId: _id, ...fields } = event;
+    const query =
+      version === 2 ? { ...fields, presentationProtocol: 2 as const } : fields;
     const work = Promise.resolve()
       .then(() =>
         this.read({ command: "configuration-phone-presentation", ...query }),
@@ -29,7 +31,7 @@ export class PhonePresentationBridge {
       .then(
         (value) =>
           ({
-            result: decodePhonePresentationResult(value, query),
+            result: decodeAnyPhonePresentationResult(value, query),
           }) as PhonePresentationOutcome,
         (error) =>
           ({

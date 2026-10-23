@@ -5,7 +5,10 @@ import { OwnedConfigurationDocument } from "@thumble/domain/owned-configuration"
 import { projectSavedController } from "@thumble/domain/saved-controller-map";
 import { projectSavedPresentation } from "@thumble/domain/saved-presentation";
 import { verifyPresentationIcon } from "../apps/service/src/presentation-icon.ts";
-import { syntheticSource } from "../tooling/presentation-service-probe.ts";
+import {
+  syntheticSource,
+  syntheticBankSource,
+} from "../tooling/presentation-service-probe.ts";
 const digest = (data: string | Uint8Array) =>
   createHash("sha256").update(data).digest("hex");
 test("synthetic real-service seed has one centered supported control and appearance-only refresh", () => {
@@ -60,4 +63,54 @@ test("synthetic real-service seed has one centered supported control and appeara
     b.presentation.controls[0]!.icon!.sha256,
   );
   expect(syntheticSource(24, "Initial spell")).toBe(initial);
+});
+
+test("bank service seed projects eight distinct verified icons and stable three-control input across refresh", () => {
+  const seen = new Set<string>();
+  let original: ReturnType<typeof projectSavedController>["map"] | undefined;
+  for (const refreshed of [false, true]) {
+    const text = syntheticBankSource(refreshed);
+    const document = OwnedConfigurationDocument.read(
+      LosslessJson.parse(text),
+      digest,
+    );
+    const profileId = document.catalog.activeProfileID!;
+    const projected = projectSavedController(
+      { document, authorityRevision: "2" },
+      { profileId, authorityRevision: "2", sourceSha256: digest(text) },
+      { generation: "1", revision: "1" },
+      { width: 874, height: 393 },
+      digest,
+    );
+    expect(projected.map.controls.map((c) => c.action).sort()).toEqual([
+      "leftVerticalTrigger",
+      "rightVerticalTrigger",
+      "south",
+    ]);
+    if (original) expect(projected.map).toEqual(original);
+    original = projected.map;
+    for (const theme of ["light", "dark"] as const)
+      for (const bank of [
+        "base",
+        "left-trigger",
+        "right-trigger",
+        "both-triggers",
+      ] as const) {
+        const presentation = projectSavedPresentation(
+          document,
+          profileId,
+          theme,
+          projected.map,
+          digest,
+          bank,
+        );
+        const icon = presentation.controls.find(
+          (c) => c.id === "ce000000-0000-0000-0000-00000000000a",
+        )!.icon!;
+        verifyPresentationIcon(icon.bytes);
+        expect(seen.has(icon.sha256)).toBe(false);
+        seen.add(icon.sha256);
+      }
+  }
+  expect(seen.size).toBe(16);
 });

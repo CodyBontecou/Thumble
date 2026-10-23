@@ -123,7 +123,7 @@ jobs:
           python3 -m unittest discover -s tooling -p test_ios_tls_runtime.py -v
           python3 -m unittest discover -s tooling -p test_ios_runtime_stages.py -v
           python3 -m unittest discover -s tooling -p test_native_control_terminal.py -v
-          python3 tooling/run_mobile_app_probe.py --platform ios -- python3 tooling/check_ios_tls_runtime.py --report reports/mobile-ios-tls-runtime.json > "$RUNNER_TEMP/ios-tls-runtime-private.txt" 2>&1
+          python3 tooling/run_mobile_app_probe.py --platform ios --terminal-report reports/mobile-ios-control-terminal-outcomes.json -- python3 tooling/check_ios_tls_runtime.py --report reports/mobile-ios-tls-runtime.json > "$RUNNER_TEMP/ios-tls-runtime-private.txt" 2>&1
       - name: Build native iOS Simulator module
         working-directory: Rewrite/native/mobile-input/ios
         run: xcodebuild -scheme ThumbleMobileInput -destination 'generic/platform=iOS Simulator' -derivedDataPath '${{ runner.temp }}/rewrite-ios-simulator' CODE_SIGNING_ALLOWED=NO build
@@ -286,6 +286,45 @@ jobs:
           pathlib.Path(destination).write_text(json.dumps(result, sort_keys=True) + "\n")
           if result["status"] != "passed":
               raise SystemExit("real_service_kotlin_presentation_witness_failed")
+          PYCODE
+      - name: Require actual Kotlin bank presentation-service witness
+        timeout-minutes: 2
+        run: |
+          set -euo pipefail
+          bun_bin="$(command -v bun)"
+          [[ "$("$bun_bin" --version)" == 1.4.3 ]]
+          bun_dir="$(dirname "$bun_bin")"
+          export PATH="$bun_dir:$PATH"
+          export THUMBLE_BANK_PRESENTATION_SERVICE_PROBE="$GITHUB_WORKSPACE/Rewrite/tooling/presentation-service-probe.ts"
+          test -x "$THUMBLE_BANK_PRESENTATION_SERVICE_PROBE"
+          test -x "$GITHUB_WORKSPACE/Rewrite/native/receiver/target/debug/thumble-rewrite-receiver"
+          result_file=build/test-results/testDebugUnitTest/TEST-com.thumble.rewrite.input.PhoneBankPresentationServiceTest.xml
+          rm -f "$result_file"
+          status=0
+          bash ./gradlew --no-daemon testDebugUnitTest --tests 'com.thumble.rewrite.input.PhoneBankPresentationServiceTest.actualAllBanksAndThemesRefreshWhileTriggersAndSouthStayHeldThenRevocationFencesReads' --rerun-tasks > "$RUNNER_TEMP/real-service-kotlin-bank-presentation.log" 2>&1 || status=$?
+          mkdir -p build/synthetic-native-results/bank-presentation-service "$GITHUB_WORKSPACE/Rewrite/reports"
+          if [[ -f "$result_file" ]]; then cp "$result_file" build/synthetic-native-results/bank-presentation-service/; fi
+          python3 - "$result_file" "$status" "$GITHUB_WORKSPACE/Rewrite/reports/mobile-real-service-kotlin-bank-presentation.json" <<'PYCODE'
+          import json, pathlib, sys, xml.etree.ElementTree as ET
+          source, status, destination = sys.argv[1:]
+          result = {"platform": "kotlin", "witness": "bank-presentation", "status": "failed"}
+          try:
+              path = pathlib.Path(source)
+              assert int(status) == 0 and path.stat().st_size <= 2_097_152
+              suite = ET.fromstring(path.read_bytes())
+              cases = suite.findall("testcase")
+              assert suite.tag == "testsuite" and len(cases) == 1
+              assert cases[0].attrib["classname"] == "com.thumble.rewrite.input.PhoneBankPresentationServiceTest"
+              assert cases[0].attrib["name"] == "actualAllBanksAndThemesRefreshWhileTriggersAndSouthStayHeldThenRevocationFencesReads"
+              assert int(suite.attrib["tests"]) == 1
+              assert all(int(suite.attrib[k]) == 0 for k in ("skipped", "failures", "errors"))
+              assert len(cases[0]) == 0
+              result.update(status="passed", cases=1, modes=2, skipped=0, failures=0)
+          except (AssertionError, OSError, ValueError, KeyError, TypeError, ET.ParseError):
+              pass
+          pathlib.Path(destination).write_text(json.dumps(result, sort_keys=True) + "\n")
+          if result["status"] != "passed":
+              raise SystemExit("real_service_kotlin_bank_presentation_witness_failed")
           PYCODE
       - uses: actions/upload-artifact@v4
         if: always()

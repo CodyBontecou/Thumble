@@ -686,3 +686,224 @@ test("Android semantic palette follows system appearance without remounting nati
   expect(screen().props.style.backgroundColor).toBe("#FAFAFA");
   expect(native()).toBe(before);
 });
+
+const bankPin = {
+  ...presentationPin,
+  presentationProtocol: 2,
+  authorityInstanceId: "authority-a",
+  viewportWidth: "844",
+  viewportHeight: "390",
+  colorScheme: "light",
+};
+function bankEvent(bank = "base", extra: Record<string, unknown> = {}) {
+  return { ...bankPin, kind: "bank", bank, ...extra };
+}
+function bankMetadata(
+  bank = "base",
+  label = "Base spell",
+  extra: Record<string, unknown> = {},
+) {
+  return {
+    ...metadata(),
+    ...bankPin,
+    bank,
+    controls: [{ id: "saved-only-east", label }],
+    ...extra,
+  };
+}
+
+test("native semantic bank selection swaps cached artwork without remounting the input view", async () => {
+  await mount();
+  await admission("ready");
+  await pinnedMap();
+  const view = native();
+  await present(bankMetadata());
+  expect(controllerLabels()).not.toContain("Base spell");
+  await present(bankEvent());
+  expect(presentationStatus()).toBe("Updating game data…");
+  await present(bankMetadata());
+  expect(controllerLabels()).toContain("Base spell");
+  await present(bankEvent("left-trigger"));
+  expect(controllerLabels()).not.toContain("Base spell");
+  await present(bankMetadata("left-trigger", "Left spell"));
+  await present(bankMetadata("both-triggers", "Both spell"));
+  expect(controllerLabels()).toContain("Left spell");
+  expect(controllerLabels()).not.toContain("Both spell");
+  await present(bankEvent("both-triggers"));
+  expect(controllerLabels()).toContain("Both spell");
+  await present(bankEvent());
+  expect(controllerLabels()).toContain("Base spell");
+  expect(native()).toBe(view);
+  expect(native().props.pointerEvents).toBe("auto");
+  expect(native().props.connect).toBe(true);
+});
+
+test("bank callbacks require the complete installed scope and cannot downgrade to legacy artwork", async () => {
+  await mount();
+  await admission("ready");
+  await pinnedMap();
+  await present(bankEvent());
+  await present(bankMetadata());
+  for (const patch of [
+    { authorityInstanceId: "foreign-authority" },
+    { viewportWidth: "845" },
+    { expectedSourceHash: "d".repeat(64) },
+    { configurationSha256: "d".repeat(64) },
+    { generation: "2" },
+    { profileId: "aaaaaaaa-0000-0000-0000-000000000002" },
+  ])
+    await present(bankMetadata("base", "Foreign", patch));
+  await present(
+    metadata({ controls: [{ id: "saved-only-east", label: "Legacy" }] }),
+  );
+  expect(controllerLabels()).toContain("Base spell");
+  expect(controllerLabels()).not.toContain("Foreign");
+  expect(controllerLabels()).not.toContain("Legacy");
+  await present(bankEvent("left-trigger"));
+  await present({
+    ...bankEvent("left-trigger"),
+    kind: "error",
+    error: "presentation_timeout",
+  });
+  expect(presentationStatus()).toBe("Game data stale");
+  expect(native().props.pointerEvents).toBe("auto");
+});
+
+test("newer inactive bank metadata stales older artwork and rejects late rollback across banks", async () => {
+  await mount();
+  await admission("ready");
+  await pinnedMap();
+  await present(bankEvent());
+  await present(bankMetadata());
+  await present(
+    bankMetadata("right-trigger", "New right spell", {
+      presentationRevision: "3",
+      presentationSourceHash: "d".repeat(64),
+    }),
+  );
+  expect(controllerLabels()).toContain("Base spell");
+  expect(presentationStatus()).toBe("Game data stale");
+  await present(bankEvent("right-trigger"));
+  expect(controllerLabels()).toContain("New right spell");
+  await present(bankMetadata("right-trigger", "Rollback"));
+  expect(controllerLabels()).not.toContain("Rollback");
+  await admission("disconnected");
+  await admission("ready");
+  await pinnedMap();
+  await present(bankMetadata("right-trigger", "Late old connection"));
+  expect(controllerLabels()).not.toContain("Late old connection");
+  expect(presentationStatus()).toBeUndefined();
+});
+
+test("bank theme callbacks recover after a scheme transition without changing native input ownership", async () => {
+  await mount();
+  await admission("ready");
+  await pinnedMap();
+  await present(bankEvent());
+  await present(bankMetadata());
+  await present(bankEvent("left-trigger", { colorScheme: "dark" }));
+  expect(controllerLabels()).toContain("Base spell");
+  const view = native();
+  systemScheme = "dark";
+  await act(() =>
+    renderer?.update(createElement(NativeController, { connected: true })),
+  );
+  expect(controllerLabels()).not.toContain("Base spell");
+  await present(bankEvent("left-trigger", { colorScheme: "dark" }));
+  await present(
+    bankMetadata("left-trigger", "Dark left", { colorScheme: "dark" }),
+  );
+  expect(controllerLabels()).toContain("Dark left");
+  expect(native()).toBe(view);
+  expect(native().props.pointerEvents).toBe("auto");
+});
+
+const { BankPresentationState } = await import("./bank-presentation-state");
+const { decodeBankPhonePresentationNotification } = await import(
+  "@thumble/contracts/phone-presentation"
+);
+const bankPng =
+  "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAL0lEQVR4nO3OIQEAAAgDMKIQhWg0hxg3E/Ornr2kEhAQEBAQEBAQEBAQEBAQEBAQSAcenxt8avMpgHIAAAAASUVORK5CYII=";
+const bankIcon = {
+  id: "saved-only-east",
+  label: "Base spell",
+  iconSHA256: "e".repeat(64),
+  iconByteCount: 104,
+  iconName: "spell",
+};
+function decodedBank(value: unknown) {
+  return decodeBankPhonePresentationNotification(value);
+}
+
+test("late inactive-bank icons never select that bank or extend metadata freshness", () => {
+  const state = new BankPresentationState(new Set([bankIcon.id]));
+  state.accept(decodedBank(bankEvent()), 0);
+  state.accept(
+    decodedBank(bankMetadata("base", "Base spell", { controls: [bankIcon] })),
+    100,
+  );
+  state.accept(decodedBank(bankEvent("left-trigger")), 150);
+  const late = state.accept(
+    decodedBank({
+      ...bankPin,
+      ...presentationVersion,
+      kind: "icon",
+      controlId: bankIcon.id,
+      iconSHA256: bankIcon.iconSHA256,
+      pngBase64: bankPng,
+    }),
+    200,
+  );
+  expect(late?.visuals).toBeNull();
+  expect(late?.pending).toBe(true);
+  const restored = state.accept(decodedBank(bankEvent()), 6200);
+  expect(restored?.visuals?.icons[bankIcon.id]).toBe(
+    `data:image/png;base64,${bankPng}`,
+  );
+  expect(restored?.visuals?.receivedAt).toBe(100);
+  expect(restored?.visuals?.stale).toBe(true);
+});
+
+test("bank artwork cache evicts inactive entries at its shared64-icon budget", () => {
+  const controls = Array.from({ length: 64 }, (_, i) => ({
+    ...bankIcon,
+    id: `control-${i}`,
+  }));
+  const state = new BankPresentationState(new Set(controls.map((c) => c.id)));
+  state.accept(decodedBank(bankEvent()), 0);
+  state.accept(decodedBank(bankMetadata("base", "unused", { controls })), 1);
+  state.accept(
+    decodedBank({
+      ...bankPin,
+      ...presentationVersion,
+      kind: "icon",
+      controlId: controls[0]!.id,
+      iconSHA256: bankIcon.iconSHA256,
+      pngBase64: bankPng,
+    }),
+    2,
+  );
+  state.accept(decodedBank(bankEvent("left-trigger")), 3);
+  state.accept(
+    decodedBank(bankMetadata("left-trigger", "unused", { controls })),
+    4,
+  );
+  for (const control of controls)
+    state.accept(
+      decodedBank({
+        ...bankPin,
+        ...presentationVersion,
+        bank: "left-trigger",
+        kind: "icon",
+        controlId: control.id,
+        iconSHA256: bankIcon.iconSHA256,
+        pngBase64: bankPng,
+      }),
+      5,
+    );
+  const retained = state.accept(decodedBank(bankEvent("left-trigger")), 6);
+  expect(Object.keys(retained?.visuals?.icons ?? {})).toHaveLength(64);
+  const evicted = state.accept(decodedBank(bankEvent()), 7);
+  expect(evicted?.visuals).toBeNull();
+  expect(evicted?.pending).toBe(true);
+});

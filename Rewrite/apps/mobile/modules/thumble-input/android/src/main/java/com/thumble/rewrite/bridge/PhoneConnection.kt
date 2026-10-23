@@ -73,6 +73,11 @@ internal class PhoneConnection(
     private var catalogClient: PhoneCatalogClient? = null
     private var savedMapClient: SavedControllerClient? = null
     private var presentation: PresentationSession? = null
+    private var presentationBank = PhonePresentationBank.BASE
+    private var presentationBaseline: Pair<SavedControllerRequest, SavedControllerMap>? = null
+    private var presentationAuthority: String? = null
+    private var bankAnnouncement: Runnable? = null
+    private var pendingBankRefresh = false
     private val main = Handler(Looper.getMainLooper())
     private val worker = Executors.newSingleThreadExecutor { task ->
         Thread(task, "ThumblePhoneBootstrap").apply { isDaemon = true }
@@ -368,13 +373,26 @@ internal class PhoneConnection(
                         fail()
                     } else
                         try {
-                            val engine = admission.bind(feedback)
+                            val engine =
+                                admission.bind(
+                                    acceptedState = { state ->
+                                        acceptedPresentation(state, client)
+                                    },
+                                    feedback = feedback,
+                                )
+                            val previousRelease = engine.onRelease
+                            engine.onRelease = { reason ->
+                                selectPresentationBank(PhonePresentationBank.BASE, client)
+                                previousRelease(reason)
+                            }
                             install(engine)
                             delivered?.let { installedMap(it.bridgeMap, it.configurationSha256) }
                             val saved = delivered
                             val request = savedRequest
                             if (saved != null && request != null) {
                                 // Optional management cannot fail or close the native input owner.
+                                presentationBaseline = Pair(request, saved)
+                                presentationAuthority = endpoint.authorityInstanceID
                                 runCatching {
                                     val session =
                                         PresentationSession(
@@ -382,6 +400,7 @@ internal class PhoneConnection(
                                             endpoint,
                                             request,
                                             saved,
+                                            bank = { presentationBank },
                                             active = {
                                                 !closed &&
                                                     control === client &&
@@ -404,18 +423,9 @@ internal class PhoneConnection(
                                         )
                                     presentation = session
                                     session.start()
+                                    scheduleBankAnnouncement(client, false)
                                 }
-                                    .onFailure {
-                                        presentationResult(
-                                            mapOf(
-                                                "kind" to "error",
-                                                "error" to "presentation_unavailable",
-                                                "generation" to map.generation,
-                                                "revision" to map.revision,
-                                                "configurationSha256" to saved.configurationSha256,
-                                            )
-                                        )
-                                    }
+                                    .onFailure { emitPresentationError(client) }
                             }
                             catalogMetadata?.let(catalogResult)
                         } catch (_: Exception) {
@@ -431,6 +441,71 @@ internal class PhoneConnection(
 
     fun refreshPresentation() {
         presentation?.refreshTheme()
+        control?.let { scheduleBankAnnouncement(it, false) }
+    }
+
+    private fun acceptedPresentation(state: GamepadStateV1, client: PhoneControlClient) {
+        selectPresentationBank(PhonePresentationBank.accepted(state), client)
+    }
+
+    private fun selectPresentationBank(bank: PhonePresentationBank, client: PhoneControlClient) {
+        if (closed || control !== client || bank == presentationBank) return
+        presentationBank = bank
+        scheduleBankAnnouncement(client, true)
+    }
+
+    private fun bankRequest(): PhonePresentationRequest? {
+        val (saved, map) = presentationBaseline ?: return null
+        val scheme =
+            if (
+                anchor.resources.configuration.uiMode and
+                    android.content.res.Configuration.UI_MODE_NIGHT_MASK ==
+                    android.content.res.Configuration.UI_MODE_NIGHT_YES
+            )
+                "dark"
+            else "light"
+        return PhonePresentationRequest(saved, map, scheme, presentationBank)
+    }
+
+    private fun scheduleBankAnnouncement(client: PhoneControlClient, refresh: Boolean) {
+        if (closed || control !== client) return
+        pendingBankRefresh = pendingBankRefresh || refresh
+        if (bankAnnouncement != null) return
+        val work = Runnable {
+            bankAnnouncement = null
+            val shouldRefresh = pendingBankRefresh
+            pendingBankRefresh = false
+            if (
+                !closed &&
+                    control === client &&
+                    anchor.isAttachedToWindow &&
+                    anchor.hasWindowFocus()
+            ) {
+                runCatching {
+                    val authority = presentationAuthority ?: return@runCatching
+                    val request = bankRequest() ?: return@runCatching
+                    presentationResult(request.bankNotification(authority))
+                }
+                if (shouldRefresh) runCatching { presentation?.refreshBank() }
+            }
+        }
+        bankAnnouncement = work
+        main.post(work)
+    }
+
+    private fun emitPresentationError(client: PhoneControlClient) {
+        if (closed || control !== client) return
+        runCatching {
+            val request = bankRequest() ?: return@runCatching
+            val authority = presentationAuthority ?: return@runCatching
+            presentationResult(request.bankNotification(authority))
+            presentationResult(
+                request.bankNotification(authority).toMutableMap().apply {
+                    put("kind", "error")
+                    put("error", "presentation_unavailable")
+                }
+            )
+        }
     }
 
     private fun fail() {
@@ -455,6 +530,12 @@ internal class PhoneConnection(
             control?.close()
             control = null
         }
+        bankAnnouncement?.let(main::removeCallbacks)
+        bankAnnouncement = null
+        pendingBankRefresh = false
+        presentationBaseline = null
+        presentationAuthority = null
+        presentationBank = PhonePresentationBank.BASE
         presentation?.close()
         presentation = null
         scanner?.close()

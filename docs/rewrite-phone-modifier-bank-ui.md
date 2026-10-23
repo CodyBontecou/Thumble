@@ -1,0 +1,9 @@
+# Phone modifier-bank overlay
+
+The bank-aware native notification protocol is separately decoded from legacy base-only presentation. A native semantic bank event selects base, left-trigger, right-trigger or both-triggers. The React overlay requires the installed map hash and admitted generation/revision, then pins authority, configuration revision/source, profile, viewport and theme for that native lifetime. It never derives modifiers from JavaScript touch events or changes native input ownership.
+
+Metadata and verified icon callbacks may fill an inactive bank cache, but cannot select it. Late icons require the exact bank, theme, presentation revision/source and control hash; they never refresh metadata age. Advancing source revisions invalidate older bank artwork for freshness, and rollback or same-revision hash replacement is rejected across banks. Unknown current-bank artwork displays generic controller labels with an updating notice; a scoped error displays stale status. It never substitutes another bank's ability artwork.
+
+At most four bank metadata entries and 64 icons / 512 KiB decoded icon data are retained across the cache. Inactive bank entries are evicted first. Map, admission and theme transitions clear the cache. Metadata becomes stale after six seconds of local monotonic age; this does not establish optical freshness. The host's observed/stale/not-evaluated value remains visible.
+
+The actual React renderer suite passes 28 cases with no skips, including native view identity through bank changes, inactive callbacks, full-pin mismatches, source advances, theme recovery, age preservation and global cache eviction. These are renderer/state checks; actual native SDK/service bank delivery, physical phone visuals and real-game optical acceptance are separate gates.

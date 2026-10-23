@@ -14,6 +14,7 @@ internal class PresentationSession(
     private val endpoint: TrustedHostEndpoint,
     private val saved: SavedControllerRequest,
     private val map: SavedControllerMap,
+    private val bank: () -> PhonePresentationBank,
     private val active: () -> Boolean,
     private val notification: (Map<String, Any>) -> Unit,
 ) : Closeable {
@@ -39,8 +40,8 @@ internal class PresentationSession(
             "dark"
         else "light"
 
-    private fun valid(ticket: Long, scheme: String) =
-        !closed && epoch == ticket && active() && theme() == scheme
+    private fun valid(ticket: Long, scheme: String, selected: PhonePresentationBank?) =
+        !closed && epoch == ticket && active() && theme() == scheme && bank() == selected
 
     fun start() {
         check(Looper.myLooper() == Looper.getMainLooper())
@@ -56,8 +57,21 @@ internal class PresentationSession(
         if (!busy) beginBatch()
     }
 
-    private fun emit(ticket: Long, scheme: String, event: Map<String, Any>) {
-        main.post { if (valid(ticket, scheme)) notification(event) }
+    fun refreshBank() = refreshTheme()
+
+    private fun emit(
+        ticket: Long,
+        scheme: String,
+        request: PhonePresentationRequest,
+        event: Map<String, Any>,
+    ) {
+        main.post {
+            if (valid(ticket, scheme, request.bank))
+                runCatching {
+                    notification(request.bankNotification(endpoint.authorityInstanceID))
+                    if (valid(ticket, scheme, request.bank)) notification(event)
+                }
+        }
     }
 
     private fun store(icon: PhonePresentationIcon) {
@@ -83,9 +97,16 @@ internal class PresentationSession(
         val scheme = theme()
         val request =
             try {
-                PhonePresentationRequest(saved, map, scheme)
+                PhonePresentationRequest(saved, map, scheme, bank())
             } catch (_: Exception) {
-                notification(errorEvent("presentation_unavailable"))
+                runCatching {
+                    notification(
+                        errorEvent(
+                            PhonePresentationRequest(saved, map, scheme, bank()),
+                            "presentation_unavailable",
+                        )
+                    )
+                }
                 main.postDelayed(poll, 2000)
                 return
             }
@@ -103,21 +124,21 @@ internal class PresentationSession(
                 if (closed || epoch != ticket) return@execute
                 // An unchanged successful metadata response still refreshes the UI observation
                 // timer.
-                emit(ticket, scheme, metadata.bridgeEvent())
+                emit(ticket, scheme, request, metadata.bridgeEvent())
                 for (control in metadata.controls) {
                     if (closed || epoch != ticket) break
                     val hash = control.iconSHA256 ?: continue
                     val icon = cache[hash] ?: next.icon(control)
                     if (closed || epoch != ticket) break
                     store(icon)
-                    emit(ticket, scheme, icon.notification(metadata, control.id))
+                    emit(ticket, scheme, request, icon.notification(metadata, control.id))
                 }
             } catch (error: Exception) {
                 if (!closed && epoch == ticket) {
                     val code =
                         (error as? PhonePresentationUnavailable)?.code?.takeIf { it in ERRORS }
                             ?: "presentation_unavailable"
-                    emit(ticket, scheme, errorEvent(code))
+                    emit(ticket, scheme, request, errorEvent(request, code))
                 }
             } finally {
                 batch?.close()
@@ -138,14 +159,11 @@ internal class PresentationSession(
         }
     }
 
-    private fun errorEvent(code: String): Map<String, Any> =
-        mapOf(
-            "kind" to "error",
-            "error" to code,
-            "generation" to map.map.generation,
-            "revision" to map.map.revision,
-            "configurationSha256" to map.configurationSha256,
-        )
+    private fun errorEvent(request: PhonePresentationRequest, code: String): Map<String, Any> =
+        request.bankNotification(endpoint.authorityInstanceID).toMutableMap().apply {
+            put("kind", "error")
+            put("error", code)
+        }
 
     override fun close() {
         check(Looper.myLooper() == Looper.getMainLooper())

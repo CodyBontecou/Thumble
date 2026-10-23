@@ -101,7 +101,7 @@ internal constructor(
                 JSONObject()
                     .put("version", 1)
                     .put("command", "hello")
-                    .put("controlVersion", 10)
+                    .put("controlVersion", request.controlVersion)
                     .put("role", "management")
                     .put("inputVersion", 1)
                     .put("documentVersion", 1)
@@ -114,7 +114,7 @@ internal constructor(
                     "command" to EnrollmentJSON.Value.Text("hello"),
                     "authorityInstanceId" to
                         EnrollmentJSON.Value.Text(endpoint.authorityInstanceID),
-                    "controlVersion" to EnrollmentJSON.Value.Integer(10),
+                    "controlVersion" to EnrollmentJSON.Value.Integer(request.controlVersion),
                     "role" to EnrollmentJSON.Value.Text("management"),
                     "inputVersion" to EnrollmentJSON.Value.Integer(1),
                     "documentVersion" to EnrollmentJSON.Value.Integer(1),

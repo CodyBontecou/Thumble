@@ -1,4 +1,4 @@
-import { decodePhonePresentationEvent } from "@thumble/contracts/phone-presentation";
+import { decodeAnyPhonePresentationEvent } from "@thumble/contracts/phone-presentation";
 import { PhonePresentationBridge } from "./phone-presentation-bridge.ts";
 import { decodePhoneControlsEvent } from "@thumble/contracts/phone-controls";
 import { PhoneControlsBridge } from "./phone-controls-bridge.ts";
@@ -71,7 +71,7 @@ export class NativePairingHost {
           if (value.event === "phone-presentation") {
             if (!presentation)
               throw new Error("unexpected_phone_presentation_event");
-            const event = decodePhonePresentationEvent(value, authority);
+            const event = decodeAnyPhonePresentationEvent(value, authority);
             if (BigInt(event.eventId) <= lastPresentationEvent)
               throw new Error("phone_presentation_event_replayed");
             lastPresentationEvent = BigInt(event.eventId);

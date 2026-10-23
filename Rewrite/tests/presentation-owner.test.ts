@@ -1,3 +1,6 @@
+import { withBankPresentation } from "./helpers/bank-presentation-source.ts";
+import bankFixture from "../packages/fixtures/saved-controller-presentation-control-v11.json";
+import { decodeAnyPhonePresentationEvent } from "@thumble/contracts/phone-presentation";
 import { expect, test } from "bun:test";
 import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -154,3 +157,95 @@ function resolvePath() {
     "../packages/fixtures/saved-controller-presentation-control-v10.json",
   );
 }
+
+test("role11 parent bridge and real configuration child serve all eight states without changing input proof", async () => {
+  const parent = realpathSync(
+      mkdtempSync(join(tmpdir(), "thumble-banked-owner-")),
+    ),
+    directory = join(parent, "runtime");
+  let owner: ConfigurationOwner | undefined;
+  try {
+    const repository = new SqliteConfigurationRepository(directory, executable);
+    repository.commit({
+      operationId: "seed",
+      payloadHash: "a".repeat(64),
+      expectedRevision: "0",
+      source: withBankPresentation(
+        starterConfiguration(profileId, "Banks", "1"),
+      ),
+      affectedEntities: [profileId],
+    });
+    const initial = repository.current()!;
+    repository.close();
+    owner = new ConfigurationOwner(executable, directory, launcher);
+    await owner.ready;
+    const q = {
+      authorityInstanceId: "owner-authority",
+      expectedConfigurationRevision: "1",
+      expectedSourceHash: initial.contentHash,
+      profileId,
+      generation: "7",
+      revision: "2",
+      viewportWidth: "874",
+      viewportHeight: "393",
+    };
+    const map = await owner.readControlsForPhone({
+      command: "configuration-phone-controls",
+      ...q,
+    });
+    if (map.kind !== "controls") throw Error("missing_map");
+    const child = owner,
+      bridge = new PhonePresentationBridge((command) =>
+        child.readPresentationForPhone(command),
+      );
+    let id = 0;
+    for (const v of bankFixture.variants) {
+      const base = {
+        ...q,
+        configurationSha256: String(map.configurationSha256),
+        bank: v.request.bank,
+        colorScheme: v.request.colorScheme,
+      };
+      const meta = await bridge.execute(
+        decodeAnyPhonePresentationEvent(
+          {
+            ...base,
+            kind: "metadata",
+            version: 2,
+            event: "phone-presentation",
+            eventId: String(++id),
+          },
+          q.authorityInstanceId,
+        ),
+      );
+      if (!("result" in meta) || meta.result.kind !== "presentation")
+        throw Error("missing_metadata");
+      expect(meta.result.bank).toBe(v.request.bank);
+      expect(meta.result.control9IconSHA256).toBe(v.iconReply.iconSHA256);
+      expect(meta.result.expectedSourceHash).toBe(initial.contentHash);
+      const icon = await bridge.execute(
+        decodeAnyPhonePresentationEvent(
+          {
+            ...base,
+            kind: "icon",
+            presentationRevision: String(meta.result.presentationRevision),
+            presentationSourceHash: String(meta.result.presentationSourceHash),
+            controlId: "ce000000-0000-0000-0000-00000000000a",
+            iconSHA256: String(meta.result.control9IconSHA256),
+            version: 2,
+            event: "phone-presentation",
+            eventId: String(++id),
+          },
+          q.authorityInstanceId,
+        ),
+      );
+      if (!("result" in icon) || icon.result.kind !== "icon")
+        throw Error("missing_icon");
+      expect(icon.result.bank).toBe(v.request.bank);
+      expect(icon.result.pngBase64).toBe(v.iconReply.pngBase64);
+    }
+  } finally {
+    if (owner) await close(owner);
+    rmSync(parent, { recursive: true, force: true });
+  }
+}, 10000);

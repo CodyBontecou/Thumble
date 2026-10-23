@@ -17,7 +17,7 @@ pub(crate) struct ManagementBridges<'a> {
 pub(crate) enum ManagementRole<'a> {
     Catalog(&'a catalog::Bridge),
     Controls(&'a controls::Bridge),
-    Presentation(&'a presentation::Bridge),
+    Presentation(&'a presentation::Bridge, presentation::Protocol),
 }
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -359,9 +359,14 @@ pub(crate) fn serve_after_hello(
     };
     if let Some(management) = management {
         return match management {
-            ManagementRole::Presentation(presentation) => {
-                presentation::serve(channel, authority, &mut authorized, presentation, now)
-            }
+            ManagementRole::Presentation(presentation, protocol) => presentation::serve(
+                channel,
+                authority,
+                &mut authorized,
+                presentation,
+                protocol,
+                now,
+            ),
             ManagementRole::Controls(controls) => {
                 controls::serve(channel, authority, &mut authorized, controls, now)
             }

@@ -23,7 +23,7 @@ final class ThumbleConfigurationBridgeTests: XCTestCase {
 
     func testReceiverSkinImportUsesNativeVersionAndReplacementPolicies() throws {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
-        let data = try Data(contentsOf: root.appendingPathComponent("Website/skins/packages/solar-sumi-1.0.0-edbecde5b708.pocketpad"))
+        let data = try Data(contentsOf: root.appendingPathComponent("docs/skins/examples/indigo-pocket/dist/indigo-pocket-1.0.0.pocketpad"))
         let package = try ThumbleSkinPackageCodec.decode(data)
         func inspect(policy: String, version: String, digest: String) throws -> ThumbleSkinBridgeResponse {
             let raw: [String: Any] = ["schemaVersion": 1, "invocationID": UUID().uuidString, "skinCommand": "inspect", "nowMillis": 0,
@@ -69,7 +69,7 @@ final class ThumbleConfigurationBridgeTests: XCTestCase {
 
     func testPureSkinBridgeInspectsAppliesDetachesAndPreservesUnknownInputMetadata() throws {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
-        let data = try Data(contentsOf: root.appendingPathComponent("Website/skins/packages/solar-sumi-1.0.0-edbecde5b708.pocketpad"))
+        let data = try Data(contentsOf: root.appendingPathComponent("docs/skins/examples/indigo-pocket/dist/indigo-pocket-1.0.0.pocketpad"))
         let package = try ThumbleSkinPackageCodec.decode(data)
         let fixture = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: root.appendingPathComponent("Host/fixtures/controller-templates/v1/productivityStarter.json"))) as? [String: Any])
         var raw = try XCTUnwrap(fixture["profile"] as? [String: Any])

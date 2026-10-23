@@ -1,3 +1,4 @@
+import type { PresentationBank } from "@thumble/contracts/phone-presentation";
 import type { ControlMap } from "@thumble/contracts/mobile-input";
 import type { LosslessJson } from "@thumble/contracts/json";
 import type {
@@ -24,7 +25,7 @@ function label(value: LosslessJson | undefined): string {
   if (text === undefined || wowLiveUtf8Size(text) > 128) unsupported();
   return text;
 }
-/** Exact base/theme assets and labels only. No skin layout, modifier selection,
+/** Exact requested bank/theme assets and labels only. No skin layout, modifier selection,
  * capture freshness, source writes or runtime/input authority are inferred here. */
 export function projectSavedPresentation(
   document: OwnedConfigurationDocument,
@@ -32,6 +33,7 @@ export function projectSavedPresentation(
   colorScheme: "light" | "dark",
   map: ControlMap,
   digest: ResourceDigest,
+  bank?: PresentationBank,
 ): SavedPresentation {
   const index = document.catalog.profiles.findIndex(
     (profile) => profile.id === profileId,
@@ -42,20 +44,78 @@ export function projectSavedPresentation(
     customization = source.get("/customization")!;
   const labels = uuidPairs(customization.get("/labelOverrides"));
   const variants = source.get("/appearanceBank/variants");
-  let appearance: LosslessJson | undefined;
+  let appearance: LosslessJson | undefined, reference: LosslessJson | undefined;
   if (variants) {
     const matching = Array.from(
       { length: variants.length! },
       (_, i) => variants.get("/" + i)!,
     ).filter(
       (v) =>
-        v.get("/actionSet")?.stringValue === "base" &&
+        v.get("/actionSet")?.stringValue === (bank ?? "base") &&
         v.get("/colorScheme")?.stringValue === colorScheme,
     );
     if (matching.length !== 1) unsupported();
     appearance = matching[0]!.get("/appearance");
+    if (bank !== undefined) {
+      const bases = Array.from(
+        { length: variants.length! },
+        (_, i) => variants.get("/" + i)!,
+      ).filter(
+        (v) =>
+          v.get("/actionSet")?.stringValue === "base" &&
+          v.get("/colorScheme")?.stringValue === "light",
+      );
+      if (bases.length !== 1) unsupported();
+      reference = bases[0]!.get("/appearance");
+    }
   }
-  const library = appearance?.get("/assetLibrary/assets");
+  const equal = (
+    a: LosslessJson | undefined,
+    b: LosslessJson | undefined,
+  ): boolean =>
+    JSON.stringify(
+      JSON.parse(a && a.kind !== "null" ? a.canonicalText() : "null"),
+    ) ===
+    JSON.stringify(
+      JSON.parse(b && b.kind !== "null" ? b.canonicalText() : "null"),
+    );
+  const iconValue = (
+    value: LosslessJson | undefined,
+  ): LosslessJson | undefined =>
+    value?.get("/tintColor")?.kind === "null"
+      ? value.remove("/tintColor")
+      : value;
+  const assets = (v: LosslessJson | undefined): Map<string, LosslessJson> => {
+    const result = new Map<string, LosslessJson>();
+    if (!v) return result;
+    if (v.kind !== "array") unsupported();
+    for (let i = 0; i < v.length!; i++) {
+      const asset = v.get("/" + i)!,
+        id = asset.get("/id")?.stringValue;
+      if (!id || result.has(id)) unsupported();
+      result.set(id, asset);
+    }
+    return result;
+  };
+  const library = assets(appearance?.get("/assetLibrary/assets"));
+  // Retained three-way library ownership: edited/missing reference entries win;
+  // unchanged entries use the selected state's bytes; new edits are added.
+  if (reference) {
+    const base = assets(reference.get("/assetLibrary/assets")),
+      edited = assets(customization.get("/assetLibrary/assets"));
+    if (edited.size === 0 && base.size > 0) library.clear();
+    for (const [id, asset] of library) {
+      const old = base.get(id),
+        current = edited.get(id);
+      if (old) {
+        if (!current) library.delete(id);
+        else if (!equal(current, old)) library.set(id, current);
+      } else if (current) library.set(id, current);
+    }
+    for (const [id, asset] of edited)
+      if (!library.has(id) && !equal(asset, base.get(id)))
+        library.set(id, asset);
+  }
   const controls = map.controls.map((control) => {
     const element = profile.elements.find(
       (element) => element.id === control.id,
@@ -71,22 +131,27 @@ export function projectSavedPresentation(
     };
     const directIcon = element.source.get("/layout/icon");
     if (!variants && directIcon && directIcon.kind !== "null") unsupported();
-    const icon = appearance?.get("/controls/" + control.id + "/icon");
+    let icon = appearance?.get("/controls/" + control.id + "/icon");
+    // A direct canonical edit/removal is relative to saved light/base, not the
+    // currently selected bank. Never resurrect an icon the user removed.
+    if (
+      reference &&
+      !equal(
+        iconValue(directIcon),
+        iconValue(reference.get("/controls/" + control.id + "/icon")),
+      )
+    )
+      icon = directIcon;
     if (icon && icon.kind !== "null") {
       if (
         icon.get("/source")?.stringValue !== "asset" ||
-        icon.get("/renderingMode")?.stringValue !== "original" ||
-        !library
+        icon.get("/renderingMode")?.stringValue !== "original"
       )
         unsupported();
       const assetId = icon.get("/value")?.stringValue;
       if (!assetId) unsupported();
-      const matches = Array.from(
-        { length: library.length! },
-        (_, i) => library.get("/" + i)!,
-      ).filter((asset) => asset.get("/id")?.stringValue === assetId);
-      if (matches.length !== 1) unsupported();
-      const asset = matches[0]!;
+      const asset = library.get(assetId);
+      if (!asset) unsupported();
       const count = Number(asset.get("/byteCount")?.numberToken);
       if (
         asset.get("/contentType")?.stringValue !== "image/png" ||

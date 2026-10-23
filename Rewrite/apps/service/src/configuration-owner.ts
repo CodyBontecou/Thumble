@@ -1,7 +1,7 @@
 import {
-  decodePhonePresentationCommand,
-  decodePhonePresentationResult,
-  type PhonePresentationCommand,
+  decodeAnyPhonePresentationCommand,
+  decodeAnyPhonePresentationResult,
+  type AnyPhonePresentationCommand,
   type PhonePresentationResult,
 } from "@thumble/contracts/phone-presentation";
 import {
@@ -425,9 +425,9 @@ export class ConfigurationOwner {
     }
   }
   async readPresentationForPhone(
-    input: PhonePresentationCommand,
+    input: AnyPhonePresentationCommand,
   ): Promise<PhonePresentationResult> {
-    const command = decodePhonePresentationCommand(input);
+    const command = decodeAnyPhonePresentationCommand(input);
     await this.ready;
     if (
       this.phoneRead ||
@@ -439,7 +439,7 @@ export class ConfigurationOwner {
     try {
       const value = await this.pipe.request(command, 30000);
       try {
-        return decodePhonePresentationResult(value, command);
+        return decodeAnyPhonePresentationResult(value, command);
       } catch {
         this.pipe.disconnect();
         this.child.kill("SIGKILL");

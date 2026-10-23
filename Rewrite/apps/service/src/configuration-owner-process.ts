@@ -1,5 +1,5 @@
 import { ConfigurationPhonePresentationOperations } from "@thumble/application/configuration-phone-presentation";
-import { decodePhonePresentationCommand } from "@thumble/contracts/phone-presentation";
+import { decodeAnyPhonePresentationCommand } from "@thumble/contracts/phone-presentation";
 import { verifyPresentationIcon } from "./presentation-icon.ts";
 import { ConfigurationWowOperations } from "./configuration-wow.ts";
 import { RetainedWowProfilePreparer } from "./wow-profile-preparer.ts";
@@ -275,7 +275,7 @@ export async function runConfigurationOwner(
               throw new Error("configuration_owner_busy");
             if (operation === "configuration-phone-presentation") {
               const result = presentations.execute(
-                decodePhonePresentationCommand(body),
+                decodeAnyPhonePresentationCommand(body),
               );
               write({ version: 1, requestId, ok: true, result });
               continue;

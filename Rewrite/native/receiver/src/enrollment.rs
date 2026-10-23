@@ -243,7 +243,7 @@ pub(crate) fn serve(
         windows,
         store,
         if presentation.is_some_and(|bridge| bridge.enabled()) {
-            10
+            11
         } else if input.datagram_port.is_some() {
             9
         } else if controls.is_some_and(|bridge| bridge.enabled()) {
@@ -270,10 +270,10 @@ pub(crate) fn serve(
         8 if !controls.is_some_and(|bridge| bridge.enabled()) => {
             Err("enrollment_version_unsupported")
         }
-        10 if !presentation.is_some_and(|bridge| bridge.enabled()) => {
+        10 | 11 if !presentation.is_some_and(|bridge| bridge.enabled()) => {
             Err("enrollment_version_unsupported")
         }
-        version @ 3..=10 => {
+        version @ 3..=11 => {
             let authority = windows
                 .lock()
                 .map_err(|_| "pairing_owner_unavailable")?
@@ -303,9 +303,16 @@ pub(crate) fn serve(
                     7 => Some(crate::authenticated_control::ManagementRole::Catalog(
                         catalog,
                     )),
-                    10 => {
-                        presentation.map(crate::authenticated_control::ManagementRole::Presentation)
-                    }
+                    10 | 11 => presentation.map(|bridge| {
+                        crate::authenticated_control::ManagementRole::Presentation(
+                            bridge,
+                            if version == 11 {
+                                crate::authenticated_control::presentation::Protocol::BanksV2
+                            } else {
+                                crate::authenticated_control::presentation::Protocol::BaseV1
+                            },
+                        )
+                    }),
                     8 => controls.map(crate::authenticated_control::ManagementRole::Controls),
                     _ => None,
                 },
@@ -347,7 +354,7 @@ fn begin(
         || (if hello.control_version == 9 {
             hello.role.as_deref() != Some("physical-input")
                 || hello.required_output_backend.as_deref() != Some("macos-hid")
-        } else if matches!(hello.control_version, 7 | 8 | 10) {
+        } else if matches!(hello.control_version, 7 | 8 | 10 | 11) {
             hello.role.as_deref() != Some("management") || hello.required_output_backend.is_some()
         } else {
             hello.role.is_some() || hello.required_output_backend.is_some()
@@ -363,7 +370,7 @@ fn begin(
         reply.as_object_mut().unwrap().remove("inputEnabled");
         reply["role"] = serde_json::json!("physical-input");
         reply["requiredOutputBackend"] = serde_json::json!("macos-hid");
-    } else if matches!(hello.control_version, 7 | 8 | 10) {
+    } else if matches!(hello.control_version, 7 | 8 | 10 | 11) {
         reply["role"] = serde_json::json!("management");
     }
     channel

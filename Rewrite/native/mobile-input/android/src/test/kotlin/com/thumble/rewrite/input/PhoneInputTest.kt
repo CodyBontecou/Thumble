@@ -780,4 +780,70 @@ class PhoneInputTest {
             }
         }
     }
+
+    @Test
+    fun acceptedObserverIsAfterSubmitAndItsExceptionCannotRetireInput() {
+        var elapsed = 1000L
+        val io = IO(fixture())
+        val client = client(io, elapsed = { elapsed })
+        client.authenticate()
+        val accepted = mutableListOf<com.thumble.rewrite.contracts.GamepadStateV1>()
+        val feedback = mutableListOf<com.thumble.rewrite.contracts.GamepadStateV1>()
+        val engine =
+            client
+                .prepareInput(map())
+                .bind(
+                    acceptedState = {
+                        accepted.add(it)
+                        throw IllegalStateException("synthetic_cosmetic_failure")
+                    },
+                    feedback = { feedback.add(it) },
+                )
+        assertTrue(engine.connected)
+        assertTrue(engine.begin(1, "1", .2, .2))
+        assertTrue(engine.connected)
+        assertEquals(setOf("south"), accepted.last().buttons.map { it.name }.toSet())
+        val count = accepted.size
+        elapsed = 999L
+        engine.tick()
+        assertFalse(engine.connected)
+        assertEquals(count, accepted.size)
+        assertEquals(GamepadReport.neutral(), feedback.last())
+        assertTrue(io.closed.await(1, TimeUnit.SECONDS))
+    }
+
+    @Test
+    fun acceptedDigitalTriggersSelectBanksAndCancellationResetsBase() {
+        val io = IO(fixture())
+        val client = client(io)
+        client.authenticate()
+        val map =
+            ControlMap(
+                generation = "1",
+                revision = "1",
+                controls =
+                    listOf(
+                        ControlRegion("left", "leftTrigger", 0.0, 0.0, .45, 1.0),
+                        ControlRegion("right", "rightTrigger", .55, 0.0, .45, 1.0),
+                    ),
+            )
+        val banks = mutableListOf<PhonePresentationBank>()
+        val engine =
+            client
+                .prepareInput(map)
+                .bind(
+                    acceptedState = { banks.add(PhonePresentationBank.accepted(it)) },
+                    feedback = {},
+                )
+        assertEquals(PhonePresentationBank.BASE, banks.last())
+        assertTrue(engine.begin(1, "1", .2, .2))
+        assertEquals(PhonePresentationBank.LEFT_TRIGGER, banks.last())
+        assertTrue(engine.begin(2, "1", .8, .2))
+        assertEquals(PhonePresentationBank.BOTH_TRIGGERS, banks.last())
+        engine.end(1, "1")
+        assertEquals(PhonePresentationBank.RIGHT_TRIGGER, banks.last())
+        engine.cancel(ReleaseReason.background)
+        assertEquals(PhonePresentationBank.BASE, banks.last())
+        assertFalse(engine.connected)
+    }
 }

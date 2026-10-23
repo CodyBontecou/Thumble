@@ -11,6 +11,14 @@ class TerminalDiagnosticTests(unittest.TestCase):
         self.assertEqual(decode_native_control_terminal('native_control_terminal code=authenticated_control_transport_failed elapsed_us=0'), {'code': 'authenticated_control_transport_failed', 'elapsedUs': 0})
         self.assertEqual(decode_native_control_terminal('native_control_terminal code=other elapsed_us=18446744073709551615')['elapsedUs'], 18446744073709551615)
 
+    def test_audited_native_ipc_outcomes_remain_distinct(self):
+        for code in ('native_input_transport_failed', 'native_input_timeout',
+                     'native_input_frame_invalid', 'native_input_server_rejected'):
+            with self.subTest(code=code):
+                self.assertEqual(decode_native_control_terminal(
+                    f'native_control_terminal code={code} elapsed_us=1'),
+                    {'code': code, 'elapsedUs': 1})
+
     def test_unknown_static_identifier_is_only_other(self):
         self.assertEqual(decode_native_control_terminal('native_control_terminal code=private_label elapsed_us=1'), {'code': 'other', 'elapsedUs': 1})
 
@@ -58,6 +66,45 @@ class TerminalDiagnosticTests(unittest.TestCase):
         self.assertLess(len(encoded), 8192)
         for private in ['private-host', 'private-secret', 'private_payload']:
             self.assertNotIn(private, encoded)
+
+
+    def test_atomic_report_contains_only_bounded_sanitized_outcomes(self):
+        import pathlib
+        import tempfile
+        with tempfile.TemporaryDirectory() as directory:
+            path = pathlib.Path(directory) / 'reports' / 'terminals.json'
+            collector = NativeControlTerminals()
+            collector.observe('private-secret host:1234')
+            collector.observe('native_control_terminal code=private_label elapsed_us=1')
+            for _ in range(100):
+                collector.observe('native_control_terminal code=input_session_closed elapsed_us=18446744073709551615')
+            self.assertTrue(collector.write_report(path))
+            value = json.loads(path.read_text())
+            self.assertEqual(set(value), {'version', 'scope', 'events'})
+            self.assertEqual(value['version'], 1)
+            self.assertEqual(value['scope'], 'native-control-terminal-outcomes')
+            self.assertEqual(len(value['events']), 64)
+            self.assertEqual(value['events'][0], {'code': 'other', 'elapsedUs': 1})
+            self.assertLessEqual(path.stat().st_size, 8192)
+            self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+            self.assertEqual(list(path.parent.iterdir()), [path])
+            for private in ['private-secret', 'host:1234', 'private_label']:
+                self.assertNotIn(private, path.read_text())
+
+    def test_report_failure_is_nonthrowing_and_preserves_previous_atomic_result(self):
+        import pathlib
+        import tempfile
+        with tempfile.TemporaryDirectory() as directory:
+            path = pathlib.Path(directory) / 'terminals.json'
+            collector = NativeControlTerminals()
+            self.assertTrue(collector.write_report(path))
+            before = path.read_bytes()
+            with mock.patch('os.replace', side_effect=OSError('private filesystem failure')):
+                self.assertFalse(collector.write_report(path))
+            self.assertEqual(path.read_bytes(), before)
+            self.assertEqual(list(path.parent.iterdir()), [path])
+            with mock.patch('pathlib.Path.mkdir', side_effect=OSError('private failure')):
+                self.assertFalse(collector.write_report(path))
 
 
 if __name__ == '__main__':

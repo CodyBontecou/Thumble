@@ -11,7 +11,10 @@ finds the installed South region by its native map ID and injects an OS touch.
 The real service recording must show at least 1.5 seconds of uninterrupted held
 South, no neutral pulses and the unchanged 350 ms input TTL across a source CAS
 that changes only the label/icon. The existing input generation remains active.
-Done must return Home and the real receiver must acknowledge neutral release.
+A separate valid source CAS then moves the saved rectangle while leaving the
+activated input binding unchanged. The UI must display **Game data stale** while
+retaining its installed map/icon and uninterrupted South hold. Done must return
+Home and the real receiver must acknowledge neutral release.
 
 The pixel oracle draws the actual mounted React image view into a bitmap. Its
 center must change from RGB(24,64,168) to RGB(144,64,48), within two channel levels.
@@ -29,9 +32,10 @@ outcome and counts. The helper and this side channel are absent from product UI.
 ## Measured scope
 
 Local owned-emulator runs passed the actual image/source-refresh/held-input/Done
-sequence. The final native night-mode barrier also passed. The persisted whole
-screen still showed a light React palette after native night mode changed, so
-visible dark-mode parity remains unresolved. Cosmetic transport failure/stale UI
-and the equivalent iOS actual PNG route remain separate acceptance gaps. This
+sequence. A native night-mode barrier initially exposed a light React palette;
+the separate reactive semantic-palette correction now has an actual dark screen
+screenshot with readable labels. The final witness also passed the valid geometry
+CAS/stale UI case while native South remained held across both source writes.
+The equivalent iOS actual PNG route remains a separate acceptance gap. This
 witness does not claim game freshness, gameplay, physical haptics or physical
 multitouch acceptance.

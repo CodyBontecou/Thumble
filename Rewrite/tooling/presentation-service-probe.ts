@@ -2,7 +2,7 @@
 /** Synthetic recording-only integration peer; no game, capture or physical output. */
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { writeFileSync } from "node:fs";
+import { readFileSync, statSync, writeFileSync } from "node:fs";
 import { resolve, join } from "node:path";
 import { createHash } from "node:crypto";
 import { deflateSync } from "node:zlib";
@@ -12,6 +12,7 @@ import {
   requestConfiguration,
   requestPairing,
   requestSavedRuntime,
+  requestSavedReadiness,
 } from "@thumble/client/local";
 import { parseStrictJson } from "@thumble/contracts/receiver";
 import { RealServicePhoneProbe, SECOND } from "./real-service-phone-probe.ts";
@@ -60,7 +61,11 @@ function png(color: number): Uint8Array {
     chunk("IEND", Buffer.alloc(0)),
   ]);
 }
-export function syntheticSource(color: number, name: string): string {
+export function syntheticSource(
+  color: number,
+  name: string,
+  centerX = 0.5,
+): string {
   const source = JSON.parse(
     starterConfiguration(SECOND, "Presentation witness", "1").text(),
   );
@@ -70,7 +75,7 @@ export function syntheticSource(color: number, name: string): string {
   );
   assert(south, "presentation_probe_south");
   south.label = name;
-  south.layout.centerX = 0.5;
+  south.layout.centerX = centerX;
   south.layout.centerY = 0.5;
   profile.customization.elements = [south];
   source.outputBindings = { [SOUTH]: source.outputBindings[SOUTH] };
@@ -122,9 +127,45 @@ export function syntheticSource(color: number, name: string): string {
   profile.appearanceBank = { schemaVersion: 1, variants };
   return JSON.stringify(source);
 }
+export function syntheticBankSource(refreshed = false): string {
+  const source = JSON.parse(
+    syntheticSource(
+      refreshed ? 144 : 24,
+      refreshed ? "Refreshed spell" : "Initial spell",
+    ),
+  );
+  const profile = source.profiles[0];
+  const starter = JSON.parse(
+    starterConfiguration(SECOND, "Presentation witness", "1").text(),
+  );
+  const triggers = starter.profiles[0].customization.elements.filter(
+    (e: { kind: string }) => e.kind === "trigger",
+  );
+  assert(triggers.length === 2, "presentation_probe_triggers");
+  profile.customization.elements.push(...triggers);
+  const variants = profile.appearanceBank.variants;
+  for (let index = 0; index < variants.length; index++) {
+    const variant = variants[index];
+    const bytes = png((refreshed ? 112 : 16) + index * 8);
+    const asset = variant.appearance.assetLibrary.assets[0];
+    asset.name = `${refreshed ? "Refreshed" : "Initial"} ${variant.colorScheme} ${variant.actionSet}`;
+    asset.byteCount = bytes.length;
+    asset.data = Buffer.from(bytes).toString("base64");
+  }
+  // Canonical mirrors deliberately equal saved light/base: selecting another bank
+  // must use that variant rather than interpret a missing mirror as icon removal.
+  profile.customization.assetLibrary = variants[0].appearance.assetLibrary;
+  profile.customization.elements[0].layout.icon =
+    variants[0].appearance.controls[SOUTH].icon;
+  return JSON.stringify(source);
+}
 export class PresentationServiceProbe {
   private readonly probe: RealServicePhoneProbe;
   private serial = 0;
+  private readonly bankMode = process.argv.includes("--bank-presentation");
+  private bankWatch:
+    | { started: number; offset: number; generation: string; revision: string }
+    | undefined;
   private phase = "base_start";
   diagnosticPhase() {
     return this.phase;
@@ -181,11 +222,22 @@ export class PresentationServiceProbe {
       }),
     );
   }
-  private async install(color: number, name: string) {
+  private async install(
+    color: number,
+    name: string,
+    centerX = 0.5,
+    bankRefresh?: boolean,
+  ) {
     const current = await this.catalog();
     assert(typeof current.revision === "string", "presentation_probe_revision");
     const path = join(this.probe.parent, "synthetic-presentation.json");
-    writeFileSync(path, syntheticSource(color, name), { mode: 0o600 });
+    writeFileSync(
+      path,
+      bankRefresh === undefined
+        ? syntheticSource(color, name, centerX)
+        : syntheticBankSource(bankRefresh),
+      { mode: 0o600 },
+    );
     const inspected = this.cli("configuration", "validate-file", [
       "--file",
       path,
@@ -224,7 +276,12 @@ export class PresentationServiceProbe {
   async start() {
     const offer = await this.probe.start();
     this.phase = "seed";
-    const installed = await this.install(24, "Initial spell");
+    const installed = await this.install(
+      24,
+      "Initial spell",
+      0.5,
+      this.bankMode ? false : undefined,
+    );
     return { ...offer, profileCount: 1, ...installed, southId: SOUTH };
   }
   async command(byte: string): Promise<Record<string, unknown>> {
@@ -233,6 +290,7 @@ export class PresentationServiceProbe {
       "z",
       "q",
       "u",
+      "s",
       "j",
       "n",
       "f",
@@ -241,9 +299,104 @@ export class PresentationServiceProbe {
       "p",
       "c",
       "d",
+      "w",
+      "g",
+      "m",
+      "i",
     ].includes(byte)
       ? `command_${byte}`
       : "invalid_command";
+    if (byte === "w" || byte === "g") {
+      assert(this.bankMode, "presentation_probe_bank_mode");
+      const expected = "00140010ffff0000000000000000000000000000";
+      const deadline = performance.now() + 1000;
+      let { snapshot } = await requestSavedRuntime(this.endpoint, {
+        command: "saved-binding-status",
+      });
+      while (
+        byte === "w" &&
+        snapshot.active &&
+        snapshot.reportHex !== expected &&
+        performance.now() < deadline
+      ) {
+        await Bun.sleep(5);
+        ({ snapshot } = await requestSavedRuntime(this.endpoint, {
+          command: "saved-binding-status",
+        }));
+      }
+      assert(
+        snapshot.backend === "recording" &&
+          !snapshot.inputEnabled &&
+          snapshot.active &&
+          snapshot.reportHex === expected,
+        "presentation_probe_bank_held",
+      );
+      if (byte === "w") {
+        this.bankWatch = {
+          started: performance.now(),
+          offset: statSync(this.endpoint.recordingLog).size,
+          generation: snapshot.generation,
+          revision: snapshot.revision,
+        };
+        return { watching: true };
+      }
+      const watch = this.bankWatch;
+      assert(
+        watch && performance.now() - watch.started >= 1500,
+        "presentation_probe_bank_hold_short",
+      );
+      assert(
+        statSync(this.endpoint.recordingLog).size <= 4194304,
+        "presentation_probe_bank_log_bound",
+      );
+      const bytes = readFileSync(this.endpoint.recordingLog);
+      assert(
+        bytes.length - watch.offset <= 2097152,
+        "presentation_probe_bank_log_bound",
+      );
+      const tail = bytes.subarray(watch.offset);
+      const end = tail.lastIndexOf(10);
+      assert(end >= 0, "presentation_probe_bank_no_samples");
+      const rows = tail
+        .subarray(0, end)
+        .toString("utf8")
+        .split("\n")
+        .map((line) => object(parseStrictJson(line)));
+      assert(
+        rows.length > 0 &&
+          rows.every(
+            (row) => row.reason === "sample" && row.reportHex === expected,
+          ),
+        "presentation_probe_bank_interrupted",
+      );
+      assert(
+        snapshot.generation === watch.generation &&
+          snapshot.revision === watch.revision,
+        "presentation_probe_bank_epochs",
+      );
+      return {
+        bankHeld: true,
+        samples: rows.length,
+        neutralPulses: 0,
+        inputTtlMs: 350,
+        inputEnabled: snapshot.inputEnabled,
+      };
+    }
+    if (byte === "i") {
+      const [{ snapshot }, readiness] = await Promise.all([
+        requestSavedRuntime(this.endpoint, { command: "saved-binding-status" }),
+        requestSavedReadiness(this.endpoint),
+      ]);
+      return {
+        active: snapshot.active,
+        generation: snapshot.generation,
+        revision: snapshot.revision,
+        reason: snapshot.lastReleaseReason,
+        firstReason: readiness.firstTermination?.reason ?? "none",
+        firstGeneration: readiness.firstTermination?.generation ?? "0",
+        firstRevision: readiness.firstTermination?.revision ?? "0",
+      };
+    }
     if (byte === "d") {
       const { snapshot } = await requestSavedRuntime(this.endpoint, {
         command: "saved-binding-status",
@@ -255,7 +408,8 @@ export class PresentationServiceProbe {
         reason: snapshot.lastReleaseReason,
       };
     }
-    if (byte === "u") {
+    if (byte === "u" || byte === "s" || byte === "m") {
+      if (byte === "m") assert(this.bankMode, "presentation_probe_bank_mode");
       const before = await requestSavedRuntime(this.endpoint, {
         command: "saved-binding-status",
       });
@@ -263,7 +417,12 @@ export class PresentationServiceProbe {
         before.savedBinding && before.snapshot.active,
         "presentation_probe_unbound",
       );
-      const refreshed = await this.install(144, "Refreshed spell");
+      const refreshed = await this.install(
+        144,
+        "Refreshed spell",
+        byte === "s" ? 0.6 : 0.5,
+        byte === "m" ? true : undefined,
+      );
       const after = await requestSavedRuntime(this.endpoint, {
         command: "saved-binding-status",
       });
@@ -275,7 +434,7 @@ export class PresentationServiceProbe {
         "presentation_probe_changed_binding",
       );
       return {
-        refreshed: true,
+        ...(byte === "s" ? { staleSource: true } : { refreshed: true }),
         ...refreshed,
         generation: after.snapshot.generation,
         revision: after.snapshot.revision,

@@ -40,6 +40,7 @@ for (const [source, name] of [
 for (const name of [
   "saved-controller-control-v8.json",
   "saved-controller-presentation-control-v10.json",
+  "saved-controller-presentation-control-v11.json",
   "physical-input-control-v9.json",
   "saved-controller-v1.json",
   "saved-controller-analog-control-v8.json",

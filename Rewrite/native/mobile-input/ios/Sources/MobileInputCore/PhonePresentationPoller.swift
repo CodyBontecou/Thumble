@@ -11,6 +11,8 @@ extension PhonePresentationClient: PhonePresentationBatch {}
 @MainActor public final class PhonePresentationPoller {
   private let baseline: PhonePresentationRequest
   private let factory: () throws -> any PhonePresentationBatch
+  private let authority: String?
+  private let bank: (() -> PhonePresentationBank)?
   private let colorScheme: () -> String
   private let active: () -> Bool
   private let notification: ([String: Any]) -> Void
@@ -26,19 +28,24 @@ extension PhonePresentationClient: PhonePresentationBatch {}
   public convenience init(
     endpoint: TrustedHostEndpoint, storage: PhoneCredentialWorker,
     request: PhonePresentationRequest, colorScheme: @escaping () -> String,
-    active: @escaping () -> Bool, notification: @escaping ([String: Any]) -> Void
+    active: @escaping () -> Bool, notification: @escaping ([String: Any]) -> Void,
+    bank: (() -> PhonePresentationBank)? = nil
   ) {
     self.init(
       request: request,
       factory: { try PhonePresentationClient(endpoint: endpoint, storage: storage) },
-      colorScheme: colorScheme, active: active, notification: notification)
+      colorScheme: colorScheme, active: active, notification: notification,
+      authority: endpoint.authorityInstanceID, bank: bank)
   }
   init(
     request: PhonePresentationRequest, factory: @escaping () throws -> any PhonePresentationBatch,
     colorScheme: @escaping () -> String, active: @escaping () -> Bool,
     notification: @escaping ([String: Any]) -> Void,
-    pause: @escaping () async throws -> Void = { try await Task.sleep(for: .seconds(2)) }
+    pause: @escaping () async throws -> Void = { try await Task.sleep(for: .seconds(2)) },
+    authority: String? = nil, bank: (() -> PhonePresentationBank)? = nil
   ) {
+    self.authority = authority
+    self.bank = bank
     baseline = request
     self.factory = factory
     self.colorScheme = colorScheme
@@ -66,11 +73,29 @@ extension PhonePresentationClient: PhonePresentationBatch {}
     cacheOrder.append(icon.sha256)
     cacheBytes += icon.byteCount
   }
+  private func contextMatches(_ request: PhonePresentationRequest) -> Bool {
+    colorScheme() == request.colorScheme
+      && (request.bank == nil || (bank?() ?? baseline.bank) == request.bank)
+  }
+  private func notify(_ request: PhonePresentationRequest, _ event: [String: Any]) {
+    guard active(), !closed, contextMatches(request) else { return }
+    if request.bank != nil {
+      guard let authority, let announcement = try? request.bankNotification(authority: authority)
+      else { return }
+      notification(announcement)
+      guard active(), !closed, contextMatches(request), !Task.isCancelled else { return }
+    }
+    notification(event)
+  }
+  public func refreshBank() { refreshTheme() }
   private func run() async {
     polls: while !closed && !Task.isCancelled && active() {
       refreshRequested = false
+      var attempt = baseline
       do {
-        let request = try baseline.withColorScheme(colorScheme())
+        attempt = try baseline.withColorScheme(colorScheme())
+        if let value = bank?() { attempt = try attempt.withBank(value) }
+        let request = attempt
         let batch = try factory()
         current = batch
         do {
@@ -79,13 +104,13 @@ extension PhonePresentationClient: PhonePresentationBatch {}
             batch.close()
             return
           }
-          guard !refreshRequested, colorScheme() == request.colorScheme else {
+          guard !refreshRequested, contextMatches(request) else {
             batch.close()
             current = nil
             continue polls
           }
           // Every successful metadata response is emitted, even when unchanged.
-          notification(metadata.bridgeEvent)
+          notify(request, metadata.bridgeEvent)
           for control in metadata.controls {
             guard valid(batch) else {
               batch.close()
@@ -102,13 +127,13 @@ extension PhonePresentationClient: PhonePresentationBatch {}
               batch.close()
               return
             }
-            guard !refreshRequested, colorScheme() == request.colorScheme else {
+            guard !refreshRequested, contextMatches(request) else {
               batch.close()
               current = nil
               continue polls
             }
             store(icon)
-            notification(try icon.notification(metadata: metadata, controlId: control.id))
+            notify(request, try icon.notification(metadata: metadata, controlId: control.id))
           }
           batch.close()
           if current === batch { current = nil }
@@ -128,10 +153,18 @@ extension PhonePresentationClient: PhonePresentationBatch {}
         } else {
           code = "presentation_unavailable"
         }
-        notification([
-          "kind": "error", "error": code, "generation": baseline.saved.generation,
-          "revision": baseline.saved.revision, "configurationSha256": baseline.configurationSha256,
-        ])
+        var event: [String: Any]
+        if attempt.bank != nil, let authority {
+          event = attempt.notificationPins(authority: authority)
+        } else {
+          event = [
+            "generation": baseline.saved.generation, "revision": baseline.saved.revision,
+            "configurationSha256": baseline.configurationSha256,
+          ]
+        }
+        event["kind"] = "error"
+        event["error"] = code
+        notify(attempt, event)
       }
       let sleeper = Task { try await pause() }
       sleeping = sleeper

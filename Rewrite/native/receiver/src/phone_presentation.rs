@@ -18,6 +18,19 @@ use std::{
 #[path = "phone_presentation_codec.rs"]
 mod codec;
 use codec::{Request, Scalars, FRAME_BYTES};
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Protocol {
+    BaseV1,
+    BanksV2,
+}
+impl Protocol {
+    fn wire_version(self) -> u8 {
+        match self {
+            Self::BaseV1 => 1,
+            Self::BanksV2 => 2,
+        }
+    }
+}
 const WAIT: Duration = Duration::from_secs(2);
 struct Pending {
     id: String,
@@ -211,6 +224,7 @@ pub(super) fn serve(
     authority: &str,
     authorized: &mut AuthorizedConnection,
     bridge: &Bridge,
+    protocol: Protocol,
     now: &mut impl FnMut() -> Result<u64, &'static str>,
 ) -> Result<(), &'static str> {
     let _connection = bridge.connection.try_lock().map_err(|error| match error {
@@ -229,7 +243,7 @@ pub(super) fn serve(
         if frame.kind != FrameKind::Control || frame.payload.len() > 2048 {
             return Err("presentation_request_invalid");
         }
-        let request = Request::parse(&frame.payload, &hex(&authorized.binding))?;
+        let request = Request::parse(&frame.payload, &hex(&authorized.binding), protocol)?;
         let authorization = authorized.authorization.clone();
         {
             let _scope = authorization.guard()?;
@@ -268,7 +282,7 @@ pub(super) fn serve(
             .as_object()
             .ok_or("presentation_parent_invalid")?
             .clone();
-        reply.insert("version".into(), json!(1));
+        reply.insert("version".into(), json!(protocol.wire_version()));
         reply.insert(
             "command".into(),
             json!(if request.icon() {
@@ -286,7 +300,7 @@ pub(super) fn serve(
         {
             return send(
                 channel,
-                json!({"version":1,"command":if request.icon(){"configuration-presentation-icon-result"}else{"configuration-presentation-result"},"connectionId":hex(&authorized.binding),"kind":"error","error":"presentation_response_too_large"}),
+                json!({"version":protocol.wire_version(),"command":if request.icon(){"configuration-presentation-icon-result"}else{"configuration-presentation-result"},"connectionId":hex(&authorized.binding),"kind":"error","error":"presentation_response_too_large"}),
             );
         }
         send(channel, reply)?;

@@ -8,8 +8,14 @@ public enum PhonePresentationError: Error, Equatable {
 public struct PhonePresentationRequest: Sendable {
   public let saved: SavedControllerRequest
   public let configurationSha256: String, colorScheme: String
+  public let bank: PhonePresentationBank?
+  var protocolVersion: UInt64 { bank == nil ? 1 : 2 }
+  var controlVersion: UInt64 { bank == nil ? 10 : 11 }
   let controlIDs: Set<String>
-  public init(saved: SavedControllerRequest, map: SavedControllerMap, colorScheme: String) throws {
+  public init(
+    saved: SavedControllerRequest, map: SavedControllerMap, colorScheme: String,
+    bank: PhonePresentationBank? = nil
+  ) throws {
     _ = try map.map.validated()
     guard saved.generation == map.map.generation, saved.revision == map.map.revision,
       SavedControllerWire.hex(map.configurationSha256, count: 64),
@@ -18,26 +24,34 @@ public struct PhonePresentationRequest: Sendable {
     self.saved = saved
     self.configurationSha256 = map.configurationSha256
     self.colorScheme = colorScheme
+    self.bank = bank
     controlIDs = Set(map.map.controls.map(\.id))
   }
-  private init(base: Self, colorScheme: String) {
+  private init(base: Self, colorScheme: String, bank: PhonePresentationBank?) {
     saved = base.saved
     configurationSha256 = base.configurationSha256
     controlIDs = base.controlIDs
     self.colorScheme = colorScheme
+    self.bank = bank
   }
   public func withColorScheme(_ value: String) throws -> Self {
     guard ["light", "dark"].contains(value) else { throw PhonePresentationError.rejected }
-    return Self(base: self, colorScheme: value)
+    return Self(base: self, colorScheme: value, bank: bank)
+  }
+  public func withBank(_ value: PhonePresentationBank) throws -> Self {
+    guard bank != nil else { throw PhonePresentationError.rejected }
+    return Self(base: self, colorScheme: colorScheme, bank: value)
   }
   var pins: [String: String] {
-    [
+    var value = [
       "expectedConfigurationRevision": saved.configurationRevision,
       "expectedSourceHash": saved.sourceHash, "profileId": saved.profileID,
       "generation": saved.generation, "revision": saved.revision,
       "viewportWidth": saved.viewportWidth, "viewportHeight": saved.viewportHeight,
       "configurationSha256": configurationSha256, "colorScheme": colorScheme,
     ]
+    if let bank { value["bank"] = bank.rawValue }
+    return value
   }
   var notificationPins: [String: Any] {
     var value: [String: Any] = pins
@@ -45,9 +59,24 @@ public struct PhonePresentationRequest: Sendable {
     value.removeValue(forKey: "viewportHeight")
     return value
   }
+  func notificationPins(authority: String) -> [String: Any] {
+    guard bank != nil else { return notificationPins }
+    var value: [String: Any] = pins
+    value["presentationProtocol"] = 2
+    value["authorityInstanceId"] = authority
+    return value
+  }
+  public func bankNotification(authority: String) throws -> [String: Any] {
+    guard bank != nil, EnrollmentInvitation.identity(authority) else {
+      throw PhonePresentationError.rejected
+    }
+    var value = notificationPins(authority: authority)
+    value["kind"] = "bank"
+    return value
+  }
   func fields(connection: String) -> [String: Any] {
     var value: [String: Any] = pins
-    value["version"] = 1
+    value["version"] = protocolVersion
     value["command"] = "configuration-presentation"
     value["connectionId"] = connection
     return value
@@ -71,10 +100,11 @@ public struct PhonePresentationMetadata: Sendable {
   public let presentationRevision: String, presentationSourceHash: String
   public let profileName: String, freshness: String
   public let controls: [PhonePresentationControl]
+  public let authorityInstanceID: String
   public var bridgeEvent: [String: Any] {
-    var fields = request.notificationPins
+    var fields = request.notificationPins(authority: authorityInstanceID)
     fields["kind"] = "presentation"
-    fields["bank"] = "base"
+    fields["bank"] = request.bank?.rawValue ?? "base"
     fields["profileName"] = profileName
     fields["freshness"] = freshness
     fields["presentationRevision"] = presentationRevision
@@ -116,9 +146,9 @@ public struct PhonePresentationIcon: Sendable {
         $0.id == controlId && $0.iconSHA256 == sha256 && $0.iconByteCount == byteCount
       })
     else { throw PhonePresentationError.rejected }
-    var fields = metadata.request.notificationPins
+    var fields = metadata.request.notificationPins(authority: metadata.authorityInstanceID)
     fields["kind"] = "icon"
-    fields["bank"] = "base"
+    fields["bank"] = metadata.request.bank?.rawValue ?? "base"
     fields["presentationRevision"] = metadata.presentationRevision
     fields["presentationSourceHash"] = metadata.presentationSourceHash
     fields["controlId"] = controlId
@@ -143,7 +173,7 @@ enum PhonePresentationWire {
     connection: String, authority: String, request: PhonePresentationRequest
   ) throws -> Set<String> {
     let common: Set<String> = ["version", "command", "connectionId", "kind"]
-    guard fields.count <= 384, fields["version"] == .integer(1),
+    guard fields.count <= 384, fields["version"] == .integer(request.protocolVersion),
       fields["command"] == .string(command), fields["connectionId"] == .string(connection)
     else { throw PhonePresentationError.rejected }
     if fields["kind"] == .string("error") {
@@ -175,7 +205,8 @@ enum PhonePresentationWire {
     let hash = try text(fields, "presentationSourceHash")
     let name = try text(fields, "profileName")
     let freshness = try text(fields, "freshness")
-    guard fields["kind"] == .string("presentation"), fields["bank"] == .string("base"),
+    guard fields["kind"] == .string("presentation"),
+      fields["bank"] == .string(request.bank?.rawValue ?? "base"),
       SavedControllerWire.counter(revision), revision != "0",
       let revisionNumber = UInt64(revision),
       let installedNumber = UInt64(request.saved.configurationRevision),
@@ -219,7 +250,8 @@ enum PhonePresentationWire {
     }
     return PhonePresentationMetadata(
       request: request, presentationRevision: revision,
-      presentationSourceHash: hash, profileName: name, freshness: freshness, controls: controls)
+      presentationSourceHash: hash, profileName: name, freshness: freshness, controls: controls,
+      authorityInstanceID: authority)
   }
   static func icon(
     _ fields: [String: EnrollmentJSON.Value], metadata: PhonePresentationMetadata,

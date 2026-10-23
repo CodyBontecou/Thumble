@@ -60,7 +60,10 @@ class PresentationAppTest {
     }
 
     private fun probe(path: String): JSONObject {
-        require(path in setOf("/begin", "/hold-start", "/refresh", "/held", "/neutral", "/finish"))
+        require(
+            path in
+                setOf("/begin", "/hold-start", "/refresh", "/stale", "/held", "/neutral", "/finish")
+        )
         val port =
             checkNotNull(InstrumentationRegistry.getArguments().getString("thumbleProbePort"))
                 .toInt()
@@ -244,6 +247,8 @@ class PresentationAppTest {
                     )
                 }
                 iconColor(144, 48)
+                assertTrue(probe("/stale").getBoolean("staleSource"))
+                assertNotNull(device.wait(Until.findObject(By.text("Game data stale")), 10000))
                 SystemClock.sleep(1600)
                 assertTrue(probe("/held").getBoolean("catalogHeld"))
                 ui {

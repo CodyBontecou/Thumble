@@ -1,8 +1,9 @@
 import {
-  decodePhonePresentationCommand,
-  decodePhonePresentationResult,
-  type PhonePresentationCommand,
+  decodeAnyPhonePresentationCommand,
+  decodeAnyPhonePresentationResult,
+  type AnyPhonePresentationCommand,
   type PhonePresentationResult,
+  type PresentationBank,
 } from "@thumble/contracts/phone-presentation";
 import {
   decodePhoneControlsQuery,
@@ -33,6 +34,7 @@ type Baseline = {
     revision: string;
     sourceHash: string;
     colorScheme: "light" | "dark";
+    bank: PresentationBank;
     presentation: SavedPresentation;
   };
 };
@@ -86,8 +88,9 @@ export class ConfigurationPhonePresentationOperations {
     while (this.baselines.size > 8)
       this.baselines.delete(this.baselines.keys().next().value!);
   }
-  execute(input: PhonePresentationCommand): PhonePresentationResult {
-    const command = decodePhonePresentationCommand(input);
+  execute(input: AnyPhonePresentationCommand): PhonePresentationResult {
+    const command = decodeAnyPhonePresentationCommand(input);
+    const bank = "presentationProtocol" in command ? command.bank : "base";
     try {
       const key = this.key(command, command.configurationSha256),
         baseline = this.baselines.get(key);
@@ -106,7 +109,8 @@ export class ConfigurationPhonePresentationOperations {
           current.contentHash !== command.presentationSourceHash ||
           baseline.latest?.revision !== current.revision ||
           baseline.latest.sourceHash !== current.contentHash ||
-          baseline.latest.colorScheme !== command.colorScheme
+          baseline.latest.colorScheme !== command.colorScheme ||
+          baseline.latest.bank !== bank
         )
           return { kind: "error", error: "presentation_stale" };
         const icon = baseline.latest.presentation.controls.find(
@@ -114,8 +118,13 @@ export class ConfigurationPhonePresentationOperations {
         )?.icon;
         if (!icon || icon.sha256 !== command.iconSHA256)
           return { kind: "error", error: "presentation_stale" };
-        const { command: _, kind: __, ...echo } = command;
-        return decodePhonePresentationResult(
+        const { command: _, kind: __, ...echoWithProtocol } = command;
+        const echo = Object.fromEntries(
+          Object.entries(echoWithProtocol).filter(
+            ([key]) => key !== "presentationProtocol",
+          ),
+        );
+        return decodeAnyPhonePresentationResult(
           {
             ...echo,
             kind: "icon",
@@ -158,6 +167,7 @@ export class ConfigurationPhonePresentationOperations {
           command.colorScheme,
           projection.map,
           this.ports.resourceHash,
+          "presentationProtocol" in command ? command.bank : undefined,
         ),
         verified = new Set<string>();
       for (const control of presentation.controls)
@@ -165,11 +175,16 @@ export class ConfigurationPhonePresentationOperations {
           this.ports.verifyIcon(control.icon.bytes.slice());
           verified.add(control.icon.sha256);
         }
-      const { command: _, kind: __, ...echo } = command;
+      const { command: _, kind: __, ...echoWithProtocol } = command;
+      const echo = Object.fromEntries(
+        Object.entries(echoWithProtocol).filter(
+          ([key]) => key !== "presentationProtocol",
+        ),
+      );
       const result: Record<string, string | number> = {
         ...echo,
         kind: "presentation",
-        bank: "base",
+        bank,
         profileName: presentation.profileName,
         presentationRevision: current.revision,
         presentationSourceHash: current.contentHash,
@@ -190,11 +205,12 @@ export class ConfigurationPhonePresentationOperations {
           result[prefix + "IconName"] = control.icon.name;
         }
       });
-      const validated = decodePhonePresentationResult(result, command);
+      const validated = decodeAnyPhonePresentationResult(result, command);
       baseline.latest = {
         revision: current.revision,
         sourceHash: current.contentHash,
         colorScheme: command.colorScheme,
+        bank,
         presentation,
       };
       return validated;

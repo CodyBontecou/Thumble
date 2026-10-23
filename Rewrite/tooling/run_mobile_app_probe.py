@@ -212,6 +212,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--platform", choices=["ios", "android"], required=True)
     parser.add_argument("--saved-controller", choices=["corner", "unsupported"])
+    parser.add_argument("--terminal-report", type=Path)
     parser.add_argument("command", nargs=argparse.REMAINDER)
     args = parser.parse_args()
     command = args.command
@@ -318,6 +319,8 @@ def main():
         health_stop.set()
         health_thread.join(timeout=3)
         probe.close()
+        if args.terminal_report is not None and not probe.native_control_terminals.write_report(args.terminal_report):
+            print("native_control_terminal_report_unavailable", file=sys.stderr)
         print("[DEBUG-renewal-app] final " + json.dumps({"completed": probe.completed, "counts": probe.counts, "httpDiagnostics": {"beginRequests": probe.begin_requests, "healthRequests": probe.health_requests, "serverThreadAlive": server_thread.is_alive(), "healthMonitor": health}, "nativeExitBeforeCleanup": native_exit_before_cleanup, "nativeFailureCodes": probe.failure_codes, "nativeHoldDiagnostic": probe.native_hold_diagnostic, "nativeControlTerminals": probe.native_control_terminals.snapshot(), "lastCheckpoint": probe.checkpoints[-1] if probe.checkpoints else None}, sort_keys=True), flush=True)
         server.shutdown()
         server.server_close()

@@ -468,3 +468,193 @@ export function decodePhonePresentationNotification(
     throw Error("phone_presentation_response_too_large");
   return result;
 }
+
+/** Role 11 is explicit; role 10 decoders above continue rejecting bank requests. */
+export const PRESENTATION_BANKS = [
+  "base",
+  "left-trigger",
+  "right-trigger",
+  "both-triggers",
+] as const;
+export type PresentationBank = (typeof PRESENTATION_BANKS)[number];
+export type BankPhonePresentationQuery = PhonePresentationQuery &
+  Readonly<{ presentationProtocol: 2; bank: PresentationBank }>;
+export type AnyPhonePresentationQuery =
+  | PhonePresentationQuery
+  | BankPhonePresentationQuery;
+export type BankPhonePresentationCommand = BankPhonePresentationQuery &
+  Readonly<{ command: "configuration-phone-presentation" }>;
+export type AnyPhonePresentationCommand =
+  | PhonePresentationCommand
+  | BankPhonePresentationCommand;
+export type BankPhonePresentationEvent = PhonePresentationQuery &
+  Readonly<{
+    version: 2;
+    event: "phone-presentation";
+    eventId: string;
+    bank: PresentationBank;
+  }>;
+export type AnyPhonePresentationEvent =
+  | PhonePresentationEvent
+  | BankPhonePresentationEvent;
+function bank(value: unknown): PresentationBank {
+  if (
+    typeof value !== "string" ||
+    !(PRESENTATION_BANKS as readonly string[]).includes(value)
+  )
+    throw Error("invalid_phone_presentation_bank");
+  return value as PresentationBank;
+}
+export function decodeBankPhonePresentationQuery(
+  input: unknown,
+): BankPhonePresentationQuery {
+  const v = presentationData(input);
+  const { presentationProtocol, bank: selected, ...legacy } = v;
+  if (presentationProtocol !== 2)
+    throw Error("invalid_phone_presentation_protocol");
+  return Object.freeze({
+    ...decodePhonePresentationQuery(legacy),
+    presentationProtocol: 2,
+    bank: bank(selected),
+  });
+}
+export function decodeAnyPhonePresentationCommand(
+  input: unknown,
+): AnyPhonePresentationCommand {
+  const v = presentationData(input);
+  if (!Object.hasOwn(v, "presentationProtocol"))
+    return decodePhonePresentationCommand(v);
+  const { command, ...query } = v;
+  if (command !== "configuration-phone-presentation")
+    throw Error("invalid_phone_presentation_command");
+  return Object.freeze({ ...decodeBankPhonePresentationQuery(query), command });
+}
+export function decodeAnyPhonePresentationEvent(
+  input: unknown,
+  authority: string,
+): AnyPhonePresentationEvent {
+  const v = presentationData(input);
+  if (v.version !== 2) return decodePhonePresentationEvent(v, authority);
+  exact(v, [
+    "version",
+    "event",
+    "eventId",
+    "kind",
+    ...BASE,
+    "bank",
+    ...(v.kind === "icon" ? ICON : []),
+  ]);
+  const { version, event, eventId, ...query } = v;
+  if (event !== "phone-presentation" || v.authorityInstanceId !== authority)
+    throw Error("invalid_phone_presentation_event");
+  const { presentationProtocol: _, ...validated } =
+    decodeBankPhonePresentationQuery({ ...query, presentationProtocol: 2 });
+  return Object.freeze({
+    ...validated,
+    version,
+    event,
+    eventId: positive(eventId),
+  });
+}
+export function decodeAnyPhonePresentationResult(
+  input: unknown,
+  query: AnyPhonePresentationQuery,
+): PhonePresentationResult {
+  if (!("presentationProtocol" in query))
+    return decodePhonePresentationResult(input, query);
+  const v = presentationData(input);
+  if (v.kind === "error") return decodePhonePresentationResult(v, query);
+  if (v.bank !== query.bank) throw Error("phone_presentation_pin_mismatch");
+  if (
+    utf8Length(JSON.stringify(v)) >
+    (query.kind === "metadata" ? 32768 : 16384) - 512
+  )
+    throw Error("phone_presentation_response_too_large");
+  const { bank: _, ...rest } = v;
+  const legacy = query.kind === "metadata" ? { ...rest, bank: "base" } : rest;
+  const { presentationProtocol: _protocol, bank: _bank, ...oldQuery } = query;
+  decodePhonePresentationResult(legacy, oldQuery);
+  return Object.freeze({ ...v }) as PhonePresentationResult;
+}
+export type BankPhonePresentationCommon = PhonePresentationBase &
+  Readonly<{ presentationProtocol: 2; bank: PresentationBank }>;
+type BankPresentationRevision = Readonly<{
+  presentationRevision: string;
+  presentationSourceHash: string;
+}>;
+export type BankPhonePresentationNotification =
+  | (BankPhonePresentationCommon & Readonly<{ kind: "bank" }>)
+  | (BankPhonePresentationCommon &
+      BankPresentationRevision &
+      Readonly<{
+        kind: "presentation";
+        profileName: string;
+        freshness: "observed" | "stale" | "not-evaluated";
+        controls: readonly PhonePresentationControl[];
+      }>)
+  | (BankPhonePresentationCommon &
+      BankPresentationRevision &
+      Readonly<{
+        kind: "icon";
+        controlId: string;
+        iconSHA256: string;
+        pngBase64: string;
+      }>)
+  | (BankPhonePresentationCommon &
+      Readonly<{ kind: "error"; error: PresentationError }>);
+/** Full installed pin and native semantic bank. Cosmetic events never grant input. */
+export function decodeBankPhonePresentationNotification(
+  input: unknown,
+): BankPhonePresentationNotification {
+  const v = presentationData(input);
+  const common = [...BASE, "presentationProtocol", "bank"];
+  decodeBankPhonePresentationQuery(
+    Object.fromEntries(
+      ["kind", ...common].map((k) => [k, k === "kind" ? "metadata" : v[k]]),
+    ),
+  );
+  if (v.kind === "bank") {
+    exact(v, ["kind", ...common]);
+    return Object.freeze({ ...v }) as BankPhonePresentationNotification;
+  }
+  const oldKeys = [...INSTALLED];
+  const normalized: Record<string, unknown> = Object.fromEntries(
+    ["kind", ...oldKeys].map((k) => [k, v[k]]),
+  );
+  if (v.kind === "error") {
+    exact(v, ["kind", ...common, "error"]);
+    decodePhonePresentationNotification({
+      kind: "error",
+      error: v.error,
+      generation: v.generation,
+      revision: v.revision,
+      configurationSha256: v.configurationSha256,
+    });
+  } else {
+    if (v.kind !== "presentation" && v.kind !== "icon")
+      throw Error("invalid_phone_presentation_notification");
+    const extra =
+      v.kind === "icon"
+        ? ["controlId", "iconSHA256", "pngBase64"]
+        : ["profileName", "freshness", "controls"];
+    exact(v, [
+      "kind",
+      ...common,
+      "presentationRevision",
+      "presentationSourceHash",
+      ...extra,
+    ]);
+    Object.assign(normalized, {
+      presentationRevision: v.presentationRevision,
+      presentationSourceHash: v.presentationSourceHash,
+      colorScheme: v.colorScheme,
+      bank: "base",
+    });
+    for (const k of extra) normalized[k] = v[k];
+    const validated = decodePhonePresentationNotification(normalized);
+    if (validated.kind === "presentation") v.controls = validated.controls;
+  }
+  if (utf8Length(JSON.stringify(v)) > (v.kind === "icon" ? 16384 : 32768))
+    throw Error("phone_presentation_response_too_large");
+  return Object.freeze({ ...v }) as BankPhonePresentationNotification;
+}

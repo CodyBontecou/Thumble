@@ -602,3 +602,67 @@ private func everyNativeLifecycleCancellationClosesTheGrantChannel(_ reason: Rel
     #expect(io.commands == ["hello", "authenticate", "input-configuration"])
   }
 }
+
+@Test @MainActor private func legacyTrailingInputClosureRemainsFeedbackOnRejectedSubmission()
+  async throws
+{
+  var now: UInt64 = 1000
+  // Preserve the exact ordered input handshake used by the existing test helpers.
+  let fixture = try inputFixture()
+  let ordered = InputControlIO(
+    ["hello", "authenticated", "configuration", "grant"].map { fixture[$0]! })
+  let client = try inputClient(ordered, now: { now })
+  _ = try await client.authenticate()
+  var feedback: [GamepadStateV1] = []
+  let engine = try await client.bindInput(inputMap()) { feedback.append($0) }
+  #expect(engine.begin(id: 1, generation: "1", x: 0.2, y: 0.2))
+  now = 999
+  engine.tick()
+  #expect(!engine.connected && feedback.last?.buttons.isEmpty == true)
+  client.close()
+}
+
+@Test @MainActor private func acceptedInputObserverSkipsRejectedSamplesAndDigitalCancelReturnsBase()
+  async throws
+{
+  let fixture = try inputFixture()
+  var now: UInt64 = 1000
+  let io = InputControlIO(
+    ["hello", "authenticated", "configuration", "grant"].map { fixture[$0]! })
+  let client = try inputClient(io, now: { now })
+  _ = try await client.authenticate()
+  let map = ControlMap(
+    generation: "1", revision: "1",
+    controls: [
+      ControlRegion(id: "left", action: "leftTrigger", x: 0, y: 0, width: 0.45, height: 1),
+      ControlRegion(id: "right", action: "rightTrigger", x: 0.55, y: 0, width: 0.45, height: 1),
+    ])
+  var banks: [PhonePresentationBank] = []
+  let engine = try await client.bindInput(
+    map, acceptedState: { banks.append(PhonePresentationBank(accepted: $0)) }, feedback: { _ in })
+  #expect(banks.last == .base)
+  #expect(engine.begin(id: 1, generation: "1", x: 0.2, y: 0.2))
+  #expect(banks.last == .leftTrigger)
+  #expect(engine.begin(id: 2, generation: "1", x: 0.8, y: 0.2))
+  #expect(banks.last == .bothTriggers)
+  engine.end(id: 1, generation: "1")
+  #expect(banks.last == .rightTrigger)
+  let count = banks.count
+  now = 999
+  engine.tick()
+  #expect(!engine.connected && banks.count == count)
+  client.close()
+
+  let releaseIO = InputControlIO(
+    ["hello", "authenticated", "configuration", "grant"].map { fixture[$0]! })
+  let releaseClient = try inputClient(releaseIO)
+  _ = try await releaseClient.authenticate()
+  var released: [PhonePresentationBank] = []
+  let releaseEngine = try await releaseClient.bindInput(
+    map, acceptedState: { released.append(PhonePresentationBank(accepted: $0)) }, feedback: { _ in }
+  )
+  #expect(releaseEngine.begin(id: 1, generation: "1", x: 0.2, y: 0.2))
+  releaseEngine.cancel(.background)
+  #expect(released.last == .base && !releaseEngine.connected)
+  releaseClient.close()
+}

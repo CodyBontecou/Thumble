@@ -12,7 +12,14 @@ class PhonePresentationRequest(
     val saved: SavedControllerRequest,
     map: SavedControllerMap,
     val colorScheme: String,
+    val bank: PhonePresentationBank? = null,
 ) {
+    internal val protocolVersion
+        get() = if (bank == null) 1L else 2L
+
+    internal val controlVersion
+        get() = if (bank == null) 10L else 11L
+
     val configurationSha256 = map.configurationSha256
     internal val controlIDs = map.map.controls.map { it.id }.toList()
 
@@ -37,18 +44,39 @@ class PhonePresentationRequest(
         saved
             .fields(connection)
             .put("command", "configuration-presentation")
+            .put("version", protocolVersion)
             .put("configurationSha256", configurationSha256)
             .put("colorScheme", colorScheme)
+            .apply { bank?.let { put("bank", it.wire) } }
 
-    internal fun installed(): Map<String, Any> =
-        mapOf(
-            "generation" to saved.generation,
-            "revision" to saved.revision,
-            "configurationSha256" to configurationSha256,
-            "expectedConfigurationRevision" to saved.configurationRevision,
-            "expectedSourceHash" to saved.sourceHash,
-            "profileId" to saved.profileID,
-        )
+    internal fun installed(authority: String? = null): Map<String, Any> {
+        val legacy =
+            mapOf(
+                "generation" to saved.generation,
+                "revision" to saved.revision,
+                "configurationSha256" to configurationSha256,
+                "expectedConfigurationRevision" to saved.configurationRevision,
+                "expectedSourceHash" to saved.sourceHash,
+                "profileId" to saved.profileID,
+            )
+        if (bank == null) return legacy
+        if (authority == null || !EnrollmentInvitation.identity(authority))
+            throw PhonePresentationRejected()
+        return legacy +
+            mapOf(
+                "presentationProtocol" to 2,
+                "authorityInstanceId" to authority,
+                "viewportWidth" to saved.viewportWidth,
+                "viewportHeight" to saved.viewportHeight,
+                "colorScheme" to colorScheme,
+                "bank" to bank.wire,
+            )
+    }
+
+    fun bankNotification(authority: String): Map<String, Any> {
+        if (bank == null) throw PhonePresentationRejected()
+        return installed(authority) + mapOf("kind" to "bank")
+    }
 }
 
 class PhonePresentationControl
@@ -68,6 +96,7 @@ internal constructor(
     val profileName: String,
     val freshness: String,
     controls: List<PhonePresentationControl>,
+    internal val authorityInstanceID: String,
 ) {
     val controls: List<PhonePresentationControl> = Collections.unmodifiableList(controls.toList())
 
@@ -76,11 +105,11 @@ internal constructor(
             "presentationRevision" to presentationRevision,
             "presentationSourceHash" to presentationSourceHash,
             "colorScheme" to request.colorScheme,
-            "bank" to "base",
+            "bank" to (request.bank?.wire ?: "base"),
         )
 
     fun bridgeEvent(): Map<String, Any> =
-        request.installed() +
+        request.installed(authorityInstanceID) +
             presented() +
             mapOf(
                 "kind" to "presentation",
@@ -107,7 +136,7 @@ internal constructor(val sha256: String, private val base64: String, val byteCou
                 ?: throw PhonePresentationRejected()
         if (control.iconSHA256 != sha256 || control.iconByteCount != byteCount)
             throw PhonePresentationRejected()
-        return metadata.request.installed() +
+        return metadata.request.installed(metadata.authorityInstanceID) +
             metadata.presented() +
             mapOf(
                 "kind" to "icon",
@@ -158,7 +187,7 @@ internal object PhonePresentationWire {
         icon: Boolean,
     ): MutableSet<String> {
         if (
-            f["version"] != EnrollmentJSON.Value.Integer(1) ||
+            f["version"] != EnrollmentJSON.Value.Integer(r.protocolVersion) ||
                 text(f, "command") !=
                     (if (icon) "configuration-presentation-icon-result"
                     else "configuration-presentation-result") ||
@@ -171,7 +200,7 @@ internal object PhonePresentationWire {
             throw PhonePresentationUnavailable(e)
         }
         val expected =
-            mapOf(
+            mutableMapOf(
                 "authorityInstanceId" to a,
                 "expectedConfigurationRevision" to r.saved.configurationRevision,
                 "expectedSourceHash" to r.saved.sourceHash,
@@ -183,6 +212,7 @@ internal object PhonePresentationWire {
                 "configurationSha256" to r.configurationSha256,
                 "colorScheme" to r.colorScheme,
             )
+        r.bank?.let { expected["bank"] = it.wire }
         if (expected.any { text(f, it.key) != it.value }) throw PhonePresentationRejected()
         return (header + expected.keys).toMutableSet()
     }
@@ -210,7 +240,7 @@ internal object PhonePresentationWire {
         val count = integer(f, "controlCount")
         if (
             text(f, "kind") != "presentation" ||
-                text(f, "bank") != "base" ||
+                text(f, "bank") != (r.bank?.wire ?: "base") ||
                 !PhoneCatalogClient.counter(revision) ||
                 java.math.BigInteger(revision) <
                     java.math.BigInteger(r.saved.configurationRevision) ||
@@ -253,6 +283,7 @@ internal object PhonePresentationWire {
             label(text(f, "profileName")),
             freshness,
             controls,
+            a,
         )
     }
 

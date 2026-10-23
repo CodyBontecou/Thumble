@@ -103,7 +103,37 @@ impl OutputStatus for Status {
             && state.admits_at(now)
     }
 }
+#[cfg(test)]
+#[derive(Clone, Copy, Debug)]
+struct WaitObservation {
+    operation: Operation,
+    budget: Duration,
+    result: Result<Option<thumble_rewrite_output_core::Receipt>, Error>,
+}
+#[cfg(test)]
+struct ObservedWait<'a> {
+    pending: &'a mut thumble_rewrite_output_core::Pending,
+    observations: &'a Mutex<Vec<WaitObservation>>,
+    operation: Operation,
+}
+#[cfg(test)]
+impl ObservedWait<'_> {
+    fn wait(
+        &mut self,
+        budget: Duration,
+    ) -> Result<Option<thumble_rewrite_output_core::Receipt>, Error> {
+        let result = self.pending.wait(budget);
+        self.observations.lock().unwrap().push(WaitObservation {
+            operation: self.operation,
+            budget,
+            result,
+        });
+        result
+    }
+}
 pub struct Bridge {
+    #[cfg(test)]
+    wait_observations: Mutex<Vec<WaitObservation>>,
     status: Arc<Status>,
     scope: Option<Scope>,
 }
@@ -127,6 +157,8 @@ impl Bridge {
                 .map_err(|_| "physical_output_unavailable")?,
         );
         Ok(Self {
+            #[cfg(test)]
+            wait_observations: Mutex::new(Vec::new()),
             status: Arc::new(Status {
                 worker,
                 clock,
@@ -156,6 +188,12 @@ impl Bridge {
                 Error::Busy | Error::Closed | Error::ReceiptExhausted => self.uncertain(),
                 _ => "physical_output_failed",
             })?;
+        #[cfg(test)]
+        let mut pending = ObservedWait {
+            pending: &mut pending,
+            observations: &self.wait_observations,
+            operation,
+        };
         match pending.wait(Duration::from_millis(ms)) {
             Ok(Some(_)) => Ok(()),
             Ok(None) | Err(Error::Closed) => Err(self.uncertain()),

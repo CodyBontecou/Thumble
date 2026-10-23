@@ -276,22 +276,73 @@ fn replacement_cannot_acknowledge_pending_old_retirement() {
     let mut runtime = Runtime::default();
     runtime.apply(activate(1), 0, &mut bridge).unwrap();
     state.gates.lock().unwrap().2 = true;
-    let start = Instant::now();
+    // A wall-clock elapsed assertion includes unrelated runner suspension. Keep
+    // a generous hang watchdog, but prove the exact receipt budget separately.
+    let (finished, completion) = std::sync::mpsc::sync_channel(1);
+    let call = std::thread::spawn(move || {
+        let result = runtime.apply(activate(2), 0, &mut bridge);
+        finished.send((runtime, bridge, result)).unwrap();
+    });
+    let (mut runtime, mut bridge, result) = completion
+        .recv_timeout(Duration::from_secs(1))
+        .expect("fake retirement call did not finish within the hang watchdog");
+    call.join().unwrap();
+    assert_eq!(result, Err("physical_output_restart_required"));
+    {
+        let waits = bridge.wait_observations.lock().unwrap();
+        assert_eq!(
+            waits.len(),
+            2,
+            "replacement must not issue another activation"
+        );
+        assert!(matches!(
+            waits[0].operation,
+            Operation::Activate {
+                scope: Scope { generation: 1, .. },
+                ..
+            }
+        ));
+        assert_eq!(waits[0].budget, Duration::from_millis(100));
+        assert!(matches!(waits[0].result, Ok(Some(_))));
+        assert!(matches!(
+            waits[1].operation,
+            Operation::Release {
+                scope: Scope { generation: 1, .. }
+            }
+        ));
+        assert_eq!(waits[1].budget, Duration::from_millis(50));
+        assert!(
+            matches!(waits[1].result, Ok(None)),
+            "pending cancellation must time out, never acknowledge release"
+        );
+    }
+    assert_eq!(runtime.snapshot().generation, "2");
+    assert_eq!(runtime.snapshot().revision, "2");
+    assert!(!runtime.snapshot().active);
+    assert!(!runtime.snapshot().input_enabled);
+    assert!(bridge.status.uncertain.load(Ordering::Acquire));
+    assert_eq!(state.created.load(Ordering::SeqCst), 1);
+    until(|| state.retired.load(Ordering::SeqCst) == 1);
+    assert_eq!(state.retired.load(Ordering::SeqCst), 1);
+    assert_eq!(*state.reports.lock().unwrap().last().unwrap(), NEUTRAL);
     assert_eq!(
         runtime.apply(activate(2), 0, &mut bridge),
+        Err("stale_activation")
+    );
+    assert_eq!(
+        runtime.apply(activate(3), 0, &mut bridge),
         Err("physical_output_restart_required")
     );
-    assert!(start.elapsed() < Duration::from_millis(150));
-    assert_eq!(runtime.snapshot().generation, "2");
-    assert!(!runtime.snapshot().active);
     assert_eq!(state.created.load(Ordering::SeqCst), 1);
+    assert_eq!(bridge.wait_observations.lock().unwrap().len(), 2);
     state.clear();
     until(|| bridge.status.worker.snapshot().phase == Phase::Stopped);
     assert!(
-        !bridge.status.cleanup_ready(1),
+        !bridge.status.cleanup_ready(3),
         "uncertain cleanup stays ineligible"
     );
 }
+
 #[test]
 fn status_observed_clock_fault_is_latched_and_only_fresh_retired_generation_recovers() {
     let (mut bridge, clock, _) = setup();

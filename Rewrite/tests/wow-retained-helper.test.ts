@@ -1,6 +1,9 @@
 import { ConfigurationPhoneControlsOperations } from "@thumble/application/configuration-phone-controls";
 import { ConfigurationPhonePresentationOperations } from "@thumble/application/configuration-phone-presentation";
-import type { PhonePresentationCommand } from "@thumble/contracts/phone-presentation";
+import {
+  PRESENTATION_BANKS,
+  type PhonePresentationCommand,
+} from "@thumble/contracts/phone-presentation";
 import { verifyPresentationIcon } from "../apps/service/src/presentation-icon.ts";
 import { expect, test } from "bun:test";
 import { mkdtempSync, rmSync, readFileSync } from "node:fs";
@@ -241,6 +244,46 @@ const helper = process.env.THUMBLE_TEST_RETAINED_WOW_HELPER;
             iconSHA256: String(metadata.control7IconSHA256),
           });
           expect(icon.kind).toBe("icon");
+          // The actual retained helper must serve every bank/theme from the old
+          // installed input proof, including a base control with no icon.
+          for (const colorScheme of ["light", "dark"] as const)
+            for (const bank of PRESENTATION_BANKS) {
+              const query = {
+                ...oldPresentation!,
+                presentationProtocol: 2 as const,
+                bank,
+                colorScheme,
+              };
+              const banked = presentations.execute(query);
+              expect(banked.kind).toBe("presentation");
+              if (banked.kind !== "presentation")
+                throw Error("actual_banked_presentation_missing");
+              expect(banked.bank).toBe(bank);
+              expect(banked.colorScheme).toBe(colorScheme);
+              expect(banked.controlCount).toBe(18);
+              expect(banked.expectedConfigurationRevision).toBe("1");
+              if (bank === "base")
+                expect(banked.control9IconSHA256).toBeUndefined();
+              else expect(banked.control9IconSHA256).toMatch(/^[a-f0-9]{64}$/);
+              const requestedControl =
+                bank === "base"
+                  ? "ce000000-0000-0000-0000-000000000008"
+                  : "ce000000-0000-0000-0000-00000000000a";
+              const requestedSHA =
+                bank === "base"
+                  ? banked.control7IconSHA256
+                  : banked.control9IconSHA256;
+              const bytes = presentations.execute({
+                ...query,
+                kind: "icon",
+                presentationRevision: String(banked.presentationRevision),
+                presentationSourceHash: String(banked.presentationSourceHash),
+                controlId: requestedControl,
+                iconSHA256: String(requestedSHA),
+              });
+              expect(bytes.kind).toBe("icon");
+              if (bytes.kind === "icon") expect(bytes.bank).toBe(bank);
+            }
         }
         if (operation === 1) {
           const edited = current.source

@@ -66,7 +66,7 @@ def main():
             nonlocal process, complete
             try:
                 with lock:
-                    assert self.path in {'/begin','/hold-start','/refresh','/held','/neutral','/finish'}
+                    assert self.path in {'/begin','/hold-start','/refresh','/stale','/held','/neutral','/finish'}
                     if self.path == '/begin':
                         assert process is None
                         stderr=(private/'presentation-native-private.log').open('wb')
@@ -83,7 +83,7 @@ def main():
                         reverse(offer['port'])
                         value={'host':'127.0.0.1','port':offer['port'],'certificatePin':offer['pin'],'authorityInstanceId':offer['authorityInstanceId'],'windowId':offer['windowId'],'secret':offer['secret'],'expiresAt':offer['expiresAt']}
                     else:
-                        value=command({'/hold-start':'q','/refresh':'u','/held':'j','/neutral':'n','/finish':'f'}[self.path])
+                        value=command({'/hold-start':'q','/refresh':'u','/stale':'s','/held':'j','/neutral':'n','/finish':'f'}[self.path])
                         if self.path=='/held':
                             assert value['catalogHeld'] is True and value['durationMs']>=1500 and value['neutralPulses']==0 and value['inputTtlMs']==350 and value['inputEnabled'] is False
                         if self.path=='/finish':
@@ -119,7 +119,7 @@ def main():
         assert status==0 and complete
         verify_android_results(ROOT/'apps/mobile/android/app/build/outputs/androidTest-results/connected/nativeQa')
         assert (private/'presentation-refreshed.png').is_file()
-        assert phases==['/hold-start','/refresh','/held','/neutral','/finish']
+        assert phases==['/hold-start','/refresh','/stale','/held','/neutral','/finish']
         print(json.dumps({'scope':'actual-react-presentation','status':'passed','heldAcrossRefresh':True,'phases':len(phases),'cases':1,'skipped':0,'failures':0}))
     finally:
         server.shutdown();server.server_close()

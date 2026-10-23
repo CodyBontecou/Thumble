@@ -293,6 +293,13 @@ public enum PhoneControlFailureStage: String, Sendable {
   public func bindInput(
     _ map: ControlMap, feedback: @escaping (GamepadStateV1) -> Void = { _ in }
   ) async throws -> InputEngine {
+    try await bindInput(map, acceptedState: { _ in }, feedback: feedback)
+  }
+  public func bindInput(
+    _ map: ControlMap, acceptedState: @escaping (GamepadStateV1) -> Void,
+    released: @escaping (ReleaseReason) -> Void = { _ in },
+    feedback: @escaping (GamepadStateV1) -> Void
+  ) async throws -> InputEngine {
     guard controlVersion >= 4, state == .authenticated, !busy, !inputAttempted,
       let admitted
     else { throw PhoneControlError.rejected }
@@ -351,9 +358,14 @@ public enum PhoneControlFailureStage: String, Sendable {
         }
         let engine = InputEngine(
           output: { [weak self] sample in
-            self?.inputChannel?.submit(sample) ?? false
+            guard self?.inputChannel?.submit(sample) == true else { return false }
+            acceptedState(sample.state)
+            return true
           }, feedback: feedback)
-        engine.onRelease = { [weak self] _ in self?.close() }
+        engine.onRelease = { [weak self] reason in
+          released(reason)
+          self?.close()
+        }
         inputEngine = engine
         _ = try engine.activate(map)
         try engine.connect(generation: map.generation)

@@ -17,7 +17,13 @@ internal constructor(
     private var grant: InputPacketGrant? = grant
     private val map = map
 
-    fun bind(feedback: (GamepadStateV1) -> Unit = {}): InputEngine {
+    fun bind(feedback: (GamepadStateV1) -> Unit = {}): InputEngine =
+        bind(acceptedState = {}, feedback = feedback)
+
+    fun bind(
+        acceptedState: (GamepadStateV1) -> Unit,
+        feedback: (GamepadStateV1) -> Unit,
+    ): InputEngine {
         client.inputThread()
         if (!consumed.compareAndSet(false, true)) throw PhoneControlRejected()
         try {
@@ -25,7 +31,17 @@ internal constructor(
             val packet = grant ?: throw PhoneControlRejected()
             grant = null
             val channel = client.bindChannel(packet)
-            val engine = InputEngine(channel::submit, feedback)
+            val engine =
+                InputEngine(
+                    { sample ->
+                        if (!channel.submit(sample)) false
+                        else {
+                            runCatching { acceptedState(sample.state) }
+                            true
+                        }
+                    },
+                    feedback,
+                )
             engine.onRelease = {
                 channel.close()
                 client.close()
