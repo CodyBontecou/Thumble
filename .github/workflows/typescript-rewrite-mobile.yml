@@ -88,6 +88,7 @@ jobs:
       - name: Require real-service Swift catalog and five-mode input witnesses
         run: |
           set -euo pipefail
+          export THUMBLE_REWRITE_PROBE_STAGE_DIAGNOSTICS=1
           export THUMBLE_REAL_SERVICE_PHONE_PROBE="$PWD/tooling/real-service-phone-probe.ts"
           export THUMBLE_NATIVE_INPUT_PROBE="$THUMBLE_REAL_SERVICE_PHONE_PROBE"
           for witness in catalog input saved-map analog; do
@@ -107,7 +108,7 @@ jobs:
             events="$RUNNER_TEMP/real-service-swift-$witness.jsonl"
             status=0
             swift test --package-path native/mobile-input/ios --filter "$test_filter" --event-stream-output-path "$events" --event-stream-version 0 > "$RUNNER_TEMP/real-service-swift-$witness.log" 2>&1 || status=$?
-            python3 tooling/check_real_service_swift_witness.py "$events" "$test_filter" "$expected_cases" "$status" "reports/mobile-real-service-swift-$witness.json"
+            python3 tooling/check_real_service_swift_witness.py "$events" "$test_filter" "$expected_cases" "$status" "reports/mobile-real-service-swift-$witness.json" "$RUNNER_TEMP/real-service-swift-$witness.log" "reports/mobile-real-service-swift-$witness-diagnostics.json"
           done
       - name: Compile native modules directly against both iOS SDKs
         id: ios-sdk-build
@@ -123,6 +124,8 @@ jobs:
           python3 -m unittest discover -s tooling -p test_ios_tls_runtime.py -v
           python3 -m unittest discover -s tooling -p test_ios_runtime_stages.py -v
           python3 -m unittest discover -s tooling -p test_ios_runtime_orchestration.py -v
+          python3 -m unittest discover -s tooling -p test_real_service_swift_witness.py -v
+          python3 -m unittest discover -s tooling -p test_bank_presentation_ios_probe.py -v
           python3 -m unittest discover -s tooling -p test_native_control_terminal.py -v
           python3 -m unittest discover -s tooling -p test_native_input_error.py -v
           python3 tooling/run_mobile_app_probe.py --platform ios --terminal-report reports/mobile-ios-control-terminal-outcomes.json --input-error-report reports/mobile-ios-input-error-events.json -- python3 tooling/check_ios_tls_runtime.py --report reports/mobile-ios-tls-runtime.json > "$RUNNER_TEMP/ios-tls-runtime-private.txt" 2>&1

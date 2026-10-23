@@ -59,5 +59,69 @@ class SwiftWitnessTests(unittest.TestCase):
             summarize("unused", "private-name", 3, 1)
 
 
+
+
+class ProbeDiagnosticProjectionTests(unittest.TestCase):
+    def project(self, lines):
+        from check_real_service_swift_witness import project_diagnostics
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "private.log"
+            path.write_text("\n".join(lines))
+            return project_diagnostics(path)
+
+    def test_fixed_stages_first_outcome_and_first_native_error_only(self):
+        result = self.project([
+            'native_probe_stage instance=1 stage=command-q event=sent outcome=none',
+            'native_probe_stage instance=1 stage=command-q event=failed outcome=early-eof',
+            'native_probe_stage instance=1 stage=command-q event=failed outcome=owned-watchdog',
+            'native_probe_stage instance=2 stage=startup event=failed outcome=owned-watchdog',
+            'Error: "probe_continuous_hold_interrupted"',
+            'native_input_error {"version":1,"role":"broker","context":"native-client","op":3,"code":"native_input_timeout"}',
+            'native_input_error {"version":1,"role":"broker","context":"native-client","op":3,"code":"native_input_transport_failed"}',
+            'native_control_terminal code=input_session_closed elapsed_us=123',
+        ])
+        self.assertEqual([v['outcome'] for v in result['firstProcessOutcomes']], ['early-eof', 'owned-watchdog'])
+        self.assertEqual(result['firstNativeInputError']['code'], 'native_input_timeout')
+        self.assertEqual(result['firstControlOutcomeAfterCleanup']['code'], 'input_session_closed')
+        self.assertEqual(result['firstProbeError'], 'probe_continuous_hold_interrupted')
+
+    def test_untrusted_payloads_and_unknown_identifiers_never_reflected(self):
+        result = self.project([
+            'secret invitation bearer /private/source',
+            'native_probe_stage instance=1 stage=secret event=failed outcome=early-eof',
+            'native_probe_stage instance=01 stage=startup event=failed outcome=early-eof',
+            'native_probe_stage instance=1 stage=startup event=sent outcome=early-eof',
+            'native_probe_stage instance=1 stage=startup event=failed outcome=none',
+            'Error: "probe_private_secret"',
+            'native_probe_stage instance=1 stage=startup event=failed outcome=early-eof extra=secret',
+            '\u00e9' * 2048,
+        ])
+        self.assertEqual(result['stages'], [])
+        self.assertIsNone(result['firstProbeError'])
+        self.assertNotIn('secret', json.dumps(result))
+        self.assertNotIn('/private', json.dumps(result))
+
+    def test_stage_and_process_caps_and_log_size(self):
+        result = self.project([f'native_probe_stage instance={i} stage=startup event=failed outcome=early-eof' for i in range(1,101)])
+        self.assertEqual(len(result['stages']),64)
+        self.assertEqual(len(result['firstProcessOutcomes']),16)
+        self.assertLess(len(json.dumps(result)),16384)
+        self.assertEqual(self.project(['x' * 2_097_153])['logStatus'],'bounds')
+
+    def test_atomic_private_report_and_failed_diagnostic_write_never_changes_admission(self):
+        import os
+        from check_real_service_swift_witness import write_diagnostics
+        with tempfile.TemporaryDirectory() as directory:
+            log = Path(directory) / "private.log"
+            target = Path(directory) / "diagnostic.json"
+            log.write_text('native_probe_stage instance=1 stage=startup event=failed outcome=early-eof\n')
+            target.write_text('old')
+            os.chmod(target, 0o644)
+            self.assertTrue(write_diagnostics(log, target))
+            self.assertEqual(target.stat().st_mode & 0o777, 0o600)
+            self.assertEqual(json.loads(target.read_text())['firstProcessOutcomes'][0]['outcome'], 'early-eof')
+            self.assertFalse(write_diagnostics(log, Path(directory)/'absent'/'out.json'))
+            self.assertEqual(len(list(Path(directory).iterdir())),2)
+
 if __name__ == "__main__":
     unittest.main()

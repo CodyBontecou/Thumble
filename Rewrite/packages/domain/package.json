@@ -18,7 +18,8 @@
     "./owned-projection-merge": "./src/owned-projection-merge.ts",
     "./saved-presentation": "./src/saved-presentation.ts",
     "./owned-control-label": "./src/owned-control-label.ts",
-    "./owned-profile-delete": "./src/owned-profile-delete.ts"
+    "./owned-profile-delete": "./src/owned-profile-delete.ts",
+    "./owned-editor-profile": "./src/owned-editor-profile.ts"
   },
   "dependencies": {
     "@thumble/contracts": "workspace:*"

@@ -9,6 +9,7 @@ import {
 import { counter } from "@thumble/contracts/receiver";
 import { ConfigurationCatalog } from "@thumble/domain/configuration-catalog";
 import { setOwnedControlLabel } from "@thumble/domain/owned-control-label";
+import { controlLabelFingerprint } from "./control-label-fingerprint.ts";
 import { deleteOwnedProfile } from "@thumble/domain/owned-profile-delete";
 import {
   ConfigurationRevisionConflict,
@@ -71,19 +72,19 @@ export class ConfigurationCatalogOperations {
     const payloadHash =
       command.command === "configuration-list"
         ? undefined
-        : this.digest(
-            JSON.stringify([
-              "thumble-catalog-operation-v1",
-              command.command,
-              command.expectedRevision,
-              ...(command.command === "configuration-delete-profile"
-                ? [
-                    command.profileId,
-                    command.activeProfileId,
-                    command.defaultProfileId,
-                  ]
-                : command.command === "configuration-set-control-label"
-                  ? [command.profileId, command.controlId, command.label]
+        : command.command === "configuration-set-control-label"
+          ? controlLabelFingerprint(command, this.digest)
+          : this.digest(
+              JSON.stringify([
+                "thumble-catalog-operation-v1",
+                command.command,
+                command.expectedRevision,
+                ...(command.command === "configuration-delete-profile"
+                  ? [
+                      command.profileId,
+                      command.activeProfileId,
+                      command.defaultProfileId,
+                    ]
                   : command.command === "configuration-rename-profile"
                     ? [command.profileId, command.name]
                     : command.command === "configuration-initialize-starter"
@@ -96,8 +97,8 @@ export class ConfigurationCatalogOperations {
                             command.name,
                             command.select,
                           ]),
-            ]),
-          );
+              ]),
+            );
     if (command.command !== "configuration-list") {
       const previous = this.repository.receipt(
         command.operationId,

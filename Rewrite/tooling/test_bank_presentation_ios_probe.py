@@ -63,4 +63,46 @@ class BankIOSOwnershipCleanupTest(unittest.TestCase):
         self.assertEqual(visited, ['failed', 'restored'])
         self.assertTrue(cleanup_all([lambda: visited.append('ok')]))
 
+
+
+class BankIOSPreflightDiagnosticTest(unittest.TestCase):
+    def test_inventory_timeout_is_fixed_and_original_error_preserved(self):
+        import json
+        import subprocess
+        from run_bank_presentation_ios_probe import preflight_owned_simulator
+        error = subprocess.TimeoutExpired(['private-path', 'secret'], 15)
+        values = []
+        def fail(*args, **kwargs):
+            self.assertEqual(kwargs, {'timeout': 15})
+            raise error
+        with self.assertRaises(subprocess.TimeoutExpired) as caught:
+            preflight_owned_simulator(OWNED, fail, values.append)
+        self.assertIs(caught.exception, error)
+        self.assertEqual(json.loads(values[0]), {'scope':'actual-react-ios-bank-artwork','status':'failed','stage':'simulator-inventory','reason':'timeout'})
+        self.assertNotIn('secret', values[0])
+
+    def test_inventory_malformed_and_unowned_fail_but_success_emits_nothing(self):
+        import json
+        from run_bank_presentation_ios_probe import preflight_owned_simulator
+        values = []
+        for data, reason in [(b'private-secret', 'inventory-invalid'), (b'x' * 2097153, 'inventory-invalid'), (b'{"devices":{}}', 'ownership-invalid')]:
+            with self.assertRaises((AssertionError, ValueError)):
+                preflight_owned_simulator(OWNED, lambda *a, **k: data, values.append)
+            self.assertEqual(json.loads(values[-1])['reason'],reason)
+            self.assertNotIn('secret',values[-1])
+        inventory = {'devices':{'runtime':[{'udid':OWNED,'isAvailable':True,'name':'Thumble Rewrite QA'}]}}
+        preflight_owned_simulator(OWNED,lambda *a, **k:json.dumps(inventory).encode(),values.append)
+        self.assertEqual(len(values),3)
+
+class BankIOSDiagnosticFailureTest(unittest.TestCase):
+    def test_failed_diagnostic_sink_preserves_primary_error_identity(self):
+        import subprocess
+        from run_bank_presentation_ios_probe import preflight_owned_simulator
+        primary = subprocess.TimeoutExpired(['private-path'], 15)
+        def fail(*args, **kwargs): raise primary
+        def broken_emit(value): raise BrokenPipeError('diagnostic sink')
+        with self.assertRaises(subprocess.TimeoutExpired) as caught:
+            preflight_owned_simulator(OWNED, fail, broken_emit)
+        self.assertIs(caught.exception, primary)
+
 if __name__ == '__main__': unittest.main()

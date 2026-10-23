@@ -16,13 +16,13 @@ export function checkPortableSource(
     } else if (
       !(
         name !== "contracts" &&
-        /^@thumble\/contracts(?:\/(?:receiver|mobile-input|pairing|json|configuration|control-label|profile-delete|saved-runtime|phone-controls|phone-presentation|wow-capture|wow-capture-control))?$/.test(
+        /^@thumble\/contracts(?:\/(?:receiver|mobile-input|pairing|json|configuration|control-label|profile-delete|editor-read|saved-runtime|phone-controls|phone-presentation|wow-capture|wow-capture-control))?$/.test(
           module,
         )
       ) &&
       !(
         name === "application" &&
-        /^@thumble\/domain(?:\/(?:configuration-catalog|starter-configuration|controller-layout|saved-controller-map|saved-presentation|owned-configuration|owned-control-label|owned-profile-delete|owned-authority|owned-resources|owned-projection-merge|wow-live|wow-capture-receipt))?$/.test(
+        /^@thumble\/domain(?:\/(?:configuration-catalog|starter-configuration|controller-layout|saved-controller-map|saved-presentation|owned-configuration|owned-control-label|owned-profile-delete|owned-editor-profile|owned-authority|owned-resources|owned-projection-merge|wow-live|wow-capture-receipt))?$/.test(
           module,
         )
       )

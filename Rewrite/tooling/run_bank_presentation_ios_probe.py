@@ -68,15 +68,33 @@ def verify_results(summary, tree):
     assert cases[0]['result'] == 'Passed'
 
 
+
+def preflight_owned_simulator(identifier, call=subprocess.check_output, emit=print):
+    """Failure metadata before any fixture/process starts; never reflect inventory."""
+    reason = "command-failed"
+    try:
+        inventory_data = call(['xcrun', 'simctl', 'list', 'devices', 'available', '--json'], timeout=15)
+        reason = "inventory-invalid"
+        assert len(inventory_data) <= 2097152
+        inventory = json.loads(inventory_data)
+        reason = "ownership-invalid"
+        validate_owned_simulator(identifier, inventory)
+    except BaseException as error:
+        if isinstance(error, subprocess.TimeoutExpired): reason = "timeout"
+        try:
+            emit(json.dumps({'scope': 'actual-react-ios-bank-artwork', 'status': 'failed', 'stage': 'simulator-inventory', 'reason': reason}, sort_keys=True))
+        except BaseException:
+            pass
+        raise
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--device', default=OWNED)
     parser.add_argument('--derived-data', required=True)
     parser.add_argument('--service-probe', type=Path, default=ROOT / 'tooling/presentation-service-probe.ts')
     args = parser.parse_args()
-    inventory_data = subprocess.check_output(['xcrun', 'simctl', 'list', 'devices', 'available', '--json'], timeout=15)
-    assert len(inventory_data) <= 2097152
-    validate_owned_simulator(args.device, json.loads(inventory_data))
+    preflight_owned_simulator(args.device)
     assert args.service_probe.is_absolute() and args.service_probe.is_file()
     assert args.service_probe.name == 'presentation-service-probe.ts'
     private = Path(os.environ['RUNNER_TEMP'])
