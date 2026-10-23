@@ -17,6 +17,6 @@ test("editor model and actual label screens preserve durable intent and confirma
   );
   expect(result.exitCode).toBe(0);
   const report = new TextDecoder().decode(result.stderr);
-  expect(report).toMatch(/^\s*9 pass$/m);
+  expect(report).toMatch(/^\s*12 pass$/m);
   expect(report).toMatch(/^\s*0 fail$/m);
 });

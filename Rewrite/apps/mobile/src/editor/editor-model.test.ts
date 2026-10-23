@@ -31,6 +31,7 @@ function fake() {
   let outcome = "retained";
   let failEnqueue = false,
     failCatalog = false,
+    failRead = false,
     ambiguous = false;
   const bridge: NativeEditor = {
     snapshot: async () => snapshot,
@@ -58,6 +59,7 @@ function fake() {
     },
     read: async (id, revision, sourceHash) => {
       calls.push(["read", id, revision, sourceHash]);
+      if (failRead) throw Error("offline_after_commit");
       snapshot = {
         ...snapshot,
         profiles: [
@@ -167,8 +169,24 @@ function fake() {
     failCatalog: () => {
       failCatalog = true;
     },
+    failRead: () => {
+      failRead = true;
+    },
     ambiguous: () => {
       ambiguous = true;
+    },
+    cacheAnotherProfile: () => {
+      snapshot = {
+        ...snapshot,
+        profiles: [
+          ...snapshot.profiles,
+          {
+            ...profile,
+            contextId: "other-context",
+            profileId: "other-profile",
+          },
+        ],
+      };
     },
   };
 }
@@ -263,4 +281,52 @@ test("ambiguous matching cached origins fail closed when opening a current profi
   expect(await f.model.openCurrent("profile")).toBe(false);
   expect(f.calls.filter(([name]) => name === "select")).toHaveLength(0);
   expect(f.model.getSnapshot().current).toBe(null);
+});
+
+test("committing a restored queue refreshes its profile cache without opening a profile", async () => {
+  const f = fake();
+  await f.model.open();
+  await f.model.enqueue(edit());
+  expect(f.model.getSnapshot().current).toBeNull();
+  f.setOutcome("committed");
+  await f.model.dispatch("original-operation", false);
+  expect(f.calls.filter(([name]) => name === "read")).toEqual([
+    ["read", "profile", "8", "b".repeat(64)],
+  ]);
+  expect(f.model.getSnapshot().snapshot.profiles[0]?.revision).toBe("8");
+  expect(f.model.getSnapshot().snapshot.queue).toHaveLength(0);
+  expect(f.model.getSnapshot().current).toBeNull();
+  expect(f.calls.filter(([name]) => name === "select")).toHaveLength(0);
+  expect(f.model.getSnapshot().notice?.detail).toContain("has been refreshed");
+});
+test("a committed edit remains saved when its profile cache refresh fails", async () => {
+  const f = fake();
+  await f.model.open();
+  await f.model.enqueue(edit());
+  f.setOutcome("committed");
+  f.failRead();
+  await f.model.dispatch("original-operation", false);
+  expect(f.model.getSnapshot().snapshot.queue).toHaveLength(0);
+  expect(f.model.getSnapshot().notice?.title).toBe("Saved on your Mac");
+  expect(f.model.getSnapshot().notice?.detail).toContain("Refresh profiles");
+  expect(f.model.getSnapshot().snapshot.profiles[0]?.revision).toBe("7");
+});
+
+test("refreshing a committed queue entry preserves another open profile and its controls", async () => {
+  const f = fake();
+  f.cacheAnotherProfile();
+  await f.model.open();
+  expect(await f.model.openCached("other-context")).toBe(true);
+  const controls = f.model.getSnapshot().controls;
+  await f.model.enqueue(edit());
+  f.setOutcome("committed");
+  await f.model.dispatch("original-operation", false);
+  expect(f.calls.filter(([name]) => name === "read")).toEqual([
+    ["read", "profile", "8", "b".repeat(64)],
+  ]);
+  expect(f.model.getSnapshot().current?.profileId).toBe("other-profile");
+  expect(f.model.getSnapshot().controls).toBe(controls);
+  expect(f.calls.filter(([name]) => name === "select")).toEqual([
+    ["select", "other-context"],
+  ]);
 });

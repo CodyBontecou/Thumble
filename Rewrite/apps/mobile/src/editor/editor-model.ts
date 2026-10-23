@@ -392,18 +392,22 @@ export class EditorModel {
           try {
             const catalog = catalogPage(await native.catalog());
             this.update({ catalog });
-            if (selectedId && catalog.sourceHash) {
-              const snapshot = await native.read(
-                selectedId,
-                catalog.revision,
-                catalog.sourceHash,
-              );
-              this.update({ snapshot });
-              await this.install(
-                native,
-                this.uniqueCurrent(snapshot, selectedId, catalog),
-              );
-            }
+            if (!catalog.sourceHash) throw Error("profile_refresh_unavailable");
+            // The queue can reopen without a selected profile after app restart.
+            // Refresh the committed profile, while preserving any other open copy.
+            const snapshot = await native.read(
+              before.profileId,
+              catalog.revision,
+              catalog.sourceHash,
+            );
+            const refreshed = this.uniqueCurrent(
+              snapshot,
+              before.profileId,
+              catalog,
+            );
+            this.update({ snapshot });
+            if (selectedId === before.profileId)
+              await this.install(native, refreshed);
             this.update({
               notice: {
                 title: "Saved on your Mac",
