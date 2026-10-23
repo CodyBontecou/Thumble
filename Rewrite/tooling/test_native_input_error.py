@@ -71,6 +71,27 @@ class BeforeCleanupTests(unittest.TestCase):
         for change in [{'role':'receiver'},{'stage':'secret'},{'code':'secret/path'},{'op':4},{'extra':'secret'}]:
             self.assertIsNone(decode_native_input_error(line(dict(original,**change))))
 
+class HandshakeTests(unittest.TestCase):
+    def test_fixed_handshake_phases_and_bounded_durations(self):
+        client = dict(context='native-connect', stage='proof-read', elapsedMs=250, code='native_input_timeout')
+        server = dict(role='receiver', context='native-handshake', stage='complete', acceptGapMs=5, queueMs=300, readMs=0, proofMs=0)
+        values = NativeInputErrors()
+        values.observe(event(**client))
+        values.observe(event(**server))
+        self.assertEqual(len(values.snapshot()), 2)
+        self.assertEqual(values.snapshot()[0]['stage'], 'proof-read')
+        self.assertEqual(values.snapshot()[1]['queueMs'], 300)
+        for phase in ['tcp-connect', 'challenge-send', 'proof-read', 'proof-validate']:
+            self.assertIsNotNone(decode_native_input_error(event(**dict(client, stage=phase))))
+        for phase in ['accepted', 'challenge-read', 'proof-send', 'complete']:
+            self.assertIsNotNone(decode_native_input_error(event(**dict(server, stage=phase))))
+        for change in [dict(stage=[]), dict(stage='secret'), dict(elapsedMs=True), dict(elapsedMs=-1), dict(elapsedMs=60001), dict(endpoint='secret'), dict(role='receiver'), dict(code='secret')]:
+            self.assertIsNone(decode_native_input_error(event(**dict(client, **change))))
+        for field in ['acceptGapMs', 'queueMs', 'readMs', 'proofMs']:
+            for invalid in [-1, 60001, True, {}, 'secret']:
+                self.assertIsNone(decode_native_input_error(event(**dict(server, **{field:invalid}))))
+        self.assertIsNone(decode_native_input_error(event(**dict(server, challenge='secret'))))
+
 
 if __name__ == '__main__':
     unittest.main()

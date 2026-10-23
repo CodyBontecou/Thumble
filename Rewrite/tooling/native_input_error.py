@@ -50,7 +50,15 @@ def decode_native_input_error(line):
             return None
         fields = set(value) - COMMON
         context = value['context']
-        if fields == {'stage', 'code'}:
+        if fields == {'stage', 'elapsedMs', 'code'}:
+            if value['role'] != 'broker' or context != 'native-connect' or type(value['stage']) is not str or value['stage'] not in {'tcp-connect', 'challenge-send', 'proof-read', 'proof-validate'} or type(value['code']) is not str or value['code'] not in CODES or type(value['elapsedMs']) is not int or not 0 <= value['elapsedMs'] <= 60000:
+                return None
+        elif fields == {'stage', 'acceptGapMs', 'queueMs', 'readMs', 'proofMs'}:
+            if value['role'] != 'receiver' or context != 'native-handshake' or type(value['stage']) is not str or value['stage'] not in {'accepted', 'challenge-read', 'proof-send', 'complete'}:
+                return None
+            if any(type(value[key]) is not int or not 0 <= value[key] <= 60000 for key in ['acceptGapMs', 'queueMs', 'readMs', 'proofMs']):
+                return None
+        elif fields == {'stage', 'code'}:
             if value['role'] != 'broker' or context != 'phone-control-before-cleanup' or type(value['stage']) is not str or value['stage'] not in CONTROL_STAGES or type(value['code']) is not str or value['code'] not in SERVE_CODES:
                 return None
         elif fields == {'op', 'code'}:

@@ -121,8 +121,23 @@ jobs:
       - run: bun run build
         if: matrix.primary
       - run: bun run test:package:ci
-        if: matrix.primary
+        if: matrix.primary && runner.os != 'Windows'
         timeout-minutes: 2
+      - name: Capture Windows standalone package phase diagnostics
+        if: matrix.primary && runner.os == 'Windows'
+        shell: bash
+        timeout-minutes: 2
+        run: |
+          mkdir -p reports
+          set +e
+          THUMBLE_REWRITE_PACKAGE_STAGE_PROBE=1 bun run test:package:ci > reports/package-stage-private.txt 2>&1
+          package_status=$?
+          cat reports/package-stage-private.txt
+          bun tooling/collect-package-stage.ts
+          collector_status=$?
+          rm -f reports/package-stage-private.txt
+          if [ "$package_status" -ne 0 ]; then exit "$package_status"; fi
+          exit "$collector_status"
       - uses: actions/upload-artifact@v4
         if: matrix.primary
         with:
@@ -148,5 +163,7 @@ jobs:
         if: always() && hashFiles('Rewrite/reports/*junit.xml') != ''
         with:
           name: rewrite-portable-tests-${{ matrix.id }}
-          path: Rewrite/reports/*junit.xml
+          path: |
+            Rewrite/reports/*junit.xml
+            Rewrite/reports/package-stage.jsonl
           if-no-files-found: error

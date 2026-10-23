@@ -6,7 +6,14 @@ import ThumbleContracts
 import UIKit
 
 public final class ThumbleInputModule: Module {
+  private let editorLifetime = PhoneEditorModuleLifetime()
+  public override func willDestroy() {
+    let owner = editorLifetime
+    owner.invalidate()
+    Task { @MainActor in await NativeEditorSession.shared.invalidate(owner) }
+  }
   public func definition() -> ModuleDefinition {
+    let editorLifetime = self.editorLifetime
     Name("ThumbleNativeInput")
     AsyncFunction("requestControllerLandscape") { () throws -> String in
       try MainActor.assumeIsolated { try ControllerOrientation.request() }
@@ -15,32 +22,32 @@ public final class ThumbleInputModule: Module {
       MainActor.assumeIsolated { ControllerOrientation.restore(token) }
     }.runOnQueue(.main)
     AsyncFunction("editorOpen") { () async throws -> String in
-      try await NativeEditorSession.shared.open()
+      try await NativeEditorSession.shared.open(editorLifetime)
     }
     AsyncFunction("editorSnapshot") { (id: String) async throws -> [String: Any] in
-      let owner = try await NativeEditorSession.shared.get(id)
+      let owner = try await NativeEditorSession.shared.get(id, owner: editorLifetime)
       return try await owner.snapshot().editorBridge
     }
     AsyncFunction("editorCachePage") {
       (id: String, contextID: String, offset: Int) async throws -> [String: Any] in
-      let owner = try await NativeEditorSession.shared.get(id)
+      let owner = try await NativeEditorSession.shared.get(id, owner: editorLifetime)
       return try await owner.cachePage(contextID: contextID, offset: offset).editorBridge
     }
     AsyncFunction("editorRead") {
       (id: String, profileID: String, revision: String, hash: String) async throws -> [String: Any]
       in
-      let owner = try await NativeEditorSession.shared.get(id)
+      let owner = try await NativeEditorSession.shared.get(id, owner: editorLifetime)
       return try await owner.read(
         profileID: profileID, expectedRevision: revision, sourceSHA256: hash
       ).editorBridge
     }
     AsyncFunction("editorCatalog") {
       (id: String, revision: String?, offset: Int) async throws -> [String: Any] in
-      let owner = try await NativeEditorSession.shared.get(id)
+      let owner = try await NativeEditorSession.shared.get(id, owner: editorLifetime)
       return try await owner.catalog(expectedRevision: revision, offset: offset).bridgeMetadata
     }
     AsyncFunction("editorSelect") { (id: String, contextID: String?) async throws in
-      let owner = try await NativeEditorSession.shared.get(id)
+      let owner = try await NativeEditorSession.shared.get(id, owner: editorLifetime)
       try await owner.select(contextID: contextID)
     }
     AsyncFunction("editorEnqueue") {
@@ -48,25 +55,25 @@ public final class ThumbleInputModule: Module {
         id: String, contextID: String, revision: String, hash: String, controlID: String,
         operationID: String, label: String?
       ) async throws in
-      let owner = try await NativeEditorSession.shared.get(id)
+      let owner = try await NativeEditorSession.shared.get(id, owner: editorLifetime)
       try await owner.enqueue(
         contextID: contextID, expectedRevision: revision, sourceSHA256: hash, controlID: controlID,
         operationID: operationID, label: label)
     }
     AsyncFunction("editorSubmit") { (id: String, operationID: String) async throws -> String in
-      let owner = try await NativeEditorSession.shared.get(id)
+      let owner = try await NativeEditorSession.shared.get(id, owner: editorLifetime)
       return try await owner.submit(operationID: operationID)
     }
     AsyncFunction("editorReconcile") { (id: String, operationID: String) async throws -> String in
-      let owner = try await NativeEditorSession.shared.get(id)
+      let owner = try await NativeEditorSession.shared.get(id, owner: editorLifetime)
       return try await owner.reconcile(operationID: operationID)
     }
     AsyncFunction("editorCancel") { (id: String) async throws in
-      let owner = try await NativeEditorSession.shared.get(id)
+      let owner = try await NativeEditorSession.shared.get(id, owner: editorLifetime)
       await owner.cancel()
     }
     AsyncFunction("editorClose") { (id: String) async throws in
-      try await NativeEditorSession.shared.close(id)
+      try await NativeEditorSession.shared.close(id, owner: editorLifetime)
     }
     // Expo dispatches view AsyncFunctions on the main queue. Assert that
     // contract before entering the Swift UI actor; only typed Sendable metadata

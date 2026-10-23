@@ -229,7 +229,7 @@ impl Bridge {
     pub(crate) fn try_coordinator(&self) -> Result<Option<Arc<EditorCoordinator>>, &'static str> {
         Ok(self.state.lock().map_err(|_| INVALID)?.coordinator.clone())
     }
-    #[cfg(test)]
+    #[cfg(all(test, unix))]
     pub(crate) fn coordinator(&self) -> Option<Arc<EditorCoordinator>> {
         self.state.lock().ok()?.coordinator.clone()
     }

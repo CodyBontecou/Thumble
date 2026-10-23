@@ -27,7 +27,7 @@ fn reserve(count: &AtomicU64) -> bool {
         })
         .is_ok()
 }
-fn emit(value: Value) {
+pub(crate) fn emit(value: Value) {
     let text = value.to_string();
     if text.len() <= 256 && reserve(&COUNT) {
         eprintln!("native_input_error {text}");
@@ -236,5 +236,85 @@ mod control_stage_tests {
             serving_value(ControlStage::Release, "native_input_timeout")["code"],
             "native_input_timeout"
         );
+    }
+}
+
+/// Fixed native IPC handshake phases, emitted only on failure/abnormal exit.
+/// Relative durations are clamped; no endpoint, challenge, proof or identity is retained.
+pub(crate) fn connect_failure(
+    stage: &'static str,
+    elapsed: std::time::Duration,
+    error: &'static str,
+) {
+    if !matches!(
+        stage,
+        "tcp-connect" | "challenge-send" | "proof-read" | "proof-validate"
+    ) {
+        return;
+    }
+    let value = json!({"version":1,"role":"broker","context":"native-connect","stage":stage,"elapsedMs":millis(elapsed),"code":code(error)});
+    handshake_event(value);
+}
+fn millis(duration: std::time::Duration) -> u64 {
+    duration.as_millis().min(60_000) as u64
+}
+#[derive(Clone, Debug)]
+pub(crate) struct HandshakeTrace {
+    accepted: std::time::Instant,
+    accept_gap: std::time::Duration,
+    queue: std::time::Duration,
+    read: std::time::Duration,
+    proof: std::time::Duration,
+    stage: &'static str,
+}
+impl HandshakeTrace {
+    pub(crate) fn accepted(gap: std::time::Duration) -> Self {
+        Self {
+            accepted: std::time::Instant::now(),
+            accept_gap: gap,
+            queue: std::time::Duration::ZERO,
+            read: std::time::Duration::ZERO,
+            proof: std::time::Duration::ZERO,
+            stage: "accepted",
+        }
+    }
+    pub(crate) fn worker(&mut self) -> std::time::Instant {
+        let now = std::time::Instant::now();
+        self.queue = now.duration_since(self.accepted);
+        self.stage = "challenge-read";
+        now
+    }
+    pub(crate) fn read(&mut self, duration: std::time::Duration) {
+        self.read = duration;
+    }
+    pub(crate) fn proof(&mut self, duration: std::time::Duration) {
+        self.proof = duration;
+    }
+    pub(crate) fn stage(&mut self, stage: &'static str) {
+        if matches!(stage, "proof-send" | "complete") {
+            self.stage = stage;
+        }
+    }
+    pub(crate) fn report(&self) {
+        handshake_event(
+            json!({"version":1,"role":"receiver","context":"native-handshake","stage":self.stage,"acceptGapMs":millis(self.accept_gap),"queueMs":millis(self.queue),"readMs":millis(self.read),"proofMs":millis(self.proof)}),
+        );
+    }
+}
+#[cfg(test)]
+thread_local! { static HANDSHAKE_TEST_EVENTS: std::cell::RefCell<Option<std::sync::mpsc::SyncSender<Value>>> = const { std::cell::RefCell::new(None) }; }
+#[cfg(test)]
+pub(crate) fn capture_handshake_for_test(sender: std::sync::mpsc::SyncSender<Value>) {
+    HANDSHAKE_TEST_EVENTS.with(|slot| *slot.borrow_mut() = Some(sender));
+}
+fn handshake_event(value: Value) {
+    #[cfg(test)]
+    HANDSHAKE_TEST_EVENTS.with(|slot| {
+        if let Some(sender) = slot.borrow().as_ref() {
+            let _ = sender.try_send(value.clone());
+        }
+    });
+    if enabled() {
+        emit(value);
     }
 }

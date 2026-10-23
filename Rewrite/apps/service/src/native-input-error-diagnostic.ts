@@ -82,6 +82,14 @@ const exits = new Set([
   "wake-failure",
   "send-failure",
 ]);
+function boundedMilliseconds(value: unknown): boolean {
+  return (
+    typeof value === "number" &&
+    Number.isInteger(value) &&
+    value >= 0 &&
+    value <= 60000
+  );
+}
 export function decodeNativeInputErrorLine(line: string): string | undefined {
   if (
     line.length > 384 ||
@@ -104,7 +112,36 @@ export function decodeNativeInputErrorLine(line: string): string | undefined {
       .filter((k) => !["version", "role", "context"].includes(k))
       .sort()
       .join(",");
-    if (fields === "code,stage") {
+    if (fields === "code,elapsedMs,stage") {
+      if (
+        row.role !== "broker" ||
+        row.context !== "native-connect" ||
+        typeof row.stage !== "string" ||
+        ![
+          "tcp-connect",
+          "challenge-send",
+          "proof-read",
+          "proof-validate",
+        ].includes(row.stage) ||
+        typeof row.code !== "string" ||
+        !codes.has(row.code) ||
+        !boundedMilliseconds(row.elapsedMs)
+      )
+        return;
+    } else if (fields === "acceptGapMs,proofMs,queueMs,readMs,stage") {
+      if (
+        row.role !== "receiver" ||
+        row.context !== "native-handshake" ||
+        typeof row.stage !== "string" ||
+        !["accepted", "challenge-read", "proof-send", "complete"].includes(
+          row.stage,
+        ) ||
+        ![row.acceptGapMs, row.queueMs, row.readMs, row.proofMs].every(
+          boundedMilliseconds,
+        )
+      )
+        return;
+    } else if (fields === "code,stage") {
       if (
         row.role !== "broker" ||
         row.context !== "phone-control-before-cleanup" ||

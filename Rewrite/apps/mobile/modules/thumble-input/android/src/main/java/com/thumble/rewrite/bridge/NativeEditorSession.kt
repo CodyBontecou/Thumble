@@ -2,35 +2,26 @@ package com.thumble.rewrite.bridge
 
 import android.content.Context
 import com.thumble.rewrite.input.*
-import java.util.UUID
 import java.util.concurrent.CompletableFuture
 import expo.modules.kotlin.Promise
 import org.json.JSONObject
 
 /** App-owned registry. No endpoint, epoch, credential, receipt or path comes from React. */
 internal object NativeEditorSession {
-    private var session: PhoneEditorSession? = null
-    private var handle: String? = null
-    private var closing = false
-    @Synchronized fun open(context: Context): String {
-        session?.let { check(closing && it.settled) { "editor_busy" } }
+    private val registry = PhoneEditorRegistry()
+    fun open(context: Context, owner: PhoneEditorModuleLifetime) = registry.open(owner) {
         val text = context.getSharedPreferences("rewrite.phone.v1", Context.MODE_PRIVATE).getString("endpoint", null)
             ?: error("editor_pairing_required")
         check(text.toByteArray(Charsets.UTF_8).size <= 1024)
         val value = JSONObject(text)
         check(value.keys().asSequence().toSet() == setOf("host", "port", "pin", "authority"))
         val endpoint = TrustedHostEndpoint(value.getString("host"), value.getInt("port"), value.getString("pin"), value.getString("authority"))
-        val next = PhoneEditorSession(endpoint, context.applicationContext)
-        try { next.snapshot().get() } catch (error: Exception) { next.close(); throw error }
-        val id = UUID.randomUUID().toString()
-        session = next; handle = id; closing = false
-        return id
+        PhoneEditorSession(endpoint, context.applicationContext)
     }
-    @Synchronized fun get(id: String): PhoneEditorSession {
-        check(!closing && id == handle) { "editor_closed" }
-        return checkNotNull(session)
-    }
-    @Synchronized fun close(id: String) { val owner = get(id); closing = true; owner.close() }
+    fun get(id: String, owner: PhoneEditorModuleLifetime) = registry.session(owner, id)
+    fun close(id: String, owner: PhoneEditorModuleLifetime) = registry.close(owner, id)
+    fun invalidate(owner: PhoneEditorModuleLifetime) = registry.invalidate(owner)
+
 }
 internal fun <T> editorComplete(future: CompletableFuture<T>, promise: Promise, map: (T) -> Any?) {
     future.whenComplete { value, error ->

@@ -1,3 +1,4 @@
+import { PackageStageDiagnostic } from "./helpers/package-stage-diagnostic.ts";
 import { LosslessJson } from "@thumble/contracts/json";
 import { OwnedAuthorityDocument } from "@thumble/domain/owned-authority";
 import { encodeResourceBase64 } from "@thumble/domain/owned-resources";
@@ -25,6 +26,7 @@ const packageTest =
 packageTest(
   "compiled CLI starts and stops its sibling native receiver without a checkout or Bun on PATH",
   async () => {
+    const trace = new PackageStageDiagnostic();
     const directory = realpathSync(
         mkdtempSync(join(tmpdir(), "thumble-package-")),
       ),
@@ -39,59 +41,62 @@ packageTest(
       family = "service",
       ...options: string[]
     ): Promise<any> => {
-      const startedAt = performance.now();
-      const child = Bun.spawn(
-        [
-          join(directory, `thumble-rewrite${extension}`),
-          family,
-          action,
-          ...options,
-          ...(family === "identity"
-            ? ["--identity-dir", join(directory, "identity")]
-            : ["--runtime-dir", runtime]),
-          "--json",
-        ],
-        {
-          cwd: directory,
-          env: {
-            ...process.env,
-            PATH:
-              process.platform === "win32"
-                ? (process.env.SystemRoot ?? "C:\\Windows") + "\\System32"
-                : "/usr/bin:/bin",
+      const stage = `${family}-${action}`;
+      return trace.run(stage, async () => {
+        const startedAt = performance.now();
+        const child = Bun.spawn(
+          [
+            join(directory, `thumble-rewrite${extension}`),
+            family,
+            action,
+            ...options,
+            ...(family === "identity"
+              ? ["--identity-dir", join(directory, "identity")]
+              : ["--runtime-dir", runtime]),
+            "--json",
+          ],
+          {
+            cwd: directory,
+            env: {
+              ...process.env,
+              PATH:
+                process.platform === "win32"
+                  ? (process.env.SystemRoot ?? "C:\\Windows") + "\\System32"
+                  : "/usr/bin:/bin",
+            },
+            stdout: "pipe",
+            stderr: "pipe",
           },
-          stdout: "pipe",
-          stderr: "pipe",
-        },
-      );
-      const [out, err, code] = await Promise.all([
-        new Response(child.stdout).text(),
-        new Response(child.stderr).text(),
-        child.exited,
-      ]);
-      expect(err).toBe("");
-      if (code !== 0) {
-        // Successful replies can contain enrollment secrets. Report only the
-        // bounded public error code, never raw CLI output or caller options.
-        let reason = "invalid_error_response";
-        try {
-          const reply = parseStrictJson(out);
-          if (
-            typeof reply === "object" &&
-            reply !== null &&
-            "ok" in reply &&
-            "error" in reply &&
-            reply.ok === false &&
-            typeof reply.error === "string" &&
-            /^[a-z_]{1,80}$/.test(reply.error)
-          )
-            reason = reply.error;
-        } catch {}
-        throw new Error(
-          `package ${family} ${action}: ${reason}; exit=${code}; elapsedMs=${Math.round(performance.now() - startedAt)}`,
         );
-      }
-      return parseStrictJson(out);
+        const [out, err, code] = await Promise.all([
+          trace.settled(stage, "stdout", new Response(child.stdout).text()),
+          trace.settled(stage, "stderr", new Response(child.stderr).text()),
+          trace.settled(stage, "exit", child.exited),
+        ]);
+        expect(err).toBe("");
+        if (code !== 0) {
+          // Successful replies can contain enrollment secrets. Report only the
+          // bounded public error code, never raw CLI output or caller options.
+          let reason = "invalid_error_response";
+          try {
+            const reply = parseStrictJson(out);
+            if (
+              typeof reply === "object" &&
+              reply !== null &&
+              "ok" in reply &&
+              "error" in reply &&
+              reply.ok === false &&
+              typeof reply.error === "string" &&
+              /^[a-z_]{1,80}$/.test(reply.error)
+            )
+              reason = reply.error;
+          } catch {}
+          throw new Error(
+            `package ${family} ${action}: ${reason}; exit=${code}; elapsedMs=${Math.round(performance.now() - startedAt)}`,
+          );
+        }
+        return parseStrictJson(out);
+      });
     };
     const inspection = join(directory, "inspection");
     mkdirSync(inspection);
@@ -102,6 +107,7 @@ packageTest(
       resolve(root, "packages/fixtures/owned-configuration-v1/document.json"),
       ownedFile,
     );
+    trace.event("file-probe", "begin");
     const fileProbe = Bun.spawn(
       [
         "node",
@@ -117,10 +123,19 @@ packageTest(
       { stdout: "pipe", stderr: "pipe" },
     );
     const [fileOut, fileErr, fileCode] = await Promise.all([
-      new Response(fileProbe.stdout).text(),
-      new Response(fileProbe.stderr).text(),
-      fileProbe.exited,
+      trace.settled(
+        "file-probe",
+        "stdout",
+        new Response(fileProbe.stdout).text(),
+      ),
+      trace.settled(
+        "file-probe",
+        "stderr",
+        new Response(fileProbe.stderr).text(),
+      ),
+      trace.settled("file-probe", "exit", fileProbe.exited),
     ]);
+    trace.event("file-probe", "end");
     expect(fileErr).toBe("");
     expect(fileCode).toBe(0);
     expect(JSON.parse(fileOut)).toEqual({
@@ -129,6 +144,7 @@ packageTest(
       server: "standalone",
       serviceRequired: false,
     });
+    trace.event("import-probe", "begin");
     const importProbe = Bun.spawn(
       [
         "node",
@@ -145,10 +161,19 @@ packageTest(
       { stdout: "pipe", stderr: "pipe" },
     );
     const [importOut, importErr, importCode] = await Promise.all([
-      new Response(importProbe.stdout).text(),
-      new Response(importProbe.stderr).text(),
-      importProbe.exited,
+      trace.settled(
+        "import-probe",
+        "stdout",
+        new Response(importProbe.stdout).text(),
+      ),
+      trace.settled(
+        "import-probe",
+        "stderr",
+        new Response(importProbe.stderr).text(),
+      ),
+      trace.settled("import-probe", "exit", importProbe.exited),
     ]);
+    trace.event("import-probe", "end");
     expect(importErr).toBe("");
     expect(importCode).toBe(0);
     expect(JSON.parse(importOut)).toEqual({
@@ -157,6 +182,7 @@ packageTest(
       imports: 2,
       server: "standalone",
     });
+    trace.event("configuration-seed", "begin");
     const configuration = new SqliteConfigurationRepository(
       runtime,
       join(directory, `thumble-rewrite-receiver${extension}`),
@@ -192,6 +218,7 @@ packageTest(
         join(directory, `thumble-rewrite-receiver${extension}`),
       ).read(assetSHA),
     ).toEqual(assetBytes);
+    trace.event("configuration-seed", "end");
     try {
       const identity = await invoke("initialize", "identity");
       expect(identity.result.certificatePin).toMatch(/^[0-9a-f]{64}$/);
@@ -212,6 +239,7 @@ packageTest(
       expect(status.result.service.instanceId).toBe(
         started.result.service.instanceId,
       );
+      trace.event("configuration-probe", "begin");
       const configurationProbe = Bun.spawn(
         [
           "node",
@@ -228,10 +256,23 @@ packageTest(
       );
       const [configurationOut, configurationErr, configurationCode] =
         await Promise.all([
-          new Response(configurationProbe.stdout).text(),
-          new Response(configurationProbe.stderr).text(),
-          configurationProbe.exited,
+          trace.settled(
+            "configuration-probe",
+            "stdout",
+            new Response(configurationProbe.stdout).text(),
+          ),
+          trace.settled(
+            "configuration-probe",
+            "stderr",
+            new Response(configurationProbe.stderr).text(),
+          ),
+          trace.settled(
+            "configuration-probe",
+            "exit",
+            configurationProbe.exited,
+          ),
         ]);
+      trace.event("configuration-probe", "end");
       expect(configurationErr).toBe("");
       expect(configurationCode).toBe(0);
       expect(JSON.parse(configurationOut)).toEqual({
@@ -260,6 +301,7 @@ packageTest(
         "--reveal-secret",
       );
       expect(listening.result.transport.listening).toBe(true);
+      trace.event("pairing-peer", "begin");
       const peer = Bun.spawn(
         ["node", resolve(root, "tooling/check-pairing-listener.mjs")],
         { stdin: "pipe", stdout: "pipe", stderr: "pipe" },
@@ -273,10 +315,19 @@ packageTest(
         );
         peer.stdin.end();
         const [text, error, code] = await Promise.all([
-          new Response(peer.stdout).text(),
-          new Response(peer.stderr).text(),
-          peer.exited,
+          trace.settled(
+            "pairing-peer",
+            "stdout",
+            new Response(peer.stdout).text(),
+          ),
+          trace.settled(
+            "pairing-peer",
+            "stderr",
+            new Response(peer.stderr).text(),
+          ),
+          trace.settled("pairing-peer", "exit", peer.exited),
         ]);
+        trace.event("pairing-peer", "end");
         expect(code).toBe(0);
         expect(error).toBe("");
         expect(JSON.parse(text).completed).toBe(true);
@@ -304,6 +355,7 @@ packageTest(
       expect(
         (await invoke("stop-listening", "pairing")).result.transport.listening,
       ).toBe(false);
+      trace.event("mcp-probe", "begin");
       const mcp = Bun.spawn(
         [
           "node",
@@ -318,10 +370,11 @@ packageTest(
         { cwd: directory, stdout: "pipe", stderr: "pipe" },
       );
       const [mcpOutput, mcpError, mcpCode] = await Promise.all([
-        new Response(mcp.stdout).text(),
-        new Response(mcp.stderr).text(),
-        mcp.exited,
+        trace.settled("mcp-probe", "stdout", new Response(mcp.stdout).text()),
+        trace.settled("mcp-probe", "stderr", new Response(mcp.stderr).text()),
+        trace.settled("mcp-probe", "exit", mcp.exited),
       ]);
+      trace.event("mcp-probe", "end");
       expect(mcpError).toBe("");
       expect(mcpCode).toBe(0);
       expect(JSON.parse(mcpOutput)).toEqual({
@@ -342,6 +395,7 @@ packageTest(
       )
         await Bun.sleep(20);
       expect(existsSync(join(runtime, "endpoint.json"))).toBe(false);
+      trace.event("configuration-reopen", "begin");
       const reopened = new SqliteConfigurationRepository(
         runtime,
         join(directory, `thumble-rewrite-receiver${extension}`),
@@ -366,6 +420,7 @@ packageTest(
       } finally {
         reopened.close();
       }
+      trace.event("configuration-reopen", "end");
       await invoke("start");
       expect((await invoke("list", "configuration")).result.revision).toBe("3");
       const replay = await invoke(
@@ -391,6 +446,7 @@ packageTest(
         await Bun.sleep(20);
       expect(existsSync(join(runtime, "endpoint.json"))).toBe(false);
     } finally {
+      trace.event("cleanup", "begin");
       if (existsSync(join(runtime, "endpoint.json"))) {
         try {
           await invoke("stop");
@@ -404,6 +460,7 @@ packageTest(
           await Bun.sleep(20);
         }
       }
+      trace.event("cleanup", "end");
     }
   },
   30000,

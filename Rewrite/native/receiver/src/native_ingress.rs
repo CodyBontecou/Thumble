@@ -313,29 +313,52 @@ impl Client {
         if port == 0 {
             return Err("native_input_endpoint_invalid");
         }
-        let mut stream =
-            TcpStream::connect_timeout(&SocketAddr::from((Ipv4Addr::LOCALHOST, port)), OP_WAIT)
+        #[cfg(debug_assertions)]
+        let started = Instant::now();
+        #[cfg(debug_assertions)]
+        let mut stage = "tcp-connect";
+        let connected = (|| {
+            let mut stream =
+                TcpStream::connect_timeout(&SocketAddr::from((Ipv4Addr::LOCALHOST, port)), OP_WAIT)
+                    .map_err(|_| "native_input_unavailable")?;
+            stream
+                .set_nodelay(true)
                 .map_err(|_| "native_input_unavailable")?;
-        stream
-            .set_nodelay(true)
-            .map_err(|_| "native_input_unavailable")?;
-        let token = bytes[10..].try_into().unwrap();
-        let challenge = random::<16>()?;
-        let mut hello = vec![0];
-        hello.extend_from_slice(&challenge);
-        send(&mut stream, &hello, OP_WAIT)?;
-        let proof = receive(&mut stream, OP_WAIT)?;
-        if proof.len() != 33
-            || proof[0] != 0
-            || !bool::from(proof[1..].ct_eq(&server_proof(&token, &challenge)))
-        {
-            return Err("native_input_server_rejected");
+            let token = bytes[10..].try_into().unwrap();
+            let challenge = random::<16>()?;
+            let mut hello = vec![0];
+            hello.extend_from_slice(&challenge);
+            #[cfg(debug_assertions)]
+            {
+                stage = "challenge-send";
+            }
+            send(&mut stream, &hello, OP_WAIT)?;
+            #[cfg(debug_assertions)]
+            {
+                stage = "proof-read";
+            }
+            let proof = receive(&mut stream, OP_WAIT)?;
+            #[cfg(debug_assertions)]
+            {
+                stage = "proof-validate";
+            }
+            if proof.len() != 33
+                || proof[0] != 0
+                || !bool::from(proof[1..].ct_eq(&server_proof(&token, &challenge)))
+            {
+                return Err("native_input_server_rejected");
+            }
+            Ok(Self {
+                stream,
+                token,
+                physical: false,
+            })
+        })();
+        #[cfg(debug_assertions)]
+        if let Err(error) = connected.as_ref() {
+            crate::input_error_diagnostics::connect_failure(stage, started.elapsed(), error);
         }
-        Ok(Self {
-            stream,
-            token,
-            physical: false,
-        })
+        connected
     }
     pub(crate) fn physical_output(&self) -> bool {
         self.physical
@@ -609,11 +632,24 @@ struct Binding {
     generation: u64,
 }
 type Peers = Arc<Mutex<BTreeMap<u64, TcpStream>>>;
+struct SocketJob {
+    id: u64,
+    stream: TcpStream,
+    #[cfg(debug_assertions)]
+    trace: crate::input_error_diagnostics::HandshakeTrace,
+}
+#[cfg(all(test, debug_assertions))]
+#[derive(Clone, Default)]
+struct HandshakeTestHooks {
+    accept_gate: Option<Arc<Mutex<mpsc::Receiver<()>>>>,
+    accept_entered: Option<mpsc::SyncSender<()>>,
+    events: Option<mpsc::SyncSender<serde_json::Value>>,
+}
 /// Four bounded socket workers enqueue work; only drain() on the native safety thread mutates output.
 pub struct Server {
     _lease: std::fs::File,
     pending: mpsc::Receiver<Pending>,
-    jobs: Option<mpsc::SyncSender<(u64, TcpStream)>>,
+    jobs: Option<mpsc::SyncSender<SocketJob>>,
     stop: Arc<AtomicBool>,
     peers: Peers,
     accept: Option<thread::JoinHandle<()>>,
@@ -630,6 +666,18 @@ impl Server {
     pub fn bind_with_wake(
         root: &Path,
         wake: Option<Arc<crate::owner_wake::OwnerWake>>,
+    ) -> Result<Self, &'static str> {
+        Self::bind_inner(
+            root,
+            wake,
+            #[cfg(all(test, debug_assertions))]
+            HandshakeTestHooks::default(),
+        )
+    }
+    fn bind_inner(
+        root: &Path,
+        wake: Option<Arc<crate::owner_wake::OwnerWake>>,
+        #[cfg(all(test, debug_assertions))] hooks: HandshakeTestHooks,
     ) -> Result<Self, &'static str> {
         security::directory(root)?;
         let lease = security::file(&root.join("native-input.lock"), false)?;
@@ -660,8 +708,10 @@ impl Server {
             .map_err(|_| "native_input_endpoint_failed")?;
         drop(file);
         fs::rename(&staged, &path).map_err(|_| "native_input_endpoint_failed")?;
+        #[cfg(debug_assertions)]
+        let published = Instant::now();
         let (incoming, pending) = mpsc::sync_channel::<Pending>(16);
-        let (jobs, work) = mpsc::sync_channel::<(u64, TcpStream)>(4);
+        let (jobs, work) = mpsc::sync_channel::<SocketJob>(4);
         let work = Arc::new(Mutex::new(work));
         let stop = Arc::new(AtomicBool::new(false));
         let peers: Peers = Arc::new(Mutex::new(BTreeMap::new()));
@@ -672,27 +722,55 @@ impl Server {
             let peers = peers.clone();
             let incoming = incoming.clone();
             let wake = wake.clone();
+            #[cfg(all(test, debug_assertions))]
+            let test_events = hooks.events.clone();
             workers.push(thread::spawn(move || loop {
+                #[cfg(all(test, debug_assertions))]
+                if let Some(events) = &test_events {
+                    crate::input_error_diagnostics::capture_handshake_for_test(events.clone());
+                }
                 #[cfg(debug_assertions)]
                 crate::input_error_diagnostics::server_thread();
-                let (id, mut stream) = match work.lock() {
+                let SocketJob {
+                    id,
+                    mut stream,
+                    #[cfg(debug_assertions)]
+                    mut trace,
+                } = match work.lock() {
                     Ok(work) => match work.recv() {
                         Ok(job) => job,
                         Err(_) => break,
                     },
                     Err(_) => break,
                 };
+                #[cfg(debug_assertions)]
+                let challenge_started = trace.worker();
                 let _ = stream.set_nonblocking(false);
                 let _ = stream.set_nodelay(true);
                 let mut owned: Vec<GrantRef> = Vec::with_capacity(2);
                 let authenticated_server = (|| {
-                    let hello = receive(&mut stream, FRAME_WAIT)?;
+                    let hello = receive(&mut stream, FRAME_WAIT);
+                    #[cfg(debug_assertions)]
+                    let started = Instant::now();
+                    #[cfg(debug_assertions)]
+                    trace.read(started.duration_since(challenge_started));
+                    let hello = hello?;
                     if hello.len() != 17 || hello[0] != 0 {
                         return Err("native_input_frame_invalid");
                     }
                     let mut proof = vec![0];
                     proof.extend_from_slice(&server_proof(&token, &hello[1..]));
-                    send(&mut stream, &proof, OP_WAIT)
+                    #[cfg(debug_assertions)]
+                    trace.stage("proof-send");
+                    let result = send(&mut stream, &proof, OP_WAIT);
+                    #[cfg(debug_assertions)]
+                    {
+                        trace.proof(started.elapsed());
+                        if result.is_ok() {
+                            trace.stage("complete");
+                        }
+                    }
+                    result
                 })()
                 .is_ok();
                 let mut owned_physical = false;
@@ -849,7 +927,14 @@ impl Server {
                     }
                 }
                 #[cfg(debug_assertions)]
-                crate::input_error_diagnostics::server_exit(exit_reason, owned.len());
+                {
+                    // Keep the original handshake timings even when the broker closes later.
+                    // A successful idle connection does not emit healthy spans.
+                    if exit_reason != "stopped" {
+                        trace.report();
+                    }
+                    crate::input_error_diagnostics::server_exit(exit_reason, owned.len());
+                }
                 for binding in owned {
                     let (response, _) = mpsc::sync_channel(1);
                     let mut payload = binding.connection.to_vec();
@@ -888,7 +973,24 @@ impl Server {
         let owner_jobs = jobs.clone();
         let next = AtomicU64::new(1);
         let accept = thread::spawn(move || {
+            #[cfg(debug_assertions)]
+            let mut last_poll = published;
+            #[cfg(all(test, debug_assertions))]
+            {
+                if let Some(entered) = hooks.accept_entered {
+                    let _ = entered.send(());
+                }
+                if let Some(gate) = hooks.accept_gate {
+                    let _ = gate.lock().unwrap().recv();
+                }
+            }
             while !owner_stop.load(Ordering::SeqCst) {
+                #[cfg(debug_assertions)]
+                let preceding_poll = last_poll;
+                #[cfg(debug_assertions)]
+                {
+                    last_poll = Instant::now();
+                }
                 for _ in 0..8 {
                     let (stream, _) = match listener.accept() {
                         Ok(pair) => pair,
@@ -898,6 +1000,10 @@ impl Server {
                             break;
                         }
                     };
+                    #[cfg(debug_assertions)]
+                    let trace = crate::input_error_diagnostics::HandshakeTrace::accepted(
+                        preceding_poll.elapsed(),
+                    );
                     let id = next.fetch_add(1, Ordering::Relaxed);
                     let mut peers = match owner_peers.lock() {
                         Ok(p) => p,
@@ -913,10 +1019,14 @@ impl Server {
                         continue;
                     }
                     if let Err(
-                        mpsc::TrySendError::Full((_, stream))
-                        | mpsc::TrySendError::Disconnected((_, stream)),
-                    ) = owner_jobs.try_send((id, stream))
-                    {
+                        mpsc::TrySendError::Full(SocketJob { stream, .. })
+                        | mpsc::TrySendError::Disconnected(SocketJob { stream, .. }),
+                    ) = owner_jobs.try_send(SocketJob {
+                        id,
+                        stream,
+                        #[cfg(debug_assertions)]
+                        trace,
+                    }) {
                         peers.remove(&id);
                         let _ = stream.shutdown(Shutdown::Both);
                     }
@@ -1625,3 +1735,139 @@ mod tests {
 #[cfg(test)]
 #[path = "physical_input_tests.rs"]
 mod physical_tests;
+
+#[cfg(all(test, debug_assertions))]
+mod handshake_diagnostic_tests {
+    use super::*;
+    use serde_json::Value;
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+    struct Root(PathBuf);
+    impl Root {
+        fn new() -> Self {
+            let root = Self(
+                Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("target")
+                    .join(format!(
+                        "handshake-diagnostic-{}-{}",
+                        std::process::id(),
+                        NEXT.fetch_add(1, Ordering::Relaxed)
+                    )),
+            );
+            fs::create_dir_all(root.0.parent().unwrap()).unwrap();
+            security::directory(&root.0).unwrap();
+            root
+        }
+    }
+    impl Drop for Root {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+    fn event_with(events: &mpsc::Receiver<Value>, field: &str, minimum: u64) -> Value {
+        for _ in 0..8 {
+            let row = events.recv_timeout(Duration::from_secs(3)).unwrap();
+            assert_eq!(row["context"], "native-handshake");
+            assert!(row.to_string().len() <= 256);
+            if row[field].as_u64().unwrap() >= minimum {
+                return row;
+            }
+        }
+        panic!("missing bounded handshake timing");
+    }
+    #[test]
+    fn withheld_proof_reports_original_client_phase_without_request_or_retry() {
+        let root = Root::new();
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let mut endpoint = MAGIC.to_vec();
+        endpoint.extend_from_slice(&listener.local_addr().unwrap().port().to_le_bytes());
+        endpoint.extend_from_slice(&[7; 32]);
+        security::file(&root.0.join("native-input.endpoint"), false)
+            .unwrap()
+            .write_all(&endpoint)
+            .unwrap();
+        let (release, wait) = mpsc::sync_channel(1);
+        let peer = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let hello = receive(&mut stream, FRAME_WAIT).unwrap();
+            assert_eq!(hello.len(), 17);
+            assert_eq!(hello[0], 0);
+            wait.recv_timeout(Duration::from_secs(3)).unwrap();
+            // The failed connection never sends an opcode or retries the proof.
+            let mut byte = [0];
+            assert_eq!(stream.read(&mut byte).unwrap(), 0);
+            listener.set_nonblocking(true).unwrap();
+            assert!(
+                matches!(listener.accept(), Err(error) if error.kind() == std::io::ErrorKind::WouldBlock)
+            );
+        });
+        let (send, events) = mpsc::sync_channel(2);
+        crate::input_error_diagnostics::capture_handshake_for_test(send);
+        assert!(matches!(
+            Client::connect(&root.0),
+            Err("native_input_timeout")
+        ));
+        let row = events.recv_timeout(Duration::from_secs(1)).unwrap();
+        assert_eq!(row["context"], "native-connect");
+        assert_eq!(row["stage"], "proof-read");
+        assert_eq!(row["code"], "native_input_timeout");
+        assert!(row["elapsedMs"].as_u64().unwrap() >= 200);
+        assert!(row.to_string().len() <= 256);
+        release.send(()).unwrap();
+        peer.join().unwrap();
+    }
+    #[test]
+    fn delayed_accept_is_distinct_from_worker_queue_and_preserves_late_success() {
+        let root = Root::new();
+        let (release, gate) = mpsc::sync_channel(1);
+        let (entered, ready) = mpsc::sync_channel(1);
+        let (send, events) = mpsc::sync_channel(16);
+        let server = Server::bind_inner(
+            &root.0,
+            None,
+            HandshakeTestHooks {
+                accept_gate: Some(Arc::new(Mutex::new(gate))),
+                accept_entered: Some(entered),
+                events: Some(send),
+            },
+        )
+        .unwrap();
+        ready.recv_timeout(Duration::from_secs(1)).unwrap();
+        assert!(matches!(
+            Client::connect(&root.0),
+            Err("native_input_timeout")
+        ));
+        release.send(()).unwrap();
+        let row = event_with(&events, "acceptGapMs", 200);
+        assert_eq!(row["stage"], "complete");
+        assert!(row["queueMs"].as_u64().unwrap() < row["acceptGapMs"].as_u64().unwrap());
+        // Diagnostics do not change the deadline or prevent later healthy connection.
+        assert!(Client::connect(&root.0).is_ok());
+        drop(server);
+    }
+    #[test]
+    fn occupied_workers_report_accepted_queue_delay_before_late_proof() {
+        let root = Root::new();
+        let (send, events) = mpsc::sync_channel(16);
+        let server = Server::bind_inner(
+            &root.0,
+            None,
+            HandshakeTestHooks {
+                events: Some(send),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        // Four actual authenticated IPC sockets occupy all four workers, with no owner work.
+        let held: Vec<_> = (0..4).map(|_| Client::connect(&root.0).unwrap()).collect();
+        assert!(matches!(
+            Client::connect(&root.0),
+            Err("native_input_timeout")
+        ));
+        drop(held);
+        let row = event_with(&events, "queueMs", 200);
+        assert_eq!(row["stage"], "complete");
+        assert!(row["acceptGapMs"].as_u64().unwrap() < row["queueMs"].as_u64().unwrap());
+        assert!(Client::connect(&root.0).is_ok());
+        drop(server);
+    }
+}

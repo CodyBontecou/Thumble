@@ -1,7 +1,7 @@
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from "expo-router";
 import { useColorScheme } from "react-native";
 import { StatusBar } from "expo-status-bar";
-export const unstable_settings = { initialRouteName: "index" };
+export const unstable_settings = { anchor: "index" };
 export default function Layout() {
   const dark = useColorScheme() === "dark";
   return (
@@ -9,6 +9,7 @@ export default function Layout() {
       <StatusBar style={dark ? "light" : "dark"} />
       <Stack>
         <Stack.Screen name="index" options={{ title: "Thumble" }} />
+        <Stack.Screen name="editor" options={{ headerShown: false }} />
         <Stack.Screen
           name="connect"
           options={{ headerShown: false, presentation: "fullScreenModal" }}

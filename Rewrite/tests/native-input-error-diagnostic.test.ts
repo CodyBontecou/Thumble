@@ -72,10 +72,109 @@ test("diagnostic sink failures and work exhaustion do not throw or grow buffers"
   expect(output).toEqual([]);
 });
 
+const connect = record({
+  version: 1,
+  role: "broker",
+  context: "native-connect",
+  stage: "proof-read",
+  elapsedMs: 250,
+  code: "native_input_timeout",
+});
+const handshake = record({
+  version: 1,
+  role: "receiver",
+  context: "native-handshake",
+  stage: "complete",
+  acceptGapMs: 5,
+  queueMs: 300,
+  readMs: 0,
+  proofMs: 0,
+});
+test("original handshake diagnostics admit only fixed phases and bounded canonical times", () => {
+  for (const stage of [
+    "tcp-connect",
+    "challenge-send",
+    "proof-read",
+    "proof-validate",
+  ]) {
+    const line = record({
+      ...JSON.parse(connect.slice("native_input_error ".length)),
+      stage,
+    });
+    expect(decodeNativeInputErrorLine(line)).toBe(line);
+  }
+  for (const stage of [
+    "accepted",
+    "challenge-read",
+    "proof-send",
+    "complete",
+  ]) {
+    const line = record({
+      ...JSON.parse(handshake.slice("native_input_error ".length)),
+      stage,
+    });
+    expect(decodeNativeInputErrorLine(line)).toBe(line);
+  }
+  const client = JSON.parse(connect.slice("native_input_error ".length));
+  const server = JSON.parse(handshake.slice("native_input_error ".length));
+  for (const change of [
+    { stage: [] },
+    { stage: "secret" },
+    { elapsedMs: true },
+    { elapsedMs: -1 },
+    { elapsedMs: 60001 },
+    { code: "secret" },
+    { role: "receiver" },
+    { endpoint: "secret" },
+  ]) {
+    expect(
+      decodeNativeInputErrorLine(record({ ...client, ...change })),
+    ).toBeUndefined();
+  }
+  for (const field of ["acceptGapMs", "queueMs", "readMs", "proofMs"]) {
+    for (const invalid of [-1, 60001, true, {}, "secret", 0.1]) {
+      expect(
+        decodeNativeInputErrorLine(record({ ...server, [field]: invalid })),
+      ).toBeUndefined();
+    }
+    for (const valid of [0, 60000]) {
+      const line = record({ ...server, [field]: valid });
+      expect(decodeNativeInputErrorLine(line)).toBe(line);
+    }
+  }
+  for (const line of [
+    connect.replace(":250", ":2.5e2"),
+    connect.replace(":250", ":250.0"),
+    connect.replace(":250", ':250,"elapsedMs":250'),
+    record({ ...server, challenge: "secret" }),
+    record({ ...server, role: "broker" }),
+  ]) {
+    expect(decodeNativeInputErrorLine(line)).toBeUndefined();
+  }
+});
+test("chunked handshake events retain bounded order without forwarding raw text", () => {
+  const output: string[] = [],
+    forwarder = new NativeInputErrorForwarder((line) => output.push(line));
+  const bytes = new TextEncoder().encode(
+    "secret raw child stderr\n" +
+      connect +
+      "\n" +
+      handshake +
+      "\n" +
+      (connect + "\n").repeat(30),
+  );
+  for (let at = 0; at < bytes.length; at += 7)
+    forwarder.push(bytes.slice(at, at + 7));
+  expect(output.length).toBe(16);
+  expect(output.slice(0, 2)).toEqual([connect, handshake]);
+  expect(output.every((line) => [connect, handshake].includes(line))).toBe(
+    true,
+  );
+});
 test("actual NativePipe forwards only bounded events under explicit flag", async () => {
   const module = new URL("../apps/service/src/native-pipe.ts", import.meta.url)
     .href;
-  const grandchild = `process.stdout.write('{"ready":true}\\n');process.stderr.write(${JSON.stringify("private-fixture-output\n" + io + "\n")});for await(const value of Bun.stdin.stream()){break;}`;
+  const grandchild = `process.stdout.write('{"ready":true}\\n');process.stderr.write(${JSON.stringify("private-fixture-output\n" + io + "\n" + connect + "\n" + handshake + "\n")});for await(const value of Bun.stdin.stream()){break;}`;
   const source = `import{NativePipe}from ${JSON.stringify(module)};const pipe=new NativePipe(process.execPath,["-e",${JSON.stringify(grandchild)}],{ready:()=>true,reply:()=>true},"test_unavailable");const closed=new Promise(resolve=>pipe.child.once("close",resolve));await pipe.ready;pipe.child.stdin.end("q\\n");await closed;`;
   for (const flag of ["0", "1"]) {
     const child = Bun.spawn([process.execPath, "-e", source], {
@@ -87,7 +186,9 @@ test("actual NativePipe forwards only bounded events under explicit flag", async
     const stderr = await new Response(child.stderr).text();
     const status = await child.exited;
     expect(status).toBe(0);
-    expect(stderr).toBe(flag === "1" ? io + "\n" : "");
+    expect(stderr).toBe(
+      flag === "1" ? [io, connect, handshake].join("\n") + "\n" : "",
+    );
   }
 });
 

@@ -71,6 +71,26 @@ export default function Home() {
         </Text>
       </Pressable>
       <Pressable
+        onPress={() => router.push("/editor")}
+        testID="home-edit-labels"
+        accessibilityRole="button"
+        accessibilityLabel="Edit labels"
+        style={({ pressed }) => ({
+          minHeight: 52,
+          justifyContent: "center",
+          alignItems: "center",
+          borderRadius: 12,
+          borderCurve: "continuous",
+          borderWidth: 1,
+          borderColor: colors.separator,
+          opacity: pressed ? 0.65 : 1,
+        })}
+      >
+        <Text style={{ fontSize: 17, fontWeight: "600", color: colors.accent }}>
+          Edit labels
+        </Text>
+      </Pressable>
+      <Pressable
         onPress={() => router.navigate("/practice")}
         testID="home-practice"
         accessibilityRole="button"

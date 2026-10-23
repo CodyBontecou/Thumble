@@ -5,48 +5,28 @@ import MobileInputCore
 /// One journal owner per app process. Closed owners remain reserved until their IO settles.
 @MainActor final class NativeEditorSession {
   static let shared = NativeEditorSession()
-  private var session: PhoneEditorSession?
-  private var handle: String?
-  private var closing = false
-  private var closeReturned = false
-  private var opening = false
-  func open() async throws -> String {
-    guard !opening else { throw InputError.unavailable }
-    opening = true
-    defer { opening = false }
-    if let session {
-      guard closing, closeReturned, await session.reusable else { throw InputError.unavailable }
-      self.session = nil
-      handle = nil
-      closing = false
-      closeReturned = false
+  private let registry = PhoneEditorRegistry()
+  func open(_ owner: PhoneEditorModuleLifetime) async throws -> String {
+    try await registry.open(owner: owner) {
+      guard let value = UserDefaults.standard.dictionary(forKey: "rewrite.phone.endpoint.v1"),
+        Set(value.keys) == Set(["host", "port", "pin", "authority"]),
+        let host = value["host"] as? String, let port = value["port"] as? Int,
+        let boundedPort = UInt16(exactly: port), let pin = value["pin"] as? String,
+        let authority = value["authority"] as? String
+      else { throw InputError.unavailable }
+      let endpoint = try TrustedHostEndpoint(
+        host: host, port: boundedPort, certificatePin: pin, authorityInstanceID: authority)
+      return await PhoneEditorSession(endpoint: endpoint)
     }
-    guard let value = UserDefaults.standard.dictionary(forKey: "rewrite.phone.endpoint.v1"),
-      Set(value.keys) == Set(["host", "port", "pin", "authority"]),
-      let host = value["host"] as? String, let port = value["port"] as? Int,
-      let boundedPort = UInt16(exactly: port), let pin = value["pin"] as? String,
-      let authority = value["authority"] as? String
-    else { throw InputError.unavailable }
-    let endpoint = try TrustedHostEndpoint(
-      host: host, port: boundedPort, certificatePin: pin, authorityInstanceID: authority)
-    let next = await PhoneEditorSession(endpoint: endpoint)
-    // Corruption is a failed open, never permission to reset the store.
-    _ = try await next.snapshot()
-    let id = UUID().uuidString.lowercased()
-    session = next
-    handle = id
-    return id
   }
-  func get(_ id: String) throws -> PhoneEditorSession {
-    guard !closing, handle == id, let session else { throw InputError.unavailable }
-    return session
+  func get(_ id: String, owner: PhoneEditorModuleLifetime) throws -> PhoneEditorSession {
+    try registry.session(owner: owner, handle: id)
   }
-  func close(_ id: String) async throws {
-    let owner = try get(id)
-    closing = true
-    closeReturned = false
-    await owner.close()
-    closeReturned = true
+  func close(_ id: String, owner: PhoneEditorModuleLifetime) async throws {
+    try await registry.close(owner: owner, handle: id)
+  }
+  func invalidate(_ owner: PhoneEditorModuleLifetime) async {
+    await registry.invalidate(owner: owner)
   }
 }
 
