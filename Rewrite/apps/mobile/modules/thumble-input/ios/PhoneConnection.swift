@@ -41,6 +41,7 @@ import UIKit
   private var enrollment: PhoneEnrollmentClient?
   private var catalogClient: PhoneCatalogClient?
   private var savedMapClient: SavedControllerClient?
+  private var presentationPoller: PhonePresentationPoller?
   private var authorityResolver: PhoneAuthorityResolver?
   private var control: PhoneControlClient?
   private let storage = PhoneCredentialWorker()
@@ -49,7 +50,8 @@ import UIKit
   private let install: (InputEngine) throws -> Void
   private let status: (String) -> Void
   private let catalogResult: ([String: Any]) -> Void
-  private let installedMap: ([String: Any]) -> Void
+  private let installedMap: ([String: Any], String?) -> Void
+  private let presentationResult: ([String: Any]) -> Void
   private let outputMode: PhoneOutputMode
   // Native test-host injection only. The product view never supplies this port.
   private let testOnlyMapProvider: ((PhoneInputConfiguration, CGSize) throws -> ControlMap)?
@@ -58,7 +60,8 @@ import UIKit
     anchor: UIView, feedback: @escaping (GamepadStateV1) -> Void,
     install: @escaping (InputEngine) throws -> Void, status: @escaping (String) -> Void,
     catalogResult: @escaping ([String: Any]) -> Void = { _ in },
-    installedMap: @escaping ([String: Any]) -> Void = { _ in },
+    installedMap: @escaping ([String: Any], String?) -> Void = { _, _ in },
+    presentationResult: @escaping ([String: Any]) -> Void = { _ in },
     testOnlyMapProvider: ((PhoneInputConfiguration, CGSize) throws -> ControlMap)? = nil,
     outputMode: PhoneOutputMode = .recording
   ) {
@@ -68,6 +71,7 @@ import UIKit
     self.status = status
     self.catalogResult = catalogResult
     self.installedMap = installedMap
+    self.presentationResult = presentationResult
     self.outputMode = outputMode
     self.testOnlyMapProvider = testOnlyMapProvider
     super.init()
@@ -256,6 +260,7 @@ import UIKit
     let viewport = anchor.bounds.size
     let map: ControlMap
     var delivered: SavedControllerMap?
+    var savedRequest: SavedControllerRequest?
     var catalogPage: PhoneCatalogResult?
     if let testOnlyMapProvider {
       map = try testOnlyMapProvider(metadata, viewport)
@@ -279,6 +284,7 @@ import UIKit
       savedMapClient = nil
       try Task.checkCancellation()
       delivered = resultMap
+      savedRequest = request
       map = resultMap.map
     }
     guard !closed, anchor.bounds.size == viewport, anchor.window?.isKeyWindow == true,
@@ -299,10 +305,43 @@ import UIKit
       throw InputError.unavailable
     }
     try install(engine)
-    if let delivered { installedMap(delivered.bridgeMap) }
+    if let delivered { installedMap(delivered.bridgeMap, delivered.configurationSha256) }
+    if let delivered, let savedRequest {
+      // Optional cosmetic reads have a separate native connection/task and never fail this input owner.
+      do {
+        let request = try PhonePresentationRequest(
+          saved: savedRequest, map: delivered,
+          colorScheme: anchor.traitCollection.userInterfaceStyle == .dark ? "dark" : "light")
+        let poller = PhonePresentationPoller(
+          endpoint: endpoint, storage: storage, request: request,
+          colorScheme: { [weak anchor] in
+            anchor?.traitCollection.userInterfaceStyle == .dark ? "dark" : "light"
+          },
+          active: { [weak self, weak client, weak engine, weak anchor] in
+            guard let self, let client, let engine, let anchor else { return false }
+            return !self.closed && self.control === client && engine.connected
+              && anchor.window?.isKeyWindow == true && anchor.bounds.size == viewport
+              && UIApplication.shared.applicationState == .active
+          },
+          notification: { [weak self, weak client] value in
+            guard let self, let client, !self.closed, self.control === client else { return }
+            self.presentationResult(value)
+          })
+        presentationPoller = poller
+        poller.start()
+      } catch {
+        presentationResult([
+          "kind": "error", "error": "presentation_unavailable",
+          "generation": map.generation, "revision": map.revision,
+          "configurationSha256": delivered.configurationSha256,
+        ])
+      }
+    }
     if let catalogPage { catalogResult(catalogPage.bridgeMetadata) }
     diagnosticPhase = .connected
   }
+  func refreshPresentation() { presentationPoller?.refreshTheme() }
+
   private func fail() {
     guard !closed else { return }
     // [DEBUG-enrollment-admission] Preserve the failed native phase before cleanup.
@@ -340,6 +379,8 @@ import UIKit
     catalogClient = nil
     savedMapClient?.close()
     savedMapClient = nil
+    presentationPoller?.close()
+    presentationPoller = nil
     task?.cancel()
     task = nil
     enrollment?.close()

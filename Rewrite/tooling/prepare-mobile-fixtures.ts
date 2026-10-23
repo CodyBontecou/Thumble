@@ -39,6 +39,7 @@ for (const [source, name] of [
 // Both SDK test bundles receive the exact shared saved-map contract/source vectors.
 for (const name of [
   "saved-controller-control-v8.json",
+  "saved-controller-presentation-control-v10.json",
   "physical-input-control-v9.json",
   "saved-controller-v1.json",
   "saved-controller-analog-control-v8.json",

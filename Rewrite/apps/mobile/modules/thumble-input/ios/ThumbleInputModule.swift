@@ -18,7 +18,7 @@ public final class ThumbleInputModule: Module {
     // contract before entering the Swift UI actor; only typed Sendable metadata
     // leaves the actor, with bridge dictionaries assembled afterwards.
     View(ThumbleInputView.self) {
-      Events("onAdmission", "onCatalog", "onControlMap")
+      Events("onAdmission", "onCatalog", "onControlMap", "onPresentation")
       Prop("practiceMap") { (view: ThumbleInputView, value: [String: Any]) in
         view.pendingPractice = value
       }
@@ -61,6 +61,7 @@ public final class ThumbleInputModule: Module {
   let onAdmission = EventDispatcher()
   let onCatalog = EventDispatcher()
   let onControlMap = EventDispatcher()
+  let onPresentation = EventDispatcher()
   fileprivate var connectionRequested = false
   // Caller intent is immutable once native bootstrap starts; changing it requires a new view.
   fileprivate var connectionOutputMode = "recording" {
@@ -130,7 +131,14 @@ public final class ThumbleInputModule: Module {
           self?.onAdmission(["admission": ["version": 1, "status": status]])
         },
         catalogResult: { [weak self] catalog in self?.onCatalog(["catalog": catalog]) },
-        installedMap: { [weak self] map in self?.onControlMap(["map": map]) },
+        installedMap: { [weak self] map, sha in
+          var event: [String: Any] = ["map": map]
+          if let sha { event["configurationSha256"] = sha }
+          self?.onControlMap(event)
+        },
+        presentationResult: { [weak self] presentation in
+          self?.onPresentation(["presentation": presentation])
+        },
         outputMode: outputMode)
       connection = flow
       flow.start()
@@ -182,6 +190,13 @@ public final class ThumbleInputModule: Module {
     isOpaque = false
     clipsToBounds = true
   }
+  override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+    super.traitCollectionDidChange(previousTraitCollection)
+    if previousTraitCollection?.userInterfaceStyle != traitCollection.userInterfaceStyle {
+      connection?.refreshPresentation()
+    }
+  }
+
   override func layoutSubviews() {
     super.layoutSubviews()
     portal?.synchronize()

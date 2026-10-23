@@ -30,7 +30,7 @@ class ThumbleInputModule : Module() {
             }
             .runOnQueue(Queues.MAIN)
         View(ThumbleInputView::class) {
-            Events("onAdmission", "onCatalog", "onControlMap")
+            Events("onAdmission", "onCatalog", "onControlMap", "onPresentation")
             Prop("practiceMap") { view: ThumbleInputView, value: Map<String, Any?> ->
                 view.pendingPractice = value
             }
@@ -66,6 +66,7 @@ class ThumbleInputView(context: Context, appContext: AppContext) : ExpoView(cont
     val onAdmission by EventDispatcher()
     val onCatalog by EventDispatcher()
     val onControlMap by EventDispatcher()
+    val onPresentation by EventDispatcher()
     internal var connectionRequested = false
     // A different output intent requires a new native view, never an in-place fallback.
     internal var connectionOutputMode = "recording"
@@ -148,7 +149,14 @@ class ThumbleInputView(context: Context, appContext: AppContext) : ExpoView(cont
                         onAdmission(mapOf("admission" to mapOf("version" to 1, "status" to status)))
                     },
                     catalogResult = { catalog -> onCatalog(mapOf("catalog" to catalog)) },
-                    installedMap = { map -> onControlMap(mapOf("map" to map)) },
+                    installedMap = { map, sha ->
+                        val event = mutableMapOf<String, Any>("map" to map)
+                        if (sha != null) event["configurationSha256"] = sha
+                        onControlMap(event)
+                    },
+                    presentationResult = { value ->
+                        onPresentation(mapOf("presentation" to value))
+                    },
                     testOnlyMapProvider = NativeInputTestHost.current(),
                     outputMode = outputMode,
                 )
@@ -210,6 +218,11 @@ class ThumbleInputView(context: Context, appContext: AppContext) : ExpoView(cont
 
     init {
         setWillNotDraw(false)
+    }
+
+    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+        super.onConfigurationChanged(newConfig)
+        connection?.refreshPresentation()
     }
 
     override fun onAttachedToWindow() {

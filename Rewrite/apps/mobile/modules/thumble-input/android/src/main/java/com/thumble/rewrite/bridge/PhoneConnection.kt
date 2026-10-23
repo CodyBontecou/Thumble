@@ -32,7 +32,8 @@ internal class PhoneConnection(
     private val install: (InputEngine) -> Unit,
     private val status: (String) -> Unit,
     private val catalogResult: (Map<String, Any?>) -> Unit = {},
-    private val installedMap: (Map<String, Any>) -> Unit = {},
+    private val installedMap: (Map<String, Any>, String?) -> Unit = { _, _ -> },
+    private val presentationResult: (Map<String, Any>) -> Unit = {},
     private val testOnlyMapProvider: ((PhoneInputConfiguration, Double, Double) -> ControlMap)? =
         null,
     private val outputMode: PhoneOutputMode = PhoneOutputMode.RECORDING,
@@ -71,6 +72,7 @@ internal class PhoneConnection(
     private var control: PhoneControlClient? = null
     private var catalogClient: PhoneCatalogClient? = null
     private var savedMapClient: SavedControllerClient? = null
+    private var presentation: PresentationSession? = null
     private val main = Handler(Looper.getMainLooper())
     private val worker = Executors.newSingleThreadExecutor { task ->
         Thread(task, "ThumblePhoneBootstrap").apply { isDaemon = true }
@@ -300,6 +302,7 @@ internal class PhoneConnection(
                 check(metadata.active)
                 val map: ControlMap
                 var delivered: SavedControllerMap? = null
+                var savedRequest: SavedControllerRequest? = null
                 var catalogMetadata: Map<String, Any?>? = null
                 if (testOnlyMapProvider != null) {
                     map =
@@ -347,6 +350,7 @@ internal class PhoneConnection(
                         check(!closed)
                     }
                     delivered = resultMap
+                    savedRequest = request
                     map = resultMap.map
                     catalogMetadata = pageResult.bridgeMetadata()
                 }
@@ -364,8 +368,55 @@ internal class PhoneConnection(
                         fail()
                     } else
                         try {
-                            install(admission.bind(feedback))
-                            delivered?.let { installedMap(it.bridgeMap) }
+                            val engine = admission.bind(feedback)
+                            install(engine)
+                            delivered?.let { installedMap(it.bridgeMap, it.configurationSha256) }
+                            val saved = delivered
+                            val request = savedRequest
+                            if (saved != null && request != null) {
+                                // Optional management cannot fail or close the native input owner.
+                                runCatching {
+                                    val session =
+                                        PresentationSession(
+                                            anchor,
+                                            endpoint,
+                                            request,
+                                            saved,
+                                            active = {
+                                                !closed &&
+                                                    control === client &&
+                                                    engine.connected &&
+                                                    anchor.isAttachedToWindow &&
+                                                    anchor.hasWindowFocus() &&
+                                                    anchor.width == viewportWidth &&
+                                                    anchor.height == viewportHeight &&
+                                                    anchor.resources.displayMetrics.density
+                                                        .toDouble() == density
+                                            },
+                                            notification = { event ->
+                                                if (
+                                                    !closed &&
+                                                        control === client &&
+                                                        engine.connected
+                                                )
+                                                    presentationResult(event)
+                                            },
+                                        )
+                                    presentation = session
+                                    session.start()
+                                }
+                                    .onFailure {
+                                        presentationResult(
+                                            mapOf(
+                                                "kind" to "error",
+                                                "error" to "presentation_unavailable",
+                                                "generation" to map.generation,
+                                                "revision" to map.revision,
+                                                "configurationSha256" to saved.configurationSha256,
+                                            )
+                                        )
+                                    }
+                            }
                             catalogMetadata?.let(catalogResult)
                         } catch (_: Exception) {
                             admission.close()
@@ -376,6 +427,10 @@ internal class PhoneConnection(
                 main.post { fail() }
             }
         }
+    }
+
+    fun refreshPresentation() {
+        presentation?.refreshTheme()
     }
 
     private fun fail() {
@@ -400,6 +455,8 @@ internal class PhoneConnection(
             control?.close()
             control = null
         }
+        presentation?.close()
+        presentation = null
         scanner?.close()
         scanner = null
         application.unregisterActivityLifecycleCallbacks(lifecycle)
