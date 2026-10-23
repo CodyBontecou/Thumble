@@ -4,6 +4,10 @@ import MobileInputUIKit
 import ThumbleContracts
 import UIKit
 
+#if DEBUG
+  import os
+#endif
+
 /// App-owned native bootstrap. Invitation text, vault material and channels never enter React.
 @MainActor final class PhoneConnection: NSObject, UITextFieldDelegate {
   // [DEBUG-renewal-app] Temporary bounded admission evidence, never bridged to JS.
@@ -25,6 +29,10 @@ import UIKit
   }
   private(set) var diagnosticPhase: DiagnosticPhase = .idle
   private(set) var diagnosticConnectOutcome: ControlTLSConnectOutcome = .idle
+  #if DEBUG
+    private enum SavedReadDiagnostic: String { case none, catalog, controls }
+    private var savedReadDiagnostic: SavedReadDiagnostic = .none
+  #endif
   private var lastControlFailure: PhoneControlFailureStage = .none
   private var lastRuntimeOutcome: ControlTLSRuntimeOutcome = .idle
   var diagnosticControlFailure: PhoneControlFailureStage {
@@ -271,6 +279,9 @@ import UIKit
     } else {
       let catalog = try PhoneCatalogClient(endpoint: endpoint, storage: storage)
       catalogClient = catalog
+      #if DEBUG
+        savedReadDiagnostic = .catalog
+      #endif
       let result = try await catalog.read()
       catalogClient = nil
       try Task.checkCancellation()
@@ -280,9 +291,15 @@ import UIKit
         catalog: page, configuration: metadata, width: viewport.width, height: viewport.height)
       let maps = try SavedControllerClient(endpoint: endpoint, storage: storage)
       savedMapClient = maps
+      #if DEBUG
+        savedReadDiagnostic = .controls
+      #endif
       let resultMap = try await maps.read(request)
       savedMapClient = nil
       try Task.checkCancellation()
+      #if DEBUG
+        savedReadDiagnostic = .none
+      #endif
       delivered = resultMap
       savedRequest = request
       map = resultMap.map
@@ -359,6 +376,11 @@ import UIKit
         case .complete: .enrollmentComplete
         }
     }
+    #if DEBUG
+      Logger(subsystem: "com.thumble.rewrite", category: "PhoneAdmission").error(
+        "phone_admission_failed phase=\(self.diagnosticPhase.rawValue, privacy: .public) savedRead=\(self.savedReadDiagnostic.rawValue, privacy: .public) connect=\(self.diagnosticConnectOutcome.rawValue, privacy: .public) control=\(self.diagnosticControlFailure.rawValue, privacy: .public) runtime=\(self.diagnosticRuntimeOutcome.rawValue, privacy: .public)"
+      )
+    #endif
     close()
     status("unavailable")
   }

@@ -24,6 +24,8 @@ class PhoneRenewalTest {
         val wall = AtomicLong(1000)
         val elapsed = AtomicLong(0)
         val renewals = AtomicInteger(0)
+        val initialProgressCompleted = CountDownLatch(1)
+        @Volatile var initialProgressWasUnacknowledged = false
         val closed = CountDownLatch(1)
         val paused = CountDownLatch(1)
         val resume = CountDownLatch(1)
@@ -82,8 +84,12 @@ class PhoneRenewalTest {
                 }
                 "input-status" -> {
                     check(value.getString("sessionId") == currentSession)
-                    val last = inputs().last()
-                    val sequence = ByteBuffer.wrap(last, 32, 8).order(ByteOrder.LITTLE_ENDIAN).long
+                    val sequence =
+                        inputs().lastOrNull()?.let {
+                            ByteBuffer.wrap(it, 32, 8).order(ByteOrder.LITTLE_ENDIAN).long
+                        }
+                    if (initialProgressCompleted.count == 1L)
+                        initialProgressWasUnacknowledged = sequence == null
                     reply(
                         JSONObject()
                             .put("version", 1)
@@ -95,10 +101,12 @@ class PhoneRenewalTest {
                             .put("revision", "1")
                             .put(
                                 "lastAcceptedSequence",
-                                if (nullProgress) JSONObject.NULL else sequence.toString(),
+                                if (nullProgress || sequence == null) JSONObject.NULL
+                                else sequence.toString(),
                             )
                             .put("inputEnabled", false)
                     )
+                    initialProgressCompleted.countDown()
                 }
                 else -> throw PhoneControlRejected()
             }
@@ -297,13 +305,35 @@ class PhoneRenewalTest {
     }
 
     @Test
+    fun initialProgressBeforePacketZeroKeepsThePreparedFixtureAvailable() {
+        val io = IO()
+        client(io).use { client ->
+            client.authenticate()
+            val admission = client.prepareInput(map())
+            // The real native status admits no accepted sequence before packet zero.
+            assertTrue(io.initialProgressCompleted.await(2, TimeUnit.SECONDS))
+            assertTrue(io.initialProgressWasUnacknowledged)
+            assertTrue(io.inputs().isEmpty())
+            val engine = admission.bind()
+            until { io.inputs().isNotEmpty() }
+            assertTrue(engine.connected)
+            engine.cancel(ReleaseReason.background)
+        }
+    }
+
+    @Test
     fun preparedRenewalCannotWaitForTheUiPastItsCommitBudget() {
         val io = IO()
         client(io).use { client ->
             client.authenticate()
-            val engine = client.prepareInput(map()).bind()
-            // Observe packet zero before jumping the synthetic clock. An undispatched
-            // initial state must expire after 350ms and cannot exercise renewal.
+            val admission = client.prepareInput(map())
+            // Force an initial progress reply before binding, then observe packet-zero
+            // dispatch below; this does not prove that the reply has been validated.
+            assertTrue(io.initialProgressCompleted.await(2, TimeUnit.SECONDS))
+            assertTrue(io.initialProgressWasUnacknowledged)
+            val engine = admission.bind()
+            // Raw IO dispatch proves the writer already checked packet-zero eligibility
+            // before this synthetic jump; queued input still expires.
             until { io.inputs().isNotEmpty() }
             io.wall.set(36_000)
             io.elapsed.set(TimeUnit.MILLISECONDS.toNanos(35_000))

@@ -18,6 +18,41 @@
   ],
   "families": [
     {
+      "id": "shared-build",
+      "executor": "legacy-host-cli",
+      "gate": "configuration-write",
+      "phoneEffect": "Not certified; these existing CLI job operations have no certified MCP or rewrite equivalent.",
+      "notes": "MCP tool names reserve parity targets only. host-cli-only does not claim that those MCP tools are implemented.",
+      "operations": [
+        {
+          "id": "shared-build.adopt",
+          "cli": [
+            "shared-build adopt"
+          ],
+          "status": "host-cli-only",
+          "mcpTool": "shared_build_adopt"
+        },
+        {
+          "id": "shared-build.status",
+          "cli": [
+            "shared-build status"
+          ],
+          "gate": "none",
+          "status": "host-cli-only",
+          "mcpTool": "shared_build_status"
+        },
+        {
+          "id": "shared-build.cancel",
+          "cli": [
+            "shared-build cancel"
+          ],
+          "gate": "system-action",
+          "status": "host-cli-only",
+          "mcpTool": "shared_build_cancel"
+        }
+      ]
+    },
+    {
       "id": "generation",
       "executor": "swift-bridge",
       "gate": "configuration-write",
@@ -1487,6 +1522,15 @@
           ],
           "status": "planned",
           "mcpTool": "legacy_mac_app_action"
+        },
+        {
+          "id": "app.editor-view",
+          "cli": [
+            "app editor-view"
+          ],
+          "status": "host-cli-only",
+          "mcpTool": "set_editor_view",
+          "notes": "Existing desktop CLI preference only; this reserves a parity target and certifies no MCP or rewrite implementation."
         }
       ]
     },

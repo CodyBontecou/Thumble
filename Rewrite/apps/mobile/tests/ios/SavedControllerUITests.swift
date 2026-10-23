@@ -89,9 +89,10 @@ private enum SavedAppHTTP {
     let summary = app.staticTexts["saved-profile-summary"]
     XCTAssertTrue(summary.waitForExistence(timeout: 10))
     XCTAssertEqual(summary.label, "2 saved profiles")
-    let label = app.staticTexts["A"].firstMatch
+    let label = app.staticTexts["South"].firstMatch
     XCTAssertTrue(label.waitForExistence(timeout: 10))
     XCTAssertFalse(app.staticTexts["B"].exists)
+    XCTAssertFalse(app.staticTexts["North"].exists)
     let surface = app.descendants(matching: .any)["controller-surface"].firstMatch
     XCTAssertTrue(surface.exists)
     XCTAssertGreaterThanOrEqual(surface.frame.height, 240)

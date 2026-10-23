@@ -216,8 +216,9 @@ class SavedControllerAppTest {
             val summary =
                 checkNotNull(device.wait(Until.findObject(By.res("saved-profile-summary")), 10000))
             assertEquals("2 saved profiles", summary.text)
-            assertNotNull(device.wait(Until.findObject(By.text("A")), 10000))
+            assertNotNull(device.wait(Until.findObject(By.text("South")), 10000))
             assertFalse(device.hasObject(By.text("B")))
+            assertFalse(device.hasObject(By.text("North")))
             val view = controller()
             val header = checkNotNull(device.findObject(By.res("connection-header"))).visibleBounds
             val control = ui {

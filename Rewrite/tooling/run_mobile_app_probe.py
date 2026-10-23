@@ -14,6 +14,7 @@ import subprocess
 import sys
 import threading
 from native_hold_diagnostic import decode_native_hold_diagnostic
+from native_control_terminal import NativeControlTerminals
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -77,6 +78,7 @@ class Probe:
         self.completed = False
         self.failure_codes = []
         self.native_hold_diagnostic = None
+        self.native_control_terminals = NativeControlTerminals()
         self.checkpoints = []
         self.readers = []
         self.counts = {"held": 0, "fresh": 0, "neutral": 0, "renewalStarts": 0, "renewalVerified": 0}
@@ -115,6 +117,7 @@ class Probe:
                 reader.start()
                 def read_failures():
                     for line in iter(lambda: self.process.stderr.readline(4096), b""):
+                        self.native_control_terminals.observe(line.decode("utf-8", errors="replace"))
                         hold = decode_native_hold_diagnostic(line.decode("utf-8", errors="replace"))
                         if hold is not None and self.native_hold_diagnostic is None:
                             self.native_hold_diagnostic = hold
@@ -315,7 +318,7 @@ def main():
         health_stop.set()
         health_thread.join(timeout=3)
         probe.close()
-        print("[DEBUG-renewal-app] final " + json.dumps({"completed": probe.completed, "counts": probe.counts, "httpDiagnostics": {"beginRequests": probe.begin_requests, "healthRequests": probe.health_requests, "serverThreadAlive": server_thread.is_alive(), "healthMonitor": health}, "nativeExitBeforeCleanup": native_exit_before_cleanup, "nativeFailureCodes": probe.failure_codes, "nativeHoldDiagnostic": probe.native_hold_diagnostic, "lastCheckpoint": probe.checkpoints[-1] if probe.checkpoints else None}, sort_keys=True), flush=True)
+        print("[DEBUG-renewal-app] final " + json.dumps({"completed": probe.completed, "counts": probe.counts, "httpDiagnostics": {"beginRequests": probe.begin_requests, "healthRequests": probe.health_requests, "serverThreadAlive": server_thread.is_alive(), "healthMonitor": health}, "nativeExitBeforeCleanup": native_exit_before_cleanup, "nativeFailureCodes": probe.failure_codes, "nativeHoldDiagnostic": probe.native_hold_diagnostic, "nativeControlTerminals": probe.native_control_terminals.snapshot(), "lastCheckpoint": probe.checkpoints[-1] if probe.checkpoints else None}, sort_keys=True), flush=True)
         server.shutdown()
         server.server_close()
         if reverse:
