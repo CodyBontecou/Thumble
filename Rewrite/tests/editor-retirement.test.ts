@@ -56,7 +56,8 @@ test("idle pairing-style stdout EOF retires the captured writer exactly once bef
   const bridge = await PhoneEditorBridge.capture(actual);
   let failures = 0;
   let retirement: Promise<void> | undefined;
-  const pipe = new NativePipe(
+  let eofBeforeExit = false;
+  const pipe: NativePipe<undefined, Record<string, unknown>> = new NativePipe(
     "node",
     [resolve(import.meta.dir, "fixtures/editor-stdout-close.mjs")],
     {
@@ -64,18 +65,23 @@ test("idle pairing-style stdout EOF retires the captured writer exactly once bef
       reply: (v) => v,
       failure: () => {
         failures++;
+        eofBeforeExit =
+          pipe.child.exitCode === null && pipe.child.signalCode === null;
         retirement = bridge.retireWriter();
       },
     },
     "pairing_host_unavailable",
   );
+  // Subscribe before awaiting readiness; a fast child must not race this observer.
+  const exited = new Promise<void>((resolve) =>
+    pipe.child.once("exit", () => resolve()),
+  );
   try {
     await pipe.ready;
     // An owned child closing stdout has no pending request timer to wake cleanup.
-    await new Promise<void>((resolve) =>
-      pipe.child.once("exit", () => resolve()),
-    );
+    await exited;
     expect(failures).toBe(1);
+    expect(eofBeforeExit).toBe(true);
     expect(retirement).toBeDefined();
     await retirement;
     expect(
