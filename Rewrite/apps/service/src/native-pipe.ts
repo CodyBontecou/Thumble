@@ -8,6 +8,17 @@ import {
   record,
 } from "@thumble/contracts/receiver";
 
+export type ParsedOwnerOutcome<Reply> =
+  | { kind: "owner-response"; ok: true; result: Reply }
+  | { kind: "owner-response"; ok: false; error: string }
+  | { kind: "not-dispatched"; error: string };
+/** This request may have reached its owner. It is never a no-op receipt. */
+export class NativePipeTransportLost extends Error {
+  constructor() {
+    super("native_owner_transport_lost");
+  }
+}
+
 /** Bounded private stdio transport; codecs retain each native owner's domain boundary. */
 export class NativePipe<Ready, Reply> {
   readonly child: ChildProcessWithoutNullStreams;
@@ -18,6 +29,7 @@ export class NativePipe<Ready, Reply> {
       resolve: (value: Reply) => void;
       reject: (error: Error) => void;
       timer: ReturnType<typeof setTimeout>;
+      ownerError?: (error: string) => void;
     }
   >();
   private buffer = Buffer.alloc(0);
@@ -113,11 +125,16 @@ export class NativePipe<Ready, Reply> {
       pending.resolve(reply);
     } else {
       exact(value, ["version", "requestId", "ok", "error"]);
-      if (typeof value.error !== "string" || !/^[a-z_]+$/.test(value.error))
+      if (
+        typeof value.error !== "string" ||
+        !/^[a-z_]+$/.test(value.error) ||
+        (pending.ownerError !== undefined && value.error.length > 100)
+      )
         throw new Error("invalid_native_response");
       this.pending.delete(value.requestId);
       clearTimeout(pending.timer);
-      pending.reject(new Error(value.error));
+      if (pending.ownerError) pending.ownerError(value.error);
+      else pending.reject(new Error(value.error));
     }
   }
   private fail(
@@ -162,6 +179,49 @@ export class NativePipe<Ready, Reply> {
       const timer = setTimeout(() => this.fail("request-timeout"), timeoutMs);
       this.pending.set(requestId, { resolve, reject, timer });
       this.child.stdin.write(line);
+    });
+  }
+  /** Private write transport: only parsed replies are definitive owner responses.
+   * Caller must retain its fence after transport loss until actual writer exit. */
+  async requestParsed(
+    body: unknown,
+    timeoutMs = 30000,
+  ): Promise<ParsedOwnerOutcome<Reply>> {
+    if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 30000)
+      return { kind: "not-dispatched", error: "native_request_budget_invalid" };
+    try {
+      await this.ready;
+    } catch {
+      return { kind: "not-dispatched", error: this.unavailable };
+    }
+    if (this.failed) return { kind: "not-dispatched", error: this.unavailable };
+    if (this.pending.size >= 16)
+      return { kind: "not-dispatched", error: "native_owner_busy" };
+    const requestId = randomUUID();
+    let line: string;
+    try {
+      line = JSON.stringify({ version: 1, requestId, body }) + "\n";
+    } catch {
+      return { kind: "not-dispatched", error: "native_request_invalid" };
+    }
+    if (Buffer.byteLength(line) > FRAME_BYTES)
+      return { kind: "not-dispatched", error: "native_request_too_large" };
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => this.fail("request-timeout"), timeoutMs);
+      this.pending.set(requestId, {
+        resolve: (result) =>
+          resolve({ kind: "owner-response", ok: true, result }),
+        ownerError: (error) =>
+          resolve({ kind: "owner-response", ok: false, error }),
+        reject: () => reject(new NativePipeTransportLost()),
+        timer,
+      });
+      // Registration precedes the write: synchronous/partial write failures are uncertain too.
+      try {
+        this.child.stdin.write(line);
+      } catch {
+        this.fail("stdin-error");
+      }
     });
   }
   /** Private, bounded event response; no request timer or pending RPC slot. */

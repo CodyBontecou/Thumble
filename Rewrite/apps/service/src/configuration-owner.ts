@@ -1,4 +1,12 @@
 import {
+  decodeEditorLabelCommit,
+  decodeEditorOwnerResponse,
+  editorLifetimeId,
+  type EditorLabelCommit,
+  type EditorOwnerResponse,
+} from "./editor-owner-envelope.ts";
+import { confirmEditorWriterExit } from "./editor-owner-exit.ts";
+import {
   decodeAnyPhonePresentationCommand,
   decodeAnyPhonePresentationResult,
   type AnyPhonePresentationCommand,
@@ -43,7 +51,9 @@ import {
 
 /** Private child owner. Database decoding/fsync never runs on input heartbeat IO. */
 export class ConfigurationOwner {
-  private readonly pipe: NativePipe<void, unknown>;
+  private readonly pipe: NativePipe<string | undefined, unknown>;
+  private editorDispatchClosed = false;
+  private editorWrite = false;
   private wowState = disabledWowSyncStatus();
   private captureState = disabledWowCaptureStatus();
   private readonly wowJobs = new Map<string, WowSyncStatus>();
@@ -97,13 +107,22 @@ export class ConfigurationOwner {
       ],
       {
         ready(value, pid) {
-          exact(value, ["version", "ready", "pid"]);
+          const hasLifetime = Object.hasOwn(value, "ownerLifetimeId");
+          exact(
+            value,
+            hasLifetime
+              ? ["version", "ready", "pid", "ownerLifetimeId"]
+              : ["version", "ready", "pid"],
+          );
           if (
             value.version !== 1 ||
             value.ready !== "configuration" ||
             value.pid !== pid
           )
             throw new Error("configuration_ready_invalid");
+          return hasLifetime
+            ? editorLifetimeId(value.ownerLifetimeId)
+            : undefined;
         },
         event: (value) => {
           exact(value, ["version", "event", "capture", "sync"]);
@@ -120,13 +139,78 @@ export class ConfigurationOwner {
       "configuration_owner_unavailable",
     );
   }
-  get ready() {
-    return this.pipe.ready;
+  get ready(): Promise<void> {
+    return this.pipe.ready.then(() => {});
   }
   get child() {
     return this.pipe.child;
   }
+  /** No caller-selected/replacement lifetime. Legacy readonly test owners lack it. */
+  async editorOwnerLifetime(): Promise<string> {
+    const lifetime = await this.pipe.ready;
+    if (this.editorDispatchClosed || !lifetime)
+      throw new Error("editor_owner_unavailable");
+    return lifetime;
+  }
+  closeEditorDispatch(): void {
+    this.editorDispatchClosed = true;
+  }
+  /** Unconnected private seam. Native must retain its independent ticket until
+   * this definitive result; pending/timeout is never a no-op acknowledgement. */
+  async commitEditorLabel(
+    input: EditorLabelCommit,
+  ): Promise<
+    | { kind: "not-dispatched"; error: string }
+    | { kind: "owner-response"; response: EditorOwnerResponse }
+    | { kind: "owner-error"; error: string }
+    | { kind: "writer-exited"; disposition: "unknown" }
+  > {
+    const envelope = decodeEditorLabelCommit(input);
+    let lifetime: string;
+    try {
+      lifetime = await this.editorOwnerLifetime();
+    } catch {
+      return { kind: "not-dispatched", error: "editor_owner_unavailable" };
+    }
+    if (this.editorDispatchClosed || lifetime !== envelope.ownerLifetimeId)
+      return {
+        kind: "not-dispatched",
+        error: "editor_owner_lifetime_mismatch",
+      };
+    if (
+      this.editorWrite ||
+      this.activeJob !== undefined ||
+      this.phoneRead ||
+      this.ordinaryReads ||
+      this.wowRequest ||
+      this.wowState.busy
+    )
+      return { kind: "not-dispatched", error: "configuration_owner_busy" };
+    this.editorWrite = true;
+    try {
+      const result = await this.pipe.requestParsed(envelope);
+      if (result.kind === "not-dispatched") {
+        this.editorWrite = false;
+        return result;
+      }
+      if (!result.ok) {
+        this.editorWrite = false;
+        return { kind: "owner-error", error: result.error };
+      }
+      const response = decodeEditorOwnerResponse(result.result, envelope);
+      this.editorWrite = false;
+      return { kind: "owner-response", response };
+    } catch {
+      // Close admission BEFORE disconnect/await; no future queue may target this child.
+      this.closeEditorDispatch();
+      this.pipe.disconnect();
+      await confirmEditorWriterExit(this.child);
+      this.editorWrite = false;
+      return { kind: "writer-exited", disposition: "unknown" };
+    }
+  }
   async request(input: ConfigurationCommand): Promise<ConfigurationReply> {
+    if (this.editorWrite) throw new Error("configuration_owner_busy");
     const command = decodeConfigurationCommand(input);
     if (
       (this.wowState.busy || this.wowRequest) &&
@@ -180,7 +264,7 @@ export class ConfigurationOwner {
             : previous.reply;
         return decodeConfigurationReply(reply, command);
       }
-      if (this.activeJob !== undefined || this.phoneRead)
+      if (this.editorWrite || this.activeJob !== undefined || this.phoneRead)
         throw new Error("configuration_owner_busy");
       if (this.jobs.size >= 32 && !previous) {
         const oldest = this.jobs.keys().next().value;
@@ -240,7 +324,7 @@ export class ConfigurationOwner {
         });
       return pending;
     }
-    if (this.activeJob !== undefined || this.phoneRead)
+    if (this.editorWrite || this.activeJob !== undefined || this.phoneRead)
       throw new Error("configuration_owner_busy");
     this.ordinaryReads++;
     try {
@@ -264,6 +348,7 @@ export class ConfigurationOwner {
       throw new Error("invalid_phone_catalog_command");
     await this.ready;
     if (
+      this.editorWrite ||
       this.phoneRead ||
       this.activeJob !== undefined ||
       this.ordinaryReads !== 0
@@ -303,6 +388,7 @@ export class ConfigurationOwner {
     if (command.command === "wow-capture-status") return this.captureState;
     if (!this.captureState.enabled) throw new Error("wow_capture_not_enabled");
     if (
+      this.editorWrite ||
       this.activeJob !== undefined ||
       this.phoneRead ||
       this.ordinaryReads ||
@@ -330,6 +416,7 @@ export class ConfigurationOwner {
       return previous;
     }
     if (
+      this.editorWrite ||
       this.activeJob !== undefined ||
       this.phoneRead ||
       this.ordinaryReads ||
@@ -367,7 +454,7 @@ export class ConfigurationOwner {
   async readSavedPin(input: SavedPinCommand): Promise<SavedConfigurationPin> {
     const command = decodeSavedPinCommand(input);
     await this.ready;
-    if (this.activeJob !== undefined || this.phoneRead)
+    if (this.editorWrite || this.activeJob !== undefined || this.phoneRead)
       throw new Error("configuration_owner_busy");
     this.ordinaryReads++;
     try {
@@ -396,6 +483,7 @@ export class ConfigurationOwner {
     const command = decodePhoneControlsCommand(input);
     await this.ready;
     if (
+      this.editorWrite ||
       this.phoneRead ||
       this.activeJob !== undefined ||
       this.ordinaryReads !== 0
@@ -430,6 +518,7 @@ export class ConfigurationOwner {
     const command = decodeAnyPhonePresentationCommand(input);
     await this.ready;
     if (
+      this.editorWrite ||
       this.phoneRead ||
       this.activeJob !== undefined ||
       this.ordinaryReads !== 0
@@ -459,6 +548,7 @@ export class ConfigurationOwner {
     }
   }
   disconnect(): void {
+    this.closeEditorDispatch();
     this.pipe.disconnect();
   }
 }

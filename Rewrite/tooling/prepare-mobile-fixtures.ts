@@ -42,6 +42,7 @@ for (const name of [
   "saved-controller-presentation-control-v10.json",
   "saved-controller-presentation-control-v11.json",
   "physical-input-control-v9.json",
+  "phone-editor-journal-v1.json",
   "saved-controller-v1.json",
   "saved-controller-analog-control-v8.json",
   "saved-controller-analog-v1.json",

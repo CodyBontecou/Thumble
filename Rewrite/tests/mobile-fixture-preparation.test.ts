@@ -26,6 +26,7 @@ test("clean mobile fixture preparation installs exact shared saved-map vectors i
     ].map((m) => m[1]!);
     for (const name of [
       "physical-input-control-v9.json",
+      "phone-editor-journal-v1.json",
       "saved-controller-control-v8.json",
       "saved-controller-presentation-control-v10.json",
       "saved-controller-presentation-control-v11.json",
@@ -49,6 +50,7 @@ test("clean mobile fixture preparation installs exact shared saved-map vectors i
     expect(result.exitCode).toBe(0);
     for (const name of [
       "physical-input-control-v9.json",
+      "phone-editor-journal-v1.json",
       "saved-controller-control-v8.json",
       "saved-controller-presentation-control-v10.json",
       "saved-controller-presentation-control-v11.json",

@@ -386,3 +386,50 @@ jobs:
             Rewrite/native/mobile-input/android/build/outputs/androidTest-results/
             Rewrite/native/mobile-input/android/build/reports/androidTests/
           if-no-files-found: error
+
+  android-editor-journal-api26:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Install pinned Android SDK
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Enable KVM on the ephemeral runner
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Execute actual private journal provider on API 26
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 26
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
+          script: |
+            test "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" = '26'
+            bash "$GITHUB_WORKSPACE/Rewrite/native/mobile-input/android/gradlew" -p "$GITHUB_WORKSPACE/Rewrite/native/mobile-input/android" --no-daemon connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.thumble.rewrite.input.EditorJournalDeviceTest
+      - name: Require exact provider execution and sanitized evidence
+        if: always()
+        run: |
+          python3 Rewrite/tooling/test_editor_journal_device.py
+          mkdir -p Rewrite/reports
+          python3 Rewrite/tooling/check_editor_journal_device.py Rewrite/native/mobile-input/android/build/outputs/androidTest-results/connected > Rewrite/reports/mobile-editor-journal-api26.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rewrite-android-editor-journal-api26
+          path: Rewrite/reports/mobile-editor-journal-api26.json
+          if-no-files-found: error

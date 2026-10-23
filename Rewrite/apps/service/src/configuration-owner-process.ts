@@ -1,3 +1,4 @@
+import { decodeEditorLabelCommit } from "./editor-owner-envelope.ts";
 import { ConfigurationPhonePresentationOperations } from "@thumble/application/configuration-phone-presentation";
 import { decodeAnyPhonePresentationCommand } from "@thumble/contracts/phone-presentation";
 import { verifyPresentationIcon } from "./presentation-icon.ts";
@@ -22,7 +23,7 @@ import { publishConfigurationFile } from "./configuration-export-files.ts";
 import { ConfigurationImportOperations } from "@thumble/application/configuration-import";
 import { readConfigurationFile } from "@thumble/client/local";
 import { configurationSourceHash } from "@thumble/storage";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { ConfigurationCatalogOperations } from "@thumble/application/configuration-catalog";
 import { decodeConfigurationCommand } from "@thumble/contracts/configuration";
 import {
@@ -52,6 +53,8 @@ export async function runConfigurationOwner(
   if (profilePath && !capturePath)
     throw new Error("wow_sync_capture_helper_required");
   const repository = new SqliteConfigurationRepository(directory, executable);
+  // Only actual SQLite ownership may mint this immutable child lifetime.
+  const ownerLifetimeId = randomUUID();
   const savedPins = new ConfigurationSavedPinOperations(
     repository,
     configurationSourceHash,
@@ -273,6 +276,22 @@ export async function runConfigurationOwner(
               operation !== "configuration-saved-pin"
             )
               throw new Error("configuration_owner_busy");
+            if (operation === "editor-label-commit") {
+              const envelope = decodeEditorLabelCommit(body);
+              if (envelope.ownerLifetimeId !== ownerLifetimeId)
+                throw new Error("editor_owner_lifetime_mismatch");
+              const outcome = operations.execute(envelope.intent, {
+                read: true,
+                write: true,
+              });
+              write({
+                version: 1,
+                requestId,
+                ok: true,
+                result: { envelope, outcome },
+              });
+              continue;
+            }
             if (operation === "configuration-phone-presentation") {
               const result = presentations.execute(
                 decodeAnyPhonePresentationCommand(body),
@@ -316,7 +335,12 @@ export async function runConfigurationOwner(
         if (!blocked && buffer.length > FRAME_BYTES)
           finish(new Error("configuration_frame_too_large"));
       }
-      write({ version: 1, ready: "configuration", pid: process.pid });
+      write({
+        version: 1,
+        ready: "configuration",
+        pid: process.pid,
+        ownerLifetimeId,
+      });
       if (capturePath) emit(wow.captureStatus(), wow.status());
       if (capturePath)
         monitor = setInterval(

@@ -53,3 +53,7 @@ pub mod owner_wake;
 
 #[cfg(debug_assertions)]
 pub mod input_error_diagnostics;
+
+// Prerequisite only: role12 integration is deliberately not enabled yet.
+#[allow(dead_code)]
+mod editor_commit_fence;

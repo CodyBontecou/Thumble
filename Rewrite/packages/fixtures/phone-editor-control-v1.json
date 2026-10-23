@@ -1,0 +1,804 @@
+{
+  "schema": 1,
+  "scope": "synthetic-editor-codec-only-no-role-or-write-enablement",
+  "context": {
+    "connectionId": "abababababababababababababababab",
+    "authorityInstanceId": "11111111-1111-1111-1111-111111111111"
+  },
+  "cases": [
+    {
+      "name": "profile-first-page",
+      "request": {
+        "version": 1,
+        "connectionId": "abababababababababababababababab",
+        "authorityInstanceId": "11111111-1111-1111-1111-111111111111",
+        "command": "editor-profile",
+        "expectedRevision": "7",
+        "expectedSourceHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "profileId": "aaaaaaaa-0000-0000-0000-000000000001",
+        "offset": 0
+      },
+      "reply": {
+        "version": 1,
+        "connectionId": "abababababababababababababababab",
+        "authorityInstanceId": "11111111-1111-1111-1111-111111111111",
+        "command": "editor-profile-result",
+        "kind": "editor-profile",
+        "revision": "7",
+        "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "profileId": "aaaaaaaa-0000-0000-0000-000000000001",
+        "name": "Synthetic controller",
+        "offset": 0,
+        "totalControls": 18,
+        "nextOffset": 8,
+        "controls": [
+          {
+            "id": "ce000000-0000-0000-0000-000000000001",
+            "generatedLabel": "Control 1",
+            "labelOverride": ""
+          },
+          {
+            "id": "ce000000-0000-0000-0000-000000000002",
+            "generatedLabel": "Control 2",
+            "labelOverride": "Move 🦊"
+          },
+          {
+            "id": "ce000000-0000-0000-0000-000000000003",
+            "generatedLabel": "Control 3",
+            "labelOverride": null
+          },
+          {
+            "id": "ce000000-0000-0000-0000-000000000004",
+            "generatedLabel": "Control 4",
+            "labelOverride": null
+          },
+          {
+            "id": "ce000000-0000-0000-0000-000000000005",
+            "generatedLabel": "Control 5",
+            "labelOverride": null
+          },
+          {
+            "id": "ce000000-0000-0000-0000-000000000006",
+            "generatedLabel": "Control 6",
+            "labelOverride": null
+          },
+          {
+            "id": "ce000000-0000-0000-0000-000000000007",
+            "generatedLabel": "Control 7",
+            "labelOverride": null
+          },
+          {
+            "id": "ce000000-0000-0000-0000-000000000008",
+            "generatedLabel": "Control 8",
+            "labelOverride": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "label-admitted",
+      "request": {
+        "version": 1,
+        "connectionId": "abababababababababababababababab",
+        "authorityInstanceId": "11111111-1111-1111-1111-111111111111",
+        "command": "configuration-set-control-label",
+        "operationId": "edit-A-1",
+        "expectedRevision": "7",
+        "profileId": "aaaaaaaa-0000-0000-0000-000000000001",
+        "controlId": "ce000000-0000-0000-0000-000000000001",
+        "label": "Move 🦊"
+      },
+      "reply": {
+        "version": 1,
+        "connectionId": "abababababababababababababababab",
+        "authorityInstanceId": "11111111-1111-1111-1111-111111111111",
+        "command": "configuration-set-control-label-result",
+        "kind": "editor-label-admitted",
+        "operationId": "edit-A-1"
+      }
+    },
+    {
+      "name": "label-committed",
+      "request": {
+        "version": 1,
+        "connectionId": "abababababababababababababababab",
+        "authorityInstanceId": "11111111-1111-1111-1111-111111111111",
+        "command": "configuration-set-control-label",
+        "operationId": "edit-A-1",
+        "expectedRevision": "7",
+        "profileId": "aaaaaaaa-0000-0000-0000-000000000001",
+        "controlId": "ce000000-0000-0000-0000-000000000001",
+        "label": "Move 🦊"
+      },
+      "reply": {
+        "version": 1,
+        "connectionId": "abababababababababababababababab",
+        "authorityInstanceId": "11111111-1111-1111-1111-111111111111",
+        "command": "configuration-set-control-label-result",
+        "kind": "committed",
+        "receipt": {
+          "version": 1,
+          "operationId": "edit-A-1",
+          "resultingRevision": "8",
+          "contentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "affectedEntities": [
+            "aaaaaaaa-0000-0000-0000-000000000001",
+            "ce000000-0000-0000-0000-000000000001"
+          ]
+        },
+        "replayed": false
+      }
+    },
+    {
+      "name": "label-replay",
+      "request": {
+        "version": 1,
+        "connectionId": "abababababababababababababababab",
+        "authorityInstanceId": "11111111-1111-1111-1111-111111111111",
+        "command": "configuration-set-control-label",
+        "operationId": "edit-A-1",
+        "expectedRevision": "7",
+        "profileId": "aaaaaaaa-0000-0000-0000-000000000001",
+        "controlId": "ce000000-0000-0000-0000-000000000001",
+        "label": "Move 🦊"
+      },
+      "reply": {
+        "version": 1,
+        "connectionId": "abababababababababababababababab",
+        "authorityInstanceId": "11111111-1111-1111-1111-111111111111",
+        "command": "configuration-set-control-label-result",
+        "kind": "committed",
+        "receipt": {
+          "version": 1,
+          "operationId": "edit-A-1",
+          "resultingRevision": "8",
+          "contentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "affectedEntities": [
+            "aaaaaaaa-0000-0000-0000-000000000001",
+            "ce000000-0000-0000-0000-000000000001"
+          ]
+        },
+        "replayed": true
+      }
+    },
+    {
+      "name": "label-conflict",
+      "request": {
+        "version": 1,
+        "connectionId": "abababababababababababababababab",
+        "authorityInstanceId": "11111111-1111-1111-1111-111111111111",
+        "command": "configuration-set-control-label",
+        "operationId": "edit-A-1",
+        "expectedRevision": "7",
+        "profileId": "aaaaaaaa-0000-0000-0000-000000000001",
+        "controlId": "ce000000-0000-0000-0000-000000000001",
+        "label": "Move 🦊"
+      },
+      "reply": {
+        "version": 1,
+        "connectionId": "abababababababababababababababab",
+        "authorityInstanceId": "11111111-1111-1111-1111-111111111111",
+        "command": "configuration-set-control-label-result",
+        "kind": "conflict",
+        "currentRevision": "9"
+      }
+    },
+    {
+      "name": "status-pending-unknown",
+      "request": {
+        "version": 1,
+        "connectionId": "abababababababababababababababab",
+        "authorityInstanceId": "11111111-1111-1111-1111-111111111111",
+        "command": "editor-label-status",
+        "intent": {
+          "command": "configuration-set-control-label",
+          "operationId": "edit-A-1",
+          "expectedRevision": "7",
+          "profileId": "aaaaaaaa-0000-0000-0000-000000000001",
+          "controlId": "ce000000-0000-0000-0000-000000000001",
+          "label": "Move 🦊"
+        }
+      },
+      "reply": {
+        "version": 1,
+        "connectionId": "abababababababababababababababab",
+        "authorityInstanceId": "11111111-1111-1111-1111-111111111111",
+        "command": "editor-label-status-result",
+        "kind": "editor-label-pending",
+        "operationId": "edit-A-1"
+      }
+    },
+    {
+      "name": "status-receipt",
+      "request": {
+        "version": 1,
+        "connectionId": "abababababababababababababababab",
+        "authorityInstanceId": "11111111-1111-1111-1111-111111111111",
+        "command": "editor-label-status",
+        "intent": {
+          "command": "configuration-set-control-label",
+          "operationId": "edit-A-1",
+          "expectedRevision": "7",
+          "profileId": "aaaaaaaa-0000-0000-0000-000000000001",
+          "controlId": "ce000000-0000-0000-0000-000000000001",
+          "label": "Move 🦊"
+        }
+      },
+      "reply": {
+        "version": 1,
+        "connectionId": "abababababababababababababababab",
+        "authorityInstanceId": "11111111-1111-1111-1111-111111111111",
+        "command": "editor-label-status-result",
+        "kind": "editor-label-receipt",
+        "receipt": {
+          "version": 1,
+          "operationId": "edit-A-1",
+          "resultingRevision": "8",
+          "contentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "affectedEntities": [
+            "aaaaaaaa-0000-0000-0000-000000000001",
+            "ce000000-0000-0000-0000-000000000001"
+          ]
+        }
+      }
+    },
+    {
+      "name": "label-clear",
+      "request": {
+        "version": 1,
+        "connectionId": "abababababababababababababababab",
+        "authorityInstanceId": "11111111-1111-1111-1111-111111111111",
+        "command": "configuration-set-control-label",
+        "operationId": "edit-clear",
+        "expectedRevision": "7",
+        "profileId": "aaaaaaaa-0000-0000-0000-000000000001",
+        "controlId": "ce000000-0000-0000-0000-000000000001",
+        "label": null
+      },
+      "reply": {
+        "version": 1,
+        "connectionId": "abababababababababababababababab",
+        "authorityInstanceId": "11111111-1111-1111-1111-111111111111",
+        "command": "configuration-set-control-label-result",
+        "kind": "editor-label-admitted",
+        "operationId": "edit-clear"
+      }
+    },
+    {
+      "name": "label-blank",
+      "request": {
+        "version": 1,
+        "connectionId": "abababababababababababababababab",
+        "authorityInstanceId": "11111111-1111-1111-1111-111111111111",
+        "command": "configuration-set-control-label",
+        "operationId": "edit-blank",
+        "expectedRevision": "7",
+        "profileId": "aaaaaaaa-0000-0000-0000-000000000001",
+        "controlId": "ce000000-0000-0000-0000-000000000001",
+        "label": ""
+      },
+      "reply": {
+        "version": 1,
+        "connectionId": "abababababababababababababababab",
+        "authorityInstanceId": "11111111-1111-1111-1111-111111111111",
+        "command": "configuration-set-control-label-result",
+        "kind": "editor-label-admitted",
+        "operationId": "edit-blank"
+      }
+    },
+    {
+      "name": "label-unicode-128-byte",
+      "request": {
+        "version": 1,
+        "connectionId": "abababababababababababababababab",
+        "authorityInstanceId": "11111111-1111-1111-1111-111111111111",
+        "command": "configuration-set-control-label",
+        "operationId": "edit-unicode-128-byte",
+        "expectedRevision": "7",
+        "profileId": "aaaaaaaa-0000-0000-0000-000000000001",
+        "controlId": "ce000000-0000-0000-0000-000000000001",
+        "label": "🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊"
+      },
+      "reply": {
+        "version": 1,
+        "connectionId": "abababababababababababababababab",
+        "authorityInstanceId": "11111111-1111-1111-1111-111111111111",
+        "command": "configuration-set-control-label-result",
+        "kind": "editor-label-admitted",
+        "operationId": "edit-unicode-128-byte"
+      }
+    },
+    {
+      "name": "editor_busy",
+      "request": {
+        "version": 1,
+        "connectionId": "abababababababababababababababab",
+        "authorityInstanceId": "11111111-1111-1111-1111-111111111111",
+        "command": "configuration-set-control-label",
+        "operationId": "edit-A-1",
+        "expectedRevision": "7",
+        "profileId": "aaaaaaaa-0000-0000-0000-000000000001",
+        "controlId": "ce000000-0000-0000-0000-000000000001",
+        "label": "Move 🦊"
+      },
+      "reply": {
+        "version": 1,
+        "connectionId": "abababababababababababababababab",
+        "authorityInstanceId": "11111111-1111-1111-1111-111111111111",
+        "command": "configuration-set-control-label-result",
+        "kind": "error",
+        "error": "editor_busy"
+      }
+    },
+    {
+      "name": "editor_unavailable",
+      "request": {
+        "version": 1,
+        "connectionId": "abababababababababababababababab",
+        "authorityInstanceId": "11111111-1111-1111-1111-111111111111",
+        "command": "configuration-set-control-label",
+        "operationId": "edit-A-1",
+        "expectedRevision": "7",
+        "profileId": "aaaaaaaa-0000-0000-0000-000000000001",
+        "controlId": "ce000000-0000-0000-0000-000000000001",
+        "label": "Move 🦊"
+      },
+      "reply": {
+        "version": 1,
+        "connectionId": "abababababababababababababababab",
+        "authorityInstanceId": "11111111-1111-1111-1111-111111111111",
+        "command": "configuration-set-control-label-result",
+        "kind": "error",
+        "error": "editor_unavailable"
+      }
+    },
+    {
+      "name": "editor_invalid_request",
+      "request": {
+        "version": 1,
+        "connectionId": "abababababababababababababababab",
+        "authorityInstanceId": "11111111-1111-1111-1111-111111111111",
+        "command": "configuration-set-control-label",
+        "operationId": "edit-A-1",
+        "expectedRevision": "7",
+        "profileId": "aaaaaaaa-0000-0000-0000-000000000001",
+        "controlId": "ce000000-0000-0000-0000-000000000001",
+        "label": "Move 🦊"
+      },
+      "reply": {
+        "version": 1,
+        "connectionId": "abababababababababababababababab",
+        "authorityInstanceId": "11111111-1111-1111-1111-111111111111",
+        "command": "configuration-set-control-label-result",
+        "kind": "error",
+        "error": "editor_invalid_request"
+      }
+    },
+    {
+      "name": "editor_access_denied",
+      "request": {
+        "version": 1,
+        "connectionId": "abababababababababababababababab",
+        "authorityInstanceId": "11111111-1111-1111-1111-111111111111",
+        "command": "configuration-set-control-label",
+        "operationId": "edit-A-1",
+        "expectedRevision": "7",
+        "profileId": "aaaaaaaa-0000-0000-0000-000000000001",
+        "controlId": "ce000000-0000-0000-0000-000000000001",
+        "label": "Move 🦊"
+      },
+      "reply": {
+        "version": 1,
+        "connectionId": "abababababababababababababababab",
+        "authorityInstanceId": "11111111-1111-1111-1111-111111111111",
+        "command": "configuration-set-control-label-result",
+        "kind": "error",
+        "error": "editor_access_denied"
+      }
+    },
+    {
+      "name": "editor_operation_reused",
+      "request": {
+        "version": 1,
+        "connectionId": "abababababababababababababababab",
+        "authorityInstanceId": "11111111-1111-1111-1111-111111111111",
+        "command": "configuration-set-control-label",
+        "operationId": "edit-A-1",
+        "expectedRevision": "7",
+        "profileId": "aaaaaaaa-0000-0000-0000-000000000001",
+        "controlId": "ce000000-0000-0000-0000-000000000001",
+        "label": "Move 🦊"
+      },
+      "reply": {
+        "version": 1,
+        "connectionId": "abababababababababababababababab",
+        "authorityInstanceId": "11111111-1111-1111-1111-111111111111",
+        "command": "configuration-set-control-label-result",
+        "kind": "error",
+        "error": "editor_operation_reused"
+      }
+    },
+    {
+      "name": "editor_profile_not_found",
+      "request": {
+        "version": 1,
+        "connectionId": "abababababababababababababababab",
+        "authorityInstanceId": "11111111-1111-1111-1111-111111111111",
+        "command": "configuration-set-control-label",
+        "operationId": "edit-A-1",
+        "expectedRevision": "7",
+        "profileId": "aaaaaaaa-0000-0000-0000-000000000001",
+        "controlId": "ce000000-0000-0000-0000-000000000001",
+        "label": "Move 🦊"
+      },
+      "reply": {
+        "version": 1,
+        "connectionId": "abababababababababababababababab",
+        "authorityInstanceId": "11111111-1111-1111-1111-111111111111",
+        "command": "configuration-set-control-label-result",
+        "kind": "error",
+        "error": "editor_profile_not_found"
+      }
+    },
+    {
+      "name": "editor_control_not_found",
+      "request": {
+        "version": 1,
+        "connectionId": "abababababababababababababababab",
+        "authorityInstanceId": "11111111-1111-1111-1111-111111111111",
+        "command": "configuration-set-control-label",
+        "operationId": "edit-A-1",
+        "expectedRevision": "7",
+        "profileId": "aaaaaaaa-0000-0000-0000-000000000001",
+        "controlId": "ce000000-0000-0000-0000-000000000001",
+        "label": "Move 🦊"
+      },
+      "reply": {
+        "version": 1,
+        "connectionId": "abababababababababababababababab",
+        "authorityInstanceId": "11111111-1111-1111-1111-111111111111",
+        "command": "configuration-set-control-label-result",
+        "kind": "error",
+        "error": "editor_control_not_found"
+      }
+    },
+    {
+      "name": "editor_source_changed",
+      "request": {
+        "version": 1,
+        "connectionId": "abababababababababababababababab",
+        "authorityInstanceId": "11111111-1111-1111-1111-111111111111",
+        "command": "configuration-set-control-label",
+        "operationId": "edit-A-1",
+        "expectedRevision": "7",
+        "profileId": "aaaaaaaa-0000-0000-0000-000000000001",
+        "controlId": "ce000000-0000-0000-0000-000000000001",
+        "label": "Move 🦊"
+      },
+      "reply": {
+        "version": 1,
+        "connectionId": "abababababababababababababababab",
+        "authorityInstanceId": "11111111-1111-1111-1111-111111111111",
+        "command": "configuration-set-control-label-result",
+        "kind": "error",
+        "error": "editor_source_changed"
+      }
+    },
+    {
+      "name": "editor_unsupported_profile",
+      "request": {
+        "version": 1,
+        "connectionId": "abababababababababababababababab",
+        "authorityInstanceId": "11111111-1111-1111-1111-111111111111",
+        "command": "configuration-set-control-label",
+        "operationId": "edit-A-1",
+        "expectedRevision": "7",
+        "profileId": "aaaaaaaa-0000-0000-0000-000000000001",
+        "controlId": "ce000000-0000-0000-0000-000000000001",
+        "label": "Move 🦊"
+      },
+      "reply": {
+        "version": 1,
+        "connectionId": "abababababababababababababababab",
+        "authorityInstanceId": "11111111-1111-1111-1111-111111111111",
+        "command": "configuration-set-control-label-result",
+        "kind": "error",
+        "error": "editor_unsupported_profile"
+      }
+    },
+    {
+      "name": "editor_response_too_large",
+      "request": {
+        "version": 1,
+        "connectionId": "abababababababababababababababab",
+        "authorityInstanceId": "11111111-1111-1111-1111-111111111111",
+        "command": "configuration-set-control-label",
+        "operationId": "edit-A-1",
+        "expectedRevision": "7",
+        "profileId": "aaaaaaaa-0000-0000-0000-000000000001",
+        "controlId": "ce000000-0000-0000-0000-000000000001",
+        "label": "Move 🦊"
+      },
+      "reply": {
+        "version": 1,
+        "connectionId": "abababababababababababababababab",
+        "authorityInstanceId": "11111111-1111-1111-1111-111111111111",
+        "command": "configuration-set-control-label-result",
+        "kind": "error",
+        "error": "editor_response_too_large"
+      }
+    },
+    {
+      "name": "profile-final-page",
+      "request": {
+        "version": 1,
+        "connectionId": "abababababababababababababababab",
+        "authorityInstanceId": "11111111-1111-1111-1111-111111111111",
+        "command": "editor-profile",
+        "expectedRevision": "7",
+        "expectedSourceHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "profileId": "aaaaaaaa-0000-0000-0000-000000000001",
+        "offset": 16
+      },
+      "reply": {
+        "version": 1,
+        "connectionId": "abababababababababababababababab",
+        "authorityInstanceId": "11111111-1111-1111-1111-111111111111",
+        "command": "editor-profile-result",
+        "kind": "editor-profile",
+        "revision": "7",
+        "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "profileId": "aaaaaaaa-0000-0000-0000-000000000001",
+        "name": "Synthetic controller",
+        "offset": 16,
+        "totalControls": 18,
+        "nextOffset": null,
+        "controls": [
+          {
+            "id": "ce000000-0000-0000-0000-000000000001",
+            "generatedLabel": "Control 1",
+            "labelOverride": ""
+          },
+          {
+            "id": "ce000000-0000-0000-0000-000000000002",
+            "generatedLabel": "Control 2",
+            "labelOverride": "Move 🦊"
+          }
+        ]
+      }
+    },
+    {
+      "name": "profile-empty",
+      "request": {
+        "version": 1,
+        "connectionId": "abababababababababababababababab",
+        "authorityInstanceId": "11111111-1111-1111-1111-111111111111",
+        "command": "editor-profile",
+        "expectedRevision": "7",
+        "expectedSourceHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "profileId": "aaaaaaaa-0000-0000-0000-000000000001",
+        "offset": 0
+      },
+      "reply": {
+        "version": 1,
+        "connectionId": "abababababababababababababababab",
+        "authorityInstanceId": "11111111-1111-1111-1111-111111111111",
+        "command": "editor-profile-result",
+        "kind": "editor-profile",
+        "revision": "7",
+        "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "profileId": "aaaaaaaa-0000-0000-0000-000000000001",
+        "name": "Synthetic controller",
+        "offset": 0,
+        "totalControls": 0,
+        "nextOffset": null,
+        "controls": []
+      }
+    },
+    {
+      "name": "u64-maximum-admitted",
+      "request": {
+        "version": 1,
+        "connectionId": "abababababababababababababababab",
+        "authorityInstanceId": "11111111-1111-1111-1111-111111111111",
+        "command": "configuration-set-control-label",
+        "operationId": "edit-A-1",
+        "expectedRevision": "18446744073709551615",
+        "profileId": "aaaaaaaa-0000-0000-0000-000000000001",
+        "controlId": "ce000000-0000-0000-0000-000000000001",
+        "label": "Move 🦊"
+      },
+      "reply": {
+        "version": 1,
+        "connectionId": "abababababababababababababababab",
+        "authorityInstanceId": "11111111-1111-1111-1111-111111111111",
+        "command": "configuration-set-control-label-result",
+        "kind": "editor-label-admitted",
+        "operationId": "edit-A-1"
+      }
+    }
+  ],
+  "limits": {
+    "requestBytes": 2048,
+    "replyBytes": 16384,
+    "maximumDepth": 4,
+    "maximumNodes": 128,
+    "controlsPerPage": 8,
+    "maximumControls": 128,
+    "labelUTF8Bytes": 128,
+    "profileNameScalars": 256,
+    "profileNameUTF8Bytes": 1024
+  },
+  "invalidRequests": [
+    {
+      "name": "duplicate-top-level",
+      "utf8": "{\"version\":1,\"version\":1,\"connectionId\":\"abababababababababababababababab\",\"authorityInstanceId\":\"11111111-1111-1111-1111-111111111111\",\"command\":\"configuration-set-control-label\",\"operationId\":\"edit-A-1\",\"expectedRevision\":\"7\",\"profileId\":\"aaaaaaaa-0000-0000-0000-000000000001\",\"controlId\":\"ce000000-0000-0000-0000-000000000001\",\"label\":\"Move 🦊\"}"
+    },
+    {
+      "name": "duplicate-nested-intent",
+      "utf8": "{\"version\":1,\"connectionId\":\"abababababababababababababababab\",\"authorityInstanceId\":\"11111111-1111-1111-1111-111111111111\",\"command\":\"editor-label-status\",\"intent\":{\"command\":\"configuration-set-control-label\",\"operationId\":\"edit-A-1\",\"expectedRevision\":\"7\",\"expectedRevision\":\"7\",\"profileId\":\"aaaaaaaa-0000-0000-0000-000000000001\",\"controlId\":\"ce000000-0000-0000-0000-000000000001\",\"label\":\"Move 🦊\"}}"
+    },
+    {
+      "name": "unpaired-surrogate",
+      "utf8": "{\"version\":1,\"connectionId\":\"abababababababababababababababab\",\"authorityInstanceId\":\"11111111-1111-1111-1111-111111111111\",\"command\":\"configuration-set-control-label\",\"operationId\":\"edit-A-1\",\"expectedRevision\":\"7\",\"profileId\":\"aaaaaaaa-0000-0000-0000-000000000001\",\"controlId\":\"ce000000-0000-0000-0000-000000000001\",\"label\":\"\\ud800\"}"
+    },
+    {
+      "name": "private-owner-field",
+      "utf8": "{\"version\":1,\"connectionId\":\"abababababababababababababababab\",\"authorityInstanceId\":\"11111111-1111-1111-1111-111111111111\",\"command\":\"configuration-set-control-label\",\"operationId\":\"edit-A-1\",\"expectedRevision\":\"7\",\"profileId\":\"aaaaaaaa-0000-0000-0000-000000000001\",\"controlId\":\"ce000000-0000-0000-0000-000000000001\",\"label\":\"Move 🦊\",\"ownerLifetimeId\":\"22222222-2222-2222-2222-222222222222\"}"
+    },
+    {
+      "name": "noncanonical-counter",
+      "utf8": "{\"version\":1,\"connectionId\":\"abababababababababababababababab\",\"authorityInstanceId\":\"11111111-1111-1111-1111-111111111111\",\"command\":\"configuration-set-control-label\",\"operationId\":\"edit-A-1\",\"expectedRevision\":\"07\",\"profileId\":\"aaaaaaaa-0000-0000-0000-000000000001\",\"controlId\":\"ce000000-0000-0000-0000-000000000001\",\"label\":\"Move 🦊\"}"
+    },
+    {
+      "name": "numeric-counter",
+      "utf8": "{\"version\":1,\"connectionId\":\"abababababababababababababababab\",\"authorityInstanceId\":\"11111111-1111-1111-1111-111111111111\",\"command\":\"configuration-set-control-label\",\"operationId\":\"edit-A-1\",\"expectedRevision\":7,\"profileId\":\"aaaaaaaa-0000-0000-0000-000000000001\",\"controlId\":\"ce000000-0000-0000-0000-000000000001\",\"label\":\"Move 🦊\"}"
+    },
+    {
+      "name": "overflow-counter",
+      "utf8": "{\"version\":1,\"connectionId\":\"abababababababababababababababab\",\"authorityInstanceId\":\"11111111-1111-1111-1111-111111111111\",\"command\":\"configuration-set-control-label\",\"operationId\":\"edit-A-1\",\"expectedRevision\":\"18446744073709551616\",\"profileId\":\"aaaaaaaa-0000-0000-0000-000000000001\",\"controlId\":\"ce000000-0000-0000-0000-000000000001\",\"label\":\"Move 🦊\"}"
+    },
+    {
+      "name": "unknown-command",
+      "utf8": "{\"version\":1,\"connectionId\":\"abababababababababababababababab\",\"authorityInstanceId\":\"11111111-1111-1111-1111-111111111111\",\"command\":\"configuration-delete-profile\",\"operationId\":\"edit-A-1\",\"expectedRevision\":\"7\",\"profileId\":\"aaaaaaaa-0000-0000-0000-000000000001\",\"controlId\":\"ce000000-0000-0000-0000-000000000001\",\"label\":\"Move 🦊\"}"
+    },
+    {
+      "name": "uppercase-id",
+      "utf8": "{\"version\":1,\"connectionId\":\"abababababababababababababababab\",\"authorityInstanceId\":\"11111111-1111-1111-1111-111111111111\",\"command\":\"configuration-set-control-label\",\"operationId\":\"edit-A-1\",\"expectedRevision\":\"7\",\"profileId\":\"AAAAAAAA-0000-0000-0000-000000000001\",\"controlId\":\"ce000000-0000-0000-0000-000000000001\",\"label\":\"Move 🦊\"}"
+    },
+    {
+      "name": "invalid-label",
+      "utf8": "{\"version\":1,\"connectionId\":\"abababababababababababababababab\",\"authorityInstanceId\":\"11111111-1111-1111-1111-111111111111\",\"command\":\"configuration-set-control-label\",\"operationId\":\"edit-A-1\",\"expectedRevision\":\"7\",\"profileId\":\"aaaaaaaa-0000-0000-0000-000000000001\",\"controlId\":\"ce000000-0000-0000-0000-000000000001\",\"label\":\"🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊\"}"
+    },
+    {
+      "name": "changed-authority",
+      "utf8": "{\"version\":1,\"connectionId\":\"abababababababababababababababab\",\"authorityInstanceId\":\"22222222-2222-2222-2222-222222222222\",\"command\":\"configuration-set-control-label\",\"operationId\":\"edit-A-1\",\"expectedRevision\":\"7\",\"profileId\":\"aaaaaaaa-0000-0000-0000-000000000001\",\"controlId\":\"ce000000-0000-0000-0000-000000000001\",\"label\":\"Move 🦊\"}"
+    },
+    {
+      "name": "unaligned-page",
+      "utf8": "{\"version\":1,\"connectionId\":\"abababababababababababababababab\",\"authorityInstanceId\":\"11111111-1111-1111-1111-111111111111\",\"command\":\"editor-profile\",\"expectedRevision\":\"7\",\"expectedSourceHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"profileId\":\"aaaaaaaa-0000-0000-0000-000000000001\",\"offset\":1}"
+    },
+    {
+      "name": "escaped-duplicate-key",
+      "utf8": "{\"version\":1,\"\\u0076ersion\":1,\"connectionId\":\"abababababababababababababababab\",\"authorityInstanceId\":\"11111111-1111-1111-1111-111111111111\",\"command\":\"configuration-set-control-label\",\"operationId\":\"edit-A-1\",\"expectedRevision\":\"7\",\"profileId\":\"aaaaaaaa-0000-0000-0000-000000000001\",\"controlId\":\"ce000000-0000-0000-0000-000000000001\",\"label\":\"Move 🦊\"}"
+    }
+  ],
+  "invalidReplies": [
+    {
+      "name": "duplicate-control-id",
+      "request": {
+        "version": 1,
+        "connectionId": "abababababababababababababababab",
+        "authorityInstanceId": "11111111-1111-1111-1111-111111111111",
+        "command": "editor-profile",
+        "expectedRevision": "7",
+        "expectedSourceHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "profileId": "aaaaaaaa-0000-0000-0000-000000000001",
+        "offset": 0
+      },
+      "utf8": "{\"version\":1,\"connectionId\":\"abababababababababababababababab\",\"authorityInstanceId\":\"11111111-1111-1111-1111-111111111111\",\"command\":\"editor-profile-result\",\"kind\":\"editor-profile\",\"revision\":\"7\",\"contentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"profileId\":\"aaaaaaaa-0000-0000-0000-000000000001\",\"name\":\"Synthetic controller\",\"offset\":0,\"totalControls\":18,\"nextOffset\":8,\"controls\":[{\"id\":\"ce000000-0000-0000-0000-000000000001\",\"generatedLabel\":\"Control 1\",\"labelOverride\":\"\"},{\"id\":\"ce000000-0000-0000-0000-000000000001\",\"generatedLabel\":\"Control 2\",\"labelOverride\":\"Move 🦊\"},{\"id\":\"ce000000-0000-0000-0000-000000000003\",\"generatedLabel\":\"Control 3\",\"labelOverride\":null},{\"id\":\"ce000000-0000-0000-0000-000000000004\",\"generatedLabel\":\"Control 4\",\"labelOverride\":null},{\"id\":\"ce000000-0000-0000-0000-000000000005\",\"generatedLabel\":\"Control 5\",\"labelOverride\":null},{\"id\":\"ce000000-0000-0000-0000-000000000006\",\"generatedLabel\":\"Control 6\",\"labelOverride\":null},{\"id\":\"ce000000-0000-0000-0000-000000000007\",\"generatedLabel\":\"Control 7\",\"labelOverride\":null},{\"id\":\"ce000000-0000-0000-0000-000000000008\",\"generatedLabel\":\"Control 8\",\"labelOverride\":null}]}"
+    },
+    {
+      "name": "unknown-control-field",
+      "request": {
+        "version": 1,
+        "connectionId": "abababababababababababababababab",
+        "authorityInstanceId": "11111111-1111-1111-1111-111111111111",
+        "command": "editor-profile",
+        "expectedRevision": "7",
+        "expectedSourceHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "profileId": "aaaaaaaa-0000-0000-0000-000000000001",
+        "offset": 0
+      },
+      "utf8": "{\"version\":1,\"connectionId\":\"abababababababababababababababab\",\"authorityInstanceId\":\"11111111-1111-1111-1111-111111111111\",\"command\":\"editor-profile-result\",\"kind\":\"editor-profile\",\"revision\":\"7\",\"contentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"profileId\":\"aaaaaaaa-0000-0000-0000-000000000001\",\"name\":\"Synthetic controller\",\"offset\":0,\"totalControls\":18,\"nextOffset\":8,\"controls\":[{\"id\":\"ce000000-0000-0000-0000-000000000001\",\"generatedLabel\":\"Control 1\",\"labelOverride\":\"\",\"secret\":\"forbidden\"},{\"id\":\"ce000000-0000-0000-0000-000000000002\",\"generatedLabel\":\"Control 2\",\"labelOverride\":\"Move 🦊\"},{\"id\":\"ce000000-0000-0000-0000-000000000003\",\"generatedLabel\":\"Control 3\",\"labelOverride\":null},{\"id\":\"ce000000-0000-0000-0000-000000000004\",\"generatedLabel\":\"Control 4\",\"labelOverride\":null},{\"id\":\"ce000000-0000-0000-0000-000000000005\",\"generatedLabel\":\"Control 5\",\"labelOverride\":null},{\"id\":\"ce000000-0000-0000-0000-000000000006\",\"generatedLabel\":\"Control 6\",\"labelOverride\":null},{\"id\":\"ce000000-0000-0000-0000-000000000007\",\"generatedLabel\":\"Control 7\",\"labelOverride\":null},{\"id\":\"ce000000-0000-0000-0000-000000000008\",\"generatedLabel\":\"Control 8\",\"labelOverride\":null}]}"
+    },
+    {
+      "name": "wrong-source-hash",
+      "request": {
+        "version": 1,
+        "connectionId": "abababababababababababababababab",
+        "authorityInstanceId": "11111111-1111-1111-1111-111111111111",
+        "command": "editor-profile",
+        "expectedRevision": "7",
+        "expectedSourceHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "profileId": "aaaaaaaa-0000-0000-0000-000000000001",
+        "offset": 0
+      },
+      "utf8": "{\"version\":1,\"connectionId\":\"abababababababababababababababab\",\"authorityInstanceId\":\"11111111-1111-1111-1111-111111111111\",\"command\":\"editor-profile-result\",\"kind\":\"editor-profile\",\"revision\":\"7\",\"contentHash\":\"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\",\"profileId\":\"aaaaaaaa-0000-0000-0000-000000000001\",\"name\":\"Synthetic controller\",\"offset\":0,\"totalControls\":18,\"nextOffset\":8,\"controls\":[{\"id\":\"ce000000-0000-0000-0000-000000000001\",\"generatedLabel\":\"Control 1\",\"labelOverride\":\"\"},{\"id\":\"ce000000-0000-0000-0000-000000000002\",\"generatedLabel\":\"Control 2\",\"labelOverride\":\"Move 🦊\"},{\"id\":\"ce000000-0000-0000-0000-000000000003\",\"generatedLabel\":\"Control 3\",\"labelOverride\":null},{\"id\":\"ce000000-0000-0000-0000-000000000004\",\"generatedLabel\":\"Control 4\",\"labelOverride\":null},{\"id\":\"ce000000-0000-0000-0000-000000000005\",\"generatedLabel\":\"Control 5\",\"labelOverride\":null},{\"id\":\"ce000000-0000-0000-0000-000000000006\",\"generatedLabel\":\"Control 6\",\"labelOverride\":null},{\"id\":\"ce000000-0000-0000-0000-000000000007\",\"generatedLabel\":\"Control 7\",\"labelOverride\":null},{\"id\":\"ce000000-0000-0000-0000-000000000008\",\"generatedLabel\":\"Control 8\",\"labelOverride\":null}]}"
+    },
+    {
+      "name": "wrong-page-continuation",
+      "request": {
+        "version": 1,
+        "connectionId": "abababababababababababababababab",
+        "authorityInstanceId": "11111111-1111-1111-1111-111111111111",
+        "command": "editor-profile",
+        "expectedRevision": "7",
+        "expectedSourceHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "profileId": "aaaaaaaa-0000-0000-0000-000000000001",
+        "offset": 0
+      },
+      "utf8": "{\"version\":1,\"connectionId\":\"abababababababababababababababab\",\"authorityInstanceId\":\"11111111-1111-1111-1111-111111111111\",\"command\":\"editor-profile-result\",\"kind\":\"editor-profile\",\"revision\":\"7\",\"contentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"profileId\":\"aaaaaaaa-0000-0000-0000-000000000001\",\"name\":\"Synthetic controller\",\"offset\":0,\"totalControls\":18,\"nextOffset\":16,\"controls\":[{\"id\":\"ce000000-0000-0000-0000-000000000001\",\"generatedLabel\":\"Control 1\",\"labelOverride\":\"\"},{\"id\":\"ce000000-0000-0000-0000-000000000002\",\"generatedLabel\":\"Control 2\",\"labelOverride\":\"Move 🦊\"},{\"id\":\"ce000000-0000-0000-0000-000000000003\",\"generatedLabel\":\"Control 3\",\"labelOverride\":null},{\"id\":\"ce000000-0000-0000-0000-000000000004\",\"generatedLabel\":\"Control 4\",\"labelOverride\":null},{\"id\":\"ce000000-0000-0000-0000-000000000005\",\"generatedLabel\":\"Control 5\",\"labelOverride\":null},{\"id\":\"ce000000-0000-0000-0000-000000000006\",\"generatedLabel\":\"Control 6\",\"labelOverride\":null},{\"id\":\"ce000000-0000-0000-0000-000000000007\",\"generatedLabel\":\"Control 7\",\"labelOverride\":null},{\"id\":\"ce000000-0000-0000-0000-000000000008\",\"generatedLabel\":\"Control 8\",\"labelOverride\":null}]}"
+    },
+    {
+      "name": "duplicate-receipt-field",
+      "request": {
+        "version": 1,
+        "connectionId": "abababababababababababababababab",
+        "authorityInstanceId": "11111111-1111-1111-1111-111111111111",
+        "command": "configuration-set-control-label",
+        "operationId": "edit-A-1",
+        "expectedRevision": "7",
+        "profileId": "aaaaaaaa-0000-0000-0000-000000000001",
+        "controlId": "ce000000-0000-0000-0000-000000000001",
+        "label": "Move 🦊"
+      },
+      "utf8": "{\"version\":1,\"connectionId\":\"abababababababababababababababab\",\"authorityInstanceId\":\"11111111-1111-1111-1111-111111111111\",\"command\":\"configuration-set-control-label-result\",\"kind\":\"committed\",\"receipt\":{\"version\":1,\"operationId\":\"edit-A-1\",\"resultingRevision\":\"8\",\"resultingRevision\":\"8\",\"contentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"affectedEntities\":[\"aaaaaaaa-0000-0000-0000-000000000001\",\"ce000000-0000-0000-0000-000000000001\"]},\"replayed\":false}"
+    },
+    {
+      "name": "receipt-not-exact-next-revision",
+      "request": {
+        "version": 1,
+        "connectionId": "abababababababababababababababab",
+        "authorityInstanceId": "11111111-1111-1111-1111-111111111111",
+        "command": "configuration-set-control-label",
+        "operationId": "edit-A-1",
+        "expectedRevision": "7",
+        "profileId": "aaaaaaaa-0000-0000-0000-000000000001",
+        "controlId": "ce000000-0000-0000-0000-000000000001",
+        "label": "Move 🦊"
+      },
+      "utf8": "{\"version\":1,\"connectionId\":\"abababababababababababababababab\",\"authorityInstanceId\":\"11111111-1111-1111-1111-111111111111\",\"command\":\"configuration-set-control-label-result\",\"kind\":\"committed\",\"receipt\":{\"version\":1,\"operationId\":\"edit-A-1\",\"resultingRevision\":\"9\",\"contentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"affectedEntities\":[\"aaaaaaaa-0000-0000-0000-000000000001\",\"ce000000-0000-0000-0000-000000000001\"]},\"replayed\":false}"
+    },
+    {
+      "name": "write-not-status-pending",
+      "request": {
+        "version": 1,
+        "connectionId": "abababababababababababababababab",
+        "authorityInstanceId": "11111111-1111-1111-1111-111111111111",
+        "command": "configuration-set-control-label",
+        "operationId": "edit-A-1",
+        "expectedRevision": "7",
+        "profileId": "aaaaaaaa-0000-0000-0000-000000000001",
+        "controlId": "ce000000-0000-0000-0000-000000000001",
+        "label": "Move 🦊"
+      },
+      "utf8": "{\"version\":1,\"connectionId\":\"abababababababababababababababab\",\"authorityInstanceId\":\"11111111-1111-1111-1111-111111111111\",\"command\":\"configuration-set-control-label-result\",\"kind\":\"editor-label-pending\",\"operationId\":\"edit-A-1\"}"
+    },
+    {
+      "name": "unknown-error",
+      "request": {
+        "version": 1,
+        "connectionId": "abababababababababababababababab",
+        "authorityInstanceId": "11111111-1111-1111-1111-111111111111",
+        "command": "configuration-set-control-label",
+        "operationId": "edit-A-1",
+        "expectedRevision": "7",
+        "profileId": "aaaaaaaa-0000-0000-0000-000000000001",
+        "controlId": "ce000000-0000-0000-0000-000000000001",
+        "label": "Move 🦊"
+      },
+      "utf8": "{\"version\":1,\"connectionId\":\"abababababababababababababababab\",\"authorityInstanceId\":\"11111111-1111-1111-1111-111111111111\",\"command\":\"configuration-set-control-label-result\",\"kind\":\"error\",\"error\":\"secret-in-error\"}"
+    }
+  ]
+}
