@@ -99,8 +99,7 @@ public enum ControlTLSRuntimeOutcome: String, Sendable {
   private var readDeadline: Task<Void, Never>?
   private var writeDeadline: Task<Void, Never>?
   private var writing = false
-  private var controls: [ControlTLSFrame] = []
-  private var latestInput: ControlTLSFrame?
+  private let inputWrites = NativeInputWriteQueue()
 
   public init(host: String, port: UInt16, certificatePin: String) throws {
     guard !host.isEmpty, host.utf8.count <= 253, !host.contains("\0"), port != 0,
@@ -215,42 +214,35 @@ public enum ControlTLSRuntimeOutcome: String, Sendable {
     }
     return sec_protocol_metadata_get_negotiated_protocol(metadata).map { String(cString: $0) }
   }
-  /// One in-flight frame, eight ordered control/packet-zero frames and one latest input slot.
-  /// A sealed packet is never re-encrypted. Coalescing preserves full-state repair and replay order.
+  /// Generic transports retain one latest input; admitted v5+ owners opt into bounded credits.
   public func offer(_ frame: ControlTLSFrame) -> Bool {
     guard state == .ready else { return false }
-    switch frame.kind {
-    case .control:
-      guard controls.count < 8 else {
-        fail(.queueOverflow)
-        return false
-      }
-      controls.append(frame)
-    case .input:
-      if frame.startsInputGrant {
-        guard controls.count < 8 else {
-          fail(.queueOverflow)
-          return false
-        }
-        // New-key packet zero is a commitment barrier, never a replaceable snapshot.
-        latestInput = nil
-        controls.append(frame)
-      } else {
-        latestInput = frame
-      }
+    do { try inputWrites.offer(frame) } catch {
+      fail(.queueOverflow)
+      return false
     }
     drain()
     return state == .ready
   }
+  func enableInputCredits(now: @escaping () -> ContinuousClock.Instant) throws {
+    try inputWrites.enable(now: now)
+  }
+  func inputProgress(scope: Data, sequence: UInt64, highestOffered: UInt64) throws {
+    try inputWrites.acknowledge(scope: scope, sequence: sequence, highestOffered: highestOffered)
+  }
+  func completeInputControl() throws {
+    try inputWrites.completeControl()
+    drain()
+  }
+  func validatedInputRenewalReply() throws { try inputWrites.validatedRenewalReply() }
   private func drain() {
     guard state == .ready, !writing else { return }
     let frame: ControlTLSFrame
-    if !controls.isEmpty {
-      frame = controls.removeFirst()
-    } else if let input = latestInput {
-      frame = input
-      latestInput = nil
-    } else {
+    do {
+      guard let next = try inputWrites.next() else { return }
+      frame = next
+    } catch {
+      fail(.invalidFrame)
       return
     }
     writing = true
@@ -339,8 +331,7 @@ public enum ControlTLSRuntimeOutcome: String, Sendable {
     connectDeadline = nil
     readDeadline = nil
     writeDeadline = nil
-    controls.removeAll()
-    latestInput = nil
+    inputWrites.close()
     writing = false
     let open = opening
     let read = reading

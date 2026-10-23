@@ -1,4 +1,10 @@
 import {
+  decodeWowSyncCommand,
+  decodeWowSyncStatus,
+  type WowSyncCommand,
+  type WowSyncStatus,
+} from "@thumble/contracts/wow-sync-control";
+import {
   decodeWowCaptureCommand,
   decodeWowCaptureControlStatus,
   type WowCaptureCommand,
@@ -314,7 +320,8 @@ function exchange<Result>(
     | ConfigurationCommand
     | SavedRuntimeCommand
     | Readonly<{ command: "saved-readiness-status" }>
-    | WowCaptureCommand,
+    | WowCaptureCommand
+    | WowSyncCommand,
   decode: (value: unknown) => Result,
 ): Promise<Result> {
   const requestId = randomUUID();
@@ -396,4 +403,11 @@ export function requestSavedReadiness(
       throw new Error("service_identity_mismatch");
     return status;
   });
+}
+
+export function requestWowSync(
+  endpoint: Endpoint,
+  body: WowSyncCommand,
+): Promise<WowSyncStatus> {
+  return exchange(endpoint, decodeWowSyncCommand(body), decodeWowSyncStatus);
 }

@@ -14,7 +14,8 @@
     "./wow-optical-panel": "./src/wow-optical-panel.ts",
     "./saved-controller-map": "./src/saved-controller-map.ts",
     "./wow-capture-receipt": "./src/wow-capture-receipt.ts",
-    "./starter-configuration": "./src/starter-configuration.ts"
+    "./starter-configuration": "./src/starter-configuration.ts",
+    "./owned-projection-merge": "./src/owned-projection-merge.ts"
   },
   "dependencies": {
     "@thumble/contracts": "workspace:*"

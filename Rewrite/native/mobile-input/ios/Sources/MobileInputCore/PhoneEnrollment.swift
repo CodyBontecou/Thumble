@@ -82,6 +82,17 @@ extension PhoneCredentialWorker: EnrollmentCredentialSink {}
   func offer(_ frame: ControlTLSFrame) -> Bool
   func receive() async throws -> ControlTLSFrame
   func close()
+  func enableInputCredits(now: @escaping () -> ContinuousClock.Instant) throws
+  func inputProgress(scope: Data, sequence: UInt64, highestOffered: UInt64) throws
+  func completeInputControl() throws
+  func validatedInputRenewalReply() throws
+}
+// Non-input enrollment/catalog transports and existing test adapters retain their behavior.
+extension EnrollmentFrameIO {
+  func enableInputCredits(now: @escaping () -> ContinuousClock.Instant) throws {}
+  func inputProgress(scope: Data, sequence: UInt64, highestOffered: UInt64) throws {}
+  func completeInputControl() throws {}
+  func validatedInputRenewalReply() throws {}
 }
 extension ControlTLSClient: EnrollmentFrameIO {}
 

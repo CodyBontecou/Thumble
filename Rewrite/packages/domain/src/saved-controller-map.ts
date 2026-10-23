@@ -414,8 +414,61 @@ export function projectSavedController(
   const mirrors = layout.get("/customButtons");
   if (mirrors?.kind === "array")
     for (let i = 0; i < mirrors.length!; i++) {
-      const id = uuid(mirrors.get(`/${i}/id`)?.stringValue);
-      if (!/^00000000-0000-0000-0000-00000000010[1-9a]$/.test(id))
+      const mirror = mirrors.get(`/${i}`)!;
+      const id = uuid(mirror.get("/id")?.stringValue);
+      if (/^00000000-0000-0000-0000-00000000010[1-9a]$/.test(id)) continue;
+      // Retained encoding can materialize duplicate customButtons presentation
+      // mirrors. Admit only independently checked input-equivalent declarations;
+      // never let a mirror supply an output or override canonical hit geometry.
+      const allowed = [
+        "id",
+        "controlKind",
+        "label",
+        "layout",
+        "joystickOutputSettings",
+        "triggerSettings",
+      ];
+      if (mirror.keys.some((key) => !allowed.includes(key)))
+        fail("unsupported_layout_mirror");
+      const element = profile.elements.find((element) => element.id === id);
+      if (!element || !["button", "joystick", "trigger"].includes(element.kind))
+        fail("unsupported_layout_mirror");
+      if (
+        (element.kind !== "joystick" &&
+          mirror.get("/joystickOutputSettings")) ||
+        (element.kind !== "trigger" && mirror.get("/triggerSettings"))
+      )
+        fail("unsupported_layout_mirror");
+      const primary = layoutFor(element, overrides),
+        duplicate = mirror.get("/layout");
+      if (duplicate?.kind !== "object") fail("unsupported_layout_mirror");
+      const visible = (value: LosslessJson) => {
+        const hidden = field(value, "isHidden");
+        if (hidden && hidden.booleanValue === undefined)
+          fail("unsupported_layout_mirror");
+        return hidden?.booleanValue ?? false;
+      };
+      if (
+        visible(primary) !== visible(duplicate) ||
+        number(primary, "zIndex", 0) !== number(duplicate, "zIndex", 0)
+      )
+        fail("unsupported_layout_mirror");
+      const kind = element.kind as "button" | "joystick" | "trigger";
+      if (
+        JSON.stringify(
+          rectangle(primary, id, scale, viewport, layoutMode, kind),
+        ) !==
+          JSON.stringify(
+            rectangle(duplicate, id, scale, viewport, layoutMode, kind),
+          ) ||
+        JSON.stringify(haptic(primary)) !== JSON.stringify(haptic(duplicate))
+      )
+        fail("unsupported_layout_mirror");
+      if (
+        kind !== "button" &&
+        analogAction(element, bindings.get(id), keyboards.get(id), primary) !==
+          analogAction(element, bindings.get(id), keyboards.get(id), duplicate)
+      )
         fail("unsupported_layout_mirror");
     }
   const controls: ControlRegion[] = [];

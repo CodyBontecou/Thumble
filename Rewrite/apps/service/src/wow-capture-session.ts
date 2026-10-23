@@ -41,9 +41,20 @@ export class WowCaptureSession {
     return this.status();
   }
   private latest: WowCaptureReceiptMetadata | undefined;
+  private captured: WowCapturedFrame | undefined;
+  frame(): WowCapturedFrame | undefined {
+    this.status();
+    return this.captured && this.supervisor.isCurrent(this.captured)
+      ? this.captured
+      : undefined;
+  }
+  isCurrent(frame: WowCapturedFrame): boolean {
+    return this.supervisor.isCurrent(frame);
+  }
   status(): WowCaptureControlStatus {
     const result = this.supervisor.take();
     if (result) {
+      this.captured = result instanceof WowCapturedFrame ? result : undefined;
       this.latest =
         result instanceof WowCapturedFrame
           ? {
@@ -62,8 +73,10 @@ export class WowCaptureSession {
             }
           : { ...result };
     }
-    if (this.latest && !this.supervisor.isCurrent(this.latest))
+    if (this.latest && !this.supervisor.isCurrent(this.latest)) {
       this.latest = undefined;
+      this.captured = undefined;
+    }
     const status = this.supervisor.status();
     return {
       kind: "wow-capture",
@@ -77,6 +90,7 @@ export class WowCaptureSession {
   }
   providerUnavailable(): void {
     this.failed = true;
+    this.captured = undefined;
     this.latest = undefined;
     void this.supervisor.stop();
   }

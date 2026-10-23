@@ -256,7 +256,7 @@ public enum PhoneControlFailureStage: String, Sendable {
         ])
         let result = try decode(
           try await receive(), command: disconnect ? "disconnected" : "control-status")
-        if disconnect { close() }
+        if disconnect { close() } else { try io.completeInputControl() }
         return result
       } catch {
         close()
@@ -325,6 +325,7 @@ public enum PhoneControlFailureStage: String, Sendable {
         inputUDPPort = grant.udpPort
         try inputCheckpoint()
         if controlVersion >= 5 {
+          try io.enableInputCredits(now: continuousNow)
           if let port = grant.udpPort {
             do {
               let udp = try datagramFactory(endpoint.host, port)
@@ -402,7 +403,11 @@ public enum PhoneControlFailureStage: String, Sendable {
           return false
         }
         return self.io.offer(frame)
-      }, initiallyReliable: reliable)
+      }, initiallyReliable: reliable,
+      progressObserved: { [weak self] scope, sequence, highest in
+        guard let self else { throw PhoneControlError.rejected }
+        try self.io.inputProgress(scope: scope, sequence: sequence, highestOffered: highest)
+      })
   }
   private func offerInput(_ packet: Data) -> Bool {
     do {
@@ -445,6 +450,7 @@ public enum PhoneControlFailureStage: String, Sendable {
         sessionID: session, udpPort: port,
         authorizationExpiresAt: admitted.expiresAt, credentialExpiresAt: credentialExpiresAt),
       now: last, outputMode: outputMode)
+    try io.validatedInputRenewalReply()
     let grant = renewal.grant
     let successor = try inputChannel.continued(grant: grant.packet) { [weak self] in
       self?.offerInput($0) ?? false
@@ -468,6 +474,7 @@ public enum PhoneControlFailureStage: String, Sendable {
     // Same engine/captures, fresh full-state packet zero through the reliable writer barrier.
     engine.tick()
     guard engine.connected else { throw PhoneControlError.rejected }
+    try io.completeInputControl()
     try await requestProgress(session: grant.sessionID, map: map)
     guard route?.acknowledged != nil else { throw PhoneControlError.rejected }
   }
@@ -490,6 +497,7 @@ public enum PhoneControlFailureStage: String, Sendable {
       map: map, lastOffered: route.lastOffered, previous: route.acknowledged, outputMode: outputMode
     )
     guard route.observe(progress) else { throw PhoneControlError.rejected }
+    try io.completeInputControl()
   }
   private func inputCheckpoint() throws {
     let time = try checkpoint()

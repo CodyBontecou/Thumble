@@ -1,3 +1,4 @@
+import { decodeWowSyncCommand } from "@thumble/contracts/wow-sync-control";
 import { decodeAuthorizedListener } from "@thumble/contracts/pairing";
 import { exportPairingQR, validatePairingQRDestination } from "./pairing-qr.ts";
 import { outputLaunchOptions } from "./output-launch.ts";
@@ -24,6 +25,7 @@ import {
   requestSavedRuntime,
   requestSavedReadiness,
   requestWowCapture,
+  requestWowSync,
   runtimeDirectory,
 } from "@thumble/client/local";
 import {
@@ -72,6 +74,7 @@ function options(values: string[]): Map<string, string | true> {
         "--runtime-dir",
         "--receiver",
         "--capture-helper",
+        "--wow-profile-helper",
         "--qr-output",
         "--qr-helper",
         "--source",
@@ -173,6 +176,12 @@ async function main(): Promise<unknown> {
     )
       throw new Error("auth_listener_persistent_identity_required");
   }
+  if (
+    opts.has("--wow-profile-helper") &&
+    !serviceLaunch &&
+    !(family === "__configuration" && action === "run")
+  )
+    throw new Error("invalid_wow_helper_option");
   const configured = opts.get("--receiver");
   const receiver =
     typeof configured === "string"
@@ -215,6 +224,50 @@ async function main(): Promise<unknown> {
   const root = runtimeDirectory(
     typeof raw === "string" ? raw : join(homedir(), ".thumble-rewrite-runtime"),
   );
+  if (
+    family === "wow" &&
+    ["refresh", "sync-start", "sync-stop", "sync-status"].includes(action ?? "")
+  ) {
+    for (const key of opts.keys())
+      if (
+        ![
+          "--runtime-dir",
+          "--receiver",
+          "--json",
+          "--operation-id",
+          "--expected-revision",
+          "--expected-source-hash",
+        ].includes(key)
+      )
+        throw new Error("invalid_wow_sync_option");
+    const mutating = action === "refresh" || action === "sync-start";
+    if (
+      !mutating &&
+      (opts.has("--expected-revision") || opts.has("--expected-source-hash"))
+    )
+      throw new Error("invalid_wow_sync_option");
+    return requestWowSync(
+      readEndpoint(root, receiver),
+      decodeWowSyncCommand(
+        mutating
+          ? {
+              command: `wow-${action}`,
+              operationId: required(opts, "--operation-id"),
+              expectedRevision: required(opts, "--expected-revision"),
+              expectedSourceHash: opts.has("--expected-source-hash")
+                ? required(opts, "--expected-source-hash")
+                : null,
+            }
+          : {
+              command: `wow-${action}`,
+              operationId:
+                action === "sync-stop"
+                  ? required(opts, "--operation-id")
+                  : (opts.get("--operation-id") ?? null),
+            },
+      ),
+    );
+  }
   if (family === "wow") {
     for (const key of opts.keys())
       if (!["--runtime-dir", "--receiver", "--source", "--json"].includes(key))
@@ -266,9 +319,23 @@ async function main(): Promise<unknown> {
 
   if (family === "__configuration" && action === "run") {
     for (const key of opts.keys())
-      if (!["--runtime-dir", "--receiver"].includes(key))
+      if (
+        ![
+          "--runtime-dir",
+          "--receiver",
+          "--capture-helper",
+          "--wow-profile-helper",
+        ].includes(key)
+      )
         throw new Error("invalid_configuration_owner_option");
-    await runConfigurationOwner(root, receiver);
+    await runConfigurationOwner(root, receiver, {
+      ...(typeof opts.get("--capture-helper") === "string"
+        ? { capture: required(opts, "--capture-helper") }
+        : {}),
+      ...(typeof opts.get("--wow-profile-helper") === "string"
+        ? { profile: required(opts, "--wow-profile-helper") }
+        : {}),
+    });
     return undefined;
   }
   if (family === "__service" && action === "run") {
@@ -289,6 +356,9 @@ async function main(): Promise<unknown> {
       output,
       opts.has("--keep-saved-controller-ready"),
       authOnlyListener,
+      typeof opts.get("--wow-profile-helper") === "string"
+        ? required(opts, "--wow-profile-helper")
+        : undefined,
     );
     return undefined;
   }
@@ -310,6 +380,9 @@ async function main(): Promise<unknown> {
       output,
       opts.has("--keep-saved-controller-ready"),
       authOnlyListener,
+      typeof opts.get("--wow-profile-helper") === "string"
+        ? required(opts, "--wow-profile-helper")
+        : undefined,
     );
     return undefined;
   }
@@ -337,6 +410,7 @@ async function main(): Promise<unknown> {
         opts.has("--advertise-host") ||
         opts.has("--keep-saved-controller-ready") ||
         opts.has("--capture-helper") ||
+        opts.has("--wow-profile-helper") ||
         opts.has("--output") ||
         opts.has("--allow-physical-output")
       )
@@ -371,6 +445,9 @@ async function main(): Promise<unknown> {
           : []),
         ...(opts.has("--capture-helper")
           ? ["--capture-helper", required(opts, "--capture-helper")]
+          : []),
+        ...(opts.has("--wow-profile-helper")
+          ? ["--wow-profile-helper", required(opts, "--wow-profile-helper")]
           : []),
         ...(authOnlyListener
           ? [

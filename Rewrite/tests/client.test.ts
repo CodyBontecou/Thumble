@@ -1,6 +1,7 @@
 import { expectError } from "./helpers/rejection.ts";
 import { test, expect } from "bun:test";
 import { createServer } from "node:net";
+import { decodeServiceStatus } from "@thumble/client";
 import { request, type Endpoint } from "@thumble/client/local";
 const snapshot = {
   backend: "recording",
@@ -23,8 +24,14 @@ test("typed local client handles repeated success and rejection without leaking 
     receiver: { pid: 2, snapshot },
     permissions: "not-evaluated",
     deviceRecognition: "not-evaluated",
-    phone: "not-connected",
+    phone: "not-evaluated",
   };
+  expect(() =>
+    decodeServiceStatus({ ...result, phone: "not-connected" }),
+  ).toThrow("invalid_service_response");
+  expect(() => decodeServiceStatus({ ...result, phone: "connected" })).toThrow(
+    "invalid_service_response",
+  );
   const server = createServer((socket) => {
     socket.on("error", () => {});
     socket.on("data", (data) => {
@@ -57,10 +64,9 @@ test("typed local client handles repeated success and rejection without leaking 
   };
   try {
     for (let n = 0; n < 30; n++) {
-      expect(
-        (await request(endpoint, { command: "status" })).receiver.snapshot
-          .active,
-      ).toBe(false);
+      const status = await request(endpoint, { command: "status" });
+      expect(status.receiver.snapshot.active).toBe(false);
+      expect(status.phone).toBe("not-evaluated");
       await expectError(
         request(endpoint, { command: "release" }),
         "test_rejection",

@@ -107,6 +107,7 @@ try {
           [
             "output_doctor",
             "wow_capture_status",
+            "wow_sync_status",
             "receiver_status",
             "receiver_saved_status",
             "receiver_readiness",

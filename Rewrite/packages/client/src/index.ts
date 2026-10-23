@@ -39,7 +39,7 @@ export function decodeServiceStatus(value: unknown): ServiceStatus {
     ) ||
     status.permissions !== "not-evaluated" ||
     status.deviceRecognition !== "not-evaluated" ||
-    status.phone !== "not-connected"
+    status.phone !== "not-evaluated"
   )
     throw new Error("invalid_service_response");
   return {
@@ -54,6 +54,6 @@ export function decodeServiceStatus(value: unknown): ServiceStatus {
     },
     permissions: "not-evaluated",
     deviceRecognition: "not-evaluated",
-    phone: "not-connected",
+    phone: "not-evaluated",
   };
 }

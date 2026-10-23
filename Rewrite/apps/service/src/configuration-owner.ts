@@ -1,4 +1,18 @@
 import {
+  decodeWowSyncCommand,
+  decodeWowSyncStatus,
+  disabledWowSyncStatus,
+  type WowSyncCommand,
+  type WowSyncStatus,
+} from "@thumble/contracts/wow-sync-control";
+import {
+  decodeWowCaptureCommand,
+  decodeWowCaptureControlStatus,
+  disabledWowCaptureStatus,
+  type WowCaptureCommand,
+  type WowCaptureControlStatus,
+} from "@thumble/contracts/wow-capture-control";
+import {
   decodePhoneControlsCommand,
   decodePhoneControlsResult,
   type PhoneControlsCommand,
@@ -24,6 +38,20 @@ import {
 /** Private child owner. Database decoding/fsync never runs on input heartbeat IO. */
 export class ConfigurationOwner {
   private readonly pipe: NativePipe<void, unknown>;
+  private wowState = disabledWowSyncStatus();
+  private captureState = disabledWowCaptureStatus();
+  private readonly wowJobs = new Map<string, WowSyncStatus>();
+  private readonly wowIntents = new Map<string, string>();
+  private wowRequest = false;
+  private cacheWow(sync: WowSyncStatus): void {
+    this.wowState = sync;
+    if (sync.operationId) this.wowJobs.set(sync.operationId, sync);
+    while (this.wowJobs.size > 32) {
+      const id = this.wowJobs.keys().next().value!;
+      this.wowJobs.delete(id);
+      this.wowIntents.delete(id);
+    }
+  }
   private readonly jobs = new Map<
     string,
     { fingerprint: string; reply: ConfigurationReply }
@@ -35,7 +63,17 @@ export class ConfigurationOwner {
     executable: string,
     directory: string,
     launcher: readonly string[],
+    helpers?: Readonly<{ capture?: string; profile?: string }>,
   ) {
+    this.wowState = disabledWowSyncStatus(
+      Boolean(helpers?.capture && helpers?.profile),
+    );
+    if (helpers?.capture)
+      this.captureState = {
+        ...disabledWowCaptureStatus(),
+        enabled: true,
+        state: "stopped",
+      };
     if (launcher.length === 0)
       throw new Error("configuration_launcher_invalid");
     this.pipe = new NativePipe(
@@ -48,6 +86,8 @@ export class ConfigurationOwner {
         directory,
         "--receiver",
         executable,
+        ...(helpers?.capture ? ["--capture-helper", helpers.capture] : []),
+        ...(helpers?.profile ? ["--wow-profile-helper", helpers.profile] : []),
       ],
       {
         ready(value, pid) {
@@ -58,6 +98,13 @@ export class ConfigurationOwner {
             value.pid !== pid
           )
             throw new Error("configuration_ready_invalid");
+        },
+        event: (value) => {
+          exact(value, ["version", "event", "capture", "sync"]);
+          if (value.version !== 1 || value.event !== "wow-state")
+            throw new Error("configuration_event_invalid");
+          this.captureState = decodeWowCaptureControlStatus(value.capture);
+          this.cacheWow(decodeWowSyncStatus(value.sync));
         },
         reply(value) {
           exact(value, ["version", "requestId", "ok", "result"]);
@@ -75,6 +122,13 @@ export class ConfigurationOwner {
   }
   async request(input: ConfigurationCommand): Promise<ConfigurationReply> {
     const command = decodeConfigurationCommand(input);
+    if (
+      (this.wowState.busy || this.wowRequest) &&
+      command.command !== "configuration-list" &&
+      command.command !== "configuration-import-status" &&
+      command.command !== "configuration-export-status"
+    )
+      throw new Error("configuration_owner_busy");
     if (
       command.command === "configuration-import-status" ||
       command.command === "configuration-export-status"
@@ -233,6 +287,75 @@ export class ConfigurationOwner {
       throw error;
     } finally {
       this.phoneRead = false;
+    }
+  }
+  async requestWowCapture(
+    input: WowCaptureCommand,
+  ): Promise<WowCaptureControlStatus> {
+    const command = decodeWowCaptureCommand(input);
+    await this.ready;
+    if (command.command === "wow-capture-status") return this.captureState;
+    if (!this.captureState.enabled) throw new Error("wow_capture_not_enabled");
+    if (
+      this.activeJob !== undefined ||
+      this.phoneRead ||
+      this.ordinaryReads ||
+      this.wowState.busy ||
+      this.wowRequest
+    )
+      throw new Error("configuration_owner_busy");
+    this.wowRequest = true;
+    try {
+      this.captureState = decodeWowCaptureControlStatus(
+        await this.pipe.request(command),
+      );
+      return this.captureState;
+    } finally {
+      this.wowRequest = false;
+    }
+  }
+  async requestWowSync(input: WowSyncCommand): Promise<WowSyncStatus> {
+    const command = decodeWowSyncCommand(input);
+    await this.ready;
+    if (command.command === "wow-sync-status") {
+      if (command.operationId === null) return this.wowState;
+      const previous = this.wowJobs.get(command.operationId);
+      if (!previous) throw new Error("wow_sync_unknown");
+      return previous;
+    }
+    if (
+      this.activeJob !== undefined ||
+      this.phoneRead ||
+      this.ordinaryReads ||
+      this.wowRequest
+    )
+      throw new Error("configuration_owner_busy");
+    if (command.command !== "wow-sync-stop") {
+      const fingerprint = JSON.stringify([
+        command.command,
+        command.expectedRevision,
+        command.expectedSourceHash,
+      ]);
+      const old = this.wowIntents.get(command.operationId);
+      if (old && old !== fingerprint) throw new Error("operation_id_reused");
+      if (old) return this.wowJobs.get(command.operationId)!;
+      if (this.wowState.busy) throw new Error("configuration_owner_busy");
+      this.wowIntents.set(command.operationId, fingerprint);
+    }
+    this.wowRequest = true;
+    try {
+      const result = decodeWowSyncStatus(await this.pipe.request(command));
+      this.cacheWow(result);
+      return result;
+    } catch (error) {
+      if (
+        command.command !== "wow-sync-stop" &&
+        !this.wowJobs.has(command.operationId)
+      )
+        this.wowIntents.delete(command.operationId);
+      throw error;
+    } finally {
+      this.wowRequest = false;
     }
   }
   async readSavedPin(input: SavedPinCommand): Promise<SavedConfigurationPin> {

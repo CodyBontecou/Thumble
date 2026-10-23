@@ -15,6 +15,30 @@ private actor RenewalStorage: ControlCredentialSource {
   private var fixture: [String: [String: Any]]
   private var replies: [[String: Any]] = []
   var inputs: [Data] = []
+  var creditQueue: NativeInputWriteQueue?
+  var creditEvents: [String] = []
+  func enableInputCredits(now: @escaping () -> ContinuousClock.Instant) throws {
+    creditEvents.append("enable")
+    try creditQueue?.enable(now: now)
+  }
+  func inputProgress(scope: Data, sequence: UInt64, highestOffered: UInt64) throws {
+    creditEvents.append("progress")
+    try creditQueue?.acknowledge(scope: scope, sequence: sequence, highestOffered: highestOffered)
+  }
+  func completeInputControl() throws {
+    creditEvents.append("complete")
+    try creditQueue?.completeControl()
+    try drainCreditQueue()
+  }
+  func validatedInputRenewalReply() throws {
+    creditEvents.append("renewed")
+    try creditQueue?.validatedRenewalReply()
+  }
+  private func drainCreditQueue() throws {
+    while let frame = try creditQueue?.next() {
+      if frame.kind == .input { inputs.append(frame.payload) }
+    }
+  }
   var commands: [String] = []
   var wall: UInt64 = 1000
   var elapsed: Int64 = 0
@@ -47,8 +71,18 @@ private actor RenewalStorage: ControlCredentialSource {
   func connect() async throws {}
   func offer(_ frame: ControlTLSFrame) -> Bool {
     guard !closed else { return false }
+    if let creditQueue {
+      do {
+        try creditQueue.offer(frame)
+        try drainCreditQueue()
+      } catch {
+        close()
+        return false
+      }
+    }
     if frame.kind == .input {
-      inputs.append(frame.payload)
+      if frame.startsInputGrant { creditEvents.append("zero") }
+      if creditQueue == nil { inputs.append(frame.payload) }
       return true
     }
     guard let value = try? EnrollmentJSON.parse(frame.payload),
@@ -58,6 +92,10 @@ private actor RenewalStorage: ControlCredentialSource {
     switch command {
     case "hello": replies.append(fixture["hello"]!)
     case "authenticate": replies.append(fixture["authenticated"]!)
+    case "control-status":
+      var reply = fixture["authenticated"]!
+      reply["command"] = "control-status"
+      replies.append(reply)
     case "input-configuration": replies.append(fixture["configuration"]!)
     case "input-grant": replies.append(fixture["grant"]!)
     case "input-renew":
@@ -97,7 +135,10 @@ private actor RenewalStorage: ControlCredentialSource {
     return try ControlTLSFrame(
       kind: .control, payload: JSONSerialization.data(withJSONObject: replies.removeFirst()))
   }
-  func close() { closed = true }
+  func close() {
+    closed = true
+    creditQueue?.close()
+  }
   func resume() {
     pending?.resume()
     pending = nil
@@ -227,4 +268,34 @@ private func renewalMap() -> ControlMap {
     try await awaitRenewal { io.closed }
     #expect(!engine.connected && engine.state.buttons.isEmpty)
   }
+}
+
+@Test @MainActor
+private func swiftPhoneOwnerKeepsCreditBarrierAcrossRealQueueRenewalAndCancellation() async throws {
+  let io = try RenewalIO()
+  io.creditQueue = NativeInputWriteQueue()
+  let client = try renewingClient(io)
+  defer { client.close() }
+  _ = try await client.authenticate()
+  let engine = try await client.bindInput(renewalMap())
+  #expect(io.creditEvents == ["enable", "zero"])
+  _ = try await client.status()
+  #expect(io.creditEvents.last == "complete")
+  #expect(engine.begin(id: 1, generation: "1", x: 0.1, y: 0.1))
+  for _ in 0..<40 { engine.tick() }
+  let bounded = io.inputs.count
+  #expect(bounded == 8)
+  io.wall = 36_000
+  io.elapsed = 35_000
+  try await awaitRenewal { io.renewals == 1 && io.creditEvents.contains("progress") }
+  #expect(engine.connected && !io.closed && !engine.state.buttons.isEmpty)
+  let renewed = try #require(io.creditEvents.firstIndex(of: "renewed"))
+  #expect(
+    Array(io.creditEvents[renewed...].prefix(4)) == ["renewed", "zero", "complete", "progress"])
+  #expect(io.inputs.count > bounded)
+  engine.cancel(.background)
+  let closedCount = io.inputs.count
+  #expect(io.closed && !engine.connected && engine.state.buttons.isEmpty)
+  engine.tick()
+  #expect(io.inputs.count == closedCount)
 }

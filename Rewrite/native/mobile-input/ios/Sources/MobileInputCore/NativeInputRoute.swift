@@ -5,6 +5,7 @@ import Foundation
   private let udp: (Data) -> Bool
   private let tls: (Data) -> Bool
   private let now: () -> UInt64
+  private let progressObserved: (Data, UInt64, UInt64) throws -> Void
   private var scope: Data?
   private var next: UInt64 = 0
   private var lastTime: UInt64?
@@ -15,10 +16,12 @@ import Foundation
   private(set) var closed = false
   init(
     now: @escaping () -> UInt64, udp: @escaping (Data) -> Bool, tls: @escaping (Data) -> Bool,
-    initiallyReliable: Bool = false
+    initiallyReliable: Bool = false,
+    progressObserved: @escaping (Data, UInt64, UInt64) throws -> Void = { _, _, _ in }
   ) {
     reliable = initiallyReliable
     self.now = now
+    self.progressObserved = progressObserved
     self.udp = udp
     self.tls = tls
   }
@@ -87,6 +90,14 @@ import Foundation
       guard let lastOffered, sequence <= lastOffered,
         acknowledged.map({ sequence >= $0 }) ?? true
       else {
+        close()
+        return false
+      }
+      guard let scope else {
+        close()
+        return false
+      }
+      do { try progressObserved(scope, sequence, lastOffered) } catch {
         close()
         return false
       }

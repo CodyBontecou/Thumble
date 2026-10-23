@@ -1,3 +1,4 @@
+import { decodeWowSyncCommand } from "@thumble/contracts/wow-sync-control";
 import { decodeSavedRuntimeCommand } from "@thumble/contracts/saved-runtime";
 import { inspectOutputCapabilities } from "./output-doctor.ts";
 import { inspectConfigurationFile } from "@thumble/service/configuration-files";
@@ -12,6 +13,7 @@ import {
   requestSavedRuntime,
   requestSavedReadiness,
   requestWowCapture,
+  requestWowSync,
 } from "@thumble/client/local";
 import { decodeLocalCommand } from "@thumble/contracts/receiver";
 import { GAMEPAD_BUTTONS } from "@thumble/contracts";
@@ -33,6 +35,10 @@ export function startMcp(
   const allowedTools = new Set([
     "output_doctor",
     "wow_capture_status",
+    "wow_sync_status",
+    ...(allowWowCapture && allowConfigurationWrite
+      ? ["wow_refresh", "wow_sync_start", "wow_sync_stop"]
+      : []),
     ...(allowWowCapture
       ? ["wow_capture_start", "wow_capture_request", "wow_capture_stop"]
       : []),
@@ -104,6 +110,70 @@ export function startMcp(
         idempotentHint: true,
         openWorldHint: false,
       });
+      server.registerTool(
+        "wow_sync_status",
+        {
+          description:
+            "Read bounded optical refresh/live job metadata. No capture, permission prompt, authority write or input activation.",
+          inputSchema: z
+            .object({ operationId: z.string().min(1).max(64).optional() })
+            .strict(),
+          annotations: annotations(true),
+        },
+        (args) =>
+          receipt(async () =>
+            requestWowSync(await readEndpointAsync(root, receiver), {
+              command: "wow-sync-status",
+              operationId: args.operationId ?? null,
+            }),
+          ),
+      );
+      if (allowWowCapture && allowConfigurationWrite) {
+        for (const action of ["refresh", "sync-start"] as const)
+          server.registerTool(
+            action === "refresh" ? "wow_refresh" : "wow_sync_start",
+            {
+              description:
+                "Explicit saved-configuration WoW refresh from the authorized game capture source. Requires capture and retained profile helpers at service launch. Commits through CAS; never activates input. Job status is bounded and asynchronous.",
+              inputSchema: z
+                .object({
+                  operationId: z.string().min(1).max(64),
+                  expectedRevision: epoch,
+                  expectedSourceHash: z
+                    .string()
+                    .regex(/^[a-f0-9]{64}$/)
+                    .nullable(),
+                })
+                .strict(),
+              annotations: annotations(false),
+            },
+            (args) =>
+              receipt(async () =>
+                requestWowSync(
+                  await readEndpointAsync(root, receiver),
+                  decodeWowSyncCommand({ command: `wow-${action}`, ...args }),
+                ),
+              ),
+          );
+        server.registerTool(
+          "wow_sync_stop",
+          {
+            description:
+              "Stop the specified local optical refresh/live job and invalidate pending work; never acknowledge an uncommitted observation.",
+            inputSchema: z
+              .object({ operationId: z.string().min(1).max(64) })
+              .strict(),
+            annotations: annotations(false),
+          },
+          (args) =>
+            receipt(async () =>
+              requestWowSync(
+                await readEndpointAsync(root, receiver),
+                decodeWowSyncCommand({ command: "wow-sync-stop", ...args }),
+              ),
+            ),
+        );
+      }
       server.registerTool(
         "wow_capture_status",
         {

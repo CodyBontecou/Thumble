@@ -294,7 +294,7 @@ test("control bounds, overlap, legacy layout mirrors and explicit safe viewport 
       {
         id: ids[0],
         controlKind: "button",
-        layout: { centerX: 0.9, centerY: 0.9 },
+        layout: { ...elements[0]!.layout, centerX: 0.9, centerY: 0.9 },
       },
     ]),
   );

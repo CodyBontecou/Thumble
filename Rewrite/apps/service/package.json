@@ -9,7 +9,8 @@
     "./configuration-owner-process": "./src/configuration-owner-process.ts",
     "./wow-capture-owner-process": "./src/wow-capture-owner-process.ts",
     "./wow-capture-permission": "./src/wow-capture-permission.ts",
-    "./native-output-options": "./src/native-receiver.ts"
+    "./native-output-options": "./src/native-receiver.ts",
+    "./wow-profile-preparer": "./src/wow-profile-preparer.ts"
   },
   "dependencies": {
     "@thumble/contracts": "workspace:*",

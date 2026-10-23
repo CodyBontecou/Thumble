@@ -74,7 +74,7 @@ export type ServiceStatus = {
   receiver: { pid: number; snapshot: Snapshot };
   permissions: "not-evaluated";
   deviceRecognition: "not-evaluated";
-  phone: "not-connected";
+  phone: "not-evaluated";
 };
 
 export function record(value: unknown): Record<string, unknown> {

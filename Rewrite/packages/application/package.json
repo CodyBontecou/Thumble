@@ -14,7 +14,9 @@
     "./wow-live-observer": "./src/wow-live-observer.ts",
     "./configuration-saved-pin": "./src/configuration-saved-pin.ts",
     "./configuration-phone-controls": "./src/configuration-phone-controls.ts",
-    "./wow-capture-supervisor": "./src/wow-capture-supervisor.ts"
+    "./wow-capture-supervisor": "./src/wow-capture-supervisor.ts",
+    "./wow-profile-refresh": "./src/wow-profile-refresh.ts",
+    "./wow-sync-session": "./src/wow-sync-session.ts"
   },
   "dependencies": {
     "@thumble/contracts": "workspace:*",

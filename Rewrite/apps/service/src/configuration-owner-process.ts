@@ -1,3 +1,14 @@
+import { ConfigurationWowOperations } from "./configuration-wow.ts";
+import { RetainedWowProfilePreparer } from "./wow-profile-preparer.ts";
+import { WowCaptureSession } from "./wow-capture-session.ts";
+import {
+  NativeWowCaptureProvider,
+  captureHelperPath,
+} from "./wow-capture-provider.ts";
+import { decodeWowAtlas } from "./wow-atlas-decoder.ts";
+import { decodeWowCaptureCommand } from "@thumble/contracts/wow-capture-control";
+import { decodeWowSyncCommand } from "@thumble/contracts/wow-sync-control";
+import { lstatSync } from "node:fs";
 import { ConfigurationPhoneControlsOperations } from "@thumble/application/configuration-phone-controls";
 import { decodePhoneControlsCommand } from "@thumble/contracts/phone-controls";
 import { ConfigurationSavedPinOperations } from "@thumble/application/configuration-saved-pin";
@@ -25,7 +36,17 @@ import { SqliteConfigurationRepository } from "@thumble/storage";
 export async function runConfigurationOwner(
   directory: string,
   executable: string,
+  helpers?: Readonly<{ capture?: string; profile?: string }>,
 ): Promise<void> {
+  const authorize = (path: string | undefined) => {
+    if (path === undefined) return undefined;
+    if (lstatSync(path).isSymbolicLink()) throw new Error("wow_helper_invalid");
+    return captureHelperPath(path);
+  };
+  const capturePath = authorize(helpers?.capture),
+    profilePath = authorize(helpers?.profile);
+  if (profilePath && !capturePath)
+    throw new Error("wow_sync_capture_helper_required");
   const repository = new SqliteConfigurationRepository(directory, executable);
   const savedPins = new ConfigurationSavedPinOperations(
     repository,
@@ -57,6 +78,40 @@ export async function runConfigurationOwner(
     resourceHash: (bytes) => createHash("sha256").update(bytes).digest("hex"),
     publish: (path, bytes) => publishConfigurationFile(executable, path, bytes),
   });
+  let emit: (capture: unknown, sync: unknown) => void = () => {};
+  let monitor: ReturnType<typeof setInterval> | undefined;
+  let lastEvent = "";
+  const providers = new Set<NativeWowCaptureProvider>();
+  const capture = capturePath
+    ? new WowCaptureSession({
+        clock: () => Math.floor(performance.now()),
+        schedule: (delay, callback) => {
+          const timer = setTimeout(callback, delay);
+          return () => clearTimeout(timer);
+        },
+        create: () => {
+          const provider = new NativeWowCaptureProvider(
+            capturePath,
+            "--capture",
+            undefined,
+            () => capture!.providerUnavailable(),
+          );
+          providers.add(provider);
+          provider.child.once("close", () => providers.delete(provider));
+          return provider;
+        },
+        decodeAtlas: decodeWowAtlas,
+      })
+    : undefined;
+  const wow = new ConfigurationWowOperations({
+    repository,
+    ...(capture ? { capture } : {}),
+    ...(profilePath
+      ? { preparer: new RetainedWowProfilePreparer(profilePath) }
+      : {}),
+    readAsset: (hash) => assets.read(hash),
+    publish: (capture, sync) => emit(capture, sync),
+  });
   try {
     await new Promise<void>((resolve, reject) => {
       let buffer = Buffer.alloc(0),
@@ -87,11 +142,26 @@ export async function runConfigurationOwner(
       };
       const write = (value: unknown) => {
         const line = JSON.stringify(value) + "\n";
-        if (Buffer.byteLength(line) > FRAME_BYTES)
+        if (
+          Buffer.byteLength(line) > FRAME_BYTES ||
+          process.stdout.writableLength > FRAME_BYTES * 2
+        )
           throw new Error("configuration_response_too_large");
         if (!process.stdout.write(line)) {
           blocked = true;
           process.stdin.pause();
+        }
+      };
+      emit = (capture, sync) => {
+        const current = JSON.stringify([capture, sync]);
+        if (current === lastEvent) return;
+        lastEvent = current;
+        if (!ended) {
+          try {
+            write({ version: 1, event: "wow-state", capture, sync });
+          } catch {
+            finish(new Error("configuration_output_failed"));
+          }
         }
       };
       process.stdout.on("error", outputFailure);
@@ -147,7 +217,44 @@ export async function runConfigurationOwner(
             return;
           }
           try {
-            if (record(body).command === "configuration-phone-controls") {
+            const operation = record(body).command;
+            if (
+              typeof operation === "string" &&
+              operation.startsWith("wow-capture-")
+            ) {
+              void wow.capture(decodeWowCaptureCommand(body)).then(
+                (result) => {
+                  if (!ended)
+                    write({ version: 1, requestId, ok: true, result });
+                },
+                () => {
+                  if (!ended)
+                    write({
+                      version: 1,
+                      requestId,
+                      ok: false,
+                      error: "wow_capture_unavailable",
+                    });
+                },
+              );
+              continue;
+            }
+            if (
+              typeof operation === "string" &&
+              (operation === "wow-refresh" || operation.startsWith("wow-sync-"))
+            ) {
+              const result = wow.execute(decodeWowSyncCommand(body));
+              write({ version: 1, requestId, ok: true, result });
+              continue;
+            }
+            if (
+              wow.busy &&
+              operation !== "configuration-list" &&
+              operation !== "configuration-phone-controls" &&
+              operation !== "configuration-saved-pin"
+            )
+              throw new Error("configuration_owner_busy");
+            if (operation === "configuration-phone-controls") {
               const result = phoneControls.execute(
                 decodePhoneControlsCommand(body),
               );
@@ -184,8 +291,18 @@ export async function runConfigurationOwner(
           finish(new Error("configuration_frame_too_large"));
       }
       write({ version: 1, ready: "configuration", pid: process.pid });
+      if (capturePath) emit(wow.captureStatus(), wow.status());
+      if (capturePath)
+        monitor = setInterval(
+          () => emit(wow.captureStatus(), wow.status()),
+          100,
+        );
     });
   } finally {
+    if (monitor) clearInterval(monitor);
+    emit = () => {};
+    await wow.close();
+    for (const provider of providers) void provider.stop();
     repository.close();
   }
 }

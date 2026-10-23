@@ -1,8 +1,10 @@
-import { WowCaptureOwner } from "./wow-capture-owner.ts";
+import {
+  decodeWowSyncCommand,
+  type WowSyncStatus,
+} from "@thumble/contracts/wow-sync-control";
 import { captureHelperPath } from "./wow-capture-provider.ts";
 import {
   decodeWowCaptureCommand,
-  disabledWowCaptureStatus,
   type WowCaptureControlStatus,
 } from "@thumble/contracts/wow-capture-control";
 import { PhoneControlsBridge } from "./phone-controls-bridge.ts";
@@ -89,6 +91,7 @@ export async function serve(
   output: ReceiverOutput = { backend: "recording" },
   keepSavedControllerReady = false,
   authOnlyListener?: AuthorizedListener,
+  wowProfileHelper?: string,
 ): Promise<void> {
   if (
     keepSavedControllerReady &&
@@ -101,6 +104,16 @@ export async function serve(
       : decodeAuthorizedListener(authOnlyListener);
   if (listener && (!identityDirectory || !isAbsolute(identityDirectory)))
     throw new Error("auth_listener_persistent_identity_required");
+  if (wowCaptureHelper && lstatSync(wowCaptureHelper).isSymbolicLink())
+    throw new Error("wow_helper_invalid");
+  if (wowProfileHelper && lstatSync(wowProfileHelper).isSymbolicLink())
+    throw new Error("wow_helper_invalid");
+  if (wowProfileHelper && !wowCaptureHelper)
+    throw new Error("wow_sync_capture_helper_required");
+  const authorizedProfileHelper =
+    wowProfileHelper === undefined
+      ? undefined
+      : captureHelperPath(wowProfileHelper);
   const authorizedCaptureHelper =
     wowCaptureHelper === undefined
       ? undefined
@@ -120,6 +133,10 @@ export async function serve(
     executable,
     directory,
     configurationLauncher,
+    {
+      ...(authorizedCaptureHelper ? { capture: authorizedCaptureHelper } : {}),
+      ...(authorizedProfileHelper ? { profile: authorizedProfileHelper } : {}),
+    },
   );
   try {
     await configuration.ready;
@@ -195,26 +212,6 @@ export async function serve(
     ]);
     throw error;
   }
-  const capture = authorizedCaptureHelper
-    ? new WowCaptureOwner(authorizedCaptureHelper, configurationLauncher)
-    : undefined;
-  if (capture) {
-    try {
-      await capture.ready;
-    } catch (error) {
-      capture.disconnect();
-      configuration.disconnect();
-      pairing.disconnect();
-      native.disconnect();
-      await Promise.all([
-        waitForOwnerExit(capture.child),
-        waitForOwnerExit(configuration.child),
-        waitForOwnerExit(pairing.child),
-        waitForOwnerExit(native.child),
-      ]);
-      throw error;
-    }
-  }
   const sockets = new Set<Socket>();
   let stopping = false;
   const status = (
@@ -228,7 +225,7 @@ export async function serve(
     receiver: { pid: native.child.pid!, snapshot },
     permissions: "not-evaluated",
     deviceRecognition: "not-evaluated",
-    phone: "not-connected",
+    phone: "not-evaluated",
   });
   const server = createServer((socket) => {
     if (sockets.size >= 32) {
@@ -285,7 +282,8 @@ export async function serve(
             | ConfigurationReply
             | SavedRuntimeStatus
             | SavedReadinessStatus
-            | WowCaptureControlStatus;
+            | WowCaptureControlStatus
+            | WowSyncStatus;
           const operation = record(envelope.body).command;
           if (operation === "saved-readiness-status") {
             exact(record(envelope.body), ["command"]);
@@ -301,12 +299,16 @@ export async function serve(
             typeof operation === "string" &&
             operation.startsWith("wow-capture-")
           ) {
-            const command = decodeWowCaptureCommand(envelope.body);
-            if (!capture) {
-              if (command.command !== "wow-capture-status")
-                throw new Error("wow_capture_not_enabled");
-              result = disabledWowCaptureStatus();
-            } else result = await capture.request(command);
+            result = await configuration.requestWowCapture(
+              decodeWowCaptureCommand(envelope.body),
+            );
+          } else if (
+            typeof operation === "string" &&
+            (operation === "wow-refresh" || operation.startsWith("wow-sync-"))
+          ) {
+            result = await configuration.requestWowSync(
+              decodeWowSyncCommand(envelope.body),
+            );
           } else if (
             operation === "activate-saved" ||
             operation === "saved-binding-status"
@@ -419,7 +421,6 @@ export async function serve(
     if (stopping) return;
     stopping = true;
     pairing.disconnect();
-    capture?.disconnect();
     clearInterval(heartbeat);
     try {
       await controller.execute({ command: "stop" });
@@ -438,7 +439,6 @@ export async function serve(
         waitForOwnerExit(native.child),
         waitForOwnerExit(pairing.child),
         waitForOwnerExit(configuration.child),
-        ...(capture ? [waitForOwnerExit(capture.child)] : []),
       ]);
     } catch {
       process.exit(1);

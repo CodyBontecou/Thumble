@@ -302,6 +302,9 @@ class PhoneRenewalTest {
         client(io).use { client ->
             client.authenticate()
             val engine = client.prepareInput(map()).bind()
+            // Observe packet zero before jumping the synthetic clock. An undispatched
+            // initial state must expire after 350ms and cannot exercise renewal.
+            until { io.inputs().isNotEmpty() }
             io.wall.set(36_000)
             io.elapsed.set(TimeUnit.MILLISECONDS.toNanos(35_000))
             until { io.renewals.get() == 1 }
