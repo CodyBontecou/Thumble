@@ -1,3 +1,3 @@
-# Thumble — submission draft
+# Thumble — pilot submission draft
 
-Version 0.1.2 includes the published terms URL. OAuth uses the existing public PKCE client; confirm the portal callback before connecting. Google remains in Testing according to the latest deployment record. Dedicated reviewer access, executed review scenarios and a walkthrough recording remain outstanding. This package is not an approved or published listing.
+This package is not a published listing. OAuth uses the existing public PKCE client; confirm the portal callback before connecting. Google remains in Testing. Publisher identity/contact, public policy verification, domain challenge, reviewer account, completed review scenarios and a video are outstanding. See docs/marketplaces in the source repository.
