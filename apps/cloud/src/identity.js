@@ -103,6 +103,9 @@ export function identityOptions(env) {
       mcp({
         loginPage: '/sign-in', consentPage: '/consent', resource: config.resource,
         resources: config.resources.map(identifier => ({ identifier, allowedScopes: [...IDENTITY_SCOPES], accessTokenTtl: 900 })),
+        // These resources are operator-managed. Refresh configured policy fields
+        // on existing rows too; insert-only seeding silently drops newly added scopes.
+        resourceSeedMode: 'merge',
         scopes: [...IDENTITY_SCOPES], advertisedMetadata: { scopes_supported: [...CHATGPT_SCOPES] }, grantTypes: ['authorization_code', 'refresh_token'],
         allowDynamicClientRegistration: false, allowUnauthenticatedClientRegistration: false,
         cachedTrustedClients: new Set(['thumble-mobile', 'thumble-chatgpt', 'thumble-receiver']),

@@ -34,11 +34,13 @@ try {
   async function request(path, { method = 'GET', value, form = false, token, session = false, expectedAccount } = {}) {
     return runtime.dispatchFetch(`${origin}${path}`, { method, redirect: 'manual', headers: { accept: value ? 'application/json' : 'text/html', 'sec-fetch-mode': value ? 'cors' : 'navigate', 'MF-Sec-Fetch-Mode': value ? 'cors' : 'navigate', 'cf-connecting-ip': '203.0.113.5', ...(expectedAccount ? { 'x-thumble-account-id': expectedAccount } : {}), ...(session ? { cookie, origin } : {}), ...(token ? { authorization: `Bearer ${token}` } : {}), ...(value ? { 'content-type': form ? 'application/x-www-form-urlencoded' : 'application/json' } : {}) }, ...(value ? { body: form ? new URLSearchParams(value).toString() : JSON.stringify(value) } : {}) });
   }
+  // Production upgrades start with a resource policy persisted before pairing scopes existed.
+  await db.prepare('INSERT INTO oauthResource (id,identifier,name,allowedScopes,accessTokenTtl,disabled,createdAt,updatedAt) VALUES (?,?,"Existing MCP resource",?,900,0,?,?)').bind('pre-pairing-resource', `${origin}/mcp`, JSON.stringify(IDENTITY_SCOPES.filter(scope => !scope.startsWith('pairing:'))), now, now).run();
   const discovery = await request('/.well-known/oauth-authorization-server/api/auth'); assert.equal(discovery.status, 200); const metadata = await discovery.json(); assert.equal(metadata.issuer, `${origin}/api/auth`); assert.ok(metadata.token_endpoint_auth_methods_supported.includes('none')); assert.equal(metadata.registration_endpoint, undefined); assert.equal(metadata.scopes_supported.includes('devices:manage'), false);
-  async function authorize(clientId) {
+  async function authorize(clientId, requestedScopes) {
     const redirectUri = clientId === 'thumble-mobile' ? MOBILE_REDIRECT_URI : clientId === 'thumble-receiver' ? RECEIVER_REDIRECT_URI : 'https://chatgpt.com/connector_platform_oauth_redirect';
     const verifier = 'a'.repeat(64), challenge = Buffer.from(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier))).toString('base64url');
-    const params = new URLSearchParams({ response_type: 'code', client_id: clientId, redirect_uri: redirectUri, scope: (clientId === 'thumble-chatgpt' ? CHATGPT_SCOPES : clientId === 'thumble-receiver' ? RECEIVER_SCOPES : MOBILE_SCOPES).join(' '), resource: `${origin}/mcp`, state: 'runtime-state', code_challenge: challenge, code_challenge_method: 'S256' });
+    const params = new URLSearchParams({ response_type: 'code', client_id: clientId, redirect_uri: redirectUri, scope: (requestedScopes ?? (clientId === 'thumble-chatgpt' ? CHATGPT_SCOPES : clientId === 'thumble-receiver' ? RECEIVER_SCOPES : MOBILE_SCOPES)).join(' '), resource: `${origin}/mcp`, state: 'runtime-state', code_challenge: challenge, code_challenge_method: 'S256' });
     const authorization = await request(`/api/auth/oauth2/authorize?${params}`, { session: true }); assert.equal(authorization.status, 302, `authorize: ${authorization.status} ${await authorization.clone().text()}`);
     const consentPath = authorization.headers.get('location'); const consentPage = await request(consentPath, { session: true }); assert.equal(consentPage.status, 200);
     const signedQuery = new URL(consentPath, origin).search.slice(1);
@@ -47,7 +49,11 @@ try {
     const exchange = await request('/api/auth/oauth2/token', { method: 'POST', form: true, value: { grant_type: 'authorization_code', client_id: clientId, redirect_uri: redirectUri, code, code_verifier: verifier, resource: `${origin}/mcp`, ...(clientId === 'thumble-chatgpt' && env.CHATGPT_CLIENT_SECRET ? { client_secret: env.CHATGPT_CLIENT_SECRET } : {}) } });
     assert.equal(exchange.status, 200); return exchange.json();
   }
+  const oldAgent = await authorize('thumble-chatgpt', CHATGPT_SCOPES.filter(scope => scope !== 'pairing:read'));
+  assert(!decodeJwt(oldAgent.access_token).scope.includes('pairing:read'));
   const phoneTokens = await authorize('thumble-mobile'); let agentTokens = await authorize('thumble-chatgpt');
+  assert(decodeJwt(agentTokens.access_token).scope.split(' ').includes('pairing:read'), 'Upgraded consent did not issue pairing:read');
+  console.log('PASS: upgrading an existing ChatGPT grant issues pairing:read');
   const receiverTokens = await authorize('thumble-receiver');
   assert.equal(receiverTokens.refresh_token, undefined);
   const receiverResponse = await request('/v1/receiver-pairing', { method: 'POST', token: receiverTokens.access_token, value: { name: 'Runtime Mac' } });
