@@ -2,4 +2,5 @@ executionPrerequisite: Isolated com.thumble.wowsetupqa is paired to the input-di
 steps:
   - scroll-to: { target: { text: 2. Add Thumble for gamepad recovery } }
   - await: { visible: { text: 2. Add Thumble for gamepad recovery } }
+  - scroll-to: { target: { text: Thumble addon installation guide } }
   - await: { visible: { text: Thumble addon installation guide } }

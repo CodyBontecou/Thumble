@@ -1,0 +1,28 @@
+To: support@smithery.ai
+Subject: Thumble direct MCP registry listing — publishing flow returns 403
+
+Hi Smithery team,
+
+Please list Thumble in the continuing public, non-proxied MCP registry, or let us know the current submission route.
+
+The publishing flow at https://smithery.ai/servers/new returned:
+403 {"error":"Updating servers has been removed. Contact support@smithery.ai."}
+
+Name: Thumble
+Canonical Streamable HTTP endpoint: https://thumble.io/mcp
+Website and documentation: https://thumble.io and https://thumble.io/docs
+Public icon: https://thumble.io/assets/app-icon.png
+Privacy: https://thumble.io/privacy
+Terms: https://thumble.io/terms
+Publisher contact: Cody Bontecou, cody@isolated.tech
+
+Thumble provides OAuth-protected, read-only inspection of saved phone-controller layouts and revisions, registered phones and viewports, and existing delivery receipts. The five current tools are profile_schema, list_profiles, get_profile, list_devices and delivery_status. AI controller generation, saving and sending are disabled. A rendered receipt confirms phone rendering, not Mac input or game bindings.
+
+The Official MCP Registry entry is published and active as io.github.CodyBontecou/thumble, version 0.1.0:
+https://registry.modelcontextprotocol.io/v0.1/servers/io.github.CodyBontecou%2Fthumble/versions/0.1.0
+
+We understand Smithery's proxy and managed identity are retiring October 31. We are requesting a direct endpoint directory listing, with no run.tools proxy dependency. Please advise if a static server card or further metadata is needed. Thumble currently uses operator-registered OAuth clients rather than dynamic registration/CIMD; no credentials are included in this message.
+
+Thanks,
+Cody Bontecou
+Thumble

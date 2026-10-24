@@ -1,0 +1,25 @@
+{
+  "server": {
+    "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+    "name": "io.github.CodyBontecou/thumble",
+    "description": "Inspect saved Thumble controller layouts, registered phones, and delivery receipts. OAuth required.",
+    "title": "Thumble",
+    "version": "0.1.0",
+    "websiteUrl": "https://thumble.io",
+    "remotes": [
+      {
+        "type": "streamable-http",
+        "url": "https://thumble.io/mcp"
+      }
+    ]
+  },
+  "_meta": {
+    "io.modelcontextprotocol.registry/official": {
+      "status": "active",
+      "statusChangedAt": "2026-10-24T19:05:13.421315Z",
+      "publishedAt": "2026-10-24T19:05:13.421315Z",
+      "updatedAt": "2026-10-24T19:05:13.421315Z",
+      "isLatest": true
+    }
+  }
+}
