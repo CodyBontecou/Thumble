@@ -1,4 +1,5 @@
-steps: []
-executionPrerequisite: Isolated com.thumble.wowsetupqa is paired to the
-  input-discarding test receiver and showing step 3 Prepare your WoW addons at
-  the top in portrait. No gameplay confirmations are made.
+executionPrerequisite: Isolated com.thumble.wowsetupqa is paired to the input-discarding test receiver and showing step 3 Prepare your WoW addons at the top in portrait. No gameplay confirmations are made.
+steps:
+  - scroll-to: { target: { text: 2. Add Thumble for gamepad recovery } }
+  - await: { visible: { text: 2. Add Thumble for gamepad recovery } }
+  - await: { visible: { text: Thumble addon installation guide } }

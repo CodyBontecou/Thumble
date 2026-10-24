@@ -13,6 +13,14 @@ const rpc = (method, params, options = {}) => new Request('https://cloud.example
 });
 const deps = { authenticateAccount: async () => principal, handleApi: async () => Response.json({ profiles: [] }) };
 
+test('pairing OAuth scope survives MCP discovery in primary and compatibility metadata', async () => {
+  const response = await handleMcp(rpc('tools/list'), env, deps);
+  const { result } = await response.json();
+  const tool = result.tools.find(tool => tool.name === 'show_pairing_code');
+  assert.deepEqual(tool.securitySchemes, [{ type: 'oauth2', scopes: ['pairing:read'] }]);
+  assert.deepEqual(tool._meta.securitySchemes, tool.securitySchemes);
+});
+
 test('cloud MCP advertises only scoped controller tools and truthful write hints', () => {
   assert.deepEqual(cloudTools.map(tool => tool.name), ['show_pairing_code', 'profile_schema', 'validate_profile', 'list_profiles', 'get_profile', 'save_profile', 'list_devices', 'deliver_profile', 'delivery_status']);
   assert.equal(cloudTools.find(tool => tool.name === 'deliver_profile').annotations.destructiveHint, true);

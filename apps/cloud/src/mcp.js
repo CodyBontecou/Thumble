@@ -26,7 +26,10 @@ const definitions = [
   ['delivery_status', 'Read the phone receipt. rendered confirms the exact phone layout in practice or after explicit Mac adoption. It does not prove Mac input or game bindings.', object({ deliveryId: id }), SCOPES.deliveryRead, read],
 ];
 export const MCP_SCOPES = Object.freeze([...new Set(definitions.map(definition => definition[3]))]);
-export const cloudTools = definitions.map(([name, description, inputSchema, scope, annotations]) => ({ name, description, inputSchema, annotations, _meta: { securitySchemes: [{ type: 'oauth2', scopes: [scope] }] } }));
+export const cloudTools = definitions.map(([name, description, inputSchema, scope, annotations]) => {
+  const securitySchemes = [{ type: 'oauth2', scopes: [scope] }];
+  return { name, description, inputSchema, annotations, securitySchemes, _meta: { securitySchemes } };
+});
 
 const generatorTools = new Set(['validate_profile', 'save_profile', 'deliver_profile']);
 export const availableCloudTools = env => cloudTools.filter(tool => !generatorTools.has(tool.name) || aiControllerGeneratorEnabled(env.AI_CONTROLLER_GENERATOR_ENABLED));
