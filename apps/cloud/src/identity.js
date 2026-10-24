@@ -6,6 +6,7 @@ import { generateAppleClientSecret } from './apple.js';
 import { FRESH_SESSION_SECONDS, prepareAccountDeletion, completeAccountDeletion } from './deletion.js';
 export { generateAppleClientSecret } from './apple.js';
 import { CLOUD_SCOPES, CloudError, validServiceUrl } from '@tapping/cloud-contracts';
+import { GLAMA_CLIENT_PREFIX, GLAMA_MONITOR_SCOPES, readGlamaRegistration, glamaAuthorization } from './glama-monitor.js';
 
 export const IDENTITY_SCOPES = Object.freeze(['openid', 'offline_access', ...CLOUD_SCOPES]);
 export const CHATGPT_SCOPES = Object.freeze(IDENTITY_SCOPES.filter(scope => !['devices:manage', 'pairing:manage'].includes(scope)));
@@ -95,7 +96,7 @@ export function identityOptions(env) {
       await prepareAccountDeletion(env, { user, request, context, issuer: config.accountIssuer });
     }, afterDelete: user => completeAccountDeletion(env, user) } },
     account: { encryptOAuthTokens: true, accountLinking: { enabled: true, requireLocalEmailVerified: true, allowDifferentEmails: false } },
-    rateLimit: { enabled: true, storage: 'database', window: 60, max: 100 },
+    rateLimit: { enabled: true, storage: 'database', window: 60, max: 100, customRules: { '/oauth2/register': { window: 60, max: 5 } } },
     disabledPaths: ['/token', '/email-otp/check-verification-otp', '/email-otp/verify-email', '/email-otp/request-password-reset', '/email-otp/forget-password', '/email-otp/reset-password', '/email-otp/request-email-change', '/email-otp/change-email'],
     plugins: [
       ...(config.providers.includes('email') ? [emailOTP({ otpLength: 6, expiresIn: 300, allowedAttempts: 3, storeOTP: 'hashed', resendStrategy: 'rotate', rateLimit: { window: 60, max: 3 }, sendVerificationOTP: data => sendSignInCode(env, data) })] : []),
@@ -107,7 +108,11 @@ export function identityOptions(env) {
         // on existing rows too; insert-only seeding silently drops newly added scopes.
         resourceSeedMode: 'merge',
         scopes: [...IDENTITY_SCOPES], advertisedMetadata: { scopes_supported: [...CHATGPT_SCOPES] }, grantTypes: ['authorization_code', 'refresh_token'],
-        allowDynamicClientRegistration: false, allowUnauthenticatedClientRegistration: false,
+        allowDynamicClientRegistration: Boolean(env.GLAMA_MONITOR_EMAIL), allowUnauthenticatedClientRegistration: Boolean(env.GLAMA_MONITOR_EMAIL),
+        generateClientId: () => `${GLAMA_CLIENT_PREFIX}${crypto.randomUUID()}`,
+        clientRegistrationDefaultScopes: [...GLAMA_MONITOR_SCOPES], clientRegistrationAllowedScopes: [],
+        clientRegistrationDefaultResources: [config.resource], clientRegistrationAllowedResources: [config.resource],
+        clientRegistrationRequirePKCE: true,
         cachedTrustedClients: new Set(['thumble-mobile', 'thumble-chatgpt', 'thumble-receiver']),
         // Better Auth 1.7.12 infers public-token support from registration or
         // client discovery, overlooking pre-provisioned public clients. This
@@ -187,5 +192,15 @@ export async function ensureIdentityClients(env) {
 }
 export async function handleIdentity(request, env) {
   await ensureIdentityClients(env);
+  if (new URL(request.url).pathname.replace(/\/+$/, '') === '/api/auth/oauth2/register') {
+    if (!env.GLAMA_MONITOR_EMAIL) return Response.json({ error: 'registration_not_supported' }, { status: 403 });
+    if (request.method !== 'POST') return Response.json({ error: 'invalid_request' }, { status: 405 });
+    if (Number(request.headers.get('content-length')) > 8192) return Response.json({ error: 'invalid_client_metadata' }, { status: 413 });
+    let metadata;
+    try { metadata = await readGlamaRegistration(request); }
+    catch (error) { return Response.json({ error: error.code || 'invalid_client_metadata', error_description: error.message }, { status: error.status || 400 }); }
+    request = new Request(request, { body: JSON.stringify(metadata) });
+  }
+  request = glamaAuthorization(request);
   return (await createIdentity(env)).handler(request);
 }

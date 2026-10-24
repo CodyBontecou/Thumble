@@ -331,7 +331,7 @@ test('operator-registered Grok client enforces read-only scopes, exact callback,
   f.db.exec(grokClientSql());
   await ensureIdentityClients(f.env);
   const row = f.db.prepare('SELECT * FROM oauthClient WHERE clientId=?').get(GROK_CLIENT_ID);
-  assert.equal(row.clientSecret, null); assert.equal(row.requirePKCE, 1); assert.equal(row.skipConsent, 0);
+  assert.equal(row.clientSecret, null); assert.equal(row.requirePKCE, 1); assert.equal(Boolean(row.skipConsent), false);
   const args = { redirect_uri: GROK_REDIRECT_URI, scope: GROK_SCOPES.join(' '), resource: 'https://thumble.io/mcp' };
   for (const extra of [{ scope: 'openid profiles:write' }, { scope: 'openid pairing:read' }, { redirect_uri: 'https://grok.com.attacker.example/connectors-oauth-exchange-code/' }]) {
     const { result } = await f.authorize(GROK_CLIENT_ID, { ...args, ...extra });
@@ -418,4 +418,76 @@ test('auth domain migration preserves cached clients, refresh tokens, sessions a
   const deletion = await worker.fetch(deletionRequest, env); assert.equal(deletion.status, 200);
   assert.equal(f.db.prepare('SELECT account_id FROM cloud_deleted_accounts').get().account_id, oldPrincipal.accountId);
   for (const accessToken of [phone.tokens.access_token, tokens.access_token]) await assert.rejects(authenticateAccount(new Request(`${origin}/v1/me`, { headers: { authorization: `Bearer ${accessToken}` } }), env), error => error.code === 'account_deleted');
+});
+
+test('Glama registration restricts callbacks, resources, scopes and sample account; PKCE/consent/refresh remain required', async t => {
+  const f = await fixture(t, { GLAMA_MONITOR_EMAIL: 'owner@example.test' });
+  const register = body => handleIdentity(f.request('/api/auth/oauth2/register', { method: 'POST', body, authenticated: false, origin: false }), f.env);
+  for (const redirect of ['https://attacker.example/callback', 'https://glama.ai.attacker.example/callback', 'http://glama.ai/callback', 'https://glama.ai@attacker.example/callback', 'https://glama.ai/callback?next=https://evil.example', 'https://glama.ai:8443/callback', 'https://glama.ai/callback#fragment']) {
+    assert.equal((await register({ redirect_uris: [redirect], token_endpoint_auth_method: 'none' })).status, 400);
+  }
+  const redirectUri = 'https://glama.ai/api/app/mcp/oauth/callback';
+  const response = await register({ redirect_uris: [redirectUri, 'http://localhost:6749/callback'], token_endpoint_auth_method: 'none', scope: 'profiles:write pairing:manage devices:manage' });
+  assert.equal(response.status, 201, await response.clone().text());
+  const client = await response.json();
+  assert.match(client.client_id, /^thumble-glama-/);
+  assert.deepEqual(client.redirect_uris, [redirectUri]);
+  assert.deepEqual(client.scope.split(' ').sort(), ['offline_access', 'profiles:read', 'devices:read', 'deliveries:read'].sort());
+  const row = f.db.prepare('SELECT * FROM oauthClient WHERE clientId = ?').get(client.client_id);
+  assert.equal(Boolean(row.skipConsent), false);
+  const verifier = 'b'.repeat(64), challenge = Buffer.from(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier))).toString('base64url');
+  const params = new URLSearchParams({ response_type: 'code', client_id: client.client_id, redirect_uri: redirectUri, scope: 'profiles:read profiles:write devices:read deliveries:read deliveries:write pairing:read', resource: `${f.env.BETTER_AUTH_URL}/mcp`, state: 'glama-test', code_challenge: challenge, code_challenge_method: 'S256' });
+  const missingPkce = new URLSearchParams(params); missingPkce.delete('code_challenge'); missingPkce.delete('code_challenge_method');
+  const noPkce = await handleIdentity(f.request(`/api/auth/oauth2/authorize?${missingPkce}`), f.env);
+  assert(new URL(noPkce.headers.get('location'), f.env.BETTER_AUTH_URL).searchParams.has('error'));
+  const authorization = await handleIdentity(f.request(`/api/auth/oauth2/authorize?${params}`), f.env);
+  assert.equal(authorization.status, 302, await authorization.clone().text());
+  const signedQuery = new URL(authorization.headers.get('location'), f.env.BETTER_AUTH_URL).search.slice(1);
+  assert.equal(new URLSearchParams(signedQuery).get('scope').includes('write'), false);
+  const consent = await handleIdentity(f.request('/api/auth/oauth2/consent', { method: 'POST', body: { accept: true, oauth_query: signedQuery } }), f.env);
+  assert.equal(consent.status, 200, await consent.clone().text());
+  const redirect = new URL((await consent.json()).url);
+  const tokenResult = await handleIdentity(f.request('/api/auth/oauth2/token', { method: 'POST', form: true, authenticated: false, origin: false, body: { grant_type: 'authorization_code', client_id: client.client_id, redirect_uri: redirectUri, code: redirect.searchParams.get('code'), code_verifier: verifier, resource: `${f.env.BETTER_AUTH_URL}/mcp` } }), f.env);
+  assert.equal(tokenResult.status, 200, await tokenResult.clone().text());
+  const tokens = await tokenResult.json();
+  assert.ok(tokens.refresh_token);
+  const claims = decodeJwt(tokens.access_token);
+  assert.equal(claims.client_id, client.client_id);
+  assert(claims.scope.split(' ').every(scope => ['offline_access', 'profiles:read', 'devices:read', 'deliveries:read'].includes(scope)));
+  const resourceRequest = () => new Request(`${f.env.BETTER_AUTH_URL}/mcp`, { headers: { authorization: `Bearer ${tokens.access_token}` } });
+  assert.equal((await authenticateAccount(resourceRequest(), f.env)).kind, 'account');
+  f.env.GLAMA_MONITOR_EMAIL = 'another@example.test';
+  await assert.rejects(authenticateAccount(resourceRequest(), f.env), error => error.code === 'forbidden');
+  f.env.GLAMA_MONITOR_EMAIL = 'owner@example.test';
+  const refresh = await handleIdentity(f.request('/api/auth/oauth2/token', { method: 'POST', form: true, authenticated: false, origin: false, body: { grant_type: 'refresh_token', client_id: client.client_id, refresh_token: tokens.refresh_token, resource: `${f.env.BETTER_AUTH_URL}/mcp` } }), f.env);
+  assert.equal(refresh.status, 200, await refresh.clone().text());
+  assert.equal(decodeJwt((await refresh.json()).access_token).scope.includes('write'), false);
+});
+
+test('operator-registered Gemini CLI client enforces read-only scopes, exact callback, consent and PKCE', async t => {
+  const { geminiClientSql, GEMINI_CLIENT_ID, GEMINI_REDIRECT_URI, GEMINI_SCOPES } = await import('../../../tools/lib/gemini-oauth-client.mjs');
+  const f = await fixture(t, { MCP_RESOURCE_URL: 'https://thumble.io/mcp' });
+  f.db.exec(geminiClientSql());
+  await ensureIdentityClients(f.env);
+  const row = f.db.prepare('SELECT * FROM oauthClient WHERE clientId=?').get(GEMINI_CLIENT_ID);
+  assert.equal(row.clientSecret, null); assert.equal(row.requirePKCE, 1); assert.equal(Boolean(row.skipConsent), false);
+  const args = { redirect_uri: GEMINI_REDIRECT_URI, scope: GEMINI_SCOPES.join(' '), resource: 'https://thumble.io/mcp' };
+  for (const extra of [{ scope: 'profiles:write' }, { scope: 'pairing:read' }, { redirect_uri: 'http://localhost:7777/wrong-path' }, { redirect_uri: 'http://attacker.example:7777/oauth/callback' }, { resource: 'https://attacker.example/mcp' }]) {
+    const { result } = await f.authorize(GEMINI_CLIENT_ID, { ...args, ...extra });
+    assert.ok(result.status >= 400 || new URL(result.headers.get('location'), f.env.BETTER_AUTH_URL).searchParams.has('error'), JSON.stringify(extra));
+  }
+  const { result, verifier } = await f.authorize(GEMINI_CLIENT_ID, args);
+  assert.equal(result.status, 302);
+  const signedQuery = new URL(result.headers.get('location'), f.env.BETTER_AUTH_URL).search.slice(1);
+  const consent = await f.auth.handler(f.request('/api/auth/oauth2/consent', { method: 'POST', body: { accept: true, oauth_query: signedQuery } }));
+  assert.equal(consent.status, 200);
+  const body = { grant_type: 'authorization_code', client_id: GEMINI_CLIENT_ID, redirect_uri: GEMINI_REDIRECT_URI, code: new URL((await consent.json()).url).searchParams.get('code'), resource: 'https://thumble.io/mcp' };
+  const missingVerifier = await f.auth.handler(f.request('/api/auth/oauth2/token', { method: 'POST', form: true, body, authenticated: false, origin: false }));
+  assert.ok(missingVerifier.status >= 400);
+  const exchanged = await f.auth.handler(f.request('/api/auth/oauth2/token', { method: 'POST', form: true, body: { ...body, code_verifier: verifier }, authenticated: false, origin: false }));
+  assert.equal(exchanged.status, 200);
+  const tokens = await exchanged.json(); assert.ok(tokens.refresh_token);
+  const claims = decodeJwt(tokens.access_token);
+  assert.ok([claims.aud].flat().includes('https://thumble.io/mcp'));
+  assert.deepEqual(claims.scope.split(' ').sort(), [...GEMINI_SCOPES].sort());
 });

@@ -25,6 +25,7 @@
     { "pattern": "thumble.io/.well-known/openai-apps-challenge", "zone_name": "thumble.io" }
   ],
   "vars": {
+    "GLAMA_MONITOR_EMAIL": "codybontecou+thumble-glama@gmail.com",
     "AI_CONTROLLER_GENERATOR_ENABLED": "false",
     "EMAIL_FROM": "signin@auth.thumble.io",
     "BETTER_AUTH_URL": "https://thumble.io",

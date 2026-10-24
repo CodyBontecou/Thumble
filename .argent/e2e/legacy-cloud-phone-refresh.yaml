@@ -1,0 +1,25 @@
+executionPrerequisite: Physical Android pilot QA build com.thumble.android.pilotqa
+  is open to Cloud controllers in portrait with its original saved account and
+  registered phone on the workers.dev service. The account has the saved Pixel
+  WoW Journey controller. No sign-in, reinstall or controller delivery is needed.
+steps:
+  - await:
+      visible:
+        text: Cloud controllers
+  - await:
+      idle: true
+  - scroll-to:
+      target:
+        text: Refresh library
+        role: Button
+  - await:
+      visible:
+        text: Refresh library
+        role: Button
+  - tap:
+      text: Refresh library
+  - await:
+      visible:
+        text: Pixel WoW Journey
+        role: Button
+      timeout: 10000

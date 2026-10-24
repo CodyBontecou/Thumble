@@ -1,0 +1,46 @@
+steps:
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: Cloud controllers
+  - tool: gesture-swipe
+    args:
+      fromX: 0.5
+      fromY: 0.78
+      toX: 0.5
+      toY: 0.3
+      durationMs: 400
+      momentum: false
+  - tool: gesture-swipe
+    args:
+      fromX: 0.5
+      fromY: 0.78
+      toX: 0.5
+      toY: 0.44
+      durationMs: 400
+      momentum: false
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: Refresh library
+  - tap:
+      text: Refresh library
+  - tool: await-ui-element
+    args:
+      condition: hidden
+      selector:
+        text: Your library is empty. Ask your AI to save your first controller.
+      timeoutMs: 10000
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: Pixel WoW Journey
+        role: Button
+      timeoutMs: 10000
+executionPrerequisite: Physical Android pilot QA build
+  com.thumble.android.pilotqa is open to Cloud controllers in portrait with its
+  original saved cloud account and registered phone. Existing service is the
+  workers.dev origin. No sign-in or reinstall.

@@ -1,0 +1,38 @@
+
+ ⛅️ wrangler 4.152.0
+────────────────────
+🌀 Building list of assets...
+✨ Read 8 files from the assets directory /private/tmp/thumble-cloud-latest-x8mbjxu0/assets/public
+🌀 Starting asset upload...
+No updated asset files to upload. Proceeding with deployment...
+Total Upload: 4120.20 KiB / gzip: 721.42 KiB
+Worker Startup Time: 110 ms
+Your Worker has access to the following bindings:
+Binding                                                                                   Resource                  
+env.EMAIL (unrestricted - senders: signin@auth.thumble.io)                                Send Email                
+env.DB (thumble-cloud-pilot)                                                              D1 Database               
+env.ASSETS                                                                                Assets                    
+env.GLAMA_MONITOR_EMAIL ("codybontecou+thumble-glama@gmail.com")                          Environment Variable      
+env.AI_CONTROLLER_GENERATOR_ENABLED ("false")                                             Environment Variable      
+env.EMAIL_FROM ("signin@auth.thumble.io")                                                 Environment Variable      
+env.BETTER_AUTH_URL ("https://thumble.io")                                                Environment Variable      
+env.LEGACY_AUTH_URL ("https://thumble-cloud-pilot.costream....")                          Environment Variable      
+env.ACCOUNT_ID_ISSUER ("https://thumble-cloud-pilot.costream....")                        Environment Variable      
+env.MCP_RESOURCE_URL ("https://thumble.io/mcp")                                           Environment Variable      
+env.CHATGPT_REDIRECT_URIS ("["https://chatgpt.com/connector_platf...")                    Environment Variable      
+
+Uploaded thumble-cloud-pilot (11.40 sec)
+Deployed thumble-cloud-pilot triggers (2.34 sec)
+  https://thumble-cloud-pilot.costream.workers.dev
+  thumble.io/api/auth* (zone name: thumble.io)
+  thumble.io/sign-in* (zone name: thumble.io)
+  thumble.io/consent* (zone name: thumble.io)
+  thumble.io/account* (zone name: thumble.io)
+  thumble.io/v1/* (zone name: thumble.io)
+  thumble.io/.well-known/oauth-authorization-server* (zone name: thumble.io)
+  thumble.io/.well-known/openid-configuration* (zone name: thumble.io)
+  thumble.io/assets/thumble/* (zone name: thumble.io)
+  thumble.io/mcp (zone name: thumble.io)
+  ...and 2 more routes
+  schedule: * * * * *
+Current Version ID: 3a94291b-b2be-4a04-942e-52dab5e43375

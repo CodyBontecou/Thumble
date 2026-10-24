@@ -1,0 +1,32 @@
+[
+  {
+    "origin": "https://thumble.io",
+    "keys": {
+      "keys": [
+        {
+          "alg": "ES256",
+          "crv": "P-256",
+          "kty": "EC",
+          "x": "t9rOh3hOmL_u6gYxyBOGEyz-SQn1kr-QIvQ-kj9dMl8",
+          "y": "nQA0WxjCXX-jg--MJoWGkB9kn5YVJ-lNhUpKBupfP2Y",
+          "kid": "XnPUx8O0ZBjBnLwKGVheqYnWGQZYTcvr"
+        }
+      ]
+    }
+  },
+  {
+    "origin": "https://thumble-cloud-pilot.costream.workers.dev",
+    "keys": {
+      "keys": [
+        {
+          "alg": "ES256",
+          "crv": "P-256",
+          "kty": "EC",
+          "x": "t9rOh3hOmL_u6gYxyBOGEyz-SQn1kr-QIvQ-kj9dMl8",
+          "y": "nQA0WxjCXX-jg--MJoWGkB9kn5YVJ-lNhUpKBupfP2Y",
+          "kid": "XnPUx8O0ZBjBnLwKGVheqYnWGQZYTcvr"
+        }
+      ]
+    }
+  }
+]

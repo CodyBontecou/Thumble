@@ -317,7 +317,7 @@ test('Better Auth native callback includes host and path and stays exact across 
   const parsed = new URL(CLOUD_REDIRECT_URI);
   assert.equal(parsed.hostname, 'cloud-auth');
   assert.equal(parsed.pathname, '/callback');
-  const auth = { mobileClientId: 'thumble-mobile', audience: 'https://thumble-cloud-pilot.costream.workers.dev/mcp', scopes: [] };
+  const auth = { mobileClientId: 'thumble-mobile', audience: 'https://thumble.io/mcp', scopes: [] };
   assert.equal(authorizationConfig(auth, CLOUD_REDIRECT_URI).redirectUri, CLOUD_REDIRECT_URI);
   assert.equal(codeExchangeConfig(auth, CLOUD_REDIRECT_URI, 'code', 'verifier').redirectUri, CLOUD_REDIRECT_URI);
 });

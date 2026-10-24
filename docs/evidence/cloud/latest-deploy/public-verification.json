@@ -1,0 +1,22 @@
+{
+  "verifiedAt": "2026-10-24T20:41:46.204Z",
+  "version": "3a94291b-b2be-4a04-942e-52dab5e43375",
+  "results": [
+    {
+      "origin": "https://thumble.io",
+      "signingKeysUnchanged": true,
+      "issuer": "https://thumble.io/api/auth",
+      "mcpResource": "https://thumble.io/mcp",
+      "discovery": "pass",
+      "unauthenticatedMcp": "401"
+    },
+    {
+      "origin": "https://thumble-cloud-pilot.costream.workers.dev",
+      "signingKeysUnchanged": true,
+      "issuer": "https://thumble-cloud-pilot.costream.workers.dev/api/auth",
+      "mcpResource": "https://thumble.io/mcp",
+      "discovery": "pass",
+      "unauthenticatedMcp": "401"
+    }
+  ]
+}

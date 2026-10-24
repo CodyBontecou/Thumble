@@ -1,0 +1,15 @@
+{
+  "apps/cloud/src/api.js": "0db46f5fe45df90d07fbbd791d01f415072a454f8262c3caa017e7a65c97a8ba",
+  "apps/cloud/src/apple.js": "5a90c2b2acb47ef84b2882240e3341eb34ab0c391798b6a7ae7a55502cb3e26b",
+  "apps/cloud/src/assets.js": "f240d5b084d8b1412695c66c6764fab0bf924cf02930808653271d8d3e4a545e",
+  "apps/cloud/src/auth-pages.js": "15962b54a5851bb493e976f42ca34756f1a7715c3a84ce3740b3770a5f73b170",
+  "apps/cloud/src/auth.js": "6358da81bf21d8947546e3868b37f2cc6b8291bdb6c42a927eae9b08d14f9d16",
+  "apps/cloud/src/deletion.js": "391a9735ef3e7f5cd6de50ef0e6a04b8ce29759f96ee4b72690b311b7313826d",
+  "apps/cloud/src/email-sign-in.js": "640d7016c69a7695317eef8b1df3ac1327d2f9f067a930f83666d2b0082e5519",
+  "apps/cloud/src/glama-monitor.js": "ffd740afd4164c6687c84eb803eb2bd9ff9f2f7eeed83642942bca6024312d39",
+  "apps/cloud/src/identity.js": "49d8c486a11f0be0d4c31cfff64c67b6d8100fcc2f6afea28bd8fb61b01fa2fa",
+  "apps/cloud/src/mcp.js": "c37c6753efa375582c7dfa5d4141874604ed74f8dc9bf718bb6e1e9249baa190",
+  "apps/cloud/src/pairing.js": "e4a3151613a5da1e08ad9690d6762a894dc9c2d5412f5c4e3cab426365b95ab4",
+  "apps/cloud/src/worker.js": "beecd4c001af3f9fa32cd7dad5c955543e3b44fe4060997d3d3713c4a284b746",
+  "apps/cloud/wrangler.pilot.jsonc": "ca1615f19a34a48f6f92cd9b289614a3b0b4660a63cdb29953d1e4234536cd12"
+}

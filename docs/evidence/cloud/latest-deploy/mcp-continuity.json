@@ -1,0 +1,166 @@
+{
+  "before": [
+    {
+      "tool": "mcp__codex_apps__thumble_a56ab35c2b32_list_devices",
+      "isError": false,
+      "data": {
+        "devices": [
+          {
+            "id": "2661910d-39d5-471c-9991-a658ad3d156d",
+            "name": "My Android phone",
+            "platform": "android",
+            "viewport": {
+              "width": 846.4761962890625,
+              "height": 387.4285583496094
+            },
+            "createdAt": "2026-10-24T11:48:01.933Z",
+            "lastSeenAt": "2026-10-24T18:12:01.453Z",
+            "revokedAt": null
+          },
+          {
+            "id": "2f8ec228-2ae6-44dc-950b-37f0b1954c77",
+            "name": "My iPhone",
+            "platform": "ios",
+            "viewport": {
+              "width": 734,
+              "height": 382
+            },
+            "createdAt": "2026-10-24T01:02:45.733Z",
+            "lastSeenAt": "2026-10-24T12:04:30.218Z",
+            "revokedAt": null
+          }
+        ]
+      }
+    },
+    {
+      "tool": "mcp__codex_apps__thumble_1f9f5a83e275_44fb9730_list_devices",
+      "isError": false,
+      "data": {
+        "devices": [
+          {
+            "id": "2661910d-39d5-471c-9991-a658ad3d156d",
+            "name": "My Android phone",
+            "platform": "android",
+            "viewport": {
+              "width": 846.4761962890625,
+              "height": 387.4285583496094
+            },
+            "createdAt": "2026-10-24T11:48:01.933Z",
+            "lastSeenAt": "2026-10-24T18:12:01.453Z",
+            "revokedAt": null
+          },
+          {
+            "id": "2f8ec228-2ae6-44dc-950b-37f0b1954c77",
+            "name": "My iPhone",
+            "platform": "ios",
+            "viewport": {
+              "width": 734,
+              "height": 382
+            },
+            "createdAt": "2026-10-24T01:02:45.733Z",
+            "lastSeenAt": "2026-10-24T12:04:30.218Z",
+            "revokedAt": null
+          }
+        ]
+      }
+    }
+  ],
+  "after": [
+    {
+      "tool": "mcp__codex_apps__thumble_a56ab35c2b32_list_devices",
+      "isError": false,
+      "data": {
+        "devices": [
+          {
+            "id": "2661910d-39d5-471c-9991-a658ad3d156d",
+            "name": "My Android phone",
+            "platform": "android",
+            "viewport": {
+              "width": 846.4761962890625,
+              "height": 387.4285583496094
+            },
+            "createdAt": "2026-10-24T11:48:01.933Z",
+            "lastSeenAt": "2026-10-24T20:43:55.280Z",
+            "revokedAt": null
+          },
+          {
+            "id": "2f8ec228-2ae6-44dc-950b-37f0b1954c77",
+            "name": "My iPhone",
+            "platform": "ios",
+            "viewport": {
+              "width": 734,
+              "height": 382
+            },
+            "createdAt": "2026-10-24T01:02:45.733Z",
+            "lastSeenAt": "2026-10-24T12:04:30.218Z",
+            "revokedAt": null
+          }
+        ]
+      }
+    },
+    {
+      "tool": "mcp__codex_apps__thumble_1f9f5a83e275_44fb9730_list_devices",
+      "isError": false,
+      "data": {
+        "devices": [
+          {
+            "id": "2661910d-39d5-471c-9991-a658ad3d156d",
+            "name": "My Android phone",
+            "platform": "android",
+            "viewport": {
+              "width": 846.4761962890625,
+              "height": 387.4285583496094
+            },
+            "createdAt": "2026-10-24T11:48:01.933Z",
+            "lastSeenAt": "2026-10-24T20:43:55.280Z",
+            "revokedAt": null
+          },
+          {
+            "id": "2f8ec228-2ae6-44dc-950b-37f0b1954c77",
+            "name": "My iPhone",
+            "platform": "ios",
+            "viewport": {
+              "width": 734,
+              "height": 382
+            },
+            "createdAt": "2026-10-24T01:02:45.733Z",
+            "lastSeenAt": "2026-10-24T12:04:30.218Z",
+            "revokedAt": null
+          }
+        ]
+      }
+    },
+    {
+      "tool": "mcp__codex_apps__thumble_a56ab35c2b32_list_profiles",
+      "isError": false,
+      "data": {
+        "profiles": [
+          {
+            "id": "pixel-wow-journey-v1",
+            "name": "Pixel WoW Journey",
+            "revision": 2,
+            "updatedAt": "2026-10-24T12:10:03.164Z"
+          },
+          {
+            "id": "wow-cloud-adoption-test-v1",
+            "name": "WoW cloud adoption test",
+            "revision": 1,
+            "updatedAt": "2026-10-24T01:37:07.321Z"
+          },
+          {
+            "id": "wow-cloud-adoption-test",
+            "name": "WoW cloud adoption test",
+            "revision": 1,
+            "updatedAt": "2026-10-24T01:36:54.581Z"
+          },
+          {
+            "id": "pilot-first-controller",
+            "name": "Pilot first controller",
+            "revision": 1,
+            "updatedAt": "2026-10-24T01:07:43.387Z"
+          }
+        ]
+      }
+    }
+  ]
+}

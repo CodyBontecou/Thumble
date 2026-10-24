@@ -2,7 +2,6 @@ import { validServiceUrl } from '@tapping/cloud-contracts';
 
 // Public deployment address only. Tokens and provider credentials never enter
 // the JS bundle; builds can select another service with EXPO_PUBLIC_CLOUD_URL.
-export const PILOT_CLOUD_URL = 'https://thumble-cloud-pilot.costream.workers.dev';
 export const DEFAULT_CLOUD_URL = process.env.EXPO_PUBLIC_CLOUD_URL || 'https://thumble.io';
 
 export function validateCloudConfig(config, service, allowLocalhost = false) {

@@ -1,6 +1,7 @@
 import { createLocalJWKSet, createRemoteJWKSet, jwtVerify } from 'jose';
 import { assertActiveIdentity } from './deletion.js';
 import { createIdentity, identityConfig, CHATGPT_SCOPES, MOBILE_SCOPES } from './identity.js';
+import { isGlamaClient, GLAMA_MONITOR_SCOPES } from './glama-monitor.js';
 import { API_VERSION, CLOUD_SCOPES, CloudError, validServiceUrl } from '@tapping/cloud-contracts';
 
 const remoteKeys = new Map();
@@ -54,6 +55,10 @@ export async function authenticateAccount(request, env) {
     const { payload } = await jwtVerify(token, keys, { issuer: issuers ?? issuer, audience: audiences ?? audience, algorithms: ['RS256', 'ES256', 'EdDSA'], requiredClaims: ['sub', 'exp', 'iat'] });
     if (typeof payload.sub !== 'string' || !payload.sub.trim() || typeof payload.scope !== 'string') throw new Error('Invalid claims');
     if (env.BETTER_AUTH_URL) await assertActiveIdentity(env, accountIssuer, payload.sub);
+    if (isGlamaClient(payload.client_id ?? payload.azp)) {
+      const user = await (await (await createIdentity(env)).$context).internalAdapter.findUserById(payload.sub);
+      if (!env.GLAMA_MONITOR_EMAIL || user?.email !== env.GLAMA_MONITOR_EMAIL || payload.scope.split(/\s+/).some(scope => !GLAMA_MONITOR_SCOPES.includes(scope))) throw new CloudError('forbidden', 'Glama health checks require the dedicated monitoring account and read-only permissions.', 403);
+    }
     if (env.BETTER_AUTH_URL && (payload.client_id ?? payload.azp) === 'thumble-chatgpt' && payload.scope.split(/\s+/).some(scope => !CHATGPT_SCOPES.includes(scope))) throw new CloudError('forbidden', 'Reconnect ChatGPT with the current controller permissions.', 403);
     return { kind: 'account', accountId: await sha256(`${accountIssuer}\n${payload.sub}`), scopes: payload.scope.split(/\s+/).filter(Boolean) };
   } catch (error) {

@@ -1,0 +1,11 @@
+steps:
+  - launch: com.thumble.android
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: Try the controls
+  - tap:
+      text: Try the controls
+  - tap:
+      role: Image
