@@ -2,6 +2,8 @@ import { useKeepAwake } from 'expo-keep-awake';
 import { calibration } from './calibration';
 import { connection } from './connection';
 import { cloud } from './cloud/store';
+import { purchases } from './purchases/store';
+import { formatDemoTime } from './demo-time';
 import ControllerChat, { useControllerChat } from './ControllerChat';
 import thumbleIcon from '../assets/thumble-menu.png';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
@@ -92,7 +94,13 @@ function Screen() {
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [visuals] = useState(() => new Map());
   const [prefix, setPrefix] = useState('');
-  const [focused, setFocused] = useState(true);
+  const [focused, setFocused] = useState(false);
+  const [appActive, setAppActive] = useState(AppState.currentState === 'active');
+  const [demoUsed, setDemoUsed] = useState(0);
+  const purchaseState = useSyncExternalStore(purchases.subscribe, purchases.snapshot);
+  const isPro = access?.pro || (network.phase === 'offline' && purchaseState.status === 'owned');
+  const remaining = access?.remaining ?? Math.max(0, 1800 - demoUsed);
+  const exhausted = network.phase === 'connected' && access && !access.pro && remaining <= 0;
   const chatTouches = useRef(new Set());
   const [geometry] = useState(() => ({ x: 0, y: 0, width: 0, height: 0 }));
   const [controller] = useState(() => new TouchController(renderedProfile, {
@@ -120,14 +128,34 @@ function Screen() {
   useEffect(() => {
     const reset = () => { chatTouches.current.clear(); controller.releaseAll(); };
     connection.resetListeners.add(reset);
-    const subscription = AppState.addEventListener('change', phase => { if (phase !== 'active') controller.releaseAll(); });
+    const subscription = AppState.addEventListener('change', phase => {
+      setAppActive(phase === 'active');
+      if (phase !== 'active') { controller.releaseAll(); connection.pausePlay(); }
+    });
     return () => { connection.resetListeners.delete(reset); subscription.remove(); controller.releaseAll(); };
   }, [controller]);
-  useEffect(() => { controller.releaseAll(); }, [controller, network.phase]);
+  useEffect(() => {
+    controller.releaseAll();
+    let current = true;
+    void purchases.demoUsed().then(used => { if (current) setDemoUsed(used); }).catch(() => {});
+    return () => { current = false; };
+  }, [controller, network.phase]);
   useFocusEffect(useCallback(() => {
     setFocused(true);
-    return () => { setFocused(false); pauseChat(); controller.releaseAll(); connection.pausePlay(); };
+    let current = true;
+    void purchases.demoUsed().then(used => { if (current) setDemoUsed(used); }).catch(() => {});
+    return () => { current = false; setFocused(false); pauseChat(); controller.releaseAll(); connection.pausePlay(); };
   }, [controller, pauseChat]));
+  useEffect(() => {
+    if (focused && appActive && network.phase === 'connected' && access && !access.enabled && !access.error && !connection.layoutPending && (access.pro || access.remaining > 0)) {
+      controller.releaseAll();
+      connection.resumePlay();
+    }
+  }, [focused, appActive, network.phase, network.detail, access, layout.revision, controller]);
+  function openDemoInfo() {
+    controller.releaseAll();
+    router.push({ pathname: '/demo-info', params: { remaining: String(remaining) } });
+  }
   function touch(method, event) {
     if (!geometry.width || !geometry.height || connection.layoutPending || connection.recovering) return;
     connection.withTouch(() => {
@@ -165,15 +193,19 @@ function Screen() {
       </View>
       <ControllerChat chat={chat} network={network} top={insets.top + (hasChatControl ? 8 : 52)} />
       {!hasChatControl && <Pressable accessibilityRole="button" accessibilityLabel={chat.state === 'listening' ? 'Stop dictation' : 'Chat'} onPress={chat.toggle} style={[s.chatButton, { top: insets.top + 4 }]}><Text style={s.action}>{chat.state === 'listening' ? 'Stop' : 'Chat'}</Text></Pressable>}
-      {network.phase === 'connected' && access && !access.enabled && <ScrollView style={s.demoOverlay} contentContainerStyle={s.demoContent}>
-        <Text style={s.demoTitle}>{access.pro ? 'Ready to play' : access.remaining <= 0 ? 'Your demo has ended' : access.remaining >= 1799 ? 'Try the full controller' : 'Controller paused'}</Text>
-        <Text style={s.demoDetail}>{access.pro ? 'Resume from neutral controls.' : access.remaining <= 0 ? 'Unlock Pro to keep playing without a time limit. All features are included in the demo.' : `${Math.ceil(access.remaining / 60)} minutes remaining across all sessions. Setup and practice are free. Controls stop when time runs out. No automatic charge.`}</Text>
+      {exhausted && <ScrollView style={s.demoOverlay} contentContainerStyle={s.demoContent} accessibilityViewIsModal>
+        <Text style={s.demoTitle}>Your free time is up</Text>
+        <Text style={s.demoDetail}>Unlock Thumble Pro for unlimited controller time. One purchase, yours forever.</Text>
         {!!access.error && <Text style={s.demoDetail}>{access.error}</Text>}
-        {(access.pro || access.remaining > 0) && <Pressable accessibilityRole="button" style={[s.demoAction, s.demoPrimary]} onPress={() => connection.resumePlay()}><Text style={s.demoPrimaryText}>{access.pro || access.remaining < 1799 ? 'Resume controller' : 'Start 30-minute demo'}</Text></Pressable>}
-        {!access.pro && <Pressable accessibilityRole="button" style={s.demoAction} onPress={() => router.push('/pro')}><Text style={s.action}>View Pro</Text></Pressable>}
+        <Pressable accessibilityRole="button" style={[s.demoAction, s.demoPrimary]} onPress={() => router.push('/pro')}><Text style={s.demoPrimaryText}>Unlock Pro</Text></Pressable>
         <Pressable accessibilityRole="button" style={s.demoAction} onPress={() => connection.disconnect()}><Text style={s.action}>Continue in practice mode</Text></Pressable>
       </ScrollView>}
-      {network.phase === 'connected' && access?.enabled && !access.pro && <Text pointerEvents="none" style={s.demoRemaining}>{access.remaining <= 300 ? `Demo: ${Math.ceil(access.remaining / 60)} min left` : ''}</Text>}
+      {network.phase === 'connected' && !!access?.error && !exhausted && <Text accessibilityRole="alert" style={s.accessError}>{access.error}</Text>}
+      <Pressable accessibilityRole="button" accessibilityLabel={isPro ? 'Thumble Pro, unlimited controller time' : `${formatDemoTime(remaining)} of free controller time remaining`}
+        accessibilityHint="Learn about free controller time and Thumble Pro" testID="controller-timer" onPress={openDemoInfo}
+        style={({ pressed }) => [s.timerButton, { right: insets.right + 8, bottom: insets.bottom + 4 }, pressed && { opacity: 0.65 }]}>
+        <Text style={[s.timerText, !isPro && remaining <= 300 && s.timerLow]}>{isPro ? 'Pro' : formatDemoTime(remaining)}</Text>
+      </Pressable>
       <Pressable accessibilityRole="button" accessibilityLabel="Thumble menu" testID="controller-menu"
         onPress={() => { controller.releaseAll(); router.push('/controller-menu'); }}
         style={({ pressed }) => [s.menuButton, { right: insets.right + 8, top: insets.top + 4 }, pressed && { opacity: 0.65 }]}>
@@ -193,7 +225,10 @@ const s = StyleSheet.create({
   demoAction: { minHeight: 48, borderRadius: 28, borderCurve: 'continuous', backgroundColor: '#1F1F1F', justifyContent: 'center', alignItems: 'center' },
   demoPrimary: { backgroundColor: '#EDEDED' },
   demoPrimaryText: { color: '#0A0A0A', fontSize: 16, fontWeight: '600' },
-  demoRemaining: { position: 'absolute', bottom: 4, alignSelf: 'center', color: '#efdf9d', fontSize: 12, fontVariant: ['tabular-nums'] },
+  timerButton: { position: 'absolute', minWidth: 64, minHeight: 44, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8 },
+  timerText: { color: '#a5adb5', fontSize: 14, fontWeight: '500', fontVariant: ['tabular-nums'] },
+  timerLow: { color: '#efdf9d' },
+  accessError: { position: 'absolute', bottom: 8, alignSelf: 'center', color: '#F1A59F', fontSize: 12 },
   screen: { flex: 1, backgroundColor: '#17191b' },
   action: { color: '#EDEDED', fontSize: 15, fontWeight: '600' },
   canvas: { flex: 1, marginHorizontal: 8 },

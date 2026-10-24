@@ -18,6 +18,7 @@ export default function RootLayout() {
     <Stack.Screen name="welcome" options={{ animation: 'fade' }} />
     <Stack.Screen name="onboarding" options={{ animation: 'fade' }} />
     <Stack.Screen name="journey" options={{ ...modal, title: 'AI to WoW' }} />
+    <Stack.Screen name="demo-info" options={{ presentation: 'transparentModal', animation: 'fade', contentStyle: { backgroundColor: 'transparent' } }} />
     <Stack.Screen name="controller-menu" options={{ presentation: 'transparentModal', animation: 'fade', contentStyle: { backgroundColor: 'transparent' } }} />
     <Stack.Screen name="setup-test" options={{ ...modal, title: 'Test controls' }} />
     <Stack.Screen name="agent-setup" options={{ ...modal, title: 'Connect your AI' }} />

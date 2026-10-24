@@ -26,7 +26,11 @@ connection.subscribeAccess(() => {
   if (!access.pro && Math.floor(1800 - access.remaining) !== lastDebit) {
     lastDebit = Math.floor(1800 - access.remaining);
     // Mirror actual consumed time; pre-debit reservations are conservative on crashes.
-    void purchases.rememberDemo(lastDebit).catch(() => connection.pausePlay());
+    void purchases.rememberDemo(lastDebit).catch(() => {
+      connection.pausePlay();
+      const current = connection.accessSnapshot();
+      if (current) connection.setAccess({ ...current, error: 'Free time could not be saved. Restore Pro or try again.' });
+    });
   }
   const pairing = `${access.receiverId}:${access.nonce}`;
   if (lastPairing !== pairing) {
