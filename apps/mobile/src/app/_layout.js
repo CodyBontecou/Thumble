@@ -1,12 +1,18 @@
 import { Stack, router } from 'expo-router';
+import { useSyncExternalStore } from 'react';
 import { Pressable, Text } from 'react-native';
+import { connection } from '../connection';
 import { colors } from '../ui/design';
 export const unstable_settings = { anchor: 'index' };
 function Done() { return <Pressable accessibilityRole="button" hitSlop={8} style={{ minHeight: 44, justifyContent: 'center' }} onPress={() => router.canGoBack() ? router.back() : router.replace('/')}><Text style={{ color: colors.text, fontSize: 16, fontWeight: '500' }}>Done</Text></Pressable>; }
 const modal = { presentation: /** @type {const} */ ('modal'), headerShown: true, headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text, headerShadowVisible: false, headerBackVisible: false, headerRight: Done };
 export default function RootLayout() {
-  return <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
-    <Stack.Screen name="index" options={{ gestureEnabled: false, fullScreenGestureEnabled: false }} />
+  const network = useSyncExternalStore(connection.subscribe, connection.snapshot);
+  // Explicit defaults let setup and settings rotate even while the connected
+  // controller remains mounted underneath. The native stack applies the lock
+  // only when the controller route is visible and restores it on return.
+  return <Stack screenOptions={{ orientation: 'default', headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
+    <Stack.Screen name="index" options={{ orientation: network.phase === 'connected' ? 'landscape' : 'default', gestureEnabled: false, fullScreenGestureEnabled: false }} />
     <Stack.Screen name="welcome" options={{ animation: 'fade' }} />
     <Stack.Screen name="onboarding" options={{ animation: 'fade' }} />
     <Stack.Screen name="controller-menu" options={{ presentation: 'transparentModal', animation: 'fade', contentStyle: { backgroundColor: 'transparent' } }} />

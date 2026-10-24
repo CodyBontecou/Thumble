@@ -1,0 +1,30 @@
+steps:
+  - tap:
+      id: controller-menu
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: Getting started
+        role: button
+  - await: { idle: true }
+  - tap:
+      text: Getting started, ›
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: Set up later · use controller
+        role: button
+  - await: { idle: true }
+  - tap:
+      text: Set up later · use controller
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        identifier: controller-menu
+  - await: { idle: true }
+executionPrerequisite: iPhone 17 Pro upright, connected controller foregrounded,
+  isolated QA receiver running. Orientation is verified separately from
+  screenshots.
