@@ -1,0 +1,26 @@
+steps:
+  - launch: com.thumble.wowsetupqa
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: WoW on your Mac.
+  - echo: Select Set up WoW. Expect the client picker.
+  - tap:
+      x: 0.865
+      y: 0.5
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: Which WoW
+  - echo: Select the Retail WoW client. Expect the connection step, without a
+      preliminary control test.
+  - tap:
+      x: 0.832
+      y: 0.29
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: Keep your Mac ready.

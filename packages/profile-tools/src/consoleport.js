@@ -53,7 +53,8 @@ export async function resolveWowIcon(kind, id) {
   return icon.toLowerCase();
 }
 
-export async function mirrorConsolePort(store, {snapshotId, sourceProfileId, sourceProfileRevision, profileId, expectedRevision}, lookup = resolveWowIcon) {
+export async function mirrorConsolePort(store, {snapshotId, sourceProfileId, sourceProfileRevision, profileId, expectedRevision, preserveSourceLayout = false}, lookup = resolveWowIcon) {
+  if (typeof preserveSourceLayout !== 'boolean') throw Error('Invalid source layout option');
   const snapshot = await getCharacter(store, snapshotId);
   const buttons = validateConsolePortLayout(snapshot.consolePortLayout);
   const source = await store.get(sourceProfileId);
@@ -77,9 +78,10 @@ export async function mirrorConsolePort(store, {snapshotId, sourceProfileId, sou
   for (const button of buttons) {
     const output = outputs[button.key], layers = {};
     for (const layer of button.layers) {
-      const utilityIcons = {JUMP:'cp_jump',INTERACTTARGET:'cp_interact',TARGETNEARESTENEMY:'cp_target',TARGETPREVIOUSENEMY:'cp_target',OPENALLBAGS:'cp_bags',TOGGLEWORLDMAP:'cp_map',TOGGLEGAMEMENU:'cp_menu'};
+      const utilityIcons = {JUMP:'cp_jump',INTERACTTARGET:'cp_interact',TARGETNEARESTENEMY:'cp_target',TARGETPREVIOUSENEMY:'cp_target',TARGETSCANENEMY:'cp_target',TARGETNEARESTFRIEND:'cp_interact',TARGETPREVIOUSFRIEND:'cp_interact',OPENALLBAGS:'cp_bags',TOGGLEWORLDMAP:'cp_map',TOGGLEGAMEMENU:'cp_menu','CLICK ConsolePortQuickMenu:LeftButton':'cp_menu'};
       const icon = icons.get(`${layer.kind}:${layer.id}`) ?? utilityIcons[layer.command];
-      const label = !layer.kind && /^(?:ACTIONBUTTON\d+|MULTIACTIONBAR\d+BUTTON\d+)$/.test(layer.command) ? 'Unbound' : layer.label.slice(0,80);
+      const utilityLabels = { 'CLICK ConsolePortQuickMenu:LeftButton': 'Quick menu', 'CLICK ConsolePortUtilityToggle:LeftButton': 'Utility ring' };
+      const label = !layer.kind && /^(?:ACTIONBUTTON\d+|MULTIACTIONBAR\d+BUTTON\d+)$/.test(layer.command) ? 'Unbound' : (utilityLabels[layer.command] ?? layer.label).slice(0,80);
       layers[layer.modifier] = {label, ...(icon ? {icon} : {})};
     }
     profile.controls.push({ id:`cp-${output}`, type:['lt','rt'].includes(output)?'trigger':'button', label:layers[''].label, ...(layers[''].icon ? {icon:layers[''].icon} : {}), badge:badges[output], layers,
@@ -94,6 +96,19 @@ export async function mirrorConsolePort(store, {snapshotId, sourceProfileId, sou
     profile.controls.push({...control,frame:{x:.46+i*.09,y:.72,width:.08,height:.18}});
     profile.mappings.push(source.profile.mappings.find(mapping => mapping.controlId === control.id));
   });
+  if (preserveSourceLayout) {
+    // Appearance follows the exported gamepad output; touch geometry and input
+    // mappings remain those the player is already using on the phone.
+    const appearance = new Map(profile.controls.filter(control => control.layers).map(control => [profile.mappings.find(mapping => mapping.controlId === control.id).outputs[0], control]));
+    profile.controls = source.profile.controls.map(control => {
+      const output = source.profile.mappings.find(mapping => mapping.controlId === control.id).outputs[0];
+      const mirror = appearance.get(output);
+      if (!mirror || control.type === 'stick') return control;
+      const { label: _label, icon: _icon, layers: _layers, ...base } = control;
+      return { ...base, label: mirror.label, ...(mirror.icon ? { icon: mirror.icon } : {}), badge: mirror.badge, layers: mirror.layers };
+    });
+    profile.mappings = source.profile.mappings;
+  }
   assertProfile(profile);
   if ((await store.get(sourceProfileId)).revision !== sourceProfileRevision) throw Error('Source profile changed during icon lookup');
   const saved = await store.save(profile, expectedRevision);

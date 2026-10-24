@@ -8,6 +8,8 @@ import CoreImage
     private let cloudPairing = CloudPairing()
     private var shareItem: NSMenuItem!
     private var stopShareItem: NSMenuItem!
+    private var syncItem: NSMenuItem!
+    private var syncStatusItem: NSMenuItem!
     private let label = NSTextField(labelWithString: "Starting receiver…")
     private let qr = NSImageView()
     private let code = NSTextField(wrappingLabelWithString: "")
@@ -20,6 +22,11 @@ import CoreImage
         stopShareItem = menu.addItem(withTitle: "Stop ChatGPT pairing", action: #selector(stopSharing), keyEquivalent: "")
         stopShareItem.isHidden = true
         menu.addItem(withTitle: "Disconnect and pair again", action: #selector(reset), keyEquivalent: "")
+        menu.addItem(.separator())
+        syncStatusItem = menu.addItem(withTitle: "ConsolePort: waiting for /reload", action: nil, keyEquivalent: "")
+        syncItem = menu.addItem(withTitle: "Automatically sync ConsolePort", action: #selector(toggleConsolePortSync), keyEquivalent: "")
+        syncItem.state = UserDefaults.standard.bool(forKey: "consolePortSyncDisabled") ? .off : .on
+        menu.addItem(withTitle: "Choose WoW folder…", action: #selector(chooseWoWFolder), keyEquivalent: "")
         menu.addItem(.separator()); menu.addItem(withTitle: "Quit Thumble Receiver", action: #selector(quit), keyEquivalent: "q")
         for item in menu.items { item.target = self }; statusItem.menu = menu
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 420, height: 470), styleMask: [.titled, .closable], backing: .buffered, defer: false)
@@ -36,6 +43,7 @@ import CoreImage
         window.contentView!.addSubview(stack)
         NSLayoutConstraint.activate([stack.leadingAnchor.constraint(equalTo: window.contentView!.leadingAnchor, constant: 24), stack.trailingAnchor.constraint(equalTo: window.contentView!.trailingAnchor, constant: -24), stack.topAnchor.constraint(equalTo: window.contentView!.topAnchor, constant: 24)])
         receiver.onStatus = { [weak self] message in DispatchQueue.main.async { self?.label.stringValue = message } }
+        receiver.onConsolePortSyncStatus = { [weak self] message in DispatchQueue.main.async { self?.syncStatusItem.title = message } }
         receiver.onInvitation = { [weak self] value in DispatchQueue.main.async { self?.updateInvitation(value) } }
         receiver.onPairingUnavailable = { [weak self] in DispatchQueue.main.async {
             self?.invitation = ""; self?.qr.image = nil; self?.cloudPairing.receiverUnavailable()
@@ -61,6 +69,19 @@ import CoreImage
     @objc private func stopSharing() { cloudPairing.stop() }
     @objc private func copyLink() { guard !invitation.isEmpty else { return }; NSPasteboard.general.clearContents(); NSPasteboard.general.setString(invitation, forType: .string) }
     @objc private func reset() { receiver.resetPairing() }
+    @objc private func toggleConsolePortSync() {
+        let disabled = !UserDefaults.standard.bool(forKey: "consolePortSyncDisabled")
+        UserDefaults.standard.set(disabled, forKey: "consolePortSyncDisabled")
+        syncItem.state = disabled ? .off : .on
+    }
+    @objc private func chooseWoWFolder() {
+        let panel = NSOpenPanel(); panel.canChooseFiles = false; panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false; panel.message = "Choose World of Warcraft or the client folder containing WTF. ConsolePort changes sync after /reload or logout."
+        if panel.runModal() == .OK, let url = panel.url {
+            UserDefaults.standard.set(url.path, forKey: "consolePortWoWFolder")
+            syncStatusItem.title = "ConsolePort: reload WoW to sync"
+        }
+    }
     @objc private func quit() { NSApp.terminate(nil) }
     func applicationWillTerminate(_ notification: Notification) { cloudPairing.stop(); receiver.stop() }
 }

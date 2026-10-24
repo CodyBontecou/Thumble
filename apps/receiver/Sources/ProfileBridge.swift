@@ -16,13 +16,20 @@ final class ProfileBridge {
     var onActivation: ((Int, [String: Any]) -> Void)?
     var onStatusTick: (() -> Void)?
     var onError: ((String) -> Void)?
+    var onConsolePortSyncStatus: ((String) -> Void)?
+    private lazy var consolePortSync = ConsolePortSync(directory: directory)
     func start() {
+        consolePortSync.onStatus = { [weak self] text in self?.onConsolePortSyncStatus?(text) }
+        consolePortSync.start()
         let timer = DispatchSource.makeTimerSource(queue: queue)
         timer.schedule(deadline: .now(), repeating: .milliseconds(250))
         timer.setEventHandler { [weak self] in self?.poll() }
         self.timer = timer; timer.resume()
     }
-    func stop() { queue.sync { timer?.cancel(); timer = nil; pairing = nil; removePairingCode() } }
+    func stop() {
+        consolePortSync.stop()
+        queue.sync { timer?.cancel(); timer = nil; pairing = nil; removePairingCode() }
+    }
     func updatePairingCode(_ invitation: String, expires: Double = 0) {
         queue.async { [self] in
             pairing = nil
@@ -90,10 +97,7 @@ final class ProfileBridge {
                     lastModification = nil
                     poll()
                 } else {
-                    do { result = try ProfileCatalog.summary(ProfileCatalog.read(directory)) }
-                    catch let error as NSError where error.domain == NSCocoaErrorDomain && error.code == NSFileReadNoSuchFileError {
-                        result = ["profiles": [], "activationRevision": 0, "agentCheckSupported": true]
-                    }
+                    result = try ProfileCatalog.summary(ProfileCatalog.read(directory))
                 }
                 completion(.success(result))
             } catch { completion(.failure(error)) }

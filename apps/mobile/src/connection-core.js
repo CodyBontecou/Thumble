@@ -1,5 +1,5 @@
 import { LatencyRecorder } from './latency-recorder.js';
-import { neutralState, parseInvitation, assertProfile, xboxProfile } from '@tapping/controller';
+import { neutralState, parseInvitation, assertProfile, defaultProfile } from '@tapping/controller';
 
 const canonical = value => JSON.stringify(value, (_, item) => item && typeof item === 'object' && !Array.isArray(item) ? Object.fromEntries(Object.keys(item).sort().map(key => [key, item[key]])) : item);
 
@@ -29,7 +29,7 @@ export class Connection {
 
   resetListeners = new Set();
   profileListeners = new Set();
-  layout = { revision: 0, profile: assertProfile(xboxProfile) };
+  layout = { revision: 0, profile: assertProfile(defaultProfile) };
   layoutPending = false;
   view = { phase: 'offline', detail: 'Practice · Mac not connected', rtt: null, chat: false };
   /** @type {{id: string, resolve: (value?: any) => void, reject: (error: Error) => void, timer: ReturnType<typeof setTimeout>} | null} */
@@ -336,7 +336,7 @@ export class Connection {
     else sent = this.native.send(text);
     if (!sent) this.disconnect('Connection stalled · controls released');
   }
-  disconnect(detail = 'Practice · Mac not connected') {
+  disconnect(detail = 'Practice · Mac not connected', { keepLayout = false } = {}) {
     const connected = this.view.phase === 'connected';
     ++this.attempt;
     // Invalidate the bridge identity before cancelling: queued callbacks from the
@@ -349,7 +349,7 @@ export class Connection {
     this.outbox = []; this.recovering = false;
     this.layoutPending = false;
     this.setAccess(null);
-    this.layout = { revision: 0, profile: assertProfile(xboxProfile) };
+    this.layout = { revision: 0, profile: assertProfile(keepLayout ? this.layout.profile : defaultProfile) };
     for (const listener of this.profileListeners) listener();
     this.lease = null; this.invitation = null; this.state = neutralState(); this.pending.clear();
     this.profilesSupported = false;

@@ -121,6 +121,7 @@ end
 CreateFrame = function(kind, name, parent, template) local f = frame(); frames[#frames + 1] = f; return f end
 UISpecialFrames = {}; SlashCmdList = {}; UIParent = {}; ChatFontNormal = {}
 assert(loadfile(addonPath .. '/UI.lua'))('ThumbleBridge', ns)
+assert(SLASH_THUMBLEBRIDGE1 == '/thumblebridge' and SLASH_THUMBLEBRIDGE2 == '/tbbridge' and SLASH_THUMBLEBRIDGE3 == '/thumble')
 SlashCmdList.THUMBLEBRIDGE()
 local export, reviewButton, apply, editor, window
 for _, f in ipairs(frames) do

@@ -34,7 +34,7 @@ export function createTestDb() {
 export async function createTestAuthority() {
   const { publicKey, privateKey } = await generateKeyPair('ES256');
   const jwk = { ...await exportJWK(publicKey), kid: 'pilot-test', alg: 'ES256', use: 'sig' };
-  const env = {
+  const env = { AI_CONTROLLER_GENERATOR_ENABLED: 'true',
     OAUTH_ISSUER: 'https://identity.example.test/', OAUTH_AUDIENCE: 'https://cloud.example.test/mcp',
     OAUTH_JWKS_JSON: JSON.stringify({ keys: [jwk] }),
     OAUTH_AUTHORIZATION_ENDPOINT: 'https://identity.example.test/authorize',

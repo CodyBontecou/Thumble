@@ -1,3 +1,4 @@
+import { AI_CONTROLLER_GENERATOR_ENABLED } from '../features';
 import { AppState, Platform } from 'react-native';
 import * as AuthSession from 'expo-auth-session';
 import * as SecureStore from 'expo-secure-store';
@@ -64,6 +65,7 @@ export const cloud = new CloudController({ storage, allowLocalhost: __DEV__, ref
 export const cloudRedirectUri = AuthSession.makeRedirectUri({ native: CLOUD_REDIRECT_URI, scheme: 'thumble', path: CLOUD_REDIRECT_PATH });
 let signingIn = false;
 export async function signInCloud(service) {
+  if (!AI_CONTROLLER_GENERATOR_ENABLED) throw Error('AI controller generation is disabled.');
   if (signingIn) return false;
   if (!validServiceUrl(service, __DEV__)) throw Error('Enter an HTTPS cloud service URL.');
   if (!validViewport(cloud.viewport)) throw Error('Turn your phone sideways once to measure the controller area, then connect your account.');
@@ -104,6 +106,7 @@ export async function manageCloudAccount() {
 
 let timer = null;
 function environment() {
+  if (!AI_CONTROLLER_GENERATOR_ENABLED) return;
   cloud.setEnvironment({ foreground: AppState.currentState === 'active', lanOffline: connection.snapshot().phase === 'offline' });
   if (timer) { clearInterval(timer); timer = null; }
   if (cloud.snapshot().foreground && cloud.snapshot().session) {
@@ -118,4 +121,4 @@ cloud.subscribe(() => {
   const nextKey = cloud.snapshot().session?.device.id || '';
   if (sessionKey !== nextKey) { sessionKey = nextKey; environment(); }
 });
-void cloud.load().then(environment);
+if (AI_CONTROLLER_GENERATOR_ENABLED) void cloud.load().then(environment);

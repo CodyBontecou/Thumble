@@ -12,14 +12,24 @@
   "triggers": { "crons": ["* * * * *"] },
   "send_email": [{ "name": "EMAIL", "allowed_sender_addresses": ["signin@auth.thumble.io"] }],
   "routes": [
+    { "pattern": "thumble.io/api/auth*", "zone_name": "thumble.io" },
+    { "pattern": "thumble.io/sign-in*", "zone_name": "thumble.io" },
+    { "pattern": "thumble.io/consent*", "zone_name": "thumble.io" },
+    { "pattern": "thumble.io/account*", "zone_name": "thumble.io" },
+    { "pattern": "thumble.io/v1/*", "zone_name": "thumble.io" },
+    { "pattern": "thumble.io/.well-known/oauth-authorization-server*", "zone_name": "thumble.io" },
+    { "pattern": "thumble.io/.well-known/openid-configuration*", "zone_name": "thumble.io" },
     { "pattern": "thumble.io/assets/thumble/*", "zone_name": "thumble.io" },
     { "pattern": "thumble.io/mcp", "zone_name": "thumble.io" },
     { "pattern": "thumble.io/.well-known/oauth-protected-resource*", "zone_name": "thumble.io" },
     { "pattern": "thumble.io/.well-known/openai-apps-challenge", "zone_name": "thumble.io" }
   ],
   "vars": {
+    "AI_CONTROLLER_GENERATOR_ENABLED": "false",
     "EMAIL_FROM": "signin@auth.thumble.io",
-    "BETTER_AUTH_URL": "https://thumble-cloud-pilot.costream.workers.dev",
+    "BETTER_AUTH_URL": "https://thumble.io",
+    "LEGACY_AUTH_URL": "https://thumble-cloud-pilot.costream.workers.dev",
+    "ACCOUNT_ID_ISSUER": "https://thumble-cloud-pilot.costream.workers.dev/api/auth",
     "MCP_RESOURCE_URL": "https://thumble.io/mcp",
     "CHATGPT_REDIRECT_URIS": "[\"https://chatgpt.com/connector_platform_oauth_redirect\"]"
   },

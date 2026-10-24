@@ -1,3 +1,4 @@
+import { AI_CONTROLLER_GENERATOR_ENABLED } from './features';
 import { useKeepAwake } from 'expo-keep-awake';
 import { calibration } from './calibration';
 import { connection } from './connection';
@@ -11,12 +12,36 @@ import { Animated, AppState, Image, Linking, Pressable, ScrollView, StyleSheet, 
 import { router, useFocusEffect } from 'expo-router';
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { TouchController, xboxProfile, modifierPrefix, controlDisplay } from '@tapping/controller';
+import { TouchController, xboxProfile, defaultProfile, modifierPrefix, controlDisplay } from '@tapping/controller';
 
 const glyph = { up: '↑', down: '↓', left: '←', right: '→', back: '▧', start: '≡' };
-// App Store v1 uses text and built-in symbols; no remote game artwork is loaded.
+const utilityArtwork = {
+  cp_jump: require('../assets/consoleport/Jump.png'),
+  cp_interact: require('../assets/consoleport/Target_Wide_Neutral.png'),
+  cp_target: require('../assets/consoleport/Target_Wide_Enemy.png'),
+  cp_bags: require('../assets/consoleport/Bags.png'),
+  cp_map: require('../assets/consoleport/Map.png'),
+  cp_menu: require('../assets/consoleport/Menu.png'),
+};
+// Profiles carry icon names, never arbitrary remote URLs.
+const spellArtworkUri = icon => typeof icon === 'string' && /^[a-z0-9_]{1,128}$/.test(icon) && !icon.startsWith('cp_') ? `https://wow.zamimg.com/images/wow/icons/large/${icon}.jpg` : null;
 function ControlLabel({ label }) {
   return label === 'Unbound' ? null : <Text numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.55} style={s.buttonLabel}>{label}</Text>;
+}
+
+function ControlArtwork({ label, icon }) {
+  const [loaded, setLoaded] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const uri = spellArtworkUri(icon);
+  const source = utilityArtwork[icon] ?? (uri ? { uri } : null);
+  if (label === 'Unbound') return null;
+  if (!source || failed) return <ControlLabel label={label} />;
+  return <View style={s.artwork}>
+    <Image accessible={false} source={source} resizeMode="cover" fadeDuration={0}
+      onLoad={() => setLoaded(true)} onError={() => setFailed(true)}
+      style={[s.artworkImage, !loaded && { opacity: 0 }]} />
+    {!loaded && <ControlLabel label={label} />}
+  </View>;
 }
 
 function Control({ control, size, visuals, onAccessiblePress, profile, prefix, chatState }) {
@@ -53,7 +78,7 @@ function Control({ control, size, visuals, onAccessiblePress, profile, prefix, c
         </View>
       ) : (
         <View style={[s.button, { width: shoulder && !consolePort ? width : diameter, height: shoulder && !consolePort ? height : diameter }, shoulder && !consolePort && s.shoulder, dpad && !consolePort && s.dpad, consolePort && s.consolePortButton, pressed && s.active, face && pressed && { borderColor: control.color }, chatting && s.chatActive]}>
-          {consolePort ? <ControlLabel label={display.label} /> : <Text numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.55} style={[s.buttonLabel, control.color && { color: control.color }, face && { fontSize: control.label.length > 3 ? 14 : 22 }, dpad && { fontSize: 22 }]}>{chatting ? display.label : control.label === xboxProfile.controls.find(item => item.id === control.id)?.label ? (glyph[control.id] ?? control.label) : control.label}</Text>}
+          {consolePort ? <ControlArtwork key={`${display.icon ?? ''}:${display.label}`} label={display.label} icon={chatting ? undefined : display.icon} /> : <Text numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.55} style={[s.buttonLabel, control.color && { color: control.color }, face && { fontSize: control.label.length > 3 ? 14 : 22 }, dpad && { fontSize: 22 }]}>{chatting ? display.label : control.label === xboxProfile.controls.find(item => item.id === control.id)?.label ? (glyph[control.id] ?? control.label) : control.label}</Text>}
           {consolePort && <Text style={[s.badge, control.color && { color: control.color }]}>{control.badge}</Text>}
         </View>
       )}
@@ -68,7 +93,7 @@ export function WowSetupScreen() {
           <Text style={s.detail}>Connect your Mac first, then follow these steps to prepare WoW and ConsolePort. You can test the controller locally before entering the game.</Text>
           {[
             ['1. Prepare your Mac', 'Install the receiver and connect both devices to the same Wi-Fi. Verify the virtual gamepad before starting WoW.'],
-            ['2. Install ConsolePort', 'Select the Forever installation in CurseForge, install the matching addon release, then restart WoW and confirm the addon is enabled.'],
+            ['2. Install ConsolePort', 'Select the WoW installation you play in CurseForge, install its matching ConsolePort release, then restart WoW and confirm the addon is enabled.'],
             ['3. Check in-game controls', 'Follow ConsolePort’s controller setup. Test movement, camera, targeting, jump and trigger modifiers. Configure your spells and actions in WoW.'],
           ].map(([title, detail]) => <View key={title} style={s.step}><Text style={s.stepTitle}>{title}</Text><Text style={s.detail}>{detail}</Text></View>)}
           <Pressable accessibilityRole="link" onPress={() => Linking.openURL('https://www.curseforge.com/wow/addons/console-port')} style={s.link}><Text style={s.action}>Open ConsolePort on CurseForge ↗</Text></Pressable>
@@ -86,10 +111,17 @@ function Screen() {
   const pauseChat = chat.pause;
   const layout = useSyncExternalStore(connection.subscribeProfile, connection.profileSnapshot);
   const cloudState = useSyncExternalStore(cloud.subscribe, cloud.snapshot);
-  const macAdoption = cloudState.macAdoption;
-  const cloudSelection = network.phase === 'offline' ? cloudState.selected : null;
+  const macAdoption = AI_CONTROLLER_GENERATOR_ENABLED ? cloudState.macAdoption : null;
+  const cloudSelection = AI_CONTROLLER_GENERATOR_ENABLED && network.phase === 'offline' ? cloudState.selected : null;
   const settings = useSyncExternalStore(calibration.subscribe, calibration.snapshot);
-  const renderedProfile = useMemo(() => cloudSelection?.profile ?? (layout.revision === 0 ? calibration.standard(settings) : layout.profile), [cloudSelection, layout, settings]);
+  const renderedProfile = useMemo(() => cloudSelection?.profile ?? (layout.revision === 0 || layout.profile.id === defaultProfile.id ? calibration.standard(settings, layout.profile) : layout.profile), [cloudSelection, layout, settings]);
+  useEffect(() => {
+    const icons = new Set(renderedProfile.controls.flatMap(control => [control.icon, ...Object.values(control.layers ?? {}).map(layer => layer.icon)]));
+    for (const icon of icons) {
+      const uri = spellArtworkUri(icon);
+      if (uri) void Image.prefetch(uri).catch(() => {});
+    }
+  }, [renderedProfile]);
   const hasChatControl = renderedProfile.controls.some(control => control.id === 'chat');
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [visuals] = useState(() => new Map());
@@ -104,7 +136,7 @@ function Screen() {
   const chatTouches = useRef(new Set());
   const [geometry] = useState(() => ({ x: 0, y: 0, width: 0, height: 0 }));
   const [controller] = useState(() => new TouchController(renderedProfile, {
-    onState: state => { connection.submit(state); setPrefix(modifierPrefix(connection.snapshot().phase === 'offline' ? cloud.snapshot().selected?.profile ?? connection.profileSnapshot().profile : connection.profileSnapshot().profile, state)); },
+    onState: (state, profile) => { connection.submit(state); setPrefix(modifierPrefix(profile, state)); },
     onVisual: (id, value) => visuals.get(id)?.(value),
   }));
   function openChat(control) {
@@ -198,7 +230,7 @@ function Screen() {
         <Text style={s.demoDetail}>Unlock Thumble Pro for unlimited controller time. One purchase, yours forever.</Text>
         {!!access.error && <Text style={s.demoDetail}>{access.error}</Text>}
         <Pressable accessibilityRole="button" style={[s.demoAction, s.demoPrimary]} onPress={() => router.push('/pro')}><Text style={s.demoPrimaryText}>Unlock Pro</Text></Pressable>
-        <Pressable accessibilityRole="button" style={s.demoAction} onPress={() => connection.disconnect()}><Text style={s.action}>Continue in practice mode</Text></Pressable>
+        <Pressable accessibilityRole="button" style={s.demoAction} onPress={() => connection.disconnect(undefined, { keepLayout: true })}><Text style={s.action}>Continue in practice mode</Text></Pressable>
       </ScrollView>}
       {network.phase === 'connected' && !!access?.error && !exhausted && <Text accessibilityRole="alert" style={s.accessError}>{access.error}</Text>}
       <Pressable accessibilityRole="button" accessibilityLabel={isPro ? 'Thumble Pro, unlimited controller time' : `${formatDemoTime(remaining)} of free controller time remaining`}
@@ -235,6 +267,8 @@ const s = StyleSheet.create({
   control: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
   button: { borderRadius: 100, backgroundColor: '#292d31', borderWidth: 2, borderColor: '#393f44', alignItems: 'center', justifyContent: 'center' },
   consolePortButton: { borderWidth: 3, borderColor: '#77736b', backgroundColor: '#343537' },
+  artwork: { width: '100%', height: '100%', borderRadius: 100, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
+  artworkImage: { position: 'absolute', width: '100%', height: '100%' },
   badge: { position: 'absolute', top: -16, color: '#efdf9d', fontSize: 12, fontWeight: '800', backgroundColor: '#17191b', paddingHorizontal: 4, borderRadius: 4 },
   stickLabel: { position: 'absolute', bottom: 5, color: '#a5adb5', fontSize: 10 },
   active: { backgroundColor: '#414a43', borderColor: '#b8e09e' },

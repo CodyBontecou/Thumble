@@ -1,0 +1,24 @@
+steps:
+  - echo: Signed-in Pixel QA fixture has rendered Pixel WoW Journey revision 2 and prior pairing history. Restart must retain the delivery while requiring a fresh Mac connection. WoW is incomplete. No account or controller data is reset.
+  - launch: com.thumble.android.pilotqa
+  - await: { visible: { text: Pick up where } }
+  - await: { idle: true, stableFor: 800 }
+  - assert: { visible: { text: Previously paired · reconnect to continue } }
+  - tap: { text: Connect your AI → receive a controller → use it on Mac → test in WoW }
+  - await: { visible: { text: From your AI } }
+  - await: { idle: true, stableFor: 800 }
+  - await: { text: { in: { text: AI TO WOW · }, contains: 2 OF 4 COMPLETE } }
+  - assert: { visible: { text: Pixel WoW Journey · revision 2 · rendered on this phone } }
+  - scroll-to: { target: { text: 4 · Tested in WoW } }
+  - assert: { visible: { text: 3 · Mac ready } }
+  - assert: { visible: { text: 4 · Tested in WoW } }
+  - tap: { text: Connect Mac }
+  - await: { visible: { text: A small screen. } }
+  - await: { idle: true, stableFor: 800 }
+  - tap: { text: Done }
+  - await: { hidden: { text: A small screen. } }
+  - await: { visible: { text: 4 · Tested in WoW } }
+  - await: { idle: true, stableFor: 800 }
+  - tap: { text: Done }
+  - await: { visible: { text: Pick up where } }
+  - await: { idle: true, stableFor: 800 }

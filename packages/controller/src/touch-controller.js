@@ -15,7 +15,7 @@ export class TouchController {
 
   /**
    * @param {any} profile
-   * @param {{onState?: (state: ReturnType<Controller['snapshot']>) => void, onVisual?: (id: string, visual: {pressed: boolean, x: number, y: number}) => void}} [options]
+   * @param {{onState?: (state: ReturnType<Controller['snapshot']>, profile: any) => void, onVisual?: (id: string, visual: {pressed: boolean, x: number, y: number}) => void}} [options]
    */
   constructor(profile, { onState = () => {}, onVisual = () => {} } = {}) {
     this.#profile = assertProfile(profile);
@@ -77,7 +77,7 @@ export class TouchController {
     this.#touches.clear();
     for (const control of this.#profile.controls) this.#onVisual(control.id, { pressed: false, x: 0, y: 0 });
     const state = this.#controller.releaseAll();
-    this.#onState(state);
+    this.#onState(state, this.#profile);
     return state;
   }
 
@@ -104,6 +104,6 @@ export class TouchController {
     }
     const state = this.#controller.update(control.id, value);
     this.#onVisual(control.id, { pressed: touches.length > 0 && value !== false, x, y });
-    this.#onState(state);
+    this.#onState(state, this.#profile);
   }
 }

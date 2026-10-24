@@ -38,3 +38,25 @@ test('phone banks preserve the exported diamonds with large, separate touch targ
  for (const f of frames) { assert(Math.min(f.width*780,f.height*280)>=44); assert(f.x>=0 && f.y>=0 && f.x+f.width<=1 && f.y+f.height<=1); }
  for (let i=0;i<frames.length;i++) for (let j=i+1;j<frames.length;j++) { const a=frames[i],b=frames[j]; assert(a.x+a.width<=b.x || b.x+b.width<=a.x || a.y+a.height<=b.y || b.y+b.height<=a.y, `touch regions ${i} and ${j} overlap`); }
 });
+
+test('appearance-only mirroring keeps source positions, control IDs and calibrated outputs', async t => {
+ const d = await mkdtemp(join(tmpdir(), 'cp-appearance-')); t.after(() => rm(d, { recursive: true, force: true }));
+ const store = new ProfileStore(d);
+ const source = structuredClone(profile);
+ source.controls.find(c => c.id === 'charge').icon = 'old_icon';
+ source.mappings.find(m => m.controlId === 'move').invertY = true;
+ await store.save(source, 0);
+ const s = structuredClone(snapshot);
+ s.consolePortLayout = [{ key: 'PAD3', frame: { x: .8, y: .8, width: .05, height: .05 }, layers: mods.map(modifier => ({ modifier, label: modifier ? 'Unbound' : 'Charge', command: modifier ? '' : 'ACTIONBUTTON3', ...(modifier ? {} : { kind: 'spell', id: 100 }) })) }];
+ await importCharacter(store, JSON.stringify(s));
+ const result = await mirrorConsolePort(store, { snapshotId: s.snapshotId, sourceProfileId: source.id, sourceProfileRevision: 1, profileId: 'character-artwork', expectedRevision: 0, preserveSourceLayout: true }, async () => 'ability_warrior_charge');
+ assert.deepEqual(result.profile.mappings, source.mappings);
+ assert.deepEqual(result.profile.controls.map(c => [c.id, c.frame]), source.controls.map(c => [c.id, c.frame]));
+ const control = result.profile.controls.find(c => c.id === 'charge');
+ assert.equal(control.icon, 'ability_warrior_charge');
+ assert.deepEqual(control.layers['SHIFT-'], { label: 'Unbound' });
+ assert.equal(controlDisplay(control, 'SHIFT-', result.profile).icon, undefined);
+ assert.equal(result.profile.modifiers.shift, 'lt');
+ assert.equal((await store.get(source.id)).profile.controls.find(c => c.id === 'charge').icon, 'old_icon');
+ assert.equal((await store.list()).active, null);
+});

@@ -1,0 +1,33 @@
+# Requires a fresh install of the isolated com.thumble.consoleportflagqa simulator app.
+# Built from the existing simulator binary plus the current production JS bundle.
+steps:
+  - launch: com.thumble.consoleportflagqa
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: ConsolePort controls, on your phone.
+  - echo: Open setup; expect three ConsolePort milestones.
+  - tap: { text: Get started }
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: GETTING STARTED
+  - echo: Enter practice; expect ConsolePort gamepad controls.
+  - tap: { text: Set up later · use controller }
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        identifier: controller-menu
+  - echo: Open the menu; expect ConsolePort controller and the ConsolePort setup
+      actions.
+  - tap:
+      id: controller-menu
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: ConsolePort controller
+      timeoutMs: 15000

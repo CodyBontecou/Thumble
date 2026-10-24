@@ -1,6 +1,8 @@
-# Thumble Bridge companion addon
+# Thumble companion addon
 
-Thumble Bridge exports a character's learned spells and current bindings, accepts a JSON plan from the local profile tools, and lets the player review and apply it outside combat. It configures bindings only. Every gameplay button press comes from the player.
+Thumble exports a character's learned spells and current bindings, accepts a JSON plan from the local profile tools, and lets the player review and apply it outside combat. It configures bindings only. Every gameplay button press comes from the player.
+
+The player-facing addon name is **Thumble** as of 0.1.1. The `ThumbleBridge` folder, TOC filename, SavedVariables name and export format are retained for update compatibility. Existing settings and export readers keep working.
 
 ## Install
 
@@ -8,7 +10,27 @@ Thumble Bridge exports a character's learned spells and current bindings, accept
 node tools/install-wow-addon.mjs '/Applications/World of Warcraft/_classic_era_'
 ```
 
-Choose the actual client directory. The installer backs up an existing Thumble Bridge installation, leaves other addons alone, and prints the destination. Restart the client when installing a new addon; `/reload` is sufficient for updates. Enable the addon and open `/thumblebridge` (or `/tbbridge`). ConsolePort is optional.
+Choose the actual client directory. The installer backs up an existing Thumble installation, leaves other addons alone, and prints the destination. Restart the client when installing a new addon; `/reload` is sufficient for updates. Enable the addon and open `/thumble` (legacy `/thumblebridge` and `/tbbridge` commands still work). ConsolePort is optional.
+
+## Automatic Mac gamepad discovery
+
+With Thumble and ConsolePort enabled on macOS, the addon refreshes WoW's gamepad discovery after a receiver disconnect. It waits for two seconds of neutral controls and defers until combat ends. A short retry window handles delayed replacement devices and stale WoW device entries; it stops when controller input is observed. When no mapped controller is visible, discovery retries at most once every five seconds. A healthy connected controller is left alone outside that recovery window.
+
+This uses WoW's own `GamePadEnable` configuration refresh inside the addon. It never types into chat, changes bindings, presses gameplay buttons, or enables gamepad support when the player disabled it. Install/update the addon once and reload the UI; users should not need to enter the two console commands after an ordinary receiver restart. Without the addon, the existing manual recovery remains available.
+
+`/thumble discovery` reports status and the current session's refresh count. `/thumble discovery off` disables automatic recovery for this character; `/thumble discovery on` re-enables it. Other operating systems and clients without the required gamepad APIs skip recovery. API errors stop retrying for the current UI session and appear in the status output.
+
+The implementation uses mapped device state because raw device state can be unavailable on macOS. API names and state fields are defined in [Blizzard's generated GamePad API documentation](https://raw.githubusercontent.com/Gethe/wow-ui-source/live/Interface/AddOns/Blizzard_APIDocumentationGenerated/GamePadDocumentation.lua).
+
+## Automatic ConsolePort sync
+
+With ConsolePort and its action bars enabled, Thumble captures the character’s visible controls, spell/item IDs and all eight modifier states. Changes are debounced outside combat, and the snapshot is refreshed at logout. WoW writes it to the character’s SavedVariables file during `/reload` or logout.
+
+Keep the Mac receiver running and use a ConsolePort controller on the phone. After `/reload`, the receiver detects the saved snapshot, resolves artwork, and delivers the updated layers through the normal acknowledged layout channel. No agent session or manual character export is needed. ConsolePort remains the source of truth for labels, spells and modifier assignments; the phone retains its touch positions, movement/camera mappings and calibration. The receiver creates a separate profile per character and avoids another activation when the layout is unchanged.
+
+Automatic sync is enabled by default. The receiver’s menu shows sync status, **Automatically sync ConsolePort**, and **Choose WoW folder…** for installations outside `/Applications/World of Warcraft`. `/thumble sync` reports the character’s setting; `/thumble sync off` and `/thumble sync on` change it. Reload once after starting the receiver: startup deliberately ignores existing files so an old logged-out character cannot replace the current controller. Non-ConsolePort controllers are preserved.
+
+This is a saved snapshot, so changes to spells, bindings, pages or stances need `/reload` before they reach the phone. Cooldowns and other live combat state are not streamed. Unsafe combat captures, malformed snapshots and snapshots older than five minutes retain the previous phone controller. The receiver reads one bounded JSON string without executing Lua, watches files on its own background queue, and uses the shared profile-store lock and atomic write. The separate `syncText` snapshot leaves manual exports and reviewed binding plans intact.
 
 ## Character to phone workflow
 
@@ -43,9 +65,11 @@ The character export also includes `consolePortLayout` when ConsolePort's visibl
 
 `mirror_consoleport` takes `{ snapshotId, sourceProfileId, sourceProfileRevision, profileId, expectedRevision }`. It saves a separate phone profile with the same relative button clusters, spell/item artwork, utility artwork and modifier labels. The source profile supplies stick mappings and utility buttons without visible ConsolePort frames. Its current movement/camera assignment is preserved. Activate the returned revision explicitly to deliver it.
 
+For an appearance-only update, pass `preserveSourceLayout: true` to `mirror_consoleport`. It copies exported labels, icons and modifier states onto the source controls by gamepad output, retaining source positions, IDs and mappings. The mobile renderer prefetches artwork for every layer and clears empty slots immediately on trigger changes.
+
 WoW artwork names are resolved from public Wowhead spell/item metadata; the phone loads images from the fixed WoW icon CDN. Lookup or download failures retain the text label. ConsolePort utility artwork is bundled unmodified with its Artistic License 2.0 notice in `apps/mobile/assets/consoleport`. Empty action slots remain empty. Holding a modifier changes presentation based on the phone's actual held outputs, while the modifier button itself uses ConsolePort's complementary state.
 
-This mirrors the exported context, not a continuously streamed game HUD: export again after changing bindings, action pages, stance or ConsolePort geometry. Cooldowns, proc glows, live target state and automatic in-game page updates are not transmitted. A visual snapshot does not apply a binding plan.
+The manual mirror uses the exported context. Automatic sync refreshes labels and layers after `/reload`; touch geometry stays on the phone. Cooldowns, proc glows and live target state are not transmitted. A visual snapshot does not apply a binding plan.
 
 On October 23 the user clarified that both horizontal and vertical directions were reversed on both sticks; the earlier output swap was a misunderstanding. Revision 4 restores `move` to `[lx, ly]` and `look` to `[rx, ry]`, initially with `invertX: true` and `invertY: true` on both mappings. The player subsequently reported horizontal reversal; revision 5 removes horizontal inversion (`invertX: false`) while retaining `invertY: true`, and the phone acknowledged activation 6. These optional boolean settings affect only the profile's output; the visual cap follows the finger and the shared HID codec is unchanged. Both the Warrior source and `consoleport-bonteq` carry this correction.
 
@@ -57,7 +81,7 @@ The corrected renderer passed a Release simulator check over an isolated TLS pre
 
 After clicking **Export character** or **Export result**, `/reload` or logout flushes the selected JSON into the character's SavedVariables file. `read_addon_export` accepts `savedVariablesPath` ending in `SavedVariables/ThumbleBridge.lua` and `exportKind` equal to `character` or `result`. It extracts only the saved JSON string without executing Lua. It does not write game files or provide live telemetry.
 
-The addon does not connect directly to MCP or poll arbitrary files. The handoff is explicit copy/paste or a flushed disk export. Names and skill bindings reach the phone only after a verified result and explicit profile activation.
+The addon does not connect directly to MCP or poll arbitrary files. The handoff is copy/paste or a flushed disk snapshot. Automatic ConsolePort sync handles appearance updates after reload; the reviewed binding-plan workflow still requires explicit Apply and confirmation.
 
 ## Validation and limits
 

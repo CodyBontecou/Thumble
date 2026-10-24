@@ -392,3 +392,22 @@ test('cloud adoption refuses old receivers and rejects forged provenance before 
   h.emit('message', { type: 'profiles-result', id: request.id, catalog: { profiles: [], activationRevision: 1, adoption: { profileId: 'cloud-' + 'b'.repeat(40), profileRevision: 1, source: { ...source, revision: 2 } } } });
   await assert.rejects(pending, /requested cloud revision/);
 });
+
+test('explicit practice retains character appearance while disconnecting input and clearing activation state', async () => {
+  const h = harness(); await h.connection.connect(invitation()); h.ready();
+  const profile = structuredClone(xboxProfile); profile.id = 'character-artwork'; profile.name = 'Character';
+  h.emit('message', { type: 'layout', revision: 9, profile });
+  h.connection.disconnect(undefined, { keepLayout: true });
+  assert.equal(h.connection.snapshot().phase, 'offline');
+  assert.equal(h.connection.profileSnapshot().profile.id, profile.id);
+  assert.equal(h.connection.profileSnapshot().revision, 0);
+  assert.equal(h.connection.canPlay, false);
+  const count = h.sent.length;
+  h.connection.submit({ ...neutralState(), buttons: 1, rt: 1 }); h.advance(1000);
+  assert.equal(h.sent.length, count);
+  assert.equal(h.connection.session, null);
+  assert.equal(h.connection.layoutPending, false);
+  assert.deepEqual(h.connection.state, neutralState());
+  h.connection.disconnect();
+  assert.notEqual(h.connection.profileSnapshot().profile.id, profile.id);
+});

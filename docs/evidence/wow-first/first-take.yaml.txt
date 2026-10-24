@@ -1,0 +1,19 @@
+steps:
+  - echo: Launch a fresh isolated app. Expect WoW and ConsolePort welcome.
+  - launch: com.thumble.wowsetupqa
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: WoW on your Mac.
+  - tool: rotate
+    args:
+      orientation: LandscapeRight
+  - echo: On welcome, choose Set up WoW; expect the WoW client picker.
+  - tap:
+      text: Set up WoW
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: Which WoW

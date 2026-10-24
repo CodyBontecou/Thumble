@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "thumble-controller",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Create, save, and send custom controller layouts to your Thumble phone for practice.",
   "homepage": "https://thumble.io",
   "keywords": [

@@ -4,7 +4,7 @@ import { importCharacter, importBindingResult } from './character-tools.js';
 
 /** Reads a single serialized Lua string. Never evaluates a SavedVariables file. */
 export function extractAddonExport(source, field) {
-  if (!['exportText', 'receiptText'].includes(field) || !/^\s*ThumbleBridgeDB\s*=\s*\{/.test(source)) throw Error('Not a Thumble Bridge SavedVariables file');
+  if (!['exportText', 'receiptText'].includes(field) || !/^\s*ThumbleBridgeDB\s*=\s*\{/.test(source)) throw Error('Not a Thumble SavedVariables file');
   const match = new RegExp('\\["' + field + '"\\]\\s*=\\s*').exec(source);
   if (!match) throw Error(`No ${field} saved. Click Export in-game, then /reload or log out so WoW writes SavedVariables.`);
   let position = match.index + match[0].length;

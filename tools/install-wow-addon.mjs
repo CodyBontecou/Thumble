@@ -10,12 +10,12 @@ try {
   await access(parent);
   try {
     const manifest = await readFile(join(target, 'ThumbleBridge.toc'), 'utf8');
-    if (!manifest.includes('## Title: Thumble Bridge')) throw Error('Destination contains an unrecognized addon; refusing to overwrite it');
+    if (!/^## Title: Thumble(?: Bridge)?\s*$/m.test(manifest)) throw Error('Destination contains an unrecognized addon; refusing to overwrite it');
     backup = join(parent, '.thumble-backups', 'ThumbleBridge-' + Date.now());
   } catch (error) { if (error.code !== 'ENOENT') throw error; }
   await cp(new URL('../addons/ThumbleBridge', import.meta.url), staging, { recursive: true });
   if (backup) { await mkdir(resolve(backup, '..'), { recursive: true }); await rename(target, backup); }
   try { await rename(staging, target); }
   catch (error) { if (backup) await rename(backup, target); throw error; }
-  console.log(JSON.stringify({ installed: target, backup, next: 'Reload the UI (restart the client if this is a newly discovered addon), then type /thumblebridge. No bindings are applied automatically.' }));
+  console.log(JSON.stringify({ installed: target, backup, next: 'Reload the UI (restart the client if this is a newly discovered addon), then type /thumble. No bindings are applied automatically.' }));
 } finally { await rm(staging, { force: true, recursive: true }); }

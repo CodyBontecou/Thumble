@@ -5,7 +5,7 @@ import { CLOUD_SCOPES, CloudError } from '@tapping/cloud-contracts';
 import { callCloudTool, cloudTools, handleMcp, handleProtectedResourceMetadata, MCP_SCOPES } from '../src/mcp.js';
 
 const principal = { kind: 'account', accountId: 'account-a', scopes: CLOUD_SCOPES };
-const env = { OAUTH_ISSUER: 'https://identity.example', OAUTH_AUDIENCE: 'https://cloud.example/mcp', OAUTH_JWKS_JSON: '{"keys":[]}' };
+const env = { AI_CONTROLLER_GENERATOR_ENABLED: 'true', OAUTH_ISSUER: 'https://identity.example', OAUTH_AUDIENCE: 'https://cloud.example/mcp', OAUTH_JWKS_JSON: '{"keys":[]}' };
 const request = () => new Request('https://cloud.example/mcp', { headers: { authorization: 'Bearer account-a-token' } });
 const rpc = (method, params, options = {}) => new Request('https://cloud.example/mcp', {
   method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream', authorization: 'Bearer account-a-token', 'mcp-protocol-version': '2025-11-25', ...options.headers },
@@ -70,7 +70,7 @@ test('stateless SDK HTTP supports initialize, tools/list, call, ping and notific
   assert.equal(init.headers.get('mcp-session-id'), null);
   assert.equal((await init.json()).result.protocolVersion, '2025-11-25');
   const list = await handleMcp(rpc('tools/list'), env, deps);
-  assert.equal((await list.json()).result.tools.length, 9);
+  assert.equal((await list.json()).result.tools.length, cloudTools.length);
   const call = await handleMcp(rpc('tools/call', { name: 'list_profiles', arguments: {} }), env, deps);
   assert.deepEqual((await call.json()).result.structuredContent, { profiles: [] });
   const ping = await handleMcp(rpc('ping'), env, deps);

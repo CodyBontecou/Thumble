@@ -1,5 +1,5 @@
 import { requireOptionalNativeModule } from 'expo-modules-core';
-import { assertProfile, xboxProfile } from '@tapping/controller';
+import { assertProfile, defaultProfile } from '@tapping/controller';
 const native = requireOptionalNativeModule('TappingPurchases');
 const defaults = () => ({ left: { invertX: false, invertY: false, deadzone: 0.12 }, right: { invertX: false, invertY: false, deadzone: 0.12 } });
 let current = defaults();
@@ -24,8 +24,8 @@ export const calibration = {
     await native.saveCalibration(JSON.stringify(next));
     current = next; for (const listener of listeners) listener();
   },
-  standard(value = current) {
-    return assertProfile({ ...xboxProfile, mappings: xboxProfile.mappings.map(mapping => ({ ...mapping, ...(mapping.controlId === 'left-stick' ? value.left : mapping.controlId === 'right-stick' ? value.right : {}) })) });
+  standard(value = current, profile = defaultProfile) {
+    return assertProfile({ ...profile, mappings: profile.mappings.map(mapping => ({ ...mapping, ...(mapping.controlId === 'left-stick' ? value.left : mapping.controlId === 'right-stick' ? value.right : {}) })) });
   },
 };
 void calibration.load();

@@ -2,7 +2,7 @@
 
 The first journey is implemented across the Worker, hosted MCP, phone and Mac receiver: an authenticated agent saves a controller revision, sends that exact revision to a registered phone, and reads the phone's render receipt. The phone supports offline practice and explicit adoption on its paired Mac. The local receiver owns game input and activation.
 
-The pilot runs at https://thumble-cloud-pilot.costream.workers.dev with Better Auth 1.7.12 and persistent D1 identity storage. Apple and Google sign-in use the service's browser flow; Auth0 is not required. The [deployment record](evidence/cloud/pilot-deployment.md) separates deployed configuration, automated proof and the successful live Google/ChatGPT-to-iPhone journey.
+The service runs at https://thumble.io with Better Auth 1.7.12 and persistent D1 identity storage. Apple and Google sign-in use the service's browser flow; Auth0 is not required. The [deployment record](evidence/cloud/pilot-deployment.md) separates deployed configuration, automated proof and the successful live Google/ChatGPT-to-iPhone journey.
 
 The [shared contract](cloud-contracts.md) defines payloads, permissions, revisions and delivery states. [The architecture decision](adr/0001-cloud-profile-delivery.md) records the authority boundary, and [hosted MCP guidance](hosted-mcp.md) describes the hosted tools and optional Mac pairing.
 
@@ -10,9 +10,9 @@ The [shared contract](cloud-contracts.md) defines payloads, permissions, revisio
 
 | Setting | Pilot value |
 | --- | --- |
-| Service origin | `https://thumble-cloud-pilot.costream.workers.dev` |
-| MCP endpoint and exact OAuth resource/audience | `https://thumble-cloud-pilot.costream.workers.dev/mcp` |
-| Better Auth issuer | `https://thumble-cloud-pilot.costream.workers.dev/api/auth` |
+| Service origin | `https://thumble.io` |
+| MCP endpoint and exact OAuth resource/audience | `https://thumble.io/mcp` |
+| Better Auth issuer | `https://thumble.io/api/auth` |
 | Authorization endpoint | `/api/auth/oauth2/authorize` |
 | Token endpoint | `/api/auth/oauth2/token` |
 | Public signing keys | `/api/auth/jwks` |
@@ -22,6 +22,8 @@ The [shared contract](cloud-contracts.md) defines payloads, permissions, revisio
 | Registered ChatGPT callback | `https://chatgpt.com/connector_platform_oauth_redirect` |
 | Google provider callback | `/api/auth/callback/google` |
 | Apple provider callback | `/api/auth/callback/apple` |
+
+The original `https://thumble-cloud-pilot.costream.workers.dev` origin remains available for installed phones and cached AI connections. Its issuer, cookies, callbacks, token exchange and refresh behavior are preserved. Both origins share users, signing keys and grants; account IDs retain their original issuer namespace. See the [authentication migration record](evidence/auth-domain-migration/README.md).
 
 All HTTP paths above are relative to the service origin. Authorization, code exchange and refresh bind access tokens to the exact MCP resource. Both clients request `openid` and `offline_access`; the phone receives the six cloud scopes, including `devices:manage` for its own registration/revocation. The AI client receives profile read/write, device read and delivery read/write permissions, without `devices:manage`. Discovery for AI clients must advertise that narrower set; the phone receives its full scope list explicitly through `/v1/config`.
 

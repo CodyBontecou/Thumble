@@ -15,7 +15,7 @@ const check = (condition, error) => { if (!condition) throw Error(error); };
 function parse(exportText, kind) {
   check(typeof exportText === 'string' && Buffer.byteLength(exportText) <= 262144, 'Paste addon JSON under 256 KiB');
   const value = JSON.parse(exportText);
-  check(record(value) && value.bridgeVersion === 1 && value.kind === kind, `Expected Thumble Bridge ${kind} export version 1`);
+  check(record(value) && value.bridgeVersion === 1 && value.kind === kind, `Expected Thumble ${kind} export version 1`);
   return value;
 }
 export function validateCharacter(value) {

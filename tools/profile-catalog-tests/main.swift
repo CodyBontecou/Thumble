@@ -2,7 +2,16 @@ import Foundation
 let directory = URL(fileURLWithPath: CommandLine.arguments[1], isDirectory: true)
 let store = try ProfileCatalog.read(directory)
 let list = try ProfileCatalog.summary(store)
-precondition((list["profiles"] as! [[String: Any]]).count == 2)
+precondition((list["profiles"] as! [[String: Any]]).count == 3)
+let fresh = directory.appendingPathComponent("fresh", isDirectory: true)
+let freshList = try ProfileCatalog.summary(ProfileCatalog.read(fresh))
+precondition((freshList["profiles"] as! [[String: Any]]).count == 2)
+let starter = try ProfileCatalog.activate(fresh, id: "consoleport-standard", profileRevision: 1, expectedActivationRevision: 0)
+precondition(starter["activationRevision"] as? Int == 1)
+let freshActive = (try ProfileCatalog.read(fresh))["active"] as! [String: Any]
+let starterProfile = freshActive["profile"] as! [String: Any]
+try CloudProfile.validate(starterProfile)
+precondition(starterProfile["theme"] as? String == "consoleport")
 precondition(ProfileCatalog.revision(true) == nil)
 precondition(list["agentCheckSupported"] as? Bool == true)
 let check = list["agentConnection"] as! [String: Any]

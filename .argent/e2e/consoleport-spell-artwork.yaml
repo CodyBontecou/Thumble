@@ -1,0 +1,103 @@
+steps:
+  - echo: "Base has Heroic Strike. Hold LT: empty spell slots clear and RB shows
+      Target Scan Enemy. Release restores base. Raw down/up ownership is
+      intentional."
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: Heroic Strike
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Down
+          x: 0.6295
+          y: 0.395
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: Target Scan Enemy
+  - tool: await-ui-element
+    args:
+      condition: hidden
+      selector:
+        text: Heroic Strike
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Up
+          x: 0.6295
+          y: 0.395
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: Heroic Strike
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Down
+          x: 0.6295
+          y: 0.605
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: Quick menu
+  - tool: await-ui-element
+    args:
+      condition: hidden
+      selector:
+        text: Heroic Strike
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Up
+          x: 0.6295
+          y: 0.605
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: Heroic Strike
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Down
+          x: 0.6295
+          y: 0.395
+          x2: 0.6295
+          y2: 0.605
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: Utility ring
+  - tool: await-ui-element
+    args:
+      condition: hidden
+      selector:
+        text: Heroic Strike
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Up
+          x: 0.6295
+          y: 0.395
+          x2: 0.6295
+          y2: 0.605
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: Heroic Strike
+  - tool: await-ui-element
+    args:
+      condition: hidden
+      selector:
+        text: Utility ring
+executionPrerequisite: Isolated com.thumble.consoleportartworkqa simulator app
+  in landscape practice with consoleport-fuskotargar revision 1 from activation
+  15 and fresh October 24 export. Neutral input. Viewport matches Tapping React
+  Native QA simulator. No Mac game input is sent.

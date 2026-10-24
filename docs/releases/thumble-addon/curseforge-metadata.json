@@ -1,0 +1,30 @@
+{
+  "name": "Thumble",
+  "summary": "Companion for Thumble phone controls and ConsolePort, with Mac gamepad recovery and explicit binding review.",
+  "game": "World of Warcraft",
+  "suggestedCategory": "Miscellaneous",
+  "website": "https://thumble.io",
+  "releaseName": "Thumble 0.1.1",
+  "releaseType": "Release",
+  "initialTestedGameVersion": "1.15.9 (Classic Era)",
+  "optionalDependency": "ConsolePort",
+  "license": "All Rights Reserved",
+  "descriptionFile": "curseforge-description.md",
+  "changelogFile": "../../../addons/ThumbleBridge/CHANGELOG.md",
+  "internalFolder": "ThumbleBridge",
+  "status": "File uploaded successfully; Processing. New project awaits moderator approval before public visibility and CurseForge synchronization.",
+  "logoFile": "curseforge-icon-400.jpg",
+  "additionalCategory": "Data Export",
+  "projectId": 1763832,
+  "authorUrl": "https://authors.curseforge.com/#/projects/1763832/files",
+  "distribution": "CurseForge ecosystem only",
+  "releaseOptions": "Publish automatically once approved",
+  "gameVersions": [
+    "1.15.9"
+  ],
+  "fileId": 9312831,
+  "fileUrl": "https://authors.curseforge.com/#/projects/1763832/files/9312831",
+  "uploadedFile": "Thumble-0.1.1.zip",
+  "sha256": "c07a42630dcc006d264b4c8b62ac3483340a5d9a04c164589d040d17cf5f9ee5",
+  "submittedDate": "2026-10-24"
+}

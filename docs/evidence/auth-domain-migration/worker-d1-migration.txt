@@ -1,0 +1,1 @@
+PASS: auth origin migration retains D1 profiles, paired phone delivery, cached refresh and account namespace; bundled Better Auth + D1, native and public ChatGPT PKCE/consent/token flows share account, MCP→device delivery, isolated deletion and JWT/write invalidation. Social login and phone renderer simulated.

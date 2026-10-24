@@ -1,0 +1,4 @@
+steps: []
+executionPrerequisite: The separate Pixel QA app has just been updated without
+  clearing data. Pixel WoW Journey revision 2 was rendered and Mac activation 9
+  was acknowledged before the update. Controls were paused.

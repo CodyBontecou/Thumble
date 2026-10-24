@@ -22,7 +22,7 @@ final class PairingHTTP: URLProtocol {
         Self.lock.lock()
         switch (method, path) {
         case ("GET", "/v1/config"):
-            response = ["auth": ["issuer": "https://thumble-cloud-pilot.costream.workers.dev/api/auth", "audience": "https://thumble.io/mcp"]]
+            response = ["auth": ["issuer": "https://thumble.io/api/auth", "audience": "https://thumble.io/mcp"]]
         case ("POST", "/api/auth/oauth2/token"): response = ["access_token": "synthetic-access"]
         case ("POST", "/v1/receiver-pairing"):
             Self.registrations += 1
@@ -76,7 +76,7 @@ Task { @MainActor in
     let sharing = CloudPairing(network: network, authorization: { url in
         let state = URLComponents(url: url, resolvingAgainstBaseURL: false)!.queryItems!.first { $0.name == "state" }!.value!
         var callback = URLComponents(string: PairingOAuth.redirect)!
-        callback.queryItems = [URLQueryItem(name: "code", value: "synthetic"), URLQueryItem(name: "state", value: state), URLQueryItem(name: "iss", value: "https://thumble-cloud-pilot.costream.workers.dev/api/auth")]
+        callback.queryItems = [URLQueryItem(name: "code", value: "synthetic"), URLQueryItem(name: "state", value: state), URLQueryItem(name: "iss", value: "https://thumble.io/api/auth")]
         return callback.url!
     }, heartbeatInterval: .milliseconds(30))
     var statuses: [String] = [], isSharing = false

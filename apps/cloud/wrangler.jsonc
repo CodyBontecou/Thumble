@@ -1,5 +1,6 @@
 {
   "$schema": "../../node_modules/wrangler/config-schema.json",
+  "vars": { "AI_CONTROLLER_GENERATOR_ENABLED": "false" },
   "name": "thumble-cloud",
   "main": "src/worker.js",
   "assets": { "directory": "../../assets/public", "binding": "ASSETS", "run_worker_first": true, "html_handling": "none", "not_found_handling": "none" },

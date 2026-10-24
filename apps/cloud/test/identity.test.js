@@ -291,3 +291,131 @@ test('email code failures, expiry, exhausted attempts and request throttling fai
   const failed = await fixture(t, { EMAIL_FROM: 'signin@auth.thumble.io', EMAIL: { send: async () => { throw Error('transport-failure'); } } });
   const failure = await failed.auth.handler(failed.request('/api/auth/email-otp/send-verification-otp', { method: 'POST', authenticated: false, body: { email: 'transport@example.test', type: 'sign-in' } })); assert.equal(failure.status, 200); assert.equal(failure.headers.get('set-cookie'), null); assert.equal(failed.db.prepare('SELECT count(*) AS n FROM user').get().n, 1);
 });
+
+test('operator-registered Claude client requires its own secret, exact callback, consent and limited PKCE scopes', async t => {
+  const { claudeClientRow, claudeClientSql, CLAUDE_CLIENT_ID, CLAUDE_REDIRECT_URI, CLAUDE_SCOPES } = await import('../../../tools/lib/claude-oauth-client.mjs');
+  const f = await fixture(t, { MCP_RESOURCE_URL: 'https://thumble.io/mcp' });
+  const claudeScopes = CLAUDE_SCOPES;
+  assert.throws(() => claudeClientRow('x'.repeat(64), ['openid', 'pairing:read']), /hosted AI/);
+  assert.throws(() => claudeClientSql(claudeClientRow('x'.repeat(64)), 'https://attacker.example/mcp'), /canonical/);
+  const secret = 'claude-test-only-secret-with-at-least-thirty-two-characters';
+  f.db.exec(claudeClientSql(claudeClientRow(secret, claudeScopes)));
+  // Routine provisioning must preserve independently operator-managed clients.
+  await ensureIdentityClients(f.env);
+  const registered = f.db.prepare('SELECT * FROM oauthClient WHERE clientId=?').get(CLAUDE_CLIENT_ID);
+  assert.notEqual(registered.clientSecret, secret);
+  assert.equal(registered.requirePKCE, 1); assert.equal(registered.skipConsent, 0);
+  for (const extra of [{ scope: 'openid devices:manage' }, { scope: 'openid pairing:manage' }, { redirect_uri: 'https://claude.ai.attacker.example/api/mcp/auth_callback' }]) {
+    const { result } = await f.authorize(CLAUDE_CLIENT_ID, { redirect_uri: CLAUDE_REDIRECT_URI, scope: claudeScopes.join(' '), resource: 'https://thumble.io/mcp', ...extra });
+    assert.ok(result.status >= 400 || new URL(result.headers.get('location'), f.env.BETTER_AUTH_URL).searchParams.has('error'));
+  }
+  const { result, verifier } = await f.authorize(CLAUDE_CLIENT_ID, { redirect_uri: CLAUDE_REDIRECT_URI, scope: claudeScopes.join(' '), resource: 'https://thumble.io/mcp' });
+  assert.equal(result.status, 302);
+  const signedQuery = new URL(result.headers.get('location'), f.env.BETTER_AUTH_URL).search.slice(1);
+  const consent = await f.auth.handler(f.request('/api/auth/oauth2/consent', { method: 'POST', body: { accept: true, oauth_query: signedQuery } }));
+  assert.equal(consent.status, 200);
+  const code = new URL((await consent.json()).url).searchParams.get('code');
+  const body = { grant_type: 'authorization_code', client_id: CLAUDE_CLIENT_ID, redirect_uri: CLAUDE_REDIRECT_URI, code, code_verifier: verifier, resource: 'https://thumble.io/mcp' };
+  const missingSecret = await f.auth.handler(f.request('/api/auth/oauth2/token', { method: 'POST', form: true, body, authenticated: false, origin: false }));
+  assert.ok(missingSecret.status >= 400);
+  const exchanged = await f.auth.handler(f.request('/api/auth/oauth2/token', { method: 'POST', form: true, body: { ...body, client_secret: secret }, authenticated: false, origin: false }));
+  assert.equal(exchanged.status, 200);
+  const tokens = await exchanged.json(); assert.ok(tokens.refresh_token);
+  const claims = decodeJwt(tokens.access_token); assert.ok([claims.aud].flat().includes('https://thumble.io/mcp')); assert.equal(claims.sub, f.user.id);
+  assert.equal(claims.scope.split(' ').some(scope => ['devices:manage', 'pairing:manage'].includes(scope)), false);
+});
+
+test('operator-registered Grok client enforces read-only scopes, exact callback, consent and PKCE', async t => {
+  const { grokClientSql, GROK_CLIENT_ID, GROK_REDIRECT_URI, GROK_SCOPES } = await import('../../../tools/lib/grok-oauth-client.mjs');
+  const f = await fixture(t, { MCP_RESOURCE_URL: 'https://thumble.io/mcp' });
+  f.db.exec(grokClientSql());
+  await ensureIdentityClients(f.env);
+  const row = f.db.prepare('SELECT * FROM oauthClient WHERE clientId=?').get(GROK_CLIENT_ID);
+  assert.equal(row.clientSecret, null); assert.equal(row.requirePKCE, 1); assert.equal(row.skipConsent, 0);
+  const args = { redirect_uri: GROK_REDIRECT_URI, scope: GROK_SCOPES.join(' '), resource: 'https://thumble.io/mcp' };
+  for (const extra of [{ scope: 'openid profiles:write' }, { scope: 'openid pairing:read' }, { redirect_uri: 'https://grok.com.attacker.example/connectors-oauth-exchange-code/' }]) {
+    const { result } = await f.authorize(GROK_CLIENT_ID, { ...args, ...extra });
+    assert.ok(result.status >= 400 || new URL(result.headers.get('location'), f.env.BETTER_AUTH_URL).searchParams.has('error'));
+  }
+  const { result, verifier } = await f.authorize(GROK_CLIENT_ID, args);
+  assert.equal(result.status, 302);
+  const signedQuery = new URL(result.headers.get('location'), f.env.BETTER_AUTH_URL).search.slice(1);
+  const consent = await f.auth.handler(f.request('/api/auth/oauth2/consent', { method: 'POST', body: { accept: true, oauth_query: signedQuery } }));
+  assert.equal(consent.status, 200);
+  const body = { grant_type: 'authorization_code', client_id: GROK_CLIENT_ID, redirect_uri: GROK_REDIRECT_URI, code: new URL((await consent.json()).url).searchParams.get('code'), resource: 'https://thumble.io/mcp' };
+  const missingVerifier = await f.auth.handler(f.request('/api/auth/oauth2/token', { method: 'POST', form: true, body, authenticated: false, origin: false }));
+  assert.ok(missingVerifier.status >= 400);
+  const exchanged = await f.auth.handler(f.request('/api/auth/oauth2/token', { method: 'POST', form: true, body: { ...body, code_verifier: verifier }, authenticated: false, origin: false }));
+  assert.equal(exchanged.status, 200);
+  const tokens = await exchanged.json(); assert.ok(tokens.refresh_token);
+  const claims = decodeJwt(tokens.access_token);
+  assert.ok([claims.aud].flat().includes('https://thumble.io/mcp'));
+  assert.deepEqual(claims.scope.split(' ').sort(), [...GROK_SCOPES].sort());
+});
+
+test('auth domain migration preserves cached clients, refresh tokens, sessions and account identity', async t => {
+  const { default: worker } = await import('../src/worker.js');
+  const { identityEnvironment } = await import('../src/identity.js');
+  const oldOrigin = 'https://thumble-cloud-pilot.costream.workers.dev', origin = 'https://thumble.io';
+  const f = await fixture(t, { BETTER_AUTH_URL: oldOrigin, MCP_RESOURCE_URL: `${origin}/mcp` });
+  const phone = await f.exchange(), agent = await f.exchange('thumble-chatgpt');
+  const pending = await f.authorize(); // Authorization started before deployment.
+  const oldPrincipal = await authenticateAccount(new Request(`${oldOrigin}/v1/me`, { headers: { authorization: `Bearer ${phone.tokens.access_token}` } }), f.env);
+  const env = { ...f.env, BETTER_AUTH_URL: origin, LEGACY_AUTH_URL: oldOrigin, ACCOUNT_ID_ISSUER: `${oldOrigin}/api/auth` };
+  await ensureIdentityClients(env);
+  const legacy = identityEnvironment(new Request(oldOrigin), env);
+  assert.equal(identityEnvironment(new Request(oldOrigin), env), legacy);
+  assert.equal(identityEnvironment(new Request('https://attacker.example'), env), env);
+  for (const [host, issuer] of [[origin, `${origin}/api/auth`], [oldOrigin, `${oldOrigin}/api/auth`]]) {
+    const discovery = await worker.fetch(new Request(`${host}/.well-known/oauth-authorization-server/api/auth`), env);
+    assert.equal(discovery.status, 200);
+    const metadata = await discovery.json();
+    assert.equal(metadata.issuer, issuer); assert.equal(metadata.token_endpoint, `${issuer}/oauth2/token`);
+    const oidc = await worker.fetch(new Request(`${host}/.well-known/openid-configuration/api/auth`), env);
+    assert.equal(oidc.status, 200); assert.equal((await oidc.json()).issuer, issuer);
+    assert.equal(getPublicConfig(new Request(`${host}/v1/config`), identityEnvironment(new Request(host), env)).auth.issuer, issuer);
+    for (const tokens of [phone.tokens, agent.tokens]) {
+      const principal = await authenticateAccount(new Request(`${host}/v1/me`, { headers: { authorization: `Bearer ${tokens.access_token}` } }), identityEnvironment(new Request(host), env));
+      assert.equal(principal.accountId, oldPrincipal.accountId);
+    }
+  }
+  // Browser sessions stay valid on the old domain; no cross-domain cookie forwarding.
+  const existingSession = await worker.fetch(f.request('/api/auth/get-session'), env);
+  assert.equal((await existingSession.json()).user.id, f.user.id);
+  for (const [clientId, tokens] of [['thumble-mobile', phone.tokens], ['thumble-chatgpt', agent.tokens]]) {
+    const refreshed = await worker.fetch(f.request('/api/auth/oauth2/token', { method: 'POST', form: true, authenticated: false, origin: false, body: { grant_type: 'refresh_token', client_id: clientId, refresh_token: tokens.refresh_token, resource: `${origin}/mcp`, ...(clientId === 'thumble-chatgpt' ? { client_secret: f.env.CHATGPT_CLIENT_SECRET } : {}) } }), env);
+    assert.equal(refreshed.status, 200);
+    const next = await refreshed.json(); assert.ok(next.refresh_token);
+    assert.equal(decodeJwt(next.access_token).iss, `${oldOrigin}/api/auth`);
+    assert.equal(decodeJwt(next.id_token).iss, `${oldOrigin}/api/auth`);
+    assert.equal((await authenticateAccount(new Request(`${origin}/mcp`, { headers: { authorization: `Bearer ${next.access_token}` } }), env)).accountId, oldPrincipal.accountId);
+  }
+  // Complete an in-flight old authorization after migration.
+  const query = new URL(pending.result.headers.get('location'), oldOrigin).search.slice(1);
+  const accepted = await worker.fetch(f.request('/api/auth/oauth2/consent', { method: 'POST', body: { accept: true, oauth_query: query } }), env);
+  assert.equal(accepted.status, 200);
+  const callback = new URL((await accepted.json()).url); assert.equal(callback.searchParams.get('iss'), `${oldOrigin}/api/auth`);
+  const exchanged = await worker.fetch(f.request('/api/auth/oauth2/token', { method: 'POST', form: true, authenticated: false, origin: false, body: { grant_type: 'authorization_code', client_id: 'thumble-mobile', code: callback.searchParams.get('code'), code_verifier: pending.verifier, redirect_uri: pending.redirectUri, resource: `${oldOrigin}/mcp` } }), env);
+  assert.equal(exchanged.status, 200);
+  // Fresh canonical authorization issues canonical tokens for the SAME existing account.
+  const canonicalRequest = request => new Request(request.url.replace(oldOrigin, origin), { method: request.method, headers: new Headers([...request.headers].map(([key, value]) => [key, key === 'origin' ? origin : value])), ...(request.method === 'POST' ? { body: request.body, duplex: 'half' } : {}) });
+  const canonical = await worker.fetch(canonicalRequest(f.request(`/api/auth/oauth2/authorize?${new URLSearchParams({ response_type: 'code', client_id: 'thumble-mobile', redirect_uri: MOBILE_REDIRECT_URI, scope: MOBILE_SCOPES.join(' '), resource: `${origin}/mcp`, state: 'canonical-state', code_challenge: Buffer.from(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pending.verifier))).toString('base64url'), code_challenge_method: 'S256', prompt: 'consent' })}`)), env);
+  assert.equal(canonical.status, 302);
+  const canonicalConsent = new URL(canonical.headers.get('location'), origin);
+  assert.equal(canonicalConsent.origin, origin);
+  const consent = await worker.fetch(canonicalRequest(f.request('/api/auth/oauth2/consent', { method: 'POST', body: { accept: true, oauth_query: canonicalConsent.search.slice(1) } })), env);
+  assert.equal(consent.status, 200);
+  const redirect = new URL((await consent.json()).url); assert.equal(redirect.searchParams.get('iss'), `${origin}/api/auth`);
+  const result = await worker.fetch(canonicalRequest(f.request('/api/auth/oauth2/token', { method: 'POST', form: true, authenticated: false, origin: false, body: { grant_type: 'authorization_code', client_id: 'thumble-mobile', redirect_uri: MOBILE_REDIRECT_URI, code: redirect.searchParams.get('code'), code_verifier: pending.verifier, resource: `${origin}/mcp` } })), env);
+  assert.equal(result.status, 200);
+  const tokens = await result.json(); assert.equal(decodeJwt(tokens.access_token).iss, `${origin}/api/auth`);
+  assert.equal((await authenticateAccount(new Request(`${origin}/v1/me`, { headers: { authorization: `Bearer ${tokens.access_token}` } }), env)).accountId, oldPrincipal.accountId);
+  const accountPage = await worker.fetch(canonicalRequest(f.request(`/account?accountId=${oldPrincipal.accountId}`)), env);
+  assert.equal(accountPage.status, 200); assert.match(await accountPage.text(), /Delete your Thumble account/);
+  // Deletion must use the stable namespace and invalidate tokens from BOTH issuers.
+  const deletionRequest = canonicalRequest(f.request('/api/auth/delete-user', { method: 'POST', body: {} }));
+  deletionRequest.headers.set('x-thumble-account-id', oldPrincipal.accountId);
+  const deletion = await worker.fetch(deletionRequest, env); assert.equal(deletion.status, 200);
+  assert.equal(f.db.prepare('SELECT account_id FROM cloud_deleted_accounts').get().account_id, oldPrincipal.accountId);
+  for (const accessToken of [phone.tokens.access_token, tokens.access_token]) await assert.rejects(authenticateAccount(new Request(`${origin}/v1/me`, { headers: { authorization: `Bearer ${accessToken}` } }), env), error => error.code === 'account_deleted');
+});

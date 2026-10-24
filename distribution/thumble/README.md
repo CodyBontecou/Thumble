@@ -23,3 +23,8 @@ Use `thumble-controller-openai-0.2.0.zip` from `openai-canonical/` for the curre
 Current portal: https://platform.openai.com/plugins/manage/plugin_asdk_app_6adc8f83963881918c960106b339df6d
 
 Domain verified; OAuth authorized; eight tools discovered; scan has no findings. Review information and demo URL remain incomplete. Not submitted.
+
+
+## Authentication domain migration (October 24, 2026)
+
+The canonical package now uses `https://thumble.io` for authorization and token exchange as well as MCP. Use `thumble-controller-openai-0.2.1.zip` for a future update. The 0.2.0 and pilot archives remain historical snapshots; installed connections continue using their cached endpoints. This local package update does not update a submitted marketplace listing.

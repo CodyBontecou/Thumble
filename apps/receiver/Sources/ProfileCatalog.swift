@@ -19,6 +19,27 @@ enum ProfileCatalog {
         return n.intValue
     }
     static func read(_ directory: URL) throws -> [String: Any] {
+        var store: [String: Any]
+        do { store = try readSaved(directory) }
+        catch let error as NSError where error.domain == NSCocoaErrorDomain && error.code == NSFileReadNoSuchFileError {
+            store = ["version": 1, "profiles": []]
+        }
+        // Command-line test binaries use the checked-in resource; app bundles ship a copy.
+        let resource = Bundle.main.url(forResource: "BuiltInProfiles", withExtension: "json")
+            ?? URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("Resources/BuiltInProfiles.json")
+        guard let builtIns = try JSONSerialization.jsonObject(with: Data(contentsOf: resource)) as? [[String: Any]],
+              var entries = store["profiles"] as? [[String: Any]] else { throw Failure.invalid }
+        for profile in builtIns {
+            guard let id = profile["id"] as? String else { throw Failure.invalid }
+            if !entries.contains(where: { ($0["profile"] as? [String: Any])?["id"] as? String == id }) {
+                if entries.count >= 256 { break }
+                entries.append(["revision": 1, "profile": profile])
+            }
+        }
+        store["profiles"] = entries
+        return store
+    }
+    private static func readSaved(_ directory: URL) throws -> [String: Any] {
         let url = directory.appendingPathComponent("store.json")
         let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
         guard let size = attributes[.size] as? NSNumber, size.intValue <= 8 * 1024 * 1024 else { throw Failure.invalid }
@@ -56,6 +77,7 @@ enum ProfileCatalog {
     }
     static func activate(_ directory: URL, id: String, profileRevision: Int, expectedActivationRevision: Int) throws -> [String: Any] {
         let manager = FileManager.default, lock = directory.appendingPathComponent("write.lock", isDirectory: true)
+        try manager.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         let deadline = ProcessInfo.processInfo.systemUptime + 3
         while true {
             do { try manager.createDirectory(at: lock, withIntermediateDirectories: false); break }

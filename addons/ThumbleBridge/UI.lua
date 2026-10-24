@@ -2,7 +2,7 @@ local _, ns = ...
 local frame, editor, review, reviewContent, status, apply, staged
 local function display(value) return tostring(value or ''):gsub('|', '||') end
 local function errorText(message) return display(tostring(message):gsub('^.-:%d+: ', '')) end
-local function message(text) if status then status:SetText(text) else print('Thumble Bridge: ' .. text) end end
+local function message(text) if status then status:SetText(text) else print('Thumble: ' .. text) end end
 local function setReview(text) review:SetText(text); if reviewContent then reviewContent:SetHeight(math.max(220, review:GetStringHeight() + 12)) end end
 local function run(action)
     local ok, result = pcall(action)
@@ -22,7 +22,7 @@ local function open()
     frame:SetSize(880, 620); frame:SetPoint('CENTER'); frame:SetFrameStrata('DIALOG'); frame:SetClampedToScreen(true)
     frame:SetMovable(true); frame:EnableMouse(true); frame:RegisterForDrag('LeftButton')
     frame:SetScript('OnDragStart', frame.StartMoving); frame:SetScript('OnDragStop', frame.StopMovingOrSizing)
-    frame.TitleText:SetText('Thumble Bridge — review your controller bindings')
+    frame.TitleText:SetText('Thumble — review your controller bindings')
     UISpecialFrames[#UISpecialFrames + 1] = 'ThumbleBridgeWindow'
     local intro = frame:CreateFontString(nil, 'OVERLAY', 'GameFontHighlight')
     intro:SetPoint('TOPLEFT', 18, -40); intro:SetPoint('TOPRIGHT', -18, -40); intro:SetJustifyH('LEFT')
@@ -88,4 +88,26 @@ local function open()
 end
 SLASH_THUMBLEBRIDGE1 = '/thumblebridge'
 SLASH_THUMBLEBRIDGE2 = '/tbbridge'
-SlashCmdList.THUMBLEBRIDGE = function() run(function() open() end) end
+SLASH_THUMBLEBRIDGE3 = '/thumble'
+SlashCmdList.THUMBLEBRIDGE = function(command)
+    local sync = (command or ''):lower():match('^sync%s*(.*)$')
+    if sync then
+        ThumbleBridgeDB = ThumbleBridgeDB or {}
+        if sync == 'off' then ThumbleBridgeDB.autoSync = false; ThumbleBridgeDB.syncText = nil
+        elseif sync == 'on' then ThumbleBridgeDB.autoSync = true end
+        if ns.ConsolePortSync then ns.ConsolePortSync:Changed() end
+        print('Thumble: ConsolePort sync ' .. (ThumbleBridgeDB.autoSync == false and 'off' or 'on') .. '. Changes reach your phone after /reload or logout while the Mac receiver is running.')
+        return
+    end
+    local discovery = (command or ''):lower():match('^discovery%s*(.*)$')
+    if discovery then
+        ThumbleBridgeDB = ThumbleBridgeDB or {}
+        if discovery == 'off' then ThumbleBridgeDB.autoDiscovery = false
+        elseif discovery == 'on' then ThumbleBridgeDB.autoDiscovery = true end
+        local state = ns.DiscoveryStatus or {}
+        print('Thumble: automatic Mac gamepad discovery ' .. (ThumbleBridgeDB.autoDiscovery == false and 'off' or 'on')
+            .. '; refreshes: ' .. (state.refreshes or 0) .. (state.lastError and '; error: ' .. state.lastError or ''))
+        return
+    end
+    run(function() open() end)
+end

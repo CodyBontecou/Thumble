@@ -1,3 +1,4 @@
+import { AI_CONTROLLER_GENERATOR_ENABLED } from '../features';
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
@@ -38,7 +39,7 @@ function Profiles() {
       <Text style={s.detail}>Choose a saved controller from your Mac.</Text>
       <Pressable accessibilityRole="button" onPress={refresh} disabled={loading || !!selecting} style={s.refresh}><Text style={s.action}>Refresh</Text></Pressable>
     </View>
-    <Button secondary onPress={() => router.push('/first-layout')}>Create a layout with your AI</Button>
+    <Button secondary onPress={() => router.push('/first-layout')}>{AI_CONTROLLER_GENERATOR_ENABLED ? 'Choose or create a layout' : 'Use ConsolePort controls'}</Button>
     {error ? <Text accessibilityRole="alert" style={s.error}>{error}</Text> : null}
     {loading ? <ActivityIndicator accessibilityLabel="Loading profiles" color="#EDEDED" style={s.loading} /> :
       <FlatList data={catalog.profiles} keyExtractor={item => item.id} contentContainerStyle={s.list}

@@ -14,13 +14,13 @@ import { IDENTITY_SCOPES, MOBILE_SCOPES, RECEIVER_SCOPES, RECEIVER_REDIRECT_URI,
 
 const directory = await mkdtemp(join(tmpdir(), 'thumble-identity-runtime-'));
 const cloud = fileURLToPath(new URL('.', import.meta.url)), root = resolve(cloud, '../..');
-const origin = 'https://identity.example.test';
-const env = { BETTER_AUTH_URL: origin, BETTER_AUTH_SECRET: 'local-runtime-test-only-secret-with-more-than-thirty-two-bytes', CHATGPT_REDIRECT_URIS: '["https://chatgpt.com/connector_platform_oauth_redirect"]' };
+let origin = 'https://identity.example.test';
+const env = { AI_CONTROLLER_GENERATOR_ENABLED: 'true', BETTER_AUTH_URL: origin, BETTER_AUTH_SECRET: 'local-runtime-test-only-secret-with-more-than-thirty-two-bytes', CHATGPT_REDIRECT_URIS: '["https://chatgpt.com/connector_platform_oauth_redirect"]' };
 let runtime;
 try {
   execFileSync(process.execPath, [join(root, 'node_modules/wrangler/bin/wrangler.js'), 'deploy', '--dry-run', '--outdir', directory], { cwd: cloud, env: { ...process.env, WRANGLER_LOG_PATH: join(directory, 'wrangler.log'), WRANGLER_SEND_METRICS: 'false' }, stdio: 'pipe' });
   runtime = new Miniflare(convertV4MiniflareOptions({ modules: true, script: await readFile(join(directory, 'worker.js'), 'utf8'), compatibilityDate: '2026-10-23', compatibilityFlags: ['nodejs_compat'], bindings: env, d1Databases: ['DB'] }));
-  const db = await runtime.getD1Database('DB');
+  let db = await runtime.getD1Database('DB');
   for (const migration of ['0001_cloud.sql', '0002_better_auth.sql', '0003_account_deletion.sql', '0004_provider_data_minimization.sql', '0005_receiver_pairing.sql']) {
     const sql = await readFile(new URL(`migrations/${migration}`, import.meta.url), 'utf8');
     await db.batch(sql.replace(/^--.*$/gm, '').split(/;(?=\s*(?:CREATE|UPDATE|INSERT|ALTER|DROP|PRAGMA|$))/i).map(s => s.trim()).filter(Boolean).map(s => db.prepare(s)));
@@ -47,7 +47,7 @@ try {
     const exchange = await request('/api/auth/oauth2/token', { method: 'POST', form: true, value: { grant_type: 'authorization_code', client_id: clientId, redirect_uri: redirectUri, code, code_verifier: verifier, resource: `${origin}/mcp`, ...(clientId === 'thumble-chatgpt' && env.CHATGPT_CLIENT_SECRET ? { client_secret: env.CHATGPT_CLIENT_SECRET } : {}) } });
     assert.equal(exchange.status, 200); return exchange.json();
   }
-  const phoneTokens = await authorize('thumble-mobile'), agentTokens = await authorize('thumble-chatgpt');
+  const phoneTokens = await authorize('thumble-mobile'); let agentTokens = await authorize('thumble-chatgpt');
   const receiverTokens = await authorize('thumble-receiver');
   assert.equal(receiverTokens.refresh_token, undefined);
   const receiverResponse = await request('/v1/receiver-pairing', { method: 'POST', token: receiverTokens.access_token, value: { name: 'Runtime Mac' } });
@@ -69,18 +69,37 @@ try {
     assert.equal(response.status, 200); const payload = await response.json(); assert.ok(!payload.result.isError, JSON.stringify(payload)); return payload.result.structuredContent;
   }
   assert.equal((await tool('save_profile', { profile: xboxProfile, deviceId: registered.device.id, expectedRevision: 0 })).revision, 1);
+  // Deploy the new origin over the SAME persistent D1 after tokens, phone,
+  // pairing session and profile exist. The cached phone stays on its old origin.
+  const previousOrigin = origin, previousAccount = await (await request('/v1/me', { token: phoneTokens.access_token })).json();
+  env.LEGACY_AUTH_URL = previousOrigin;
+  env.ACCOUNT_ID_ISSUER = `${previousOrigin}/api/auth`;
+  env.BETTER_AUTH_URL = origin = 'https://thumble.io';
+  env.MCP_RESOURCE_URL = `${origin}/mcp`;
+  await runtime.setOptions(convertV4MiniflareOptions({ modules: true, script: await readFile(join(directory, 'worker.js'), 'utf8'), compatibilityDate: '2026-10-23', compatibilityFlags: ['nodejs_compat'], bindings: env, d1Databases: ['DB'] }));
+  db = await runtime.getD1Database('DB');
+  const newDiscovery = await request('/.well-known/oauth-authorization-server/api/auth');
+  assert.equal((await newDiscovery.json()).issuer, `${origin}/api/auth`);
+  const newMe = await request('/v1/me', { token: phoneTokens.access_token });
+  assert.equal((await newMe.json()).accountId, previousAccount.accountId);
+  const oldRefresh = await runtime.dispatchFetch(`${previousOrigin}/api/auth/oauth2/token`, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'refresh_token', client_id: 'thumble-mobile', refresh_token: phoneTokens.refresh_token, resource: `${previousOrigin}/mcp` }).toString() });
+  assert.equal(oldRefresh.status, 200); assert.equal(decodeJwt((await oldRefresh.json()).access_token).iss, `${previousOrigin}/api/auth`);
+  agentTokens = await authorize('thumble-chatgpt');
+  assert.equal(decodeJwt(agentTokens.access_token).iss, `${origin}/api/auth`);
+  const listed = await tool('list_profiles', {});
+  assert.ok(JSON.stringify(listed).includes(xboxProfile.id));
   const { delivery } = await tool('deliver_profile', { deviceId: registered.device.id, profileId: xboxProfile.id, profileRevision: 1, requestId: 'better-auth-journey' });
-  const pending = await request(`/v1/devices/${registered.device.id}/deliveries`, { token: registered.deviceToken }); assert.equal(pending.status, 200);
+  const pending = await runtime.dispatchFetch(`${previousOrigin}/v1/devices/${registered.device.id}/deliveries`, { headers: { authorization: `Bearer ${registered.deviceToken}` } }); assert.equal(pending.status, 200);
   for (const state of ['received', 'rendered']) { const ack = await request(`/v1/devices/${registered.device.id}/deliveries/${delivery.id}/ack`, { method: 'POST', token: registered.deviceToken, value: { profileId: xboxProfile.id, profileRevision: 1, state } }); assert.equal(ack.status, 200); }
   assert.equal((await tool('delivery_status', { deliveryId: delivery.id })).delivery.state, 'rendered');
-  const accountId = (await me.json()).accountId;
+  const accountId = previousAccount.accountId;
   const deletion = await request('/api/auth/delete-user', { method: 'POST', session: true, value: {}, expectedAccount: accountId });
   assert.equal(deletion.status, 200); assert.equal((await deletion.json()).success, true);
   const rejected = await request('/v1/me', { token: phoneTokens.access_token }); assert.equal(rejected.status, 401); assert.equal((await rejected.json()).error.code, 'account_deleted');
   for (const table of ['user', 'session', 'devices', 'deliveries', 'profile_revisions', 'oauthConsent', 'oauthRefreshToken', 'receiver_pairing_sessions']) assert.equal((await db.prepare(`SELECT count(*) AS n FROM ${table}`).first()).n, 0);
   assert.equal((await db.prepare('SELECT account_id FROM cloud_deleted_accounts').first()).account_id, accountId);
   await assert.rejects(db.prepare('INSERT INTO profile_revisions (account_id,profile_id,revision,name,profile_json,created_at) VALUES (?,?,?,?,?,?)').bind(accountId, xboxProfile.id, 1, xboxProfile.name, JSON.stringify(xboxProfile), now).run(), /account_deleted/);
-  console.log('PASS: bundled Better Auth + D1, native and public ChatGPT PKCE/consent/token flows share account, MCP→device delivery, isolated deletion and JWT/write invalidation. Social login and phone renderer simulated.');
+  console.log('PASS: auth origin migration retains D1 profiles, paired phone delivery, cached refresh and account namespace; bundled Better Auth + D1, native and public ChatGPT PKCE/consent/token flows share account, MCP→device delivery, isolated deletion and JWT/write invalidation. Social login and phone renderer simulated.');
 } finally {
   try { await runtime?.dispose(); } finally { await rm(directory, { recursive: true, force: true }); }
 }

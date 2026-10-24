@@ -16,11 +16,11 @@ try {
   const candidates=[process.env.TAPPING_LUA,'lua5.1','lua',resolve('build/lua/lua-5.1.5/src/lua')].filter(Boolean);
   const executable=candidates.find(command=>spawnSync(command,['-v'],{encoding:'utf8'}).status===0);
   if(!executable)throw Error('Install Lua 5.1 or set TAPPING_LUA to a compatible interpreter, then rerun npm run test:addon.');
-  for(const name of ['Codec.lua','Core.lua','WoW.lua','UI.lua']){
+  for(const name of ['Codec.lua','Core.lua','WoW.lua','Discovery.lua','Sync.lua','UI.lua']){
     const check=spawnSync(executable,['-e',`assert(loadfile(${JSON.stringify(resolve('addons/ThumbleBridge',name))}))`],{encoding:'utf8'});
     if(check.status!==0)throw Error(check.stderr);
   }
-  for (const args of [['addons/test/core.lua',fixture,path,resolve('addons/ThumbleBridge')],['addons/test/wow.lua',resolve('addons/ThumbleBridge')]]) {
+  for (const args of [['addons/test/core.lua',fixture,path,resolve('addons/ThumbleBridge')],['addons/test/wow.lua',resolve('addons/ThumbleBridge')],['addons/test/discovery.lua',resolve('addons/ThumbleBridge')],['addons/test/sync.lua',resolve('addons/ThumbleBridge')]]) {
     const test=spawnSync(executable,args,{encoding:'utf8'});
     process.stdout.write(test.stdout);process.stderr.write(test.stderr);if(test.status!==0)process.exitCode=1;
   }

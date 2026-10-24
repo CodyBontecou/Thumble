@@ -1,0 +1,32 @@
+
+> test:addon
+> node tools/test-addon.mjs
+
+PASS JSON codec round-trips UTF-8, booleans, arrays, null and escaped strings
+PASS JSON decoder rejects duplicate keys, code, trailing data and invalid numbers
+PASS JS-generated plan passes Lua review and matches the intended learned spells
+PASS review rejects different character, specialization, binding scope, page and modifiers
+PASS review rejects stale, overridden, reserved, unknown and passive bindings
+PASS review rejects keyboard, macro, duplicate and executable plan fields
+PASS combat apply performs zero writes and never queues work
+PASS apply rechecks the live state and preserves keyboard bindings
+PASS a stale plan performs zero writes at apply time
+PASS a client rejection rolls back earlier mutations
+PASS unexpected unrelated changes are detected and rolled back
+PASS save failure rolls back mutations and reports rollback failure when persistence fails
+PASS ConsolePort proxy refresh may be pending but unrelated overrides still fail
+PASS an ordinary ConsolePort utility route can remain pending until refresh
+PASS 14 Lua 5.1 addon core tests
+PASS legacy spellbook export includes current context with zero writes
+PASS modern spellbook branch excludes unlearned entries
+PASS read-only ConsolePort visual export resolves paged actions and all modifier states
+PASS review, explicit apply, readback receipt, and receipt export after reload
+PASS restore requires unchanged post-apply bindings and refuses combat
+PASS delayed utility routes stay pending until effective readback confirms the new binding
+PASS UI opens disabled, reviews without writes, and invalidates apply on edit/combat
+PASS missing-controller discovery retries are rate limited and stop once a mapped device appears
+PASS stale entries allow bounded retries; rescan events never extend the window
+PASS working buttons, triggers and sticks cancel pending recovery without interrupting input
+PASS combat, disabled gamepad support, opt-out and unsupported platform/API gates defer recovery
+PASS unreadable device state fails closed and a rejected refresh stops retries
+PASS runtime respects platform, ConsolePort, saved opt-out and disabled CVar; stale IDs with nil mapped state recover

@@ -1,0 +1,6 @@
+
+> test:pairing
+> node tools/test-pairing-code.mjs
+
+Pairing QR decodes exactly; private bridge refresh, clear, expiry and stop passed.
+Hosted pairing lifecycle regressions passed (slow heartbeats, changed state, listener failure).

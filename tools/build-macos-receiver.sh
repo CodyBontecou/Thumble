@@ -50,6 +50,8 @@ else
   xcrun lipo -create "$task_root/build/receiver/thumble-receiver-arm64" "$task_root/build/receiver/thumble-receiver-x86_64" -output "$task_app/Contents/MacOS/thumble-receiver"
 fi
 cp "$task_config" "$task_app/Contents/Resources/Monetization.json"
+node "$task_root/tools/export-builtin-profiles.mjs"
+cp "$task_root/apps/receiver/Resources/BuiltInProfiles.json" "$task_app/Contents/Resources/BuiltInProfiles.json"
 cp "$task_root/apps/receiver/Info.plist" "$task_app/Contents/Info.plist"
 if [[ "$task_mode" == '--testflight' ]]; then
   /usr/libexec/PlistBuddy -c 'Set :CFBundleName Thumble TestFlight Receiver' "$task_app/Contents/Info.plist"

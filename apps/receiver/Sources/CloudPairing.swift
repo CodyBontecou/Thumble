@@ -47,7 +47,7 @@ private final class PairingRedirectPolicy: NSObject, URLSessionTaskDelegate {
 
 /// Explicit, memory-only sharing. No input packets, account refresh tokens or LAN listener.
 @MainActor final class CloudPairing: NSObject, ASWebAuthenticationPresentationContextProviding {
-    private let service = URL(string: "https://thumble-cloud-pilot.costream.workers.dev")!
+    private let service = URL(string: "https://thumble.io")!
     private let network: URLSession
     private let authorization: ((URL) async throws -> URL)?
     private let heartbeatInterval: Duration

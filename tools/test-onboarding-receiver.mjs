@@ -57,7 +57,7 @@ try {
       return response.catalog;
     }
     const fresh = await catalog('fresh-install');
-    assert.deepEqual(fresh.profiles, []);
+    assert.deepEqual(fresh.profiles.map(profile => profile.id), ['xbox-standard', 'consoleport-standard']);
     assert.equal(fresh.agentCheckSupported, true);
     const store = new ProfileStore(directory);
     await callProfileTool(store, 'agent_connection_check', { code: '123456abcdef' });
@@ -68,7 +68,7 @@ try {
     assert.equal((await catalog('expired-check')).agentConnection, undefined);
     assert.equal((await store.list()).active, null);
     assert.equal(socket.readyState, WebSocket.OPEN);
-    console.log('PASS receiver transport: empty first-install catalog, matching agent tool round trip, expired marker omitted, no profile activation');
+    console.log('PASS receiver transport: built-in first-install catalog, matching agent tool round trip, expired marker omitted, no profile activation');
   }
 } finally {
   socket?.terminate();

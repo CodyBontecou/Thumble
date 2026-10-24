@@ -1,3 +1,4 @@
+import { AI_CONTROLLER_GENERATOR_ENABLED } from '../features';
 import { useSyncExternalStore } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { router } from 'expo-router';
@@ -14,7 +15,7 @@ export default function ControllerMenu() {
   const cloudState = useSyncExternalStore(cloud.subscribe, cloud.snapshot);
   const { width } = useWindowDimensions();
   const online = network.phase === 'connected';
-  const displayedProfile = network.phase === 'offline' ? cloudState.selected?.profile ?? layout.profile : layout.profile;
+  const displayedProfile = AI_CONTROLLER_GENERATOR_ENABLED && network.phase === 'offline' ? cloudState.selected?.profile ?? layout.profile : layout.profile;
   function close() { if (router.canGoBack()) router.back(); else router.replace('/'); }
   return <SafeAreaProvider><SafeAreaView style={s.overlay} accessibilityViewIsModal>
     <StatusBar hidden />
@@ -29,8 +30,9 @@ export default function ControllerMenu() {
         </View>
         <View style={{ flex: 1.15, flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
           {[
-            ['AI to WoW', '/journey'], ['Profiles', '/profiles'], ['Cloud controllers', '/cloud'], ['Stick calibration', '/calibration'],
-            ['WoW setup', '/wow-setup'], ['Connect your AI', '/agent-setup'],
+            ...(AI_CONTROLLER_GENERATOR_ENABLED ? [['AI to WoW', '/journey'], ['Cloud controllers', '/cloud'], ['Connect your AI', '/agent-setup']] : []),
+            ...(!AI_CONTROLLER_GENERATOR_ENABLED ? [['Cloud account', '/cloud']] : []),
+            ['Profiles', '/profiles'], ['Stick calibration', '/calibration'], ['WoW setup', '/wow-setup'],
             ['Thumble Pro', '/pro'], ['Getting started', '/onboarding'],
           ].map(([title, path]) => <View key={path} style={{ width: '48%', flexGrow: 1, minHeight: 64, justifyContent: 'center', backgroundColor: colors.surface, borderRadius: 16, borderCurve: 'continuous' }}><Row title={title} onPress={() => router.replace(path)} /></View>)}
         </View>

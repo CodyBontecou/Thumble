@@ -1,0 +1,86 @@
+# Raw gestures preserve down/up ownership across live accessibility checks and allow two fingers.
+# Coordinates come from the landscape simulator AX tree. Keep AX waits raw because the native runner tree does not expose these labels as AXButton.
+steps:
+  - echo: Hold LT in ConsolePort practice. Expect LT + A without moving the action
+      targets.
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Down
+          x: 0.6295
+          y: 0.395
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: LT + A
+        role: AXButton
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Up
+          x: 0.6295
+          y: 0.395
+  - tool: await-ui-element
+    args:
+      condition: hidden
+      selector:
+        text: LT + A
+        role: AXButton
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Down
+          x: 0.6295
+          y: 0.605
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: RT + A
+        role: AXButton
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Up
+          x: 0.6295
+          y: 0.605
+  - tool: await-ui-element
+    args:
+      condition: hidden
+      selector:
+        text: RT + A
+        role: AXButton
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Down
+          x: 0.6295
+          y: 0.395
+          x2: 0.6295
+          y2: 0.605
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: LT + RT + A
+        role: AXButton
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Up
+          x: 0.6295
+          y: 0.395
+          x2: 0.6295
+          y2: 0.605
+  - tool: await-ui-element
+    args:
+      condition: hidden
+      selector:
+        text: LT + RT + A
+        role: AXButton
+executionPrerequisite: Isolated com.thumble.consoleportlayersqa iOS simulator
+  app is open in offline practice with the built-in ConsolePort controller,
+  neutral input, and LandscapeRight orientation. Uses the current production JS
+  bundle. Touch coordinates follow its accessibility tree; no Mac or game is
+  connected.

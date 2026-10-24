@@ -1,0 +1,49 @@
+{
+  "verifiedAt": "2026-10-24T19:01:11.262Z",
+  "version": "528a3572-42d1-4fa7-9ba4-c9b032a3b019",
+  "homepageStatus": 200,
+  "results": [
+    {
+      "origin": "https://thumble.io",
+      "issuer": "https://thumble.io/api/auth",
+      "tokenEndpoint": "https://thumble.io/api/auth/oauth2/token",
+      "resource": "https://thumble.io/mcp",
+      "authorizationServers": [
+        "https://thumble.io/api/auth"
+      ],
+      "signingKeysUnchanged": true,
+      "callbacks": [
+        {
+          "provider": "google",
+          "redirectUri": "https://thumble.io/api/auth/callback/google"
+        },
+        {
+          "provider": "apple",
+          "redirectUri": "https://thumble.io/api/auth/callback/apple"
+        }
+      ],
+      "mcpUnauthenticatedStatus": 401
+    },
+    {
+      "origin": "https://thumble-cloud-pilot.costream.workers.dev",
+      "issuer": "https://thumble-cloud-pilot.costream.workers.dev/api/auth",
+      "tokenEndpoint": "https://thumble-cloud-pilot.costream.workers.dev/api/auth/oauth2/token",
+      "resource": "https://thumble.io/mcp",
+      "authorizationServers": [
+        "https://thumble-cloud-pilot.costream.workers.dev/api/auth"
+      ],
+      "signingKeysUnchanged": true,
+      "callbacks": [
+        {
+          "provider": "google",
+          "redirectUri": "https://thumble-cloud-pilot.costream.workers.dev/api/auth/callback/google"
+        },
+        {
+          "provider": "apple",
+          "redirectUri": "https://thumble-cloud-pilot.costream.workers.dev/api/auth/callback/apple"
+        }
+      ],
+      "mcpUnauthenticatedStatus": 401
+    }
+  ]
+}

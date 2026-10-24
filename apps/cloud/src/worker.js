@@ -1,7 +1,7 @@
 import { CloudError } from '@tapping/cloud-contracts';
 import { handleApi } from './api.js';
 import { handleMcp, handleProtectedResourceMetadata } from './mcp.js';
-import { handleIdentity } from './identity.js';
+import { handleIdentity, identityEnvironment } from './identity.js';
 import { handleAuthPage } from './auth-pages.js';
 import { handleAsset } from './assets.js';
 import { cleanPairingSessions } from './pairing.js';
@@ -12,6 +12,7 @@ export default {
   async scheduled(_event, env, ctx) { ctx.waitUntil(cleanPairingSessions(env)); },
   async fetch(request, env) {
     try {
+      env = identityEnvironment(request, env);
       const { pathname } = new URL(request.url);
       if (pathname === '/.well-known/openai-apps-challenge') {
         if (!['GET', 'HEAD'].includes(request.method)) return new Response('Use GET or HEAD.', { status: 405, headers: { allow: 'GET, HEAD' } });
@@ -24,7 +25,11 @@ export default {
       if (pathname === '/.well-known/oauth-protected-resource' || pathname === '/.well-known/oauth-protected-resource/mcp') {
         return await handleProtectedResourceMetadata(request, env);
       }
-      if (pathname.startsWith('/api/auth/') || pathname === '/api/auth' || pathname === '/.well-known/oauth-authorization-server/api/auth' || pathname === '/.well-known/openid-configuration/api/auth') {
+      if (pathname === '/.well-known/openid-configuration/api/auth') {
+        const discovery = new URL('/api/auth/.well-known/openid-configuration', request.url);
+        return await handleIdentity(new Request(discovery, request), env);
+      }
+      if (pathname.startsWith('/api/auth/') || pathname === '/api/auth' || pathname === '/.well-known/oauth-authorization-server/api/auth') {
         return await handleIdentity(request, env);
       }
       if (pathname === '/sign-in' || pathname === '/consent' || pathname === '/account') return await handleAuthPage(request, env);

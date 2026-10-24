@@ -1,0 +1,76 @@
+steps:
+  - echo: Signed-in QA installation with a rendered Pixel WoW Journey revision 2 and
+      saved pairing history. Restart must retain cloud delivery while clearing
+      live Mac readiness and leaving WoW incomplete.
+  - launch: com.thumble.android.pilotqa
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: Pick up where
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: Previously paired · reconnect to continue
+  - tap:
+      text: Connect your AI → receive a controller → use it on Mac → test in WoW
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: From your AI
+  - tool: await-ui-element
+    args:
+      condition: text
+      selector:
+        text: AI TO WOW ·
+      expectedText: 2 OF 4 COMPLETE
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: Pixel WoW Journey · revision 2 · rendered on this phone
+  - tool: gesture-swipe
+    args:
+      fromX: 0.5
+      fromY: 0.83
+      toX: 0.5
+      toY: 0.3
+      momentum: false
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: 3 · Mac ready
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: 4 · Tested in WoW
+  - tap:
+      text: Connect Mac
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: A small screen.
+  - tap:
+      text: Done
+  - tool: await-ui-element
+    args:
+      condition: hidden
+      selector:
+        text: A small screen.
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: 4 · Tested in WoW
+  - tap:
+      text: Done
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: Pick up where

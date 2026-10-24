@@ -88,7 +88,7 @@ async function accountPage(request, config, auth) {
     if (!providers) return errorPage('Sign-in has not been configured for this service yet.', 503);
     return page('Manage account', `<h1>Manage your account.</h1><p>Sign in with the same account you used on your phone.</p>${providers}`, loginScript);
   }
-  const accountId = await sessionAccountId(config.issuer, session.user.id);
+  const accountId = await sessionAccountId(config.accountIssuer ?? config.issuer, session.user.id);
   const identity = `<p>Signed in as ${escape(session.user.email || session.user.name || 'your Thumble account')}.</p>`;
   if (expected && expected !== accountId) return page('Choose the connected account', `<h1>This is a different account.</h1>${identity}<p>Sign in with the identity connected to your phone to manage that account. No account has been deleted.</p>${providers}`, loginScript, 409);
   const context = await auth.$context;

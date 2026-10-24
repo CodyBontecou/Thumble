@@ -1,4 +1,5 @@
-import { useState, useSyncExternalStore } from 'react';
+import { AI_CONTROLLER_GENERATOR_ENABLED } from '../features';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { ActivityIndicator, Share, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import { cloud, signInCloud, manageCloudAccount } from '../cloud/store';
@@ -10,6 +11,28 @@ import { adoptCloudSelection } from '../cloud/adoption';
 import { Button, Columns, Eyebrow, Page, Row, colors, ui } from '../ui/design';
 
 export default function CloudLibrary() {
+  return AI_CONTROLLER_GENERATOR_ENABLED ? <CloudGenerator /> : <CloudAccount />;
+}
+function CloudAccount() {
+  const state = useSyncExternalStore(cloud.subscribe, cloud.snapshot);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  useEffect(() => { void cloud.load().catch(failure => setError(failure.message)); }, []);
+  async function act(operation) {
+    setBusy(true); setError('');
+    try { await operation(); } catch (failure) { setError(failure.message); }
+    finally { setBusy(false); }
+  }
+  return <Page><View style={ui.column}><Eyebrow>CLOUD ACCOUNT</Eyebrow><Text accessibilityRole="header" style={ui.title}>Your account.</Text>
+    {!state.loaded ? <ActivityIndicator /> : state.session ? <>
+      <Text style={ui.body}>Manage your existing cloud account or remove its saved connection from this phone.</Text>
+      <Button disabled={busy} onPress={() => act(manageCloudAccount)}>Manage or delete account</Button>
+      <Button secondary disabled={busy} onPress={() => act(() => cloud.logout())}>Sign out</Button>
+    </> : <Text style={ui.body}>No cloud account is connected on this phone.</Text>}
+    {!!(error || state.error) && <Text accessibilityRole="alert" style={ui.error}>{error || state.error}</Text>}
+  </View></Page>;
+}
+function CloudGenerator() {
   const state = useSyncExternalStore(cloud.subscribe, cloud.snapshot);
   const { state: setup } = useSetup();
   const network = useSyncExternalStore(connection.subscribe, connection.snapshot);

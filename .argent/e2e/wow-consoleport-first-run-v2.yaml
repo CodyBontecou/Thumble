@@ -1,0 +1,9 @@
+steps:
+  - echo: Fresh isolated QA app required. Reinstall com.thumble.wowsetupqa before replay.
+  - launch: com.thumble.wowsetupqa
+  - await: { visible: { text: WoW on your Mac. } }
+  - await: { idle: true }
+  - echo: Choose Set up WoW. Expect the WoW client picker.
+  - tap: { text: Set up WoW }
+  - await: { visible: { text: Which WoW } }
+  - await: { idle: true }

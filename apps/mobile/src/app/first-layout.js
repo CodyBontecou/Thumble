@@ -1,6 +1,7 @@
+import { AI_CONTROLLER_GENERATOR_ENABLED } from '../features';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { Share, Text, TextInput, View } from 'react-native';
-import { xboxProfile } from '@tapping/controller';
+import { xboxProfile, consolePortProfile } from '@tapping/controller';
 import { router } from 'expo-router';
 import { connection } from '../connection';
 import { firstLayoutDelivered, firstLayoutPrompt } from '../onboarding-core';
@@ -34,17 +35,18 @@ export default function FirstLayout() {
     } catch (failure) { setError(failure.message); }
     finally { checking.current = false; setBusy(false); }
   }
-  async function useStandard() {
+  /** @param {typeof xboxProfile | typeof consolePortProfile} [profile] */
+  async function chooseBuiltIn(profile = consolePortProfile) {
     if (checking.current) return;
     checking.current = true; setBusy(true); setError('');
     try {
-      if (layout.profile.id !== xboxProfile.id) {
+      if (layout.profile.id !== profile.id) {
         const catalog = await connection.requestProfiles();
-        const standard = catalog.profiles.find(profile => profile.id === xboxProfile.id);
-        if (!standard) throw Error('The standard profile is missing on your Mac. Ask your agent to restore it, or choose a saved profile.');
+        const standard = catalog.profiles.find(entry => entry.id === profile.id);
+        if (!standard) throw Error('This built-in controller is missing on your Mac. Update your receiver, then try again.');
         await connection.selectProfile(standard, catalog.activationRevision);
       }
-      if (await save({ personalized: true, profileId: '' })) router.dismissTo('/onboarding');
+      if (await save({ personalized: true, profileId: '', layoutMode: profile.id === consolePortProfile.id ? 'consoleport' : 'familiar' })) router.dismissTo('/onboarding');
     } catch (failure) { setError(failure.message); }
     finally { checking.current = false; setBusy(false); }
   }
@@ -53,11 +55,12 @@ export default function FirstLayout() {
   const delivery = state.personalized ? 'You confirmed this layout arrived on your phone.' : layout.profile.id === state.profileId ? 'Requested layout rendered. Confirm delivery below.' : 'Waiting for your agent to save and activate this layout.';
   const nextAction = state.personalized ? () => router.dismissTo('/onboarding') : !state.profileId ? prepare : network.phase === 'connected' ? checkDelivery : () => router.push('/pair?setup=1');
   const nextLabel = state.personalized ? 'Continue setup' : !state.profileId ? 'Prepare layout request' : network.phase === 'connected' ? 'Check layout delivery' : 'Connect Mac';
+  if (!AI_CONTROLLER_GENERATOR_ENABLED) return <Page><Columns><View style={ui.column}><Eyebrow>CONSOLEPORT CONTROLLER</Eyebrow><Text accessibilityRole="header" style={ui.title}>{'Ready for\nyour next game.'}</Text><Text style={ui.body}>Two sticks, face buttons, D-pad, shoulders and triggers. Set your actions and modifier bindings in ConsolePort on your Mac.</Text><Button disabled={!state.loaded || busy} onPress={() => chooseBuiltIn()}>{busy ? 'Please wait…' : 'Use ConsolePort controls'}</Button><Button secondary onPress={() => router.push('/calibration')}>Stick calibration</Button>{!!error && <Text accessibilityRole="alert" style={ui.error}>{error}</Text>}</View></Columns></Page>;
   return <Page footer={<Actions status={state.profileId ? delivery : 'Choose preferences, then prepare your request.'}>
-    <View style={{ flex: 1 }}><Button secondary disabled={!state.loaded || busy} onPress={state.profileId ? share : useStandard}>{state.profileId ? 'Share layout request' : 'Keep standard controls'}</Button></View>
+    <View style={{ flex: 1 }}><Button secondary disabled={!state.loaded || busy} onPress={state.profileId ? share : () => chooseBuiltIn(consolePortProfile)}>{state.profileId ? 'Share layout request' : 'Keep ConsolePort controls'}</Button></View>
     <View style={{ flex: 1 }}><Button disabled={!state.loaded || busy} onPress={nextAction}>{busy ? 'Please wait…' : nextLabel}</Button></View>
-  </Actions>}><Columns><View style={ui.column}><Eyebrow>YOUR FIRST LAYOUT</Eyebrow><Text accessibilityRole="header" style={ui.title}>{'Start with what\nfeels familiar.'}</Text><Text style={ui.body}>Keep the standard controller, or send your preferences to your own AI agent. Your choices and request are saved when you leave.</Text><Button secondary onPress={() => router.push('/cloud')}>Create with your AI in the cloud</Button>{(!!state.profileId || state.personalized) && <Button secondary disabled={!state.loaded || busy} onPress={useStandard}>Keep the standard controller</Button>}<Text style={ui.small}>The standard controller works without an AI agent. Custom layouts are included in the demo.</Text>
-      <View style={ui.card}><Text style={ui.heading}>Choose a starting point</Text>{[['familiar', 'Familiar controls', 'Start from the Xbox-style arrangement'], ['consoleport', 'Match ConsolePort', 'Use a fresh character export from Thumble Bridge'], ['character', 'Build for my character', 'Use learned spells and review binding changes in-game']].map(([value, title, detail]) => <Row key={value} title={title} detail={detail} trailing={state.layoutMode === value ? '✓' : '›'} disabled={!state.loaded || busy} onPress={() => preference({ layoutMode: value })} />)}</View>
+  </Actions>}><Columns><View style={ui.column}><Eyebrow>YOUR FIRST LAYOUT</Eyebrow><Text accessibilityRole="header" style={ui.title}>{'Start with what\nfeels familiar.'}</Text><Text style={ui.body}>Choose a built-in Xbox or ConsolePort controller, or send your preferences to your own AI agent. Your choices and request are saved when you leave.</Text><Button secondary onPress={() => router.push('/cloud')}>Create with your AI in the cloud</Button><Button secondary disabled={!state.loaded || busy} onPress={() => chooseBuiltIn(consolePortProfile)}>Use ConsolePort controls</Button>{(!!state.profileId || state.personalized) && <Button secondary disabled={!state.loaded || busy} onPress={() => chooseBuiltIn(xboxProfile)}>Use Xbox controls</Button>}<Text style={ui.small}>Both built-in controllers work without an AI agent. ConsolePort controls use gamepad labels; set your actions in WoW. Custom layouts are included in the demo.</Text>
+      <View style={ui.card}><Text style={ui.heading}>Choose a starting point</Text>{[['familiar', 'Familiar controls', 'Start from the Xbox-style arrangement'], ['consoleport', 'Match ConsolePort', 'Use a fresh character export from Thumble'], ['character', 'Build for my character', 'Use learned spells and review binding changes in-game']].map(([value, title, detail]) => <Row key={value} title={title} detail={detail} trailing={state.layoutMode === value ? '✓' : '›'} disabled={!state.loaded || busy} onPress={() => preference({ layoutMode: value })} />)}</View>
     </View><View style={ui.column}>
       {!!error && <Text accessibilityRole="alert" style={ui.error}>{error}</Text>}
       <View style={ui.card}><Text style={ui.heading}>Make it comfortable</Text><Row title="Button size" detail={state.buttonSize === 'larger' ? 'Larger action buttons' : 'Standard size'} disabled={!state.loaded || busy} onPress={() => preference({ buttonSize: state.buttonSize === 'larger' ? 'standard' : 'larger' })} /><Row title="Movement side" detail={state.movementSide === 'left' ? 'Left thumb' : 'Right thumb'} disabled={!state.loaded || busy} onPress={() => preference({ movementSide: state.movementSide === 'left' ? 'right' : 'left' })} />{state.layoutMode === 'character' && <TextInput accessibilityLabel="Character or class" placeholder="Character or class (optional)" placeholderTextColor="#A1A1A1" maxLength={80} value={character} onChangeText={value => { setDraftCharacter(value); void preference({ character: value }); }} style={ui.input} />}

@@ -50,6 +50,7 @@ final class Receiver {
     var onStatus: ((String) -> Void)?
     var onInvitation: ((String) -> Void)?
     var onPairingUnavailable: (() -> Void)?
+    var onConsolePortSyncStatus: ((String) -> Void)?
     private var chatTask: Task<Void, Never>?
     private var chatBusy = false
     private var chatResults: [String: [String: Any]] = [:]
@@ -99,6 +100,7 @@ final class Receiver {
         }
         profiles.onStatusTick = { [weak self] in self?.queue.async { [weak self] in self?.publishProfileStatus() } }
         profiles.onError = { [weak self] error in self?.onStatus?(error) }
+        profiles.onConsolePortSyncStatus = { [weak self] text in self?.onConsolePortSyncStatus?(text) }
         profiles.start()
         listener.start(queue: queue)
         let timer = DispatchSource.makeTimerSource(queue: queue)

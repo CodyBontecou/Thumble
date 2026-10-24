@@ -35,6 +35,6 @@ test('game confirmations persist for a receiver/activation/game, with retest aft
   state.setup.wowClient = 'classic-era';
   assert.equal(cloudJourney(state).tested, false);
   assert.equal(wowSetupStep(state.setup, true, { controlKey, wowKey: testContext(state.access, state.layout, 'classic-era') }), 'game');
-  assert.equal(wowSetupStep(state.setup, true, { controlKey: 'different-activation', wowKey }), 'controls');
+  assert.equal(wowSetupStep(state.setup, true, { controlKey: 'different-activation', wowKey }), 'game');
   assert.equal(cloudJourney({ ...state, network: { phase: 'offline' } }).tested, false);
 });

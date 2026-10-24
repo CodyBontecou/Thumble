@@ -1,0 +1,6 @@
+(node:45029) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/codybontecou/dev/tapping/apps/mobile/src/connection-core.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/codybontecou/dev/tapping/apps/mobile/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS actual TLS receiver adoption: >4KiB validated profile, isolated persisted copy, phone layout/neutral ACK, paused input, idempotent retry
+PASS receiver safety: movement + button/shoulder/trigger chord, pause release, profile switch release, disconnect release, persisted exact profile after fresh pairing/phone core restart, explicit resume required

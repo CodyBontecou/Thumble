@@ -2,10 +2,17 @@ import { mkdir, readFile, writeFile, rename, rm, open } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { assertProfile, xboxProfile } from '../../controller/src/index.js';
+import { assertProfile, builtInProfiles } from '../../controller/src/index.js';
 
 export const defaultDirectory = () => process.env.TAPPING_PROFILE_DIR || join(homedir(), 'Library/Application Support/Tapping/profiles');
-const initial = () => ({ version: 1, profiles: [{ revision: 1, profile: assertProfile(xboxProfile) }], active: null });
+const initial = () => ({ version: 1, profiles: [], active: null });
+function withBuiltIns(data) {
+  for (const profile of builtInProfiles) if (!data.profiles.some(entry => entry.profile.id === profile.id)) {
+    if (data.profiles.length >= 256) break;
+    data.profiles.push({ revision: 1, profile: assertProfile(profile) });
+  }
+  return data;
+}
 const revision = value => Number.isSafeInteger(value) && value >= 0;
 
 /** One atomic document is the transaction boundary for profiles and activation. */
@@ -14,7 +21,7 @@ export class ProfileStore {
   async read() {
     let data;
     try { data = JSON.parse(await readFile(join(this.directory, 'store.json'), 'utf8')); }
-    catch (error) { if (error.code === 'ENOENT') return initial(); throw error; }
+    catch (error) { if (error.code === 'ENOENT') return withBuiltIns(initial()); throw error; }
     if (data.version !== 1 || !Array.isArray(data.profiles) || data.profiles.length > 256) throw Error('Invalid profile store');
     const ids = new Set();
     for (const entry of data.profiles) {
@@ -26,7 +33,7 @@ export class ProfileStore {
       assertProfile(data.active.profile);
       if (!revision(data.active.revision) || data.active.revision < 1 || !revision(data.active.profileRevision)) throw Error('Invalid active revision');
     }
-    return data;
+    return withBuiltIns(data);
   }
   async transaction(update) {
     await mkdir(this.directory, { recursive: true, mode: 0o700 });

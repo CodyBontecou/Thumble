@@ -1,42 +1,40 @@
-# Onboarding: pair, verify, enter WoW
+# Onboarding: WoW and ConsolePort
 
-This is the implementation specification. The current app implements QR/manual pairing, a controller-only play view with a Thumble options menu, native HID acknowledgements and resumable setup with an agent connection check and first-layout request flow. Physical Android and iPhone gameplay and optical QR pairing have been verified on installed Classic with ConsolePort. Clean-install onboarding and Forever-specific verification remain acceptance work.
+Thumble initially targets World of Warcraft on a Mac with ConsolePort. The phone supplies controls over the local network; the game stays on the Mac. ConsolePort and WoW own spell bindings and modifier layers. The built-in ConsolePort controller is the default. AI/MCP controller generation is disabled unless explicitly enabled through the feature flag.
 
 ## First successful session
 
-1. **Prepare the Mac.** Phone shows the receiver download URL and explains that both devices use the same local network. The Mac receiver opens a short setup window from its menu-bar item. It reports whether the virtual gamepad is ready, requires setup, or failed, with an actionable reason. Pairing must not imply HID setup succeeded.
-2. **Pair the phone.** Mac shows an expiring single-use QR. Phone explains camera and local-network access just before requesting them, then scans and performs the authenticated handshake. The user sees the receiver's name. Camera denial has manual invitation entry; local-network denial links to the relevant system setting. LAN privacy applies to direct local connections too: see [Apple's usage-description documentation](https://developer.apple.com/documentation/bundleresources/information-property-list/nslocalnetworkusagedescription?changes=l_9). Keep invite secrets out of logs and support exports.
-3. **Verify the controller.** A short live test checks left/right stick range, neutral centers, both triggers, ABXY, D-pad and simultaneous movement + action. Separate indicators for paired, receiving input and virtual gamepad ready. The test must observe output at the HID layer in a separate process; displaying touch events is insufficient.
-4. **Set up Forever.** Ask the user to select the Forever installation when needed; do not hardcode an unverified installation-folder name. Open the [ConsolePort distribution](https://www.curseforge.com/wow/addons/console-port), explain selection of the Forever flavor/client, and guide installation. Identify the detected addon version if the user grants folder access. If installed while WoW is running, guide the required game restart and verify the addon is enabled. A completed download does not establish that the addon loaded.
-5. **Verify in game.** Connect the gamepad before launching for the initial test. Guide through the supported ConsolePort controller setup on the actual client version, confirm an Xbox-style button layout, then demonstrate movement, camera, interaction, jump, targeting and trigger-modified actions. Verify menu navigation and a way back to keyboard/mouse. Do not claim the receiver can inspect in-game state without an implemented integration; ask for user confirmation where only the game can show the result.
-6. **Play.** Phone becomes the landscape controller. Menu-bar status stays small: connected phone, current profile, input health, pause/disconnect and setup help. On reconnect, reset input first and restore the selected profile without replaying onboarding.
+1. **Choose the WoW client.** Welcome leads directly to WoW setup. Choose the installation actually launched, then use a compatible ConsolePort release. Client selection does not establish compatibility.
+2. **Pair the phone.** Download Thumble Receiver from thumble.io on the Mac. Run it, open Pair phone, and scan the invitation on the same Wi-Fi. Keep the receiver running. Camera denial supports manual invitation entry. Pairing does not establish working gamepad output.
+3. **Prepare ConsolePort.** Use CurseForge → World of Warcraft → the selected WoW installation → Get More Addons to install ConsolePort. Also search for the recommended Thumble companion addon (project 1763832) and install a matching release when available. Restart WoW after a first installation, enable the addons at character selection and follow ConsolePort’s controller setup. Thumble provides Mac gamepad recovery; it is not a prerequisite for completing setup. The first release targets Classic Era 1.15.9 and is awaiting CurseForge approval. The onboarding hub links to thumble.io/docs#thumble-addon for current installation instructions. Use standard Xbox-style button names. The app's confirmation establishes only that the player has completed these steps. If the receiver has not delivered a saved controller yet, select the built-in ConsolePort controller through the acknowledged catalog path.
+4. **Check controls in WoW.** Open the controller and test in a quiet place, then return through Thumble menu → WoW setup. Confirm movement, camera, an action, a modifier combination and menu navigation. One five-check list replaces the former separate preliminary controller test. Finish enables only after all five confirmations for the current receiver, profile revision and WoW client.
+5. **Play.** Open the WoW controller. Revisit setup or stick calibration from the Thumble menu. Changing the controller or receiver invalidates the corresponding control confirmations; changing the WoW client also requires ConsolePort preparation again.
 
-Spell/action bindings belong to ConsolePort/WoW. AI edits the phone's physical arrangement and gamepad output mappings through MCP; onboarding has no layout editor.
+Setup saves each milestone locally and resumes after leaving the controller or restarting the app. Existing players retain their profiles and progress. No step inspects WoW or claims that player confirmations are native HID measurements.
 
-## Acceptance criteria
+## Requirements and positioning
 
-- Fresh installs reach a demonstrated in-game action on a physical iPhone and Android phone without a terminal.
-- No setup step claims success before its layer is actually verified.
-- Camera denied, local-network denied, expired QR, wrong network and AP client isolation produce specific recovery guidance.
-- Lost Wi-Fi, app background/lock, killed mobile process, receiver restart and rejected profile updates leave no stuck buttons or movement.
-- Pairing can be revoked. Another phone cannot take over an active controller silently.
-- A game opened before pairing can recover through hot-plug or an explicitly tested relaunch path.
-- No existing WoW bindings or addon settings are silently overwritten.
-- Diagnostics identify the failing layer and redact device secrets. RTT is labeled RTT; it is not presented as game input latency.
-- Store reviewers can obtain the matching receiver and reproduce pairing/input verification without a paid WoW subscription; WoW-specific verification is a separate product acceptance check.
+- Mac with macOS 15 or later, Thumble Receiver, WoW and a compatible ConsolePort release.
+- iPhone or Android phone on the same local Wi-Fi network as the Mac.
+- The game renders on the Mac. Thumble does not stream WoW to the phone.
+- No AI connection or cloud account is required for the default controller.
+- Public phone-store availability remains coming soon until store release. The website offers launch updates and the Mac receiver download.
+- The demo provides 30 total connected minutes across sessions. Pro is a one-time $19.99 purchase.
 
-## Resumable phone setup
+Welcome, Getting started, pairing, WoW setup, Pro, the website landing page, setup guide and support copy use this same scope. Compatibility with other games and universal WoW-client support are not promised.
 
-Fresh installs see Welcome once, followed by Getting started. The hub persists four independent milestones on the phone: paired, controls tested by the player, WoW action confirmed by the player, and first-layout choice completed. Leaving for the controller preserves unfinished milestones. Existing v1 intro completion migrates to a dismissed setup; it never invents verified milestones. Getting started remains in the controller menu.
+## Progress and input safety
 
-Progress and layout preferences use the native `getOnboardingProgress` / `saveOnboardingProgress` methods (UserDefaults on iOS, committed SharedPreferences on Android). Writes are serialized and failed saves leave the prior state intact. Both phone native builds must be updated. The controller remains mounted beneath setup, releases gameplay input when unfocused, and renders/acknowledges incoming profiles normally.
+Progress and layout preferences use native getOnboardingProgress / saveOnboardingProgress methods. Writes are serialized and failed saves leave the prior state intact. The controller remains mounted beneath setup and releases gameplay input when unfocused. Existing v1 intro completion migrates to dismissed setup without inventing verified milestones.
 
-**Connect your AI** is available from the menu and first-layout screen. Share the displayed request with a Mac agent that has the local MCP server configured. `agent_connection_check` records a non-secret 12-character correlation code in the shared profile store. Check connection requests the paired receiver's profile catalog and accepts only a matching code no older than ten minutes. An old receiver reports that an update is required; a missing/mismatched check explains how to refresh the agent and align `TAPPING_PROFILE_DIR`. This verifies access to the same store at the time of checking, not continuous agent availability or game compatibility. External agent installation still requires configuring the local stdio server; no hosted AI service is bundled.
+All five checks are tied to the active test context. Finish rechecks the connection, profile revision, recovery state and current confirmations inside the serialized save. It marks both controls and WoW milestones complete. Profile delivery and neutral recovery must finish before checks can be recorded.
 
-**Your first layout** offers familiar controls, a ConsolePort mirror, or a character-based layout. Button size, movement side, optional character text, source profile ID and a unique target profile ID persist across restarts. The selectable/shareable request instructs the agent to read revisions, validate, preserve in-game review/Apply, import the verified binding result before syncing labels, activate explicitly and check delivery. Changing preferences clears the pending request. Check layout delivery completes the milestone only for the requested profile after phone rendering and neutral recovery. Standard-controller selection needs no agent and switches from an active custom profile through the existing acknowledged profile-selection path.
+Camera denial, local-network denial, expired invitations and wrong networks need actionable recovery. Lost Wi-Fi, backgrounding, locking, process termination and receiver restart must release held input. Existing WoW bindings and addon settings must never be silently overwritten. Invite secrets must stay out of logs and support exports. RTT is labeled RTT, not game input latency.
 
-Verification: `npm test`, mobile lint/typecheck, `node tools/test-profile-catalog.mjs`, `node tools/test-onboarding-receiver.mjs` (isolated stub receiver), and the recorded simulator walkthrough. Physical in-game confirmations remain player assertions; setup does not synthesize HID verification.
+## Optional generator
 
-## WoW and ConsolePort guided setup
+EXPO_PUBLIC_AI_CONTROLLER_GENERATOR_ENABLED=true restores the optional mobile AI routes. The shared/local and cloud flags independently guard generation and mutation endpoints. Legacy first-layout and agent-connection screens remain behind the flag. They are not part of the default onboarding path. Existing saved profiles remain available.
 
-WoW setup now resumes through installation selection, Mac pairing, a full standard-controller test, matching ConsolePort preparation and five explicit in-game checks. Pairing/test confirmations return directly to the WoW flow. Standard controls finish without an AI dependency; optional cloud requests include WoW and comfort context while character mirroring retains the local Bridge review/apply handoff. See [implementation and QA evidence](evidence/onboarding/wow-setup/README.md), including remaining cloud-to-Mac and live gameplay validation boundaries.
+## Verification
+
+Run npm test plus mobile lint and typecheck. Context-bound checklist tests cover disconnected, changed-controller, stale-revision and incomplete-check cases. The first-run simulator recording exercises Welcome → WoW client → Mac connection using an isolated QA app. Physical game confirmations remain player assertions; neither the recording nor unit tests establish that every WoW client supports ConsolePort.

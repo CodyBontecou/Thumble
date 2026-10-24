@@ -1,0 +1,683 @@
+{
+  "character": "Fuskotargar",
+  "exportedAt": 1792868252,
+  "activationRevision": 16,
+  "profileRevision": 1,
+  "profile": {
+    "controls": [
+      {
+        "frame": {
+          "height": 0.4,
+          "width": 0.2,
+          "x": 0.24,
+          "y": 0.57
+        },
+        "id": "left-stick",
+        "label": "Move",
+        "type": "stick"
+      },
+      {
+        "frame": {
+          "height": 0.4,
+          "width": 0.2,
+          "x": 0.56,
+          "y": 0.57
+        },
+        "id": "right-stick",
+        "label": "Look",
+        "type": "stick"
+      },
+      {
+        "badge": "\u2191",
+        "frame": {
+          "height": 0.22,
+          "width": 0.09,
+          "x": 0.105,
+          "y": 0.05
+        },
+        "id": "up",
+        "label": "Unbound",
+        "layers": {
+          "": {
+            "label": "Unbound"
+          },
+          "ALT-": {
+            "label": "Unbound"
+          },
+          "ALT-CTRL-": {
+            "label": "Unbound"
+          },
+          "ALT-CTRL-SHIFT-": {
+            "label": "Unbound"
+          },
+          "ALT-SHIFT-": {
+            "label": "Unbound"
+          },
+          "CTRL-": {
+            "label": "Unbound"
+          },
+          "CTRL-SHIFT-": {
+            "label": "Unbound"
+          },
+          "SHIFT-": {
+            "label": "Unbound"
+          }
+        },
+        "type": "button"
+      },
+      {
+        "badge": "\u2190",
+        "frame": {
+          "height": 0.22,
+          "width": 0.09,
+          "x": 0.005,
+          "y": 0.29
+        },
+        "id": "left",
+        "label": "Unbound",
+        "layers": {
+          "": {
+            "label": "Unbound"
+          },
+          "ALT-": {
+            "label": "Unbound"
+          },
+          "ALT-CTRL-": {
+            "label": "Unbound"
+          },
+          "ALT-CTRL-SHIFT-": {
+            "label": "Unbound"
+          },
+          "ALT-SHIFT-": {
+            "label": "Unbound"
+          },
+          "CTRL-": {
+            "label": "Unbound"
+          },
+          "CTRL-SHIFT-": {
+            "label": "Unbound"
+          },
+          "SHIFT-": {
+            "label": "Unbound"
+          }
+        },
+        "type": "button"
+      },
+      {
+        "badge": "\u2192",
+        "frame": {
+          "height": 0.22,
+          "width": 0.09,
+          "x": 0.205,
+          "y": 0.29
+        },
+        "id": "right",
+        "label": "Unbound",
+        "layers": {
+          "": {
+            "label": "Unbound"
+          },
+          "ALT-": {
+            "label": "Unbound"
+          },
+          "ALT-CTRL-": {
+            "label": "Unbound"
+          },
+          "ALT-CTRL-SHIFT-": {
+            "label": "Unbound"
+          },
+          "ALT-SHIFT-": {
+            "label": "Unbound"
+          },
+          "CTRL-": {
+            "label": "Unbound"
+          },
+          "CTRL-SHIFT-": {
+            "label": "Unbound"
+          },
+          "SHIFT-": {
+            "label": "Unbound"
+          }
+        },
+        "type": "button"
+      },
+      {
+        "badge": "\u2193",
+        "frame": {
+          "height": 0.22,
+          "width": 0.09,
+          "x": 0.105,
+          "y": 0.53
+        },
+        "icon": "inv_misc_food_16",
+        "id": "down",
+        "label": "Tough Jerky",
+        "layers": {
+          "": {
+            "icon": "inv_misc_food_16",
+            "label": "Tough Jerky"
+          },
+          "ALT-": {
+            "label": "Unbound"
+          },
+          "ALT-CTRL-": {
+            "label": "Unbound"
+          },
+          "ALT-CTRL-SHIFT-": {
+            "label": "Unbound"
+          },
+          "ALT-SHIFT-": {
+            "label": "Unbound"
+          },
+          "CTRL-": {
+            "label": "Unbound"
+          },
+          "CTRL-SHIFT-": {
+            "label": "Unbound"
+          },
+          "SHIFT-": {
+            "label": "Unbound"
+          }
+        },
+        "type": "button"
+      },
+      {
+        "badge": "A",
+        "color": "#55b959",
+        "frame": {
+          "height": 0.22,
+          "width": 0.09,
+          "x": 0.805,
+          "y": 0.53
+        },
+        "icon": "cp_jump",
+        "id": "a",
+        "label": "Jump",
+        "layers": {
+          "": {
+            "icon": "cp_jump",
+            "label": "Jump"
+          },
+          "ALT-": {
+            "label": "Unbound"
+          },
+          "ALT-CTRL-": {
+            "label": "Unbound"
+          },
+          "ALT-CTRL-SHIFT-": {
+            "label": "Unbound"
+          },
+          "ALT-SHIFT-": {
+            "label": "Unbound"
+          },
+          "CTRL-": {
+            "icon": "cp_menu",
+            "label": "Quick menu"
+          },
+          "CTRL-SHIFT-": {
+            "label": "Utility ring"
+          },
+          "SHIFT-": {
+            "label": "Unbound"
+          }
+        },
+        "type": "button"
+      },
+      {
+        "badge": "B",
+        "color": "#ed625a",
+        "frame": {
+          "height": 0.22,
+          "width": 0.09,
+          "x": 0.905,
+          "y": 0.29
+        },
+        "id": "b",
+        "label": "Unbound",
+        "layers": {
+          "": {
+            "label": "Unbound"
+          },
+          "ALT-": {
+            "label": "Unbound"
+          },
+          "ALT-CTRL-": {
+            "label": "Unbound"
+          },
+          "ALT-CTRL-SHIFT-": {
+            "label": "Unbound"
+          },
+          "ALT-SHIFT-": {
+            "label": "Unbound"
+          },
+          "CTRL-": {
+            "label": "Unbound"
+          },
+          "CTRL-SHIFT-": {
+            "label": "Unbound"
+          },
+          "SHIFT-": {
+            "label": "Unbound"
+          }
+        },
+        "type": "button"
+      },
+      {
+        "badge": "X",
+        "color": "#59a4ed",
+        "frame": {
+          "height": 0.22,
+          "width": 0.09,
+          "x": 0.705,
+          "y": 0.29
+        },
+        "icon": "ability_rogue_ambush",
+        "id": "x",
+        "label": "Heroic Strike",
+        "layers": {
+          "": {
+            "icon": "ability_rogue_ambush",
+            "label": "Heroic Strike"
+          },
+          "ALT-": {
+            "label": "Unbound"
+          },
+          "ALT-CTRL-": {
+            "label": "Unbound"
+          },
+          "ALT-CTRL-SHIFT-": {
+            "label": "Unbound"
+          },
+          "ALT-SHIFT-": {
+            "label": "Unbound"
+          },
+          "CTRL-": {
+            "label": "Unbound"
+          },
+          "CTRL-SHIFT-": {
+            "label": "Unbound"
+          },
+          "SHIFT-": {
+            "label": "Unbound"
+          }
+        },
+        "type": "button"
+      },
+      {
+        "badge": "Y",
+        "color": "#efc849",
+        "frame": {
+          "height": 0.22,
+          "width": 0.09,
+          "x": 0.805,
+          "y": 0.05
+        },
+        "id": "y",
+        "label": "SPELL Perception",
+        "layers": {
+          "": {
+            "label": "SPELL Perception"
+          },
+          "ALT-": {
+            "label": "Unbound"
+          },
+          "ALT-CTRL-": {
+            "label": "Unbound"
+          },
+          "ALT-CTRL-SHIFT-": {
+            "label": "Unbound"
+          },
+          "ALT-SHIFT-": {
+            "label": "Unbound"
+          },
+          "CTRL-": {
+            "label": "Unbound"
+          },
+          "CTRL-SHIFT-": {
+            "label": "Unbound"
+          },
+          "SHIFT-": {
+            "label": "Unbound"
+          }
+        },
+        "type": "button"
+      },
+      {
+        "badge": "View",
+        "frame": {
+          "height": 0.16,
+          "width": 0.09,
+          "x": 0.455,
+          "y": 0.73
+        },
+        "id": "back",
+        "label": "View",
+        "type": "button"
+      },
+      {
+        "badge": "Menu",
+        "frame": {
+          "height": 0.16,
+          "width": 0.09,
+          "x": 0.455,
+          "y": 0.4
+        },
+        "id": "start",
+        "label": "Menu",
+        "type": "button"
+      },
+      {
+        "badge": "L3",
+        "frame": {
+          "height": 0.16,
+          "width": 0.09,
+          "x": 0.035,
+          "y": 0.77
+        },
+        "id": "ls",
+        "label": "L3",
+        "type": "button"
+      },
+      {
+        "badge": "R3",
+        "frame": {
+          "height": 0.16,
+          "width": 0.09,
+          "x": 0.875,
+          "y": 0.77
+        },
+        "id": "rs",
+        "label": "R3",
+        "type": "button"
+      },
+      {
+        "badge": "LB",
+        "frame": {
+          "height": 0.16,
+          "width": 0.09,
+          "x": 0.33,
+          "y": 0.05
+        },
+        "icon": "ability_rogue_ambush",
+        "id": "lb",
+        "label": "Heroic Strike",
+        "layers": {
+          "": {
+            "icon": "ability_rogue_ambush",
+            "label": "Heroic Strike"
+          },
+          "ALT-": {
+            "label": "Unbound"
+          },
+          "ALT-CTRL-": {
+            "label": "Unbound"
+          },
+          "ALT-CTRL-SHIFT-": {
+            "label": "Unbound"
+          },
+          "ALT-SHIFT-": {
+            "label": "Unbound"
+          },
+          "CTRL-": {
+            "label": "Unbound"
+          },
+          "CTRL-SHIFT-": {
+            "label": "Unbound"
+          },
+          "SHIFT-": {
+            "label": "Unbound"
+          }
+        },
+        "type": "button"
+      },
+      {
+        "badge": "RB",
+        "frame": {
+          "height": 0.16,
+          "width": 0.09,
+          "x": 0.58,
+          "y": 0.05
+        },
+        "icon": "ability_meleedamage",
+        "id": "rb",
+        "label": "Attack",
+        "layers": {
+          "": {
+            "icon": "ability_meleedamage",
+            "label": "Attack"
+          },
+          "ALT-": {
+            "label": "Unbound"
+          },
+          "ALT-CTRL-": {
+            "label": "Unbound"
+          },
+          "ALT-CTRL-SHIFT-": {
+            "label": "Unbound"
+          },
+          "ALT-SHIFT-": {
+            "label": "Unbound"
+          },
+          "CTRL-": {
+            "label": "Unbound"
+          },
+          "CTRL-SHIFT-": {
+            "label": "Unbound"
+          },
+          "SHIFT-": {
+            "icon": "cp_target",
+            "label": "Target Scan Enemy (Hold)"
+          }
+        },
+        "type": "button"
+      },
+      {
+        "badge": "LT",
+        "frame": {
+          "height": 0.18,
+          "width": 0.09,
+          "x": 0.33,
+          "y": 0.3
+        },
+        "icon": "cp_interact",
+        "id": "lt",
+        "label": "Interact With Target",
+        "layers": {
+          "": {
+            "icon": "cp_interact",
+            "label": "Interact With Target"
+          },
+          "ALT-": {
+            "label": "Unbound"
+          },
+          "ALT-CTRL-": {
+            "label": "Unbound"
+          },
+          "ALT-CTRL-SHIFT-": {
+            "label": "Unbound"
+          },
+          "ALT-SHIFT-": {
+            "label": "Unbound"
+          },
+          "CTRL-": {
+            "icon": "cp_interact",
+            "label": "Target Previous Friend"
+          },
+          "CTRL-SHIFT-": {
+            "label": "Unbound"
+          },
+          "SHIFT-": {
+            "label": "Unbound"
+          }
+        },
+        "type": "trigger"
+      },
+      {
+        "badge": "RT",
+        "frame": {
+          "height": 0.18,
+          "width": 0.09,
+          "x": 0.58,
+          "y": 0.3
+        },
+        "icon": "cp_target",
+        "id": "rt",
+        "label": "Target Nearest Enemy",
+        "layers": {
+          "": {
+            "icon": "cp_target",
+            "label": "Target Nearest Enemy"
+          },
+          "ALT-": {
+            "label": "Unbound"
+          },
+          "ALT-CTRL-": {
+            "label": "Unbound"
+          },
+          "ALT-CTRL-SHIFT-": {
+            "label": "Unbound"
+          },
+          "ALT-SHIFT-": {
+            "label": "Unbound"
+          },
+          "CTRL-": {
+            "label": "Unbound"
+          },
+          "CTRL-SHIFT-": {
+            "label": "Unbound"
+          },
+          "SHIFT-": {
+            "icon": "cp_interact",
+            "label": "Target Nearest Friend"
+          }
+        },
+        "type": "trigger"
+      }
+    ],
+    "id": "consoleport-dfa59fa4944b5d4cca69f59d",
+    "mappings": [
+      {
+        "controlId": "left-stick",
+        "deadzone": 0.12,
+        "outputs": [
+          "lx",
+          "ly"
+        ],
+        "sensitivity": 1
+      },
+      {
+        "controlId": "right-stick",
+        "deadzone": 0.12,
+        "outputs": [
+          "rx",
+          "ry"
+        ],
+        "sensitivity": 1
+      },
+      {
+        "controlId": "up",
+        "outputs": [
+          "up"
+        ]
+      },
+      {
+        "controlId": "left",
+        "outputs": [
+          "left"
+        ]
+      },
+      {
+        "controlId": "right",
+        "outputs": [
+          "right"
+        ]
+      },
+      {
+        "controlId": "down",
+        "outputs": [
+          "down"
+        ]
+      },
+      {
+        "controlId": "a",
+        "outputs": [
+          "a"
+        ]
+      },
+      {
+        "controlId": "b",
+        "outputs": [
+          "b"
+        ]
+      },
+      {
+        "controlId": "x",
+        "outputs": [
+          "x"
+        ]
+      },
+      {
+        "controlId": "y",
+        "outputs": [
+          "y"
+        ]
+      },
+      {
+        "controlId": "back",
+        "outputs": [
+          "back"
+        ]
+      },
+      {
+        "controlId": "start",
+        "outputs": [
+          "start"
+        ]
+      },
+      {
+        "controlId": "ls",
+        "outputs": [
+          "ls"
+        ]
+      },
+      {
+        "controlId": "rs",
+        "outputs": [
+          "rs"
+        ]
+      },
+      {
+        "controlId": "lb",
+        "outputs": [
+          "lb"
+        ]
+      },
+      {
+        "controlId": "rb",
+        "outputs": [
+          "rb"
+        ]
+      },
+      {
+        "controlId": "lt",
+        "outputs": [
+          "lt"
+        ]
+      },
+      {
+        "controlId": "rt",
+        "outputs": [
+          "rt"
+        ]
+      }
+    ],
+    "modifiers": {
+      "alt": "none",
+      "ctrl": "rt",
+      "shift": "lt"
+    },
+    "name": "Fuskotargar \u00b7 ConsolePort",
+    "schemaVersion": 1,
+    "theme": "consoleport"
+  }
+}

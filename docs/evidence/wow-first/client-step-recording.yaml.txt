@@ -1,0 +1,12 @@
+steps:
+  - echo: Choose Retail World of Warcraft. Expect Mac connection as step two.
+  - tap:
+      x: 0.5
+      y: 0.77
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: Keep your Mac ready.
+executionPrerequisite: Isolated com.thumble.wowsetupqa is on the fresh WoW
+  client picker in portrait, with no Mac paired.

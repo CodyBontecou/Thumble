@@ -79,8 +79,6 @@ test('WoW setup resumes each checkpoint and reconnect takes priority over stale 
   assert.equal(wowSetupStep(f.store.snapshot(), false), 'client');
   await f.store.update({ wowClient: 'classic-era' });
   assert.equal(wowSetupStep(f.store.snapshot(), false), 'connect');
-  assert.equal(wowSetupStep(f.store.snapshot(), true), 'controls');
-  await f.store.update({ controlsTested: true });
   assert.equal(wowSetupStep(f.store.snapshot(), true), 'addon');
   await f.store.update({ consolePortReady: true });
   assert.equal(wowSetupStep(f.store.snapshot(), true), 'game');
@@ -90,7 +88,7 @@ test('WoW setup resumes each checkpoint and reconnect takes priority over stale 
   assert.equal(canCompleteWowSetup(resumed, true), true);
   assert.equal(canCompleteWowSetup(resumed, false), false);
   assert.equal(resumed.wowTested, false);
-  await f.store.update({ wowTested: true });
+  await f.store.update({ wowTested: true, controlsTested: true });
   assert.equal(wowSetupStep(f.store.snapshot(), true), 'ready');
   assert.equal(wowSetupStep(f.store.snapshot(), false), 'connect');
   await f.store.update({ wowClient: 'retail', consolePortReady: false, wowTested: false, wowChecks: {} });
@@ -116,5 +114,24 @@ test('WoW cloud request carries saved preferences and binds preview to exact pho
   const state = { ...initialSetup(), wowClient: 'classic-era', layoutMode: 'consoleport', movementSide: 'right', character: 'Warrior' };
   const prompt = cloudLayoutPrompt(state, { service: 'https://example.test', device: { id: 'phone-a', name: 'My phone' } });
   for (const expected of ['WoW Classic Era', 'ConsolePort', 'both triggers', 'D-pad', 'View and Menu', 'movement on the right', 'phone-a', 'exact saved revision', 'not working Mac input', 'separate local agent handoff', 'not a verified export']) assert.ok(prompt.includes(expected), expected);
-  assert.equal(cloudLayoutPrompt(initialSetup(), { service: 'https://example.test', device: { id: 'phone-a', name: 'My phone' } }).includes('I play'), false);
+  assert.equal(cloudLayoutPrompt({ ...initialSetup(), layoutMode: 'familiar' }, { service: 'https://example.test', device: { id: 'phone-a', name: 'My phone' } }).includes('I play'), false);
+});
+
+
+test('WoW setup uses one in-game checklist and keeps confirmations tied to the live controller', async () => {
+  const { WOW_CHECKS, wowSetupStep, canCompleteWowSetup } = await import('../../apps/mobile/src/onboarding-core.js');
+  const context = { controlKey: 'receiver:consoleport-standard:3', wowKey: 'receiver:consoleport-standard:3:retail' };
+  const setup = { ...initialSetup(), wowClient: 'retail' };
+  assert.equal(wowSetupStep(setup, true, context), 'addon');
+  const prepared = { ...setup, consolePortReady: true, wowCheckContext: context.wowKey, wowChecks: Object.fromEntries(WOW_CHECKS.map(check => [check.id, true])) };
+  assert.equal(wowSetupStep(prepared, true, context), 'game');
+  assert.equal(canCompleteWowSetup(prepared, true, context), true); // no separate pre-test
+  for (const check of WOW_CHECKS) assert.equal(canCompleteWowSetup({ ...prepared, wowChecks: { ...prepared.wowChecks, [check.id]: false } }, true, context), false);
+  assert.equal(canCompleteWowSetup(prepared, false, context), false);
+  assert.equal(canCompleteWowSetup(prepared, true, { controlKey: '', wowKey: '' }), false);
+  assert.equal(canCompleteWowSetup(prepared, true, { controlKey: 'new-controller', wowKey: 'new-controller:retail' }), false);
+  const completed = { ...prepared, controlsTested: true, controlsCheckContext: context.controlKey, wowTested: true };
+  assert.equal(wowSetupStep(completed, true, context), 'ready');
+  assert.equal(wowSetupStep(completed, false, context), 'connect');
+  assert.equal(wowSetupStep(completed, true, { controlKey: 'different', wowKey: context.wowKey }), 'game');
 });

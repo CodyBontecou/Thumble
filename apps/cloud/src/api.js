@@ -1,7 +1,7 @@
 import { CloudError, MAX_BODY_BYTES, SCOPES, requireId, requireRevision, requireScope, validateCloudProfile } from '@tapping/cloud-contracts';
 import { authenticateAccount, authenticateDevice, getPublicConfig, sha256 } from './auth.js';
 import { handlePairingApi } from './pairing.js';
-import { validateLayout, validViewport } from '@tapping/controller';
+import { validateLayout, validViewport, aiControllerGeneratorEnabled } from '@tapping/controller';
 
 function requireLayout(profile, device) {
   const quality = validateLayout(profile, { width: device.width, height: device.height });
@@ -80,6 +80,7 @@ async function accountRoute(request, env, path) {
     ]);
     return json({ revoked: true });
   }
+  if (method === 'POST' && ['profiles', 'deliveries'].includes(path[0]) && !aiControllerGeneratorEnabled(env.AI_CONTROLLER_GENERATOR_ENABLED)) throw new CloudError('feature_disabled', 'AI controller generation is disabled. Use the built-in ConsolePort controller.', 403);
   if (path[0] === 'profiles') {
     if (method === 'POST' && path.length === 2 && path[1] === 'validate') {
       requireScope(principal, SCOPES.profileWrite);

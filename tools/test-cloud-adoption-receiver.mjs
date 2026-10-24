@@ -45,11 +45,11 @@ try {
   assert.equal(connection.layoutPending, false); assert.equal(connection.recovering, false);
   const disk = await new ProfileStore(directory).read();
   assert.equal(disk.active.profile.id, adopted.adoption.profileId);
-  assert.equal(disk.profiles[0].cloudSource.revision, 7);
+  assert.equal(disk.profiles.find(entry => entry.profile.id === adopted.adoption.profileId).cloudSource.revision, 7);
   assert.deepEqual({ ...disk.active.profile, id: profile.id }, profile);
   const retry = await connection.adoptProfile(profile, source, adopted.activationRevision);
   assert.equal(retry.activationRevision, 1);
-  assert.equal((await new ProfileStore(directory).read()).profiles.length, 1);
+  assert.equal((await new ProfileStore(directory).read()).profiles.length, 3);
   const reportPath = join(dirname(directory), 'reports');
   const lastReport = async () => {
     try { return Buffer.from((await readFile(reportPath, 'utf8')).trim().split('\n').at(-1), 'hex'); }
@@ -85,7 +85,7 @@ try {
   await until(() => connection.snapshot().phase === 'connected' && connection.layout.revision === 2 && !connection.layoutPending && !connection.recovering);
   assert.equal(connection.layout.profile.id, next.adoption.profileId);
   assert.equal(connection.canPlay, false); await until(neutral);
-  assert.equal((await new ProfileStore(directory).read()).profiles.length, 2);
+  assert.equal((await new ProfileStore(directory).read()).profiles.length, 4);
   console.log('PASS actual TLS receiver adoption: >4KiB validated profile, isolated persisted copy, phone layout/neutral ACK, paused input, idempotent retry');
   console.log('PASS receiver safety: movement + button/shoulder/trigger chord, pause release, profile switch release, disconnect release, persisted exact profile after fresh pairing/phone core restart, explicit resume required');
 } finally {

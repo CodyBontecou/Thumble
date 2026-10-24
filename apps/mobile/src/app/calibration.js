@@ -15,7 +15,7 @@ export default function CalibrationScreen() {
     finally { setBusy(false); }
   }
   return <Page>
-    <View style={{ gap: 12 }}><Eyebrow>MAKE IT FEEL RIGHT</Eyebrow><Text accessibilityRole="header" style={ui.title}>Fine-tune your thumbs.</Text><Text style={s.detail}>Adjust the standard controller. Custom layouts use the settings supplied by your agent.</Text></View><Columns>
+    <View style={{ gap: 12 }}><Eyebrow>MAKE IT FEEL RIGHT</Eyebrow><Text accessibilityRole="header" style={ui.title}>Fine-tune your thumbs.</Text><Text style={s.detail}>Adjust your ConsolePort controller’s movement and camera sticks. Saved custom controllers keep their own stick settings.</Text></View><Columns>
     {(['left', 'right']).map(side => <View key={side} style={[ui.card, { flex: 1 }]}>
       <Text style={s.title}>{side === 'left' ? 'Movement stick' : 'Camera stick'}</Text>
       {(['invertX', 'invertY']).map(key => <View style={s.row} key={key}><Text style={s.label}>{key === 'invertX' ? 'Invert horizontal' : 'Invert vertical'}</Text><Switch trackColor={{ false: colors.border, true: colors.secondary }} thumbColor={colors.text} disabled={busy} accessibilityLabel={`${side} ${key}`} value={saved[side][key]} onValueChange={value => change(side, key, value)} /></View>)}

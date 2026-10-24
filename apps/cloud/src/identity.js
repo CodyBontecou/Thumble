@@ -15,6 +15,20 @@ export const RECEIVER_REDIRECT_URI = 'thumble-receiver://cloud-auth/callback';
 export const MOBILE_REDIRECT_URI = 'thumble://cloud-auth/callback';
 const instances = new WeakMap();
 const clientSetup = new WeakMap();
+const legacyEnvironments = new WeakMap();
+
+// Only the explicitly configured former origin gets its own auth instance.
+// Cached clients retain issuer, callback, cookie and refresh endpoint semantics.
+export function identityEnvironment(request, env) {
+  if (!env.LEGACY_AUTH_URL || new URL(request.url).origin !== env.LEGACY_AUTH_URL) return env;
+  let legacy = legacyEnvironments.get(env);
+  if (!legacy) {
+    identityConfig(env); // Validate the migration configuration before using it.
+    legacy = { ...env, BETTER_AUTH_URL: env.LEGACY_AUTH_URL, AUTH_CANONICAL_URL: env.BETTER_AUTH_URL };
+    legacyEnvironments.set(env, legacy);
+  }
+  return legacy;
+}
 
 export function identityConfig(env) {
   if (!validServiceUrl(env.BETTER_AUTH_URL) || new URL(env.BETTER_AUTH_URL).pathname !== '/') throw new CloudError('not_configured', 'The authentication service URL is not configured.', 503);
@@ -22,12 +36,16 @@ export function identityConfig(env) {
   const resource = env.MCP_RESOURCE_URL ?? `${baseURL}/mcp`;
   if (!validServiceUrl(resource) || new URL(resource).pathname !== '/mcp') throw new CloudError('not_configured', 'The MCP resource must be a canonical HTTPS /mcp URL.', 503);
   // Keep the original audience usable while installed phone sessions migrate.
-  const resources = [...new Set([resource, `${baseURL}/mcp`])];
+  const origins = [...new Set([baseURL, env.LEGACY_AUTH_URL, env.AUTH_CANONICAL_URL].filter(Boolean))];
+  if (origins.some(origin => !validServiceUrl(origin) || new URL(origin).origin !== origin)) throw new CloudError('not_configured', 'Authentication origins must be exact HTTPS origins.', 503);
+  const accountIssuer = env.ACCOUNT_ID_ISSUER ?? `${baseURL}/api/auth`;
+  if (!origins.some(origin => accountIssuer === `${origin}/api/auth`)) throw new CloudError('not_configured', 'The account identity namespace must belong to a configured authentication origin.', 503);
+  const resources = [...new Set([resource, ...origins.map(origin => `${origin}/mcp`)])];
   const providers = [];
   if (env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET) providers.push('google');
   if (env.APPLE_CLIENT_ID && env.APPLE_TEAM_ID && env.APPLE_KEY_ID && env.APPLE_PRIVATE_KEY) providers.push('apple');
   if (emailSignInEnabled(env)) providers.push('email');
-  return { baseURL, issuer: `${baseURL}/api/auth`, resource, resources, mobileClientId: 'thumble-mobile', providers, scopes: [...IDENTITY_SCOPES] };
+  return { baseURL, issuer: `${baseURL}/api/auth`, accountIssuer, issuers: origins.map(origin => `${origin}/api/auth`), resource, resources, mobileClientId: 'thumble-mobile', providers, scopes: [...IDENTITY_SCOPES] };
 }
 
 
@@ -74,7 +92,7 @@ export function identityOptions(env) {
     session: { freshAge: FRESH_SESSION_SECONDS },
     user: { deleteUser: { enabled: true, beforeDelete: async (user, request) => {
       const context = await (await createIdentity(env)).$context;
-      await prepareAccountDeletion(env, { user, request, context, issuer: config.issuer });
+      await prepareAccountDeletion(env, { user, request, context, issuer: config.accountIssuer });
     }, afterDelete: user => completeAccountDeletion(env, user) } },
     account: { encryptOAuthTokens: true, accountLinking: { enabled: true, requireLocalEmailVerified: true, allowDifferentEmails: false } },
     rateLimit: { enabled: true, storage: 'database', window: 60, max: 100 },

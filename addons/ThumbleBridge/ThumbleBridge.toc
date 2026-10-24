@@ -1,11 +1,13 @@
 ## Interface: 120100, 50504, 38010, 20506, 16001, 11509
-## Title: Thumble Bridge
-## Notes: Review agent-designed gamepad bindings before applying them.
+## Title: Thumble
+## Notes: Companion for Thumble phone controls and ConsolePort: automatic spell layers, Mac gamepad recovery and reviewed binding tools.
 ## Author: Thumble
-## Version: 0.1.0
+## Version: 0.1.1
 ## OptionalDeps: ConsolePort
 ## SavedVariablesPerCharacter: ThumbleBridgeDB
 Codec.lua
 Core.lua
 WoW.lua
+Discovery.lua
+Sync.lua
 UI.lua

@@ -1,11 +1,20 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { validateLayout, xboxProfile } from '../src/index.js';
+import { validateLayout, xboxProfile, consolePortProfile, assertProfile } from '../src/index.js';
+import { readFileSync } from 'node:fs';
 
 const viewport = { width: 740, height: 380 };
 const candidate = () => structuredClone(xboxProfile);
 test('complete default gamepad fits a real landscape safe canvas', () => {
   assert.deepEqual(validateLayout(xboxProfile, viewport).errors, []);
+});
+test('ConsolePort starter fits the phone and preserves every standard gamepad output', () => {
+  assert.deepEqual(validateLayout(consolePortProfile, viewport).errors, []);
+  assert.deepEqual(consolePortProfile.mappings, xboxProfile.mappings);
+  assert.equal(assertProfile(consolePortProfile).theme, 'consoleport');
+  assert.equal(consolePortProfile.modifiers, undefined);
+  const bundled = JSON.parse(readFileSync(new URL('../../../apps/receiver/Resources/BuiltInProfiles.json', import.meta.url), 'utf8'));
+  assert.deepEqual(bundled, [assertProfile(xboxProfile), assertProfile(consolePortProfile)]);
 });
 test('undersized generated B button and overlapping action targets fail with named corrections', () => {
   const profile = candidate(), b = profile.controls.find(control => control.id === 'b');

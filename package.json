@@ -10,6 +10,7 @@
     "test": "node --test packages/controller/test/*.test.js packages/profile-tools/test/*.test.js apps/cloud/test/*.test.js tools/test/*.test.js",
     "check": "node --check packages/controller/src/index.js",
     "profiles": "node packages/profile-tools/src/server.js",
+    "test:consoleport-sync": "node tools/test-consoleport-sync.mjs",
     "test:addon": "node tools/test-addon.mjs",
     "test:pairing": "node tools/test-pairing-code.mjs",
     "test:chat": "mkdir -p build/chat-tests && xcrun swiftc -swift-version 5 -module-cache-path build/chat-tests/cache apps/receiver/Sources/ChatDelivery.swift tools/chat-tests.swift -o build/chat-tests/validate && build/chat-tests/validate",

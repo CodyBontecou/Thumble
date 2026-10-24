@@ -1,0 +1,11 @@
+steps:
+  - echo: Requires a fresh isolated com.thumble.wowsetupqa install. Reinstall before replay.
+  - launch: com.thumble.wowsetupqa
+  - await: { visible: { text: WoW on your Mac. } }
+  - await: { idle: true }
+  - tap: { text: Set up WoW }
+  - await: { visible: { text: Which WoW } }
+  - await: { idle: true }
+  - tap: { text: World of Warcraft }
+  - await: { visible: { text: Keep your Mac ready. } }
+  - await: { idle: true }

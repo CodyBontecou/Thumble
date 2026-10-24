@@ -6,7 +6,7 @@ Website: https://thumble.io
 Support: https://thumble.io/support  
 Privacy: https://thumble.io/privacy  
 Terms: https://thumble.io/terms (published October 23, 2026).  
-MCP: https://thumble-cloud-pilot.costream.workers.dev/mcp  
+MCP: https://thumble.io/mcp  
 Transport: stateless Streamable HTTP over HTTPS; OAuth required for discovery and tools.
 
 ## Public copy
@@ -16,7 +16,7 @@ Transport: stateless Streamable HTTP over HTTPS; OAuth required for discovery an
 
 Create, validate, save, and send custom controller layouts to your Thumble phone for practice. Connect the same account on your phone and AI assistant, choose a registered phone, and confirm the exact layout revision rendered. Layouts can include buttons, sticks and triggers, with labels and placement suited to your screen.
 
-Cloud access is currently a pilot. Phone app installation and a registered device are required for delivery. The public website currently describes the phone app as coming soon; reviewer installation access must be arranged. Local setup and practice are free. Live connected controller use includes a 30-minute total demo; Pro is a $19.99 USD base-price one-time native store purchase that removes the time limit. This connector does not sell Pro or process payments.
+Cloud access is currently a pilot. Phone app installation and a registered device are required for delivery. The Apple-approved iOS 1.0.0 (3) review build is available at https://testflight.apple.com/join/kxwHv4qW (Marketplace Review, capped at 10 testers). Local setup and practice are free. Live connected controller use includes a 30-minute total demo; Pro is a $19.99 USD base-price one-time native store purchase that removes the time limit. This connector does not sell Pro or process payments.
 
 Hosted tools manage controller layouts and phone practice. Game input uses the separate paired local Mac receiver; a `rendered` cloud receipt does not prove Mac input or game bindings.
 
@@ -41,7 +41,7 @@ Revision conflicts require rereading and reconsidering the edit. Retry a deliver
 
 ## Reviewer setup — still to execute
 
-Use a dedicated sample-data account, never the owner's private library. Supply account credentials and private installation access through the marketplace's secure review fields, outside public packages. Google currently limits sign-in to configured test users. Each marketplace needs a working OAuth client before these instructions are executable there.
+Use a dedicated sample-data account, never the owner's private library. Supply account credentials and private installation access through the marketplace's secure review fields, outside public packages. Email-code sign-in is live; reviewers must control the dedicated account inbox. Each marketplace needs a working OAuth client before these instructions are executable there.
 
 1. Install the intended Thumble phone build and sign in to Cloud controllers.
 2. Register the test phone. Keep it foregrounded and disconnected from its Mac receiver for practice.

@@ -1,3 +1,4 @@
+process.env.AI_CONTROLLER_GENERATOR_ENABLED = 'true';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
@@ -13,6 +14,28 @@ async function fixture(t) {
   t.after(() => rm(directory, { recursive: true, force: true }));
   return new ProfileStore(directory);
 }
+test('both starters are available without an agent and upgrades preserve saved profiles and activation', async t => {
+  const store = await fixture(t);
+  assert.deepEqual((await store.list()).profiles.map(p => p.id), ['xbox-standard', 'consoleport-standard']);
+  await store.save(warrior(), 0);
+  await store.activate('warrior', 1, 0);
+  const old = await store.read();
+  old.profiles = old.profiles.filter(entry => entry.profile.id !== 'consoleport-standard');
+  old.profiles.find(entry => entry.profile.id === 'xbox-standard').profile.name = 'My Xbox';
+  await writeFile(join(store.directory, 'store.json'), JSON.stringify(old));
+  const upgraded = await store.read();
+  assert.equal(upgraded.active.profile.id, 'warrior');
+  assert.equal(upgraded.profiles.find(entry => entry.profile.id === 'xbox-standard').profile.name, 'My Xbox');
+  await store.activate('consoleport-standard', 1, 1);
+  assert.equal((await new ProfileStore(store.directory).read()).active.profile.theme, 'consoleport');
+});
+test('a full older catalog stays readable without discarding saved profiles for starters', async t => {
+  const store = await fixture(t);
+  const profiles = Array.from({ length: 256 }, (_, i) => ({ revision: 1, profile: { ...warrior(), id: `saved-${i}` } }));
+  await writeFile(join(store.directory, 'store.json'), JSON.stringify({ version: 1, profiles, active: null }));
+  assert.equal((await store.list()).profiles.length, 256);
+  assert.equal((await store.get('saved-255')).profile.id, 'saved-255');
+});
 test('saved revisions persist, invalid edits are atomic, and saving never changes an active layout', async t => {
   const store = await fixture(t);
   const entry = await store.save(warrior(), 0);
