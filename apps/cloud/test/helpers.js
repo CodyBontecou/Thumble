@@ -8,7 +8,9 @@ import { CLOUD_SCOPES } from '@tapping/cloud-contracts';
 export function createTestDb() {
   const sqlite = new DatabaseSync(':memory:');
   sqlite.exec('PRAGMA foreign_keys=ON');
-  sqlite.exec(readFileSync(new URL('../migrations/0001_cloud.sql', import.meta.url), 'utf8'));
+  for (const migration of ['0001_cloud.sql', '0002_better_auth.sql', '0003_account_deletion.sql', '0004_provider_data_minimization.sql', '0005_receiver_pairing.sql']) {
+    sqlite.exec(readFileSync(new URL(`../migrations/${migration}`, import.meta.url), 'utf8'));
+  }
   function prepare(sql, bindings = []) {
     return {
       bind(...values) { return prepare(sql, values); },

@@ -42,7 +42,7 @@ and [Cloudflare asset bindings](https://developers.cloudflare.com/workers/static
 
 ## Authentication and browser clients
 
-Protected-resource metadata is available at `/.well-known/oauth-protected-resource/mcp` (also aliased at the root metadata path). It advertises `OAUTH_AUDIENCE` as the resource and `OAUTH_ISSUER` as its authorization server. Configure the audience as the canonical HTTPS MCP resource URL and issue access tokens for that exact audience. Every request is authenticated, including initialize and tool discovery; each tool also enforces its required scope. The eight tools never accept an account ID and never return a phone credential.
+Protected-resource metadata is available at `/.well-known/oauth-protected-resource/mcp` (also aliased at the root metadata path). It advertises `OAUTH_AUDIENCE` as the resource and `OAUTH_ISSUER` as its authorization server. Configure the audience as the canonical HTTPS MCP resource URL and issue access tokens for that exact audience. Every request is authenticated, including initialize and tool discovery; each tool also enforces its required scope. The hosted tools never accept an account ID or return a phone device credential. `show_pairing_code` returns a temporary LAN pairing image only after the Mac owner explicitly shares it with the same account.
 
 Server and native clients normally omit `Origin`. Browser clients with an `Origin` header must match the service origin or an explicit comma-separated `MCP_ALLOWED_ORIGINS` deployment setting. CORS support, if needed, should use that same allowlist; adding an allowed origin does not grant an account scope.
 
@@ -67,3 +67,20 @@ Pages use same-origin JSON requests with session cookies, a per-response script 
 The phone opens `/account?accountId=…` without sending tokens in the URL. The browser derives its own account ID from the authenticated user and issuer, then compares it with that expected phone account. A mismatch never displays a deletion action. Deletion requires a recent social sign-in and an explicit confirmation checkbox. The browser submits a same-origin, session-bound request to Better Auth; an account assertion header prevents a different browser session from being deleted if the session changes after the page loads.
 
 The page shows success only after the server confirms deletion. Returning to Thumble triggers a separate authenticated account check before the app clears its secure cloud cache. A callback URL or `deleted` query flag cannot prove deletion. Other offline devices may retain cached controllers until they reconnect or sign out.
+
+## Pair a Mac from ChatGPT
+
+The receiver’s **Pair through ChatGPT…** menu action uses the fixed public OAuth client `thumble-receiver`, the exact redirect `thumble-receiver://cloud-auth/callback`, consent, PKCE S256, and issuer/state checks. Its only scopes are `openid pairing:manage`; it cannot read phones, controllers, or deliveries and is not issued a refresh token. Phone OAuth permissions stay unchanged. ChatGPT adds `pairing:read`, never `pairing:manage`. Existing ChatGPT connections must refresh discovery and reconnect with this new permission. The OpenAI plugin source manifests include it in `baseScopes`.
+
+After sign-in, the Mac creates a ten-minute sharing session, uploads only its QR PNG and expiry, and refreshes a heartbeat every ten seconds. The publisher capability is hashed in D1 and remains only in receiver memory. The tool `show_pairing_code({receiverId?})` authenticates the account on every call, rejects ambiguous Macs, and returns native MCP `image/png` content plus small expiry/name metadata. It never returns an invitation URI or publisher credential. No QR is exposed through a public URL, image resource, or third-party QR generator. Chat history can retain an expired image.
+
+Endpoints on the authenticated cloud origin:
+
+- `POST /v1/receiver-pairing` with account scope `pairing:manage` and `{name}` creates a session. At most four unexpired sessions per account.
+- `PUT /v1/receiver-pairing/:id` with that session’s publisher bearer updates `{sequence, connected, png?, expiresAt?}`. Sequences must increase; late uploads cannot restore a consumed QR.
+- `DELETE /v1/receiver-pairing/:id` with the publisher bearer revokes it.
+- `GET /v1/pairing-code?receiverId=…` with `pairing:read` reads only that account’s current QR. Missing permission, wrong account, stale heartbeat (30 seconds), expired QR, already-paired phone, and stopped/expired sessions fail closed.
+
+Apply migration `0005_receiver_pairing.sql` before deploying the Worker. Its scheduled cleanup purges expired/offline QR blobs every minute and deletes expired sessions. Account deletion clears sharing sessions and a database tombstone trigger blocks concurrent recreation. Build the updated receiver; old receiver builds do not upload pairing images. This flow preserves direct certificate-pinned LAN phone pairing and does not bypass phone local-network permission or the same-Wi-Fi requirement.
+
+Validation: `npm test`, `npm run test:pairing` (macOS Core Image/Vision and OAuth callback checks), and `npm run test:cloud:identity:runtime` (isolated workerd/D1, fixed receiver OAuth consent/PKCE, publisher upload, hosted MCP image result, and deletion cleanup). The runtime uses a synthetic phone/session and does not establish physical phone pairing or prove ChatGPT’s production UI rendering.

@@ -4,7 +4,7 @@ The first journey is implemented across the Worker, hosted MCP, phone and Mac re
 
 The pilot runs at https://thumble-cloud-pilot.costream.workers.dev with Better Auth 1.7.12 and persistent D1 identity storage. Apple and Google sign-in use the service's browser flow; Auth0 is not required. The [deployment record](evidence/cloud/pilot-deployment.md) separates deployed configuration, automated proof and the successful live Google/ChatGPT-to-iPhone journey.
 
-The [shared contract](cloud-contracts.md) defines payloads, permissions, revisions and delivery states. [The architecture decision](adr/0001-cloud-profile-delivery.md) records the authority boundary, and [hosted MCP guidance](hosted-mcp.md) describes the eight tools.
+The [shared contract](cloud-contracts.md) defines payloads, permissions, revisions and delivery states. [The architecture decision](adr/0001-cloud-profile-delivery.md) records the authority boundary, and [hosted MCP guidance](hosted-mcp.md) describes the hosted tools and optional Mac pairing.
 
 ## Pilot identity configuration
 

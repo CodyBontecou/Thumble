@@ -15,6 +15,7 @@ const revision = { type: 'integer', minimum: 1, maximum: Number.MAX_SAFE_INTEGER
 const read = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false };
 const write = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false };
 const definitions = [
+  ['show_pairing_code', 'Display a current single-use pairing QR image inline in ChatGPT. The Mac owner must first choose Pair through ChatGPT… in the receiver menu and sign in to this same Thumble account. Call with no arguments for one sharing Mac. If several Macs are sharing, ask the user which receiverId to use. Phone and Mac must share local Wi-Fi. Does not disconnect a phone or send gameplay input. Never publish the QR or its temporary credential.', object({ receiverId: id }, []), SCOPES.pairingRead, read],
   ['profile_schema', 'Get the controller schema and design constraints. Profiles contain layout data only; they cannot send game input.', object(), SCOPES.profileRead, read],
   ['validate_profile', 'Validate schema, target sizes, touch overlap and toolbar clearance against the selected phone’s usable canvas. Read list_devices first. Does not save or deliver.', object({ profile: profileSchema, deviceId: id }), SCOPES.profileWrite, read],
   ['list_profiles', 'List this account’s saved controllers and latest revisions.', object(), SCOPES.profileRead, read],
@@ -36,7 +37,7 @@ function failure(error) {
 }
 function validateArgs(tool, args) {
   if (!args || typeof args !== 'object' || Array.isArray(args) || Object.keys(args).some(key => !Object.hasOwn(tool.inputSchema.properties, key)) || tool.inputSchema.required.some(key => !Object.hasOwn(args, key))) throw new CloudError('invalid_request', 'Use the documented arguments for this tool.');
-  for (const key of ['deviceId', 'deliveryId', 'requestId']) if (Object.hasOwn(args, key)) requireId(args[key], key);
+  for (const key of ['deviceId', 'deliveryId', 'requestId', 'receiverId']) if (Object.hasOwn(args, key)) requireId(args[key], key);
   if (Object.hasOwn(args, 'profileId') && (typeof args.profileId !== 'string' || !new RegExp(PROFILE_ID_PATTERN).test(args.profileId))) throw new CloudError('invalid_request', 'Invalid profileId.');
   for (const key of ['revision', 'profileRevision', 'expectedRevision']) if (Object.hasOwn(args, key)) requireRevision(args[key], key === 'expectedRevision');
 }
@@ -51,6 +52,7 @@ export async function callCloudTool(request, env, principal, name, args = {}, ap
     if (name === 'profile_schema') return result(profileSchema);
     let path, body;
     switch (name) {
+      case 'show_pairing_code': path = `/v1/pairing-code${args.receiverId ? `?receiverId=${encodeURIComponent(args.receiverId)}` : ''}`; break;
       case 'validate_profile': path = '/v1/profiles/validate'; body = args; break;
       case 'list_profiles': path = '/v1/profiles'; break;
       case 'get_profile': path = `/v1/profiles/${encodeURIComponent(args.profileId)}${args.revision === undefined ? '' : `/revisions/${args.revision}`}`; break;
@@ -63,8 +65,21 @@ export async function callCloudTool(request, env, principal, name, args = {}, ap
     if (body) headers.set('content-type', 'application/json');
     const response = await api(new Request(new URL(path, request.url), { method: body ? 'POST' : 'GET', headers, ...(body ? { body: JSON.stringify(body) } : {}) }), env);
     const value = await response.json();
+    if (name === 'show_pairing_code' && response.ok) {
+      const metadata = { receiverId: value.receiverId, name: value.name, expiresAt: value.expiresAt };
+      return { structuredContent: metadata, content: [
+        { type: 'text', text: `Scan this code in Thumble → Connect Mac on the same Wi-Fi. Expires at ${new Date(value.expiresAt).toISOString()}; single use. Display the returned image inline. This confirms code availability, not a connected phone.` },
+        { type: 'image', mimeType: 'image/png', data: value.png },
+      ] };
+    }
     return result(value, !response.ok);
-  } catch (error) { return failure(error); }
+  } catch (error) {
+    if (name === 'show_pairing_code' && error instanceof CloudError && error.code === 'forbidden') {
+      return { ...failure(new CloudError('forbidden', 'Reconnect ChatGPT and allow pairing:read to display the QR shared by your Mac.', 403)),
+        _meta: { 'mcp/www_authenticate': 'Bearer error="insufficient_scope", scope="pairing:read"' } };
+    }
+    return failure(error);
+  }
 }
 
 const json = (value, status = 200, headers = {}) => Response.json(value, { status, headers: { 'cache-control': 'no-store', ...headers } });

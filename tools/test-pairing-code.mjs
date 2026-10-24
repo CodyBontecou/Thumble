@@ -8,7 +8,7 @@ await mkdir(output, { recursive: true });
 const directory = await mkdtemp(join(tmpdir(), 'thumble-pairing-native-'));
 try {
   execFileSync('xcrun', ['swiftc', '-swift-version', '5', '-module-cache-path', resolve('build/receiver/swift-cache'),
-    ...['PairingCode', 'ProfileBridge', 'ProfileCatalog', 'CloudProfile'].map(name => resolve(`apps/receiver/Sources/${name}.swift`)),
+    ...['CloudPairing', 'PairingCode', 'ProfileBridge', 'ProfileCatalog', 'CloudProfile'].map(name => resolve(`apps/receiver/Sources/${name}.swift`)),
     resolve('tools/pairing-code-tests/main.swift'), '-o', join(output, 'tests')], { stdio: 'inherit' });
   execFileSync(join(output, 'tests'), [directory], { stdio: 'inherit' });
 } finally { await rm(directory, { recursive: true, force: true }); }

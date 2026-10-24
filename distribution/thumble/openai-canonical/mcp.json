@@ -23,6 +23,7 @@
               "profiles:write",
               "devices:read",
               "deliveries:read",
+              "pairing:read",
               "deliveries:write"
             ]
           }

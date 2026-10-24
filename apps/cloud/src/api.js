@@ -1,5 +1,6 @@
 import { CloudError, MAX_BODY_BYTES, SCOPES, requireId, requireRevision, requireScope, validateCloudProfile } from '@tapping/cloud-contracts';
 import { authenticateAccount, authenticateDevice, getPublicConfig, sha256 } from './auth.js';
+import { handlePairingApi } from './pairing.js';
 import { validateLayout, validViewport } from '@tapping/controller';
 
 function requireLayout(profile, device) {
@@ -168,6 +169,7 @@ export async function handleApi(request, env) {
     if (path[0] !== 'v1') notFound(); path.shift();
     if (request.method === 'GET' && path.length === 1 && path[0] === 'config') return json(getPublicConfig(request, env));
     if (!env.DB) throw new CloudError('not_configured', 'Cloud storage is not configured.', 503);
+    if (['receiver-pairing', 'pairing-code'].includes(path[0])) return await handlePairingApi(request, env, path, { body, json });
     if (path[0] === 'devices' && ['deliveries', 'viewport'].includes(path[2])) return await deviceRoute(request, env, path);
     return await accountRoute(request, env, path);
   } catch (error) { return errorResponse(error); }

@@ -11,7 +11,7 @@ import { cloudAccountId } from '../src/deletion.js';
 
 async function fixture(t, apple = false) {
   const db = new DatabaseSync(':memory:'); db.exec('PRAGMA foreign_keys=ON');
-  for (const migration of ['0001_cloud.sql', '0002_better_auth.sql', '0003_account_deletion.sql', '0004_provider_data_minimization.sql']) db.exec(readFileSync(new URL(`../migrations/${migration}`, import.meta.url), 'utf8'));
+  for (const migration of ['0001_cloud.sql', '0002_better_auth.sql', '0003_account_deletion.sql', '0004_provider_data_minimization.sql', '0005_receiver_pairing.sql']) db.exec(readFileSync(new URL(`../migrations/${migration}`, import.meta.url), 'utf8'));
   t.after(() => db.close());
   const env = { DB: db, BETTER_AUTH_URL: 'https://deletion.example.test', BETTER_AUTH_SECRET: 'deletion-test-only-long-stable-key-of-at-least-thirty-two-bytes' };
   let applePublicKey;
@@ -26,6 +26,7 @@ async function fixture(t, apple = false) {
     const cookie = `${context.authCookies.sessionToken.name}=${encodeURIComponent(`${session.token}.${await makeSignature(session.token, context.secret)}`)}`;
     const accountId = await cloudAccountId(config.issuer, user.id), id = crypto.randomUUID(), now = new Date().toISOString();
     db.prepare('INSERT INTO profile_revisions VALUES (?,?,?,?,?,?)').run(accountId, xboxProfile.id, 1, xboxProfile.name, JSON.stringify(xboxProfile), now);
+    db.prepare('INSERT INTO receiver_pairing_sessions (id,account_id,name,publisher_hash,session_expires_at,updated_at) VALUES (?,?,?,?,?,?)').run(crypto.randomUUID(), accountId, name, 'test-publisher-hash', Date.now() + 600_000, Date.now());
     db.prepare('INSERT INTO devices (id,account_id,name,platform,width,height,token_hash,token_expires_at,created_at,last_seen_at) VALUES (?,?,?,\'ios\',844,390,?,?,?,?)').run(id, accountId, name, crypto.randomUUID(), new Date(Date.now() + 3600000).toISOString(), now, now);
     db.prepare('INSERT INTO deliveries (id,account_id,device_id,profile_id,profile_revision,request_id,state,created_at,updated_at) VALUES (?,?,?,?,1,?,\'queued\',?,?)').run(crypto.randomUUID(), accountId, id, xboxProfile.id, crypto.randomUUID(), now, now);
     // Provider's public server-only signing API is used only by this fixture.
@@ -75,7 +76,7 @@ test('successful Apple revocation precedes isolated deletion; tokens, sessions, 
   });
   const response = await f.auth.handler(f.deletionRequest()); assert.equal(response.status, 200); assert.equal((await response.json()).success, true);
   assert.equal(f.db.prepare('SELECT count(*) n FROM user').get().n, 1); assert.equal(f.db.prepare('SELECT id FROM user').get().id, f.other.user.id);
-  for (const table of ['devices', 'deliveries', 'profile_revisions']) { assert.equal(f.db.prepare(`SELECT count(*) n FROM ${table} WHERE account_id = ?`).get(f.target.accountId).n, 0); assert.equal(f.db.prepare(`SELECT count(*) n FROM ${table} WHERE account_id = ?`).get(f.other.accountId).n, 1); }
+  for (const table of ['devices', 'deliveries', 'profile_revisions', 'receiver_pairing_sessions']) { assert.equal(f.db.prepare(`SELECT count(*) n FROM ${table} WHERE account_id = ?`).get(f.target.accountId).n, 0); assert.equal(f.db.prepare(`SELECT count(*) n FROM ${table} WHERE account_id = ?`).get(f.other.accountId).n, 1); }
   for (const table of ['session', 'account', 'oauthConsent', 'oauthRefreshToken', 'oauthAccessToken']) assert.equal(f.db.prepare(`SELECT count(*) n FROM ${table} WHERE userId = ?`).get(f.target.user.id).n, 0);
   assert.equal(f.db.prepare('SELECT count(*) n FROM verification WHERE identifier = ?').get('pending-target-code').n, 0);
   assert.equal(f.db.prepare('SELECT count(*) n FROM verification WHERE identifier = ?').get('pending-other-code').n, 1);

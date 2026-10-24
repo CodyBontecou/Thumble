@@ -4,10 +4,12 @@ import { handleMcp, handleProtectedResourceMetadata } from './mcp.js';
 import { handleIdentity } from './identity.js';
 import { handleAuthPage } from './auth-pages.js';
 import { handleAsset } from './assets.js';
+import { cleanPairingSessions } from './pairing.js';
 
 // Account APIs and MCP share the same authenticated service and persistent store.
 // The receiver's LAN transport is intentionally outside this Worker.
 export default {
+  async scheduled(_event, env, ctx) { ctx.waitUntil(cleanPairingSessions(env)); },
   async fetch(request, env) {
     try {
       const { pathname } = new URL(request.url);

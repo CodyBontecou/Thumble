@@ -1,6 +1,6 @@
 import { createLocalJWKSet, createRemoteJWKSet, jwtVerify } from 'jose';
 import { assertActiveIdentity } from './deletion.js';
-import { createIdentity, identityConfig, CHATGPT_SCOPES } from './identity.js';
+import { createIdentity, identityConfig, CHATGPT_SCOPES, MOBILE_SCOPES } from './identity.js';
 import { API_VERSION, CLOUD_SCOPES, CloudError, validServiceUrl } from '@tapping/cloud-contracts';
 
 const remoteKeys = new Map();
@@ -20,13 +20,13 @@ export function getPublicConfig(request, env) {
   if (env.BETTER_AUTH_URL) {
     const config = identityConfig(env);
     if (!env.BETTER_AUTH_SECRET || env.BETTER_AUTH_SECRET.length < 32 || !env.DB) throw new CloudError('not_configured', 'Cloud sign-in is not configured.', 503);
-    return { apiVersion: API_VERSION, auth: { issuer: config.issuer, authorizationEndpoint: `${config.issuer}/oauth2/authorize`, tokenEndpoint: `${config.issuer}/oauth2/token`, mobileClientId: config.mobileClientId, audience: config.resource, scopes: config.scopes }, mcpUrl: config.resource };
+    return { apiVersion: API_VERSION, auth: { issuer: config.issuer, authorizationEndpoint: `${config.issuer}/oauth2/authorize`, tokenEndpoint: `${config.issuer}/oauth2/token`, mobileClientId: config.mobileClientId, audience: config.resource, scopes: [...MOBILE_SCOPES] }, mcpUrl: config.resource };
   }
   const { issuer, audience } = authConfig(env);
   const authorizationEndpoint = configuredUrl(env.OAUTH_AUTHORIZATION_ENDPOINT);
   const tokenEndpoint = configuredUrl(env.OAUTH_TOKEN_ENDPOINT);
   if (!authorizationEndpoint || !tokenEndpoint || !env.OAUTH_MOBILE_CLIENT_ID) throw new CloudError('not_configured', 'Cloud sign-in is not configured.', 503);
-  return { apiVersion: API_VERSION, auth: { issuer, authorizationEndpoint, tokenEndpoint, mobileClientId: env.OAUTH_MOBILE_CLIENT_ID, audience, scopes: ['openid', ...CLOUD_SCOPES] }, mcpUrl: new URL('/mcp', request.url).href };
+  return { apiVersion: API_VERSION, auth: { issuer, authorizationEndpoint, tokenEndpoint, mobileClientId: env.OAUTH_MOBILE_CLIENT_ID, audience, scopes: ['openid', ...CLOUD_SCOPES.filter(scope => !scope.startsWith('pairing:'))] }, mcpUrl: new URL('/mcp', request.url).href };
 }
 export function bearerToken(request) {
   const match = /^Bearer ([^\s]+)$/i.exec(request.headers.get('authorization') || '');

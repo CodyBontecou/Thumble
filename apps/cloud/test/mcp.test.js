@@ -14,7 +14,7 @@ const rpc = (method, params, options = {}) => new Request('https://cloud.example
 const deps = { authenticateAccount: async () => principal, handleApi: async () => Response.json({ profiles: [] }) };
 
 test('cloud MCP advertises only scoped controller tools and truthful write hints', () => {
-  assert.deepEqual(cloudTools.map(tool => tool.name), ['profile_schema', 'validate_profile', 'list_profiles', 'get_profile', 'save_profile', 'list_devices', 'deliver_profile', 'delivery_status']);
+  assert.deepEqual(cloudTools.map(tool => tool.name), ['show_pairing_code', 'profile_schema', 'validate_profile', 'list_profiles', 'get_profile', 'save_profile', 'list_devices', 'deliver_profile', 'delivery_status']);
   assert.equal(cloudTools.find(tool => tool.name === 'deliver_profile').annotations.destructiveHint, true);
   assert.equal(cloudTools.find(tool => tool.name === 'save_profile').annotations.readOnlyHint, false);
   assert.ok(cloudTools.every(tool => tool._meta.securitySchemes[0].type === 'oauth2'));
@@ -70,7 +70,7 @@ test('stateless SDK HTTP supports initialize, tools/list, call, ping and notific
   assert.equal(init.headers.get('mcp-session-id'), null);
   assert.equal((await init.json()).result.protocolVersion, '2025-11-25');
   const list = await handleMcp(rpc('tools/list'), env, deps);
-  assert.equal((await list.json()).result.tools.length, 8);
+  assert.equal((await list.json()).result.tools.length, 9);
   const call = await handleMcp(rpc('tools/call', { name: 'list_profiles', arguments: {} }), env, deps);
   assert.deepEqual((await call.json()).result.structuredContent, { profiles: [] });
   const ping = await handleMcp(rpc('ping'), env, deps);

@@ -4,14 +4,14 @@ import { DatabaseSync } from 'node:sqlite';
 import { readFileSync } from 'node:fs';
 import { makeSignature } from 'better-auth/crypto';
 import { decodeJwt, exportJWK, exportPKCS8, generateKeyPair, jwtVerify, SignJWT } from 'jose';
-import { createIdentity, ensureIdentityClients, handleIdentity, identityConfig, identityOptions, generateAppleClientSecret, IDENTITY_SCOPES, CHATGPT_SCOPES, MOBILE_REDIRECT_URI } from '../src/identity.js';
+import { createIdentity, ensureIdentityClients, handleIdentity, identityConfig, identityOptions, generateAppleClientSecret, IDENTITY_SCOPES, MOBILE_SCOPES, RECEIVER_SCOPES, RECEIVER_REDIRECT_URI, CHATGPT_SCOPES, MOBILE_REDIRECT_URI } from '../src/identity.js';
 import { authenticateAccount, getPublicConfig } from '../src/auth.js';
 import { handleAuthPage } from '../src/auth-pages.js';
 
 async function fixture(t, overrides = {}) {
   const db = new DatabaseSync(':memory:');
   db.exec('PRAGMA foreign_keys=ON');
-  for (const migration of ['0001_cloud.sql', '0002_better_auth.sql', '0003_account_deletion.sql', '0004_provider_data_minimization.sql']) db.exec(readFileSync(new URL(`../migrations/${migration}`, import.meta.url), 'utf8'));
+  for (const migration of ['0001_cloud.sql', '0002_better_auth.sql', '0003_account_deletion.sql', '0004_provider_data_minimization.sql', '0005_receiver_pairing.sql']) db.exec(readFileSync(new URL(`../migrations/${migration}`, import.meta.url), 'utf8'));
   t.after(() => db.close());
   const env = { DB: db, BETTER_AUTH_URL: 'https://identity.example.test', BETTER_AUTH_SECRET: 'test-only-identity-secret-with-more-than-thirty-two-bytes', CHATGPT_CLIENT_SECRET: 'test-only-confidential-client-secret-with-more-than-thirty-two-bytes', CHATGPT_REDIRECT_URIS: '["https://chatgpt.com/connector_platform_oauth_redirect"]', ...overrides };
   await ensureIdentityClients(env);
@@ -25,8 +25,8 @@ async function fixture(t, overrides = {}) {
   }
   async function authorize(clientId = 'thumble-mobile', extra = {}) {
     const verifier = 'a'.repeat(64), challenge = Buffer.from(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier))).toString('base64url');
-    const redirectUri = clientId === 'thumble-mobile' ? MOBILE_REDIRECT_URI : 'https://chatgpt.com/connector_platform_oauth_redirect';
-    const params = new URLSearchParams({ response_type: 'code', client_id: clientId, redirect_uri: redirectUri, scope: (clientId === 'thumble-chatgpt' ? CHATGPT_SCOPES : IDENTITY_SCOPES).join(' '), resource: `${env.BETTER_AUTH_URL}/mcp`, state: 'test-state', code_challenge: challenge, code_challenge_method: 'S256', ...extra });
+    const redirectUri = clientId === 'thumble-mobile' ? MOBILE_REDIRECT_URI : clientId === 'thumble-receiver' ? RECEIVER_REDIRECT_URI : 'https://chatgpt.com/connector_platform_oauth_redirect';
+    const params = new URLSearchParams({ response_type: 'code', client_id: clientId, redirect_uri: redirectUri, scope: (clientId === 'thumble-chatgpt' ? CHATGPT_SCOPES : clientId === 'thumble-receiver' ? RECEIVER_SCOPES : MOBILE_SCOPES).join(' '), resource: `${env.BETTER_AUTH_URL}/mcp`, state: 'test-state', code_challenge: challenge, code_challenge_method: 'S256', ...extra });
     const result = await auth.handler(request(`/api/auth/oauth2/authorize?${params}`));
     return { result, verifier, redirectUri };
   }
@@ -63,7 +63,7 @@ test('Better Auth discovery and fixed persistent clients require consent and PKC
   assert.equal(provider.options.allowDynamicClientRegistration, false);
   assert.equal(provider.options.allowUnauthenticatedClientRegistration, false);
   const clients = f.db.prepare('SELECT clientId,clientSecret,requirePKCE,skipConsent,subjectType FROM oauthClient ORDER BY clientId').all();
-  assert.equal(clients.length, 2); assert.ok(clients.every(c => c.requirePKCE === 1 && c.skipConsent === 0 && c.subjectType === 'public'));
+  assert.equal(clients.length, 3); assert.ok(clients.every(c => c.requirePKCE === 1 && c.skipConsent === 0 && c.subjectType === 'public'));
   assert.equal(clients.find(c => c.clientId === 'thumble-mobile').clientSecret, null);
   assert.notEqual(clients.find(c => c.clientId === 'thumble-chatgpt').clientSecret, f.env.CHATGPT_CLIENT_SECRET);
   assert.equal(f.db.prepare('SELECT count(*) AS n FROM user').get().n, 1); // Only explicit test user, no bootstrap identity.
@@ -87,6 +87,21 @@ test('native PKCE and confidential ChatGPT flows yield signed audience-bound JWT
   assert.equal(refreshed.status, 200); assert.equal(decodeJwt((await refreshed.json()).access_token).sub, f.user.id);
   const replay = await f.auth.handler(f.request('/api/auth/oauth2/token', { method: 'POST', form: true, body: phone.tokenBody, authenticated: false, origin: false })); assert.equal(replay.status, 400);
 
+});
+
+test('Mac pairing uses its own consented PKCE client without phone permissions or refresh tokens', async t => {
+  const f = await fixture(t), receiver = await f.exchange('thumble-receiver');
+  assert.deepEqual(decodeJwt(receiver.tokens.access_token).scope.split(' ').sort(), [...RECEIVER_SCOPES].sort());
+  assert.equal(receiver.tokens.refresh_token, undefined);
+  assert.equal(getPublicConfig(f.request('/v1/config'), f.env).auth.scopes.includes('pairing:manage'), false);
+  assert(CHATGPT_SCOPES.includes('pairing:read'));
+  assert(!CHATGPT_SCOPES.includes('pairing:manage'));
+  for (const client of ['thumble-mobile', 'thumble-chatgpt']) {
+    const rejected = await f.authorize(client, { scope: 'openid pairing:manage' });
+    assert.match(rejected.result.headers.get('location') || '', /error=invalid_scope/);
+  }
+  const invalid = await f.authorize('thumble-receiver', { redirect_uri: 'thumble-receiver://attacker/callback' });
+  assert.match(invalid.result.headers.get('location') || '', /error=/);
 });
 
 test('login handoff is signed, redirect and resource substitution and forged consent are rejected', async t => {

@@ -9,6 +9,7 @@
     "nodejs_compat"
   ],
   "workers_dev": true,
+  "triggers": { "crons": ["* * * * *"] },
   "send_email": [{ "name": "EMAIL", "allowed_sender_addresses": ["signin@auth.thumble.io"] }],
   "routes": [
     { "pattern": "thumble.io/assets/thumble/*", "zone_name": "thumble.io" },

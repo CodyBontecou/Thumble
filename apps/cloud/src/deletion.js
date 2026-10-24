@@ -51,6 +51,7 @@ export async function prepareAccountDeletion(env, { user, request, context, issu
   await atomic(env, [
     ['INSERT OR IGNORE INTO cloud_deleted_accounts (account_id,deleted_at) VALUES (?,?)', [accountId, new Date().toISOString()]],
     ['DELETE FROM deliveries WHERE account_id = ?', [accountId]],
+    ['DELETE FROM receiver_pairing_sessions WHERE account_id = ?', [accountId]],
     ['DELETE FROM devices WHERE account_id = ?', [accountId]],
     ['DELETE FROM profile_revisions WHERE account_id = ?', [accountId]],
     ['DELETE FROM verification WHERE CASE WHEN json_valid(value) THEN json_extract(value, \'$.userId\') = ? OR json_extract(value, \'$.link.userId\') = ? ELSE 0 END', [user.id, user.id]],

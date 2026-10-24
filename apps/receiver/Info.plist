@@ -20,6 +20,8 @@
 	<string>15.0</string>
 	<key>LSUIElement</key>
 	<true/>
+	<key>CFBundleURLTypes</key>
+	<array><dict><key>CFBundleURLSchemes</key><array><string>thumble-receiver</string></array><key>CFBundleURLName</key><string>Thumble receiver authentication</string></dict></array>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Receive controller input from your phone on local Wi-Fi.</string>
 </dict>

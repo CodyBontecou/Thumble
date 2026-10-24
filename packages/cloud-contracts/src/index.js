@@ -1,7 +1,7 @@
 import { assertProfile } from '@tapping/controller';
 export const API_VERSION = 1;
 export const MCP_PROTOCOL_VERSION = '2025-11-25';
-export const SCOPES = Object.freeze({ profileRead: 'profiles:read', profileWrite: 'profiles:write', deviceRead: 'devices:read', deviceManage: 'devices:manage', deliveryWrite: 'deliveries:write', deliveryRead: 'deliveries:read' });
+export const SCOPES = Object.freeze({ profileRead: 'profiles:read', profileWrite: 'profiles:write', deviceRead: 'devices:read', deviceManage: 'devices:manage', deliveryWrite: 'deliveries:write', deliveryRead: 'deliveries:read', pairingRead: 'pairing:read', pairingManage: 'pairing:manage' });
 export const CLOUD_SCOPES = Object.values(SCOPES);
 export const MAX_BODY_BYTES = 262144;
 export const DELIVERY_STATES = ['queued', 'received', 'rendered', 'failed', 'superseded'];

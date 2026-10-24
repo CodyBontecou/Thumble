@@ -8,7 +8,10 @@ export { generateAppleClientSecret } from './apple.js';
 import { CLOUD_SCOPES, CloudError, validServiceUrl } from '@tapping/cloud-contracts';
 
 export const IDENTITY_SCOPES = Object.freeze(['openid', 'offline_access', ...CLOUD_SCOPES]);
-export const CHATGPT_SCOPES = Object.freeze(IDENTITY_SCOPES.filter(scope => scope !== 'devices:manage'));
+export const CHATGPT_SCOPES = Object.freeze(IDENTITY_SCOPES.filter(scope => !['devices:manage', 'pairing:manage'].includes(scope)));
+export const MOBILE_SCOPES = Object.freeze(IDENTITY_SCOPES.filter(scope => !scope.startsWith('pairing:')));
+export const RECEIVER_SCOPES = Object.freeze(['openid', 'pairing:manage']);
+export const RECEIVER_REDIRECT_URI = 'thumble-receiver://cloud-auth/callback';
 export const MOBILE_REDIRECT_URI = 'thumble://cloud-auth/callback';
 const instances = new WeakMap();
 const clientSetup = new WeakMap();
@@ -84,14 +87,14 @@ export function identityOptions(env) {
         resources: config.resources.map(identifier => ({ identifier, allowedScopes: [...IDENTITY_SCOPES], accessTokenTtl: 900 })),
         scopes: [...IDENTITY_SCOPES], advertisedMetadata: { scopes_supported: [...CHATGPT_SCOPES] }, grantTypes: ['authorization_code', 'refresh_token'],
         allowDynamicClientRegistration: false, allowUnauthenticatedClientRegistration: false,
-        cachedTrustedClients: new Set(['thumble-mobile', 'thumble-chatgpt']),
+        cachedTrustedClients: new Set(['thumble-mobile', 'thumble-chatgpt', 'thumble-receiver']),
         // Better Auth 1.7.12 infers public-token support from registration or
         // client discovery, overlooking pre-provisioned public clients. This
         // supported registry extension resolves only our fixed stored clients,
         // so discovery advertises `none` without opening any registration.
         extensions: [{ clientDiscovery: {
           id: 'thumble-managed-public-clients',
-          matches: clientId => clientId === 'thumble-mobile' || clientId === 'thumble-chatgpt',
+          matches: clientId => ['thumble-mobile', 'thumble-chatgpt', 'thumble-receiver'].includes(clientId),
           resolve: async (ctx, clientId, existing) => {
             const client = existing ?? await ctx.context.adapter.findOne({ model: 'oauthClient', where: [{ field: 'clientId', value: clientId }] });
             return client?.tokenEndpointAuthMethod === 'none' ? client : null;
@@ -126,14 +129,18 @@ async function hashClientSecret(secret) {
 async function provisionClients(env) {
   const chatgpt = configuredChatgptClient(env);
   const auth = await createIdentity(env), context = await auth.$context, config = identityConfig(env);
-  const clients = [{ clientId: 'thumble-mobile', name: 'Thumble phone', redirectUris: [MOBILE_REDIRECT_URI], applicationType: 'native', tokenEndpointAuthMethod: 'none', requirePKCE: true }];
+  const clients = [
+    { clientId: 'thumble-mobile', name: 'Thumble phone', redirectUris: [MOBILE_REDIRECT_URI], applicationType: 'native', tokenEndpointAuthMethod: 'none', requirePKCE: true },
+    { clientId: 'thumble-receiver', name: 'Thumble Mac pairing', redirectUris: [RECEIVER_REDIRECT_URI], applicationType: 'native', tokenEndpointAuthMethod: 'none', requirePKCE: true },
+  ];
   if (chatgpt) clients.push(chatgpt);
   else await context.adapter.update({ model: 'oauthClient', where: [{ field: 'clientId', value: 'thumble-chatgpt' }], update: { disabled: true, updatedAt: new Date() } });
   // Operator-managed rows with fixed IDs. Adapter serialization follows the
   // installed Better Auth schema; no hidden bootstrap user/session is created.
   for (const client of clients) {
     const { secret, ...registration } = client;
-    const data = { ...registration, clientSecret: secret ? await hashClientSecret(secret) : null, scopes: client.clientId === 'thumble-chatgpt' ? [...CHATGPT_SCOPES] : [...IDENTITY_SCOPES], clientCredentialsScopes: [], grantTypes: ['authorization_code', 'refresh_token'], responseTypes: ['code'], subjectType: 'public', skipConsent: false, disabled: false, updatedAt: new Date() };
+    const scopes = client.clientId === 'thumble-chatgpt' ? CHATGPT_SCOPES : client.clientId === 'thumble-receiver' ? RECEIVER_SCOPES : MOBILE_SCOPES;
+    const data = { ...registration, clientSecret: secret ? await hashClientSecret(secret) : null, scopes: [...scopes], clientCredentialsScopes: [], grantTypes: client.clientId === 'thumble-receiver' ? ['authorization_code'] : ['authorization_code', 'refresh_token'], responseTypes: ['code'], subjectType: 'public', skipConsent: false, disabled: false, updatedAt: new Date() };
     const existing = await context.adapter.findOne({ model: 'oauthClient', where: [{ field: 'clientId', value: client.clientId }] });
     if (!existing) {
       try { await context.adapter.create({ model: 'oauthClient', data: { ...data, createdAt: new Date() } }); }

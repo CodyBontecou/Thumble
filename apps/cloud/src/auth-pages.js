@@ -7,6 +7,7 @@ const descriptions = {
   'profiles:read': 'Read your saved controllers', 'profiles:write': 'Create controller revisions',
   'devices:read': 'Read your registered phones', 'devices:manage': 'Register and disconnect phones',
   'deliveries:write': 'Send saved controller revisions to your phones', 'deliveries:read': 'Read phone delivery receipts',
+  'pairing:read': 'Read pairing QR codes that you explicitly share from your Mac', 'pairing:manage': 'Share this Mac’s temporary pairing QR with your Thumble account for up to ten minutes',
 };
 const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
 const scriptValue = value => JSON.stringify(value).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
@@ -32,7 +33,7 @@ async function post(path, body, fallbackURL) {
     const target = data.url || data.redirect_uri || data.redirectURI || fallbackURL;
     if (!target) throw Error('The authorization service did not provide the next step. Start connecting again.');
     const next = new URL(target, location.origin);
-    if (!['https:', 'http:', 'thumble:'].includes(next.protocol)) throw Error('The authorization service returned an unsupported destination.');
+    if (!['https:', 'http:', 'thumble:', 'thumble-receiver:'].includes(next.protocol)) throw Error('The authorization service returned an unsupported destination.');
     location.assign(next.href);
   } catch (failure) { error.textContent = failure.message; buttons.forEach(button => button.disabled = false); }
 }

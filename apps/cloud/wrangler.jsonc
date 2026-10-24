@@ -5,6 +5,7 @@
   "assets": { "directory": "../../assets/public", "binding": "ASSETS", "run_worker_first": true, "html_handling": "none", "not_found_handling": "none" },
   "compatibility_date": "2026-10-23",
   "compatibility_flags": ["nodejs_compat"],
+  "triggers": { "crons": ["* * * * *"] },
   "observability": { "enabled": true, "head_sampling_rate": 1 },
   "d1_databases": [{ "binding": "DB", "database_name": "thumble-cloud", "database_id": "REPLACE_WITH_D1_DATABASE_ID", "migrations_dir": "migrations" }]
 }
