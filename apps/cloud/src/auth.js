@@ -8,7 +8,7 @@ function configuredUrl(value) {
   return typeof value === 'string' && validServiceUrl(value) ? value : null;
 }
 export function authConfig(env) {
-  if (env.BETTER_AUTH_URL) { const { issuer, resource } = identityConfig(env); return { issuer, audience: resource }; }
+  if (env.BETTER_AUTH_URL) { const { issuer, resource, resources } = identityConfig(env); return { issuer, audience: resource, audiences: resources }; }
   const issuer = configuredUrl(env.OAUTH_ISSUER);
   const audience = typeof env.OAUTH_AUDIENCE === 'string' && env.OAUTH_AUDIENCE.trim() ? env.OAUTH_AUDIENCE : null;
   if (!issuer || !audience || (!env.OAUTH_JWKS_JSON && !configuredUrl(env.OAUTH_JWKS_URL))) {
@@ -37,7 +37,7 @@ export async function sha256(value) {
   return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))), byte => byte.toString(16).padStart(2, '0')).join('');
 }
 export async function authenticateAccount(request, env) {
-  const { issuer, audience } = authConfig(env);
+  const { issuer, audience, audiences } = authConfig(env);
   const token = bearerToken(request);
   try {
     let keys;
@@ -51,7 +51,7 @@ export async function authenticateAccount(request, env) {
       keys = remoteKeys.get(cacheKey);
       if (!keys) { keys = createRemoteJWKSet(new URL(env.OAUTH_JWKS_URL)); if (remoteKeys.size >= 8) remoteKeys.delete(remoteKeys.keys().next().value); remoteKeys.set(cacheKey, keys); }
     }
-    const { payload } = await jwtVerify(token, keys, { issuer, audience, algorithms: ['RS256', 'ES256', 'EdDSA'], requiredClaims: ['sub', 'exp', 'iat'] });
+    const { payload } = await jwtVerify(token, keys, { issuer, audience: audiences ?? audience, algorithms: ['RS256', 'ES256', 'EdDSA'], requiredClaims: ['sub', 'exp', 'iat'] });
     if (typeof payload.sub !== 'string' || !payload.sub.trim() || typeof payload.scope !== 'string') throw new Error('Invalid claims');
     if (env.BETTER_AUTH_URL) await assertActiveIdentity(env, issuer, payload.sub);
     if (env.BETTER_AUTH_URL && (payload.client_id ?? payload.azp) === 'thumble-chatgpt' && payload.scope.split(/\s+/).some(scope => !CHATGPT_SCOPES.includes(scope))) throw new CloudError('forbidden', 'Reconnect ChatGPT with the current controller permissions.', 403);

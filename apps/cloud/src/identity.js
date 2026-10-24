@@ -15,10 +15,14 @@ const clientSetup = new WeakMap();
 export function identityConfig(env) {
   if (!validServiceUrl(env.BETTER_AUTH_URL) || new URL(env.BETTER_AUTH_URL).pathname !== '/') throw new CloudError('not_configured', 'The authentication service URL is not configured.', 503);
   const baseURL = new URL(env.BETTER_AUTH_URL).origin;
+  const resource = env.MCP_RESOURCE_URL ?? `${baseURL}/mcp`;
+  if (!validServiceUrl(resource) || new URL(resource).pathname !== '/mcp') throw new CloudError('not_configured', 'The MCP resource must be a canonical HTTPS /mcp URL.', 503);
+  // Keep the original audience usable while installed phone sessions migrate.
+  const resources = [...new Set([resource, `${baseURL}/mcp`])];
   const providers = [];
   if (env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET) providers.push('google');
   if (env.APPLE_CLIENT_ID && env.APPLE_TEAM_ID && env.APPLE_KEY_ID && env.APPLE_PRIVATE_KEY) providers.push('apple');
-  return { baseURL, issuer: `${baseURL}/api/auth`, resource: `${baseURL}/mcp`, mobileClientId: 'thumble-mobile', providers, scopes: [...IDENTITY_SCOPES] };
+  return { baseURL, issuer: `${baseURL}/api/auth`, resource, resources, mobileClientId: 'thumble-mobile', providers, scopes: [...IDENTITY_SCOPES] };
 }
 
 
@@ -74,7 +78,7 @@ export function identityOptions(env) {
       jwt({ disableSettingJwtHeader: true, jwks: { keyPairConfig: { alg: 'ES256' }, rotationInterval: 30 * 86400 }, jwt: { issuer: config.issuer, audience: config.resource, expirationTime: '15m' } }),
       mcp({
         loginPage: '/sign-in', consentPage: '/consent', resource: config.resource,
-        resources: [{ identifier: config.resource, allowedScopes: [...IDENTITY_SCOPES], accessTokenTtl: 900 }],
+        resources: config.resources.map(identifier => ({ identifier, allowedScopes: [...IDENTITY_SCOPES], accessTokenTtl: 900 })),
         scopes: [...IDENTITY_SCOPES], advertisedMetadata: { scopes_supported: [...CHATGPT_SCOPES] }, grantTypes: ['authorization_code', 'refresh_token'],
         allowDynamicClientRegistration: false, allowUnauthenticatedClientRegistration: false,
         cachedTrustedClients: new Set(['thumble-mobile', 'thumble-chatgpt']),
@@ -134,12 +138,14 @@ async function provisionClients(env) {
     } else {
       await context.adapter.update({ model: 'oauthClient', where: [{ field: 'clientId', value: client.clientId }], update: data });
     }
-    const resource = await context.adapter.findOne({ model: 'oauthResource', where: [{ field: 'identifier', value: config.resource }] });
-    if (!resource) throw new CloudError('not_configured', 'The OAuth resource schema has not been initialized.', 503);
-    const link = await context.adapter.findOne({ model: 'oauthClientResource', where: [{ field: 'clientId', value: client.clientId }, { field: 'resourceId', value: resource.identifier }] });
-    if (!link) {
-      try { await context.adapter.create({ model: 'oauthClientResource', data: { clientId: client.clientId, resourceId: resource.identifier } }); }
-      catch (error) { if (!await context.adapter.findOne({ model: 'oauthClientResource', where: [{ field: 'clientId', value: client.clientId }, { field: 'resourceId', value: resource.identifier }] })) throw error; }
+    for (const identifier of config.resources) {
+      const resource = await context.adapter.findOne({ model: 'oauthResource', where: [{ field: 'identifier', value: identifier }] });
+      if (!resource) throw new CloudError('not_configured', 'The OAuth resource schema has not been initialized.', 503);
+      const link = await context.adapter.findOne({ model: 'oauthClientResource', where: [{ field: 'clientId', value: client.clientId }, { field: 'resourceId', value: resource.identifier }] });
+      if (!link) {
+        try { await context.adapter.create({ model: 'oauthClientResource', data: { clientId: client.clientId, resourceId: resource.identifier } }); }
+        catch (error) { if (!await context.adapter.findOne({ model: 'oauthClientResource', where: [{ field: 'clientId', value: client.clientId }, { field: 'resourceId', value: resource.identifier }] })) throw error; }
+      }
     }
   }
 }

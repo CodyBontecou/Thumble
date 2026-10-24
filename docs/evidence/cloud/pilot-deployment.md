@@ -97,3 +97,7 @@ npx wrangler deploy --config wrangler.pilot.jsonc
 ```
 
 Database creation has already completed. Do not create another database for this pilot or copy fixture keys/tokens into this environment.
+
+### OpenAI submission domain verification — October 23, 2026
+
+Deployed pilot version `bfd58c7b-aef9-4288-909a-4086c36fc916` with `--keep-vars`. Added only the public, exact-path `/.well-known/openai-apps-challenge` asset route for GET/HEAD; writes are rejected and it exposes no account data. OpenAI portal displayed **Domain verified** after its verification request. All 43 cloud tests passed; focused checks confirmed exact text response, write rejection and the missing-binding case. No database migration or OAuth scope change was made.

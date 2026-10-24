@@ -30,8 +30,8 @@ async function fixture(t, overrides = {}) {
     const result = await auth.handler(request(`/api/auth/oauth2/authorize?${params}`));
     return { result, verifier, redirectUri };
   }
-  async function exchange(clientId = 'thumble-mobile') {
-    const { result, verifier, redirectUri } = await authorize(clientId);
+  async function exchange(clientId = 'thumble-mobile', resource = identityConfig(env).resource) {
+    const { result, verifier, redirectUri } = await authorize(clientId, { resource });
     assert.equal(result.status, 302);
     const signedQuery = new URL(result.headers.get('location'), env.BETTER_AUTH_URL).search.slice(1);
     const page = await handleAuthPage(request(`/consent?${signedQuery}`), env);
@@ -39,7 +39,7 @@ async function fixture(t, overrides = {}) {
     const consent = await auth.handler(request('/api/auth/oauth2/consent', { method: 'POST', body: { accept: true, oauth_query: signedQuery } }));
     assert.equal(consent.status, 200); const redirect = new URL((await consent.json()).url);
     assert.equal(redirect.searchParams.get('state'), 'test-state'); assert.equal(redirect.searchParams.get('iss'), `${env.BETTER_AUTH_URL}/api/auth`);
-    const tokenBody = { grant_type: 'authorization_code', client_id: clientId, redirect_uri: redirectUri, code: redirect.searchParams.get('code'), code_verifier: verifier, resource: `${env.BETTER_AUTH_URL}/mcp`, ...(clientId === 'thumble-chatgpt' && env.CHATGPT_CLIENT_SECRET ? { client_secret: env.CHATGPT_CLIENT_SECRET } : {}) };
+    const tokenBody = { grant_type: 'authorization_code', client_id: clientId, redirect_uri: redirectUri, code: redirect.searchParams.get('code'), code_verifier: verifier, resource, ...(clientId === 'thumble-chatgpt' && env.CHATGPT_CLIENT_SECRET ? { client_secret: env.CHATGPT_CLIENT_SECRET } : {}) };
     const tokenResult = await auth.handler(request('/api/auth/oauth2/token', { method: 'POST', body: tokenBody, form: true, authenticated: false, origin: false }));
     assert.equal(tokenResult.status, 200); return { tokens: await tokenResult.json(), tokenBody, signedQuery };
   }
@@ -195,4 +195,25 @@ test('fixed public ChatGPT client uses PKCE without a copied secret and preserve
   const substituted = await f.auth.handler(f.request('/api/auth/oauth2/consent', { method: 'POST', body: { accept: true, oauth_query: changedResource } })); assert.equal(substituted.status, 400);
   assert.throws(() => identityOptions({ ...f.env, BETTER_AUTH_URL: 'https://identity.example.test/path' }), /not configured/);
   await assert.rejects(ensureIdentityClients({ ...f.env, CHATGPT_REDIRECT_URIS: '["https://chatgpt.com.attacker.example/callback"]' }), /exact HTTPS ChatGPT/);
+});
+
+
+test('canonical MCP audience works across hosts while installed pilot clients retain their audience', async t => {
+  const f = await fixture(t, { MCP_RESOURCE_URL: 'https://thumble.example.test/mcp', CHATGPT_CLIENT_SECRET: undefined });
+  const config = getPublicConfig(f.request('/v1/config'), f.env);
+  assert.equal(config.mcpUrl, 'https://thumble.example.test/mcp');
+  assert.equal(config.auth.audience, config.mcpUrl);
+  assert.equal(config.auth.issuer, `${f.env.BETTER_AUTH_URL}/api/auth`);
+  const canonical = await f.exchange('thumble-chatgpt');
+  const legacy = await f.exchange('thumble-mobile', `${f.env.BETTER_AUTH_URL}/mcp`);
+  assert.ok([decodeJwt(canonical.tokens.access_token).aud].flat().includes(config.mcpUrl));
+  assert.ok([decodeJwt(legacy.tokens.access_token).aud].flat().includes(`${f.env.BETTER_AUTH_URL}/mcp`));
+  const principals = await Promise.all([canonical, legacy].map(({ tokens }) => authenticateAccount(new Request(config.mcpUrl, { headers: { authorization: `Bearer ${tokens.access_token}` } }), f.env)));
+  assert.equal(principals[0].accountId, principals[1].accountId);
+  assert.equal(principals[0].scopes.includes('devices:manage'), false);
+  const foreign = await f.authorize('thumble-chatgpt', { resource: 'https://attacker.example/mcp' });
+  assert.ok(foreign.result.status >= 400 || new URL(foreign.result.headers.get('location'), f.env.BETTER_AUTH_URL).searchParams.has('error'));
+  for (const resource of ['http://thumble.example.test/mcp', 'https://thumble.example.test/wrong', 'https://thumble.example.test/mcp?token=bad']) {
+    assert.throws(() => identityConfig({ ...f.env, MCP_RESOURCE_URL: resource }), error => error.code === 'not_configured');
+  }
 });
