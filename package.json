@@ -11,6 +11,7 @@
     "check": "node --check packages/controller/src/index.js",
     "profiles": "node packages/profile-tools/src/server.js",
     "test:addon": "node tools/test-addon.mjs",
+    "test:pairing": "node tools/test-pairing-code.mjs",
     "test:chat": "mkdir -p build/chat-tests && xcrun swiftc -swift-version 5 -module-cache-path build/chat-tests/cache apps/receiver/Sources/ChatDelivery.swift tools/chat-tests.swift -o build/chat-tests/validate && build/chat-tests/validate",
     "test:access": "mkdir -p build/access-check && xcrun swiftc -swift-version 5 -module-cache-path build/monetization-swift-cache apps/receiver/Sources/AccessSession.swift tools/access-tests/main.swift -o build/access-check/tests && build/access-check/tests",
     "test:cloud": "node --test apps/cloud/test/*.test.js tools/test/cloud-*.test.js",

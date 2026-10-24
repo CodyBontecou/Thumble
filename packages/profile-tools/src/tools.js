@@ -1,4 +1,5 @@
 import { readAddonExport } from './addon-export.js';
+import { showPairingCode } from './pairing-code.js';
 import { mirrorConsolePort } from './consoleport.js';
 import { importCharacter, getCharacter, listCharacters, proposeBindings, getBindingPlan, importBindingResult, syncBindingLabels, utilityActions } from './character-tools.js';
 import { profileSchema, validateProfile } from '../../controller/src/index.js';
@@ -6,6 +7,7 @@ const id = { type: 'string', pattern: '^[a-z0-9][a-z0-9-]{0,63}$' };
 const revision = { type: 'integer', minimum: 0, maximum: Number.MAX_SAFE_INTEGER };
 const schema = (properties = {}, required = Object.keys(properties)) => ({ type: 'object', properties, required, additionalProperties: false });
 export const profileTools = [
+  { name: 'show_pairing_code', description: 'Return the running local receiver’s current single-use QR code as an image. Display it inline in chat so the player can scan it with Thumble on the same Wi-Fi. Expires within two minutes; call again for the current image. Does not open a window, launch the receiver, or disconnect a paired phone. The image is a temporary pairing credential; do not publish or upload it.', inputSchema: schema(), annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false } },
   { name: 'agent_connection_check', description: 'Verify this agent reaches the same profile store as the paired phone. Echo the check code shown in Connect your AI. Free; changes no layout or game bindings.', inputSchema: schema({ code: { type: 'string', pattern: '^[a-f0-9]{12}$' } }) },
   { name: 'profile_schema', description: 'Get the controller profile JSON schema and rules. Tools configure layouts only; never send gameplay input.', inputSchema: schema() },
   { name: 'list_profiles', description: 'List saved profiles, revisions and the active layout. Read before editing.', inputSchema: schema() },
@@ -29,6 +31,7 @@ export async function callProfileTool(store, name, args = {}) {
   if (!tool) throw Error(`Unknown tool: ${name}`);
   if (!args || typeof args !== 'object' || Array.isArray(args) || Object.keys(args).some(key => !Object.hasOwn(tool.inputSchema.properties, key)) || tool.inputSchema.required.some(key => !Object.hasOwn(args, key))) throw Error('Invalid tool arguments');
   switch (name) {
+    case 'show_pairing_code': return showPairingCode(store);
     case 'mirror_consoleport': return mirrorConsolePort(store,args);
     case 'read_addon_export': return readAddonExport(store, args.savedVariablesPath, args.exportKind);
     case 'list_characters': return listCharacters(store);

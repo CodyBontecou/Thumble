@@ -27,6 +27,7 @@ async function dispatch(request) {
   if (request.method === 'tools/call') {
     try {
       const result = await callProfileTool(store, request.params?.name, request.params?.arguments);
+      if (request.params?.name === 'show_pairing_code') return result;
       return { content: [{ type: 'text', text: JSON.stringify(result) }] };
     } catch (error) { return { isError: true, content: [{ type: 'text', text: error.message }] }; }
   }

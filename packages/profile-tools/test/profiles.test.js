@@ -55,7 +55,7 @@ test('delivery status requires a fresh phone acknowledgement for the exact activ
 });
 test('tool surface has no input execution tools, rejects extra arguments, and validates semantics', async t => {
   const store = await fixture(t);
-  assert.deepEqual(profileTools.map(tool => tool.name), ['agent_connection_check', 'profile_schema', 'list_profiles', 'get_profile', 'validate_profile', 'save_profile', 'activate_profile', 'controller_status', 'read_addon_export', 'list_characters', 'mirror_consoleport', 'import_character', 'get_character', 'propose_bindings', 'get_binding_plan', 'import_binding_result', 'sync_binding_labels']);
+  assert.deepEqual(profileTools.map(tool => tool.name), ['show_pairing_code', 'agent_connection_check', 'profile_schema', 'list_profiles', 'get_profile', 'validate_profile', 'save_profile', 'activate_profile', 'controller_status', 'read_addon_export', 'list_characters', 'mirror_consoleport', 'import_character', 'get_character', 'propose_bindings', 'get_binding_plan', 'import_binding_result', 'sync_binding_labels']);
   await assert.rejects(callProfileTool(store, 'save_profile', { profile: warrior(), expectedRevision: 0, execute: true }), /Invalid tool arguments/);
   await assert.rejects(callProfileTool(store, 'press_button', {}), /Unknown tool/);
   const invalid = warrior(); invalid.mappings[0].outputs = ['a'];

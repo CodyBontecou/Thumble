@@ -33,7 +33,8 @@ import CoreImage
         receiver.onInvitation = { [weak self] value in DispatchQueue.main.async { self?.updateInvitation(value) } }
         NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(reset), name: NSWorkspace.willSleepNotification, object: nil)
         do { try receiver.start() } catch { label.stringValue = "Receiver could not start: \(error)" }
-        showPairing()
+        // Agents can display the code in chat; the menu still opens this window on demand.
+        if ProcessInfo.processInfo.arguments.contains("--show-pairing") { showPairing() }
     }
     private func updateInvitation(_ value: String) {
         invitation = value

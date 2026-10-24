@@ -94,7 +94,7 @@ final class Receiver {
         listener.stateUpdateHandler = { [weak self] phase in
             guard let self else { return }
             if case .ready = phase, let port = listener.port { self.port = port.rawValue; self.newInvitation(); self.status("Ready · scan to connect") }
-            if case .failed(let error) = phase { self.release(); self.status("Network error: \(error.localizedDescription)") }
+            if case .failed(let error) = phase { self.port = 0; self.token = ""; self.release(); self.profiles.updatePairingCode(""); self.status("Network error: \(error.localizedDescription)") }
         }
         listener.newConnectionHandler = { [weak self] connection in self?.accept(connection) }
         profiles.onActivation = { [weak self] revision, profile in
@@ -127,8 +127,9 @@ final class Receiver {
         self.timer = timer; timer.resume()
     }
     func stop() {
-        profiles.stop(); access.stop()
+        access.stop()
         queue.sync { if let activity = self.activity { ProcessInfo.processInfo.endActivity(activity); self.activity = nil }; self.release(); self.datagram?.stop(); self.datagram = nil; self.timer?.cancel(); self.listener?.cancel(); self.clients.values.forEach { $0.cancel() }; self.clients.removeAll(); if let gamepad = self.gamepad { tapping_gamepad_destroy(gamepad); self.gamepad = nil } }
+        profiles.stop()
     }
     func resetPairing() { queue.async { self.disconnect("Ready · scan to connect"); self.newInvitation() } }
     private func newInvitation() {
@@ -142,7 +143,9 @@ final class Receiver {
         let payload: [String: Any] = ["v": 1, "url": "wss://\(address):\(port)/controller", "pin": fingerprint, "token": token, "expires": Int(expiry)]
         guard let data = try? JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys]) else { return }
         let encoded = data.base64EncodedString().replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "=", with: "")
-        onInvitation?("thumble://pair?data=\(encoded)")
+        let invitation = "thumble://pair?data=\(encoded)"
+        profiles.updatePairingCode(invitation, expires: expiry)
+        onInvitation?(invitation)
     }
     private func accept(_ connection: NWConnection) {
         guard clients.count < 4 else { connection.cancel(); return }
@@ -181,6 +184,7 @@ final class Receiver {
                   let phoneID = message["phoneId"] as? String, UUID(uuidString: phoneID) != nil,
                   Date().timeIntervalSince1970 <= expiry, message["token"] as? String == token else { connection.cancel(); return }
             token = "" // Single-use pairing credential.
+            profiles.updatePairingCode("")
             activity = ProcessInfo.processInfo.beginActivity(options: [.userInitiatedAllowingIdleSystemSleep, .latencyCritical], reason: "Receive real-time phone controller input")
             chatResults.removeAll(); chatBusy = false; profileRequestBusy = false
             accessInfo = [:]; profileRevision = 0

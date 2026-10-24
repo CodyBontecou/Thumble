@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 
 /// Disk traffic stays off the input/watchdog queue. Agents only write declarative data.
 final class ProfileBridge {
@@ -7,6 +8,7 @@ final class ProfileBridge {
     private var lastModification: Date?
     private var lastPayload: Data?
     private var ticks = 0
+    private var pairing: [String: Any]?
     private let directory: URL = {
         if let path = ProcessInfo.processInfo.environment["TAPPING_PROFILE_DIR"] { return URL(fileURLWithPath: path, isDirectory: true) }
         return FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/Tapping/profiles", isDirectory: true)
@@ -20,10 +22,43 @@ final class ProfileBridge {
         timer.setEventHandler { [weak self] in self?.poll() }
         self.timer = timer; timer.resume()
     }
-    func stop() { queue.sync { timer?.cancel(); timer = nil } }
+    func stop() { queue.sync { timer?.cancel(); timer = nil; pairing = nil; removePairingCode() } }
+    func updatePairingCode(_ invitation: String, expires: Double = 0) {
+        queue.async { [self] in
+            pairing = nil
+            removePairingCode()
+            guard !invitation.isEmpty else { return }
+            do {
+                pairing = ["version": 1, "expiresAt": Int(expires * 1000),
+                           "png": try PairingCode.png(invitation).base64EncodedString()]
+                publishPairingCode()
+            } catch { onError?("Pairing image could not be generated.") }
+        }
+    }
+    private func removePairingCode() {
+        try? FileManager.default.removeItem(at: directory.appendingPathComponent("pairing-code.json"))
+    }
+    private func publishPairingCode() {
+        guard var payload = pairing else { return }
+        let now = Date().timeIntervalSince1970 * 1000
+        guard let expires = payload["expiresAt"] as? Int, Double(expires) > now else {
+            pairing = nil; removePairingCode(); return
+        }
+        payload["updatedAt"] = Int(now)
+        let temporary = directory.appendingPathComponent("pairing-\(UUID().uuidString).tmp")
+        defer { try? FileManager.default.removeItem(at: temporary) }
+        do {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+            let data = try JSONSerialization.data(withJSONObject: payload)
+            guard FileManager.default.createFile(atPath: temporary.path, contents: data, attributes: [.posixPermissions: 0o600]),
+                  rename(temporary.path, directory.appendingPathComponent("pairing-code.json").path) == 0 else {
+                throw BridgeError.invalidStore
+            }
+        } catch { pairing = nil; removePairingCode(); onError?("Pairing image could not be saved privately.") }
+    }
     private func poll() {
         ticks += 1
-        if ticks % 4 == 0 { onStatusTick?() }
+        if ticks % 4 == 0 { onStatusTick?(); publishPairingCode() }
         let path = directory.appendingPathComponent("store.json")
         do {
             let attributes = try FileManager.default.attributesOfItem(atPath: path.path)
