@@ -1,0 +1,28 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "thumble-cloud-pilot",
+  "account_id": "e4265f322e6380ee832b83ad45e3e8c0",
+  "main": "src/worker.js",
+  "assets": { "directory": "../../assets/public", "binding": "ASSETS", "run_worker_first": true, "html_handling": "none", "not_found_handling": "none" },
+  "compatibility_date": "2026-10-23",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "workers_dev": true,
+  "vars": {
+    "BETTER_AUTH_URL": "https://thumble-cloud-pilot.costream.workers.dev",
+    "CHATGPT_REDIRECT_URIS": "[\"https://chatgpt.com/connector_platform_oauth_redirect\"]"
+  },
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "thumble-cloud-pilot",
+      "database_id": "67be3503-2cee-4303-a6d2-dcc396ce2e68",
+      "migrations_dir": "migrations"
+    }
+  ]
+}

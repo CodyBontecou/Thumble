@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import { Buffer } from 'node:buffer';
 import { createSign } from 'node:crypto';
 import { PRODUCT_ID } from './grants.js';
 
@@ -32,18 +33,50 @@ export function googleVerifier({ packageName, credentials, fetcher = fetch }) {
   };
 }
 export async function appleVerifier(env) {
-  const { AppStoreServerAPIClient, SignedDataVerifier, Environment } = await import('@apple/app-store-server-library');
-  const environment = env.APPLE_ENVIRONMENT === 'Sandbox' ? Environment.SANDBOX : Environment.PRODUCTION;
   const roots = await Promise.all(env.APPLE_ROOT_CERTIFICATES.split(',').map(path => readFile(path.trim())));
-  const verifier = new SignedDataVerifier(roots, true, environment, env.APPLE_BUNDLE_ID, environment === Environment.PRODUCTION ? Number(env.APPLE_APP_ID) : undefined);
-  const client = new AppStoreServerAPIClient(await readFile(env.APPLE_PRIVATE_KEY_FILE, 'utf8'), env.APPLE_KEY_ID, env.APPLE_ISSUER_ID, env.APPLE_BUNDLE_ID, environment);
-  return async proof => {
-    // Verify the caller's JWS before using its transaction ID in a store request.
-    const transaction = await verifier.verifyAndDecodeTransaction(proof);
-    if (transaction.productId !== PRODUCT_ID || !transaction.transactionId) throw Error('Wrong product');
-    const latest = await client.getTransactionInfo(transaction.transactionId);
-    const current = await verifier.verifyAndDecodeTransaction(latest.signedTransactionInfo);
-    if (current.productId !== PRODUCT_ID || current.type !== 'Non-Consumable') throw Error('Wrong product type');
-    return !current.revocationDate;
-  };
+  return createAppleVerifier({
+    environment: env.APPLE_ENVIRONMENT,
+    roots,
+    bundleId: env.APPLE_BUNDLE_ID,
+    appId: env.APPLE_APP_ID,
+    keyId: env.APPLE_KEY_ID,
+    issuerId: env.APPLE_ISSUER_ID,
+    signingKey: await readFile(env.APPLE_PRIVATE_KEY_FILE, 'utf8'),
+    allowSandboxReview: env.APPLE_REVIEW_SANDBOX_ENABLED === 'true',
+  });
+}
+
+// Accept secret bindings directly in hosted runtimes; never write keys to public assets.
+export async function createAppleVerifier(config) {
+  const { AppStoreServerAPIClient, SignedDataVerifier, Environment } = await import('@apple/app-store-server-library');
+  if (!['Sandbox', 'Production'].includes(config.environment)) throw Error('Invalid Apple environment');
+  if (!config.roots?.length || !config.signingKey || !config.keyId || !config.issuerId || !config.bundleId) throw Error('Apple verification is not configured');
+  const environment = config.environment === 'Sandbox' ? Environment.SANDBOX : Environment.PRODUCTION;
+  if (environment === Environment.PRODUCTION && (!Number.isSafeInteger(Number(config.appId)) || Number(config.appId) <= 0)) throw Error('Invalid Apple app ID');
+  const forEnvironment = value => ({
+    verifier: new SignedDataVerifier(config.roots, true, value, config.bundleId, value === Environment.PRODUCTION ? Number(config.appId) : undefined),
+    client: new AppStoreServerAPIClient(config.signingKey, config.keyId, config.issuerId, config.bundleId, value),
+  });
+  const primary = forEnvironment(environment);
+  const review = environment === Environment.PRODUCTION && config.allowSandboxReview === true ? forEnvironment(Environment.SANDBOX) : null;
+  return proof => verifyAppleTransaction(proof, primary, review);
+}
+
+export async function verifyAppleTransaction(proof, primary, review = null) {
+  const { VerificationException, VerificationStatus } = await import('@apple/app-store-server-library');
+  let selected = primary, transaction;
+  try {
+    // Apple verifies the certificate chain, signature and bundle before environment.
+    transaction = await primary.verifier.verifyAndDecodeTransaction(proof);
+  } catch (error) {
+    if (!review || !(error instanceof VerificationException) || error.status !== VerificationStatus.INVALID_ENVIRONMENT) throw error;
+    selected = review;
+    // Sandbox is an explicitly configured review path, never a signature bypass.
+    transaction = await review.verifier.verifyAndDecodeTransaction(proof);
+  }
+  if (transaction.productId !== PRODUCT_ID || !transaction.transactionId) throw Error('Wrong product');
+  const latest = await selected.client.getTransactionInfo(transaction.transactionId);
+  const current = await selected.verifier.verifyAndDecodeTransaction(latest.signedTransactionInfo);
+  if (current.productId !== PRODUCT_ID || current.type !== 'Non-Consumable' || current.transactionId !== transaction.transactionId) throw Error('Wrong product or transaction');
+  return !current.revocationDate;
 }

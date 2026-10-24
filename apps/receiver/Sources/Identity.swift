@@ -17,7 +17,7 @@ struct ReceiverIdentity {
             try process.run(); process.waitUntilExit()
             guard process.terminationStatus == 0 else { throw ReceiverError.message("Could not create the local TLS identity.") }
         }
-        try openssl(["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", "key.pem", "-out", "cert.pem", "-days", "365", "-subj", "/CN=Tapping Local Receiver"])
+        try openssl(["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", "key.pem", "-out", "cert.pem", "-days", "365", "-subj", "/CN=Thumble Local Receiver"])
         let password = UUID().uuidString
         try openssl(["pkcs12", "-export", "-inkey", "key.pem", "-in", "cert.pem", "-out", "identity.p12", "-passout", "pass:\(password)", "-keypbe", "PBE-SHA1-3DES", "-certpbe", "PBE-SHA1-3DES", "-macalg", "sha1"])
         let data = try Data(contentsOf: directory.appendingPathComponent("identity.p12"))

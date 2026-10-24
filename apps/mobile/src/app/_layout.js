@@ -7,10 +7,15 @@ const modal = { presentation: /** @type {const} */ ('modal'), headerShown: true,
 export default function RootLayout() {
   return <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
     <Stack.Screen name="index" options={{ gestureEnabled: false, fullScreenGestureEnabled: false }} />
+    <Stack.Screen name="welcome" options={{ animation: 'fade' }} />
     <Stack.Screen name="onboarding" options={{ animation: 'fade' }} />
     <Stack.Screen name="controller-menu" options={{ presentation: 'transparentModal', animation: 'fade', contentStyle: { backgroundColor: 'transparent' } }} />
+    <Stack.Screen name="setup-test" options={{ ...modal, title: 'Test controls' }} />
+    <Stack.Screen name="agent-setup" options={{ ...modal, title: 'Connect your AI' }} />
+    <Stack.Screen name="first-layout" options={{ ...modal, title: 'Your first layout' }} />
     <Stack.Screen name="calibration" options={{ ...modal, title: 'Stick calibration' }} />
     <Stack.Screen name="pro" options={{ ...modal, title: 'Thumble Pro' }} />
+    <Stack.Screen name="cloud" options={{ ...modal, title: 'Cloud controllers' }} />
     <Stack.Screen name="profiles" options={{ ...modal, title: 'Profiles' }} />
     <Stack.Screen name="pair" options={{ ...modal, title: 'Connect Mac' }} />
     <Stack.Screen name="wow-setup" options={{ ...modal, title: 'WoW setup' }} />

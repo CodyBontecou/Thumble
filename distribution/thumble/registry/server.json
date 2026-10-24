@@ -1,0 +1,13 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.CodyBontecou/thumble",
+  "title": "Thumble",
+  "description": "Create, save, and send custom controller layouts to your Thumble phone for practice.",
+  "version": "0.1.0",
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://thumble-cloud-pilot.costream.workers.dev/mcp"
+    }
+  ]
+}

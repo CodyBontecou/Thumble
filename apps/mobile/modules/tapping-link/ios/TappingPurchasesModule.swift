@@ -4,7 +4,7 @@ import Security
 
 // StoreKit owns the payment UI and verification. No purchase secrets enter JS logs.
 public final class TappingPurchasesModule: Module {
-    private let productID = "tapping_pro_lifetime"
+    private let productID = "thumble_pro_lifetime"
     private var updates: Task<Void, Never>?
     private var buying = false
     public func definition() -> ModuleDefinition {
@@ -62,6 +62,12 @@ public final class TappingPurchasesModule: Module {
         }
         AsyncFunction("onboardingComplete") { () -> Bool in UserDefaults.standard.bool(forKey: "tapping.onboarding.v1") }
         AsyncFunction("completeOnboarding") { UserDefaults.standard.set(true, forKey: "tapping.onboarding.v1") }
+        AsyncFunction("getOnboardingProgress") { () -> String in UserDefaults.standard.string(forKey: "tapping.onboarding.v2") ?? "" }
+        AsyncFunction("saveOnboardingProgress") { (json: String) in
+            guard json.utf8.count <= 8192, let data = json.data(using: .utf8),
+                  (try? JSONSerialization.jsonObject(with: data)) is [String: Any] else { throw PurchaseError.message("Setup could not be saved.") }
+            UserDefaults.standard.set(json, forKey: "tapping.onboarding.v2")
+        }
         AsyncFunction("getCalibration") { () -> String in UserDefaults.standard.string(forKey: "tapping.calibration") ?? "" }
         AsyncFunction("saveCalibration") { (json: String) in
             guard json.utf8.count <= 4096 else { throw PurchaseError.message("Invalid calibration.") }

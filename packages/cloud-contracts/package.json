@@ -1,0 +1,8 @@
+{
+  "name": "@tapping/cloud-contracts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.js",
+  "dependencies": { "@tapping/controller": "0.1.0" }
+}

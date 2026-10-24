@@ -13,7 +13,7 @@ RunLoop.main.run(until: Date().addingTimeInterval(2))
 
 let devices = (IOHIDManagerCopyDevices(manager) as? Set<IOHIDDevice>) ?? []
 let observations: [[String: Any]] = devices.filter {
-    (IOHIDDeviceGetProperty($0, kIOHIDProductKey as CFString) as? String) == "Tapping HID capability probe"
+    (IOHIDDeviceGetProperty($0, kIOHIDProductKey as CFString) as? String) == "Thumble HID capability probe"
 }.map { device in
     [
         "product": IOHIDDeviceGetProperty(device, kIOHIDProductKey as CFString) ?? "unknown" as CFString,

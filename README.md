@@ -1,4 +1,4 @@
-# Tapping
+# Thumble
 
 A phone gamepad for World of Warcraft: Forever and ConsolePort. Targets iOS and Android, with a minimal macOS menu-bar receiver over local Wi-Fi. Public launch target: November 4, 2026.
 
@@ -25,7 +25,7 @@ npm run start --workspace @tapping/mobile
 npm run ios --workspace @tapping/mobile -- --device SIMULATOR_UDID
 ```
 
-Metro uses port 8088. The Android build command is `npm run android --workspace @tapping/mobile`. Native projects are generated with Expo Prebuild. Phone builds use isolated development identifiers (`com.codybontecou.PocketPad.iOS.tappingdev` and `com.thumble.android.tappingdev`); Mac signing uses the approved Thumble capability. The old repository is not a runtime dependency.
+Metro uses port 8088. The Android build command is `npm run android --workspace @tapping/mobile`. Native projects are generated with Expo Prebuild. Production identifiers are `com.thumble.ios` (iOS), `com.thumble.android` (Android), and `com.codybontecou.PocketPadMac` (Mac). The Mac keeps its existing identifier to reuse Apple’s approved production virtual HID capability while displaying Thumble Receiver. Public distribution requires a matching Developer ID profile and signing certificate. The old repository is not a runtime dependency.
 
 For bundled hardware testing without Metro, run `npx expo run:ios --configuration Release --device IPHONE_UDID --no-bundler` or `npx expo run:android --variant release --device ANDROID_SERIAL --no-bundler` from `apps/mobile`. Configure `ANDROID_HOME` to the installed SDK. Build the Mac receiver using [its instructions](apps/receiver/README.md), then open Connect Mac on the phone.
 
@@ -61,6 +61,7 @@ The local MCP server calls the same validation and profile API. Agents can read,
 
 ## Design and launch gates
 
+- [Cloud controller pilot: contracts, configuration and QA](docs/cloud-pilot.md)
 - [Architecture and implementation sequence](docs/architecture.md)
 - [WoW and ConsolePort research](docs/research/wow-consoleport.md)
 - [Onboarding and acceptance criteria](docs/onboarding.md)

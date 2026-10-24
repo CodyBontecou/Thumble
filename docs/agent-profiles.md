@@ -1,10 +1,10 @@
 # Agent-designed controller profiles
 
-The local MCP server exposes configuration only: `profile_schema`, `list_profiles`, `get_profile`, `validate_profile`, `save_profile`, `activate_profile`, and `controller_status`. There is no tool for pressing a button, moving a stick, running a macro, or calling into the game. The agent creates declarative JSON; the human supplies all gameplay input.
+The local MCP server exposes configuration only: `profile_schema`, `list_profiles`, `get_profile`, `validate_profile`, `save_profile`, `activate_profile`, `controller_status`, and `agent_connection_check`. There is no tool for pressing a button, moving a stick, running a macro, or calling into the game. The agent creates declarative JSON; the human supplies all gameplay input.
 
 ## Recording workflow
 
-1. Run the newly built Tapping Receiver and open the updated app on the phone. Both must be on the same Wi-Fi. Pair with the receiver's QR code or pairing link.
+1. Run the newly built Thumble Receiver and open the updated app on the phone. Both must be on the same Wi-Fi. Pair with the receiver's QR code or pairing link.
 2. Connect the MCP server below to your agent. This machine already has a Codex registration named `tapping-profiles`.
 3. Ask: “Make me a Warrior layout. Big Charge and Execute buttons under my right thumb, movement on the left, a smaller camera stick, and Chat up top. Save it and activate it on my paired phone.”
 4. The agent reads the schema and revisions, validates a whole candidate, saves it, activates that saved revision, and checks `controller_status`. It can claim delivery only when status says `acknowledged`. If the phone is offline, activation is queued until it reconnects.
@@ -70,7 +70,7 @@ The opt-in native integration test uses a private invitation export and an isola
 ```sh
 TAPPING_PROFILE_DIR="$PWD/build/profile-qa" \
 TAPPING_INVITATION_FILE=/private/tmp/tapping-profile-qa-invitation \
-  'build/Tapping Receiver.app/Contents/MacOS/tapping-receiver'
+  'build/Thumble Receiver.app/Contents/MacOS/thumble-receiver'
 # In another terminal:
 node tools/test-profile-receiver.mjs /private/tmp/tapping-profile-qa-invitation "$PWD/build/profile-qa"
 ```
@@ -84,3 +84,9 @@ Open **Thumble icon → Profiles** while connected to the Mac. The list comes fr
 The paired WebSocket exposes `profiles-list` and `profile-select`; the phone cannot submit profile bodies. Selection includes the listed profile revision and expected activation revision. The receiver's `ProfileCatalog` uses the agent store's `write.lock` directory and atomic file replacement, rejects stale revisions, and keeps disk operations off the input/watchdog queue. A changed list shows an error with Refresh; disconnected phones and older receivers show a clear connection/update message. No separate offline profile library is created.
 
 The native bridge regression is `node tools/test-profile-catalog.mjs` (macOS with Xcode CLI tools). It checks the shared lock, conflicting revisions, unknown IDs, boolean revision rejection and Node reading a Swift-written activation. `npm test` also covers correlated list replies, invalid catalogs, disconnect cancellation and selection waiting for render plus neutral acknowledgement.
+
+## Check the agent from the phone
+
+Open **Thumble menu → Connect your AI**, share the request with your Mac agent, and have it call `agent_connection_check` with the exact displayed code. Then tap **Check connection** on the phone within ten minutes. The receiver returns the fresh marker through the authenticated profile catalog, proving that the agent and receiver share the profile store. The tool uses the existing atomic transaction/lock and changes no profile, activation or bindings. A recorded tool response alone is not phone confirmation. Refresh MCP after updating the server to discover the new tool.
+
+**Getting started → Make your first layout** prepares a persistent request with a unique profile ID and preferences. Share it with the same agent, then check layout delivery on the phone. Layout generation uses the existing profile and character tools; the phone does not embed an LLM or send character data to a new service.

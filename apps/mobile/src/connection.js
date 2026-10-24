@@ -10,7 +10,7 @@ export const connection = new Connection(native, { beforeConnect: async () => {
   }
   connection.phoneId = await purchases.installationId();
   connection.demoUsed = await purchases.demoUsed();
-  if (AppState.currentState !== 'active') throw new Error('Open Tapping before connecting to your Mac.');
+  if (AppState.currentState !== 'active') throw new Error('Open Thumble before connecting to your Mac.');
 } });
 AppState.addEventListener('change', phase => {
   // Permission dialogs briefly make iOS inactive. The controller releases held

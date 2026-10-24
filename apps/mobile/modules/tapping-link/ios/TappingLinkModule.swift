@@ -76,7 +76,7 @@ private final class PinnedSocket: NSObject, URLSessionWebSocketDelegate, @unchec
     }
     func send(_ text: String) -> Bool {
         lock.lock()
-        guard !closed, pending < 8, text.utf8.count <= 4096, let task else { lock.unlock(); notify("status", "Connection stalled"); close(); return false }
+        guard !closed, pending < 8, text.utf8.count <= 65536, let task else { lock.unlock(); notify("status", "Connection stalled"); close(); return false }
         pending += 1; lock.unlock()
         task.send(.string(text)) { [weak self] error in
             guard let self else { return }

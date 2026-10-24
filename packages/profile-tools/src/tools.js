@@ -6,6 +6,7 @@ const id = { type: 'string', pattern: '^[a-z0-9][a-z0-9-]{0,63}$' };
 const revision = { type: 'integer', minimum: 0, maximum: Number.MAX_SAFE_INTEGER };
 const schema = (properties = {}, required = Object.keys(properties)) => ({ type: 'object', properties, required, additionalProperties: false });
 export const profileTools = [
+  { name: 'agent_connection_check', description: 'Verify this agent reaches the same profile store as the paired phone. Echo the check code shown in Connect your AI. Free; changes no layout or game bindings.', inputSchema: schema({ code: { type: 'string', pattern: '^[a-f0-9]{12}$' } }) },
   { name: 'profile_schema', description: 'Get the controller profile JSON schema and rules. Tools configure layouts only; never send gameplay input.', inputSchema: schema() },
   { name: 'list_profiles', description: 'List saved profiles, revisions and the active layout. Read before editing.', inputSchema: schema() },
   { name: 'get_profile', description: 'Read a saved profile and its revision before changing it.', inputSchema: schema({ id }) },
@@ -37,6 +38,13 @@ export async function callProfileTool(store, name, args = {}) {
     case 'get_binding_plan': return getBindingPlan(store, args.planId);
     case 'import_binding_result': return importBindingResult(store, args.exportText);
     case 'sync_binding_labels': return syncBindingLabels(store, args.planId, args.expectedRevision);
+    case 'agent_connection_check': {
+      if (typeof args.code !== 'string' || !/^[a-f0-9]{12}$/.test(args.code)) throw Error('Use the 12-character check code shown on the phone.');
+      return store.transaction(data => {
+        data.agentConnection = { code: args.code, checkedAt: Date.now() };
+        return { code: args.code, status: 'recorded', note: 'Tap Check connection on the paired phone. Only a matching phone result confirms the receiver uses this store. No profile or game bindings changed.' };
+      });
+    }
     case 'profile_schema': return profileSchema;
     case 'list_profiles': return store.list();
     case 'get_profile': return store.get(args.id);

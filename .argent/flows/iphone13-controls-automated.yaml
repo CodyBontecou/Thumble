@@ -1,0 +1,237 @@
+steps:
+  - await:
+      visible:
+        text: Thumble menu
+  - await: { idle: true }
+  - tap:
+      text: Jump
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Down
+          x: 0.897
+          y: 0.392
+        - type: Up
+          x: 0.897
+          y: 0.392
+          delayMs: 300
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Down
+          x: 0.7205
+          y: 0.392
+        - type: Up
+          x: 0.7205
+          y: 0.392
+          delayMs: 300
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Down
+          x: 0.81
+          y: 0.153
+        - type: Up
+          x: 0.81
+          y: 0.153
+          delayMs: 300
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Down
+          x: 0.4465
+          y: 0.153
+        - type: Up
+          x: 0.4465
+          y: 0.153
+          delayMs: 300
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Down
+          x: 0.5525
+          y: 0.153
+        - type: Up
+          x: 0.5525
+          y: 0.153
+          delayMs: 300
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Down
+          x: 0.3855
+          y: 0.41
+        - type: Up
+          x: 0.3855
+          y: 0.41
+          delayMs: 300
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Down
+          x: 0.6145
+          y: 0.41
+        - type: Up
+          x: 0.6145
+          y: 0.41
+          delayMs: 300
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Down
+          x: 0.19
+          y: 0.153
+        - type: Up
+          x: 0.19
+          y: 0.153
+          delayMs: 300
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Down
+          x: 0.104
+          y: 0.392
+        - type: Up
+          x: 0.104
+          y: 0.392
+          delayMs: 300
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Down
+          x: 0.2795
+          y: 0.392
+        - type: Up
+          x: 0.2795
+          y: 0.392
+          delayMs: 300
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Down
+          x: 0.19
+          y: 0.61
+        - type: Up
+          x: 0.19
+          y: 0.61
+          delayMs: 300
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Down
+          x: 0.359
+          y: 0.7345
+        - type: Move
+          x: 0.359
+          y: 0.7345
+          delayMs: 100
+        - type: Up
+          x: 0.259
+          y: 0.7345
+          delayMs: 350
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Down
+          x: 0.359
+          y: 0.7345
+        - type: Move
+          x: 0.359
+          y: 0.7345
+          delayMs: 100
+        - type: Up
+          x: 0.45899999999999996
+          y: 0.7345
+          delayMs: 350
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Down
+          x: 0.359
+          y: 0.7345
+        - type: Move
+          x: 0.359
+          y: 0.7345
+          delayMs: 100
+        - type: Up
+          x: 0.359
+          y: 0.5345
+          delayMs: 350
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Down
+          x: 0.359
+          y: 0.7345
+        - type: Move
+          x: 0.359
+          y: 0.7345
+          delayMs: 100
+        - type: Up
+          x: 0.359
+          y: 0.9345000000000001
+          delayMs: 350
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Down
+          x: 0.641
+          y: 0.7345
+        - type: Move
+          x: 0.641
+          y: 0.7345
+          delayMs: 100
+        - type: Up
+          x: 0.541
+          y: 0.7345
+          delayMs: 350
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Down
+          x: 0.641
+          y: 0.7345
+        - type: Move
+          x: 0.641
+          y: 0.7345
+          delayMs: 100
+        - type: Up
+          x: 0.741
+          y: 0.7345
+          delayMs: 350
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Down
+          x: 0.641
+          y: 0.7345
+        - type: Move
+          x: 0.641
+          y: 0.7345
+          delayMs: 100
+        - type: Up
+          x: 0.641
+          y: 0.5345
+          delayMs: 350
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Down
+          x: 0.641
+          y: 0.7345
+        - type: Move
+          x: 0.641
+          y: 0.7345
+          delayMs: 100
+        - type: Up
+          x: 0.641
+          y: 0.9345000000000001
+          delayMs: 350
+  - await:
+      visible:
+        text: Jump
+executionPrerequisite: Physical iPhone foregrounded on controller;
+  consoleport-bonteq activation 6/profile revision 5; current signed receiver
+  connected and demo running; WoW closed. Independent gamepad observer running.
+  Fixed-profile touch coordinates are intentional for duplicate spell labels and
+  stick drags.

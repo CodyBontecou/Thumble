@@ -1,0 +1,238 @@
+{
+  "hid-first-pass": {
+    "pass": true,
+    "events": 610,
+    "channels": [
+      {
+        "page": 1,
+        "usage": 48,
+        "min": -32768,
+        "max": 32767,
+        "neutral": true
+      },
+      {
+        "page": 1,
+        "usage": 49,
+        "min": -32768,
+        "max": 32767,
+        "neutral": true
+      },
+      {
+        "page": 1,
+        "usage": 51,
+        "min": -32768,
+        "max": 32767,
+        "neutral": true
+      },
+      {
+        "page": 1,
+        "usage": 52,
+        "min": -32768,
+        "max": 32767,
+        "neutral": true
+      },
+      {
+        "page": 1,
+        "usage": 50,
+        "min": 0,
+        "max": 255,
+        "neutral": true
+      },
+      {
+        "page": 1,
+        "usage": 53,
+        "min": 0,
+        "max": 255,
+        "neutral": true
+      },
+      {
+        "page": 9,
+        "usage": 1,
+        "min": 0,
+        "max": 1,
+        "neutral": true
+      },
+      {
+        "page": 9,
+        "usage": 2,
+        "min": 0,
+        "max": 1,
+        "neutral": true
+      },
+      {
+        "page": 9,
+        "usage": 3,
+        "min": 0,
+        "max": 1,
+        "neutral": true
+      },
+      {
+        "page": 9,
+        "usage": 4,
+        "min": 0,
+        "max": 1,
+        "neutral": true
+      },
+      {
+        "page": 9,
+        "usage": 5,
+        "min": 0,
+        "max": 1,
+        "neutral": true
+      },
+      {
+        "page": 9,
+        "usage": 6,
+        "min": 0,
+        "max": 1,
+        "neutral": true
+      },
+      {
+        "page": 9,
+        "usage": 12,
+        "min": 0,
+        "max": 1,
+        "neutral": true
+      },
+      {
+        "page": 9,
+        "usage": 13,
+        "min": 0,
+        "max": 1,
+        "neutral": true
+      },
+      {
+        "page": 9,
+        "usage": 14,
+        "min": 0,
+        "max": 1,
+        "neutral": true
+      },
+      {
+        "page": 9,
+        "usage": 15,
+        "min": 0,
+        "max": 1,
+        "neutral": true
+      }
+    ]
+  },
+  "hid-replay": {
+    "pass": true,
+    "events": 624,
+    "channels": [
+      {
+        "page": 1,
+        "usage": 48,
+        "min": -32768,
+        "max": 32767,
+        "neutral": true
+      },
+      {
+        "page": 1,
+        "usage": 49,
+        "min": -32768,
+        "max": 32767,
+        "neutral": true
+      },
+      {
+        "page": 1,
+        "usage": 51,
+        "min": -32768,
+        "max": 32767,
+        "neutral": true
+      },
+      {
+        "page": 1,
+        "usage": 52,
+        "min": -32768,
+        "max": 32767,
+        "neutral": true
+      },
+      {
+        "page": 1,
+        "usage": 50,
+        "min": 0,
+        "max": 255,
+        "neutral": true
+      },
+      {
+        "page": 1,
+        "usage": 53,
+        "min": 0,
+        "max": 255,
+        "neutral": true
+      },
+      {
+        "page": 9,
+        "usage": 1,
+        "min": 0,
+        "max": 1,
+        "neutral": true
+      },
+      {
+        "page": 9,
+        "usage": 2,
+        "min": 0,
+        "max": 1,
+        "neutral": true
+      },
+      {
+        "page": 9,
+        "usage": 3,
+        "min": 0,
+        "max": 1,
+        "neutral": true
+      },
+      {
+        "page": 9,
+        "usage": 4,
+        "min": 0,
+        "max": 1,
+        "neutral": true
+      },
+      {
+        "page": 9,
+        "usage": 5,
+        "min": 0,
+        "max": 1,
+        "neutral": true
+      },
+      {
+        "page": 9,
+        "usage": 6,
+        "min": 0,
+        "max": 1,
+        "neutral": true
+      },
+      {
+        "page": 9,
+        "usage": 12,
+        "min": 0,
+        "max": 1,
+        "neutral": true
+      },
+      {
+        "page": 9,
+        "usage": 13,
+        "min": 0,
+        "max": 1,
+        "neutral": true
+      },
+      {
+        "page": 9,
+        "usage": 14,
+        "min": 0,
+        "max": 1,
+        "neutral": true
+      },
+      {
+        "page": 9,
+        "usage": 15,
+        "min": 0,
+        "max": 1,
+        "neutral": true
+      }
+    ]
+  }
+}

@@ -132,7 +132,7 @@ final class AccessSession {
               let payload = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               payload["v"] as? Int == 1, payload["receiverId"] as? String == receiverID,
               payload["phoneId"] as? String == phoneID,
-              payload["productId"] as? String == "tapping_pro_lifetime",
+              payload["productId"] as? String == "thumble_pro_lifetime",
               let owned = payload["pro"] as? Bool,
               let issued = payload["issuedAt"] as? Double, let expires = payload["expiresAt"] as? Double,
               issued.isFinite, expires.isFinite, issued >= grantIssued,

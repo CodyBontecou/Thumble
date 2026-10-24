@@ -1,0 +1,18 @@
+# Diagnostic only; not replayable. Private pairing links omitted; simulator coordinates had rotated-tree capture limitations.
+steps:
+  - launch: com.thumble.ios
+  - tool: await-ui-element
+    args:
+      selector:
+        text: Get started
+      condition: visible
+  - tap:
+      x: 0.171
+      y: 0.7095
+  - tool: await-ui-element
+    args:
+      selector:
+        text: GETTING STARTED
+      condition: visible
+  - tap:
+      role: AXScrollArea

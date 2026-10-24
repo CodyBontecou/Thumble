@@ -24,3 +24,10 @@ xcuserdata/
 npm-debug.*
 yarn-debug.*
 yarn-error.*
+
+# Local purchase-verifier secret backup (never commit)
+.secrets/
+
+.wrangler/
+.dev.vars
+.dev.vars.*

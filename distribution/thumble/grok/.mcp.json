@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "thumble": {
+      "type": "http",
+      "url": "https://thumble-cloud-pilot.costream.workers.dev/mcp"
+    }
+  }
+}

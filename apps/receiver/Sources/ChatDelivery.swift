@@ -18,7 +18,7 @@ enum ChatDelivery {
             return "Bring World of Warcraft to the front on your Mac, then try again."
         }
         let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
-        guard AXIsProcessTrustedWithOptions(options) else { return "Allow Tapping Receiver in Mac System Settings → Privacy & Security → Accessibility, then try again." }
+        guard AXIsProcessTrustedWithOptions(options) else { return "Allow Thumble Receiver in Mac System Settings → Privacy & Security → Accessibility, then try again." }
         let pid = app.processIdentifier
         func focused() -> Bool { !Task.isCancelled && NSWorkspace.shared.frontmostApplication?.processIdentifier == pid && !app.isTerminated }
         func key(_ code: CGKeyCode) {

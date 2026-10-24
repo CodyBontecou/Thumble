@@ -13,7 +13,7 @@ void *tapping_gamepad_create(void) {
     CFNumberRef vendor = CFNumberCreate(NULL, kCFNumberIntType, &vid), product = CFNumberCreate(NULL, kCFNumberIntType, &pid);
     CFDataRef descriptor = CFDataCreate(NULL, xbox_descriptor, sizeof(xbox_descriptor));
     const void *keys[] = {CFSTR(kIOHIDReportDescriptorKey), CFSTR(kIOHIDProductKey), CFSTR(kIOHIDManufacturerKey), CFSTR(kIOHIDTransportKey), CFSTR(kIOHIDVendorIDKey), CFSTR(kIOHIDProductIDKey)};
-    const void *values[] = {descriptor, CFSTR("Tapping Wi-Fi Gamepad"), CFSTR("Tapping"), CFSTR("USB"), vendor, product};
+    const void *values[] = {descriptor, CFSTR("Thumble Wi-Fi Gamepad"), CFSTR("Thumble"), CFSTR("USB"), vendor, product};
     CFDictionaryRef props = CFDictionaryCreate(NULL, keys, values, 6, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
     g->device = IOHIDUserDeviceCreateWithProperties(NULL, props, IOHIDUserDeviceOptionsCreateOnActivate);
     CFRelease(props); CFRelease(descriptor); CFRelease(vendor); CFRelease(product);

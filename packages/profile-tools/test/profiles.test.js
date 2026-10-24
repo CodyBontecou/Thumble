@@ -55,7 +55,7 @@ test('delivery status requires a fresh phone acknowledgement for the exact activ
 });
 test('tool surface has no input execution tools, rejects extra arguments, and validates semantics', async t => {
   const store = await fixture(t);
-  assert.deepEqual(profileTools.map(tool => tool.name), ['profile_schema', 'list_profiles', 'get_profile', 'validate_profile', 'save_profile', 'activate_profile', 'controller_status', 'read_addon_export', 'list_characters', 'mirror_consoleport', 'import_character', 'get_character', 'propose_bindings', 'get_binding_plan', 'import_binding_result', 'sync_binding_labels']);
+  assert.deepEqual(profileTools.map(tool => tool.name), ['agent_connection_check', 'profile_schema', 'list_profiles', 'get_profile', 'validate_profile', 'save_profile', 'activate_profile', 'controller_status', 'read_addon_export', 'list_characters', 'mirror_consoleport', 'import_character', 'get_character', 'propose_bindings', 'get_binding_plan', 'import_binding_result', 'sync_binding_labels']);
   await assert.rejects(callProfileTool(store, 'save_profile', { profile: warrior(), expectedRevision: 0, execute: true }), /Invalid tool arguments/);
   await assert.rejects(callProfileTool(store, 'press_button', {}), /Unknown tool/);
   const invalid = warrior(); invalid.mappings[0].outputs = ['a'];
@@ -86,4 +86,19 @@ test('MCP stdio saves and activates profiles without a purchase and reports revi
   assert.equal(JSON.parse(responses[2].result.content[0].text).revision, 1);
   assert.equal(JSON.parse(responses[3].result.content[0].text).delivery, 'queued');
   assert.equal(responses[4].result.isError, true);
+});
+
+test('agent connection check is validated, persists through the shared store and changes no layout', async t => {
+  const store = await fixture(t);
+  const before = await store.list();
+  await assert.rejects(callProfileTool(store, 'agent_connection_check', { code: '../bad' }), /check code/);
+  const result = await callProfileTool(store, 'agent_connection_check', { code: '123456abcdef' });
+  assert.equal(result.status, 'recorded');
+  const after = await store.list();
+  assert.deepEqual(after, before);
+  const check = (await new ProfileStore(store.directory).read()).agentConnection;
+  assert.equal(check.code, '123456abcdef');
+  assert.ok(Date.now() - check.checkedAt < 1000);
+  await store.save(warrior(), 0);
+  assert.deepEqual((await store.read()).agentConnection, check);
 });

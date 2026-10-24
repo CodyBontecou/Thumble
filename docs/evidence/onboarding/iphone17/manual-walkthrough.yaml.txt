@@ -1,0 +1,160 @@
+# DIAGNOSTIC TRANSCRIPT ONLY. Do not replay. Backend injections and private pair links were intentionally omitted. Step 7 was miscaptured while handling a system permission dialog. See QA report.
+steps:
+  - tool: launch-app
+    args:
+      bundleId: com.thumble.ios
+  - tap:
+      id: controller-menu
+  - tool: await-ui-element
+    args:
+      selector:
+        text: Getting started
+      condition: visible
+  - tap:
+      text: Getting started, ›
+  - tool: await-ui-element
+    args:
+      selector:
+        text: GETTING STARTED
+      condition: visible
+  - echo: Allow the first-run iOS local-network prompt. The system alert is visible
+      in the screenshot but absent from the physical accessibility tree; tap its
+      visible Allow button.
+  - tap:
+      text: Connect with link
+  - tool: await-ui-element
+    args:
+      selector:
+        text: GETTING STARTED
+      condition: visible
+  - tap:
+      text: Make your first layout, Keep familiar controls or create one with your AI,
+        4
+  - tool: await-ui-element
+    args:
+      selector:
+        text: Make it comfortable
+      condition: visible
+  - tap:
+      text: Connect your AI
+  - tool: await-ui-element
+    args:
+      selector:
+        text: 1 / SEND THIS TO YOUR MAC AGENT
+      condition: visible
+  - tool: gesture-swipe
+    args:
+      fromX: 0.75
+      fromY: 0.85
+      toX: 0.75
+      toY: 0.35
+      durationMs: 400
+      momentum: false
+  - tap:
+      text: Check connection
+  - tool: await-ui-element
+    args:
+      selector:
+        text: No matching check yet
+      condition: visible
+  - tap:
+      text: Check connection
+  - tool: await-ui-element
+    args:
+      selector:
+        text: No matching check yet
+      condition: visible
+  - tap:
+      text: Check connection
+  - tool: await-ui-element
+    args:
+      selector:
+        text: Connection verified.
+      condition: visible
+  - tap:
+      text: Create my first layout
+  - tool: await-ui-element
+    args:
+      selector:
+        text: Make it comfortable
+      condition: visible
+  - tap:
+      text: Movement side, Left thumb, ›
+  - tool: await-ui-element
+    args:
+      selector:
+        text: Movement side, Right thumb
+      condition: visible
+  - tool: gesture-swipe
+    args:
+      fromX: 0.75
+      fromY: 0.85
+      toX: 0.75
+      toY: 0.45
+      durationMs: 400
+      momentum: false
+  - tap:
+      text: Prepare my layout request
+  - tool: await-ui-element
+    args:
+      selector:
+        text: Prepare a new request
+      condition: visible
+  - tool: gesture-swipe
+    args:
+      fromX: 0.75
+      fromY: 0.85
+      toX: 0.75
+      toY: 0.45
+      durationMs: 400
+      momentum: false
+  - tool: gesture-swipe
+    args:
+      fromX: 0.75
+      fromY: 0.85
+      toX: 0.75
+      toY: 0.3
+      durationMs: 450
+      momentum: false
+  - tool: gesture-swipe
+    args:
+      fromX: 0.75
+      fromY: 0.85
+      toX: 0.75
+      toY: 0.3
+      durationMs: 450
+      momentum: false
+  - tool: gesture-swipe
+    args:
+      fromX: 0.75
+      fromY: 0.85
+      toX: 0.75
+      toY: 0.5
+      durationMs: 450
+      momentum: false
+  - tap:
+      text: Check layout delivery
+  - tool: button
+    args:
+      button: home
+  - tap:
+      text: Done
+  - tap:
+      text: Make your first layout, Keep familiar controls or create one with your AI,
+        4
+  - tool: gesture-swipe
+    args:
+      fromX: 0.75
+      fromY: 0.85
+      toX: 0.75
+      toY: 0.25
+      durationMs: 250
+  - tool: gesture-swipe
+    args:
+      fromX: 0.75
+      fromY: 0.85
+      toX: 0.75
+      toY: 0.25
+      durationMs: 250
+  - tap:
+      text: Check layout delivery

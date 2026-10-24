@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { router } from 'expo-router';
 import { connection } from '../connection';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import { Eyebrow, ui } from '../ui/design';
+import { Button, Eyebrow, ui } from '../ui/design';
 
 export default function ProfilesScreen() { return <SafeAreaProvider><Profiles /></SafeAreaProvider>; }
 
@@ -37,11 +38,12 @@ function Profiles() {
       <Text style={s.detail}>Choose a saved controller from your Mac.</Text>
       <Pressable accessibilityRole="button" onPress={refresh} disabled={loading || !!selecting} style={s.refresh}><Text style={s.action}>Refresh</Text></Pressable>
     </View>
+    <Button secondary onPress={() => router.push('/first-layout')}>Create a layout with your AI</Button>
     {error ? <Text accessibilityRole="alert" style={s.error}>{error}</Text> : null}
     {loading ? <ActivityIndicator accessibilityLabel="Loading profiles" color="#EDEDED" style={s.loading} /> :
       <FlatList data={catalog.profiles} keyExtractor={item => item.id} contentContainerStyle={s.list}
         extraData={[layout, selecting, network.phase]}
-        ListEmptyComponent={<Text style={s.detail}>{error ? '' : 'No saved profiles yet. Ask your agent to create one.'}</Text>}
+        ListEmptyComponent={<Text style={s.detail}>{error ? '' : 'No saved profiles yet. Create your first layout to get started.'}</Text>}
         renderItem={({ item }) => {
           const selected = layout.profile.id === item.id && layout.revision > 0;
           const busy = selecting === item.id;

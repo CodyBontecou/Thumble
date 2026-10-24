@@ -25,11 +25,11 @@ assert entitlements.get('com.apple.developer.hid.virtual.device') is True, 'Prof
 assert 'OSX' in profile.get('Platform', []), 'Not a Mac profile'
 print('Profile metadata matches Thumble Mac and includes virtual HID.')
 PY
-task_app="$task_root/build/Tapping HID Probe.app"
+task_app="$task_root/build/Thumble HID Probe.app"
 mkdir -p "$task_app/Contents/MacOS"
 mkdir -p "$task_app/Contents/Resources/ThirdParty"
 xcrun clang -Wall -Wextra -Werror -fblocks -framework IOKit -framework CoreFoundation \
-  "$task_root/tools/macos-hid-probe.c" -o "$task_app/Contents/MacOS/tapping-hid-probe"
+  "$task_root/tools/macos-hid-probe.c" -o "$task_app/Contents/MacOS/thumble-hid-probe"
 cp "$task_root/tools/macos-hid-probe-Info.plist" "$task_app/Contents/Info.plist"
 cp "$task_profile" "$task_app/Contents/embedded.provisionprofile"
 cp "$task_root/ThirdParty/SteamControllerBridge-LICENSE.txt" "$task_app/Contents/Resources/ThirdParty/"

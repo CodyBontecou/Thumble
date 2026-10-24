@@ -45,7 +45,7 @@ test('Google validation acknowledges completed purchases but rejects pending or 
   const validator = googleVerifier({ packageName: 'test.app', credentials: { client_email: 'test@example.com', private_key: keys.privateKey.export({ type: 'pkcs8', format: 'pem' }) }, fetcher: async (url) => {
     if (url.includes('oauth2')) return { ok: true, json: async () => ({ access_token: 'test', expires_in: 3600 }) };
     if (url.endsWith(':acknowledge')) { acknowledgements++; return { ok: true }; }
-    assert(url.includes('/test.app/purchases/products/tapping_pro_lifetime/tokens/'));
+    assert(url.includes('/test.app/purchases/products/thumble_pro_lifetime/tokens/'));
     return { ok: true, json: async () => purchase };
   } });
   assert.equal(await validator('token'), true); assert.equal(acknowledgements, 1);

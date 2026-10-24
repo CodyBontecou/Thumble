@@ -1,8 +1,11 @@
 {
   "expo": {
-    "name": "Tapping",
-    "slug": "tapping",
-    "scheme": "tapping",
+    "name": "Thumble",
+    "slug": "thumble",
+    "scheme": [
+      "thumble",
+      "tapping"
+    ],
     "plugins": [
       "expo-router",
       [
@@ -22,7 +25,9 @@
           }
         }
       ],
-      "./plugins/with-speech.cjs"
+      "./plugins/with-speech.cjs",
+      "expo-secure-store",
+      "expo-web-browser"
     ],
     "version": "1.0.0",
     "orientation": "landscape",
@@ -30,24 +35,25 @@
     "userInterfaceStyle": "dark",
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.codybontecou.PocketPad.iOS.tappingdev",
+      "bundleIdentifier": "com.thumble.ios",
       "appleTeamId": "67KC823C9A",
       "infoPlist": {
-        "NSLocalNetworkUsageDescription": "Tapping connects to your Mac on local Wi-Fi to send game controller input.",
+        "NSLocalNetworkUsageDescription": "Thumble connects to your Mac on local Wi-Fi to send game controller input.",
         "NSAppTransportSecurity": {
           "NSAllowsLocalNetworking": true
         },
         "NSMicrophoneUsageDescription": "Dictate a message to review and send to World of Warcraft.",
-        "NSSpeechRecognitionUsageDescription": "Turn your voice into editable World of Warcraft chat messages."
-      }
+        "NSSpeechRecognitionUsageDescription": "Turn your voice into editable World of Warcraft chat messages.",
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSPhotoLibraryUsageDescription": "Thumble does not request your photo library. A bundled image framework requires this compatibility description."
+      },
+      "buildNumber": "2"
     },
     "android": {
-      "package": "com.thumble.android.tappingdev",
+      "package": "com.thumble.android",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "backgroundColor": "#9E9D9A",
+        "foregroundImage": "./assets/icon.png"
       },
       "permissions": [
         "android.permission.ACCESS_LOCAL_NETWORK",

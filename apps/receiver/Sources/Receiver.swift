@@ -87,7 +87,7 @@ final class Receiver {
         sec_protocol_options_set_min_tls_protocol_version(tls.securityProtocolOptions, .TLSv12)
         let tcp = NWProtocolTCP.Options(); tcp.noDelay = true
         let parameters = NWParameters(tls: tls, tcp: tcp)
-        let websocket = NWProtocolWebSocket.Options(); websocket.autoReplyPing = true; websocket.maximumMessageSize = 4096
+        let websocket = NWProtocolWebSocket.Options(); websocket.autoReplyPing = true; websocket.maximumMessageSize = 65536
         parameters.defaultProtocolStack.applicationProtocols.insert(websocket, at: 0)
         let listener = try NWListener(using: parameters, on: .any)
         self.listener = listener
@@ -142,7 +142,7 @@ final class Receiver {
         let payload: [String: Any] = ["v": 1, "url": "wss://\(address):\(port)/controller", "pin": fingerprint, "token": token, "expires": Int(expiry)]
         guard let data = try? JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys]) else { return }
         let encoded = data.base64EncodedString().replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "=", with: "")
-        onInvitation?("tapping://pair?data=\(encoded)")
+        onInvitation?("thumble://pair?data=\(encoded)")
     }
     private func accept(_ connection: NWConnection) {
         guard clients.count < 4 else { connection.cancel(); return }
@@ -166,10 +166,11 @@ final class Receiver {
         connection.receiveMessage { [weak self, weak connection] data, context, _, error in
             guard let self, let connection else { return }
             let receivedMs = ProcessInfo.processInfo.systemUptime * 1000
-            guard error == nil, let data, data.count <= 4096,
+            guard error == nil, let data, data.count <= 65536,
                   let metadata = context?.protocolMetadata(definition: NWProtocolWebSocket.definition) as? NWProtocolWebSocket.Metadata,
                   metadata.opcode == .text,
                   let message = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { connection.cancel(); return }
+            guard data.count <= 4096 || (self.peer === connection && message["type"] as? String == "profile-adopt") else { connection.cancel(); return }
             self.handle(message, connection: connection, receivedMs: receivedMs)
             if self.clients[ObjectIdentifier(connection)] != nil { self.receive(connection) }
         }
@@ -217,7 +218,7 @@ final class Receiver {
             publishProfileStatus()
             return
         }
-        if let type = message["type"] as? String, ["profiles-list", "profile-select"].contains(type) {
+        if let type = message["type"] as? String, ["profiles-list", "profile-select", "profile-adopt"].contains(type) {
             handleProfiles(message, connection: connection)
             return
         }
@@ -254,6 +255,30 @@ final class Receiver {
             return
         }
         var selection: (String, Int, Int)?
+        let adopting = message["type"] as? String == "profile-adopt"
+        if adopting {
+            guard let profile = message["profile"] as? [String: Any], let source = message["source"] as? [String: Any],
+                  let activation = ProfileCatalog.revision(message["expectedActivationRevision"]),
+                  !layoutPending, !chatBusy,
+                  let lease = message["lease"] as? String, let deadline = leases[lease],
+                  InputTiming.leaseIsFresh(now: ProcessInfo.processInfo.systemUptime, deadline: deadline) else {
+                send(["type": "profiles-result", "id": request, "error": "Connection changed. Refresh and try again."], to: connection); return
+            }
+            profileRequestBusy = true
+            pauseAccess()
+            profiles.adopt(profile: profile, source: source, expectedActivationRevision: activation) { [weak self, weak connection] result in
+                guard let self, let connection else { return }
+                self.queue.async {
+                    guard self.peer === connection else { return }
+                    self.profileRequestBusy = false
+                    switch result {
+                    case .success(let catalog): self.send(["type": "profiles-result", "id": request, "catalog": catalog], to: connection)
+                    case .failure(let error): self.send(["type": "profiles-result", "id": request, "error": error.localizedDescription], to: connection)
+                    }
+                }
+            }
+            return
+        }
         if message["type"] as? String == "profile-select" {
             guard let id = message["profileId"] as? String, id.utf8.count <= 64,
                   let revision = ProfileCatalog.revision(message["profileRevision"]), revision > 0,
@@ -357,7 +382,7 @@ final class Receiver {
         let lease = UUID().uuidString; leases[lease] = InputTiming.leaseDeadline(issuedAt: now)
         if leases.count > 256 { disconnect("Input rate exceeded"); return }
         var response: [String: Any] = ["type": type, "seq": sequence, "lease": lease]
-        if type == "ready" { response["chat"] = 1; response["profiles"] = 1; response["access"] = 1 }
+        if type == "ready" { response["chat"] = 1; response["profiles"] = 1; response["access"] = 1; response["cloudAdoption"] = 1 }
         if type == "ready", diagnostics != nil { response["diagnostics"] = true }
         if var timing { timing["ackMs"] = ProcessInfo.processInfo.systemUptime * 1000; response["timing"] = timing }
         if let udp { datagram?.send(response, to: udp) } else { send(response, to: connection) }

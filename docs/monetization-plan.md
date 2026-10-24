@@ -64,7 +64,7 @@ No game-state/combat detection is claimed; expiry may interrupt play.
 
 ## Native purchase implementation
 
-Use StoreKit 2 and Google Play Billing directly, with `tapping_pro_lifetime` as
+Use StoreKit 2 and Google Play Billing directly, with `thumble_pro_lifetime` as
 an Apple non-consumable / Google one-time non-consumable. There is no RevenueCat.
 Native flows handle localized prices, cancellation, pending approval, transaction
 updates and restoration through the same store account. iOS and Android purchases

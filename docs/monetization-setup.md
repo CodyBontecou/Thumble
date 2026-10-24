@@ -6,6 +6,142 @@ connected-use demo. Custom layouts, saved profiles and integrated dictation are
 available without purchase. Pro only removes the usage limit. Calibration,
 pairing, setup and local practice are free. No visual editor is included.
 
+## App Store Connect record (October 23, 2026)
+
+- New listing: **Thumble: Phone Controller** — app ID `6826421489`,
+  bundle ID `com.thumble.ios`, SKU `THUMBLE_IOS_001`, primary locale `en-US`.
+- Listing: https://appstoreconnect.apple.com/apps/6826421489/distribution
+- Registered Apple bundle resource: `48LYFB3K3A`, team `67KC823C9A`;
+  In-App Purchase capability enabled.
+- App download price: Free. Initial iOS version: `1.0.0`, manual release.
+- Pro: `thumble_pro_lifetime`, non-consumable, reference name
+  **Thumble Pro Lifetime**, Apple product resource `6826421543`.
+  US base price verified at **$19.99 USD**.
+- Product display name: **Thumble Pro**. Description:
+  “Unlimited controller time with a one-time purchase.”
+- App and Pro availability configured for all 175 current App Store territories,
+  with availability in new territories enabled, as approved by the owner.
+- Set verifier `APPLE_APP_ID=6826421489` and `APPLE_BUNDLE_ID=com.thumble.ios`.
+- The old ThumbConsole/PocketPad listing (`6788494990`) was left unchanged;
+  this is a separate replacement app, as requested by the owner.
+- The mobile icon is copied byte-for-byte from the older Thumble project’s
+  `Resources/iOS/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png` into
+  `apps/mobile/assets/icon.png`. Expo regenerates the iOS and Android assets;
+  App Store Connect receives the new app icon with the uploaded build.
+
+The app and Pro product have not been submitted for review. A signed production
+build, real purchase tests, final review screenshots, privacy/support URLs,
+App Privacy/age-rating declarations and reviewer instructions still need to be
+completed. Production purchase verification and Google store credentials remain
+unconfigured; the isolated Apple sandbox verifier is configured below. Do not use the current “Purchases coming soon” screenshot as the
+final IAP review screenshot.
+
+## TestFlight purchase test setup (October 23, 2026)
+
+The sandbox verifier is deployed at
+`https://thumble-purchases-sandbox.costream.workers.dev` in the owner's Cloudflare
+account. `apps/entitlements/wrangler.jsonc` defines the deployment. Its encrypted
+secrets hold the Apple account's existing IAP key (reused with explicit owner
+approval), Apple trust roots and a separate Ed25519 grant key. Secrets are never
+embedded in the phone or receiver. The ignored local backup is under
+`.secrets/purchases/`; keep this owner-only, git-ignored backup secure.
+
+`GET /health` initializes Apple's official verifier and validates the signing-key
+type. `POST /v1/grants` bounds requests and rate-limits attempts, verifies the Apple
+certificate chain and current transaction through Apple's sandbox API, then signs
+the receiver/phone/nonce-bound grant. Production and Android purchases are rejected
+by this sandbox deployment. Apple accepted the credentials in an authenticated
+sandbox API check; a real Thumble sandbox transaction still requires the tester's
+purchase. The endpoint rejects forged proofs.
+
+TestFlight build 2 and the TestFlight receiver share the sandbox public key.
+They are for **TestFlight only**. Production source configuration now points to
+the separate production verifier/key; rebuild the phone before an App Store
+release. Do not submit the sandbox-only build for public release.
+
+For this test, use `build/Thumble TestFlight Receiver.app`. Both test and
+production receivers retain `com.codybontecou.PocketPadMac` (`CX585YS32T`) to reuse
+its existing **production HID Virtual Device** approval, verified in the Developer
+portal. The visible name remains Thumble Receiver. The unused `com.thumble.macos`
+registration is not needed for this release. Public downloads additionally need a
+matching Developer ID profile and a usable Developer ID Application private key.
+Build the test companion with:
+
+```sh
+bash tools/build-macos-receiver.sh /path/to/existing-approved.provisionprofile \
+  'Apple Development identity' --testflight
+```
+
+Quit the previous receiver before opening the TestFlight receiver, then pair again.
+Do not run both receivers simultaneously. The build process does not restart the
+running receiver or alter existing profiles/demo usage.
+
+### Production verifier and Mac distribution
+
+The production Worker is deployed at
+`https://thumble-purchases.costream.workers.dev`, configured by
+`apps/entitlements/wrangler.production.jsonc`. It has a separate Ed25519 grant key
+from sandbox. `config/monetization.json` contains the production URL/public key;
+`config/monetization.sandbox.json` preserves the TestFlight configuration. Existing
+TestFlight build 2 still uses the sandbox configuration embedded at build time.
+
+Production verifies signed Apple transactions and fetches their current status
+from Apple. An explicit App Review setting permits sandbox transactions only after
+Apple's verifier reports a verified environment mismatch; invalid signatures,
+certificates and bundle identifiers are rejected. Google Play requires separate
+service-account credentials and is not yet configured on the hosted Worker.
+
+At setup, production `/health` returned 200, and sandbox API authentication
+succeeded. Apple's production API returned 401 for the unreleased app. Apple's
+[server-library maintainer explains](https://github.com/apple/app-store-server-library-node/issues/209)
+that production API access requires a production release. Production purchases
+remain unverified end to end until a real transaction is tested after release;
+the health check confirms local configuration, not Apple production access.
+
+The existing Mac identifier has production HID enabled. The owner authorized a new
+Developer ID Application signing certificate, issued as `FQP4WCVJLB` (expires
+2027-11-22), with distribution profile `PTQ96A4K5H`. The profile authorizes virtual
+HID for all Macs. Existing certificates were preserved. The signing identity is in
+an owner-only dedicated keychain at `.secrets/mac-signing/thumble-signing.keychain-db`;
+the CSR, private key, certificate, encrypted PKCS12 and keychain password are backed
+up in the same ignored directory. Keep this directory private and back it up securely.
+Set `THUMBLE_SIGNING_KEYCHAIN` to the absolute keychain path when building locally.
+The SHA-1 signing identity is `F99E7E4531AE49E2E5DEF117EFBE0D1CA2CC5FB4`.
+
+Build and package:
+
+```sh
+bash tools/build-macos-receiver.sh /path/to/developer-id.provisionprofile \
+  'Developer ID Application identity'
+bash tools/package-macos-receiver.sh 'Developer ID Application identity'
+```
+
+The release script notarizes and staples the app, creates a DMG containing the app
+and an Applications shortcut, then signs, notarizes and staples the DMG. Gatekeeper
+assessment must pass before uploading `build/distribution/Thumble-Receiver-1.0.0.dmg`
+to thumble.io.
+
+Release **1.0.0** is published at
+[thumble.io/downloads/receiver-latest.dmg](https://thumble.io/downloads/receiver-latest.dmg),
+redirecting to the immutable `Thumble-Receiver-1.0.0.dmg`. The checksum is at the
+same versioned URL with `.sha256` appended. The download Worker is in
+`apps/downloads/`, serving only the explicit release allowlist from the existing
+R2 bucket. The website's older release manifest is unchanged.
+
+Apple accepted app submission `6eac35d2-4f28-42bc-9632-5c2f8b78d299` and DMG
+submission `2fc6ed68-1634-4ce8-87bc-13cfc17bc2b3`. Both have stapled tickets and
+passed Gatekeeper assessment. The DMG contains the validated universal app and an
+Applications shortcut. SHA-256:
+`edfa5e11224d3de34f92a9cea94f6c5c021b88a26aef10a8982c8bdefebd710a`.
+The receiver was not launched as part of release verification.
+
+Internal TestFlight group: **Thumble Internal**
+(`76d1f1c6-9e57-4588-afe8-b72f30e87b8e`). Test with the owner's enrolled Apple
+account. Install the new app from TestFlight, pair the test receiver, open Pro,
+and purchase `thumble_pro_lifetime`. Apple TestFlight transactions are sandbox
+transactions and are not charged. Confirm unlimited time, restart/restore, and
+restoration after reconnecting. Cancellation should leave the demo unchanged.
+
 ## What is implemented
 
 - Explicit demo start/resume, foreground controller-session metering, pause on
@@ -37,9 +173,13 @@ pairing, setup and local practice are free. No visual editor is included.
 
 ## Store setup required before purchases can be enabled
 
-1. Finalize production bundle/package identifiers. Current app config contains
-   development identifiers; do not register production products against those.
-2. Create `tapping_pro_lifetime` as an Apple non-consumable and a Google Play
+1. Use `com.thumble.ios` (Apple iOS), `com.thumble.android` (Google Play),
+   and the existing `com.codybontecou.PocketPadMac` (Mac receiver). The Mac identifier
+   preserves the existing production HID approval; its visible name is **Thumble
+   Receiver**. iOS is registered and its App Store name is **Thumble: Phone Controller**.
+   Mac distribution needs a matching Developer ID profile authorizing
+   `com.apple.developer.hid.virtual.device`, signed with a certificate in that profile.
+2. Create `thumble_pro_lifetime` as an Apple non-consumable and a Google Play
    non-consumable one-time product. Set the US base price to $19.99 in each store,
    then configure regional prices/availability. The app displays the actual
    localized store price. Enable In-App Purchase for the Apple app and complete
@@ -79,12 +219,12 @@ request timeouts too. Deploy secrets through the host's secret manager:
 | `TAPPING_GRANT_PRIVATE_KEY_FILE` | Ed25519 PKCS#8 PEM signing key file |
 | `PORT` | Optional loopback port, default 8788 |
 | `APPLE_ENVIRONMENT` | `Production` or isolated `Sandbox` deployment |
-| `APPLE_BUNDLE_ID` | Exact registered iOS bundle ID |
+| `APPLE_BUNDLE_ID` | `com.thumble.ios` |
 | `APPLE_APP_ID` | Numeric Apple app ID, required in Production |
 | `APPLE_ISSUER_ID` / `APPLE_KEY_ID` | App Store Server API identity |
 | `APPLE_PRIVATE_KEY_FILE` | Apple p8 key file |
 | `APPLE_ROOT_CERTIFICATES` | Comma-separated paths to Apple root DER certificates |
-| `GOOGLE_PACKAGE_NAME` | Exact registered Android package name |
+| `GOOGLE_PACKAGE_NAME` | `com.thumble.android` |
 | `GOOGLE_APPLICATION_CREDENTIALS` | Google service-account JSON file |
 
 At least one store must be configured. The verifier uses Apple's official
@@ -131,3 +271,46 @@ References: [StoreKit](https://developer.apple.com/documentation/storekit),
 [Apple server library](https://github.com/apple/app-store-server-library-node),
 [Apple review rules](https://developer.apple.com/app-store/review/guidelines/#in-app-purchase),
 [Blizzard addon policy](https://eu.forums.blizzard.com/en/wow/t/wow-user-interface-add-on-development-policy/1642).
+
+## Branding compatibility
+
+New pairing links use `thumble://pair`; existing `tapping://pair` links are still
+accepted. Internal npm workspace names, native module names, environment variables,
+and persisted storage keys/directories retain their legacy names to preserve
+profiles, pairing state and demo ledgers. The repository path is unchanged.
+Historical validation reports describe the older development artifacts, not the
+new production identifiers. Changing mobile app identifiers creates separate app identities and can separate
+local app data from the installed development apps. This rename does not migrate
+data between those installations.
+
+### Local TestFlight build notes
+
+Apple rejected build 1 with ITMS-90683 because a bundled framework references
+photo-library APIs. Build 2 adds the required NSPhotoLibraryUsageDescription
+without requesting photo access or adding a photo feature. The app already
+includes camera, local-network, microphone and speech purpose strings.
+
+Distribution profile: **Thumble App Store**, Apple resource `PXUHN5M5A9`,
+UUID `30f69404-c8c5-4e04-98b3-becf02b65d82`, existing certificate `7LBA9GBNXH`.
+The local generated Xcode application target uses manual signing with this profile
+and iPhone Distribution identity; CocoaPods targets keep their existing settings.
+When regenerating iOS native files, reapply those application-target signing
+settings before archiving. Set MARKETING_VERSION=1.0.0 and use the build number
+from app.json. Archive/export with asc xcode, then upload using asc publish
+testflight targeting app 6826421489 and group Thumble Internal. Do not distribute
+a sandbox build through an App Store public release.
+
+### Verified TestFlight delivery
+
+Build **1.0.0 (2)** was accepted by Apple with processing state **VALID**.
+Build resource: `a38cc790-4365-4173-81c0-8e19f88885ce`. It is assigned to
+**Thumble Internal** with all-builds access; the owner's tester is **INVITED**.
+What to Test notes include the required companion receiver and sandbox purchase
+instructions. Artifacts: `build/Thumble-TestFlight-2.xcarchive`,
+`build/Thumble-TestFlight-2.ipa`, and `build/Thumble TestFlight Receiver.app`.
+
+Validation: 93 Node tests, mobile lint/type checks, signed iOS archive/export,
+strict receiver signature verification, matching phone/receiver verification keys,
+Apple sandbox API authentication, live Worker signing health, and forged-proof
+rejection. A genuine purchase and restore on the tester's TestFlight installation
+have not yet been performed. Upload/processing receipt: `build/testflight-upload-2.log`.

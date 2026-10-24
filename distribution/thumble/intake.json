@@ -1,0 +1,22 @@
+{
+  "publisher": "Thumble",
+  "contact": {
+    "firstName": "Cody",
+    "lastName": "Bontecou",
+    "email": "codybontecou@gmail.com"
+  },
+  "organizationHandle": "thumble",
+  "website": "https://thumble.io",
+  "mcpUrl": "https://thumble-cloud-pilot.costream.workers.dev/mcp",
+  "logoUrl": null,
+  "termsUrl": null,
+  "description": "Create, validate, save, and send custom controller layouts to a registered Thumble phone for offline practice. Check exact revision render receipts. Game input uses a separate local Mac receiver. Cloud access is currently a pilot.",
+  "requestedDestinations": [
+    "Grok (coming soon)",
+    "Grok Bot",
+    "Cursor"
+  ],
+  "localAndInAppTestingAttestation": false,
+  "publisherTermsAccepted": false,
+  "submitted": false
+}

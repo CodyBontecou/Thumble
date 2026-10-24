@@ -1,0 +1,22 @@
+{
+  "capturedAt": "2026-10-24T01:44:30.007Z",
+  "profileId": "cloud-7e162aad5e900775815ddaa99c1bf4cb5fee498d",
+  "name": "WoW cloud adoption test",
+  "controlCount": 18,
+  "localRevision": 1,
+  "activationRevision": 8,
+  "cloudSource": {
+    "service": "https://thumble-cloud-pilot.costream.workers.dev",
+    "profileId": "wow-cloud-adoption-test-v1",
+    "revision": 1
+  },
+  "receiver": {
+    "connected": true,
+    "ready": true,
+    "revision": 8
+  },
+  "deliveryId": "aa6dce77-32ed-4b76-8291-c6d8580ea90d",
+  "cloudReceipt": "rendered",
+  "cloudReceiptError": null,
+  "cloudReceiptUpdatedAt": "2026-10-24T01:37:44Z"
+}

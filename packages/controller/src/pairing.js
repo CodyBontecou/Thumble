@@ -2,7 +2,7 @@
 export function parseInvitation(value, now = Date.now()) {
   if (typeof value !== 'string' || value.length > 2048) throw new Error('Pairing code is too large.');
   const link = new URL(value.trim());
-  if (link.protocol !== 'tapping:' || link.hostname !== 'pair' || link.pathname !== '') throw new Error('Scan a Tapping pairing code.');
+  if (!['thumble:', 'tapping:'].includes(link.protocol) || link.hostname !== 'pair' || link.pathname !== '') throw new Error('Scan a Thumble pairing code.');
   const encoded = link.searchParams.get('data');
   if (!encoded || !/^[A-Za-z0-9_-]+$/.test(encoded)) throw new Error('Invalid pairing code.');
   const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';

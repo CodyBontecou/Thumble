@@ -11,16 +11,16 @@ import CoreImage
     private var invitation = ""
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        statusItem.button?.image = NSImage(systemSymbolName: "gamecontroller", accessibilityDescription: "Tapping Wi-Fi controller")
+        statusItem.button?.image = NSImage(systemSymbolName: "gamecontroller", accessibilityDescription: "Thumble Wi-Fi controller")
         let menu = NSMenu(); menu.addItem(withTitle: "Pair phone…", action: #selector(showPairing), keyEquivalent: "")
         menu.addItem(withTitle: "Disconnect and pair again", action: #selector(reset), keyEquivalent: "")
-        menu.addItem(.separator()); menu.addItem(withTitle: "Quit Tapping Receiver", action: #selector(quit), keyEquivalent: "q")
+        menu.addItem(.separator()); menu.addItem(withTitle: "Quit Thumble Receiver", action: #selector(quit), keyEquivalent: "q")
         for item in menu.items { item.target = self }; statusItem.menu = menu
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 420, height: 470), styleMask: [.titled, .closable], backing: .buffered, defer: false)
-        window.title = "Tapping · Pair your phone"; window.isReleasedWhenClosed = false; window.center()
+        window.title = "Thumble · Pair your phone"; window.isReleasedWhenClosed = false; window.center()
         let stack = NSStackView(); stack.orientation = .vertical; stack.spacing = 14; stack.translatesAutoresizingMaskIntoConstraints = false
         let title = NSTextField(labelWithString: "Your phone. Your controller."); title.font = .boldSystemFont(ofSize: 22)
-        let detail = NSTextField(wrappingLabelWithString: "Connect your phone and Mac to the same Wi-Fi. In Tapping, tap Connect Mac and scan this code.")
+        let detail = NSTextField(wrappingLabelWithString: "Connect your phone and Mac to the same Wi-Fi. In Thumble, tap Connect Mac and scan this code.")
         detail.alignment = .center
         qr.imageScaling = .scaleProportionallyUpOrDown
         qr.widthAnchor.constraint(equalToConstant: 260).isActive = true; qr.heightAnchor.constraint(equalToConstant: 260).isActive = true

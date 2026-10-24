@@ -1,0 +1,27 @@
+steps:
+  - await:
+      visible:
+        text: Connect your Mac, Connected now
+  - await:
+      idle: true
+  - tap:
+      text: Set up WoW, Prepare ConsolePort and verify an action in-game, 3
+  - await:
+      visible:
+        text: Confirm only after you have tried it in-game.
+  - await:
+      idle: true
+  - await:
+      visible:
+        text: I performed an action in WoW
+        role: AXButton
+  - tap:
+      text: Done
+  - await:
+      visible:
+        text: Connect your Mac, Connected now
+  - await:
+      idle: true
+executionPrerequisite: >-
+  Physical iPhone 13 foregrounded on Getting started; current receiver connected, WoW milestone pending. No
+  game input or milestone confirmation.

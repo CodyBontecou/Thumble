@@ -54,7 +54,21 @@ final class ProfileBridge {
                     result = try ProfileCatalog.activate(directory, id: id, profileRevision: profileRevision, expectedActivationRevision: activationRevision)
                     lastModification = nil
                     poll()
-                } else { result = try ProfileCatalog.summary(ProfileCatalog.read(directory)) }
+                } else {
+                    do { result = try ProfileCatalog.summary(ProfileCatalog.read(directory)) }
+                    catch let error as NSError where error.domain == NSCocoaErrorDomain && error.code == NSFileReadNoSuchFileError {
+                        result = ["profiles": [], "activationRevision": 0, "agentCheckSupported": true]
+                    }
+                }
+                completion(.success(result))
+            } catch { completion(.failure(error)) }
+        }
+    }
+    func adopt(profile: [String: Any], source: [String: Any], expectedActivationRevision: Int, completion: @escaping (Result<[String: Any], Error>) -> Void) {
+        queue.async { [self] in
+            do {
+                let result = try ProfileCatalog.adopt(directory, profile: profile, source: source, expectedActivationRevision: expectedActivationRevision)
+                lastModification = nil; poll()
                 completion(.success(result))
             } catch { completion(.failure(error)) }
         }

@@ -4,7 +4,7 @@ Pod::Spec.new do |s|
   s.summary = 'Certificate-pinned local controller transport'
   s.description = s.summary
   s.license = { :type => 'UNLICENSED' }
-  s.author = 'Tapping'
+  s.author = 'Thumble'
   s.homepage = 'https://example.invalid/tapping'
   s.platform = :ios, '16.4'
   s.swift_version = '5.9'

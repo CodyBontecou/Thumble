@@ -1,0 +1,170 @@
+
+> test
+> node --test packages/controller/test/*.test.js packages/profile-tools/test/*.test.js apps/cloud/test/*.test.js tools/test/*.test.js
+
+✔ fails closed and verifies JWT signatures, expiry, issuer, audience, scopes and tenant (32.080042ms)
+✔ immutable revisions use atomic compare-and-swap with concurrent writers (7.14175ms)
+✔ delivery idempotency, explicit revisions, supersession and exact render receipts (10.521916ms)
+✔ device receipts are isolated, revoked/expired credentials cannot poll or acknowledge (3.386084ms)
+✔ bounded JSON bodies and public config contain no credentials (1.567042ms)
+✔ cloud MCP advertises only scoped controller tools and truthful write hints (0.583833ms)
+✔ every tool denies an account without its scope before calling the API (10.418625ms)
+✔ delivery requires exact identifiers and rejects injected account authority (1.239667ms)
+✔ MCP writes pass the original bearer and exact arguments into authenticated REST (1.390916ms)
+✔ revision conflicts and validation errors are actionable tool errors (0.5635ms)
+✔ stateless SDK HTTP supports initialize, tools/list, call, ping and notifications (8.497917ms)
+✔ MCP fails closed, advertises protected resource metadata and blocks unexpected browser origins (0.367958ms)
+✔ SDK transport rejects malformed messages, oversized streamed bodies and unsupported methods (1.320541ms)
+✔ each stateless MCP request authenticates afresh and concurrent calls stay isolated (1.248709ms)
+✔ the shipped controller template has a mapping for every control (1.175125ms)
+✔ concurrent movement, camera, modifier and action remain independent (0.52725ms)
+✔ releasing one of two touch controls mapped to A does not release the other (0.264167ms)
+✔ stick deadzone is radial and diagonal input cannot exceed unit magnitude (0.106875ms)
+✔ disconnect or background release clears every held control (1.081625ms)
+✔ profile replacement clears held input and takes an isolated copy (0.239166ms)
+✔ an invalid MCP profile edit does not alter the active profile or held state (0.343125ms)
+✔ profiles reject duplicate IDs, missing mappings, oversized geometry and code fields (0.204792ms)
+✔ profiles reject ambiguous analog ownership and mismatched control types (0.319208ms)
+✔ malformed profile payloads produce validation errors without throwing (0.146541ms)
+✔ non-finite inputs never enter controller state (0.19375ms)
+✔ receiver watchdog releases movement and buttons after 150ms without valid input (0.149042ms)
+✔ invalid packets cannot refresh the receiver watchdog (0.084084ms)
+✔ axis calibration accepts booleans only on sticks (0.163ms)
+✔ QR retains exact TLS identity and expiring local capability (1.02425ms)
+✔ QR rejects public, cleartext, credentials, stale and malformed invitations (2.865959ms)
+✔ legacy pairing links retain compatibility (0.206791ms)
+✔ separate fingers can move, hold a modifier, and press an action concurrently (3.152208ms)
+✔ moving outside a captured button releases it without pressing a neighboring button (0.666791ms)
+✔ releasing one finger on the same button preserves the other hold (0.656791ms)
+✔ a second finger cannot steal a stick, and cancellation neutralizes every input (0.218459ms)
+✔ replacing a touched layout releases old touch ownership and uses the new geometry (0.522583ms)
+✔ per-stick inversion reverses both output axes while the cap follows the finger (0.365875ms)
+✔ a stick starts inside its visible circle, captures outside drags and releases only its owner (0.291167ms)
+✔ SavedVariables extraction decodes only strings and never evaluates Lua (1.438ms)
+✔ disk import accepts only the named addon SavedVariables file (35.533833ms)
+✔ import reads learned spells and automatic proposals map profile outputs to WoW keys without changing the profile (42.713916ms)
+✔ unlearned and ambiguous spells remain unresolved instead of fabricating abilities (22.157583ms)
+✔ explicit proposals reject passive spells, macros, duplicate keys, modifiers and overrides (17.605917ms)
+✔ result confirmation is exact and labels require the original unchanged profile revision (26.035917ms)
+✔ results for another character, plan or duplicated key cannot confirm a proposal (14.509583ms)
+✔ malformed or conflicting character snapshots never replace a prior export (10.159042ms)
+✔ recognized ConsolePort action proxies can be proposed, but pending receipts cannot confirm them (19.765125ms)
+✔ ConsolePort mirror preserves button arrangement and calibrated sticks, resolves icons, and changes no activation (39.416542ms)
+✔ modifier presentation follows held outputs without changing input; rejects unsafe artwork URLs (0.412708ms)
+✔ phone banks preserve the exported diamonds with large, separate touch targets (0.152125ms)
+✔ saved revisions persist, invalid edits are atomic, and saving never changes an active layout (45.745875ms)
+✔ two independent agents cannot overwrite each other or corrupt the store (38.111042ms)
+✔ delivery status requires a fresh phone acknowledgement for the exact activation (15.268375ms)
+✔ tool surface has no input execution tools, rejects extra arguments, and validates semantics (0.944291ms)
+✔ MCP stdio saves and activates profiles without a purchase and reports revision conflicts (53.438958ms)
+✔ agent connection check is validated, persists through the shared store and changes no layout (11.680166ms)
+(node:80142) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/codybontecou/dev/tapping/apps/mobile/src/cloud/core.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/codybontecou/dev/tapping/apps/mobile/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ signed MCP save → exact delivery → offline phone receipt → revocation (37.702459ms)
+✔ unconfigured composed cloud service exposes no demo account or tools (0.263208ms)
+(node:80143) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/codybontecou/dev/tapping/apps/mobile/src/cloud/core.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/codybontecou/dev/tapping/apps/mobile/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ cloud delivery uses device credential and acknowledges rendered only from exact committed selection (13.391792ms)
+✔ LAN-connected and background phone never acknowledge cloud render; foreground polling only (0.616167ms)
+✔ new delivery supersedes old local selection; only new exact revision can acknowledge (1.049041ms)
+✔ invalid delivered profile cannot select or acknowledge received (0.341958ms)
+✔ logout cancels a delayed download, erases cache and attempts device revocation (0.483208ms)
+✔ cache restores securely scoped profile for offline practice and never replays old render receipts (0.4735ms)
+✔ superseded delivery disappears and resets pending preview to last acknowledged cache (0.269834ms)
+✔ render receipt failure is retried after a fresh pending poll (0.985125ms)
+✔ logout serialization prevents in-flight persistence from restoring credentials (0.337416ms)
+✔ lost render response reconciles idempotently after server removes committed delivery from queue (0.694458ms)
+✔ committed preview with superseded render receipt resets after empty queue reconciliation conflict (0.457042ms)
+✔ concurrent library and preview requests share one rotating refresh token exchange (0.557458ms)
+✔ logout shares in-flight rotating refresh for revocation without restoring stale credentials (2.210708ms)
+(node:80144) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/codybontecou/dev/tapping/apps/mobile/src/connection-core.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/codybontecou/dev/tapping/apps/mobile/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ late callbacks from an old socket cannot affect a replacement (2.827583ms)
+✔ disconnect cancels an asynchronous pairing preparation (0.252792ms)
+✔ overlapping preparation only opens the latest requested pairing (0.3315ms)
+✔ pause releases held controls and uses the replacement lease immediately (0.583375ms)
+✔ duplicate acknowledgements cannot keep a dead receiver alive (0.422584ms)
+✔ failed initial input does not leave a heartbeat running (0.357041ms)
+✔ handshake timeout and invalid future acknowledgements disconnect safely (0.622667ms)
+✔ touch timing context never leaks into heartbeats or neutral resets (0.34425ms)
+✔ layout activation releases input, blocks old geometry, and waits for fresh receiver lease (0.4665ms)
+✔ invalid or stale layout disconnects and reconnect can receive the same active revision (0.911542ms)
+✔ superseded renders cannot acknowledge a more recent layout (0.389958ms)
+✔ UDP input requires the encrypted native handshake; blocked handshake keeps WebSocket input (0.407375ms)
+✔ UDP send failure releases controls and closes the control session (0.354458ms)
+✔ a burst of analog updates cannot disconnect a healthy but temporarily backpressured session (0.357041ms)
+✔ backpressure preserves press/release edges while merging intermediate motion (0.414959ms)
+✔ an expired queued press is cancelled, never replayed when ACK delivery resumes (0.278ms)
+✔ heartbeats coalesce to the current held state without falsely cancelling a sustained hold (0.255416ms)
+✔ slow ACK return does not stop forward heartbeats when native writes are available (0.397709ms)
+✔ native backpressure coalesces motion, preserves edges, and retries without waiting for network ACK (0.984708ms)
+✔ pause blocks held input until fresh neutral is acknowledged and clears queued edges (0.313375ms)
+✔ chat requires receiver support and never enters the datagram input path (0.764584ms)
+✔ chat matches acknowledgement IDs and surfaces receiver errors without disconnecting (0.247ms)
+✔ chat disconnect rejects pending delivery and clears its timer (0.16925ms)
+✔ chat rejects commands with newlines, control characters, excessive UTF-8 bytes and unknown channels (0.260125ms)
+✔ unconfirmed chat times out without automatically resending (0.26625ms)
+✔ profile list uses paired control transport; selecting waits for rendered layout and fresh neutral ACK (0.598958ms)
+✔ profile conflicts, invalid catalogs, and disconnect reject without claiming activation (0.428875ms)
+✔ older receivers cannot be sent profile requests and duplicate requests are rejected (0.288084ms)
+✔ demo includes profiles and custom layouts; expiry blocks live input and chat only (0.368458ms)
+✔ legacy receivers without access negotiation cannot become an unmetered connection (0.373958ms)
+✔ hosted verifier never grants access when Apple rejects a proof (9.613084ms)
+✔ hosted verifier signs both ownership and confirmed revocation for the current pairing (1.438292ms)
+✔ hosted verifier bounds streamed bodies and rate limits before verifying purchases (1.048875ms)
+✔ production verification checks current transaction identity and refunds with Apple (0.574958ms)
+✔ App Review fallback requires a verified environment mismatch and rechecks sandbox proof (0.329958ms)
+(node:80146) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/codybontecou/dev/tapping/apps/mobile/src/latency-recorder.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/codybontecou/dev/tapping/apps/mobile/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ timing recorder separates clock domains and batches bounded duration-only exports (0.807333ms)
+✔ invalid or reversed timing never becomes a plausible measurement (0.142959ms)
+(node:80147) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/codybontecou/dev/tapping/apps/mobile/src/purchases/core.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/codybontecou/dev/tapping/apps/mobile/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ capability grants are signed, bound, expiring and reject invalid challenges (1.413583ms)
+✔ native proof verification must succeed before issuing a Pro grant (0.622666ms)
+✔ Google validation acknowledges completed purchases but rejects pending or consumed purchases (10.541959ms)
+✔ profile saves and activation do not require a purchase (23.222959ms)
+✔ purchase adapter distinguishes pending and cancellation, prevents duplicate purchase calls and retains cached ownership on errors (0.570584ms)
+✔ purchase verification cannot deliver a grant to a replacement pairing (0.506167ms)
+✔ a slow foreground refresh cannot overwrite a completed purchase (0.293875ms)
+✔ clock bounds distinguish forward and return spikes without symmetric-delay assumptions (0.691459ms)
+✔ inconsistent clocks are reported rather than silently producing a one-way claim (0.939417ms)
+(node:80149) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/codybontecou/dev/tapping/apps/mobile/src/onboarding-core.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/codybontecou/dev/tapping/apps/mobile/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ setup resumes milestones and preferences after restart, without completing skipped steps (1.576167ms)
+✔ legacy intro completion skips the new funnel without inventing milestones (0.109ms)
+✔ concurrent writes preserve milestones and failed writes can be retried (0.297208ms)
+✔ invalid persisted data cannot claim verified milestones or inject a profile identifier (0.070333ms)
+✔ agent verification needs matching supported, fresh receiver evidence (0.08025ms)
+✔ layout completion requires the requested rendered profile and completed neutral recovery (0.059917ms)
+✔ first-layout request survives restart and preserves the character review and receipt boundaries (0.153542ms)
+(node:80150) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/codybontecou/dev/tapping/apps/mobile/src/pairing-link.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/codybontecou/dev/tapping/apps/mobile/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ a pairing link arriving during foreground transition connects once active without reopening (1.844375ms)
+✔ refocusing the same link retries; repeated active events never open duplicate sockets (0.385958ms)
+✔ leaving pairing removes the foreground listener and cancels pending preparation (0.228417ms)
+✔ invalid or expired links report an actionable error without opening a socket (0.149583ms)
+✔ leaving after a successful handshake preserves the connected session (0.228958ms)
+✔ a foreground event during asynchronous preparation is not lost (0.306667ms)
+ℹ tests 130
+ℹ suites 0
+ℹ pass 130
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 228.320875

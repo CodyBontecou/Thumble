@@ -1,0 +1,5 @@
+steps:
+  - tap:
+      text: Set up WoW, Prepare ConsolePort and verify an action in-game, 3
+executionPrerequisite: iPhone 13 on Getting started with existing pairing saved,
+  Mac disconnected. Diagnostic baseline of old installed build.

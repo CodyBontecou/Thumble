@@ -1,0 +1,30 @@
+{
+  "queued": {
+    "activationRevision": 2,
+    "profileId": "first-layout-0efeae54",
+    "profileRevision": 3,
+    "receiver": {
+      "connected": false,
+      "updatedAt": 1792795934959.6191,
+      "receiverId": "E2BB58AD-4425-4DA1-A512-6941D54614D2",
+      "revision": 1,
+      "pro": false,
+      "ready": false
+    },
+    "delivery": "queued"
+  },
+  "acknowledged": {
+    "activationRevision": 2,
+    "profileId": "first-layout-0efeae54",
+    "profileRevision": 3,
+    "receiver": {
+      "connected": true,
+      "updatedAt": 1792795972209.5461,
+      "receiverId": "E2BB58AD-4425-4DA1-A512-6941D54614D2",
+      "revision": 2,
+      "pro": false,
+      "ready": true
+    },
+    "delivery": "acknowledged"
+  }
+}

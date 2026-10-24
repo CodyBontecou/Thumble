@@ -1,0 +1,18 @@
+# Diagnostic only; not replayable. Private pairing links omitted; simulator coordinates had rotated-tree capture limitations.
+steps:
+  - launch: com.thumble.ios
+  - tool: await-ui-element
+    args:
+      selector:
+        text: Connected now
+      condition: visible
+      timeoutMs: 12000
+  - tool: button
+    args:
+      button: home
+  - tool: await-ui-element
+    args:
+      selector:
+        text: Connected now
+      condition: visible
+      timeoutMs: 8000

@@ -1,5 +1,5 @@
 // Diagnostic only: creates an ephemeral gamepad, sends no reports, then releases it.
-// Build: xcrun clang -fblocks -framework IOKit -framework CoreFoundation tools/macos-hid-probe.c -o /tmp/tapping-hid-probe
+// Build: xcrun clang -fblocks -framework IOKit -framework CoreFoundation tools/macos-hid-probe.c -o /tmp/thumble-hid-probe
 #include <CoreFoundation/CoreFoundation.h>
 #include <IOKit/hidsystem/IOHIDUserDevice.h>
 #include <dispatch/dispatch.h>
@@ -37,9 +37,9 @@ int main(int argc, char **argv) {
     CFDataRef data = CFDataCreate(NULL, xbox ? xbox_descriptor : descriptor,
                                 xbox ? sizeof(xbox_descriptor) : sizeof(descriptor));
     CFDictionarySetValue(properties, CFSTR(kIOHIDReportDescriptorKey), data);
-    CFDictionarySetValue(properties, CFSTR(kIOHIDProductKey), CFSTR("Tapping HID capability probe"));
+    CFDictionarySetValue(properties, CFSTR(kIOHIDProductKey), CFSTR("Thumble HID capability probe"));
     CFDictionarySetValue(properties, CFSTR(kIOHIDTransportKey), xbox ? CFSTR("USB") : CFSTR("Virtual"));
-    CFDictionarySetValue(properties, CFSTR(kIOHIDManufacturerKey), CFSTR("Tapping"));
+    CFDictionarySetValue(properties, CFSTR(kIOHIDManufacturerKey), CFSTR("Thumble"));
     if (xbox) {
         int vendor = 0x045e, product = 0x028e;
         CFNumberRef vendor_ref = CFNumberCreate(NULL, kCFNumberIntType, &vendor);

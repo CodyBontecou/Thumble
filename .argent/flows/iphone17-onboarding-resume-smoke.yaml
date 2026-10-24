@@ -1,0 +1,44 @@
+# Requires saved QA state: onboarding dismissed; paired and personalized only; right movement, larger buttons, agent verified. Launch preserves that state.
+steps:
+  - launch: com.thumble.ios
+  - await:
+      visible:
+        text: Thumble menu
+      timeout: 15000
+  - await: { idle: true }
+  - tap:
+      id: controller-menu
+  - await:
+      visible:
+        text: Getting started
+  - await: { idle: true }
+  - tap:
+      text: Getting started, ›
+  - await:
+      visible:
+        text: Pick up where
+  - await: { idle: true }
+  - await:
+      visible:
+        text: GETTING STARTED · 2 OF 4 COMPLETE
+  - await:
+      visible:
+        text: Previously paired
+  - await:
+      visible:
+        text: Your first layout is ready
+  - tap:
+      text: Make your first layout, Your first layout is ready, ✓
+  - await:
+      visible:
+        text: Make it comfortable
+  - await: { idle: true }
+  - await:
+      visible:
+        text: Movement side, Right thumb
+  - await:
+      visible:
+        text: Button size, Larger action buttons
+  - await:
+      visible:
+        text: Check agent connection again

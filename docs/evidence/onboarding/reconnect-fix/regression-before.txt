@@ -1,0 +1,58 @@
+(node:60322) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/codybontecou/dev/tapping/apps/mobile/src/pairing-link.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/codybontecou/dev/tapping/apps/mobile/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✖ a pairing link arriving during foreground transition connects once active without reopening (3.694375ms)
+✔ refocusing the same link retries; repeated active events never open duplicate sockets (1.299625ms)
+✖ leaving pairing removes the foreground listener and cancels pending preparation (0.715541ms)
+✔ invalid or expired links report an actionable error without opening a socket (0.317042ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 2
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 71.115833
+
+✖ failing tests:
+
+test at tools/test/pairing-link.test.js:18:1
+✖ a pairing link arriving during foreground transition connects once active without reopening (3.694375ms)
+  AssertionError [ERR_ASSERTION]: foreground transition must not fail pairing
+  + actual - expected
+  
+  + [
+  +   'Open Thumble before connecting to your Mac.'
+  + ]
+  - []
+  
+      at TestContext.<anonymous> (file:///Users/codybontecou/dev/tapping/tools/test/pairing-link.test.js:20:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: [ 'Open Thumble before connecting to your Mac.' ],
+    expected: [],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tools/test/pairing-link.test.js:32:1
+✖ leaving pairing removes the foreground listener and cancels pending preparation (0.715541ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  1 !== 0
+  
+      at TestContext.<anonymous> (file:///Users/codybontecou/dev/tapping/tools/test/pairing-link.test.js:36:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 1,
+    expected: 0,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

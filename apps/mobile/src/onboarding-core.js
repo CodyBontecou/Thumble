@@ -1,0 +1,101 @@
+export const initialSetup = () => ({
+  version: 2, welcomeSeen: false, dismissed: false, paired: false, controlsTested: false, wowTested: false,
+  personalized: false, agentVerified: false, agentCode: '', layoutMode: 'familiar',
+  buttonSize: 'larger', movementSide: 'left', character: '', profileId: '', sourceProfileId: '',
+  wowClient: '', consolePortReady: false, wowChecks: {},
+});
+export function normalizeSetup(value) {
+  const result = initialSetup();
+  if (!value || value.version !== 2) return result;
+  for (const key of ['welcomeSeen', 'dismissed', 'paired', 'controlsTested', 'wowTested', 'personalized', 'agentVerified', 'consolePortReady']) result[key] = value[key] === true;
+  for (const [key, choices] of Object.entries({ layoutMode: ['familiar', 'consoleport', 'character'], buttonSize: ['standard', 'larger'], movementSide: ['left', 'right'] })) {
+    if (choices.includes(value[key])) result[key] = value[key];
+  }
+  if (typeof value.character === 'string') result.character = value.character.slice(0, 80);
+  if (WOW_CLIENTS.some(client => client.id === value.wowClient)) result.wowClient = value.wowClient;
+  result.wowChecks = Object.fromEntries(WOW_CHECKS.map(check => [check.id, value.wowChecks?.[check.id] === true]));
+  if (typeof value.agentCode === 'string' && /^[a-f0-9]{12}$/.test(value.agentCode)) result.agentCode = value.agentCode;
+  for (const key of ['profileId', 'sourceProfileId']) if (typeof value[key] === 'string' && /^[a-z0-9][a-z0-9-]{0,63}$/.test(value[key])) result[key] = value[key];
+  return result;
+}
+export const setupComplete = state => state.paired && state.controlsTested && state.wowTested && state.personalized;
+export const matchesAgentCheck = (catalog, code) => /^[a-f0-9]{12}$/.test(code) && catalog?.agentCheckSupported === true && catalog.agentConnection?.code === code && Number.isFinite(catalog.agentConnection.ageSeconds) && catalog.agentConnection.ageSeconds >= 0 && catalog.agentConnection.ageSeconds <= 600;
+export const firstLayoutDelivered = (state, network, layout, pending, recovering) => !!state.profileId && network.phase === 'connected' && layout.profile.id === state.profileId && layout.revision > 0 && !pending && !recovering;
+
+export const WOW_CLIENTS = [
+  { id: 'retail', name: 'World of Warcraft', detail: 'The current Retail installation' },
+  { id: 'classic', name: 'WoW Classic', detail: 'Your progression Classic installation' },
+  { id: 'classic-era', name: 'WoW Classic Era', detail: 'Era, Hardcore or a seasonal Era realm' },
+  { id: 'other', name: 'Another WoW installation', detail: 'Use the exact installation selected in Battle.net' },
+];
+export const WOW_CHECKS = [
+  { id: 'movement', title: 'Move and stop', detail: 'Walk with the movement stick. Release it and check that your character stops.' },
+  { id: 'camera', title: 'Look in every direction', detail: 'Try the camera stick. If a direction feels reversed, adjust Stick calibration from the Thumble menu.' },
+  { id: 'action', title: 'Use a bound action', detail: 'Try jump or a learned ability using the binding shown by ConsolePort.' },
+  { id: 'modifier', title: 'Hold a modifier and act', detail: 'Hold a shoulder or trigger modifier, press an action, then release both. Confirm the intended action and return to the base layer.' },
+  { id: 'menu', title: 'Navigate and return', detail: 'Open a game menu, move through it and close it. Keep keyboard and mouse within reach.' },
+];
+export const wowClientName = state => WOW_CLIENTS.find(client => client.id === state.wowClient)?.name || 'the WoW installation selected in Battle.net';
+export function wowSetupStep(state, online) {
+  if (!state.wowClient) return 'client';
+  if (!online) return 'connect';
+  if (!state.controlsTested) return 'controls';
+  if (!state.consolePortReady) return 'addon';
+  return state.wowTested ? 'ready' : 'game';
+}
+export const canCompleteWowSetup = (state, online) => online && !!state.wowClient && state.controlsTested && state.consolePortReady && WOW_CHECKS.every(check => state.wowChecks?.[check.id] === true);
+
+export function cloudLayoutPrompt(state, session) {
+  const wow = state.layoutMode === 'consoleport' || state.layoutMode === 'character';
+  const context = wow
+    ? `I play ${wowClientName(state)} with ConsolePort${state.character ? `. Character/class note (user supplied, not a verified export): ${JSON.stringify(state.character)}` : ''}. Build a complete standard gamepad layout for WoW: movement and camera sticks, A/B/X/Y, shoulders, both triggers, D-pad, stick clicks, View and Menu. Keep shoulder/trigger modifier combinations reachable while moving. Preserve standard gamepad outputs; ConsolePort owns the in-game action bindings. Label buttons by their gamepad names unless I provide a fresh verified character export. Do not invent spells, modifier assignments or claim a binding is applied. Ask which character export I want to share before using character data. The hosted service does not expose the local Thumble Bridge import/mirror/binding tools; those require a separate local agent handoff and player Review and Apply in-game.`
+    : 'Build a comfortable controller with familiar gamepad mappings.';
+  return `Connect to my Thumble MCP service at ${session.mcpUrl || `${session.service}/mcp`} and sign in to the same account as my phone. Read profile_schema and list_devices before designing. ${context}\nI prefer ${state.buttonSize === 'larger' ? 'larger action buttons' : 'standard-size buttons'} and movement on the ${state.movementSide}. Use the phone viewport, keep every control inside the usable area and prevent overlapping touch targets. Validate the complete profile, then save a new profile ID without overwriting my existing controllers. Deliver that exact saved revision to device ${session.device.id} (${JSON.stringify(session.device.name)}) using a fresh requestId. Check delivery_status; queued and received are not rendered. I will open the downloaded controller in practice. A rendered receipt confirms the phone preview, not working Mac input or WoW bindings. Every gameplay press stays mine.`;
+}
+
+// Serialize reads and writes so rapid edits cannot lose another milestone.
+export function createOnboardingStore(storage) {
+  let state = { ...initialSetup(), loaded: false };
+  let loading;
+  /** @type {Promise<any>} */
+  let writes = Promise.resolve();
+  const listeners = new Set();
+  const publish = next => { state = next; for (const listener of listeners) listener(); };
+  const load = () => {
+    if (state.loaded) return Promise.resolve(state);
+    if (!loading) loading = (async () => {
+      const raw = await storage.read();
+      const legacy = !raw && await storage.legacyComplete();
+      const value = raw ? normalizeSetup(JSON.parse(raw)) : { ...initialSetup(), welcomeSeen: legacy, dismissed: legacy };
+      publish({ ...value, loaded: true });
+      return state;
+    })().catch(error => { loading = undefined; throw error; });
+    return loading;
+  };
+  return {
+    subscribe: listener => { listeners.add(listener); return () => listeners.delete(listener); },
+    snapshot: () => state,
+    load,
+    update(patch) {
+      const operation = writes.catch(() => {}).then(async () => {
+        await load();
+        const changes = typeof patch === 'function' ? patch(state) : patch;
+        const next = normalizeSetup({ ...state, ...changes });
+        await storage.write(JSON.stringify(next));
+        publish({ ...next, loaded: true });
+        return state;
+      });
+      writes = operation;
+      return operation;
+    },
+    async isComplete() { const value = await load(); return value.dismissed || setupComplete(value); },
+  };
+}
+export function firstLayoutPrompt(state, sourceProfileId) {
+  const startingPoint = state.layoutMode === 'consoleport'
+    ? `I play ${wowClientName(state)}. Mirror my exported ConsolePort layout with mirror_consoleport, using my current phone profile as the source. Ask for a fresh Thumble Bridge character export if needed; do not invent exported positions.`
+    : state.layoutMode === 'character'
+      ? `Build around my character${state.character ? ` (${state.character})` : ''}. Read my imported character snapshot or ask me for a fresh Thumble Bridge export. Use only learned spells; leave ambiguous choices unresolved.`
+      : 'Start from the familiar Xbox-style controller, preserving its gamepad outputs.';
+  return `Help me create my first Thumble layout. First call agent_connection_check with code "${state.agentCode}", then read controller_status, profile_schema and current profile revisions.\n${startingPoint}\nMy current phone profile ID is "${sourceProfileId}". Use "${state.profileId}" as the new profile ID and do not overwrite another profile. I prefer ${state.buttonSize === 'larger' ? 'larger action buttons' : 'standard-size buttons'} and movement on the ${state.movementSide}. Keep controls reachable and non-overlapping.\nValidate and save the complete profile. Custom layouts are included in the demo; Pro removes the play-time limit. If game bindings need changing, propose them and guide me through in-game Review and Apply; import the verified result before syncing labels. Activate the saved revision on my paired phone, then check controller_status. Only say it arrived when the matching revision is acknowledged. Every gameplay press stays mine.`;
+}

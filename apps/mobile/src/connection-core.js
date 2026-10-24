@@ -1,6 +1,8 @@
 import { LatencyRecorder } from './latency-recorder.js';
 import { neutralState, parseInvitation, assertProfile, xboxProfile } from '@tapping/controller';
 
+const canonical = value => JSON.stringify(value, (_, item) => item && typeof item === 'object' && !Array.isArray(item) ? Object.fromEntries(Object.keys(item).sort().map(key => [key, item[key]])) : item);
+
 export class Connection {
   listeners = new Set();
   accessListeners = new Set();
@@ -33,6 +35,7 @@ export class Connection {
   /** @type {{id: string, resolve: (value?: any) => void, reject: (error: Error) => void, timer: ReturnType<typeof setTimeout>} | null} */
   chatRequest = null;
   profilesSupported = false;
+  cloudAdoptionSupported = false;
   profileSequence = 0;
   /** @type {any} */
   profileRequest = null;
@@ -95,6 +98,13 @@ export class Connection {
             this.finishProfileRequest(Error('The receiver returned an invalid profile list.')); return;
           }
           request.result = catalog;
+          if (request.operation === 'profile-adopt') {
+            const adoption = catalog.adoption;
+            if (!adoption || !/^cloud-[a-f0-9]{40}$/.test(adoption.profileId) || adoption.profileRevision !== 1 || canonical(adoption.source) !== canonical(request.source)) {
+              this.finishProfileRequest(Error('The receiver did not confirm the requested cloud revision.')); return;
+            }
+            request.profileId = adoption.profileId;
+          }
           if (request.operation === 'profiles-list') this.finishProfileRequest();
           else this.completeProfileSelection();
           return;
@@ -151,6 +161,7 @@ export class Connection {
           if (this.timer) this.timers.clearTimeout(this.timer);
           this.invitation = null;
           this.profilesSupported = message.profiles === 1;
+          this.cloudAdoptionSupported = message.cloudAdoption === 1;
           this.diagnostics = message.diagnostics === true && typeof this.native.sendTimed === 'function' ? new LatencyRecorder(text => this.native.send(text)) : null;
           this.update({ phase: 'connected', detail: 'Connected · Xbox gamepad', rtt: null, chat: message.chat === 1 });
           this.submit(neutralState(), 'neutral');
@@ -222,6 +233,13 @@ export class Connection {
     for (const reset of this.resetListeners) reset();
     return this.profileOperation('profile-select', { profileId: profile.id, profileRevision: profile.revision, expectedActivationRevision });
   }
+  adoptProfile(profile, source, expectedActivationRevision) {
+    if (!this.cloudAdoptionSupported) return Promise.reject(Error('Update your Mac receiver to use cloud controllers.'));
+    const checked = assertProfile(profile);
+    if (source.profileId !== checked.id || !Number.isSafeInteger(source.revision) || source.revision < 1) return Promise.reject(Error('Invalid cloud revision.'));
+    this.pausePlay();
+    return this.profileOperation('profile-adopt', { profile: checked, source: { ...source }, expectedActivationRevision });
+  }
   profileOperation(operation, fields = {}) {
     if (this.view.phase !== 'connected') return Promise.reject(Error('Connect your Mac to see saved profiles.'));
     if (!this.profilesSupported) return Promise.reject(Error('Update your Mac receiver to choose profiles here.'));
@@ -229,13 +247,16 @@ export class Connection {
     const id = `profiles-${++this.profileSequence}`;
     return new Promise((resolve, reject) => {
       const timer = this.timers.setTimeout(() => this.finishProfileRequest(Error('Could not confirm the profile. Refresh and try again.')), 7000);
-      this.profileRequest = { id, operation, profileId: fields.profileId, result: null, resolve, reject, timer };
+      this.profileRequest = { id, operation, profileId: fields.profileId, source: fields.source, profile: fields.profile, result: null, resolve, reject, timer };
       if (!this.native.send(JSON.stringify({ type: operation, id, ...fields, lease: this.lease }))) this.finishProfileRequest(Error('Could not reach your Mac.'));
     });
   }
   completeProfileSelection() {
     const r = this.profileRequest;
-    if (r?.operation === 'profile-select' && r.result && this.layout.profile.id === r.profileId && this.layout.revision === r.result.activationRevision && !this.layoutPending && !this.recovering) this.finishProfileRequest();
+    if (['profile-select', 'profile-adopt'].includes(r?.operation) && r.result && this.layout.profile.id === r.profileId && this.layout.revision === r.result.activationRevision && !this.layoutPending && !this.recovering) {
+      if (r.operation === 'profile-adopt' && canonical({ ...this.layout.profile, id: r.profile.id }) !== canonical(r.profile)) this.finishProfileRequest(Error('The Mac activated a different controller. Refresh and try again.'));
+      else this.finishProfileRequest();
+    }
   }
   /** @param {Error | null} [error] */
   finishProfileRequest(error = null) {
@@ -332,6 +353,7 @@ export class Connection {
     for (const listener of this.profileListeners) listener();
     this.lease = null; this.invitation = null; this.state = neutralState(); this.pending.clear();
     this.profilesSupported = false;
+    this.cloudAdoptionSupported = false;
     this.finishProfileRequest(Error('Disconnected from your Mac.'));
     if (this.chatRequest) { this.timers.clearTimeout(this.chatRequest.timer); this.chatRequest.reject(Error('Disconnected. Check WoW before sending again.')); this.chatRequest = null; }
     this.update({phase:'offline',detail,rtt:null,chat:false});

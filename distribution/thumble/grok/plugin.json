@@ -1,0 +1,10 @@
+{
+  "name": "thumble",
+  "version": "0.1.0",
+  "description": "Create, save, and send custom controller layouts to your Thumble phone for practice.",
+  "homepage": "https://thumble.io",
+  "author": {
+    "name": "Thumble",
+    "email": "codybontecou@gmail.com"
+  }
+}

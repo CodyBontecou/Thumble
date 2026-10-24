@@ -62,7 +62,7 @@ class TappingLinkModule : Module() {
   }
   @Synchronized private fun send(text: String): Boolean {
     val current = socket
-    if (text.toByteArray().size > 4096 || current == null || current.queueSize() > 8192) {
+    if (text.toByteArray().size > 65536 || current == null || current.queueSize() > 262144) {
       val id = connectionId
       close()
       if (id != null) sendEvent("status", mapOf("value" to "Connection stalled", "id" to id))

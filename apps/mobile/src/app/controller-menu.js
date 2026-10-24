@@ -24,12 +24,12 @@ export default function ControllerMenu() {
           <Button onPress={() => online ? (connection.disconnect(), close()) : router.replace('/pair')} secondary={online}>{online ? 'Disconnect Mac' : 'Connect Mac'}</Button>
           <Text style={ui.small}>{access?.pro ? 'PRO · UNLIMITED PLAY' : access ? `${Math.ceil(access.remaining / 60)} minutes of demo remaining` : '30-minute total controller demo'}</Text>
         </View>
-        <View style={{ flex: 1.15, gap: 4 }}>
-          <Row title="Profiles" detail="Choose your saved controller" onPress={() => router.replace('/profiles')} />
-          <Row title="Stick calibration" onPress={() => router.replace('/calibration')} />
-          <Row title="WoW setup" onPress={() => router.replace('/wow-setup')} />
-          <Row title={access?.pro ? 'Thumble Pro' : 'Unlock Thumble Pro'} detail={access?.pro ? 'Manage your purchase' : 'Remove the 30-minute limit.'} onPress={() => router.replace('/pro')} />
-          <Row title="Getting started" onPress={() => router.replace('/onboarding')} />
+        <View style={{ flex: 1.15, flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+          {[
+            ['Profiles', '/profiles'], ['Cloud controllers', '/cloud'], ['Stick calibration', '/calibration'],
+            ['WoW setup', '/wow-setup'], ['Connect your AI', '/agent-setup'],
+            ['Thumble Pro', '/pro'], ['Getting started', '/onboarding'],
+          ].map(([title, path]) => <View key={path} style={{ width: '48%', flexGrow: 1, minHeight: 64, justifyContent: 'center', backgroundColor: colors.surface, borderRadius: 16, borderCurve: 'continuous' }}><Row title={title} onPress={() => router.replace(path)} /></View>)}
         </View>
       </ScrollView>
     </View>

@@ -1,0 +1,67 @@
+# Saved QA state: setup dismissed; pairing and personalization complete. Checks action reachability and request disclosure; no network or gameplay steps.
+steps:
+  - launch: com.thumble.ios
+  - await:
+      visible:
+        text: Thumble menu
+      timeout: 15000
+  - await: { idle: true }
+  - tap:
+      id: controller-menu
+  - await:
+      visible:
+        text: Getting started
+  - await: { idle: true }
+  - tap:
+      text: Getting started, ›
+  - await:
+      visible:
+        text: Pick up where
+  - await: { idle: true }
+  - tap:
+      text: Make your first layout, Your first layout is ready, ✓
+  - await:
+      visible:
+        text: Make it comfortable
+  - await: { idle: true }
+  - await:
+      visible:
+        text: Share layout request
+  - await:
+      visible:
+        text: Continue setup
+  - tap:
+      text: Continue setup
+  - await:
+      visible:
+        text: Pick up where
+  - await: { idle: true }
+  - tap:
+      text: Set up later · use controller
+  - await:
+      visible:
+        text: Thumble menu
+  - await: { idle: true }
+  - tap:
+      id: controller-menu
+  - await:
+      visible:
+        text: Getting started
+  - await: { idle: true }
+  - tap:
+      text: Connect your AI, ›
+  - await:
+      visible:
+        text: Your connection check
+  - await: { idle: true }
+  - await:
+      visible:
+        text: Share check request
+  - tap:
+      text: View check request, Send this request to your Mac agent, +
+  - await:
+      visible:
+        text: Hide check request
+  - await:
+      visible:
+        text: Share check request

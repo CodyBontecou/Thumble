@@ -1,0 +1,10 @@
+{
+  "name": "thumble",
+  "version": "0.1.0",
+  "description": "Create and deliver Thumble phone controller layouts for practice. OAuth client registration is required before use.",
+  "mcpServers": {
+    "thumble": {
+      "httpUrl": "https://thumble-cloud-pilot.costream.workers.dev/mcp"
+    }
+  }
+}

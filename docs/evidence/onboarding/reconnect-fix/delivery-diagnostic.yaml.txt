@@ -1,0 +1,76 @@
+# Diagnostic transcript only. Not replayable: backend mutations and short-lived private links are omitted.
+steps:
+  - tap:
+      text: Continue in practice mode
+  - tap:
+      id: controller-menu
+  - tap:
+      text: Connect your AI, ›
+  - tool: await-ui-element
+    args:
+      selector:
+        text: Your connection check
+      condition: visible
+  - tap:
+      text: Connect Mac
+  - tap:
+      text: Make your first layout, Your first layout is ready, ✓
+  - tool: gesture-swipe
+    args:
+      fromX: 0.75
+      fromY: 0.6
+      toX: 0.75
+      toY: 0.26
+      durationMs: 350
+      momentum: false
+  - tap:
+      text: Check agent connection again
+  - tap:
+      text: Check connection
+  - tap:
+      text: Create my first layout
+  - tap:
+      text: Movement side, Right thumb, ›
+  - tool: await-ui-element
+    args:
+      selector:
+        text: Movement side, Left thumb
+      condition: visible
+  - tap:
+      text: Movement side, Left thumb, ›
+  - tap:
+      text: Prepare layout request
+  - tool: gesture-swipe
+    args:
+      fromX: 0.75
+      fromY: 0.6
+      toX: 0.75
+      toY: 0.26
+      durationMs: 350
+      momentum: false
+  - tool: gesture-swipe
+    args:
+      fromX: 0.75
+      fromY: 0.6
+      toX: 0.75
+      toY: 0.26
+      durationMs: 350
+      momentum: false
+  - tap:
+      text: View layout request, Your saved request for your Mac agent, +
+  - tool: button
+    args:
+      button: home
+  - tap:
+      text: Make your first layout, Keep familiar controls or create one with your AI,
+        4
+  - tap:
+      text: Check layout delivery
+  - tool: await-ui-element
+    args:
+      selector:
+        text: You confirmed this layout arrived
+      condition: visible
+executionPrerequisite: Updated iPhone app connected to the isolated QA receiver;
+  practice/demo choice visible. Backend profile calls and private pair links are
+  performed separately.

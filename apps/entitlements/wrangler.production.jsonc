@@ -1,0 +1,19 @@
+{
+  "name": "thumble-purchases",
+  "main": "src/worker.js",
+  "account_id": "e4265f322e6380ee832b83ad45e3e8c0",
+  "compatibility_date": "2026-10-23",
+  "compatibility_flags": ["nodejs_compat"],
+  "alias": { "node-fetch": "./src/worker-fetch.js" },
+  "workers_dev": true,
+  "preview_urls": false,
+  "vars": {
+    "APPLE_ENVIRONMENT": "Production",
+    "APPLE_REVIEW_SANDBOX_ENABLED": "true",
+    "APPLE_BUNDLE_ID": "com.thumble.ios",
+    "APPLE_APP_ID": "6826421489",
+    "GOOGLE_PACKAGE_NAME": "com.thumble.android"
+  },
+  "ratelimits": [{ "name": "PURCHASE_LIMITER", "namespace_id": "17002", "simple": { "limit": 30, "period": 60 } }],
+  "observability": { "enabled": true, "logs": { "enabled": true, "invocation_logs": false } }
+}

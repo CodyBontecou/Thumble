@@ -1,0 +1,33 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "thumble": {
+      "type": "streamable-http",
+      "url": "https://thumble-cloud-pilot.costream.workers.dev/mcp",
+      "extensions": {
+        "com.openai": {
+          "auth": {
+            "type": "oauth",
+            "client": {
+              "mode": "provided",
+              "clientId": "thumble-chatgpt",
+              "tokenEndpointAuthMethod": "none"
+            },
+            "authorizationUrl": "https://thumble-cloud-pilot.costream.workers.dev/api/auth/oauth2/authorize",
+            "tokenUrl": "https://thumble-cloud-pilot.costream.workers.dev/api/auth/oauth2/token",
+            "resource": "https://thumble-cloud-pilot.costream.workers.dev/mcp",
+            "baseScopes": [
+              "openid",
+              "offline_access",
+              "profiles:read",
+              "profiles:write",
+              "devices:read",
+              "deliveries:read",
+              "deliveries:write"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

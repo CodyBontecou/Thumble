@@ -1,0 +1,37 @@
+# Identity storage and deletion facts
+
+Implementation: Better Auth 1.7.12 on the cloud Worker's D1 database, with migrations 0001–0004. This records implemented behavior and its test limits; it does not claim marketplace approval or a live account-deletion demonstration.
+
+## Stored while an account is active
+
+- `user`: a generated user ID, name, email, verified-email flag and creation/update timestamps. Google and Apple profile mapping sets `image:null`; migration 0003 clears previous avatar URLs. Apple returning login may recover name/email from the same exact already-linked Apple subject when Apple omits them.
+- `account`: the user/provider association and provider subject ID, scopes and token-expiry timestamps. Access/refresh tokens are encrypted through Better Auth's XChaCha20-Poly1305 mechanism using the Worker signing secret. They permit provider revocation; no provider ID token is retained after login. Supported create/update hooks discard that unused token, and migration 0004 clears older copies. Provider profile/ID-token payloads, including any avatar claim, are processed transiently during login. They are not copied into an analytics store.
+- `session`: a session token, user ID, timestamps, expiry, and the framework's IP-address/user-agent fields. Default session validity is seven days, with session renewal; deletion requires a session created less than five minutes ago. Expiry is an authorization limit, not a claim of immediate physical row purging.
+- OAuth clients/resources, consented scopes, opaque token hashes, refresh state, authorization codes and expiries. The resource access token lasts 15 minutes; default OAuth refresh validity is 30 days; authorization codes/signed flow context expire after ten minutes. Session/client/grant state can constrain refresh before that limit. Rotated refresh responses may be encrypted and replayed for the MCP plugin's 30-second retry window. Expired records are not promised a separate scheduled purge by this implementation.
+- Cloud controller profile revisions, registered phone metadata (name/platform/viewport and activity timestamps), hashed device credentials, and delivery state/errors. Device credentials expire after 30 days. Delivery errors accept bounded descriptions up to 500 characters; callers must not put credentials in those descriptions.
+- Authentication rate-limit buckets contain IP/path-derived keys, counts and timestamps. They are operational authentication state, not a separate analytics system.
+
+There is no advertising or product-analytics integration in this flow. Worker infrastructure may retain access/operational logs according to its configured service policy. Identity application logging emits fixed event names only; provider error bodies, tokens, names, emails and raw provider payloads are not passed to that logger. Cloud request-failure logging is limited to a fixed event plus error type.
+
+## Deletion behavior
+
+The account page displays the signed-in account, requires an explicit confirmation and posts to Better Auth's `/api/auth/delete-user`. A fresh browser session (under five minutes) and an `x-thumble-account-id` assertion matching the current session's issuer-derived account hash are both required. A query string or another account's hash cannot choose the account to delete.
+
+For every linked Apple account, the service first decrypts its stored refresh token (or access token if no refresh token is available) and calls Apple's HTTPS revocation endpoint using a dynamically generated five-minute ES256 client-secret JWT. The request has an eight-second timeout and rejects redirects. No erasure starts until Apple revocation succeeds. Missing credentials, failed network requests and non-successful responses return a bounded error while leaving the account, encrypted credentials and cloud data available for a retry. Google authorization grants held by Google are not revoked by this deletion hook; their local encrypted credentials and associations are erased.
+
+After successful Apple revocation, one D1 batch writes the security tombstone and deletes that account's controller revisions, phone registrations/device-token hashes, deliveries and user-linked pending authorization codes. Better Auth then deletes its user, provider account associations and sessions; database cascades delete that user's OAuth access/refresh-token records and consent rows. A final pass removes pending user-linked codes that raced the initial cleanup. SQL triggers prevent later writes for the tombstoned cloud owner and prevent new orphaned user-linked authorization codes. Other users' records and shared signing keys/client definitions are preserved.
+
+A previously valid signed Better Auth access token is rejected with `401 account_deleted` when the user is absent or the tombstone exists, even before the JWT expires. Deleted device tokens no longer resolve. Browser deletion failures after erasure has begun remain retryable through the browser session when that session still exists; the tombstone keeps cloud access blocked during that incomplete cleanup.
+
+## What remains after successful deletion
+
+- **One security tombstone:** `account_id` (SHA-256 of issuer plus user ID) and `deleted_at`. No email, name, provider subject, provider token or session/device token is kept in it. It has no automatic expiration. Its purpose is to reject stale/in-flight cloud writes; this is deliberate retained pseudonymous security data.
+- **Shared service records:** service-wide JWKS, fixed OAuth clients/resources and operational rate-limit records are not account-owned deletion targets. Unlinked transient OAuth flow state can retain its callback/context until normal framework expiry/cleanup; no user-specific diagnostic copy is created.
+- **Provider/infrastructure records:** Apple, Google and Cloudflare operate their own records, security logs and managed backups. This code does not erase those systems' logs or control their retention windows. Deployment owners still need to confirm and publish the actual infrastructure backup/log retention and restoration handling before making a stronger privacy promise.
+- **Offline phones:** cloud deletion cannot remotely erase an offline phone's SecureStore cache. The app clears local account credentials/controller cache after an authenticated `account_deleted` confirmation, or when the user signs out. An offline copy remains until the app performs that check or the user clears it.
+
+## Evidence and outstanding live validation
+
+`apps/cloud/test/deletion.test.js` exercises fresh-session/account assertions, Apple revocation failure retaining data, successful revocation before erasure, owner isolation, cleanup of sessions/grants/codes, JWT invalidation and stale-write guards with local SQL and mocked Apple network responses. Identity tests cover encrypted provider credentials, dropped provider ID tokens, null avatar storage and exact-subject Apple email recovery.
+
+`apps/cloud/test-identity-runtime.mjs` builds the real Worker and runs the PKCE/consent/MCP delivery journey followed by deletion only against isolated local workerd/D1 fixture data. It checks rows are removed, the original JWT returns `account_deleted` and a late SQL write is rejected. Social login, Apple revocation and phone rendering in these automated fixtures are not a live provider/physical-phone deletion demonstration. No real user account was deleted by this implementation task. Live deletion, provider revocation and store-disclosure validation remain separate release checks.

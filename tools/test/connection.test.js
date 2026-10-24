@@ -359,3 +359,36 @@ test('legacy receivers without access negotiation cannot become an unmetered con
   assert.equal(h.connection.snapshot().phase, 'offline');
   assert.match(h.connection.snapshot().detail, /Update your Mac receiver/);
 });
+
+test('cloud adoption pauses input and confirms exact content only after receiver activation and neutral ACK', async () => {
+  const h = harness(); await h.connection.connect(invitation()); h.ready();
+  h.connection.profilesSupported = true; h.connection.cloudAdoptionSupported = true;
+  const source = { service: 'https://pilot.example', accountId: 'a'.repeat(64), profileId: xboxProfile.id, revision: 7 };
+  const localId = 'cloud-' + 'b'.repeat(40);
+  let complete = false;
+  const pending = h.connection.adoptProfile(xboxProfile, source, 0).then(value => { complete = true; return value; });
+  assert.equal(h.connection.canPlay, false);
+  const request = h.sent.at(-1); assert.equal(request.type, 'profile-adopt');
+  const catalog = { profiles: [{ id: localId, name: xboxProfile.name, revision: 1 }], activationRevision: 1, adoption: { profileId: localId, profileRevision: 1, source } };
+  h.emit('message', { type: 'profiles-result', id: request.id, catalog });
+  await Promise.resolve(); assert.equal(complete, false);
+  h.emit('message', { type: 'layout', revision: 1, profile: { ...xboxProfile, id: localId } });
+  h.connection.acknowledgeLayout(1);
+  h.emit('message', { type: 'paused', seq: h.connection.sequence, lease: 'adopt-lease' });
+  const neutral = h.sent.at(-1); assert.deepEqual(neutral.state, neutralState());
+  await Promise.resolve(); assert.equal(complete, false);
+  h.emit('message', { type: 'ack', seq: neutral.seq, lease: 'confirmed' });
+  assert.equal((await pending).activationRevision, 1);
+  assert.equal(complete, true); assert.equal(h.connection.canPlay, false);
+});
+
+test('cloud adoption refuses old receivers and rejects forged provenance before success', async () => {
+  const h = harness(); await h.connection.connect(invitation()); h.ready(); h.connection.profilesSupported = true;
+  const source = { service: 'https://pilot.example', accountId: 'a'.repeat(64), profileId: xboxProfile.id, revision: 1 };
+  await assert.rejects(h.connection.adoptProfile(xboxProfile, source, 0), /Update your Mac receiver/);
+  h.connection.cloudAdoptionSupported = true;
+  const pending = h.connection.adoptProfile(xboxProfile, source, 0);
+  const request = h.sent.at(-1);
+  h.emit('message', { type: 'profiles-result', id: request.id, catalog: { profiles: [], activationRevision: 1, adoption: { profileId: 'cloud-' + 'b'.repeat(40), profileRevision: 1, source: { ...source, revision: 2 } } } });
+  await assert.rejects(pending, /requested cloud revision/);
+});

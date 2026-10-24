@@ -1,0 +1,10 @@
+{
+  "productId": "thumble_pro_lifetime",
+  "basePriceUSD": 19.99,
+  "demoSeconds": 1800,
+  "entitlementPublicKey": "PP/12jQNJrLFJTantpP71kZUXHl34HVPB+J1uyFRhI4=",
+  "entitlementServiceURL": "https://thumble-purchases-sandbox.costream.workers.dev",
+  "privacyURL": "https://thumble.io/privacy",
+  "termsURL": "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/",
+  "supportURL": "https://thumble.io/support"
+}

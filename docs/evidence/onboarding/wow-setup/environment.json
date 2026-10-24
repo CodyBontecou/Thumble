@@ -1,0 +1,19 @@
+{
+  "is_react_native": true,
+  "expo_version": "58.0.17",
+  "react_native_version": "0.88.0",
+  "native_platforms": ["ios", "android"],
+  "package_manager": "npm workspaces",
+  "metro_port": 8088,
+  "metro_command": "npm run start --workspace @tapping/mobile",
+  "lint_command": "npm run lint --workspace @tapping/mobile",
+  "typecheck_command": "npm run typecheck --workspace @tapping/mobile",
+  "test_command": "npm test",
+  "ios_workspace": "apps/mobile/ios/Tapping.xcworkspace",
+  "ios_scheme": "Tapping",
+  "ios_bundle_id": "com.thumble.ios",
+  "qa_device": "87952CD2-B760-40A1-AF11-5CE40995960B",
+  "qa_derived_data": "/tmp/tapping-onboarding-build",
+  "qa_configuration": "Release",
+  "note": "Project Environment from argent-environment-inspector. Release bundles run without Metro. Discover running devices before reusing the historical QA target."
+}

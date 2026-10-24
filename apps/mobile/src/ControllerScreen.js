@@ -1,6 +1,7 @@
 import { useKeepAwake } from 'expo-keep-awake';
 import { calibration } from './calibration';
 import { connection } from './connection';
+import { cloud } from './cloud/store';
 import ControllerChat, { useControllerChat } from './ControllerChat';
 import thumbleIcon from '../assets/thumble-menu.png';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
@@ -11,11 +12,9 @@ import { StatusBar } from 'expo-status-bar';
 import { TouchController, xboxProfile, modifierPrefix, controlDisplay } from '@tapping/controller';
 
 const glyph = { up: '↑', down: '↓', left: '←', right: '→', back: '▧', start: '≡' };
-const utilityArt = { cp_jump: require('../assets/consoleport/Jump.png'), cp_interact: require('../assets/consoleport/Target_Wide_Neutral.png'), cp_target: require('../assets/consoleport/Target_Wide_Enemy.png'), cp_bags: require('../assets/consoleport/Bags.png'), cp_map: require('../assets/consoleport/Map.png'), cp_menu: require('../assets/consoleport/Menu.png') };
-
-function SpellArt({ icon, label }) {
-  const [failedIcon, setFailedIcon] = useState(null);
-  return icon && icon !== failedIcon ? <Image accessible={false} source={utilityArt[icon] ?? { uri: `https://wow.zamimg.com/images/wow/icons/large/${icon}.jpg` }} style={s.spellArt} onError={() => setFailedIcon(icon)} fadeDuration={0} /> : label === 'Unbound' ? null : <Text numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.55} style={s.buttonLabel}>{label}</Text>;
+// App Store v1 uses text and built-in symbols; no remote game artwork is loaded.
+function ControlLabel({ label }) {
+  return label === 'Unbound' ? null : <Text numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.55} style={s.buttonLabel}>{label}</Text>;
 }
 
 function Control({ control, size, visuals, onAccessiblePress, profile, prefix, chatState }) {
@@ -52,7 +51,7 @@ function Control({ control, size, visuals, onAccessiblePress, profile, prefix, c
         </View>
       ) : (
         <View style={[s.button, { width: shoulder && !consolePort ? width : diameter, height: shoulder && !consolePort ? height : diameter }, shoulder && !consolePort && s.shoulder, dpad && !consolePort && s.dpad, consolePort && s.consolePortButton, pressed && s.active, face && pressed && { borderColor: control.color }, chatting && s.chatActive]}>
-          {consolePort ? <SpellArt icon={display.icon} label={display.label} /> : <Text numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.55} style={[s.buttonLabel, control.color && { color: control.color }, face && { fontSize: control.label.length > 3 ? 14 : 22 }, dpad && { fontSize: 22 }]}>{chatting ? display.label : control.label === xboxProfile.controls.find(item => item.id === control.id)?.label ? (glyph[control.id] ?? control.label) : control.label}</Text>}
+          {consolePort ? <ControlLabel label={display.label} /> : <Text numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.55} style={[s.buttonLabel, control.color && { color: control.color }, face && { fontSize: control.label.length > 3 ? 14 : 22 }, dpad && { fontSize: 22 }]}>{chatting ? display.label : control.label === xboxProfile.controls.find(item => item.id === control.id)?.label ? (glyph[control.id] ?? control.label) : control.label}</Text>}
           {consolePort && <Text style={[s.badge, control.color && { color: control.color }]}>{control.badge}</Text>}
         </View>
       )}
@@ -84,17 +83,20 @@ function Screen() {
   const chat = useControllerChat(network);
   const pauseChat = chat.pause;
   const layout = useSyncExternalStore(connection.subscribeProfile, connection.profileSnapshot);
+  const cloudState = useSyncExternalStore(cloud.subscribe, cloud.snapshot);
+  const macAdoption = cloudState.macAdoption;
+  const cloudSelection = network.phase === 'offline' ? cloudState.selected : null;
   const settings = useSyncExternalStore(calibration.subscribe, calibration.snapshot);
-  const renderedProfile = useMemo(() => layout.revision === 0 ? calibration.standard(settings) : layout.profile, [layout, settings]);
-  const hasChatControl = layout.profile.controls.some(control => control.id === 'chat');
+  const renderedProfile = useMemo(() => cloudSelection?.profile ?? (layout.revision === 0 ? calibration.standard(settings) : layout.profile), [cloudSelection, layout, settings]);
+  const hasChatControl = renderedProfile.controls.some(control => control.id === 'chat');
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [visuals] = useState(() => new Map());
   const [prefix, setPrefix] = useState('');
   const [focused, setFocused] = useState(true);
   const chatTouches = useRef(new Set());
   const [geometry] = useState(() => ({ x: 0, y: 0, width: 0, height: 0 }));
-  const [controller] = useState(() => new TouchController(layout.profile, {
-    onState: state => { connection.submit(state); setPrefix(modifierPrefix(connection.profileSnapshot().profile, state)); },
+  const [controller] = useState(() => new TouchController(renderedProfile, {
+    onState: state => { connection.submit(state); setPrefix(modifierPrefix(connection.snapshot().phase === 'offline' ? cloud.snapshot().selected?.profile ?? connection.profileSnapshot().profile : connection.profileSnapshot().profile, state)); },
     onVisual: (id, value) => visuals.get(id)?.(value),
   }));
   function openChat(control) {
@@ -103,9 +105,18 @@ function Screen() {
     return true;
   }
   useLayoutEffect(() => {
+    controller.releaseAll();
     controller.replaceProfile(renderedProfile);
     connection.acknowledgeLayout(layout.revision);
   }, [controller, layout, renderedProfile]);
+  useEffect(() => {
+    if (cloudSelection && focused && size.width > 0 && cloudState.foreground) void cloud.rendered(cloudSelection);
+  }, [cloudSelection, focused, size.width, cloudState.foreground, cloudState.renderAttempt]);
+  useEffect(() => {
+    if (macAdoption && focused && size.width > 0 && network.phase === 'connected' && connection.session === macAdoption.pairing && layout.profile.id === macAdoption.profileId && layout.revision === macAdoption.activationRevision && !connection.layoutPending && !connection.recovering) {
+      void cloud.rendered(macAdoption.selection, macAdoption);
+    }
+  }, [macAdoption, focused, size.width, layout, network, cloudState.renderAttempt]);
   useEffect(() => {
     const reset = () => { chatTouches.current.clear(); controller.releaseAll(); };
     connection.resetListeners.add(reset);
@@ -128,7 +139,7 @@ function Screen() {
       if (method === 'up') controller.up(item.identifier);
       else {
         const x = (item.pageX - geometry.x) / geometry.width, y = (item.pageY - geometry.y) / geometry.height;
-        const hit = method === 'down' && [...layout.profile.controls].reverse().find(control => x >= control.frame.x && x <= control.frame.x + control.frame.width && y >= control.frame.y && y <= control.frame.y + control.frame.height);
+        const hit = method === 'down' && [...renderedProfile.controls].reverse().find(control => x >= control.frame.x && x <= control.frame.x + control.frame.width && y >= control.frame.y && y <= control.frame.y + control.frame.height);
         if (hit && openChat(hit)) { chatTouches.current.add(item.identifier); continue; }
         controller[method](item.identifier, x, y);
       }
@@ -150,7 +161,7 @@ function Screen() {
         onResponderMove={event => touch('move', event)} onResponderEnd={event => touch('up', event)}
         onResponderTerminationRequest={() => false}
         onResponderRelease={() => { chatTouches.current.clear(); controller.releaseAll(); }} onResponderTerminate={() => { chatTouches.current.clear(); controller.releaseAll(); }}>
-        {size.width > 0 && layout.profile.controls.map(control => <Control key={`${layout.revision}-${control.id}`} control={control} size={size} visuals={visuals} onAccessiblePress={accessiblePress} profile={layout.profile} prefix={prefix} chatState={chat.state} />)}
+        {size.width > 0 && renderedProfile.controls.map(control => <Control key={`${cloudSelection ? `cloud-${cloudSelection.profile.id}-${cloudSelection.revision}` : layout.revision}-${control.id}`} control={control} size={size} visuals={visuals} onAccessiblePress={accessiblePress} profile={renderedProfile} prefix={prefix} chatState={chat.state} />)}
       </View>
       <ControllerChat chat={chat} network={network} top={insets.top + (hasChatControl ? 8 : 52)} />
       {!hasChatControl && <Pressable accessibilityRole="button" accessibilityLabel={chat.state === 'listening' ? 'Stop dictation' : 'Chat'} onPress={chat.toggle} style={[s.chatButton, { top: insets.top + 4 }]}><Text style={s.action}>{chat.state === 'listening' ? 'Stop' : 'Chat'}</Text></Pressable>}
@@ -158,7 +169,7 @@ function Screen() {
         <Text style={s.demoTitle}>{access.pro ? 'Ready to play' : access.remaining <= 0 ? 'Your demo has ended' : access.remaining >= 1799 ? 'Try the full controller' : 'Controller paused'}</Text>
         <Text style={s.demoDetail}>{access.pro ? 'Resume from neutral controls.' : access.remaining <= 0 ? 'Unlock Pro to keep playing without a time limit. All features are included in the demo.' : `${Math.ceil(access.remaining / 60)} minutes remaining across all sessions. Setup and practice are free. Controls stop when time runs out. No automatic charge.`}</Text>
         {!!access.error && <Text style={s.demoDetail}>{access.error}</Text>}
-        {(access.pro || access.remaining > 0) && <Pressable accessibilityRole="button" style={s.demoAction} onPress={() => connection.resumePlay()}><Text style={s.action}>{access.pro || access.remaining < 1799 ? 'Resume controller' : 'Start 30-minute demo'}</Text></Pressable>}
+        {(access.pro || access.remaining > 0) && <Pressable accessibilityRole="button" style={[s.demoAction, s.demoPrimary]} onPress={() => connection.resumePlay()}><Text style={s.demoPrimaryText}>{access.pro || access.remaining < 1799 ? 'Resume controller' : 'Start 30-minute demo'}</Text></Pressable>}
         {!access.pro && <Pressable accessibilityRole="button" style={s.demoAction} onPress={() => router.push('/pro')}><Text style={s.action}>View Pro</Text></Pressable>}
         <Pressable accessibilityRole="button" style={s.demoAction} onPress={() => connection.disconnect()}><Text style={s.action}>Continue in practice mode</Text></Pressable>
       </ScrollView>}
@@ -175,19 +186,20 @@ function Screen() {
 export default function ControllerScreen() { return <SafeAreaProvider><Screen /></SafeAreaProvider>; }
 
 const s = StyleSheet.create({
-  demoOverlay: { position: 'absolute', alignSelf: 'center', top: '8%', bottom: '8%', width: '65%', backgroundColor: '#24282b', borderRadius: 14, borderCurve: 'continuous' },
-  demoContent: { padding: 16, gap: 8 },
-  demoTitle: { color: '#f0f1f2', fontSize: 22, fontWeight: '700' },
-  demoDetail: { color: '#a5adb5', fontSize: 14, lineHeight: 20 },
-  demoAction: { minHeight: 44, justifyContent: 'center', alignItems: 'center' },
+  demoOverlay: { position: 'absolute', alignSelf: 'center', top: '8%', bottom: '8%', width: '65%', maxWidth: 640, backgroundColor: '#141414', borderWidth: 1, borderColor: '#2E2E2E', borderRadius: 24, borderCurve: 'continuous' },
+  demoContent: { padding: 24, gap: 12 },
+  demoTitle: { color: '#EDEDED', fontSize: 28, letterSpacing: -0.6, fontWeight: '600' },
+  demoDetail: { color: '#A1A1A1', fontSize: 14, lineHeight: 20 },
+  demoAction: { minHeight: 48, borderRadius: 28, borderCurve: 'continuous', backgroundColor: '#1F1F1F', justifyContent: 'center', alignItems: 'center' },
+  demoPrimary: { backgroundColor: '#EDEDED' },
+  demoPrimaryText: { color: '#0A0A0A', fontSize: 16, fontWeight: '600' },
   demoRemaining: { position: 'absolute', bottom: 4, alignSelf: 'center', color: '#efdf9d', fontSize: 12, fontVariant: ['tabular-nums'] },
   screen: { flex: 1, backgroundColor: '#17191b' },
-  action: { color: '#b8e09e', fontSize: 15, fontWeight: '600' },
+  action: { color: '#EDEDED', fontSize: 15, fontWeight: '600' },
   canvas: { flex: 1, marginHorizontal: 8 },
   control: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
   button: { borderRadius: 100, backgroundColor: '#292d31', borderWidth: 2, borderColor: '#393f44', alignItems: 'center', justifyContent: 'center' },
   consolePortButton: { borderWidth: 3, borderColor: '#77736b', backgroundColor: '#343537' },
-  spellArt: { position: 'absolute', width: '100%', height: '100%', borderRadius: 100 },
   badge: { position: 'absolute', top: -16, color: '#efdf9d', fontSize: 12, fontWeight: '800', backgroundColor: '#17191b', paddingHorizontal: 4, borderRadius: 4 },
   stickLabel: { position: 'absolute', bottom: 5, color: '#a5adb5', fontSize: 10 },
   active: { backgroundColor: '#414a43', borderColor: '#b8e09e' },

@@ -2,7 +2,7 @@ import Foundation
 import CoreFoundation
 
 // Same atomic store and directory lock as the agent tools. Phone requests select
-// existing revisions only; they never supply a profile body or executable input.
+// existing revisions, or explicitly adopt validated cloud configuration. No executable input.
 enum ProfileCatalog {
     enum Failure: LocalizedError {
         case invalid, conflict, busy
@@ -42,10 +42,17 @@ enum ProfileCatalog {
     static func summary(_ store: [String: Any]) throws -> [String: Any] {
         guard let entries = store["profiles"] as? [[String: Any]] else { throw Failure.invalid }
         let active = store["active"] as? [String: Any]
-        return ["profiles": entries.map { e -> [String: Any] in
+        var result: [String: Any] = ["profiles": entries.map { e -> [String: Any] in
             let p = e["profile"] as! [String: Any]
             return ["id": p["id"]!, "name": p["name"]!, "revision": e["revision"]!]
-        }, "activationRevision": revision(active?["revision"]) ?? 0]
+        }, "activationRevision": revision(active?["revision"]) ?? 0, "agentCheckSupported": true, "cloudAdoptionSupported": true]
+        if let check = store["agentConnection"] as? [String: Any],
+           let code = check["code"] as? String, code.range(of: "^[a-f0-9]{12}$", options: .regularExpression) != nil,
+           let checkedAt = check["checkedAt"] as? NSNumber, CFGetTypeID(checkedAt) != CFBooleanGetTypeID() {
+            let age = Date().timeIntervalSince1970 - checkedAt.doubleValue / 1000
+            if age.isFinite && age >= 0 && age <= 600 { result["agentConnection"] = ["code": code, "ageSeconds": age] }
+        }
+        return result
     }
     static func activate(_ directory: URL, id: String, profileRevision: Int, expectedActivationRevision: Int) throws -> [String: Any] {
         let manager = FileManager.default, lock = directory.appendingPathComponent("write.lock", isDirectory: true)
@@ -74,5 +81,54 @@ enum ProfileCatalog {
         try data.write(to: path, options: .atomic)
         try manager.setAttributes([.posixPermissions: 0o600], ofItemAtPath: path.path)
         return try summary(store)
+    }
+    static func adopt(_ directory: URL, profile: [String: Any], source: [String: Any], expectedActivationRevision: Int) throws -> [String: Any] {
+        try CloudProfile.validate(profile)
+        let id = try CloudProfile.localID(source: source, profile: profile)
+        var local = profile; local["id"] = id
+        let manager = FileManager.default
+        try manager.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        let lock = directory.appendingPathComponent("write.lock", isDirectory: true)
+        let deadline = ProcessInfo.processInfo.systemUptime + 3
+        while true {
+            do { try manager.createDirectory(at: lock, withIntermediateDirectories: false); break }
+            catch {
+                guard manager.fileExists(atPath: lock.path) else { throw error }
+                guard ProcessInfo.processInfo.systemUptime < deadline else { throw Failure.busy }
+                Thread.sleep(forTimeInterval: 0.025)
+            }
+        }
+        defer { try? manager.removeItem(at: lock) }
+        var store: [String: Any]
+        do { store = try read(directory) }
+        catch let error as NSError where error.domain == NSCocoaErrorDomain && error.code == NSFileReadNoSuchFileError { store = ["version": 1, "profiles": []] }
+        var entries = store["profiles"] as! [[String: Any]]
+        let active = store["active"] as? [String: Any]
+        let previous = revision(active?["revision"]) ?? 0
+        guard expectedActivationRevision == previous, previous < 9_007_199_254_740_991 else { throw Failure.conflict }
+        let canonical = try JSONSerialization.data(withJSONObject: local, options: [.sortedKeys])
+        let sourceData = try JSONSerialization.data(withJSONObject: source, options: [.sortedKeys])
+        if let entry = entries.first(where: { ($0["profile"] as? [String: Any])?["id"] as? String == id }) {
+            guard revision(entry["revision"]) == 1, let old = entry["profile"] as? [String: Any],
+                  let oldSource = entry["cloudSource"] as? [String: Any],
+                  try JSONSerialization.data(withJSONObject: old, options: [.sortedKeys]) == canonical,
+                  try JSONSerialization.data(withJSONObject: oldSource, options: [.sortedKeys]) == sourceData else { throw Failure.conflict }
+        } else {
+            guard entries.count < 256 else { throw Failure.invalid }
+            entries.append(["profile": local, "revision": 1, "cloudSource": source])
+        }
+        // Lost-response retries reuse the same immutable local copy and activation.
+        let sameActive = (active?["profile"] as? [String: Any])?["id"] as? String == id && revision(active?["profileRevision"]) == 1
+        let next = sameActive ? previous : previous + 1
+        store["profiles"] = entries
+        store["active"] = ["revision": next, "profileRevision": 1, "profile": local]
+        let data = try JSONSerialization.data(withJSONObject: store)
+        guard data.count <= 8 * 1024 * 1024 else { throw Failure.invalid }
+        let path = directory.appendingPathComponent("store.json")
+        try data.write(to: path, options: .atomic)
+        try manager.setAttributes([.posixPermissions: 0o600], ofItemAtPath: path.path)
+        var result = try summary(store)
+        result["adoption"] = ["profileId": id, "profileRevision": 1, "source": source]
+        return result
     }
 }

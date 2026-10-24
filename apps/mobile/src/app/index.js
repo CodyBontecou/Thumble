@@ -1,12 +1,22 @@
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, View } from 'react-native';
-import { Redirect } from 'expo-router';
+import { useCallback, useRef } from 'react';
+import { ActivityIndicator, Text, View } from 'react-native';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import ControllerScreen from '../ControllerScreen';
 import { onboarding } from '../onboarding';
-import { colors } from '../ui/design';
+import { setupComplete } from '../onboarding-core';
+import { useSetup } from '../use-setup';
+import { Button, colors, ui } from '../ui/design';
 export default function Index() {
-  const [ready, setReady] = useState(/** @type {boolean | null} */ (null));
-  useEffect(() => { let active = true; onboarding.isComplete().then(value => { if (active) setReady(value); }).catch(() => { if (active) setReady(false); }); return () => { active = false; }; }, []);
-  if (ready === null) return <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background }}><ActivityIndicator color={colors.text} /></View>;
-  return ready ? <ControllerScreen /> : <Redirect href="/onboarding" />;
+  const { practice } = useLocalSearchParams();
+  const { state, error, setError } = useSetup();
+  const entryHandled = useRef(false);
+  useFocusEffect(useCallback(() => {
+    if (!state.loaded || entryHandled.current) return;
+    entryHandled.current = true;
+    if (!state.dismissed && !setupComplete(state) && practice !== '1') router.push(state.welcomeSeen ? '/onboarding' : '/welcome');
+  }, [state, practice]));
+  if (!state.loaded) return <View style={{ flex: 1, padding: 24, gap: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background }}>{error ? <><Text accessibilityRole="alert" style={ui.error}>{error}</Text><Button onPress={() => { setError(''); void onboarding.load().catch(failure => setError(failure.message)); }}>Retry loading setup</Button></> : <ActivityIndicator color={colors.text} />}</View>;
+  // Keep the real controller mounted beneath setup so incoming profiles render
+  // and acknowledge normally. Its focus handler releases input while covered.
+  return <ControllerScreen />;
 }

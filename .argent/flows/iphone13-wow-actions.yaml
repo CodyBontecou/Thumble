@@ -1,0 +1,88 @@
+steps:
+  - echo: >-
+      Requires saved pairing and Getting started as launch destination; Mac offline. Does not confirm
+      gameplay.
+  - launch: com.thumble.ios
+  - await:
+      visible:
+        text: Set up WoW, Prepare ConsolePort
+  - await:
+      idle: true
+  - tap:
+      text: Set up WoW, Prepare ConsolePort and verify an action in-game, 3
+  - await:
+      visible:
+        text: THUMBLE × CONSOLEPORT
+  - await:
+      idle: true
+  - await:
+      visible:
+        text: Connect Mac
+        role: AXButton
+  - await:
+      visible:
+        text: I performed an action in WoW
+        role: AXButton
+  - echo: >-
+      Four single-finger scroll gestures exercise the footer at different content offsets on iPhone 13
+      landscape. Raw points intentionally stay inside the scroll viewport.
+  - tool: gesture-swipe
+    args:
+      fromX: 0.75
+      fromY: 0.65
+      toX: 0.75
+      toY: 0.24
+      durationMs: 450
+      momentum: false
+  - tool: gesture-swipe
+    args:
+      fromX: 0.75
+      fromY: 0.65
+      toX: 0.75
+      toY: 0.24
+      durationMs: 450
+      momentum: false
+  - tool: gesture-swipe
+    args:
+      fromX: 0.75
+      fromY: 0.65
+      toX: 0.75
+      toY: 0.24
+      durationMs: 450
+      momentum: false
+  - tool: gesture-swipe
+    args:
+      fromX: 0.75
+      fromY: 0.65
+      toX: 0.75
+      toY: 0.24
+      durationMs: 450
+      momentum: false
+  - await:
+      visible:
+        text: Thumble cannot inspect this live game state
+  - await:
+      visible:
+        text: Connect Mac
+        role: AXButton
+  - tap:
+      text: Connect Mac
+  - await:
+      visible:
+        text: 01 / CONNECT YOUR MAC
+  - await:
+      idle: true
+  - tap:
+      text: Done
+  - await:
+      visible:
+        text: Connect your Mac before confirming your in-game check.
+  - await:
+      idle: true
+  - tap:
+      text: Done
+  - await:
+      visible:
+        text: Set up WoW, Prepare ConsolePort
+  - await:
+      idle: true

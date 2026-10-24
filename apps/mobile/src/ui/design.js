@@ -16,10 +16,18 @@ export const ui = StyleSheet.create({
   error: { color: colors.danger, fontSize: 14, lineHeight: 21 },
   small: { color: colors.secondary, fontSize: 12, lineHeight: 18 },
 });
-export function Page({ children, style = {}, scroll = true }) {
+/** @param {{children: any, style?: any, scroll?: boolean, footer?: any}} props */
+export function Page({ children, style = {}, scroll = true, footer = null }) {
   return <SafeAreaProvider><SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['left', 'right', 'bottom']}>
-    {scroll ? <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" contentInsetAdjustmentBehavior="automatic" contentContainerStyle={[{ padding: 24, paddingBottom: 32, gap: 24, width: '100%', maxWidth: 1120, alignSelf: 'center' }, style]}>{children}</ScrollView> : children}
+    {scroll ? <ScrollView automaticallyAdjustKeyboardInsets keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" contentInsetAdjustmentBehavior="automatic" contentContainerStyle={[{ padding: 24, paddingBottom: 32, gap: 24, width: '100%', maxWidth: 1120, alignSelf: 'center' }, style]}>{children}</ScrollView> : children}
+    {footer}
   </SafeAreaView></SafeAreaProvider>;
+}
+export function Actions({ children, status = '' }) {
+  return <View style={{ paddingHorizontal: 24, paddingTop: 12, paddingBottom: 8, borderTopWidth: 1, borderColor: colors.border, gap: 8 }}>
+    {!!status && <Text accessibilityLiveRegion="polite" style={ui.small}>{status}</Text>}
+    <View style={{ flexDirection: 'row', gap: 12 }}>{children}</View>
+  </View>;
 }
 export function Columns({ children, style = {} }) {
   const { width } = useWindowDimensions();
@@ -33,7 +41,7 @@ export function Button({ children, onPress, disabled = false, secondary = false,
   </Pressable>;
 }
 export function Row({ title, detail = '', trailing = '›', onPress, disabled = false }) {
-  return <Pressable accessibilityRole="button" disabled={disabled} accessibilityState={{ disabled }} onPress={onPress} style={({ pressed }) => ({ minHeight: 60, paddingHorizontal: 16, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', gap: 16, backgroundColor: pressed ? colors.raised : 'transparent', borderRadius: 16, borderCurve: 'continuous', opacity: disabled ? 0.4 : 1 })}>
+  return <Pressable accessibilityRole="button" disabled={disabled} accessibilityState={{ disabled }} onPress={onPress} style={({ pressed }) => ({ minHeight: 48, paddingHorizontal: 16, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', gap: 16, backgroundColor: pressed ? colors.raised : 'transparent', borderRadius: 16, borderCurve: 'continuous', opacity: disabled ? 0.4 : 1 })}>
     <View style={{ flex: 1, gap: 4 }}><Text style={{ color: colors.text, fontSize: 16, fontWeight: '500' }}>{title}</Text>{detail ? <Text style={ui.small}>{detail}</Text> : null}</View>
     <Text style={{ color: colors.secondary, fontSize: 22 }}>{trailing}</Text>
   </Pressable>;

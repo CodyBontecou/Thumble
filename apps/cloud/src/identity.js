@@ -1,0 +1,154 @@
+import { betterAuth } from 'better-auth';
+import { jwt } from 'better-auth/plugins';
+import { mcp } from '@better-auth/mcp';
+import { generateAppleClientSecret } from './apple.js';
+import { FRESH_SESSION_SECONDS, prepareAccountDeletion, completeAccountDeletion } from './deletion.js';
+export { generateAppleClientSecret } from './apple.js';
+import { CLOUD_SCOPES, CloudError, validServiceUrl } from '@tapping/cloud-contracts';
+
+export const IDENTITY_SCOPES = Object.freeze(['openid', 'offline_access', ...CLOUD_SCOPES]);
+export const CHATGPT_SCOPES = Object.freeze(IDENTITY_SCOPES.filter(scope => scope !== 'devices:manage'));
+export const MOBILE_REDIRECT_URI = 'thumble://cloud-auth/callback';
+const instances = new WeakMap();
+const clientSetup = new WeakMap();
+
+export function identityConfig(env) {
+  if (!validServiceUrl(env.BETTER_AUTH_URL) || new URL(env.BETTER_AUTH_URL).pathname !== '/') throw new CloudError('not_configured', 'The authentication service URL is not configured.', 503);
+  const baseURL = new URL(env.BETTER_AUTH_URL).origin;
+  const providers = [];
+  if (env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET) providers.push('google');
+  if (env.APPLE_CLIENT_ID && env.APPLE_TEAM_ID && env.APPLE_KEY_ID && env.APPLE_PRIVATE_KEY) providers.push('apple');
+  return { baseURL, issuer: `${baseURL}/api/auth`, resource: `${baseURL}/mcp`, mobileClientId: 'thumble-mobile', providers, scopes: [...IDENTITY_SCOPES] };
+}
+
+
+async function mapAppleProfile(env, profile) {
+  const result = { image: null };
+  if (profile.email || typeof profile.sub !== 'string') return result;
+  // Apple can omit email on returning authorization. Recover only the same
+  // already-linked provider subject; a new subject still needs provider email.
+  const context = await (await createIdentity(env)).$context;
+  const account = await context.adapter.findOne({ model: 'account', where: [{ field: 'providerId', value: 'apple' }, { field: 'accountId', value: profile.sub }] });
+  const user = account ? await context.internalAdapter.findUserById(account.userId) : null;
+  return user ? { ...result, email: user.email, emailVerified: user.emailVerified, name: user.name } : result;
+}
+
+// Exported for version-matched schema generation; no request can supply options.
+export function identityOptions(env) {
+  const config = identityConfig(env);
+  if (typeof env.BETTER_AUTH_SECRET !== 'string' || env.BETTER_AUTH_SECRET.length < 32 || !env.DB) throw new CloudError('not_configured', 'Authentication storage and signing secret must be configured.', 503);
+  const socialProviders = {};
+  if (config.providers.includes('google')) socialProviders.google = { clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET, mapProfileToUser: () => ({ image: null }) };
+  if (config.providers.includes('apple')) socialProviders.apple = async () => ({ clientId: env.APPLE_CLIENT_ID, clientSecret: await generateAppleClientSecret(env), mapProfileToUser: profile => mapAppleProfile(env, profile) });
+  return {
+    appName: 'Thumble', baseURL: config.baseURL, basePath: '/api/auth', secret: env.BETTER_AUTH_SECRET,
+    database: env.DB,
+    advanced: {
+      ipAddress: { ipAddressHeaders: ['cf-connecting-ip'] },
+      // Apple returns an OAuth form POST across sites. Only the short-lived
+      // double-submit state cookies need SameSite=None; sessions stay Lax.
+      ...(config.providers.includes('apple') ? { cookies: { state: { attributes: { sameSite: 'none', secure: true, path: '/api/auth/callback' } }, oauth_state: { attributes: { sameSite: 'none', secure: true, path: '/api/auth/callback' } } } } : {}),
+    },
+    trustedOrigins: [config.baseURL, ...(config.providers.includes('apple') ? ['https://appleid.apple.com'] : [])],
+    socialProviders,
+    logger: { level: 'warn', log: level => {
+      const event = level === 'error' ? 'identity_error' : 'identity_warning';
+      console.warn(JSON.stringify({ event }));
+    } },
+    emailAndPassword: { enabled: false },
+    // Provider ID tokens are needed during identity verification only. Keeping
+    // access/refresh tokens supports revocation without retaining avatar claims.
+    databaseHooks: { account: {
+      create: { before: async account => ({ data: { ...account, idToken: null } }) },
+      update: { before: async account => ({ data: { ...account, idToken: null } }) },
+    } },
+    session: { freshAge: FRESH_SESSION_SECONDS },
+    user: { deleteUser: { enabled: true, beforeDelete: async (user, request) => {
+      const context = await (await createIdentity(env)).$context;
+      await prepareAccountDeletion(env, { user, request, context, issuer: config.issuer });
+    }, afterDelete: user => completeAccountDeletion(env, user) } },
+    account: { encryptOAuthTokens: true, accountLinking: { enabled: true, requireLocalEmailVerified: true, allowDifferentEmails: false } },
+    rateLimit: { enabled: true, storage: 'database', window: 60, max: 100 },
+    disabledPaths: ['/token'],
+    plugins: [
+      jwt({ disableSettingJwtHeader: true, jwks: { keyPairConfig: { alg: 'ES256' }, rotationInterval: 30 * 86400 }, jwt: { issuer: config.issuer, audience: config.resource, expirationTime: '15m' } }),
+      mcp({
+        loginPage: '/sign-in', consentPage: '/consent', resource: config.resource,
+        resources: [{ identifier: config.resource, allowedScopes: [...IDENTITY_SCOPES], accessTokenTtl: 900 }],
+        scopes: [...IDENTITY_SCOPES], advertisedMetadata: { scopes_supported: [...CHATGPT_SCOPES] }, grantTypes: ['authorization_code', 'refresh_token'],
+        allowDynamicClientRegistration: false, allowUnauthenticatedClientRegistration: false,
+        cachedTrustedClients: new Set(['thumble-mobile', 'thumble-chatgpt']),
+        // Better Auth 1.7.12 infers public-token support from registration or
+        // client discovery, overlooking pre-provisioned public clients. This
+        // supported registry extension resolves only our fixed stored clients,
+        // so discovery advertises `none` without opening any registration.
+        extensions: [{ clientDiscovery: {
+          id: 'thumble-managed-public-clients',
+          matches: clientId => clientId === 'thumble-mobile' || clientId === 'thumble-chatgpt',
+          resolve: async (ctx, clientId, existing) => {
+            const client = existing ?? await ctx.context.adapter.findOne({ model: 'oauthClient', where: [{ field: 'clientId', value: clientId }] });
+            return client?.tokenEndpointAuthMethod === 'none' ? client : null;
+          },
+        } }],
+        // These fixed clients are provisioned by the operator, never user CRUD.
+        clientPrivileges: () => false, resourcePrivileges: () => false,
+      }),
+    ],
+  };
+}
+
+export async function createIdentity(env) {
+  let instance = instances.get(env);
+  if (!instance) { instance = betterAuth(identityOptions(env)); instances.set(env, instance); }
+  return instance;
+}
+
+function configuredChatgptClient(env) {
+  if (!env.CHATGPT_CLIENT_SECRET && !env.CHATGPT_REDIRECT_URIS) return null;
+  const confidential = Boolean(env.CHATGPT_CLIENT_SECRET);
+  if (confidential && (typeof env.CHATGPT_CLIENT_SECRET !== 'string' || env.CHATGPT_CLIENT_SECRET.length < 32)) throw new CloudError('not_configured', 'The ChatGPT OAuth client secret must be at least 32 characters.', 503);
+  let redirectUris;
+  try { redirectUris = JSON.parse(env.CHATGPT_REDIRECT_URIS); } catch { throw new CloudError('not_configured', 'ChatGPT redirect URIs must be a JSON array.', 503); }
+  if (!Array.isArray(redirectUris) || !redirectUris.length || redirectUris.some(uri => !validServiceUrl(uri) || !['chatgpt.com', 'chat.openai.com'].includes(new URL(uri).hostname))) throw new CloudError('not_configured', 'Configure exact HTTPS ChatGPT redirect URIs.', 503);
+  return { clientId: 'thumble-chatgpt', name: 'ChatGPT', redirectUris, applicationType: 'web', tokenEndpointAuthMethod: confidential ? 'client_secret_post' : 'none', requirePKCE: true, ...(confidential ? { secret: env.CHATGPT_CLIENT_SECRET } : {}) };
+}
+async function hashClientSecret(secret) {
+  const bytes = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(secret)));
+  return btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+async function provisionClients(env) {
+  const chatgpt = configuredChatgptClient(env);
+  const auth = await createIdentity(env), context = await auth.$context, config = identityConfig(env);
+  const clients = [{ clientId: 'thumble-mobile', name: 'Thumble phone', redirectUris: [MOBILE_REDIRECT_URI], applicationType: 'native', tokenEndpointAuthMethod: 'none', requirePKCE: true }];
+  if (chatgpt) clients.push(chatgpt);
+  else await context.adapter.update({ model: 'oauthClient', where: [{ field: 'clientId', value: 'thumble-chatgpt' }], update: { disabled: true, updatedAt: new Date() } });
+  // Operator-managed rows with fixed IDs. Adapter serialization follows the
+  // installed Better Auth schema; no hidden bootstrap user/session is created.
+  for (const client of clients) {
+    const { secret, ...registration } = client;
+    const data = { ...registration, clientSecret: secret ? await hashClientSecret(secret) : null, scopes: client.clientId === 'thumble-chatgpt' ? [...CHATGPT_SCOPES] : [...IDENTITY_SCOPES], clientCredentialsScopes: [], grantTypes: ['authorization_code', 'refresh_token'], responseTypes: ['code'], subjectType: 'public', skipConsent: false, disabled: false, updatedAt: new Date() };
+    const existing = await context.adapter.findOne({ model: 'oauthClient', where: [{ field: 'clientId', value: client.clientId }] });
+    if (!existing) {
+      try { await context.adapter.create({ model: 'oauthClient', data: { ...data, createdAt: new Date() } }); }
+      catch (error) { if (!await context.adapter.findOne({ model: 'oauthClient', where: [{ field: 'clientId', value: client.clientId }] })) throw error; }
+    } else {
+      await context.adapter.update({ model: 'oauthClient', where: [{ field: 'clientId', value: client.clientId }], update: data });
+    }
+    const resource = await context.adapter.findOne({ model: 'oauthResource', where: [{ field: 'identifier', value: config.resource }] });
+    if (!resource) throw new CloudError('not_configured', 'The OAuth resource schema has not been initialized.', 503);
+    const link = await context.adapter.findOne({ model: 'oauthClientResource', where: [{ field: 'clientId', value: client.clientId }, { field: 'resourceId', value: resource.identifier }] });
+    if (!link) {
+      try { await context.adapter.create({ model: 'oauthClientResource', data: { clientId: client.clientId, resourceId: resource.identifier } }); }
+      catch (error) { if (!await context.adapter.findOne({ model: 'oauthClientResource', where: [{ field: 'clientId', value: client.clientId }, { field: 'resourceId', value: resource.identifier }] })) throw error; }
+    }
+  }
+}
+export async function ensureIdentityClients(env) {
+  let setup = clientSetup.get(env);
+  if (!setup) { setup = provisionClients(env); clientSetup.set(env, setup); }
+  try { await setup; } catch (error) { clientSetup.delete(env); throw error; }
+}
+export async function handleIdentity(request, env) {
+  await ensureIdentityClients(env);
+  return (await createIdentity(env)).handler(request);
+}

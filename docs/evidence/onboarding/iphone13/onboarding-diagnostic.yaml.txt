@@ -1,0 +1,48 @@
+steps:
+  - launch: com.thumble.ios
+  - tool: await-ui-element
+    args:
+      selector:
+        text: Get started
+      condition: visible
+      timeoutMs: 15000
+  - tap:
+      text: Get started
+  - tap:
+      text: Connect your Mac, Pair with the receiver on the same Wi-Fi, 1
+  - tap:
+      text: Scan Mac QR code
+  - tap:
+      text: Test your controls, Try movement, camera, buttons and release, 2
+  - tap:
+      text: Open controller to test
+  - tap:
+      text: Start 30-minute demo
+  - tap:
+      id: controller-menu
+  - tap:
+      text: Getting started, ›
+  - tap:
+      text: Set up WoW, Prepare ConsolePort and verify an action in-game, 3
+  - tool: gesture-swipe
+    args:
+      fromX: 0.75
+      fromY: 0.85
+      toX: 0.75
+      toY: 0.27
+      durationMs: 350
+      momentum: false
+  - tool: gesture-swipe
+    args:
+      fromX: 0.75
+      fromY: 0.85
+      toX: 0.75
+      toY: 0.4
+      durationMs: 400
+      momentum: false
+  - tool: button
+    args:
+      button: home
+  - tool: launch-app
+    args:
+      bundleId: com.thumble.ios

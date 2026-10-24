@@ -8,7 +8,7 @@ import android.os.Handler
 import android.os.Looper
 
 class TappingPurchasesModule : Module(), PurchasesUpdatedListener {
-  private val productId = "tapping_pro_lifetime"
+  private val productId = "thumble_pro_lifetime"
   private var billing: BillingClient? = null
   private var buying: Promise? = null
   private val main = Handler(Looper.getMainLooper())
@@ -21,7 +21,7 @@ class TappingPurchasesModule : Module(), PurchasesUpdatedListener {
       if (buying != null) promise.reject("busy", "A purchase is already in progress.", null)
       else connect(promise) {
         val activity = appContext.currentActivity
-        if (activity == null) promise.reject("unavailable", "Open Tapping before buying Pro.", null)
+        if (activity == null) promise.reject("unavailable", "Open Thumble before buying Pro.", null)
         else details(promise) { product ->
           buying = promise
           val item = BillingFlowParams.ProductDetailsParams.newBuilder().setProductDetails(product)
@@ -38,6 +38,12 @@ class TappingPurchasesModule : Module(), PurchasesUpdatedListener {
     AsyncFunction("onboardingComplete") { prefs().getBoolean("onboarding.v1", false) }
     AsyncFunction("completeOnboarding") {
       if (!prefs().edit().putBoolean("onboarding.v1", true).commit()) throw IllegalStateException("Setup could not be saved.")
+    }
+    AsyncFunction("getOnboardingProgress") { prefs().getString("onboarding.v2", "") ?: "" }
+    AsyncFunction("saveOnboardingProgress") { json: String ->
+      require(json.toByteArray(Charsets.UTF_8).size <= 8192) { "Setup could not be saved." }
+      org.json.JSONObject(json)
+      if (!prefs().edit().putString("onboarding.v2", json).commit()) throw IllegalStateException("Setup could not be saved.")
     }
     AsyncFunction("getCalibration") { prefs().getString("calibration", "") ?: "" }
     AsyncFunction("saveCalibration") { json: String ->

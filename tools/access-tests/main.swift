@@ -40,7 +40,7 @@ print("PASS demo: setup, pause, cumulative use, crash debit, 1800-second exhaust
 
 let receiverID = restarted.snapshot()["receiverId"] as! String
 func grant(pro: Bool, receiver: String = receiverID, nonce: String? = nil, owner: String = phone) throws -> [String: Any] {
-    let value: [String: Any] = ["v": 1, "productId": "tapping_pro_lifetime", "receiverId": receiver, "phoneId": owner, "nonce": nonce ?? restarted.snapshot()["nonce"]!, "pro": pro, "issuedAt": wall, "expiresAt": wall + 100]
+    let value: [String: Any] = ["v": 1, "productId": "thumble_pro_lifetime", "receiverId": receiver, "phoneId": owner, "nonce": nonce ?? restarted.snapshot()["nonce"]!, "pro": pro, "issuedAt": wall, "expiresAt": wall + 100]
     let data = try JSONSerialization.data(withJSONObject: value)
     return ["payload": data.base64EncodedString(), "signature": try key.signature(for: data).base64EncodedString()]
 }

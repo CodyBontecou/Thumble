@@ -1,11 +1,14 @@
 import { requireOptionalNativeModule } from 'expo-modules-core';
+import { createOnboardingStore } from './onboarding-core';
 const native = requireOptionalNativeModule('TappingPurchases');
-let completed = false;
-export const onboarding = {
-  async isComplete() { completed = native?.onboardingComplete ? await native.onboardingComplete() : completed; return completed; },
-  async finish() {
-    if (!native?.completeOnboarding) throw Error('Install the updated app to save your setup.');
-    await native.completeOnboarding();
-    completed = true;
+export const onboarding = createOnboardingStore({
+  async read() {
+    if (!native?.getOnboardingProgress) throw Error('Install the updated app to resume setup.');
+    return native.getOnboardingProgress();
   },
-};
+  async write(json) {
+    if (!native?.saveOnboardingProgress) throw Error('Install the updated app to save setup.');
+    await native.saveOnboardingProgress(json);
+  },
+  async legacyComplete() { return native?.onboardingComplete ? native.onboardingComplete() : false; },
+});

@@ -1,0 +1,23 @@
+Thumble is an iPhone controller for a Mac. The Mac companion is free, Developer ID signed and notarized.
+
+REQUIREMENTS AND INSTALLATION
+Mac with macOS 15 or later (Apple silicon or Intel), and the iPhone on the same local network.
+Receiver: https://thumble.io/downloads/receiver-latest.dmg
+Guide: https://thumble.io/docs
+Support: codybontecou@gmail.com
+
+LOCAL REVIEW FLOW
+1. Drag Thumble Receiver from the DMG to Applications and open it. Quit any older Thumble receiver first.
+2. Open Thumble on the iPhone. Local standard-controller use does not require an account.
+3. Use the phone pairing screen to scan the receiver's current QR code. Allow local-network access. Camera access is used only for pairing.
+4. Try the standard controller and local practice. Start a connected session explicitly to send input. Use a controller-compatible Mac game or controller-input viewer to observe the virtual gamepad.
+5. Custom layouts are created by the user's own connected agent through the documented MCP tools. Gameplay presses remain human input. The app uses text and built-in control symbols, not downloaded game spell artwork.
+6. Dictation is optional. Allow microphone/speech access or type instead. Review and edit a transcript before sending. Local chat/input goes to the paired Mac, not our cloud controller service.
+
+MONETIZATION
+The free download includes every feature and 30 minutes TOTAL of connected controller use across sessions. It does not refill daily. Setup, menus, local practice, pause and disconnection do not consume that allowance. Active connected sessions include idle gaps and chat composition. At expiry the receiver releases controls and stops live input/chat delivery; profiles and local practice remain available.
+Thumble Pro (thumble_pro_lifetime) is a $19.99 USD one-time non-consumable that only removes the time limit. There is no subscription and no extra paid feature gate. Open Pro to buy or Restore Purchases. A store purchase can be made before pairing; connecting the receiver delivers verified unlimited access. Purchase/restore requires internet. Local prices are supplied by StoreKit.
+The verifier validates Apple-signed transactions and their current store status. The production endpoint supports Apple's verified sandbox environment during App Review. TestFlight purchases are sandbox transactions.
+
+OPTIONAL CLOUD CONTROLLERS
+Final sign-in, account-deletion instructions and any review access details will be added once the separate cloud release work is verified. Do not submit these notes until that section and the physical-device evidence are complete.

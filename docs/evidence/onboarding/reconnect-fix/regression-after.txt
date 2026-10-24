@@ -1,0 +1,18 @@
+(node:79960) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/codybontecou/dev/tapping/apps/mobile/src/pairing-link.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/codybontecou/dev/tapping/apps/mobile/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ a pairing link arriving during foreground transition connects once active without reopening (2.029458ms)
+✔ refocusing the same link retries; repeated active events never open duplicate sockets (0.372583ms)
+✔ leaving pairing removes the foreground listener and cancels pending preparation (0.236875ms)
+✔ invalid or expired links report an actionable error without opening a socket (0.146083ms)
+✔ leaving after a successful handshake preserves the connected session (0.2155ms)
+✔ a foreground event during asynchronous preparation is not lost (0.292375ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 6
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 42.216375

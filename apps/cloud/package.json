@@ -1,0 +1,23 @@
+{
+  "name": "@tapping/cloud",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "@better-auth/mcp": "^1.7.12",
+    "@better-auth/oauth-provider": "^1.7.12",
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "@tapping/cloud-contracts": "0.1.0",
+    "better-auth": "^1.7.12",
+    "jose": "^6.1.0"
+  },
+  "devDependencies": {
+    "miniflare": "5.20261019.2-beta",
+    "wrangler": "^4.152.0"
+  }
+}
