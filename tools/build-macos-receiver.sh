@@ -4,16 +4,23 @@ umask 077
 task_keychain_args=()
 if [[ -n "${THUMBLE_SIGNING_KEYCHAIN:-}" ]]; then task_keychain_args=(--keychain "$THUMBLE_SIGNING_KEYCHAIN"); fi
 task_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-if [[ $# -lt 2 || $# -gt 3 || ( $# == 3 && "$3" != '--testflight' ) ]]; then echo 'Usage: bash tools/build-macos-receiver.sh PROFILE_PATH SIGNING_IDENTITY [--testflight]' >&2; exit 2; fi
+if [[ $# -lt 2 || $# -gt 3 || ( $# == 3 && "$3" != '--testflight' && "$3" != '--local-testing' ) ]]; then echo 'Usage: bash tools/build-macos-receiver.sh PROFILE_PATH SIGNING_IDENTITY [--testflight|--local-testing]' >&2; exit 2; fi
 task_mode="${3:-production}"
 task_config="$task_root/config/monetization.json"
 task_entitlements="$task_root/tools/macos-hid-probe.entitlements"
+task_swift_flags=()
+if [[ "$task_mode" == '--local-testing' ]]; then
+  task_swift_flags=(-D THUMBLE_LOCAL_TESTING)
+fi
 task_app="$task_root/build/Thumble Receiver.app"
 if [[ "$task_mode" == '--testflight' ]]; then
   task_config="$task_root/config/monetization.sandbox.json"
   task_app="$task_root/build/Thumble TestFlight Receiver.app"
   task_entitlements="$task_root/build/receiver/TestFlight.entitlements"
   mkdir -p "$task_root/build/receiver"
+fi
+if [[ "$task_mode" == '--local-testing' ]]; then
+  task_app="$task_root/build/Thumble Local Test Receiver.app"
 fi
 python3 - "$1" "$task_root/tools/macos-hid-probe.entitlements" "$task_entitlements" "$task_mode" "$task_config" <<'PY'
 import datetime
@@ -42,7 +49,7 @@ task_arches="arm64 x86_64"
 if [[ "$task_mode" == '--testflight' ]]; then task_arches="$(uname -m)"; fi
 for task_arch in $task_arches; do
   xcrun clang -target "$task_arch-apple-macosx15.0" -Wall -Wextra -Werror -fblocks -c "$task_root/apps/receiver/Sources/Gamepad.c" -o "$task_root/build/receiver/Gamepad-$task_arch.o"
-  xcrun swiftc -target "$task_arch-apple-macosx15.0" -swift-version 5 -O -module-cache-path "$task_root/build/receiver/swift-cache" -import-objc-header "$task_root/apps/receiver/Sources/Gamepad.h" "$task_root"/apps/receiver/Sources/*.swift "$task_root/build/receiver/Gamepad-$task_arch.o" -framework AppKit -framework Network -framework Security -framework CryptoKit -framework IOKit -o "$task_root/build/receiver/thumble-receiver-$task_arch"
+  xcrun swiftc ${task_swift_flags[@]+"${task_swift_flags[@]}"} -target "$task_arch-apple-macosx15.0" -swift-version 5 -O -module-cache-path "$task_root/build/receiver/swift-cache" -import-objc-header "$task_root/apps/receiver/Sources/Gamepad.h" "$task_root"/apps/receiver/Sources/*.swift "$task_root/build/receiver/Gamepad-$task_arch.o" -framework AppKit -framework Network -framework Security -framework CryptoKit -framework IOKit -o "$task_root/build/receiver/thumble-receiver-$task_arch"
 done
 if [[ "$task_mode" == '--testflight' ]]; then
   cp "$task_root/build/receiver/thumble-receiver-$task_arches" "$task_app/Contents/MacOS/thumble-receiver"
@@ -55,6 +62,9 @@ cp "$task_root/apps/receiver/Resources/BuiltInProfiles.json" "$task_app/Contents
 cp "$task_root/apps/receiver/Info.plist" "$task_app/Contents/Info.plist"
 if [[ "$task_mode" == '--testflight' ]]; then
   /usr/libexec/PlistBuddy -c 'Set :CFBundleName Thumble TestFlight Receiver' "$task_app/Contents/Info.plist"
+fi
+if [[ "$task_mode" == '--local-testing' ]]; then
+  /usr/libexec/PlistBuddy -c 'Set :CFBundleName Thumble Local Test Receiver' "$task_app/Contents/Info.plist"
 fi
 cp "$1" "$task_app/Contents/embedded.provisionprofile"
 cp "$task_root/ThirdParty/SteamControllerBridge-LICENSE.txt" "$task_app/Contents/Resources/ThirdParty/"

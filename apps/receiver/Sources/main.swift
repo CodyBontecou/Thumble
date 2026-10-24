@@ -17,7 +17,13 @@ import CoreImage
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem.button?.image = NSImage(systemSymbolName: "gamecontroller", accessibilityDescription: "Thumble Wi-Fi controller")
-        let menu = NSMenu(); menu.addItem(withTitle: "Pair phone…", action: #selector(showPairing), keyEquivalent: "")
+        let menu = NSMenu();
+#if THUMBLE_LOCAL_TESTING
+        let testing = menu.addItem(withTitle: "Local testing · unlimited controller time", action: nil, keyEquivalent: "")
+        testing.isEnabled = false
+        menu.addItem(.separator())
+#endif
+        menu.addItem(withTitle: "Pair phone…", action: #selector(showPairing), keyEquivalent: "")
         shareItem = menu.addItem(withTitle: "Pair through ChatGPT…", action: #selector(sharePairing), keyEquivalent: "")
         stopShareItem = menu.addItem(withTitle: "Stop ChatGPT pairing", action: #selector(stopSharing), keyEquivalent: "")
         stopShareItem.isHidden = true

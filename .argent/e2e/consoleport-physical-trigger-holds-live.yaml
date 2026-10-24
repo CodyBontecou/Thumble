@@ -1,0 +1,40 @@
+steps:
+  - echo: Hold LT for three seconds, then release; HID audit must show the matching
+      trigger and neutral release.
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Down
+          x: 0.3895
+          y: 0.372
+        - type: Up
+          x: 0.3895
+          y: 0.372
+          delayMs: 3000
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: Heroic Strike
+  - echo: Hold RT for three seconds, then release; HID audit must show the matching
+      trigger and neutral release.
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Down
+          x: 0.6105
+          y: 0.372
+        - type: Up
+          x: 0.6105
+          y: 0.372
+          delayMs: 3000
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: Heroic Strike
+executionPrerequisite: Physical iPhone 13 Pro Max with com.thumble.ios open in
+  landscape, Fuskotargar ConsolePort layout at activation 16, neutral controls,
+  paired to unlimited Local Test Receiver; WoW in a safe out-of-combat state.
+  Receiver input audit enabled. Single-finger holds are checked by independent
+  HID audit; this fragment only checks base UI after release.

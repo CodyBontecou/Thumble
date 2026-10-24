@@ -1,0 +1,160 @@
+{
+  "content": [
+    {
+      "type": "text",
+      "text": "Prerequisite: com.thumble.consoleportartworkqa simulator app open in LandscapeRight, Fuskotargar ConsolePort layout received automatically from the real Local Test Receiver, unlimited access active and neutral input. WoW foreground in Valley of Trials outside combat. Coordinates use the simulator AX orientation. This fragment tests the actual exported character labels, not a fixture or generated controller."
+    },
+    {
+      "type": "text",
+      "text": "Running e2e test \"consoleport-live-wow-spell-layers\" on 87952CD2-B760-40A1-AF11-5CE40995960B (19 steps)"
+    },
+    {
+      "type": "text",
+      "text": "[1] ✓ Base must show Heroic Strike. LT must clear the spell slots and show Target Scan Enemy; releasing restores Heroic Strike. Raw Down/Up preserves the held finger across checks."
+    },
+    {
+      "type": "text",
+      "text": "[2] ✓ await-ui-element (0.0s)"
+    },
+    {
+      "type": "text",
+      "text": "{\n  \"success\": true,\n  \"elapsed\": 23\n}"
+    },
+    {
+      "type": "text",
+      "text": "[3] ✓ gesture-custom (0.0s)"
+    },
+    {
+      "type": "text",
+      "text": "{\n  \"events\": 1\n}"
+    },
+    {
+      "type": "text",
+      "text": "[4] ✓ await-ui-element (0.0s)"
+    },
+    {
+      "type": "text",
+      "text": "{\n  \"success\": true,\n  \"elapsed\": 19\n}"
+    },
+    {
+      "type": "text",
+      "text": "[5] ✓ await-ui-element (0.0s)"
+    },
+    {
+      "type": "text",
+      "text": "{\n  \"success\": true,\n  \"elapsed\": 17,\n  \"note\": \"condition met immediately — the selector never matched any element, so it may have already been hidden before the wait, or the selector is wrong\"\n}"
+    },
+    {
+      "type": "text",
+      "text": "[6] ✓ gesture-custom (0.0s)"
+    },
+    {
+      "type": "text",
+      "text": "{\n  \"events\": 1\n}"
+    },
+    {
+      "type": "text",
+      "text": "[7] ✓ await-ui-element (0.0s)"
+    },
+    {
+      "type": "text",
+      "text": "{\n  \"success\": true,\n  \"elapsed\": 21\n}"
+    },
+    {
+      "type": "text",
+      "text": "[8] ✓ gesture-custom (0.0s)"
+    },
+    {
+      "type": "text",
+      "text": "{\n  \"events\": 1\n}"
+    },
+    {
+      "type": "text",
+      "text": "[9] ✓ await-ui-element (0.0s)"
+    },
+    {
+      "type": "text",
+      "text": "{\n  \"success\": true,\n  \"elapsed\": 22\n}"
+    },
+    {
+      "type": "text",
+      "text": "[10] ✓ await-ui-element (0.0s)"
+    },
+    {
+      "type": "text",
+      "text": "{\n  \"success\": true,\n  \"elapsed\": 20,\n  \"note\": \"condition met immediately — the selector never matched any element, so it may have already been hidden before the wait, or the selector is wrong\"\n}"
+    },
+    {
+      "type": "text",
+      "text": "[11] ✓ Release RT to base, then hold both triggers. Expect Utility ring and cleared spell slots in the app and WoW. Release both restores base."
+    },
+    {
+      "type": "text",
+      "text": "[12] ✓ gesture-custom (0.0s)"
+    },
+    {
+      "type": "text",
+      "text": "{\n  \"events\": 1\n}"
+    },
+    {
+      "type": "text",
+      "text": "[13] ✓ await-ui-element (0.0s)"
+    },
+    {
+      "type": "text",
+      "text": "{\n  \"success\": true,\n  \"elapsed\": 24\n}"
+    },
+    {
+      "type": "text",
+      "text": "[14] ✓ gesture-custom (0.0s)"
+    },
+    {
+      "type": "text",
+      "text": "{\n  \"events\": 1\n}"
+    },
+    {
+      "type": "text",
+      "text": "[15] ✓ await-ui-element (0.0s)"
+    },
+    {
+      "type": "text",
+      "text": "{\n  \"success\": true,\n  \"elapsed\": 20\n}"
+    },
+    {
+      "type": "text",
+      "text": "[16] ✓ await-ui-element (0.0s)"
+    },
+    {
+      "type": "text",
+      "text": "{\n  \"success\": true,\n  \"elapsed\": 18,\n  \"note\": \"condition met immediately — the selector never matched any element, so it may have already been hidden before the wait, or the selector is wrong\"\n}"
+    },
+    {
+      "type": "text",
+      "text": "[17] ✓ gesture-custom (0.0s)"
+    },
+    {
+      "type": "text",
+      "text": "{\n  \"events\": 1\n}"
+    },
+    {
+      "type": "text",
+      "text": "[18] ✓ await-ui-element (0.0s)"
+    },
+    {
+      "type": "text",
+      "text": "{\n  \"success\": true,\n  \"elapsed\": 21\n}"
+    },
+    {
+      "type": "text",
+      "text": "[19] ✓ await-ui-element (0.0s)"
+    },
+    {
+      "type": "text",
+      "text": "{\n  \"success\": true,\n  \"elapsed\": 16,\n  \"note\": \"condition met immediately — the selector never matched any element, so it may have already been hidden before the wait, or the selector is wrong\"\n}"
+    },
+    {
+      "type": "text",
+      "text": "PASS — 17 passed, 0 failed, 0 errored, 0 skipped (0.7s)"
+    }
+  ]
+}

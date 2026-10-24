@@ -14,6 +14,15 @@ final class AccessSession {
     private var deadline = 0.0
     private var running = false
     private var pro = false
+    // This branch is compiled only into the separately named local QA receiver.
+    // Store ownership and the durable demo ledger remain unchanged.
+    private var unlimited: Bool {
+#if THUMBLE_LOCAL_TESTING
+        return true
+#else
+        return pro
+#endif
+    }
     private var grantExpires = 0.0
     private var grantIssued = 0.0
     private var nonce = UUID().uuidString
@@ -62,7 +71,7 @@ final class AccessSession {
         queue.async {
             guard !self.running else { self.emit(); return }
             let now = self.now()
-            if self.pro { self.running = true; self.emit(); return }
+            if self.unlimited { self.running = true; self.emit(); return }
             let reserve = min(5, 1800 - self.used)
             guard reserve > 0 else { self.emit(); return }
             self.used += reserve
@@ -86,7 +95,7 @@ final class AccessSession {
     private func tick() {
         let now = self.now()
         if pro && self.wallNow() >= grantExpires { pro = false; pauseNow() }
-        if running && !pro {
+        if running && !unlimited {
             if now >= deadline { running = false }
             else if deadline - now <= 1 && used < 1800 {
                 let reserve = min(5, 1800 - used)
@@ -97,7 +106,7 @@ final class AccessSession {
         emit()
     }
     private func pauseNow() {
-        if running && !pro {
+        if running && !unlimited {
             used = max(0, used - max(0, deadline - self.now()))
             saveOrExhaust()
         }
@@ -105,12 +114,12 @@ final class AccessSession {
     }
     private func emit() {
         let now = self.now()
-        let remaining = max(0, 1800 - used + (running && !pro ? max(0, deadline - now) : 0))
-        let value: [String: Any] = ["v": 1, "pro": pro, "remaining": remaining,
+        let remaining = max(0, 1800 - used + (running && !unlimited ? max(0, deadline - now) : 0))
+        let value: [String: Any] = ["v": 1, "pro": unlimited, "remaining": remaining,
             "debitedUsed": used, "running": running, "receiverId": receiverID, "nonce": nonce,
             "error": error, "grantExpires": grantExpires]
         current = value
-        onChange?(value, running ? (pro ? Double.greatestFiniteMagnitude : deadline) : 0)
+        onChange?(value, running ? (unlimited ? Double.greatestFiniteMagnitude : deadline) : 0)
     }
     @discardableResult private func saveOrExhaust() -> Bool {
         do { try persist(); return true }

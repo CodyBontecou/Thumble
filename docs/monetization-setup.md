@@ -314,3 +314,19 @@ strict receiver signature verification, matching phone/receiver verification key
 Apple sandbox API authentication, live Worker signing health, and forged-proof
 rejection. A genuine purchase and restore on the tester's TestFlight installation
 have not yet been performed. Upload/processing receipt: `build/testflight-upload-2.log`.
+
+### Local unlimited controller testing
+
+For owner-device gameplay QA, build the separately named **Thumble Local Test Receiver**:
+
+```sh
+THUMBLE_SIGNING_KEYCHAIN="$PWD/.secrets/mac-signing/thumble-signing.keychain-db" \
+  bash tools/build-macos-receiver.sh .secrets/mac-signing/Thumble-DeveloperID.provisionprofile \
+  F99E7E4531AE49E2E5DEF117EFBE0D1CA2CC5FB4 --local-testing
+```
+
+Quit the normal receiver, open `build/Thumble Local Test Receiver.app`, and pair the test phone. This build includes `THUMBLE_LOCAL_TESTING`, grants unlimited controller access over the existing access protocol, and labels its menu **Local testing · unlimited controller time**. The phone displays its existing unlimited/Pro badge; this does not create a store purchase or signed ownership grant. Returning to the normal receiver restores ordinary access enforcement. Demo usage and saved layouts are preserved. The normal receiver and release packaging paths do not include the testing flag; this local app is not a public release or a purchase-validation test.
+
+`node tools/test-local-test-access.mjs` compiles both variants and checks exhausted-phone resume, 24-hour use, reconnect, unchanged ledger, absence of fabricated grants, and normal-build enforcement. The existing `npm run test:access` purchase-signature and demo-metering tests also pass.
+
+On October 24 the cabled iPhone 13 Pro Max was paired to this local build for ConsolePort auto-sync/layer-switching QA. Argent observed **Thumble Pro, unlimited controller time**, and the receiver reported an acknowledged ConsolePort layout at activation 16 with unlimited access. The app's existing purchase/free-time settings were not changed.
