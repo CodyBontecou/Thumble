@@ -37,6 +37,9 @@ import CoreImage
         NSLayoutConstraint.activate([stack.leadingAnchor.constraint(equalTo: window.contentView!.leadingAnchor, constant: 24), stack.trailingAnchor.constraint(equalTo: window.contentView!.trailingAnchor, constant: -24), stack.topAnchor.constraint(equalTo: window.contentView!.topAnchor, constant: 24)])
         receiver.onStatus = { [weak self] message in DispatchQueue.main.async { self?.label.stringValue = message } }
         receiver.onInvitation = { [weak self] value in DispatchQueue.main.async { self?.updateInvitation(value) } }
+        receiver.onPairingUnavailable = { [weak self] in DispatchQueue.main.async {
+            self?.invitation = ""; self?.qr.image = nil; self?.cloudPairing.receiverUnavailable()
+        } }
         cloudPairing.onStatus = { [weak self] message in self?.label.stringValue = message }
         cloudPairing.onSharing = { [weak self] sharing in self?.shareItem.isHidden = sharing; self?.stopShareItem.isHidden = !sharing }
         NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(reset), name: NSWorkspace.willSleepNotification, object: nil)

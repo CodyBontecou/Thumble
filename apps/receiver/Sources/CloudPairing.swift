@@ -48,12 +48,15 @@ private final class PairingRedirectPolicy: NSObject, URLSessionTaskDelegate {
 /// Explicit, memory-only sharing. No input packets, account refresh tokens or LAN listener.
 @MainActor final class CloudPairing: NSObject, ASWebAuthenticationPresentationContextProviding {
     private let service = URL(string: "https://thumble-cloud-pilot.costream.workers.dev")!
-    private let network = URLSession(configuration: .ephemeral, delegate: PairingRedirectPolicy(), delegateQueue: nil)
+    private let network: URLSession
+    private let authorization: ((URL) async throws -> URL)?
+    private let heartbeatInterval: Duration
     private var authentication: ASWebAuthenticationSession?
     private weak var window: NSWindow?
     private var operation: Task<Void, Never>?
     private var heartbeat: Task<Void, Never>?
     private var publication: Task<Void, Never>?
+    private var publishingInvitation: String?
     private var generation = UUID()
     private var receiverId: String?
     private var publisherToken: String?
@@ -63,9 +66,17 @@ private final class PairingRedirectPolicy: NSObject, URLSessionTaskDelegate {
     var onStatus: ((String) -> Void)?
     var onSharing: ((Bool) -> Void)?
 
+    init(network: URLSession? = nil, authorization: ((URL) async throws -> URL)? = nil, heartbeatInterval: Duration = .seconds(10)) {
+        self.network = network ?? URLSession(configuration: .ephemeral, delegate: PairingRedirectPolicy(), delegateQueue: nil)
+        self.authorization = authorization
+        self.heartbeatInterval = heartbeatInterval
+        super.init()
+    }
+
     func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor { window ?? NSWindow() }
     func start(window: NSWindow) {
         guard operation == nil, publisherToken == nil else { return }
+        guard invitation != nil else { onStatus?("Receiver unavailable · restart it before sharing a QR"); return }
         self.window = window
         let epoch = generation
         onSharing?(true); onStatus?("Sign in to share pairing with ChatGPT for 10 minutes…")
@@ -73,6 +84,7 @@ private final class PairingRedirectPolicy: NSObject, URLSessionTaskDelegate {
             guard let self else { return }
             do {
                 let config = try await request("v1/config")
+                guard generation == epoch, !Task.isCancelled else { return }
                 guard let auth = config["auth"] as? [String: Any],
                       auth["issuer"] as? String == service.absoluteString + "/api/auth",
                       let audience = auth["audience"] as? String,
@@ -80,6 +92,7 @@ private final class PairingRedirectPolicy: NSObject, URLSessionTaskDelegate {
                 let verifier = try PairingOAuth.random(), state = try PairingOAuth.random()
                 let url = PairingOAuth.authorize(service: service, audience: audience, verifier: verifier, state: state)
                 let callback = try await authenticate(url)
+                guard generation == epoch, !Task.isCancelled else { return }
                 let code = try PairingOAuth.code(callback, state: state, issuer: service.absoluteString + "/api/auth")
                 let tokens = try await request("api/auth/oauth2/token", method: "POST", form: ["grant_type": "authorization_code", "client_id": "thumble-receiver", "redirect_uri": PairingOAuth.redirect, "code": code, "code_verifier": verifier, "resource": audience])
                 guard generation == epoch, !Task.isCancelled, let access = tokens["access_token"] as? String, !access.isEmpty else { throw CancellationError() }
@@ -97,7 +110,7 @@ private final class PairingRedirectPolicy: NSObject, URLSessionTaskDelegate {
                 publish()
                 heartbeat = Task { [weak self] in
                     while !Task.isCancelled {
-                        do { try await Task.sleep(for: .seconds(10)) } catch { return }
+                        do { try await Task.sleep(for: self?.heartbeatInterval ?? .seconds(10)) } catch { return }
                         guard let self, self.generation == epoch else { return }
                         if Date().timeIntervalSince1970 * 1000 >= self.expiresAt { self.stop(); return }
                         self.publish()
@@ -111,7 +124,8 @@ private final class PairingRedirectPolicy: NSObject, URLSessionTaskDelegate {
         }
     }
     private func authenticate(_ url: URL) async throws -> URL {
-        try await withCheckedThrowingContinuation { continuation in
+        if let authorization { return try await authorization(url) }
+        return try await withCheckedThrowingContinuation { continuation in
             let session = ASWebAuthenticationSession(url: url, callbackURLScheme: "thumble-receiver") { callback, error in
                 if let callback { continuation.resume(returning: callback) }
                 else { continuation.resume(throwing: error ?? PairingOAuth.Failure.invalid) }
@@ -122,15 +136,28 @@ private final class PairingRedirectPolicy: NSObject, URLSessionTaskDelegate {
         }
     }
     func updateInvitation(_ value: String) { invitation = value; publish() }
+    func receiverUnavailable() {
+        invitation = nil
+        stop()
+        onStatus?("Receiver unavailable · ChatGPT pairing sharing stopped")
+    }
     private func publish() {
         guard let id = receiverId, let token = publisherToken, let value = invitation else { return }
         guard Date().timeIntervalSince1970 * 1000 < expiresAt else { stop(); return }
+        // An unchanged heartbeat must not cancel a slow but healthy upload.
+        guard publication == nil || publishingInvitation != value else { return }
         sequence += 1
         let revision = sequence, epoch = generation
-        // An update cancels the old request; the server's sequence check also rejects late arrivals.
+        // Supersede only changed state; sequence checks reject its late arrivals.
         publication?.cancel()
+        publishingInvitation = value
         publication = Task { [weak self] in
             guard let self else { return }
+            defer {
+                if generation == epoch, sequence == revision {
+                    publication = nil; publishingInvitation = nil
+                }
+            }
             do {
                 var body: [String: Any] = ["sequence": revision, "connected": value.isEmpty]
                 if !value.isEmpty {
@@ -155,7 +182,7 @@ private final class PairingRedirectPolicy: NSObject, URLSessionTaskDelegate {
         let id = receiverId, token = publisherToken
         generation = UUID(); operation?.cancel(); operation = nil
         authentication?.cancel(); authentication = nil
-        heartbeat?.cancel(); heartbeat = nil; publication?.cancel(); publication = nil
+        heartbeat?.cancel(); heartbeat = nil; publication?.cancel(); publication = nil; publishingInvitation = nil
         receiverId = nil; publisherToken = nil; expiresAt = 0
         onSharing?(false); onStatus?("ChatGPT pairing sharing stopped")
         if let id, let token { Task { _ = try? await request("v1/receiver-pairing/\(id)", method: "DELETE", token: token) } }

@@ -49,6 +49,7 @@ final class Receiver {
     private var state = PadState.neutral
     var onStatus: ((String) -> Void)?
     var onInvitation: ((String) -> Void)?
+    var onPairingUnavailable: (() -> Void)?
     private var chatTask: Task<Void, Never>?
     private var chatBusy = false
     private var chatResults: [String: [String: Any]] = [:]
@@ -91,11 +92,7 @@ final class Receiver {
         parameters.defaultProtocolStack.applicationProtocols.insert(websocket, at: 0)
         let listener = try NWListener(using: parameters, on: .any)
         self.listener = listener
-        listener.stateUpdateHandler = { [weak self] phase in
-            guard let self else { return }
-            if case .ready = phase, let port = listener.port { self.port = port.rawValue; self.newInvitation(); self.status("Ready · scan to connect") }
-            if case .failed(let error) = phase { self.port = 0; self.token = ""; self.release(); self.profiles.updatePairingCode(""); self.status("Network error: \(error.localizedDescription)") }
-        }
+        listener.stateUpdateHandler = { [weak self, weak listener] phase in self?.handleListenerState(phase, port: listener?.port?.rawValue) }
         listener.newConnectionHandler = { [weak self] connection in self?.accept(connection) }
         profiles.onActivation = { [weak self] revision, profile in
             self?.queue.async { [weak self] in self?.activateLayout(revision: revision, profile: profile) }
@@ -130,6 +127,15 @@ final class Receiver {
         access.stop()
         queue.sync { if let activity = self.activity { ProcessInfo.processInfo.endActivity(activity); self.activity = nil }; self.release(); self.datagram?.stop(); self.datagram = nil; self.timer?.cancel(); self.listener?.cancel(); self.clients.values.forEach { $0.cancel() }; self.clients.removeAll(); if let gamepad = self.gamepad { tapping_gamepad_destroy(gamepad); self.gamepad = nil } }
         profiles.stop()
+    }
+    // Called on the receiver queue by the listener's state callback.
+    func handleListenerState(_ phase: NWListener.State, port: UInt16?) {
+        if case .ready = phase, let port { self.port = port; newInvitation(); status("Ready · scan to connect") }
+        if case .failed(let error) = phase {
+            self.port = 0; token = ""; release(); profiles.updatePairingCode("")
+            onPairingUnavailable?()
+            status("Network error: \(error.localizedDescription)")
+        }
     }
     func resetPairing() { queue.async { self.disconnect("Ready · scan to connect"); self.newInvitation() } }
     private func newInvitation() {
