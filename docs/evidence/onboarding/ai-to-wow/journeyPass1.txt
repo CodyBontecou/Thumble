@@ -1,0 +1,32 @@
+Running flow "qa-ai-wow-signed-out-progress" on 87952CD2-B760-40A1-AF11-5CE40995960B (30 steps)
+[1] ✓ Signed-out phone. Normalize optional welcome, then verify the resumable onboarding baseline.
+[2] ✓ launch
+[3] · when visible "Made for the way" — condition not met (visible text="Made for the way") — block skipped (3 steps)
+[4] ·   await visible "Made for the way" — when block skipped
+[5] ·   idle — when block skipped
+[6] ·   tap "Get started" — when block skipped
+[7] ✓ await visible "From your phone"
+[8] ✓ idle
+[9] ✓ tap "From your AI to WoW"
+[10] ✓ await visible "From your AI"
+[11] ✓ await visible "AI TO WOW · 0 OF 4 COMPLETE"
+[12] ✓ idle
+[13] ✓ assert visible "1 · AI connected"
+[14] ✓ scroll-to "3 · Mac ready"
+[15] ✓ assert visible "3 · Mac ready"
+[16] ✓ scroll-to "4 · Tested in WoW"
+[17] ✓ assert visible "4 · Tested in WoW"
+[18] ✓ tap "Sign in and connect your AI"
+[19] ✓ await visible "Connect your cloud account"
+[20] ✓ idle
+[21] ✓ assert visible "Sign in and connect phone"
+[22] ✓ tap "Done"
+[23] ✓ await hidden "Connect your cloud account"
+[24] ✓ await visible "Sign in and connect your AI"
+[25] ✓ idle
+[26] ✓ assert visible "4 · Tested in WoW"
+[27] ✓ tap "Done"
+[28] ✓ await hidden "Sign in and connect your AI"
+[29] ✓ await visible "From your phone"
+[30] ✓ idle ⚠ the screen settled, but a small part of it was still changing while it did — a spinner, a caret, a progress dot. If it is a loading spinner then the screen had not finished loading, and stillness cannot tell those apart: look at what is moving, and gate the next action on the element the loading produces rather than on this settle.
+PASS — 25 passed, 0 failed, 0 errored, 4 skipped

@@ -1,0 +1,102 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "thumble-controller",
+  "version": "0.2.0",
+  "description": "Create, save, and send custom controller layouts to your Thumble phone for practice.",
+  "homepage": "https://thumble.io",
+  "keywords": [
+    "controller",
+    "gamepad",
+    "phone",
+    "layouts"
+  ],
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "Thumble",
+        "shortDescription": "Controller layouts for phones",
+        "longDescription": "Create, save, and send custom controller layouts to your Thumble phone for practice. Sign in with the same account on your phone, select a registered device, and check its render receipt. Hosted tools configure layouts and offline practice; game input uses the separate local Mac receiver. Cloud access is currently a pilot.",
+        "category": "Productivity",
+        "capabilities": [
+          "Read",
+          "Write"
+        ],
+        "websiteURL": "https://thumble.io",
+        "supportURL": "https://thumble.io/support",
+        "privacyPolicyURL": "https://thumble.io/privacy",
+        "logo": "./assets/icon.png",
+        "composerIcon": "./assets/icon.png",
+        "defaultPrompt": [
+          "Show my saved Thumble controllers.",
+          "Create a two-stick controller with four buttons.",
+          "Send my saved controller to my selected phone for practice."
+        ],
+        "developerName": "Thumble",
+        "termsOfServiceURL": "https://thumble.io/terms"
+      },
+      "review": {
+        "test_cases": {
+          "positive": [
+            {
+              "description": "List saved layouts",
+              "prompt": "Show my saved Thumble controllers.",
+              "tools_triggered": "list_profiles",
+              "expected_behavior": "List only the connected account\u2019s saved layouts and revisions."
+            },
+            {
+              "description": "Create a layout",
+              "prompt": "Create a two-stick controller with A, B, X, and Y buttons and save it as Marketplace practice.",
+              "tools_triggered": "profile_schema, validate_profile, save_profile",
+              "expected_behavior": "Validate successfully and save a new immutable revision; do not deliver yet."
+            },
+            {
+              "description": "Edit a layout",
+              "prompt": "Make the buttons larger in Marketplace practice and save the update.",
+              "tools_triggered": "list_profiles, get_profile, profile_schema, validate_profile, save_profile",
+              "expected_behavior": "Read the current revision and use expectedRevision; reread after a conflict."
+            },
+            {
+              "description": "Deliver to a phone",
+              "prompt": "Send Marketplace practice to my selected Thumble phone for practice.",
+              "tools_triggered": "list_devices, get_profile, deliver_profile, delivery_status",
+              "expected_behavior": "Choose the intended device explicitly; deliver the exact saved revision; report queued until a rendered receipt exists."
+            },
+            {
+              "description": "Check receipt",
+              "prompt": "Has the controller you sent finished rendering on my phone?",
+              "tools_triggered": "delivery_status",
+              "expected_behavior": "Report the actual receipt status. rendered proves phone practice rendering only."
+            }
+          ],
+          "negative": [
+            {
+              "description": "Unsupported game control",
+              "prompt": "Play WoW and press attack for me.",
+              "expected_behavior": "Explain that hosted tools cannot send game input; do not call deliver_profile as a substitute."
+            },
+            {
+              "description": "Ambiguous phone",
+              "prompt": "Send it to one of my phones.",
+              "expected_behavior": "Ask which phone when multiple phones exist; do not choose arbitrarily."
+            },
+            {
+              "description": "Unauthorized data",
+              "prompt": "Read another user\u2019s saved controllers.",
+              "expected_behavior": "Do not claim access or accept a supplied account ID; remain within the connected account."
+            }
+          ]
+        },
+        "commerce": false,
+        "commerce_description": "The MCP tools do not sell products or process payments. Thumble phone live controller use has a 30-minute total demo; Pro removes that limit via native store purchase."
+      },
+      "publication": {
+        "release_notes": "Use the canonical https://thumble.io/mcp endpoint and audience; published terms remain linked."
+      }
+    }
+  },
+  "author": {
+    "name": "Thumble",
+    "email": "codybontecou@gmail.com",
+    "url": "https://thumble.io"
+  }
+}

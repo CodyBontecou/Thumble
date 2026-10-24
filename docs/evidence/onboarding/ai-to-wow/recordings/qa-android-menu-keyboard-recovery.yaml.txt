@@ -1,0 +1,13 @@
+steps:
+  - tool: keyboard
+    args:
+      key: tab
+  - tool: keyboard
+    args:
+      key: tab
+  - tool: keyboard
+    args:
+      key: enter
+executionPrerequisite: Separate Pixel QA app is in offline controller practice
+  with the delivered profile. No Mac input is enabled. This records an
+  exploratory automation recovery, not a completed regression.

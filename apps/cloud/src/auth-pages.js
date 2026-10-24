@@ -10,7 +10,7 @@ const descriptions = {
 };
 const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
 const scriptValue = value => JSON.stringify(value).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
-const css = `:root{color-scheme:dark;font:17px/1.5 system-ui,sans-serif;background:#111310;color:#f4f4ed}*{box-sizing:border-box}body{margin:0;padding:48px 20px;min-height:100dvh;display:grid;place-items:center}main{width:min(100%,520px)}.brand{font-weight:700;letter-spacing:.08em;font-size:13px;color:#b8bcae}h1{font-size:34px;line-height:1.15;letter-spacing:-.03em;margin:16px 0}p{color:#c4c8bc}button{width:100%;font:inherit;font-weight:600;min-height:50px;padding:12px 18px;border-radius:12px;border:1px solid #58604d;background:#e4f2ce;color:#18200f;cursor:pointer;margin:8px 0}button.secondary{background:transparent;color:#f4f4ed}button:disabled{opacity:.5;cursor:wait}a{color:#d2e6b8}input[type=checkbox]{width:22px;height:22px;vertical-align:middle;margin-right:8px}label{display:block}button:focus-visible{outline:3px solid #bada8d;outline-offset:3px}.card{background:#1c2019;padding:20px;border-radius:16px;margin:24px 0}ul{padding-left:22px}li{margin:12px 0}small{display:block;color:#aeb5a5;overflow-wrap:anywhere}code{font-size:13px;overflow-wrap:anywhere}#error{color:#ffbaac;min-height:24px}details{margin:16px 0}pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px}`;
+const css = `:root{color-scheme:dark;font:17px/1.5 system-ui,sans-serif;background:#111310;color:#f4f4ed}*{box-sizing:border-box}body{margin:0;padding:48px 20px;min-height:100dvh;display:grid;place-items:center}main{width:min(100%,520px)}.brand{font-weight:700;letter-spacing:.08em;font-size:13px;color:#b8bcae}h1{font-size:34px;line-height:1.15;letter-spacing:-.03em;margin:16px 0}p{color:#c4c8bc}button{width:100%;font:inherit;font-weight:600;min-height:50px;padding:12px 18px;border-radius:12px;border:1px solid #58604d;background:#e4f2ce;color:#18200f;cursor:pointer;margin:8px 0}button.secondary{background:transparent;color:#f4f4ed}button:disabled{opacity:.5;cursor:wait}a{color:#d2e6b8}input[type=checkbox]{width:22px;height:22px;vertical-align:middle;margin-right:8px}label{display:block}input[type=email],input[type=text]{width:100%;font:inherit;padding:12px;margin:8px 0 12px;border:1px solid #58604d;border-radius:8px;background:#111310;color:#f4f4ed}h2{font-size:22px;margin-top:0}[hidden]{display:none!important}button:focus-visible{outline:3px solid #bada8d;outline-offset:3px}.card{background:#1c2019;padding:20px;border-radius:16px;margin:24px 0}ul{padding-left:22px}li{margin:12px 0}small{display:block;color:#aeb5a5;overflow-wrap:anywhere}code{font-size:13px;overflow-wrap:anywhere}#error{color:#ffbaac;min-height:24px}details{margin:16px 0}pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px}`;
 function page(title, content, script = '', status = 200) {
   const nonce = crypto.randomUUID().replace(/-/g, '');
   return new Response(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escape(title)} · Thumble</title><style nonce="${nonce}">${css}</style></head><body><main><div class="brand">THUMBLE</div>${content}<p id="error" role="alert" aria-live="polite"></p></main>${script ? `<script nonce="${nonce}">${script}</script>` : ''}</body></html>`, { status, headers: {
@@ -23,13 +23,13 @@ function errorPage(message, status = 400) { return page('Connection unavailable'
 const clientScript = `
 const buttons = [...document.querySelectorAll('button')];
 const error = document.getElementById('error');
-async function post(path, body) {
+async function post(path, body, fallbackURL) {
   buttons.forEach(button => button.disabled = true); error.textContent = '';
   try {
     const response = await fetch(path, {method:'POST', credentials:'same-origin', headers:{'content-type':'application/json'}, body:JSON.stringify(body)});
     const data = await response.json();
     if (!response.ok || data.error) throw Error(data.error?.message || data.message || 'The connection could not be completed. Try again.');
-    const target = data.url || data.redirect_uri || data.redirectURI;
+    const target = data.url || data.redirect_uri || data.redirectURI || fallbackURL;
     if (!target) throw Error('The authorization service did not provide the next step. Start connecting again.');
     const next = new URL(target, location.origin);
     if (!['https:', 'http:', 'thumble:'].includes(next.protocol)) throw Error('The authorization service returned an unsupported destination.');
@@ -45,6 +45,34 @@ async function sessionAccountId(issuer, userId) {
 function socialButtons(providers) {
   return providers.filter(provider => ['apple', 'google'].includes(provider)).map(provider => `<button data-provider="${provider}">Continue with ${provider === 'apple' ? 'Apple' : 'Google'}</button>`).join('');
 }
+function emailForm(providers) {
+  if (!providers.includes('email')) return '';
+  return `<section class="card" aria-label="Email sign-in"><h2>Sign in with email</h2><form id="email-form"><label for="email">Email address</label><input id="email" name="email" type="email" autocomplete="email" required maxlength="254"><button type="submit">Send sign-in code</button></form><form id="code-form" hidden><p id="code-status" role="status">Check your inbox for a six-digit code. It expires in 5 minutes. If it does not arrive, try again shortly.</p><label for="code">Sign-in code</label><input id="code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" minlength="6" maxlength="6" required><button type="submit">Verify and continue</button><button id="change-email" type="button" class="secondary">Use a different email</button></form></section>`;
+}
+function emailScript(callbackURL, query = '') {
+  return `
+const emailForm = document.getElementById('email-form');
+if (emailForm) {
+  const emailInput = document.getElementById('email'), codeForm = document.getElementById('code-form'), codeInput = document.getElementById('code');
+  emailForm.addEventListener('submit', async event => {
+    event.preventDefault(); if (!emailForm.reportValidity()) return;
+    buttons.forEach(button => button.disabled = true); error.textContent = '';
+    try {
+      const response = await fetch('/api/auth/email-otp/send-verification-otp', {method:'POST',credentials:'same-origin',headers:{'content-type':'application/json'},body:JSON.stringify({email:emailInput.value.trim(),type:'sign-in'})});
+      const data = await response.json();
+      if (!response.ok || data.error || data.success !== true) throw Error(data.error?.message || data.message || 'The code could not be sent. Try again shortly.');
+      emailInput.readOnly = true; emailForm.hidden = true; codeForm.hidden = false; codeInput.focus();
+    } catch (failure) { error.textContent = failure.message; }
+    finally { buttons.forEach(button => button.disabled = false); }
+  });
+  codeForm.addEventListener('submit', event => {
+    event.preventDefault(); if (!codeForm.reportValidity()) return;
+    return post('/api/auth/sign-in/email-otp', {email:emailInput.value.trim(),otp:codeInput.value${query ? `,oauth_query:${scriptValue(query)}` : ''}}, ${scriptValue(callbackURL)});
+  });
+  document.getElementById('change-email').addEventListener('click', () => { codeForm.hidden = true; codeInput.value = ''; emailInput.readOnly = false; emailForm.hidden = false; error.textContent = ''; emailInput.focus(); });
+}
+`;
+}
 async function accountPage(request, config, auth) {
   const url = new URL(request.url);
   const expectedIds = url.searchParams.getAll('accountId');
@@ -53,11 +81,11 @@ async function accountPage(request, config, auth) {
   const callback = new URL('/account', config.baseURL);
   if (expected) callback.searchParams.set('accountId', expected);
   const session = await auth.api.getSession({ headers: request.headers });
-  const providers = socialButtons(config.providers);
-  const loginScript = `${clientScript}\nconst callbackURL = ${scriptValue(callback.href)};\nbuttons.filter(button => button.dataset.provider).forEach(button => button.addEventListener('click', () => post('/api/auth/sign-in/social', {provider:button.dataset.provider,callbackURL})));`;
+  const providers = socialButtons(config.providers) + emailForm(config.providers);
+  const loginScript = `${clientScript}\nconst callbackURL = ${scriptValue(callback.href)};\nbuttons.filter(button => button.dataset.provider).forEach(button => button.addEventListener('click', () => post('/api/auth/sign-in/social', {provider:button.dataset.provider,callbackURL})));${emailScript(callback.href)}`;
   if (!session?.user) {
-    if (!providers) return errorPage('Apple and Google sign-in have not been configured for this service yet.', 503);
-    return page('Manage account', `<h1>Manage your account.</h1><p>Sign in with the same Apple or Google identity you used on your phone.</p>${providers}`, loginScript);
+    if (!providers) return errorPage('Sign-in has not been configured for this service yet.', 503);
+    return page('Manage account', `<h1>Manage your account.</h1><p>Sign in with the same account you used on your phone.</p>${providers}`, loginScript);
   }
   const accountId = await sessionAccountId(config.issuer, session.user.id);
   const identity = `<p>Signed in as ${escape(session.user.email || session.user.name || 'your Thumble account')}.</p>`;
@@ -91,10 +119,10 @@ export async function handleAuthPage(request, env, dependencies = {}) {
     if (url.pathname === '/sign-in') {
       if (session?.user && !params) return page('Signed in', `<h1>You’re signed in.</h1><p>Return to Thumble or your AI to finish connecting.</p>`);
       const providers = config.providers.filter(provider => ['apple', 'google'].includes(provider));
-      if (!providers.length) return errorPage('Apple and Google sign-in have not been configured for this service yet.', 503);
+      if (!providers.length && !config.providers.includes('email')) return errorPage('Sign-in has not been configured for this service yet.', 503);
       const callbackURL = new URL(`/sign-in${query ? `?${query}` : ''}`, config.baseURL).href;
-      const content = `<h1>Connect your Thumble account.</h1><p>Sign in to continue connecting your phone and AI.</p>${providers.map(provider => `<button data-provider="${provider}">Continue with ${provider === 'apple' ? 'Apple' : 'Google'}</button>`).join('')}<p><small>Your AI receives only the permissions you approve on the next screen.</small></p>`;
-      return page('Sign in', content, `${clientScript}\nconst oauthQuery = ${scriptValue(query)}; const callbackURL = ${scriptValue(callbackURL)};\nbuttons.forEach(button => button.addEventListener('click', () => post('/api/auth/sign-in/social', {provider:button.dataset.provider,callbackURL,...(oauthQuery ? {oauth_query:oauthQuery} : {})})));`);
+      const content = `<h1>Connect your Thumble account.</h1><p>Sign in to continue connecting your phone and AI.</p>${socialButtons(providers)}${emailForm(config.providers)}<p><small>Your AI receives only the permissions you approve on the next screen.</small></p>`;
+      return page('Sign in', content, `${clientScript}\nconst oauthQuery = ${scriptValue(query)}; const callbackURL = ${scriptValue(callbackURL)};\nbuttons.filter(button => button.dataset.provider).forEach(button => button.addEventListener('click', () => post('/api/auth/sign-in/social', {provider:button.dataset.provider,callbackURL,...(oauthQuery ? {oauth_query:oauthQuery} : {})})));${emailScript(callbackURL, query)}`);
     }
     if (!params || !params.get('client_id')) return errorPage('Start authorization from your phone or AI to review its requested access.');
     if (!session?.user) return new Response(null, { status: 303, headers: { location: new URL(`/sign-in?${query}`, config.baseURL).href, 'cache-control': 'no-store' } });

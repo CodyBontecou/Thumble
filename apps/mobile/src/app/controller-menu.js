@@ -4,14 +4,17 @@ import { router } from 'expo-router';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { connection } from '../connection';
+import { cloud } from '../cloud/store';
 import { Button, Eyebrow, Row, colors, ui } from '../ui/design';
 import thumbleIcon from '../../assets/thumble-menu.png';
 export default function ControllerMenu() {
   const network = useSyncExternalStore(connection.subscribe, connection.snapshot);
   const access = useSyncExternalStore(connection.subscribeAccess, connection.accessSnapshot);
   const layout = useSyncExternalStore(connection.subscribeProfile, connection.profileSnapshot);
+  const cloudState = useSyncExternalStore(cloud.subscribe, cloud.snapshot);
   const { width } = useWindowDimensions();
   const online = network.phase === 'connected';
+  const displayedProfile = network.phase === 'offline' ? cloudState.selected?.profile ?? layout.profile : layout.profile;
   function close() { if (router.canGoBack()) router.back(); else router.replace('/'); }
   return <SafeAreaProvider><SafeAreaView style={s.overlay} accessibilityViewIsModal>
     <StatusBar hidden />
@@ -19,14 +22,14 @@ export default function ControllerMenu() {
     <View style={s.panel}>
       <View style={s.heading}><Image source={thumbleIcon} style={s.icon} accessible={false} /><Text style={s.brand}>thumble.</Text><Pressable accessibilityRole="button" onPress={close} style={s.done}><Text style={{ color: colors.text, fontSize: 16 }}>Done</Text></Pressable></View>
       <ScrollView contentContainerStyle={{ padding: 16, gap: 16, flexDirection: width >= 680 ? 'row' : 'column' }}>
-        <View style={[s.summary, { flex: 1 }]}><Eyebrow>{online ? 'CONNECTED TO YOUR MAC' : 'YOUR CONTROLLER'}</Eyebrow><Text style={[ui.title, { fontSize: 28, lineHeight: 32 }]}>{layout.profile.name}</Text>
+        <View style={[s.summary, { flex: 1 }]}><Eyebrow>{online ? 'CONNECTED TO YOUR MAC' : 'YOUR CONTROLLER'}</Eyebrow><Text style={[ui.title, { fontSize: 28, lineHeight: 32 }]}>{displayedProfile.name}</Text>
           <Text style={ui.small}>{network.detail}{network.rtt != null ? ` · ${network.rtt} ms` : ''}</Text>
           <Button onPress={() => online ? (connection.disconnect(), close()) : router.replace('/pair')} secondary={online}>{online ? 'Disconnect Mac' : 'Connect Mac'}</Button>
           <Text style={ui.small}>{access?.pro ? 'PRO · UNLIMITED PLAY' : access ? `${Math.ceil(access.remaining / 60)} minutes of demo remaining` : '30-minute total controller demo'}</Text>
         </View>
         <View style={{ flex: 1.15, flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
           {[
-            ['Profiles', '/profiles'], ['Cloud controllers', '/cloud'], ['Stick calibration', '/calibration'],
+            ['AI to WoW', '/journey'], ['Profiles', '/profiles'], ['Cloud controllers', '/cloud'], ['Stick calibration', '/calibration'],
             ['WoW setup', '/wow-setup'], ['Connect your AI', '/agent-setup'],
             ['Thumble Pro', '/pro'], ['Getting started', '/onboarding'],
           ].map(([title, path]) => <View key={path} style={{ width: '48%', flexGrow: 1, minHeight: 64, justifyContent: 'center', backgroundColor: colors.surface, borderRadius: 16, borderCurve: 'continuous' }}><Row title={title} onPress={() => router.replace(path)} /></View>)}

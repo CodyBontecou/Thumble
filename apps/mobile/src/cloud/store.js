@@ -1,9 +1,10 @@
-import { AppState, Platform, Dimensions } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import * as AuthSession from 'expo-auth-session';
 import * as SecureStore from 'expo-secure-store';
 import * as Crypto from 'expo-crypto';
 import * as WebBrowser from 'expo-web-browser';
 import { validServiceUrl } from '@tapping/cloud-contracts';
+import { validViewport } from '@tapping/controller';
 import { CloudController } from './core';
 import { authorizationConfig, codeExchangeConfig, refreshConfig, tokenFields, validateCloudConfig } from './oauth';
 import { connection } from '../connection';
@@ -65,6 +66,7 @@ let signingIn = false;
 export async function signInCloud(service) {
   if (signingIn) return false;
   if (!validServiceUrl(service, __DEV__)) throw Error('Enter an HTTPS cloud service URL.');
+  if (!validViewport(cloud.viewport)) throw Error('Turn your phone sideways once to measure the controller area, then connect your account.');
   signingIn = true;
   try {
     const response = await fetch(`${service.replace(/\/$/, '')}/v1/config`);
@@ -77,8 +79,7 @@ export async function signInCloud(service) {
     if (result.type === 'cancel' || result.type === 'dismiss') return false;
     if (result.type !== 'success' || !result.params.code || !request.codeVerifier) throw Error('Sign-in did not finish. Try again.');
     const tokens = await AuthSession.exchangeCodeAsync(codeExchangeConfig(auth, cloudRedirectUri, result.params.code, request.codeVerifier, result.params.iss), auth);
-    const viewport = Dimensions.get('window');
-    await cloud.connect(service, { ...tokenFields(tokens), auth, mcpUrl: config.mcpUrl }, { name: Platform.OS === 'ios' ? 'My iPhone' : 'My Android phone', platform: Platform.OS, viewport: { width: Math.round(viewport.width), height: Math.round(viewport.height) } });
+    await cloud.connect(service, { ...tokenFields(tokens), auth, mcpUrl: config.mcpUrl }, { name: Platform.OS === 'ios' ? 'My iPhone' : 'My Android phone', platform: Platform.OS, viewport: { ...cloud.viewport } });
     return true;
   } finally { signingIn = false; }
 }

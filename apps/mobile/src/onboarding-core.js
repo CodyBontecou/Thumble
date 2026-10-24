@@ -2,7 +2,7 @@ export const initialSetup = () => ({
   version: 2, welcomeSeen: false, dismissed: false, paired: false, controlsTested: false, wowTested: false,
   personalized: false, agentVerified: false, agentCode: '', layoutMode: 'familiar',
   buttonSize: 'larger', movementSide: 'left', character: '', profileId: '', sourceProfileId: '',
-  wowClient: '', consolePortReady: false, wowChecks: {},
+  wowClient: '', consolePortReady: false, wowChecks: {}, controlsCheckContext: '', wowCheckContext: '',
 });
 export function normalizeSetup(value) {
   const result = initialSetup();
@@ -12,6 +12,7 @@ export function normalizeSetup(value) {
     if (choices.includes(value[key])) result[key] = value[key];
   }
   if (typeof value.character === 'string') result.character = value.character.slice(0, 80);
+  for (const key of ['controlsCheckContext', 'wowCheckContext']) if (typeof value[key] === 'string' && /^[a-zA-Z0-9:-]{1,250}$/.test(value[key])) result[key] = value[key];
   if (WOW_CLIENTS.some(client => client.id === value.wowClient)) result.wowClient = value.wowClient;
   result.wowChecks = Object.fromEntries(WOW_CHECKS.map(check => [check.id, value.wowChecks?.[check.id] === true]));
   if (typeof value.agentCode === 'string' && /^[a-f0-9]{12}$/.test(value.agentCode)) result.agentCode = value.agentCode;
@@ -36,21 +37,23 @@ export const WOW_CHECKS = [
   { id: 'menu', title: 'Navigate and return', detail: 'Open a game menu, move through it and close it. Keep keyboard and mouse within reach.' },
 ];
 export const wowClientName = state => WOW_CLIENTS.find(client => client.id === state.wowClient)?.name || 'the WoW installation selected in Battle.net';
-export function wowSetupStep(state, online) {
+/** @param {any} state @param {boolean} online @param {{controlKey:string, wowKey:string} | null} [context] */
+export function wowSetupStep(state, online, context = null) {
   if (!state.wowClient) return 'client';
   if (!online) return 'connect';
-  if (!state.controlsTested) return 'controls';
+  if (!state.controlsTested || (context && (!context.controlKey || state.controlsCheckContext !== context.controlKey))) return 'controls';
   if (!state.consolePortReady) return 'addon';
-  return state.wowTested ? 'ready' : 'game';
+  return state.wowTested && (!context || (context.wowKey && state.wowCheckContext === context.wowKey)) ? 'ready' : 'game';
 }
-export const canCompleteWowSetup = (state, online) => online && !!state.wowClient && state.controlsTested && state.consolePortReady && WOW_CHECKS.every(check => state.wowChecks?.[check.id] === true);
+/** @param {any} state @param {boolean} online @param {{controlKey:string, wowKey:string} | null} [context] */
+export const canCompleteWowSetup = (state, online, context = null) => online && !!state.wowClient && state.controlsTested && state.consolePortReady && (!context || (!!context.controlKey && state.controlsCheckContext === context.controlKey && !!context.wowKey && state.wowCheckContext === context.wowKey)) && WOW_CHECKS.every(check => state.wowChecks?.[check.id] === true);
 
 export function cloudLayoutPrompt(state, session) {
   const wow = state.layoutMode === 'consoleport' || state.layoutMode === 'character';
   const context = wow
     ? `I play ${wowClientName(state)} with ConsolePort${state.character ? `. Character/class note (user supplied, not a verified export): ${JSON.stringify(state.character)}` : ''}. Build a complete standard gamepad layout for WoW: movement and camera sticks, A/B/X/Y, shoulders, both triggers, D-pad, stick clicks, View and Menu. Keep shoulder/trigger modifier combinations reachable while moving. Preserve standard gamepad outputs; ConsolePort owns the in-game action bindings. Label buttons by their gamepad names unless I provide a fresh verified character export. Do not invent spells, modifier assignments or claim a binding is applied. Ask which character export I want to share before using character data. The hosted service does not expose the local Thumble Bridge import/mirror/binding tools; those require a separate local agent handoff and player Review and Apply in-game.`
     : 'Build a comfortable controller with familiar gamepad mappings.';
-  return `Connect to my Thumble MCP service at ${session.mcpUrl || `${session.service}/mcp`} and sign in to the same account as my phone. Read profile_schema and list_devices before designing. ${context}\nI prefer ${state.buttonSize === 'larger' ? 'larger action buttons' : 'standard-size buttons'} and movement on the ${state.movementSide}. Use the phone viewport, keep every control inside the usable area and prevent overlapping touch targets. Validate the complete profile, then save a new profile ID without overwriting my existing controllers. Deliver that exact saved revision to device ${session.device.id} (${JSON.stringify(session.device.name)}) using a fresh requestId. Check delivery_status; queued and received are not rendered. I will open the downloaded controller in practice. A rendered receipt confirms the phone preview, not working Mac input or WoW bindings. Every gameplay press stays mine.`;
+  return `Connect to my Thumble MCP service at ${session.mcpUrl || `${session.service}/mcp`} and sign in to the same account as my phone. Read profile_schema and list_devices before designing. ${context}\nI prefer ${state.buttonSize === 'larger' ? 'larger action buttons' : 'standard-size buttons'} and movement on the ${state.movementSide}. Use the phone viewport, keep every control inside the usable area and prevent overlapping touch targets. Validate the complete profile with deviceId for this phone: use at least 48 logical points on both target dimensions and 96 for stick diameters, with no overlapping touch targets or top Chat/menu obstruction. Pass deviceId when saving a new profile ID without overwriting my existing controllers. Deliver that exact saved revision to device ${session.device.id} (${JSON.stringify(session.device.name)}) using a fresh requestId. Check delivery_status; queued and received are not rendered. I will open the downloaded controller in practice or explicitly choose Use this controller on Mac while paired. A rendered receipt confirms the phone layout, not working Mac input or WoW bindings. Every gameplay press stays mine.`;
 }
 
 // Serialize reads and writes so rapid edits cannot lose another milestone.

@@ -174,3 +174,23 @@ test('fresh own-account view gates deletion on confirmation and submits only ses
   assert.deepEqual(JSON.parse(calls[0].body), {});
   assert.match(main.innerHTML, /Your account is deleted/);
 });
+
+test('email-only login renders validated forms and submits a code with the original signed OAuth request', async () => {
+  const response = await handleAuthPage(request('/sign-in', signed), {}, dependencies({ providers: ['email'] }));
+  const html = await response.text();
+  assert.equal(response.status, 200); assert.match(html, /autocomplete="one-time-code"/); assert.match(html, /type="email"/); assert.match(html, /inputmode="numeric"/); assert.doesNotMatch(html, /data-provider=/);
+  const script = html.match(/<script nonce="[^"]+">([\s\S]*?)<\/script>/)[1];
+  const listeners = {}, buttons = [{ disabled: false, dataset: {} }];
+  const emailForm = { hidden: false, reportValidity: () => true, addEventListener: (type, cb) => { listeners.send = cb; } };
+  const codeForm = { hidden: true, reportValidity: () => true, addEventListener: (type, cb) => { listeners.verify = cb; } };
+  const email = { value: 'reviewer@example.test', focus() {} }, code = { value: '123456', focus() {} }, error = { textContent: '' };
+  const elements = { 'email-form': emailForm, 'code-form': codeForm, email, code, error, 'change-email': { addEventListener: (type, cb) => { listeners.change = cb; } } };
+  const calls = [], assigned = [];
+  runInNewContext(script, { URL, document: { querySelectorAll: () => buttons, getElementById: id => elements[id] }, location: { origin: config.baseURL, assign: url => assigned.push(url) }, fetch: async (path, options) => { calls.push({ path, ...options }); return { ok: true, json: async () => calls.length === 1 ? { success: true } : { url: '/consent?original=signed' } }; } });
+  const event = { preventDefault() {} };
+  await listeners.send(event); assert.equal(emailForm.hidden, true); assert.equal(codeForm.hidden, false); assert.equal(email.readOnly, true); assert.equal(assigned.length, 0);
+  await listeners.verify(event); assert.equal(calls[1].path, '/api/auth/sign-in/email-otp'); assert.deepEqual(JSON.parse(calls[1].body), { email: 'reviewer@example.test', otp: '123456', oauth_query: signed }); assert.equal(calls[1].credentials, 'same-origin'); assert.equal(assigned[0], 'https://cloud.example/consent?original=signed');
+  listeners.change(); assert.equal(emailForm.hidden, false); assert.equal(codeForm.hidden, true); assert.equal(code.value, '');
+  const account = await handleAuthPage(request('/account'), {}, dependencies({ providers: ['email'] })); assert.match(await account.text(), /id="email-form"/);
+  const invalid = await handleAuthPage(request('/sign-in', `${signed}&bad=true`), {}, dependencies({ providers: ['email'] })); assert.equal(invalid.status, 400); assert.doesNotMatch(await invalid.text(), /id="email-form"/);
+});

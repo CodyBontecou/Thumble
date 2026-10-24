@@ -217,3 +217,62 @@ test('canonical MCP audience works across hosts while installed pilot clients re
     assert.throws(() => identityConfig({ ...f.env, MCP_RESOURCE_URL: resource }), error => error.code === 'not_configured');
   }
 });
+
+test('email codes verify inbox ownership, stay hashed, reject wrong/reused codes and preserve existing user identity', async t => {
+  const messages = [];
+  const f = await fixture(t, { EMAIL_FROM: 'signin@auth.thumble.io', EMAIL: { send: async message => { messages.push(message); return { messageId: 'test-email' }; } } });
+  assert.ok(identityConfig(f.env).providers.includes('email'));
+  const send = await f.auth.handler(f.request('/api/auth/email-otp/send-verification-otp', { method: 'POST', authenticated: false, body: { email: f.user.email, type: 'sign-in' } }));
+  assert.equal(send.status, 200); assert.equal((await send.json()).success, true); assert.equal(send.headers.get('set-cookie'), null);
+  assert.equal(messages.length, 1); assert.equal(messages[0].to, f.user.email);
+  const otp = messages[0].text.match(/code is (\d{6})/)[1];
+  assert.ok(f.db.prepare('SELECT value FROM verification').all().every(row => !row.value.includes(otp)));
+  const signIn = code => f.auth.handler(f.request('/api/auth/sign-in/email-otp', { method: 'POST', authenticated: false, body: { email: f.user.email, otp: code } }));
+  assert.equal((await signIn(otp === '000000' ? '000001' : '000000')).status, 400);
+  const verified = await signIn(otp); assert.equal(verified.status, 200); assert.equal((await verified.json()).user.id, f.user.id); assert.ok(verified.headers.get('set-cookie'));
+  assert.equal(f.db.prepare('SELECT count(*) AS n FROM user').get().n, 1);
+  assert.equal((await signIn(otp)).status, 400);
+  for (const path of ['/email-otp/check-verification-otp', '/email-otp/verify-email', '/email-otp/request-password-reset', '/email-otp/change-email']) assert.equal((await f.auth.handler(f.request(`/api/auth${path}`, { method: 'POST', body: {} }))).status, 404);
+});
+
+test('new email reviewer signs in through signed OAuth, requires consent and obtains an exact-resource PKCE token', async t => {
+  let otp;
+  const f = await fixture(t, { CHATGPT_CLIENT_SECRET: undefined, EMAIL_FROM: 'signin@auth.thumble.io', EMAIL: { send: async message => { otp = message.text.match(/code is (\d{6})/)[1]; } } });
+  const verifier = 'reviewer-verifier-'.repeat(4), challenge = Buffer.from(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier))).toString('base64url');
+  const redirectUri = 'https://chatgpt.com/connector_platform_oauth_redirect', resource = `${f.env.BETTER_AUTH_URL}/mcp`;
+  const params = new URLSearchParams({ response_type: 'code', client_id: 'thumble-chatgpt', redirect_uri: redirectUri, scope: CHATGPT_SCOPES.join(' '), resource, state: 'email-reviewer-state', code_challenge: challenge, code_challenge_method: 'S256' });
+  const begin = await f.auth.handler(f.request(`/api/auth/oauth2/authorize?${params}`, { authenticated: false })); assert.equal(begin.status, 302);
+  const signedQuery = new URL(begin.headers.get('location'), f.env.BETTER_AUTH_URL).search.slice(1);
+  const email = 'reviewer@example.test';
+  const send = await f.auth.handler(f.request('/api/auth/email-otp/send-verification-otp', { method: 'POST', authenticated: false, body: { email, type: 'sign-in' } })); assert.equal(send.status, 200);
+  const loginBody = { email, otp, oauth_query: signedQuery };
+  const tampered = await f.auth.handler(f.request('/api/auth/sign-in/email-otp', { method: 'POST', authenticated: false, body: { ...loginBody, oauth_query: `${signedQuery}&scope=devices:manage` } })); assert.equal(tampered.status, 400);
+  const login = await f.auth.handler(f.request('/api/auth/sign-in/email-otp', { method: 'POST', authenticated: false, body: loginBody })); assert.equal(login.status, 200);
+  const next = await login.json(); assert.match(next.url, /\/consent\?/);
+  const sessionCookie = login.headers.get('set-cookie').split(';')[0];
+  const consentQuery = new URL(next.url, f.env.BETTER_AUTH_URL).search.slice(1);
+  const consent = await f.auth.handler(new Request(`${f.env.BETTER_AUTH_URL}/api/auth/oauth2/consent`, { method: 'POST', headers: { origin: f.env.BETTER_AUTH_URL, cookie: sessionCookie, 'content-type': 'application/json' }, body: JSON.stringify({ accept: true, oauth_query: consentQuery }) })); assert.equal(consent.status, 200);
+  const callback = new URL((await consent.json()).url); assert.equal(callback.searchParams.get('state'), 'email-reviewer-state');
+  const exchange = await f.auth.handler(f.request('/api/auth/oauth2/token', { method: 'POST', authenticated: false, origin: false, form: true, body: { grant_type: 'authorization_code', client_id: 'thumble-chatgpt', redirect_uri: redirectUri, code: callback.searchParams.get('code'), code_verifier: verifier, resource } })); assert.equal(exchange.status, 200);
+  const claims = decodeJwt((await exchange.json()).access_token); assert.ok([claims.aud].flat().includes(resource)); assert.ok(!claims.scope.split(' ').includes('devices:manage'));
+  const reviewer = f.db.prepare('SELECT id,emailVerified FROM user WHERE email = ?').get(email); assert.equal(reviewer.id, claims.sub); assert.equal(reviewer.emailVerified, 1); assert.notEqual(reviewer.id, f.user.id);
+});
+
+test('email code failures, expiry, exhausted attempts and request throttling fail closed', async t => {
+  let otp;
+  const f = await fixture(t, { EMAIL_FROM: 'signin@auth.thumble.io', EMAIL: { send: async message => { otp = message.text.match(/code is (\d{6})/)[1]; } } });
+  const send = email => f.auth.handler(f.request('/api/auth/email-otp/send-verification-otp', { method: 'POST', authenticated: false, body: { email, type: 'sign-in' } }));
+  const verify = (email, code, ip) => f.auth.handler(new Request(`${f.env.BETTER_AUTH_URL}/api/auth/sign-in/email-otp`, { method: 'POST', headers: { origin: f.env.BETTER_AUTH_URL, 'content-type': 'application/json', 'cf-connecting-ip': ip }, body: JSON.stringify({ email, otp: code }) }));
+  const email = 'expiry@example.test'; assert.equal((await send(email)).status, 200);
+  f.db.prepare('UPDATE verification SET expiresAt = ?').run(new Date(Date.now() - 1000).toISOString());
+  assert.equal((await verify(email, otp, '203.0.113.20')).status, 400);
+  assert.equal((await send(email)).status, 200);
+  const wrong = otp === '000000' ? '000001' : '000000';
+  for (let i = 0; i < 3; i++) assert.equal((await verify(email, wrong, `203.0.113.${21 + i}`)).status, 400);
+  assert.ok((await verify(email, otp, '203.0.113.24')).status >= 400);
+  assert.equal((await send('throttle@example.test')).status, 200);
+  assert.equal((await send('throttle@example.test')).status, 429);
+  assert.equal(f.db.prepare('SELECT count(*) AS n FROM user').get().n, 1);
+  const failed = await fixture(t, { EMAIL_FROM: 'signin@auth.thumble.io', EMAIL: { send: async () => { throw Error('transport-failure'); } } });
+  const failure = await failed.auth.handler(failed.request('/api/auth/email-otp/send-verification-otp', { method: 'POST', authenticated: false, body: { email: 'transport@example.test', type: 'sign-in' } })); assert.equal(failure.status, 200); assert.equal(failure.headers.get('set-cookie'), null); assert.equal(failed.db.prepare('SELECT count(*) AS n FROM user').get().n, 1);
+});

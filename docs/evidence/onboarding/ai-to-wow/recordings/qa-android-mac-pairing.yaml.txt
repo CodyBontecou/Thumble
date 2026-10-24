@@ -1,0 +1,30 @@
+steps:
+  - tap:
+      text: Connect Mac
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: A small screen.
+  - tap:
+      text: Scan Mac QR code
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: Only this time
+  - tap:
+      role: SurfaceView
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: Cancel scanning
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: Controller paused
+executionPrerequisite: Separate Pixel QA app is signed in and the portrait
+  controller menu is open after owner assistance. Receiver is running with a
+  fresh QR. No Mac input is enabled.

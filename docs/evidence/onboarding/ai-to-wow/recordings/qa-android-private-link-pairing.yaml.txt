@@ -1,0 +1,110 @@
+steps:
+  - tap:
+      text: Connect Mac to use this controller
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: Mac pairing link
+  - tap:
+      text: Mac pairing link
+  - tool: run-sequence
+    args:
+      steps:
+        - tool: keyboard
+          args:
+            text: "{{secret:THUMBLE_PIXEL_PAIRING_LINK}}"
+        - tool: keyboard
+          args:
+            key: enter
+        - tool: await-ui-element
+          args:
+            condition: visible
+            selector:
+              text: Connect with link
+        - tool: gesture-tap
+          args:
+            x: 0.5
+            y: 0.7045
+        - tool: await-ui-element
+          args:
+            condition: visible
+            selector:
+              text: Controller paused
+            timeoutMs: 7500
+  - tool: run-sequence
+    args:
+      steps:
+        - tool: keyboard
+          args:
+            text: "{{secret:THUMBLE_PIXEL_PAIRING_LINK}}"
+        - tool: keyboard
+          args:
+            key: enter
+        - tool: await-ui-element
+          args:
+            condition: visible
+            selector:
+              text: Connect with link
+        - tool: gesture-tap
+          args:
+            x: 0.5
+            y: 0.7045
+        - tool: await-ui-element
+          args:
+            condition: visible
+            selector:
+              text: Controller paused
+            timeoutMs: 7500
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: Controller paused
+  - echo: "Controls are paused. Probe the landscape menu using the
+      portrait-coordinate inverse rotation of its observed AX centre:
+      naturalX=1-screenY, naturalY=screenX. This is an automation calibration,
+      not gameplay."
+  - tap:
+      x: 0.937
+      y: 0.967
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: Disconnect Mac
+  - tap:
+      text: Cloud controllers
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: Share request with your AI
+  - tool: gesture-swipe
+    args:
+      fromX: 0.5
+      fromY: 0.84
+      toX: 0.5
+      toY: 0.32
+      momentum: false
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: Use this controller on Mac
+  - tap:
+      text: Use this controller on Mac
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: Jump · ChatGPT
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: Controller paused
+executionPrerequisite: The explicit com.thumble.android.pilotqa app is signed in
+  and its Cloud controllers page is open in portrait, with no Mac connected. A
+  fresh receiver invitation is available only through the private
+  THUMBLE_PIXEL_PAIRING_LINK secret placeholder.

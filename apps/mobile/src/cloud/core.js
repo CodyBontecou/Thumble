@@ -1,4 +1,4 @@
-import { assertProfile } from '@tapping/controller';
+import { assertProfile, validViewport, validateLayout } from '@tapping/controller';
 import { validServiceUrl } from '@tapping/cloud-contracts';
 
 /** @typedef {{id: string, name: string}} Device */
@@ -19,6 +19,33 @@ export class CloudController {
   epoch = 0;
   polling = false;
   writes = Promise.resolve();
+  /** @type {{width:number, height:number} | null} */
+  viewport = null;
+  /** @type {Promise<void> | null} */
+  viewportFlight = null;
+  viewportKey = '';
+  setViewport(value) {
+    // Cloud gamepads are used in landscape. A portrait settings sheet must
+    // not replace the measured design canvas with a different aspect ratio.
+    if (!validViewport(value) || value.width <= value.height) return;
+    this.viewport = { width: value.width, height: value.height };
+  }
+  async syncViewport() {
+    if (this.viewportFlight) return this.viewportFlight;
+    const epoch = this.epoch, session = this.state.session;
+    if (!session || !this.viewport || !this.state.foreground) return;
+    const operation = (async () => {
+      while (epoch === this.epoch && this.state.foreground && this.viewport) {
+        const viewport = { ...this.viewport }, key = `${session.device.id}:${viewport.width}:${viewport.height}`;
+        if (key === this.viewportKey) return;
+        await this.api(`/v1/devices/${session.device.id}/viewport`, { method: 'POST', device: true, session, body: viewport });
+        if (epoch !== this.epoch) return;
+        this.viewportKey = key;
+      }
+    })();
+    this.viewportFlight = operation;
+    try { await operation; } finally { if (this.viewportFlight === operation) this.viewportFlight = null; }
+  }
   subscribe = listener => { this.listeners.add(listener); return () => this.listeners.delete(listener); };
   snapshot = () => this.state;
   update(patch) { this.state = { ...this.state, ...patch }; this.listeners.forEach(listener => listener()); }
@@ -27,7 +54,7 @@ export class CloudController {
     this.writes = this.writes.catch(() => {}).then(() => epoch === this.epoch ? this.storage.save(value) : undefined);
     return this.writes;
   }
-  /** @type {{profile: ReturnType<typeof assertProfile>, revision: number} | null} */
+  /** @type {{profile: ReturnType<typeof assertProfile>, revision: number, delivery?: Delivery | null} | null} */
   cache = null;
   async load() {
     const epoch = this.epoch;
@@ -38,7 +65,7 @@ export class CloudController {
         const session = saved.session;
         if (!session.accountId || !session.device?.id || !session.deviceToken) throw Error('Sign in again to connect this phone.');
         this.cache = saved.cache ? { ...saved.cache, profile: assertProfile(saved.cache.profile) } : null;
-        this.update({ session, selected: this.cache ? { ...this.cache, cached: true, delivery: null } : null });
+        this.update({ session, selected: this.cache ? { ...this.cache, cached: true, delivery: this.cache.delivery || null } : null });
       }
     } catch { if (epoch !== this.epoch) return; await this.storage.save(null); this.update({ error: 'Saved cloud connection could not be restored. Sign in again.' }); }
     finally { if (epoch === this.epoch) this.update({ loaded: true }); }
@@ -111,6 +138,7 @@ export class CloudController {
       const registration = await this.api('/v1/devices', { method: 'POST', body: info, session: provisional });
       provisional = { ...provisional, accountId, device: registration.device, deviceToken: registration.deviceToken, deviceExpiresAt: registration.expiresAt };
       if (epoch !== this.epoch) { void this.api(`/v1/devices/${registration.device.id}`, { method: 'DELETE', session: provisional }).catch(() => {}); return; }
+      this.viewportKey = '';
       this.update({ session: provisional, selected: null });
       await this.persist(epoch);
       await this.refreshProfiles();
@@ -120,7 +148,7 @@ export class CloudController {
   async logout() {
     const previous = this.state.session;
     const refreshing = this.tokenRefresh?.epoch === this.epoch ? this.tokenRefresh : null;
-    ++this.epoch; this.committedSelection = null; this.cache = null;
+    ++this.epoch; this.committedSelection = null; this.cache = null; this.viewportKey = ''; this.viewportFlight = null;
     this.update({ session: null, selected: null, pending: null, profiles: [], macAdoption: null, error: '', busy: false });
     // Queue erasure after any in-flight write, so a late save cannot resurrect credentials.
     await this.persist();
@@ -163,6 +191,8 @@ export class CloudController {
     this.polling = true;
     const epoch = this.epoch, session = this.state.session;
     try {
+      await this.syncViewport();
+      if (epoch !== this.epoch || !this.state.foreground) return;
       const { deliveries } = await this.api(`/v1/devices/${session.device.id}/deliveries`, { device: true, session });
       if (epoch !== this.epoch || !this.state.foreground) return;
       const item = deliveries[0];
@@ -181,6 +211,15 @@ export class CloudController {
       const profile = assertProfile(item.profile);
       if (delivery.deviceId !== session.device.id || delivery.profileId !== profile.id || !Number.isSafeInteger(delivery.profileRevision) || delivery.profileRevision < 1) throw Error('The delivery does not match this phone and profile.');
       if (!['queued', 'received'].includes(delivery.state)) return;
+      if (this.viewport) {
+        const quality = validateLayout(profile, this.viewport);
+        if (!quality.valid) {
+          const error = `Ask your AI to adjust this controller: ${quality.errors[0].message}`.slice(0, 500);
+          await this.api(`/v1/devices/${session.device.id}/deliveries/${delivery.id}/ack`, { method: 'POST', device: true, session, body: { profileId: profile.id, profileRevision: delivery.profileRevision, state: 'failed', error } });
+          if (epoch === this.epoch) this.update({ pending: null, error });
+          return;
+        }
+      }
       if (delivery.id === this.state.pending?.id) { this.update({ renderAttempt: this.state.renderAttempt + 1 }); return; }
       const { delivery: received } = await this.api(`/v1/devices/${session.device.id}/deliveries/${delivery.id}/ack`, { method: 'POST', device: true, session, body: { profileId: profile.id, profileRevision: delivery.profileRevision, state: 'received' } });
       if (epoch !== this.epoch || !this.state.foreground) return;
@@ -202,8 +241,9 @@ export class CloudController {
     try {
       if (selected.delivery) await this.api(`/v1/devices/${session.device.id}/deliveries/${selected.delivery.id}/ack`, { method: 'POST', device: true, session, body: { profileId: selected.profile.id, profileRevision: selected.revision, state: 'rendered' } });
       if (epoch !== this.epoch || selected !== this.state.selected) return;
-      this.cache = { profile: selected.profile, revision: selected.revision };
-      this.update({ selected: { ...selected, cached: true }, pending: null, error: '' });
+      const delivery = selected.delivery ? { ...selected.delivery, state: 'rendered' } : null;
+      this.cache = { profile: selected.profile, revision: selected.revision, delivery };
+      this.update({ selected: { ...selected, delivery, cached: true }, pending: null, error: '' });
       await this.persist(epoch);
     } catch (failure) {
       if (epoch === this.epoch && selected === this.state.selected) {

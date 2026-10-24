@@ -51,20 +51,27 @@ export default function CloudLibrary() {
     if (selected?.profile.id === profile.id && selected?.revision === profile.revision && cloud.snapshot().lanOffline) router.dismissTo('/?practice=1');
   }
   const prompt = session ? cloudLayoutPrompt(setup, session) : '';
+  async function shareRequest() {
+    setBusy(true); setError('');
+    try { await cloud.syncViewport(); await Share.share({ message: prompt }); }
+    catch (failure) { setError(failure.message); }
+    finally { setBusy(false); }
+  }
   return <Page><Columns><View style={ui.column}>
     <Eyebrow>{wow ? 'WOW + CONSOLEPORT' : 'CONTROLLERS FROM YOUR AI'}</Eyebrow><Text accessibilityRole="header" style={ui.title}>Build it anywhere.<Text>{'\n'}Try it here.</Text></Text>
     <Text style={ui.body}>Ask your AI to create a controller, then try it on this phone. Your cloud library works without a Mac connection.</Text>
     {session && <View style={ui.card}>
       <Text style={ui.heading}>{session.device.name}</Text><Text selectable style={ui.small}>{session.service}</Text><Text selectable style={ui.small}>Device: {session.device.id}</Text>
       <Text style={ui.small}>Keep Thumble open to receive controllers. Saved previews remain available offline until you sign out.</Text>
-      <Button disabled={busy} secondary onPress={() => { void Share.share({ message: prompt }).catch(failure => setError(failure.message)); }}>Share request with your AI</Button>
+      <Button disabled={busy} secondary onPress={shareRequest}>Share request with your AI</Button>
+      <Button secondary onPress={() => router.push('/journey')}>View AI to WoW progress</Button>
       <Button disabled={busy} secondary onPress={logout}>Sign out and disconnect phone</Button>
       <Row title="Delete account" detail="Review and confirm deletion in your browser" disabled={busy} onPress={deleteAccount} />
     </View>}
     {!!(error || state.error) && <Text accessibilityRole="alert" style={ui.error}>{error || state.error}</Text>}
   </View><View style={ui.column}>
     {!state.loaded ? <ActivityIndicator color={colors.text} /> : !session && <View style={[ui.card, { padding: 16, gap: 12 }]}>
-      <Text style={ui.heading}>Connect your cloud account</Text><Text style={ui.small}>Continue with Apple or Google securely in your browser.</Text>
+      <Text style={ui.heading}>Connect your cloud account</Text><Text style={ui.small}>Turn your phone sideways once to size your controller. Continue with email, Apple, or Google securely in your browser.</Text>
       {editingService && <TextInput accessibilityLabel="Cloud service URL" placeholder="https://your-cloud-service.example" placeholderTextColor={colors.secondary} value={service} onChangeText={setService} autoCapitalize="none" autoCorrect={false} keyboardType="url" textContentType="URL" style={ui.input} editable={!busy} />}
       <Button disabled={busy || state.busy || !service.trim()} onPress={signIn}>{busy || state.busy ? 'Connecting…' : 'Sign in and connect phone'}</Button>
       <Row title={editingService ? 'Hide service address' : 'Change cloud service'} onPress={() => setEditingService(!editingService)} />

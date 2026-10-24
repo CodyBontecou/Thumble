@@ -31,3 +31,6 @@ yarn-error.*
 .wrangler/
 .dev.vars
 .dev.vars.*
+
+# Machine-local Argent test credentials
+.argent/secrets.env

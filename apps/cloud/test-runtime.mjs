@@ -50,7 +50,7 @@ try {
     assert.equal(response.status, 200); const result = (await response.json()).result; assert.ok(!result.isError, JSON.stringify(result)); return result.structuredContent;
   }
   const registered = await api('/devices', { name: 'Runtime test phone', platform: 'ios', viewport: { width: 844, height: 390 } });
-  const saved = await tool('save_profile', { profile: xboxProfile, expectedRevision: 0 }); assert.equal(saved.revision, 1);
+  const saved = await tool('save_profile', { profile: xboxProfile, deviceId: registered.device.id, expectedRevision: 0 }); assert.equal(saved.revision, 1);
   const { delivery } = await tool('deliver_profile', { deviceId: registered.device.id, profileId: xboxProfile.id, profileRevision: 1, requestId: 'runtime-journey' });
   const pending = await api(`/devices/${registered.device.id}/deliveries`, undefined, registered.deviceToken); assert.equal(pending.deliveries[0].profile.id, xboxProfile.id);
   for (const state of ['received', 'rendered']) await api(`/devices/${registered.device.id}/deliveries/${delivery.id}/ack`, { profileId: xboxProfile.id, profileRevision: 1, state }, registered.deviceToken);

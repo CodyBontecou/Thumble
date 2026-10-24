@@ -155,7 +155,7 @@ function Screen() {
   return (
     <SafeAreaView style={s.screen} pointerEvents={focused ? 'auto' : 'none'} accessibilityElementsHidden={!focused} importantForAccessibility={focused ? 'auto' : 'no-hide-descendants'}>
       <StatusBar hidden />
-      <View style={s.canvas} onLayout={event => { controller.setViewport(event.nativeEvent.layout.width, event.nativeEvent.layout.height); setSize(event.nativeEvent.layout); const target = event.currentTarget; if (typeof target !== 'number') target.measureInWindow((x, y, width, height) => Object.assign(geometry, { x, y, width, height })); }}
+      <View style={s.canvas} onLayout={event => { controller.setViewport(event.nativeEvent.layout.width, event.nativeEvent.layout.height); cloud.setViewport(event.nativeEvent.layout); setSize(event.nativeEvent.layout); const target = event.currentTarget; if (typeof target !== 'number') target.measureInWindow((x, y, width, height) => Object.assign(geometry, { x, y, width, height })); }}
         onStartShouldSetResponder={() => true}
         onResponderGrant={event => touch('down', event)} onResponderStart={event => touch('down', event)}
         onResponderMove={event => touch('move', event)} onResponderEnd={event => touch('up', event)}

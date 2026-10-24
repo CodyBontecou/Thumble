@@ -25,6 +25,38 @@ function fixture() {
   return { client, requests, saved: () => saved, item: value => { item = value; } };
 }
 
+test('canvas reporting serializes resize changes and preserves landscape measurements across portrait settings', async () => {
+  const { client } = fixture(); await client.load();
+  const calls = []; let release;
+  client.request = async (url, options) => {
+    calls.push({ path: new URL(url).pathname, body: JSON.parse(options.body), token: options.headers.Authorization });
+    if (calls.length === 1) await new Promise(resolve => { release = resolve; });
+    return Response.json({ viewport: JSON.parse(options.body) });
+  };
+  client.setViewport({ width: 740, height: 380 });
+  const first = client.syncViewport();
+  client.setViewport({ width: 780, height: 380 });
+  release(); await first;
+  assert.deepEqual(calls.map(call => call.body.width), [740, 780]);
+  assert.ok(calls.every(call => call.token === `Bearer ${session.deviceToken}`));
+  client.setViewport({ width: 380, height: 780 }); await client.syncViewport();
+  assert.equal(client.viewport.width, 780); assert.equal(calls.length, 2);
+  client.setEnvironment({ foreground: false }); client.setViewport({ width: 800, height: 380 }); await client.syncViewport();
+  assert.equal(calls.length, 2);
+});
+
+test('late viewport replies after logout cannot overwrite a new account canvas marker', async () => {
+  const { client } = fixture(); await client.load();
+  let release;
+  client.request = async (url, options) => {
+    if (url.endsWith('/viewport')) await new Promise(resolve => { release = resolve; });
+    return Response.json({ revoked: true });
+  };
+  client.setViewport({ width: 740, height: 380 }); const syncing = client.syncViewport();
+  await client.logout(); release(); await syncing;
+  assert.equal(client.viewportKey, ''); assert.equal(client.snapshot().session, null);
+});
+
 test('cloud delivery uses device credential and acknowledges rendered only from exact committed selection', async () => {
   const { client, requests, saved } = fixture();
   await client.load();
@@ -88,11 +120,14 @@ test('logout cancels a delayed download, erases cache and attempts device revoca
   await client.load();
   const original = client.request;
   let release;
+  let started;
+  const downloading = new Promise(resolve => { started = resolve; });
   client.request = async (url, options) => {
-    if (new URL(url).pathname.endsWith('/deliveries')) await new Promise(resolve => { release = resolve; });
+    if (new URL(url).pathname.endsWith('/deliveries')) await new Promise(resolve => { release = resolve; started(); });
     return original(url, options);
   };
   const polling = client.poll();
+  await downloading;
   await client.logout();
   release(); await polling;
   assert.equal(client.snapshot().selected, null);
@@ -248,6 +283,9 @@ test('Better Auth mobile OAuth requests bind authorization, code exchange and re
   const service = 'https://thumble-cloud-pilot.costream.workers.dev';
   const auth = { issuer: `${service}/api/auth`, authorizationEndpoint: `${service}/api/auth/oauth2/authorize`, tokenEndpoint: `${service}/api/auth/oauth2/token`, mobileClientId: 'thumble-mobile', audience: `${service}/mcp`, scopes: ['openid', 'offline_access', 'profiles:read', 'devices:manage'] };
   assert.equal(validateCloudConfig({ apiVersion: 1, auth, mcpUrl: `${service}/mcp` }, service), auth);
+  const canonical = { ...auth, audience: 'https://thumble.io/mcp' };
+  assert.equal(validateCloudConfig({ apiVersion: 1, auth: canonical, mcpUrl: canonical.audience }, service), canonical);
+  assert.throws(() => validateCloudConfig({ apiVersion: 1, auth: { ...auth, audience: 'http://thumble.io/mcp' }, mcpUrl: 'http://thumble.io/mcp' }, service), /resource/);
   const authorization = authorizationConfig(auth, 'thumble://cloud-auth');
   assert.equal(authorization.usePKCE, true);
   assert.equal(authorization.responseType, 'code');

@@ -7,6 +7,7 @@ function fixture() {
   const selected = { profile: structuredClone(xboxProfile), revision: 7, cached: false, delivery: { id: 'delivery-1' } };
   const source = { service: 'https://pilot.example', accountId: 'a'.repeat(64), profileId: selected.profile.id, revision: 7 };
   const cloud = new CloudController({ storage: { load: async () => null, save: async () => {} }, fetch: async () => Response.json({ delivery: { state: 'rendered' } }) });
+  cloud.setViewport({ width: 740, height: 380 });
   cloud.update({ session: { ...source, accessToken: 'fixture', device: { id: 'phone-1', name: 'Phone' }, deviceToken: 'device-fixture' }, selected, pending: selected.delivery, lanOffline: false });
   let adopts = 0;
   const connection = { session: 'pairing-1', snapshot: () => ({ phase: 'connected' }), requestProfiles: async () => ({ activationRevision: 9 }), adoptProfile: async (profile, receivedSource, expected) => {

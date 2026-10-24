@@ -1,5 +1,6 @@
 import { betterAuth } from 'better-auth';
-import { jwt } from 'better-auth/plugins';
+import { jwt, emailOTP } from 'better-auth/plugins';
+import { emailSignInEnabled, sendSignInCode } from './email-sign-in.js';
 import { mcp } from '@better-auth/mcp';
 import { generateAppleClientSecret } from './apple.js';
 import { FRESH_SESSION_SECONDS, prepareAccountDeletion, completeAccountDeletion } from './deletion.js';
@@ -22,6 +23,7 @@ export function identityConfig(env) {
   const providers = [];
   if (env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET) providers.push('google');
   if (env.APPLE_CLIENT_ID && env.APPLE_TEAM_ID && env.APPLE_KEY_ID && env.APPLE_PRIVATE_KEY) providers.push('apple');
+  if (emailSignInEnabled(env)) providers.push('email');
   return { baseURL, issuer: `${baseURL}/api/auth`, resource, resources, mobileClientId: 'thumble-mobile', providers, scopes: [...IDENTITY_SCOPES] };
 }
 
@@ -73,8 +75,9 @@ export function identityOptions(env) {
     }, afterDelete: user => completeAccountDeletion(env, user) } },
     account: { encryptOAuthTokens: true, accountLinking: { enabled: true, requireLocalEmailVerified: true, allowDifferentEmails: false } },
     rateLimit: { enabled: true, storage: 'database', window: 60, max: 100 },
-    disabledPaths: ['/token'],
+    disabledPaths: ['/token', '/email-otp/check-verification-otp', '/email-otp/verify-email', '/email-otp/request-password-reset', '/email-otp/forget-password', '/email-otp/reset-password', '/email-otp/request-email-change', '/email-otp/change-email'],
     plugins: [
+      ...(config.providers.includes('email') ? [emailOTP({ otpLength: 6, expiresIn: 300, allowedAttempts: 3, storeOTP: 'hashed', resendStrategy: 'rotate', rateLimit: { window: 60, max: 3 }, sendVerificationOTP: data => sendSignInCode(env, data) })] : []),
       jwt({ disableSettingJwtHeader: true, jwks: { keyPairConfig: { alg: 'ES256' }, rotationInterval: 30 * 86400 }, jwt: { issuer: config.issuer, audience: config.resource, expirationTime: '15m' } }),
       mcp({
         loginPage: '/sign-in', consentPage: '/consent', resource: config.resource,

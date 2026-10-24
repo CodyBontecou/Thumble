@@ -40,7 +40,7 @@ test('delivery requires exact identifiers and rejects injected account authority
 });
 
 test('MCP writes pass the original bearer and exact arguments into authenticated REST', async () => {
-  const args = { profile: xboxProfile, expectedRevision: 0 };
+  const args = { profile: xboxProfile, deviceId: 'phone-1', expectedRevision: 0 };
   const value = await callCloudTool(request(), env, principal, 'save_profile', args, async (forwarded, passedEnv) => {
     assert.equal(forwarded.url, 'https://cloud.example/v1/profiles');
     assert.equal(forwarded.method, 'POST');
@@ -54,10 +54,13 @@ test('MCP writes pass the original bearer and exact arguments into authenticated
 });
 
 test('revision conflicts and validation errors are actionable tool errors', async () => {
-  const value = await callCloudTool(request(), env, principal, 'save_profile', { profile: xboxProfile, expectedRevision: 2 }, async () => Response.json({ error: { code: 'revision_conflict', message: 'Read the latest revision.' } }, { status: 409 }));
+  const value = await callCloudTool(request(), env, principal, 'save_profile', { profile: xboxProfile, deviceId: 'phone-1', expectedRevision: 2 }, async () => Response.json({ error: { code: 'revision_conflict', message: 'Read the latest revision.' } }, { status: 409 }));
   assert.equal(value.isError, true);
   assert.equal(value.structuredContent.error.code, 'revision_conflict');
-  const validation = await callCloudTool(request(), env, principal, 'validate_profile', { profile: { ...xboxProfile, controls: [] } });
+  const validation = await callCloudTool(request(), env, principal, 'validate_profile', { profile: { ...xboxProfile, controls: [] }, deviceId: 'phone-1' }, async forwarded => {
+    assert.equal(new URL(forwarded.url).pathname, '/v1/profiles/validate');
+    return Response.json({ valid: false, errors: [{ code: 'invalid_profile' }] });
+  });
   assert.equal(validation.structuredContent.valid, false);
 });
 

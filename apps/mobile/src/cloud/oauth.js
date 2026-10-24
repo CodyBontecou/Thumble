@@ -11,8 +11,9 @@ export function validateCloudConfig(config, service, allowLocalhost = false) {
   for (const field of ['issuer', 'authorizationEndpoint', 'tokenEndpoint']) {
     if (!validServiceUrl(config.auth[field], allowLocalhost)) throw Error('The identity provider requires valid HTTPS endpoints.');
   }
-  const resource = `${service.replace(/\/$/, '')}/mcp`;
-  if (config.mcpUrl !== resource || config.auth.audience !== resource) throw Error('The identity provider must authorize this cloud service resource.');
+  // The trusted service can advertise its canonical MCP origin separately
+  // from the API origin that hosts sign-in and phone registration.
+  if (!validServiceUrl(config.mcpUrl, allowLocalhost) || config.auth.audience !== config.mcpUrl) throw Error('The identity provider must authorize this cloud service resource.');
   return config.auth;
 }
 

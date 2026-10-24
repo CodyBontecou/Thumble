@@ -32,7 +32,7 @@ export default function PairScreen() {
     return followPairingLink(connection, AppState, `thumble://pair?data=${params.data}`, failure => setError(failure.message));
   }, [params.data]));
   useEffect(() => {
-    if (state.phase === 'connected') void onboarding.update({ paired: true }).then(() => router.dismissTo(params.returnTo === 'wow' ? '/wow-setup' : params.setup === '1' ? '/onboarding' : '/')).catch(failure => setError(failure.message));
+    if (state.phase === 'connected') void onboarding.update({ paired: true }).then(() => router.dismissTo(params.returnTo === 'wow' ? '/wow-setup' : params.returnTo === 'journey' ? '/journey' : params.setup === '1' ? '/onboarding' : '/')).catch(failure => setError(failure.message));
   }, [state.phase, router, params.setup, params.returnTo]);
   const failure = error || (state.phase === 'offline' && !state.detail.startsWith('Practice') ? state.detail : '');
   return <Page style={{ paddingTop: 16 }} footer={<Actions status={state.phase === 'connecting' ? state.detail : failure ? 'Could not pair. Scan the current code on your Mac.' : 'Same Wi-Fi · encrypted connection'}>

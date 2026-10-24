@@ -21,5 +21,5 @@ export const profileSchema = {
       },
     } },
   },
-  description: 'Normalized safe-area coordinates; x+width and y+height must fit within 1. IDs must be unique. Each control needs exactly one mapping: button to one button, trigger to lt/rt, stick to [lx,ly] or [rx,ry]. Optional invertX/invertY booleans reverse stick output axes without changing thumb visuals. Analog outputs have one owner. Labels do not bind WoW spells. Use validate_profile for semantic checks. No executable code, macros, timers or generated input.',
+  description: 'Normalized usable-canvas coordinates; x+width and y+height must fit within 1. Read list_devices for logical canvas dimensions. Cloud validate_profile and save_profile require deviceId: targets must be at least 48 points on both axes, sticks at least 96 points in diameter, and touch areas must not overlap controls or the top Chat/menu areas. IDs must be unique. Each control needs exactly one mapping: button to one button, trigger to lt/rt, stick to [lx,ly] or [rx,ry]. Optional invertX/invertY booleans reverse stick output axes without changing thumb visuals. Analog outputs have one owner. Labels do not bind WoW spells. No executable code, macros, timers or generated input.',
 };

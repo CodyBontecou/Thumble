@@ -8,10 +8,10 @@ The shared [cloud contract](cloud-contracts.md) defines authority, REST shapes a
 
 1. Sign in on the phone and register it from Cloud controllers.
 2. In the agent client, call `list_devices` and explicitly choose the intended phone. Its viewport helps size the controller.
-3. Read `profile_schema`, construct a controller and call `validate_profile`.
-4. Call `save_profile` with `expectedRevision: 0` to create it. For edits, read `get_profile` and use its revision as `expectedRevision`.
+3. Read `profile_schema`, construct a controller and call `validate_profile` with the chosen `deviceId`. Fix all named size, overlap and toolbar-clearance errors.
+4. Call `save_profile` with that same `deviceId` and `expectedRevision: 0` to create it. For edits, read `get_profile` and use its revision as `expectedRevision`. The service enforces layout checks even if validation was skipped.
 5. Call `deliver_profile` with the chosen `deviceId`, saved `profileId`, exact `profileRevision` and a fresh `requestId`.
-6. Keep the phone app foregrounded and disconnected from its Mac to preview. Call `delivery_status` with the returned delivery ID. A `rendered` receipt confirms this exact controller revision committed on the phone. It does not confirm game input or game bindings.
+6. Keep the phone app foregrounded. Open offline practice or explicitly choose **Use this controller on Mac** while paired. Call `delivery_status` with the returned delivery ID. A `rendered` receipt confirms this exact revision committed on the phone. It does not confirm game input or bindings. Follow **AI to WoW** on the phone for Mac readiness and player-confirmed game checks.
 
 Reusing a request ID with the same arguments returns the original delivery. A revision conflict requires reading the latest revision and reconsidering the edit. Do not retry writes blindly. A later delivery can supersede a queued or received delivery.
 

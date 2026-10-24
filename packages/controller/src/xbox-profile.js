@@ -22,7 +22,7 @@ button('start', 'Menu', 0.515, 0.3);
 button('ls', 'L3', 0.09, 0.72);
 button('rs', 'R3', 0.87, 0.75);
 add('lb', 'button', 'LB', { x: 0.05, y: 0.02, width: 0.16, height: 0.14 }, ['lb']);
-add('rb', 'button', 'RB', { x: 0.79, y: 0.02, width: 0.16, height: 0.14 }, ['rb']);
+add('rb', 'button', 'RB', { x: 0.79, y: 0.02, width: 0.14, height: 0.14 }, ['rb']);
 add('lt', 'trigger', 'LT', { x: 0.24, y: 0.02, width: 0.15, height: 0.14 }, ['lt']);
 add('rt', 'trigger', 'RT', { x: 0.61, y: 0.02, width: 0.15, height: 0.14 }, ['rt']);
 

@@ -1,0 +1,33 @@
+steps:
+  - echo: Signed-out phone. Normalize optional welcome, then verify the resumable onboarding baseline.
+  - launch: com.thumble.ios
+  - when:
+      visible: { text: Made for the way }
+    steps:
+      - await: { visible: { text: Made for the way } }
+      - await: { idle: true, stableFor: 800 }
+      - tap: { text: Get started }
+  - await: { visible: { text: From your phone } }
+  - await: { idle: true, stableFor: 800 }
+  - tap: { text: From your AI to WoW }
+  - await: { visible: { text: From your AI } }
+  - await: { visible: { text: AI TO WOW · 0 OF 4 COMPLETE } }
+  - await: { idle: true, stableFor: 800 }
+  - assert: { visible: { text: 1 · AI connected } }
+  - scroll-to: { target: { text: 3 · Mac ready } }
+  - assert: { visible: { text: 3 · Mac ready } }
+  - scroll-to: { target: { text: 4 · Tested in WoW } }
+  - assert: { visible: { text: 4 · Tested in WoW } }
+  - tap: { text: Sign in and connect your AI }
+  - await: { visible: { text: Connect your cloud account } }
+  - await: { idle: true, stableFor: 800 }
+  - assert: { visible: { text: Sign in and connect phone } }
+  - tap: { text: Done }
+  - await: { hidden: { text: Connect your cloud account } }
+  - await: { visible: { text: Sign in and connect your AI } }
+  - await: { idle: true, stableFor: 800 }
+  - assert: { visible: { text: 4 · Tested in WoW } }
+  - tap: { text: Done }
+  - await: { hidden: { text: Sign in and connect your AI } }
+  - await: { visible: { text: From your phone } }
+  - await: { idle: true, stableFor: 800 }

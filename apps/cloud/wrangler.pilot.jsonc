@@ -9,6 +9,7 @@
     "nodejs_compat"
   ],
   "workers_dev": true,
+  "send_email": [{ "name": "EMAIL", "allowed_sender_addresses": ["signin@auth.thumble.io"] }],
   "routes": [
     { "pattern": "thumble.io/assets/thumble/*", "zone_name": "thumble.io" },
     { "pattern": "thumble.io/mcp", "zone_name": "thumble.io" },
@@ -16,6 +17,7 @@
     { "pattern": "thumble.io/.well-known/openai-apps-challenge", "zone_name": "thumble.io" }
   ],
   "vars": {
+    "EMAIL_FROM": "signin@auth.thumble.io",
     "BETTER_AUTH_URL": "https://thumble-cloud-pilot.costream.workers.dev",
     "MCP_RESOURCE_URL": "https://thumble.io/mcp",
     "CHATGPT_REDIRECT_URIS": "[\"https://chatgpt.com/connector_platform_oauth_redirect\"]"

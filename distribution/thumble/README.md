@@ -14,3 +14,12 @@ Public publisher/contact: Thumble / codybontecou@gmail.com. No account credentia
 The packages use the verified pilot URL. Choose the long-term endpoint before review: OpenAI's current update flow does not support changing an existing MCP URL without support.
 
 Read [submission status and blockers](../../docs/marketplaces/status.md) before uploading or publishing. The old `0.1.0` and `0.1.1` OpenAI ZIPs are historical; use `0.1.2`.
+
+
+## Canonical OpenAI draft (October 24, 2026)
+
+Use `thumble-controller-openai-0.2.0.zip` from `openai-canonical/` for the current submission. It keeps the public display name Thumble and uses `https://thumble.io/mcp`. OpenAI does not allow replacing the origin on the old `thumble` draft; the new package name identifies a separate draft. The original `openai/` package and 0.1.x ZIPs remain the historical pilot package.
+
+Current portal: https://platform.openai.com/plugins/manage/plugin_asdk_app_6adc8f83963881918c960106b339df6d
+
+Domain verified; OAuth authorized; eight tools discovered; scan has no findings. Review information and demo URL remain incomplete. Not submitted.

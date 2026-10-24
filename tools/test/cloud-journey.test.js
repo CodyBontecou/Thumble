@@ -36,8 +36,8 @@ test('signed MCP save → exact delivery → offline phone receipt → revocatio
   };
   const { devices } = await mcp('list_devices'); assert.equal(devices[0].id, deviceId);
   assert.equal(JSON.stringify(devices).includes(deviceToken), false);
-  const first = await mcp('save_profile', { profile: xboxProfile, expectedRevision: 0 });
-  await mcp('save_profile', { profile: { ...xboxProfile, name: 'Later revision' }, expectedRevision: first.revision });
+  const first = await mcp('save_profile', { profile: xboxProfile, deviceId: deviceId, expectedRevision: 0 });
+  await mcp('save_profile', { profile: { ...xboxProfile, name: 'Later revision' }, deviceId, expectedRevision: first.revision });
   const args = { deviceId, profileId: first.profile.id, profileRevision: first.revision, requestId: 'first-journey' };
   const { delivery } = await mcp('deliver_profile', args);
   assert.equal(delivery.state, 'queued');

@@ -1,0 +1,17 @@
+steps:
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: View AI to WoW progress
+  - tool: gesture-swipe
+    args:
+      fromX: 0.5
+      fromY: 0.84
+      toX: 0.5
+      toY: 0.32
+      momentum: false
+executionPrerequisite: Separate Pixel QA app is signed in with device
+  2661910d-39d5-471c-9991-a658ad3d156d, a delivered cloud controller is
+  selected, Mac is paired, and Cloud controllers is open in portrait.
+  Direct-route entry is functional setup, not navigation acceptance evidence.

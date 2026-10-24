@@ -1,5 +1,12 @@
 import { CloudError, MAX_BODY_BYTES, SCOPES, requireId, requireRevision, requireScope, validateCloudProfile } from '@tapping/cloud-contracts';
 import { authenticateAccount, authenticateDevice, getPublicConfig, sha256 } from './auth.js';
+import { validateLayout, validViewport } from '@tapping/controller';
+
+function requireLayout(profile, device) {
+  const quality = validateLayout(profile, { width: device.width, height: device.height });
+  if (!quality.valid) throw new CloudError('invalid_layout', 'Adjust this controller for the target phone before saving or delivering.', 400, quality);
+  return quality;
+}
 
 export function json(data, status = 200) {
   return Response.json(data, { status, headers: { 'Cache-Control': 'no-store' } });
@@ -73,8 +80,15 @@ async function accountRoute(request, env, path) {
     return json({ revoked: true });
   }
   if (path[0] === 'profiles') {
+    if (method === 'POST' && path.length === 2 && path[1] === 'validate') {
+      requireScope(principal, SCOPES.profileWrite);
+      const value = await body(request), device = await deviceOwned(db, account, requireId(value.deviceId, 'deviceId'));
+      return json(validateLayout(value.profile, { width: device.width, height: device.height }));
+    }
     if (method === 'POST' && path.length === 1) {
       requireScope(principal, SCOPES.profileWrite); const value = await body(request), profile = validateCloudProfile(value.profile), expected = requireRevision(value.expectedRevision, true);
+      const device = await deviceOwned(db, account, requireId(value.deviceId, 'deviceId'));
+      requireLayout(profile, device);
       if (!Number.isSafeInteger(expected + 1)) throw new CloudError('invalid_request', 'The next revision exceeds the supported range.');
       const row = await db.prepare('INSERT INTO profile_revisions (account_id,profile_id,revision,name,profile_json,created_at) SELECT ?,?,?,?,?,? WHERE COALESCE((SELECT MAX(revision) FROM profile_revisions WHERE account_id = ? AND profile_id = ?),0) = ? RETURNING *').bind(account, profile.id, expected + 1, profile.name, JSON.stringify(profile), now, account, profile.id, expected).first();
       if (!row) throw new CloudError('revision_conflict', 'The saved profile changed. Fetch the latest revision before saving again.', 409);
@@ -104,7 +118,8 @@ async function accountRoute(request, env, path) {
       const existing = await db.prepare('SELECT * FROM deliveries WHERE account_id = ? AND request_id = ?').bind(account, requestId).first();
       const check = row => { if (row.device_id !== deviceId || row.profile_id !== profileId || row.profile_revision !== revision) throw new CloudError('delivery_conflict', 'This requestId already targets a different delivery.', 409); return json({ delivery: deliveryValue(row) }, 201); };
       if (existing) return check(existing);
-      await deviceOwned(db, account, deviceId); await getRevision(db, account, profileId, revision);
+      const device = await deviceOwned(db, account, deviceId), saved = await getRevision(db, account, profileId, revision);
+      requireLayout(revisionValue(saved).profile, device);
       const id = crypto.randomUUID();
       await db.batch([
         db.prepare("INSERT INTO deliveries (id,account_id,device_id,profile_id,profile_revision,request_id,state,created_at,updated_at) SELECT ?,?,?,?,?,?,'queued',?,? WHERE EXISTS(SELECT 1 FROM devices WHERE id = ? AND account_id = ? AND revoked_at IS NULL AND token_expires_at > ?) ON CONFLICT(account_id,request_id) DO NOTHING").bind(id, account, deviceId, profileId, revision, requestId, now, now, deviceId, account, now),
@@ -118,6 +133,12 @@ async function accountRoute(request, env, path) {
 }
 async function deviceRoute(request, env, path) {
   const deviceId = requireId(path[1], 'deviceId'), device = await authenticateDevice(request, env, deviceId), db = env.DB;
+  if (path.length === 3 && path[2] === 'viewport' && request.method === 'POST') {
+    const value = await body(request);
+    if (!validViewport(value)) throw new CloudError('invalid_request', 'Provide the usable controller canvas in logical points.');
+    await db.prepare('UPDATE devices SET width = ?,height = ? WHERE id = ? AND account_id = ? AND revoked_at IS NULL AND token_expires_at > ?').bind(value.width, value.height, deviceId, device.account_id, new Date().toISOString()).run();
+    return json({ viewport: { width: value.width, height: value.height } });
+  }
   if (request.method === 'GET' && path.length === 3) {
     const { results } = await db.prepare("SELECT * FROM deliveries WHERE device_id = ? AND account_id = ? AND state IN ('queued','received') ORDER BY created_at DESC LIMIT 1").bind(deviceId, device.account_id).all();
     return json({ deliveries: await Promise.all(results.map(async row => ({ delivery: deliveryValue(row), profile: revisionValue(await getRevision(db, device.account_id, row.profile_id, row.profile_revision)).profile }))) });
@@ -147,7 +168,7 @@ export async function handleApi(request, env) {
     if (path[0] !== 'v1') notFound(); path.shift();
     if (request.method === 'GET' && path.length === 1 && path[0] === 'config') return json(getPublicConfig(request, env));
     if (!env.DB) throw new CloudError('not_configured', 'Cloud storage is not configured.', 503);
-    if (path[0] === 'devices' && path[2] === 'deliveries') return await deviceRoute(request, env, path);
+    if (path[0] === 'devices' && ['deliveries', 'viewport'].includes(path[2])) return await deviceRoute(request, env, path);
     return await accountRoute(request, env, path);
   } catch (error) { return errorResponse(error); }
 }

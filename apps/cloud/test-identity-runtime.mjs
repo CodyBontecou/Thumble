@@ -56,7 +56,7 @@ try {
     const response = await runtime.dispatchFetch(`${origin}/mcp`, { method: 'POST', headers: { authorization: `Bearer ${agentTokens.access_token}`, 'content-type': 'application/json', accept: 'application/json, text/event-stream', 'mcp-protocol-version': '2025-11-25' }, body: JSON.stringify({ jsonrpc: '2.0', id: ++id, method: 'tools/call', params: { name, arguments: args } }) });
     assert.equal(response.status, 200); const payload = await response.json(); assert.ok(!payload.result.isError, JSON.stringify(payload)); return payload.result.structuredContent;
   }
-  assert.equal((await tool('save_profile', { profile: xboxProfile, expectedRevision: 0 })).revision, 1);
+  assert.equal((await tool('save_profile', { profile: xboxProfile, deviceId: registered.device.id, expectedRevision: 0 })).revision, 1);
   const { delivery } = await tool('deliver_profile', { deviceId: registered.device.id, profileId: xboxProfile.id, profileRevision: 1, requestId: 'better-auth-journey' });
   const pending = await request(`/v1/devices/${registered.device.id}/deliveries`, { token: registered.deviceToken }); assert.equal(pending.status, 200);
   for (const state of ['received', 'rendered']) { const ack = await request(`/v1/devices/${registered.device.id}/deliveries/${delivery.id}/ack`, { method: 'POST', token: registered.deviceToken, value: { profileId: xboxProfile.id, profileRevision: 1, state } }); assert.equal(ack.status, 200); }

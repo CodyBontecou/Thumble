@@ -15,12 +15,34 @@ async function fixture(t) {
 }
 const phone = { name: 'My phone', platform: 'ios', viewport: { width: 844, height: 390 } };
 async function savedAndPhone(f) {
-  const saved = await f.call('/profiles', { profile: xboxProfile, expectedRevision: 0 }); assert.equal(saved.status, 201);
   const registered = await f.call('/devices', phone); assert.equal(registered.status, 201);
+  f.deviceId = registered.value.device.id;
+  const saved = await f.call('/profiles', { profile: xboxProfile, expectedRevision: 0, deviceId: f.deviceId }); assert.equal(saved.status, 201);
   return { saved: saved.value, ...registered.value };
 }
 const target = (device, revision = 1, requestId = 'first') => ({ deviceId: device.id, profileId: xboxProfile.id, profileRevision: revision, requestId });
 const receipt = state => ({ profileId: xboxProfile.id, profileRevision: 1, state });
+
+test('layout gates use the owned target canvas before saving and delivering; reads preserve legacy layouts', async t => {
+  const f = await fixture(t), { device, deviceToken } = await savedAndPhone(f);
+  const bad = structuredClone(xboxProfile); bad.id = 'small-generated'; bad.controls.find(control => control.id === 'b').frame.width = 0.03;
+  const validation = await f.call('/profiles/validate', { profile: bad, deviceId: device.id });
+  assert.equal(validation.value.valid, false);
+  assert.ok(validation.value.errors.some(error => error.controls.includes('b')));
+  assert.equal((await f.call('/profiles', { profile: bad, expectedRevision: 0, deviceId: device.id })).value.error.code, 'invalid_layout');
+  assert.equal((await f.call('/profiles', { profile: xboxProfile, expectedRevision: 0 })).status, 400);
+  const stranger = await f.tokenFor({ sub: 'other' });
+  assert.equal((await f.call('/profiles/validate', { profile: xboxProfile, deviceId: device.id }, stranger)).status, 404);
+  assert.equal(f.db.sqlite.prepare('SELECT COUNT(*) AS n FROM profile_revisions').get().n, 1);
+  // Resize between save and delivery: the already-saved revision stays
+  // readable, but it cannot be delivered to an unsuitable canvas.
+  assert.equal((await f.call(`/devices/${device.id}/viewport`, { width: 340, height: 240 }, deviceToken)).status, 200);
+  assert.equal((await f.call('/deliveries', target(device))).value.error.code, 'invalid_layout');
+  assert.equal((await f.call(`/profiles/${xboxProfile.id}`)).status, 200);
+  assert.equal((await f.call(`/devices/${device.id}/viewport`, { width: 740, height: 380 }, f.token)).status, 401);
+  assert.equal((await f.call(`/devices/${device.id}/viewport`, { width: 740, height: 380 }, deviceToken)).status, 200);
+  assert.equal((await f.call('/deliveries', target(device))).status, 201);
+});
 
 test('fails closed and verifies JWT signatures, expiry, issuer, audience, scopes and tenant', async t => {
   const f = await fixture(t);
@@ -42,13 +64,13 @@ test('fails closed and verifies JWT signatures, expiry, issuer, audience, scopes
 
 test('immutable revisions use atomic compare-and-swap with concurrent writers', async t => {
   const f = await fixture(t); await savedAndPhone(f);
-  const results = await Promise.all(['First edit', 'Second edit'].map(name => f.call('/profiles', { profile: { ...xboxProfile, name }, expectedRevision: 1 })));
+  const results = await Promise.all(['First edit', 'Second edit'].map(name => f.call('/profiles', { profile: { ...xboxProfile, name }, expectedRevision: 1, deviceId: f.deviceId })));
   assert.deepEqual(results.map(r => r.status).sort(), [201, 409]);
   assert.deepEqual((await f.call(`/profiles/${xboxProfile.id}/revisions/1`)).value.profile, xboxProfile);
   assert.equal((await f.call(`/profiles/${xboxProfile.id}`)).value.revision, 2);
   assert.equal((await f.call('/profiles')).value.profiles.length, 1);
   assert.equal((await f.call('/profiles', { profile: { bad: true }, expectedRevision: 2 })).status, 400);
-  assert.equal((await f.call('/profiles', { profile: xboxProfile, expectedRevision: Number.MAX_SAFE_INTEGER })).status, 400);
+  assert.equal((await f.call('/profiles', { profile: xboxProfile, deviceId: f.deviceId, expectedRevision: Number.MAX_SAFE_INTEGER })).status, 400);
 });
 
 test('delivery idempotency, explicit revisions, supersession and exact render receipts', async t => {

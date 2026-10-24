@@ -4,3 +4,4 @@ export { xboxProfile } from './xbox-profile.js';
 export { parseInvitation } from './pairing.js';
 export { profileSchema } from './profile-schema.js';
 export { modifierPrefix, controlDisplay } from './display.js';
+export { validateLayout, validViewport, layoutLimits } from './layout-quality.js';

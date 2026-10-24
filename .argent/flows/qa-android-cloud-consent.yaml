@@ -1,0 +1,12 @@
+steps:
+  - await: { visible: { text: "Allow Thumble phone to connect?" } }
+  - await: { idle: true, stableFor: 800 }
+  - scroll-to: { target: { text: Allow access } }
+  - await: { visible: { text: "Allow access" } }
+  - await: { idle: true, stableFor: 800 }
+  - tap:
+      text: Allow access
+  - await: { visible: { text: "Share request with your AI" } }
+  - await: { idle: true, stableFor: 800 }
+executionPrerequisite: The separate Android QA app has opened the Thumble phone
+  consent page after owner Google sign-in. This is a routine sign-in with the same previously authorized Thumble client and scopes.

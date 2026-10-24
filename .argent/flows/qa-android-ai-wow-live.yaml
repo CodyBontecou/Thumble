@@ -1,0 +1,39 @@
+steps:
+  - echo: Separate Android QA installation; existing owner app and data are
+      preserved. Start at first-run welcome.
+  - launch: com.thumble.android.pilotqa
+  - await: { visible: { text: "Made for the way" } }
+  - await: { idle: true, stableFor: 800 }
+  - tap:
+      text: Get started
+  - await: { visible: { text: "From your phone" } }
+  - await: { idle: true, stableFor: 800 }
+  - tap:
+      text: Connect your AI → receive a controller → use it on Mac → test in WoW
+  - await: { visible: { text: "AI TO WOW · 0 OF 4 COMPLETE" } }
+  - await: { idle: true, stableFor: 800 }
+  - tap:
+      text: Sign in and connect your AI
+  - await: { visible: { text: "Connect your cloud account" } }
+  - await: { idle: true, stableFor: 800 }
+  - echo: Measure the landscape canvas; landscape tapping did not navigate in this take.
+  - tool: rotate
+    args:
+      orientation: LandscapeLeft
+  - await: { visible: { text: "Sign in and connect phone" } }
+  - await: { idle: true, stableFor: 800 }
+  - tap:
+      text: Sign in and connect phone
+  - tool: rotate
+    args:
+      orientation: Portrait
+  - echo: Landscape measurement is retained when returning to portrait. Continue
+      sign-in in portrait.
+  - tap:
+      text: Sign in and connect phone
+  - await: { visible: { text: "Connect your Thumble account." } }
+  - await: { idle: true, stableFor: 800 }
+  - tap:
+      text: Continue with Google
+  - await: { visible: { text: "Choose an account" } }
+  - await: { idle: true, stableFor: 800 }

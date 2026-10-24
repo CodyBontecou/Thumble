@@ -1,0 +1,61 @@
+steps:
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: Controller paused
+  - tap:
+      x: 0.937
+      y: 0.967
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: Disconnect Mac
+  - tap:
+      text: AI to WoW
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: From your AI
+  - tool: await-ui-element
+    args:
+      condition: text
+      selector:
+        text: AI TO WOW ·
+      expectedText: 3 OF 4 COMPLETE
+  - tool: gesture-swipe
+    args:
+      fromX: 0.5
+      fromY: 0.83
+      toX: 0.5
+      toY: 0.3
+      momentum: false
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: ✓ · Mac ready
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: 4 · Tested in WoW
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: Test this controller in WoW
+  - tap:
+      text: Done
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: Controller paused
+executionPrerequisite: Pixel 7 QA app is in landscape controller view, paired to
+  the sole receiver, with Pixel WoW Journey revision 2 adopted and acknowledged
+  at activation 9. Controller is paused. No WoW checks are marked. Menu tapping
+  requires the documented inverse rotation workaround for Argent 0.25 on this
+  physical Pixel.

@@ -1,14 +1,19 @@
+import { validateLayout } from '@tapping/controller';
+
 /** Explicitly copy the selected cloud revision to the currently paired Mac. */
 export async function adoptCloudSelection(cloud, connection) {
   const selected = cloud.snapshot().selected;
   const session = cloud.snapshot().session;
   const epoch = cloud.epoch, pairing = connection.session;
-  const current = () => cloud.epoch === epoch && cloud.snapshot().session?.accountId === session?.accountId && cloud.snapshot().selected === selected && connection.session === pairing && connection.snapshot().phase === 'connected';
+  const current = () => cloud.epoch === epoch && cloud.snapshot().foreground && cloud.snapshot().session?.accountId === session?.accountId && cloud.snapshot().selected === selected && connection.session === pairing && connection.snapshot().phase === 'connected';
   if (!selected || !session) throw Error('Choose a cloud controller first.');
   if (!pairing || connection.snapshot().phase !== 'connected') throw Error('Connect your Mac before using this controller there.');
+  const quality = validateLayout(selected.profile, cloud.viewport);
+  if (!quality.valid) throw Error(`Ask your AI to adjust this layout for your phone: ${quality.errors[0].message}`);
   const account = await cloud.accountSession(epoch);
   if (!account || !current()) throw Error('The account, controller or Mac connection changed. Try again.');
   await cloud.api('/v1/me', { session: account });
+  await cloud.syncViewport();
   if (!current()) throw Error('The account, controller or Mac connection changed. Try again.');
   const catalog = await connection.requestProfiles();
   if (!current()) throw Error('The account, controller or Mac connection changed. Try again.');
