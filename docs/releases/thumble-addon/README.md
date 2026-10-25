@@ -1,4 +1,16 @@
-# Thumble addon 0.1.1
+# Thumble addon 0.1.2 — submitted
+
+Release ZIP: `build/addons/Thumble-0.1.2.zip` (16,724 bytes). SHA-256: `3043ae49936b7135b0ee5435b1195541f79aec0407e3102dbf41cc0eb9f20ad8`.
+
+This package includes all six declared Lua files, including `Sync.lua`, in one `ThumbleBridge` folder. It adds saved ConsolePort snapshots after `/reload` or logout for automatic phone spell labels, artwork and modifier layers through an updated Mac receiver. No bindings are changed. The existing folder, SavedVariables and export protocol stay compatible.
+
+The submitted 0.1.1 ZIP predates automatic sync and contains five Lua files. It is retained unchanged. Version 0.1.2 was **uploaded successfully on October 24, 2026** to project 1763832 as file **9316122**. The file list showed **Processing**; the new project still requires moderator approval before public visibility or synchronization. Automatic publication after approval is enabled. File 9312831 remains the unchanged 0.1.1 submission. Metadata is in `curseforge-0.1.2-metadata.json`; screenshot evidence is `curseforge-0.1.2-submitted.png`. Keep Classic Era 1.15.9 as the tested release target. Other TOC declarations do not establish gameplay compatibility.
+
+Mobile onboarding now includes an explicit reload-and-compare step before the five gameplay checks. The player confirms the phone labels and held modifier layers match, or explicitly continues without synced labels. Each choice persists for the current receiver/controller revision/client. Existing completed setups remain complete. Confirmation is a player observation, not a live-game measurement.
+
+Rebuild with `node tools/package-wow-addon.mjs /path/to/new-release.zip`; existing archives are never overwritten. Checksums for both releases are in SHA256SUMS.
+
+## Previous submission: 0.1.1
 
 Release ZIP: `build/addons/Thumble-0.1.1.zip` (14,740 bytes). Checksum in SHA256SUMS. Rebuild to a fresh filename with `node tools/package-wow-addon.mjs /path/to/new-release.zip`. The packager copies only declared Lua files, the TOC and addon documentation. It refuses to reuse an existing archive, avoiding stale ZIP entries.
 

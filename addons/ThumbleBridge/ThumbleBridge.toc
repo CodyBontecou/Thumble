@@ -2,7 +2,7 @@
 ## Title: Thumble
 ## Notes: Companion for Thumble phone controls and ConsolePort: automatic spell layers, Mac gamepad recovery and reviewed binding tools.
 ## Author: Thumble
-## Version: 0.1.1
+## Version: 0.1.2
 ## OptionalDeps: ConsolePort
 ## SavedVariablesPerCharacter: ThumbleBridgeDB
 Codec.lua

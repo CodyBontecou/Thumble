@@ -24,6 +24,8 @@ The implementation uses mapped device state because raw device state can be unav
 
 ## Automatic ConsolePort sync
 
+Requires addon 0.1.2 or later and an updated Mac receiver. The prepared 0.1.2 ZIP includes `Sync.lua`; the previously submitted 0.1.1 ZIP does not.
+
 With ConsolePort and its action bars enabled, Thumble captures the character’s visible controls, spell/item IDs and all eight modifier states. Changes are debounced outside combat, and the snapshot is refreshed at logout. WoW writes it to the character’s SavedVariables file during `/reload` or logout.
 
 Keep the Mac receiver running and use a ConsolePort controller on the phone. After `/reload`, the receiver detects the saved snapshot, resolves artwork, and delivers the updated layers through the normal acknowledged layout channel. No agent session or manual character export is needed. ConsolePort remains the source of truth for labels, spells and modifier assignments; the phone retains its touch positions, movement/camera mappings and calibration. The receiver creates a separate profile per character and avoids another activation when the layout is unchanged.

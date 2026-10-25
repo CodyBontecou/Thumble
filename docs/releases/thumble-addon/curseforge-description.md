@@ -25,7 +25,7 @@ For manual installation, extract the `ThumbleBridge` folder from the ZIP into yo
 - Initial gameplay verification: WoW Classic Era 1.15.9 with ConsolePort 3.3.11 on macOS.
 - Automatic gamepad recovery requires ConsolePort; the addon can otherwise load without it.
 - Phone control requires the separate Thumble phone app and Mac receiver. WoW runs on the Mac, with the phone connected over the same Wi-Fi.
-- Public phone downloads are coming soon. Visit [thumble.io](https://thumble.io) for availability and setup information.
+- The iOS phone app is available in a limited public [TestFlight beta](https://testflight.apple.com/join/kxwHv4qW). Visit [thumble.io](https://thumble.io) for availability and setup information.
 - The addon itself has no purchase check. The separate phone app offers a 30-minute total connected-use demo and an optional paid Pro unlock.
 
 The addon does not connect directly to a cloud service or an AI agent. Exports are shared explicitly by copy/paste or a SavedVariables file written by WoW after reload/logout.
