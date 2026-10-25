@@ -1,0 +1,13 @@
+{
+  "name": "thumble-cli",
+  "version": "0.1.0",
+  "description": "Official read-only CLI for Thumble phone gamepad service configuration, sandbox and account inspection.",
+  "type": "module",
+  "bin": { "thumble": "src/thumble.mjs" },
+  "files": ["src/thumble.mjs", "README.md", "LICENSE"],
+  "engines": { "node": ">=22" },
+  "license": "MIT",
+  "homepage": "https://thumble.io/developers#cli",
+  "repository": { "type": "git", "url": "git+https://github.com/CodyBontecou/tapping.git", "directory": "packages/cli" },
+  "scripts": { "test": "node --test test/*.test.mjs" }
+}

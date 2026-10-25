@@ -7,7 +7,7 @@
     "apps/*"
   ],
   "scripts": {
-    "test": "node --test packages/controller/test/*.test.js packages/profile-tools/test/*.test.js apps/cloud/test/*.test.js tools/test/*.test.js",
+    "test": "node --test packages/cli/test/*.test.mjs packages/controller/test/*.test.js packages/profile-tools/test/*.test.js apps/cloud/test/*.test.js tools/test/*.test.js",
     "check": "node --check packages/controller/src/index.js",
     "profiles": "node packages/profile-tools/src/server.js",
     "test:consoleport-sync": "node tools/test-consoleport-sync.mjs",
