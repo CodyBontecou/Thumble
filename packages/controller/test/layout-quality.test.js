@@ -10,7 +10,7 @@ test('complete default gamepad fits a real landscape safe canvas', () => {
 });
 test('ConsolePort starter fits the phone and preserves every standard gamepad output', () => {
   assert.deepEqual(validateLayout(consolePortProfile, viewport).errors, []);
-  assert.deepEqual(consolePortProfile.mappings, xboxProfile.mappings);
+  assert.deepEqual(consolePortProfile.mappings, xboxProfile.mappings.map(mapping => mapping.controlId === 'left-stick' ? { ...mapping, invertY: true } : mapping));
   assert.equal(assertProfile(consolePortProfile).theme, 'consoleport');
   assert.equal(consolePortProfile.modifiers, undefined);
   const bundled = JSON.parse(readFileSync(new URL('../../../apps/receiver/Resources/BuiltInProfiles.json', import.meta.url), 'utf8'));

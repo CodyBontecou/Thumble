@@ -22,5 +22,7 @@ export const consolePortProfile = Object.freeze({
     const [x, y, width, height] = frames[control.id];
     return Object.freeze({ ...control, ...(control.type !== 'stick' ? { badge: badges[control.id] ?? control.label } : {}), frame: Object.freeze({ x, y, width, height }) });
   })),
-  mappings: xboxProfile.mappings,
+  // ConsolePort movement uses negative Y for forward.
+  mappings: Object.freeze(xboxProfile.mappings.map(mapping => mapping.controlId === 'left-stick'
+    ? Object.freeze({ ...mapping, invertY: true }) : mapping)),
 });

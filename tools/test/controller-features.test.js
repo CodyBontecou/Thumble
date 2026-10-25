@@ -23,7 +23,7 @@ test('ConsolePort touch targets fit compact and large landscape canvases with ev
   for (const [width, height] of [[568, 300], [640, 320], [740, 380], [840, 380], [900, 420]]) {
     assert.deepEqual(validateLayout(defaultProfile, { width, height }).errors, [], `${width} × ${height}`);
   }
-  assert.deepEqual(defaultProfile.mappings, xboxProfile.mappings);
+  assert.deepEqual(defaultProfile.mappings, xboxProfile.mappings.map(mapping => mapping.controlId === 'left-stick' ? { ...mapping, invertY: true } : mapping));
 });
 
 test('local MCP hides generation tools and rejects direct calls before touching the store', async () => {

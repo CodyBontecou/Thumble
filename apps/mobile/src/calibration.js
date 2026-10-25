@@ -25,7 +25,12 @@ export const calibration = {
     current = next; for (const listener of listeners) listener();
   },
   standard(value = current, profile = defaultProfile) {
-    return assertProfile({ ...profile, mappings: profile.mappings.map(mapping => ({ ...mapping, ...(mapping.controlId === 'left-stick' ? value.left : mapping.controlId === 'right-stick' ? value.right : {}) })) });
+    return assertProfile({ ...profile, mappings: profile.mappings.map(mapping => {
+      const stick = mapping.controlId === 'left-stick' ? value.left : mapping.controlId === 'right-stick' ? value.right : null;
+      if (!stick) return mapping;
+      // Calibration reverses the profile's default direction when enabled.
+      return { ...mapping, ...stick, invertX: !!mapping.invertX !== stick.invertX, invertY: !!mapping.invertY !== stick.invertY };
+    }) });
   },
 };
 void calibration.load();

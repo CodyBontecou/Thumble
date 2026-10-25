@@ -557,7 +557,8 @@
           "ly"
         ],
         "deadzone": 0.12,
-        "sensitivity": 1
+        "sensitivity": 1,
+        "invertY": true
       },
       {
         "controlId": "right-stick",
