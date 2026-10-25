@@ -87,7 +87,7 @@ Validation: `npm test`, `npm run test:pairing` (macOS Core Image/Vision and OAut
 
 ## Public developer sandbox and REST budget
 
-`GET /v1/sandbox` returns fixed synthetic controller, phone and receipt examples without sign-in or a key. It has no storage access and rejects writes. The official read-only CLI source is in `packages/cli`; its downloadable script and npm-compatible archive are served by thumble.io under `/cli/`. Registry publication requires publisher authentication and is not claimed by the website.
+`GET /v1/sandbox` returns fixed synthetic controller, phone and receipt examples without sign-in or a key. It has no storage access and rejects writes. The official read-only CLI source is in `packages/cli`; its downloadable script and npm-compatible archive are served by thumble.io under `/cli/`. The official `thumble-cli@0.1.0` package is published on npm; install with `npm install -g thumble-cli` or try `npx thumble-cli@0.1.0 sandbox`.
 
 The `/v1/` Worker entry point enforces `REST_RATE_LIMITER` at 600 requests per 60 seconds in each Cloudflare location. Bearer credentials use a hashed credential key; anonymous calls use the source IP supplied by Cloudflare. Quotas are approximate across instances. Every REST response advertises `RateLimit-Policy` and `X-RateLimit-Limit`. A denied request returns 429, `RateLimit` with zero remaining and a conservative 60-second delay, and `Retry-After: 60`. The binding does not expose a precise remaining counter, so successful responses do not invent one. Local fixtures without the binding retain their existing behavior. OAuth/email sign-in retains its separate abuse limits.
 

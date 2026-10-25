@@ -1,0 +1,19 @@
+{
+  "name": "thumble-cli",
+  "version": "0.1.0",
+  "publisher": "codybontecou",
+  "integrity": "sha512-HSgHb9+5UtJhOYlqBgC3cLCZscW/xyYjGqufMUR2biKwpwCBMOnTpoY8B8QLcc83q5KTwk4FsohuiggIY9Ytlw==",
+  "shasum": "97b2068231ab732e0a4a27f3eb1a9865c9177772",
+  "files": [
+    "LICENSE",
+    "README.md",
+    "package.json",
+    "src/thumble.mjs"
+  ],
+  "publishAccepted": true,
+  "publicAvailability": "published",
+  "checkedAt": "2026-10-25T12:28:20.058008+00:00",
+  "verifiedAt": "2026-10-25T12:31:10.542386+00:00",
+  "registryUrl": "https://www.npmjs.com/package/thumble-cli",
+  "installSmokeTest": "Passed: isolated npm install thumble-cli@0.1.0, --version, live sandbox read"
+}

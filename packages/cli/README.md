@@ -2,12 +2,21 @@
 
 Official read-only CLI for Thumble phone gamepad service discovery and account inspection. Node.js 22 or later; no dependencies.
 
-Download the maintained script from [thumble.io](https://thumble.io/cli/thumble.mjs), then run:
+Install from npm:
 
 ```sh
-node thumble.mjs config
-node thumble.mjs sandbox
+npm install -g thumble-cli
+thumble config
+thumble sandbox
 ```
+
+Or run without a global installation:
+
+```sh
+npx thumble-cli@0.1.0 sandbox
+```
+
+A standalone script is also available from [thumble.io](https://thumble.io/cli/thumble.mjs). Run it with `node thumble.mjs config` or `node thumble.mjs sandbox`.
 
 These commands need no account, credit card or API key. Sandbox records are fixed examples; they cannot access an account, phone, receiver or gameplay input.
 
@@ -23,4 +32,4 @@ node thumble.mjs delivery delivery-id
 
 Required scopes: profiles:read, devices:read or deliveries:read for the corresponding command. Output is JSON; failures exit nonzero. On HTTP 429, wait for Retry-After. There is no automatic retry, login flow, persistent credential store, write command, or hardware control.
 
-The npm package source is prepared as `thumble-cli`; registry publication is pending publisher authentication. The official download above works now. [Developer documentation](https://thumble.io/developers#cli).
+[Package source](https://github.com/CodyBontecou/tapping/tree/main/packages/cli) · [Developer documentation](https://thumble.io/developers#cli).
