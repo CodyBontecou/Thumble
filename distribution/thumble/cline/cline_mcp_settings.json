@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "thumble": {
+      "type": "streamableHttp",
+      "url": "https://thumble.io/mcp",
+      "oauthClient": {
+        "clientId": "thumble-cline"
+      },
+      "disabled": false,
+      "autoApprove": []
+    }
+  }
+}

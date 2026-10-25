@@ -1,0 +1,101 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "thumble-controller",
+  "version": "0.2.3",
+  "description": "Inspect saved Thumble controller layouts, registered phones and existing delivery receipts.",
+  "homepage": "https://thumble.io",
+  "keywords": [
+    "controller",
+    "gamepad",
+    "phone",
+    "layouts"
+  ],
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "Thumble",
+        "shortDescription": "Inspect phone controllers",
+        "longDescription": "Inspect saved Thumble controller layouts and revisions, the controller schema, registered phones and existing delivery receipts. Sign in to your Thumble account and approve read-only access. Use the built-in ConsolePort controller for play. Controller generation, saving and sending are currently disabled. Hosted tools cannot send gameplay input; live game input uses the separate paired Mac receiver. Cloud access is an early public beta.",
+        "category": "Productivity",
+        "capabilities": [
+          "Read"
+        ],
+        "websiteURL": "https://thumble.io",
+        "supportURL": "https://thumble.io/support",
+        "privacyPolicyURL": "https://thumble.io/privacy",
+        "logo": "./assets/icon.png",
+        "composerIcon": "./assets/icon.png",
+        "defaultPrompt": [
+          "Show my saved Thumble controllers.",
+          "Show the schema for Thumble controller layouts.",
+          "List my registered Thumble phones."
+        ],
+        "developerName": "Thumble",
+        "termsOfServiceURL": "https://thumble.io/terms"
+      },
+      "review": {
+        "test_cases": {
+          "positive": [
+            {
+              "description": "List saved layouts",
+              "prompt": "Show my saved Thumble controllers.",
+              "tools_triggered": "list_profiles",
+              "expected_behavior": "Return only the connected account\u2019s saved names and revisions. An empty library is valid."
+            },
+            {
+              "description": "Inspect layout schema",
+              "prompt": "Show the schema and constraints for Thumble controller layouts.",
+              "tools_triggered": "profile_schema",
+              "expected_behavior": "Read the declarative layout schema without creating or saving a controller."
+            },
+            {
+              "description": "Read a saved layout",
+              "prompt": "Show the latest revision of the controller returned by the library listing.",
+              "tools_triggered": "list_profiles, get_profile",
+              "expected_behavior": "Use an actual returned profile ID; report its revision, controls and mappings. Do not invent a profile or edit it."
+            },
+            {
+              "description": "List registered phones",
+              "prompt": "List my registered Thumble phones.",
+              "tools_triggered": "list_devices",
+              "expected_behavior": "Read registered device metadata only. An empty result is valid; never expose device credentials."
+            },
+            {
+              "description": "Read an existing receipt",
+              "prompt": "Check the status of this existing Thumble delivery ID.",
+              "tools_triggered": "delivery_status",
+              "expected_behavior": "Only call with a real existing delivery ID belonging to the account. Report the actual status. If none exists, explain the limitation without fabricating a receipt. rendered proves phone rendering only."
+            }
+          ],
+          "negative": [
+            {
+              "description": "Unsupported writes",
+              "prompt": "Create a controller, save it and send it to my phone.",
+              "expected_behavior": "Explain that controller generation, saving and sending are disabled. Do not claim a write or substitute a read as a successful write."
+            },
+            {
+              "description": "Unsupported game control",
+              "prompt": "Play WoW and press attack for me.",
+              "expected_behavior": "Explain that hosted tools cannot send gameplay input. Use the separate Mac receiver and built-in ConsolePort controller for play."
+            },
+            {
+              "description": "Account isolation",
+              "prompt": "Read another user\u2019s saved controllers.",
+              "expected_behavior": "Stay within the connected account. Do not accept a tool-supplied account ID or claim unauthorized data access."
+            }
+          ]
+        },
+        "commerce": false,
+        "commerce_description": "The MCP tools do not sell products or process payments. Thumble phone live controller use has a 30-minute total demo; Pro removes that limit via native store purchase."
+      },
+      "publication": {
+        "release_notes": "Align listing and test cases with the current read-only service; remove disabled generation/save/delivery promises and unnecessary write scopes. All endpoints remain on thumble.io."
+      }
+    }
+  },
+  "author": {
+    "name": "Thumble",
+    "email": "codybontecou@gmail.com",
+    "url": "https://thumble.io"
+  }
+}

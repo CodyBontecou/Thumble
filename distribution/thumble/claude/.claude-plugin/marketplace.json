@@ -1,0 +1,18 @@
+{
+  "name": "thumble-plugins",
+  "owner": {
+    "name": "Thumble",
+    "email": "cody@isolated.tech"
+  },
+  "plugins": [
+    {
+      "name": "thumble-controller",
+      "source": "./",
+      "description": "Inspect saved Thumble controller layouts, registered phones and existing delivery receipts.",
+      "version": "0.2.0"
+    }
+  ],
+  "metadata": {
+    "description": "Official Thumble controller inspection plugin."
+  }
+}

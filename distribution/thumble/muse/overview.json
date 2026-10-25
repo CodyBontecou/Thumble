@@ -12,14 +12,42 @@
   "iconWidth": 512,
   "iconHeight": 512,
   "iconBytes": 142885,
-  "status": "submitted for review; confirmation verified",
+  "status": "canonical endpoint replacement submitted for review; confirmation verified",
   "submitted": true,
   "mcpUrl": "https://thumble.io/mcp",
   "documentationUrl": "https://thumble.io/docs#agents",
-  "submissionId": "4ceeddaa-8016-4e73-86cb-dfdc8e47b2f9",
-  "submissionUrl": "https://platform.muse.ai/submissions/4ceeddaa-8016-4e73-86cb-dfdc8e47b2f9",
-  "submittedDate": "2026-10-23",
+  "submissionId": "9c318c5a-6bd7-4cf5-9965-bdda71f2205d",
+  "submissionUrl": "https://platform.muse.ai/submissions/9c318c5a-6bd7-4cf5-9965-bdda71f2205d",
+  "submittedDate": "2026-10-24",
   "timezone": "America/Puerto_Rico",
   "connectorTermsAccepted": true,
-  "ownerConfirmedTermsAcceptance": true
+  "ownerConfirmedTermsAcceptance": true,
+  "previousSubmissionId": "4ceeddaa-8016-4e73-86cb-dfdc8e47b2f9",
+  "previousSubmissionUrl": "https://platform.muse.ai/submissions/4ceeddaa-8016-4e73-86cb-dfdc8e47b2f9",
+  "replacementRequested": true,
+  "oauth": {
+    "clientId": "thumble-muse",
+    "redirectUri": "https://agent.meta.ai/api/hatch/oauth/callback",
+    "authorizationUrl": "https://thumble.io/api/auth/oauth2/authorize",
+    "tokenUrl": "https://thumble.io/api/auth/oauth2/token",
+    "resource": "https://thumble.io/mcp",
+    "tokenEndpointAuthMethod": "none",
+    "requirePKCE": true,
+    "scopes": [
+      "offline_access",
+      "profiles:read",
+      "devices:read",
+      "deliveries:read"
+    ],
+    "portalCredentialsStatus": "submitted and portal confirmation verified on 2026-10-24; owner-approved not-applicable marker in required Password field, with explicit email-OTP coordination instructions; not a real password",
+    "endToEndStatus": "passed in live Muse: OAuth/PKCE, initialize, tools/list, profile_schema, list_profiles, list_devices and get_profile; sample glama-monitor-starter revision 1, zero devices; delivery_status untested because no receipts exist"
+  },
+  "requirements": {
+    "integrationCredentials": "submitted; in review",
+    "businessVerification": "submitted; contact email confirmed; Isotech; in review",
+    "dataProcessing": "submitted; in review",
+    "completed": 3,
+    "total": 3,
+    "checkedDate": "2026-10-24"
+  }
 }

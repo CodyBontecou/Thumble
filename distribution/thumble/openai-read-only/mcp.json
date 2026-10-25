@@ -1,0 +1,31 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "thumble": {
+      "type": "streamable-http",
+      "url": "https://thumble.io/mcp",
+      "extensions": {
+        "com.openai": {
+          "auth": {
+            "type": "oauth",
+            "client": {
+              "mode": "provided",
+              "clientId": "thumble-chatgpt",
+              "tokenEndpointAuthMethod": "none"
+            },
+            "authorizationUrl": "https://thumble.io/api/auth/oauth2/authorize",
+            "tokenUrl": "https://thumble.io/api/auth/oauth2/token",
+            "resource": "https://thumble.io/mcp",
+            "baseScopes": [
+              "openid",
+              "offline_access",
+              "profiles:read",
+              "devices:read",
+              "deliveries:read"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

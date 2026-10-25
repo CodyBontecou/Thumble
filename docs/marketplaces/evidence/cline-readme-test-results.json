@@ -1,0 +1,423 @@
+{
+  "date": "2026-10-24",
+  "cliVersion": "3.0.73",
+  "session": "1792884310522_5ww2g",
+  "instructions": "https://github.com/CodyBontecou/thumble-cline",
+  "installation": "Agent created config from public README; interactive terminal/browser OAuth handoff completed; same agent session resumed.",
+  "autoApprove": false,
+  "toolResults": [
+    {
+      "tool": "thumble__list_profiles",
+      "result": {
+        "profiles": [
+          {
+            "id": "glama-monitor-starter",
+            "name": "Glama monitor sample",
+            "revision": 1,
+            "updatedAt": "2026-10-24T19:45:21.734Z"
+          }
+        ]
+      }
+    },
+    {
+      "tool": "thumble__profile_schema",
+      "result": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schemaVersion",
+          "id",
+          "name",
+          "controls",
+          "mappings"
+        ],
+        "properties": {
+          "schemaVersion": {
+            "const": 1
+          },
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]{0,63}$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "theme": {
+            "enum": [
+              "consoleport"
+            ]
+          },
+          "modifiers": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "shift": {
+                "enum": [
+                  "a",
+                  "b",
+                  "x",
+                  "y",
+                  "lb",
+                  "rb",
+                  "back",
+                  "start",
+                  "ls",
+                  "rs",
+                  "up",
+                  "down",
+                  "left",
+                  "right",
+                  "guide",
+                  "lt",
+                  "rt",
+                  "none"
+                ]
+              },
+              "ctrl": {
+                "enum": [
+                  "a",
+                  "b",
+                  "x",
+                  "y",
+                  "lb",
+                  "rb",
+                  "back",
+                  "start",
+                  "ls",
+                  "rs",
+                  "up",
+                  "down",
+                  "left",
+                  "right",
+                  "guide",
+                  "lt",
+                  "rt",
+                  "none"
+                ]
+              },
+              "alt": {
+                "enum": [
+                  "a",
+                  "b",
+                  "x",
+                  "y",
+                  "lb",
+                  "rb",
+                  "back",
+                  "start",
+                  "ls",
+                  "rs",
+                  "up",
+                  "down",
+                  "left",
+                  "right",
+                  "guide",
+                  "lt",
+                  "rt",
+                  "none"
+                ]
+              }
+            }
+          },
+          "controls": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 64,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "type",
+                "label",
+                "frame"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 80
+                },
+                "type": {
+                  "enum": [
+                    "button",
+                    "stick",
+                    "trigger"
+                  ]
+                },
+                "label": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 80
+                },
+                "color": {
+                  "type": "string",
+                  "pattern": "^#[0-9a-fA-F]{6}$"
+                },
+                "icon": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9_]{1,128}$"
+                },
+                "badge": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 80
+                },
+                "layers": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "label"
+                      ],
+                      "properties": {
+                        "label": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 80
+                        },
+                        "icon": {
+                          "type": "string",
+                          "pattern": "^[a-z0-9_]{1,128}$"
+                        }
+                      }
+                    },
+                    "SHIFT-": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "label"
+                      ],
+                      "properties": {
+                        "label": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 80
+                        },
+                        "icon": {
+                          "type": "string",
+                          "pattern": "^[a-z0-9_]{1,128}$"
+                        }
+                      }
+                    },
+                    "CTRL-": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "label"
+                      ],
+                      "properties": {
+                        "label": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 80
+                        },
+                        "icon": {
+                          "type": "string",
+                          "pattern": "^[a-z0-9_]{1,128}$"
+                        }
+                      }
+                    },
+                    "ALT-": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "label"
+                      ],
+                      "properties": {
+                        "label": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 80
+                        },
+                        "icon": {
+                          "type": "string",
+                          "pattern": "^[a-z0-9_]{1,128}$"
+                        }
+                      }
+                    },
+                    "CTRL-SHIFT-": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "label"
+                      ],
+                      "properties": {
+                        "label": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 80
+                        },
+                        "icon": {
+                          "type": "string",
+                          "pattern": "^[a-z0-9_]{1,128}$"
+                        }
+                      }
+                    },
+                    "ALT-SHIFT-": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "label"
+                      ],
+                      "properties": {
+                        "label": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 80
+                        },
+                        "icon": {
+                          "type": "string",
+                          "pattern": "^[a-z0-9_]{1,128}$"
+                        }
+                      }
+                    },
+                    "ALT-CTRL-": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "label"
+                      ],
+                      "properties": {
+                        "label": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 80
+                        },
+                        "icon": {
+                          "type": "string",
+                          "pattern": "^[a-z0-9_]{1,128}$"
+                        }
+                      }
+                    },
+                    "ALT-CTRL-SHIFT-": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "label"
+                      ],
+                      "properties": {
+                        "label": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 80
+                        },
+                        "icon": {
+                          "type": "string",
+                          "pattern": "^[a-z0-9_]{1,128}$"
+                        }
+                      }
+                    }
+                  }
+                },
+                "frame": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "x",
+                    "y",
+                    "width",
+                    "height"
+                  ],
+                  "properties": {
+                    "x": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "y": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "width": {
+                      "type": "number",
+                      "minimum": 0.01,
+                      "maximum": 1
+                    },
+                    "height": {
+                      "type": "number",
+                      "minimum": 0.01,
+                      "maximum": 1
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "mappings": {
+            "type": "array",
+            "maxItems": 64,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "controlId",
+                "outputs"
+              ],
+              "properties": {
+                "controlId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 80
+                },
+                "outputs": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 2,
+                  "items": {
+                    "enum": [
+                      "a",
+                      "b",
+                      "x",
+                      "y",
+                      "lb",
+                      "rb",
+                      "back",
+                      "start",
+                      "ls",
+                      "rs",
+                      "up",
+                      "down",
+                      "left",
+                      "right",
+                      "guide",
+                      "lx",
+                      "ly",
+                      "rx",
+                      "ry",
+                      "lt",
+                      "rt"
+                    ]
+                  }
+                },
+                "deadzone": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 0.5
+                },
+                "sensitivity": {
+                  "type": "number",
+                  "minimum": 0.1,
+                  "maximum": 3
+                },
+                "invertX": {
+                  "type": "boolean"
+                },
+                "invertY": {
+                  "type": "boolean"
+                }
+              }
+            }
+          }
+        },
+        "description": "Normalized usable-canvas coordinates; x+width and y+height must fit within 1. Read list_devices for logical canvas dimensions. Cloud validate_profile and save_profile require deviceId: targets must be at least 48 points on both axes, sticks at least 96 points in diameter, and touch areas must not overlap controls or the top Chat/menu areas. IDs must be unique. Each control needs exactly one mapping: button to one button, trigger to lt/rt, stick to [lx,ly] or [rx,ry]. Optional invertX/invertY booleans reverse stick output axes without changing thumb visuals. Analog outputs have one owner. Labels do not bind WoW spells. No executable code, macros, timers or generated input."
+      }
+    }
+  ]
+}

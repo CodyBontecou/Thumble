@@ -1,8 +1,11 @@
 {
-  "mcpServers": {
-    "thumble": {
-      "type": "http",
-      "url": "https://thumble.io/mcp"
+  "thumble": {
+    "type": "http",
+    "url": "https://thumble.io/mcp",
+    "oauth": {
+      "clientId": "thumble-claude-code",
+      "callbackPort": 8766,
+      "scopes": "offline_access profiles:read devices:read deliveries:read"
     }
   }
 }

@@ -1,30 +1,16 @@
-# Thumble distribution drafts
+# Thumble marketplace packages
 
-These files prepare marketplace submissions; they are not evidence of publication or cross-client compatibility.
+Canonical hosted MCP: https://thumble.io/mcp. Authentication, token exchange and reviewer sign-in use thumble.io. Current hosted capabilities are pairing and read-only inspection; controller generation, saving and sending are disabled.
 
-- `openai/`: portable Agent Plugins package, MCP OAuth settings, current app icon, and review scenarios. Source manifests use thumble.io; existing 0.1.x ZIPs preserve their original pilot endpoints.
-- `claude/`: Claude-compatible metadata and remote MCP declaration. Client registration is still required.
-- `grok/`: Grok Build metadata and remote MCP declaration; OAuth compatibility is unverified.
-- `intake.json`: recoverable Grok/Cursor intake copy; missing URLs and attestations are explicit.
-- `gemini/`: Gemini CLI extension manifest. Publish at the root of a dedicated public distribution repository or self-contained release archive after authentication testing.
-- `registry/`: metadata-only MCP Registry remote server draft; no npm package is needed for remote-only distribution. Authenticate the GitHub namespace before publishing.
+- `openai-read-only/`: current OpenAI 0.2.3 correction source. `thumble-controller-openai-0.2.3.zip` is submitted and in review after owner-approved final attestations. Five positive/three negative review cases, read-only base scopes, canonical endpoints. Private reviewer details remain in the portal.
+- `openai/`, `openai-canonical/` and earlier ZIPs: historical package sources/releases; do not use their older capability claims for a new submission. 0.2.2 had canonical auth URLs but still advertised disabled writes.
+- `claude/`: submitted Claude Code plugin source, separate from the published standalone Claude connector. Public repository: https://github.com/CodyBontecou/thumble-claude-code . Scan passed; publication requested; reviewer approval pending.
+- `cline/`: public remote-MCP setup package. https://github.com/CodyBontecou/thumble-cline . README-only Cline agent installation and authenticated read calls passed with the normal interactive OAuth handoff. Submission #3255 has both installation checkboxes checked and awaits review.
+- `gemini/`: public Gemini CLI extension, https://github.com/CodyBontecou/thumble-gemini . Root manifest and required topic confirmed; gallery indexing unconfirmed.
+- `registry/`: active official MCP Registry remote-server metadata, version 0.1.0.
+- `muse/`: submitted canonical replacement; all three requirements complete and in review.
+- `grok/` and `intake.json`: combined Grok/Grok Bot/Cursor intake copy and separate Grok Build draft. Combined intake was submitted; no Grok Build PR has been opened.
 
-Public publisher/contact: Thumble / codybontecou@gmail.com. No account credentials, access tokens or client secrets belong in these packages. The OpenAI public client identifier is intentionally included; it is not a secret.
+Publisher: Thumble / Isotech. Contact: codybontecou@gmail.com; directory support also uses cody@isolated.tech. Never put private account credentials, access tokens or client secrets in these public packages. Public OAuth client identifiers are not secrets.
 
-All source packages use `https://thumble.io/mcp`, with authorization and token exchange under `https://thumble.io/api/auth`. OpenAI's current update flow does not support changing an existing MCP URL without support.
-
-Read [submission status and blockers](../../docs/marketplaces/status.md) before uploading or publishing. All `thumble-openai-0.1.x.zip` archives are historical pilot snapshots. Use `thumble-controller-openai-0.2.1.zip` for the current canonical endpoints.
-
-
-## Canonical OpenAI draft (October 24, 2026)
-
-The submitted 0.2.0 package was built from `openai-canonical/`; use `thumble-controller-openai-0.2.1.zip` for subsequent uploads with canonical authorization endpoints. It keeps the public display name Thumble and uses `https://thumble.io/mcp`. OpenAI does not allow replacing the origin on the old `thumble` draft; the new package name identifies a separate draft. The `openai/` source manifest also uses the canonical domain; the 0.1.x ZIPs remain historical pilot snapshots.
-
-Current portal: https://platform.openai.com/plugins/manage/plugin_asdk_app_6adc8f83963881918c960106b339df6d
-
-See [submission status and blockers](../../docs/marketplaces/status.md) for the current portal state. Package source updates do not change an already submitted listing.
-
-
-## Authentication domain migration (October 24, 2026)
-
-The canonical package now uses `https://thumble.io` for authorization and token exchange as well as MCP. Use `thumble-controller-openai-0.2.1.zip` for a future update. The 0.2.0 and pilot archives remain historical snapshots; installed connections continue using their cached endpoints. This local package update does not update a submitted marketplace listing.
+Use [marketplace status](../../docs/marketplaces/status.md) for live submission state and outstanding requirements. Local package edits do not update a submitted listing.
