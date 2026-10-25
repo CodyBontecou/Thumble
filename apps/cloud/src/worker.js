@@ -14,6 +14,15 @@ export default {
     try {
       env = identityEnvironment(request, env);
       const { pathname } = new URL(request.url);
+      // The issuer includes /api/auth. Root discovery helps clients find that
+      // existing issuer without publishing conflicting authorization metadata.
+      if (pathname === '/.well-known/oauth-authorization-server' || pathname === '/.well-known/openid-configuration') {
+        if (!['GET', 'HEAD'].includes(request.method)) return new Response('Use GET or HEAD.', { status: 405, headers: { allow: 'GET, HEAD' } });
+        const target = pathname.endsWith('oauth-authorization-server')
+          ? '/.well-known/oauth-authorization-server/api/auth'
+          : '/api/auth/.well-known/openid-configuration';
+        return Response.redirect(new URL(target, request.url).href, 307);
+      }
       if (pathname === '/.well-known/openai-apps-challenge') {
         if (!['GET', 'HEAD'].includes(request.method)) return new Response('Use GET or HEAD.', { status: 405, headers: { allow: 'GET, HEAD' } });
         if (!env.ASSETS) return new Response('Verification not configured.', { status: 404 });
