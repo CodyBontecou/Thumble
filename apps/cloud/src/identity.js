@@ -1,3 +1,5 @@
+import { museAuthorization } from './muse-client.js';
+import { clineAuthorization } from './cline-client.js';
 import { betterAuth } from 'better-auth';
 import { jwt, emailOTP } from 'better-auth/plugins';
 import { emailSignInEnabled, sendSignInCode } from './email-sign-in.js';
@@ -201,6 +203,6 @@ export async function handleIdentity(request, env) {
     catch (error) { return Response.json({ error: error.code || 'invalid_client_metadata', error_description: error.message }, { status: error.status || 400 }); }
     request = new Request(request, { body: JSON.stringify(metadata) });
   }
-  request = glamaAuthorization(request);
+  request = museAuthorization(clineAuthorization(glamaAuthorization(request)), identityConfig(env).resource);
   return (await createIdentity(env)).handler(request);
 }

@@ -491,3 +491,98 @@ test('operator-registered Gemini CLI client enforces read-only scopes, exact cal
   assert.ok([claims.aud].flat().includes('https://thumble.io/mcp'));
   assert.deepEqual(claims.scope.split(' ').sort(), [...GEMINI_SCOPES].sort());
 });
+
+test('operator-registered Cline client enforces read-only scopes, exact callback, consent and PKCE', async t => {
+  const { clineClientSql, CLINE_CLIENT_ID, CLINE_REDIRECT_URI, CLINE_SCOPES } = await import('../../../tools/lib/cline-oauth-client.mjs');
+  const f = await fixture(t, { MCP_RESOURCE_URL: 'https://thumble.io/mcp' });
+  f.db.exec(clineClientSql());
+  await ensureIdentityClients(f.env);
+  const row = f.db.prepare('SELECT * FROM oauthClient WHERE clientId=?').get(CLINE_CLIENT_ID);
+  assert.equal(row.clientSecret, null); assert.equal(row.requirePKCE, 1); assert.equal(Boolean(row.skipConsent), false);
+  const args = { redirect_uri: CLINE_REDIRECT_URI, scope: CLINE_SCOPES.join(' '), resource: 'https://thumble.io/mcp' };
+  for (const extra of [{ scope: 'profiles:write' }, { scope: 'pairing:read' }, { redirect_uri: 'http://127.0.0.1:1456/wrong-path' }, { redirect_uri: 'http://attacker.example:1456/mcp/oauth/callback' }, { resource: 'https://attacker.example/mcp' }]) {
+    const { result } = await f.authorize(CLINE_CLIENT_ID, { ...args, ...extra });
+    assert.ok(result.status >= 400 || new URL(result.headers.get('location'), f.env.BETTER_AUTH_URL).searchParams.has('error'), JSON.stringify(extra));
+  }
+  const initial = await f.authorize(CLINE_CLIENT_ID, args);
+  const verifier = initial.verifier;
+  const challenge = Buffer.from(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier))).toString('base64url');
+  const params = new URLSearchParams({ response_type: 'code', client_id: CLINE_CLIENT_ID, ...args, scope: 'pairing:read profiles:read profiles:write devices:read deliveries:write deliveries:read', state: 'cline-test', code_challenge: challenge, code_challenge_method: 'S256' });
+  const result = await handleIdentity(f.request(`/api/auth/oauth2/authorize?${params}`), f.env);
+  assert.equal(result.status, 302);
+  const signedQuery = new URL(result.headers.get('location'), f.env.BETTER_AUTH_URL).search.slice(1);
+  const consent = await f.auth.handler(f.request('/api/auth/oauth2/consent', { method: 'POST', body: { accept: true, oauth_query: signedQuery } }));
+  assert.equal(consent.status, 200);
+  const body = { grant_type: 'authorization_code', client_id: CLINE_CLIENT_ID, redirect_uri: CLINE_REDIRECT_URI, code: new URL((await consent.json()).url).searchParams.get('code'), resource: 'https://thumble.io/mcp' };
+  const missingVerifier = await f.auth.handler(f.request('/api/auth/oauth2/token', { method: 'POST', form: true, body, authenticated: false, origin: false }));
+  assert.ok(missingVerifier.status >= 400);
+  const exchanged = await f.auth.handler(f.request('/api/auth/oauth2/token', { method: 'POST', form: true, body: { ...body, code_verifier: verifier }, authenticated: false, origin: false }));
+  assert.equal(exchanged.status, 200);
+  const tokens = await exchanged.json(); assert.ok(tokens.refresh_token);
+  const claims = decodeJwt(tokens.access_token);
+  assert.ok([claims.aud].flat().includes('https://thumble.io/mcp'));
+  assert.deepEqual(claims.scope.split(' ').sort(), [...CLINE_SCOPES].sort());
+});
+
+
+test('operator-registered Muse client restricts callbacks and scopes and supports PKCE without a resource parameter', async t => {
+  const { museClientSql, MUSE_CLIENT_ID, MUSE_REDIRECT_URI, MUSE_SCOPES } = await import('../../../tools/lib/muse-oauth-client.mjs');
+  const f = await fixture(t, { MCP_RESOURCE_URL: 'https://thumble.io/mcp' });
+  f.db.exec(museClientSql());
+  await ensureIdentityClients(f.env);
+  const row = f.db.prepare('SELECT * FROM oauthClient WHERE clientId=?').get(MUSE_CLIENT_ID);
+  assert.equal(row.clientSecret, null); assert.equal(row.requirePKCE, 1); assert.equal(Boolean(row.skipConsent), false);
+  const args = { redirect_uri: MUSE_REDIRECT_URI, scope: MUSE_SCOPES.join(' '), resource: 'https://thumble.io/mcp' };
+  for (const extra of [{ scope: 'profiles:write' }, { scope: 'devices:manage' }, { scope: 'pairing:read' }, { redirect_uri: 'https://agent.meta.ai.attacker.example/api/hatch/oauth/callback' }, { redirect_uri: 'https://agent.meta.ai/api/hatch/oauth/other' }, { resource: 'https://attacker.example/mcp' }]) {
+    const { result } = await f.authorize(MUSE_CLIENT_ID, { ...args, ...extra });
+    assert.ok(result.status >= 400 || new URL(result.headers.get('location'), f.env.BETTER_AUTH_URL).searchParams.has('error'), JSON.stringify(extra));
+  }
+  const verifier = 'm'.repeat(64);
+  const challenge = Buffer.from(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier))).toString('base64url');
+  const params = new URLSearchParams({ response_type: 'code', client_id: MUSE_CLIENT_ID, redirect_uri: MUSE_REDIRECT_URI, scope: MUSE_SCOPES.join(' '), state: 'muse-test', code_challenge: challenge, code_challenge_method: 'S256' });
+  const result = await handleIdentity(f.request(`/api/auth/oauth2/authorize?${params}`), f.env);
+  assert.equal(result.status, 302);
+  const signedQuery = new URL(result.headers.get('location'), f.env.BETTER_AUTH_URL).search.slice(1);
+  const consent = await f.auth.handler(f.request('/api/auth/oauth2/consent', { method: 'POST', body: { accept: true, oauth_query: signedQuery } }));
+  assert.equal(consent.status, 200);
+  const body = { grant_type: 'authorization_code', client_id: MUSE_CLIENT_ID, redirect_uri: MUSE_REDIRECT_URI, code: new URL((await consent.json()).url).searchParams.get('code') };
+  const missingVerifier = await f.auth.handler(f.request('/api/auth/oauth2/token', { method: 'POST', form: true, body, authenticated: false, origin: false }));
+  assert.ok(missingVerifier.status >= 400);
+  const exchanged = await f.auth.handler(f.request('/api/auth/oauth2/token', { method: 'POST', form: true, body: { ...body, code_verifier: verifier }, authenticated: false, origin: false }));
+  assert.equal(exchanged.status, 200);
+  const tokens = await exchanged.json(); assert.ok(tokens.refresh_token);
+  const claims = decodeJwt(tokens.access_token);
+  assert.ok([claims.aud].flat().includes('https://thumble.io/mcp'));
+  assert.deepEqual(claims.scope.split(' ').sort(), [...MUSE_SCOPES].sort());
+  const refreshed = await f.auth.handler(f.request('/api/auth/oauth2/token', { method: 'POST', form: true, body: { grant_type: 'refresh_token', client_id: MUSE_CLIENT_ID, refresh_token: tokens.refresh_token }, authenticated: false, origin: false }));
+  assert.equal(refreshed.status, 200);
+  assert.ok([decodeJwt((await refreshed.json()).access_token).aud].flat().includes('https://thumble.io/mcp'));
+});
+
+test('operator-registered Claude Code client enforces read-only scopes, exact callback, consent and PKCE', async t => {
+  const { claudeCodeClientSql, CLAUDE_CODE_CLIENT_ID, CLAUDE_CODE_REDIRECT_URI, CLAUDE_CODE_SCOPES } = await import('../../../tools/lib/claude-code-oauth-client.mjs');
+  const f = await fixture(t, { MCP_RESOURCE_URL: 'https://thumble.io/mcp' });
+  f.db.exec(claudeCodeClientSql());
+  await ensureIdentityClients(f.env);
+  const row = f.db.prepare('SELECT * FROM oauthClient WHERE clientId=?').get(CLAUDE_CODE_CLIENT_ID);
+  assert.equal(row.clientSecret, null); assert.equal(row.requirePKCE, 1); assert.equal(Boolean(row.skipConsent), false);
+  const args = { redirect_uri: CLAUDE_CODE_REDIRECT_URI, scope: CLAUDE_CODE_SCOPES.join(' '), resource: 'https://thumble.io/mcp' };
+  for (const extra of [{ scope: 'profiles:write' }, { scope: 'pairing:read' }, { redirect_uri: 'http://localhost:8766/wrong-path' }, { redirect_uri: 'http://attacker.example:8766/callback' }, { resource: 'https://attacker.example/mcp' }]) {
+    const { result } = await f.authorize(CLAUDE_CODE_CLIENT_ID, { ...args, ...extra });
+    assert.ok(result.status >= 400 || new URL(result.headers.get('location'), f.env.BETTER_AUTH_URL).searchParams.has('error'), JSON.stringify(extra));
+  }
+  const { result, verifier } = await f.authorize(CLAUDE_CODE_CLIENT_ID, args);
+  assert.equal(result.status, 302);
+  const signedQuery = new URL(result.headers.get('location'), f.env.BETTER_AUTH_URL).search.slice(1);
+  const consent = await f.auth.handler(f.request('/api/auth/oauth2/consent', { method: 'POST', body: { accept: true, oauth_query: signedQuery } }));
+  assert.equal(consent.status, 200);
+  const body = { grant_type: 'authorization_code', client_id: CLAUDE_CODE_CLIENT_ID, redirect_uri: CLAUDE_CODE_REDIRECT_URI, code: new URL((await consent.json()).url).searchParams.get('code'), resource: 'https://thumble.io/mcp' };
+  const missingVerifier = await f.auth.handler(f.request('/api/auth/oauth2/token', { method: 'POST', form: true, body, authenticated: false, origin: false }));
+  assert.ok(missingVerifier.status >= 400);
+  const exchanged = await f.auth.handler(f.request('/api/auth/oauth2/token', { method: 'POST', form: true, body: { ...body, code_verifier: verifier }, authenticated: false, origin: false }));
+  assert.equal(exchanged.status, 200);
+  const tokens = await exchanged.json(); assert.ok(tokens.refresh_token);
+  const claims = decodeJwt(tokens.access_token);
+  assert.ok([claims.aud].flat().includes('https://thumble.io/mcp'));
+  assert.deepEqual(claims.scope.split(' ').sort(), [...CLAUDE_CODE_SCOPES].sort());
+});
