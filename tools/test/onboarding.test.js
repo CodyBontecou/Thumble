@@ -81,6 +81,8 @@ test('WoW setup resumes each checkpoint and reconnect takes priority over stale 
   assert.equal(wowSetupStep(f.store.snapshot(), false), 'connect');
   assert.equal(wowSetupStep(f.store.snapshot(), true), 'addon');
   await f.store.update({ consolePortReady: true });
+  assert.equal(wowSetupStep(f.store.snapshot(), true), 'sync');
+  await f.store.update({ wowSyncStatus: 'skipped', wowSyncContext: 'receiver:consoleport:1:classic-era' });
   assert.equal(wowSetupStep(f.store.snapshot(), true), 'game');
   assert.equal(canCompleteWowSetup(f.store.snapshot(), true), false);
   await Promise.all(WOW_CHECKS.map(check => f.store.update(previous => ({ wowChecks: { ...previous.wowChecks, [check.id]: true } }))));
@@ -123,7 +125,7 @@ test('WoW setup uses one in-game checklist and keeps confirmations tied to the l
   const context = { controlKey: 'receiver:consoleport-standard:3', wowKey: 'receiver:consoleport-standard:3:retail' };
   const setup = { ...initialSetup(), wowClient: 'retail' };
   assert.equal(wowSetupStep(setup, true, context), 'addon');
-  const prepared = { ...setup, consolePortReady: true, wowCheckContext: context.wowKey, wowChecks: Object.fromEntries(WOW_CHECKS.map(check => [check.id, true])) };
+  const prepared = { ...setup, consolePortReady: true, wowSyncStatus: 'confirmed', wowSyncContext: context.wowKey, wowCheckContext: context.wowKey, wowChecks: Object.fromEntries(WOW_CHECKS.map(check => [check.id, true])) };
   assert.equal(wowSetupStep(prepared, true, context), 'game');
   assert.equal(canCompleteWowSetup(prepared, true, context), true); // no separate pre-test
   for (const check of WOW_CHECKS) assert.equal(canCompleteWowSetup({ ...prepared, wowChecks: { ...prepared.wowChecks, [check.id]: false } }, true, context), false);
@@ -134,4 +136,40 @@ test('WoW setup uses one in-game checklist and keeps confirmations tied to the l
   assert.equal(wowSetupStep(completed, true, context), 'ready');
   assert.equal(wowSetupStep(completed, false, context), 'connect');
   assert.equal(wowSetupStep(completed, true, { controlKey: 'different', wowKey: context.wowKey }), 'game');
+});
+
+
+test('label sync confirmation and skip persist for the current controller and invalidate on context changes', async () => {
+  const { WOW_CHECKS, wowSetupStep, canCompleteWowSetup } = await import('../../apps/mobile/src/onboarding-core.js');
+  const context = { controlKey: 'receiver:consoleport:2', wowKey: 'receiver:consoleport:2:classic-era' };
+  for (const status of ['confirmed', 'skipped']) {
+    const f = fixture();
+    await f.store.update({ wowClient: 'classic-era', consolePortReady: true });
+    assert.equal(wowSetupStep(f.store.snapshot(), true, context), 'sync');
+    await f.store.update({ wowSyncStatus: status, wowSyncContext: context.wowKey });
+    const resumed = await createOnboardingStore(f.storage).load();
+    assert.equal(resumed.wowSyncStatus, status);
+    assert.equal(resumed.wowTested, false);
+    assert.equal(resumed.controlsTested, false);
+    assert.equal(wowSetupStep(resumed, true, context), 'game');
+    assert.equal(wowSetupStep(resumed, false, context), 'connect');
+    const checked = { ...resumed, wowCheckContext: context.wowKey, wowChecks: Object.fromEntries(WOW_CHECKS.map(check => [check.id, true])) };
+    assert.equal(canCompleteWowSetup(checked, true, context), true);
+    for (const wowKey of ['receiver:consoleport:3:classic-era', 'other:consoleport:2:classic-era', 'receiver:consoleport:2:retail']) {
+      assert.equal(wowSetupStep(checked, true, { ...context, wowKey }), 'sync');
+      assert.equal(canCompleteWowSetup(checked, true, { ...context, wowKey }), false);
+    }
+    assert.equal(wowSetupStep({ ...checked, wowSyncStatus: '' }, true, context), 'sync');
+    assert.equal(canCompleteWowSetup({ ...checked, wowSyncStatus: '' }, true, context), false);
+  }
+});
+
+test('legacy completed setups stay ready while malformed label confirmations cannot bypass the sync step', async () => {
+  const { wowSetupStep } = await import('../../apps/mobile/src/onboarding-core.js');
+  const context = { controlKey: 'receiver:consoleport:2', wowKey: 'receiver:consoleport:2:classic-era' };
+  const prepared = { ...initialSetup(), wowClient: 'classic-era', consolePortReady: true };
+  for (const extra of [{ wowSyncStatus: true }, { wowSyncStatus: 'confirmed' }, { wowSyncStatus: 'unknown', wowSyncContext: context.wowKey }, { wowSyncStatus: 'confirmed', wowSyncContext: '../invalid' }]) {
+    assert.equal(wowSetupStep(normalizeSetup({ ...prepared, ...extra }), true, context), 'sync');
+  }
+  assert.equal(wowSetupStep({ ...prepared, wowTested: true, controlsTested: true, controlsCheckContext: context.controlKey, wowCheckContext: context.wowKey }, true, context), 'ready');
 });

@@ -5,6 +5,7 @@ export const initialSetup = () => ({
   personalized: false, agentVerified: false, agentCode: '', layoutMode: 'consoleport',
   buttonSize: 'larger', movementSide: 'left', character: '', profileId: '', sourceProfileId: '',
   wowClient: '', consolePortReady: false, wowChecks: {}, controlsCheckContext: '', wowCheckContext: '',
+  wowSyncStatus: '', wowSyncContext: '',
 });
 export function normalizeSetup(value) {
   const result = initialSetup();
@@ -14,7 +15,8 @@ export function normalizeSetup(value) {
     if (choices.includes(value[key])) result[key] = value[key];
   }
   if (typeof value.character === 'string') result.character = value.character.slice(0, 80);
-  for (const key of ['controlsCheckContext', 'wowCheckContext']) if (typeof value[key] === 'string' && /^[a-zA-Z0-9:-]{1,250}$/.test(value[key])) result[key] = value[key];
+  for (const key of ['controlsCheckContext', 'wowCheckContext', 'wowSyncContext']) if (typeof value[key] === 'string' && /^[a-zA-Z0-9:-]{1,250}$/.test(value[key])) result[key] = value[key];
+  if (['confirmed', 'skipped'].includes(value.wowSyncStatus)) result.wowSyncStatus = value.wowSyncStatus;
   if (WOW_CLIENTS.some(client => client.id === value.wowClient)) result.wowClient = value.wowClient;
   result.wowChecks = Object.fromEntries(WOW_CHECKS.map(check => [check.id, value.wowChecks?.[check.id] === true]));
   if (typeof value.agentCode === 'string' && /^[a-f0-9]{12}$/.test(value.agentCode)) result.agentCode = value.agentCode;
@@ -44,10 +46,15 @@ export function wowSetupStep(state, online, context = null) {
   if (!state.wowClient) return 'client';
   if (!online) return 'connect';
   if (!state.consolePortReady) return 'addon';
-  return state.wowTested && state.controlsTested && (!context || (context.controlKey && state.controlsCheckContext === context.controlKey && context.wowKey && state.wowCheckContext === context.wowKey)) ? 'ready' : 'game';
+  if (state.wowTested && state.controlsTested && (!context || (context.controlKey && state.controlsCheckContext === context.controlKey && context.wowKey && state.wowCheckContext === context.wowKey))) return 'ready';
+  if (!wowSyncResolved(state, context)) return 'sync';
+  return 'game';
 }
+/** @param {any} state @param {{controlKey:string, wowKey:string} | null} context */
+const wowSyncResolved = (state, context) => ['confirmed', 'skipped'].includes(state.wowSyncStatus) && !!state.wowSyncContext && (!context || state.wowSyncContext === context.wowKey);
+
 /** @param {any} state @param {boolean} online @param {{controlKey:string, wowKey:string} | null} [context] */
-export const canCompleteWowSetup = (state, online, context = null) => online && !!state.wowClient && state.consolePortReady && (!context || (!!context.controlKey && !!context.wowKey && state.wowCheckContext === context.wowKey)) && WOW_CHECKS.every(check => state.wowChecks?.[check.id] === true);
+export const canCompleteWowSetup = (state, online, context = null) => online && !!state.wowClient && state.consolePortReady && wowSyncResolved(state, context) && (!context || (!!context.controlKey && !!context.wowKey && state.wowCheckContext === context.wowKey)) && WOW_CHECKS.every(check => state.wowChecks?.[check.id] === true);
 
 export function cloudLayoutPrompt(state, session) {
   const wow = state.layoutMode === 'consoleport' || state.layoutMode === 'character';

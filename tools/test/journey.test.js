@@ -27,14 +27,14 @@ test('Mac-ready requires the exact account, source revision, pairing and acknowl
 });
 test('game confirmations persist for a receiver/activation/game, with retest after changes', () => {
   const state = fixture(), controlKey = testContext(state.access, state.layout), wowKey = testContext(state.access, state.layout, 'retail');
-  state.setup = normalizeSetup({ ...state.setup, controlsTested: true, controlsCheckContext: controlKey, consolePortReady: true, wowCheckContext: wowKey, wowTested: true, wowChecks: Object.fromEntries(WOW_CHECKS.map(check => [check.id, true])) });
+  state.setup = normalizeSetup({ ...state.setup, controlsTested: true, controlsCheckContext: controlKey, consolePortReady: true, wowSyncStatus: 'confirmed', wowSyncContext: wowKey, wowCheckContext: wowKey, wowTested: true, wowChecks: Object.fromEntries(WOW_CHECKS.map(check => [check.id, true])) });
   const context = { controlKey, wowKey };
   assert.equal(canCompleteWowSetup(state.setup, true, context), true);
   assert.equal(wowSetupStep(state.setup, true, context), 'ready');
   assert.equal(cloudJourney(state).complete, 4);
   state.setup.wowClient = 'classic-era';
   assert.equal(cloudJourney(state).tested, false);
-  assert.equal(wowSetupStep(state.setup, true, { controlKey, wowKey: testContext(state.access, state.layout, 'classic-era') }), 'game');
+  assert.equal(wowSetupStep(state.setup, true, { controlKey, wowKey: testContext(state.access, state.layout, 'classic-era') }), 'sync');
   assert.equal(wowSetupStep(state.setup, true, { controlKey: 'different-activation', wowKey }), 'game');
   assert.equal(cloudJourney({ ...state, network: { phase: 'offline' } }).tested, false);
 });
