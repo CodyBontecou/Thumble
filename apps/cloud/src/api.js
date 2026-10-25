@@ -1,4 +1,5 @@
 import { CloudError, MAX_BODY_BYTES, SCOPES, requireId, requireRevision, requireScope, validateCloudProfile } from '@tapping/cloud-contracts';
+import { sandboxExample } from './sandbox.js';
 import { authenticateAccount, authenticateDevice, getPublicConfig, sha256 } from './auth.js';
 import { handlePairingApi } from './pairing.js';
 import { validateLayout, validViewport, aiControllerGeneratorEnabled } from '@tapping/controller';
@@ -169,6 +170,10 @@ export async function handleApi(request, env) {
     const path = new URL(request.url).pathname.split('/').filter(Boolean);
     if (path[0] !== 'v1') notFound(); path.shift();
     if (request.method === 'GET' && path.length === 1 && path[0] === 'config') return json(getPublicConfig(request, env));
+    if (path.length === 1 && path[0] === 'sandbox') {
+      if (request.method !== 'GET') return Response.json({ error: { code: 'method_not_allowed', message: 'The sandbox is read-only. Use GET.' } }, { status: 405, headers: { Allow: 'GET', 'Cache-Control': 'no-store' } });
+      return json(sandboxExample());
+    }
     if (!env.DB) throw new CloudError('not_configured', 'Cloud storage is not configured.', 503);
     if (['receiver-pairing', 'pairing-code'].includes(path[0])) return await handlePairingApi(request, env, path, { body, json });
     if (path[0] === 'devices' && ['deliveries', 'viewport'].includes(path[2])) return await deviceRoute(request, env, path);

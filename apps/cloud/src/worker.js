@@ -5,6 +5,7 @@ import { handleIdentity, identityEnvironment } from './identity.js';
 import { handleAuthPage } from './auth-pages.js';
 import { handleAsset } from './assets.js';
 import { cleanPairingSessions } from './pairing.js';
+import { withRestPolicy } from './rest-policy.js';
 
 // Account APIs and MCP share the same authenticated service and persistent store.
 // The receiver's LAN transport is intentionally outside this Worker.
@@ -42,7 +43,7 @@ export default {
         return await handleIdentity(request, env);
       }
       if (pathname === '/sign-in' || pathname === '/consent' || pathname === '/account') return await handleAuthPage(request, env);
-      if (pathname.startsWith('/v1/')) return await handleApi(request, env);
+      if (pathname.startsWith('/v1/')) return await withRestPolicy(request, env, () => handleApi(request, env));
       return Response.json({ error: { code: 'not_found', message: 'Route not found.' } }, { status: 404, headers: { 'Cache-Control': 'no-store' } });
     } catch (error) {
       const known = error instanceof CloudError;

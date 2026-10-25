@@ -4,6 +4,7 @@
   "account_id": "e4265f322e6380ee832b83ad45e3e8c0",
   "main": "src/worker.js",
   "assets": { "directory": "../../assets/public", "binding": "ASSETS", "run_worker_first": true, "html_handling": "none", "not_found_handling": "none" },
+  "ratelimits": [{ "name": "REST_RATE_LIMITER", "namespace_id": "1763832001", "simple": { "limit": 600, "period": 60 } }],
   "compatibility_date": "2026-10-23",
   "compatibility_flags": [
     "nodejs_compat"
