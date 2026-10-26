@@ -1,13 +1,16 @@
 import asyncio
 import base64
+from copy import deepcopy
 import hashlib
 import json
 from pathlib import Path
+import shutil
 import ssl
 import tempfile
 import threading
 import time
 import unittest
+from unittest.mock import patch
 import uuid
 
 from cryptography.hazmat.primitives import serialization
@@ -212,6 +215,34 @@ class SessionTests(unittest.TestCase):
         finally:
             output.close()
 
+    def test_layout_commit_needs_current_revision_fresh_neutral_and_resume(self):
+        self.session.enabled = True
+        self.output.apply(State(buttons=1), self.clock() + 0.3, self.output.generation)
+        replies = self.session.activate(dict(revision=1, profile={'id': 'first'}))
+        self.assertEqual(replies[-1]['type'], 'layout')
+        self.assertEqual(self.output.backend.state, NEUTRAL)
+        self.assertFalse(self.session.enabled)
+        self.session.activate(dict(revision=2, profile={'id': 'second'}))
+        self.assertEqual(self.session.handle(dict(type='layout-ready', revision=1)), [])
+        self.assertEqual(self.session.handle(self.frame()), [])
+        with self.assertRaises(ProtocolError):
+            self.session.handle(dict(type='layout-ready', revision=3))
+        paused = self.session.handle(dict(type='layout-ready', revision=2))[0]
+        frame = {**self.frame(State(buttons=1), lease=paused['lease']), 'revision': 2}
+        self.assertEqual(self.session.handle(frame), [])
+        self.assertEqual(self.session.handle({**frame, 'state': NEUTRAL.__dict__})[0]['type'], 'ack')
+        self.assertFalse(self.session.enabled)
+        self.assertEqual(self.session.handle(self.frame(seq=1)), [])
+
+    def test_layout_timeout_is_five_seconds_and_does_not_refresh_on_old_input(self):
+        self.session.activate(dict(revision=1, profile={'id': 'first'}))
+        self.clock.value += 4
+        self.assertEqual(self.session.tick(), [])
+        self.assertEqual(self.session.handle(self.frame()), [])
+        self.clock.value += 1
+        with self.assertRaises(ProtocolError):
+            self.session.tick()
+
 
 class PairingTests(unittest.TestCase):
     def test_private_addresses_and_single_use_expiry(self):
@@ -273,7 +304,7 @@ class TransportTests(unittest.IsolatedAsyncioTestCase):
             ready = await self.receive(socket, 'ready')
             self.assertEqual(ready['access'], 1)
             self.assertNotIn('chat', ready)
-            self.assertNotIn('profiles', ready)
+            self.assertEqual(ready['profiles'], 1)
             await self.receive(socket, 'access')
             await socket.send(json.dumps(dict(type='access-resume')))
             paused = await self.receive(socket, 'paused')
@@ -317,6 +348,122 @@ class TransportTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(ConnectionClosed):
                 while True:
                     await asyncio.wait_for(socket.recv(), 3)
+
+    async def test_phone_profile_selection_and_persisted_reconnect(self):
+        async with connect(self.url, ssl=self.client_context, proxy=None) as socket:
+            await self.hello(socket)
+            ready = await self.receive(socket, 'ready')
+            await socket.send(json.dumps(dict(type='profiles-list', id='list')))
+            catalog = (await self.receive(socket, 'profiles-result'))['catalog']
+            self.assertEqual(catalog['activationRevision'], 0)
+            await socket.send(json.dumps(dict(type='profile-select', id='select', profileId='consoleport-standard',
+                                               profileRevision=1, expectedActivationRevision=0, lease=ready['lease'])))
+            layout = await self.receive(socket, 'layout')
+            result = await self.receive(socket, 'profiles-result')
+            self.assertEqual(result['catalog']['activationRevision'], layout['revision'])
+            await socket.send(json.dumps(dict(type='layout-ready', revision=layout['revision'])))
+            paused = await self.receive(socket, 'paused')
+            await socket.send(json.dumps(dict(type='input', revision=layout['revision'], seq=0,
+                                               lease=paused['lease'], state=NEUTRAL.__dict__)))
+            await self.receive(socket, 'ack')
+            self.assertFalse(self.server.session.enabled)
+            await asyncio.sleep(0.3)
+            status = json.loads((self.server.profiles.directory / 'receiver-status.json').read_bytes())
+            self.assertTrue(status['ready'])
+            self.assertEqual(status['revision'], 1)
+        await asyncio.wait_for(self.ready.get(), 3)
+        async with connect(self.url, ssl=self.client_context, proxy=None) as socket:
+            await self.hello(socket)
+            await self.receive(socket, 'ready')
+            layout = await self.receive(socket, 'layout')
+            self.assertEqual(layout['profile']['id'], 'consoleport-standard')
+            self.assertEqual(layout['revision'], 1)
+
+    async def test_agent_file_activation_reaches_phone_and_supersedes_old_render(self):
+        async with connect(self.url, ssl=self.client_context, proxy=None) as socket:
+            await self.hello(socket)
+            await self.receive(socket, 'ready')
+            await asyncio.to_thread(self.server.profiles.select, 'consoleport-standard', 1, 0)
+            first = await self.receive(socket, 'layout')
+            await asyncio.to_thread(self.server.profiles.select, 'xbox-standard', 1, 1)
+            second = await self.receive(socket, 'layout')
+            self.assertGreater(second['revision'], first['revision'])
+            await socket.send(json.dumps(dict(type='layout-ready', revision=first['revision'])))
+            await asyncio.sleep(0.03)
+            self.assertTrue(self.server.session.layout_pending)
+            await socket.send(json.dumps(dict(type='layout-ready', revision=second['revision'])))
+            await self.receive(socket, 'paused')
+            self.assertFalse(self.server.session.layout_pending)
+
+    async def test_large_frames_require_authenticated_adoption(self):
+        async with connect(self.url, ssl=self.client_context, proxy=None) as socket:
+            await self.hello(socket)
+            ready = await self.receive(socket, 'ready')
+            profile = deepcopy(self.server.profiles.builtins[1])
+            for control in profile['controls']:
+                control['label'] = 'Long label ' * 7
+            self.assertGreater(len(json.dumps(profile)), 4096)
+            source = dict(service='https://thumble.example/v1', accountId='a' * 64,
+                           profileId=profile['id'], revision=1)
+            await socket.send(json.dumps(dict(type='profile-adopt', id='adopt', profile=profile, source=source,
+                                               expectedActivationRevision=0, lease=ready['lease'])))
+            layout = await self.receive(socket, 'layout')
+            result = await self.receive(socket, 'profiles-result')
+            self.assertEqual(layout['profile']['id'], result['catalog']['adoption']['profileId'])
+            await socket.send(json.dumps(dict(type='profiles-list', id='x' * 5000)))
+            with self.assertRaises(ConnectionClosed):
+                while True:
+                    await socket.recv()
+
+    async def test_real_phone_connection_selects_and_adopts_with_layout_receipts(self):
+        if not shutil.which('node'):
+            self.skipTest('Node is required for the real phone connection test')
+        self.invitation.address = '192.168.1.2'
+        link = self.invitation.renew()
+        process = await asyncio.create_subprocess_exec('node', str(Path(__file__).with_name('phone-client.mjs')),
+                    stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+        try:
+            stdout, stderr = await asyncio.wait_for(process.communicate(json.dumps(dict(invitation=link)).encode()), 12)
+            self.assertEqual(process.returncode, 0, stderr.decode() + '\nReceiver: ' + self.server.profile_error)
+            self.assertIn('PASS real phone connection', stdout.decode())
+        finally:
+            if process.returncode is None:
+                process.kill()
+                await process.wait()
+
+    async def test_slow_profile_disk_work_releases_controls_without_blocking_input(self):
+        gate = threading.Event()
+        original = self.server.profiles.select
+
+        def delayed(*args):
+            gate.wait(2)
+            return original(*args)
+
+        async with connect(self.url, ssl=self.client_context, proxy=None) as socket:
+            await self.hello(socket)
+            await self.receive(socket, 'ready')
+            await socket.send(json.dumps(dict(type='access-resume')))
+            paused = await self.receive(socket, 'paused')
+            frame = dict(type='input', revision=0, seq=0, lease=paused['lease'], state=NEUTRAL.__dict__)
+            await socket.send(json.dumps(frame))
+            ack = await self.receive(socket, 'ack')
+            await socket.send(json.dumps({**frame, 'seq': 1, 'lease': ack['lease'], 'state': State(buttons=1).__dict__}))
+            ack = await self.receive(socket, 'ack')
+            self.assertEqual(self.output.backend.state.buttons, 1)
+            with patch.object(self.server.profiles, 'select', side_effect=delayed):
+                try:
+                    await socket.send(json.dumps(dict(type='profile-select', id='slow', profileId='consoleport-standard',
+                        profileRevision=1, expectedActivationRevision=0, lease=ack['lease'])))
+                    paused = await self.receive(socket, 'paused')
+                    self.assertEqual(self.output.backend.state, NEUTRAL)
+                    await socket.send(json.dumps({**frame, 'seq': 2, 'lease': paused['lease']}))
+                    ack = await asyncio.wait_for(self.receive(socket, 'ack'), 0.5)
+                    self.assertEqual(ack['seq'], 2)
+                finally:
+                    gate.set()
+                await self.receive(socket, 'layout')
+                result = await self.receive(socket, 'profiles-result')
+                self.assertEqual(result['catalog']['activationRevision'], 1)
 
 
 if __name__ == '__main__':

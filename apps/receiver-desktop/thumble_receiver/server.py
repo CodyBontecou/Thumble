@@ -1,6 +1,7 @@
 """Bounded WSS transport and the v3 phone protocol; no gameplay cloud relay."""
 import asyncio
 import contextlib
+from concurrent.futures import ThreadPoolExecutor
 import json
 import time
 import uuid
@@ -10,21 +11,22 @@ from websockets.exceptions import ConnectionClosed
 
 from .state import NEUTRAL, State, integer
 from .clock import monotonic
+from .consoleport import ConsolePortSync
+from .profiles import ProfileStore, ProfileError, load_json
 
 
 class ProtocolError(ValueError):
     pass
 
 
-def decode(text):
-    def invalid(_):
-        raise ProtocolError('Non-finite JSON number')
-
-    if not isinstance(text, str) or len(text.encode('utf-8')) > 4096:
+def decode(text, adoption=False):
+    if not isinstance(text, str) or len(text.encode('utf-8')) > (65536 if adoption else 4096):
         raise ProtocolError('Expected a small JSON text frame')
-    value = json.loads(text, parse_constant=invalid)
+    value = load_json(text)
     if not isinstance(value, dict):
         raise ProtocolError('Expected object')
+    if len(text.encode('utf-8')) > 4096 and value.get('type') != 'profile-adopt':
+        raise ProtocolError('Only authenticated profile adoption accepts large messages')
     return value
 
 
@@ -35,11 +37,28 @@ class Session:
         self.leases = {}
         self.paused, self.enabled = True, False
         self.generation = output.generation
+        self.revision, self.profile, self.layout_pending, self.layout_deadline = 0, None, False, 0
+        self.profile_busy = False
 
-    def pause(self):
+    def activate(self, active):
+        if not active or active['revision'] <= self.revision:
+            return []
+        self.pause()
+        self.enabled = False
+        self.revision, self.profile = active['revision'], active['profile']
+        self.layout_pending, self.layout_deadline = True, self.clock() + 5
+        return [self.access.snapshot(False), dict(type='layout', revision=self.revision, profile=self.profile)]
+
+    def status(self):
+        return dict(updatedAt=time.time() * 1000, connected=True,
+                    ready=not self.layout_pending and not self.paused,
+                    revision=self.revision, pro=self.access.pro, receiverId=self.access.receiver_id)
+
+    def pause(self, revoke=True):
         self.output.release()
         self.generation = self.output.generation
-        self.leases.clear()
+        if revoke:
+            self.leases.clear()
         self.paused = True
         self.access.pause()
 
@@ -52,7 +71,7 @@ class Session:
         self.leases[lease] = now + 0.5
         value = dict(type=kind, seq=self.sequence, lease=lease)
         if kind == 'ready':
-            value['access'] = 1
+            value.update(access=1, profiles=1, cloudAdoption=1)
         return value
 
     def handle(self, message):
@@ -61,9 +80,14 @@ class Session:
             raise ProtocolError('Phone disconnected')
         if kind == 'access-pause':
             self.enabled = False
-            self.pause()
-            return [self.access.snapshot(False), self.ack('paused')]
+            # The phone sends access-pause immediately before profile-adopt,
+            # using its current lease for the adoption. Keep that lease valid
+            # until its original deadline; paused held input still cannot rearm.
+            self.pause(revoke=False)
+            return [self.access.snapshot(False)] + ([] if self.layout_pending else [self.ack('paused')])
         if kind == 'access-resume':
+            if self.layout_pending:
+                return [self.access.snapshot(False)]
             self.pause()
             self.enabled = self.access.pro or self.access.used < 1800
             return [self.access.snapshot(self.enabled), self.ack('paused')]
@@ -71,7 +95,17 @@ class Session:
             self.pause()
             self.enabled = False
             self.access.submit(message.get('grant'))
-            return [self.access.snapshot(False), self.ack('paused')]
+            return [self.access.snapshot(False)] + ([] if self.layout_pending else [self.ack('paused')])
+        if kind == 'layout-ready':
+            value = message.get('revision')
+            if not integer(value) or value > self.revision:
+                raise ProtocolError('Invalid layout acknowledgement')
+            if value != self.revision or not self.layout_pending:
+                return []
+            self.layout_pending = False
+            self.pause()
+            self.last_input = self.clock()
+            return [self.ack('paused')]
         if kind in ('profiles-list', 'profile-select', 'profile-adopt', 'chat'):
             # Do not advertise unfinished features, or leave older clients waiting.
             request = message.get('id')
@@ -83,8 +117,7 @@ class Session:
             return []
         if kind != 'input':
             raise ProtocolError('Unknown message')
-        # This receiver uses the phone's built-in layout (revision zero).
-        if type(message.get('revision')) is not int or message['revision'] != 0:
+        if self.layout_pending or type(message.get('revision')) is not int or message['revision'] != self.revision:
             return []
         sequence = message.get('seq')
         if not integer(sequence) or sequence <= self.sequence:
@@ -115,6 +148,10 @@ class Session:
 
     def tick(self):
         now = self.clock()
+        if self.layout_pending:
+            if now >= self.layout_deadline:
+                raise ProtocolError('Phone did not acknowledge the layout')
+            return []
         if now - self.last_input > 2:
             raise ProtocolError('Input timed out')
         self.access.tick()
@@ -132,11 +169,70 @@ class Session:
 
 
 class ReceiverServer:
-    def __init__(self, output, access, invitation, on_invitation=lambda _: None):
+    def __init__(self, output, access, invitation, on_invitation=lambda _: None, profiles=None, wow_roots=()):
         self.output, self.access, self.invitation = output, access, invitation
         self.on_invitation = on_invitation
         self.peer = None
         self.clients = 0
+        self.profiles = profiles if profiles is not None else ProfileStore(access.directory / 'profiles')
+        self.sync = ConsolePortSync(self.profiles, wow_roots)
+        self.worker = ThreadPoolExecutor(max_workers=1, thread_name_prefix='thumble-profiles')
+        self.active = None
+        self.session = None
+        self.profile_error = ''
+
+    async def work(self, function, *args):
+        return await asyncio.get_running_loop().run_in_executor(self.worker, function, *args)
+
+    def catalog(self):
+        data = self.profiles.read()
+        summary = self.profiles.summary(data)
+        summary['consolePortBridge'] = dict(enabled=bool(self.sync.roots), detail=self.sync.detail)
+        return summary, data.get('active')
+
+    async def profile_request(self, socket, session, message):
+        request, kind = message.get('id'), message.get('type')
+        if not isinstance(request, str) or not 0 < len(request.encode()) <= 80:
+            return
+        result = dict(type='profiles-result', id=request)
+        if session.profile_busy:
+            result['error'] = 'Another profile request is in progress.'
+            await self.send(socket, [result])
+            return
+        session.profile_busy = True
+        did_pause = False
+        try:
+            if kind == 'profiles-list':
+                catalog, active = await self.work(self.catalog)
+            else:
+                lease = message.get('lease')
+                if (session.layout_pending or not isinstance(lease, str)
+                        or session.clock() > session.leases.get(lease, float('-inf'))):
+                    raise ProfileError('Connection changed. Refresh and try again.')
+                # Disk locks, validation, and atomic writes never retain held input.
+                session.enabled = False
+                session.pause()
+                did_pause = True
+                await self.send(socket, [self.access.snapshot(False), session.ack('paused')])
+                if kind == 'profile-select':
+                    catalog, active = await self.work(self.profiles.select, message.get('profileId'),
+                                                       message.get('profileRevision'), message.get('expectedActivationRevision'))
+                else:
+                    catalog, active = await self.work(self.profiles.adopt, message.get('profile'),
+                                                       message.get('source'), message.get('expectedActivationRevision'))
+            if self.peer is not socket:
+                return
+            self.active = active if not self.active or (active and active['revision'] > self.active['revision']) else self.active
+            replies = session.activate(self.active)
+            result['catalog'] = catalog
+            await self.send(socket, replies + [result])
+        except (ValueError, OSError, TypeError, KeyError) as error:
+            self.profile_error = str(error)
+            result['error'] = 'Profile request failed. Check the profile, refresh the list, and try again.'
+            if self.peer is socket:
+                await self.send(socket, [result] + ([session.ack('paused')] if did_pause and not session.layout_pending else []))
+        finally:
+            session.profile_busy = False
 
     def renew(self):
         self.on_invitation(self.invitation.renew())
@@ -144,7 +240,8 @@ class ReceiverServer:
     async def send(self, socket, values):
         for value in values:
             # A stalled client must not retain a session indefinitely.
-            await asyncio.wait_for(socket.send(json.dumps(value, allow_nan=False)), timeout=0.2)
+            await asyncio.wait_for(socket.send(json.dumps(value, ensure_ascii=False, allow_nan=False,
+                                                         separators=(',', ':'))), timeout=0.2)
 
     async def handler(self, socket):
         if self.clients >= 4 or socket.request.path != '/controller':
@@ -153,6 +250,7 @@ class ReceiverServer:
         self.clients += 1
         ticker = None
         session = None
+        profile_tasks = set()
         try:
             hello = decode(await asyncio.wait_for(socket.recv(), timeout=5))
             phone_id = hello.get('phoneId')
@@ -167,7 +265,8 @@ class ReceiverServer:
             self.output.release()
             self.access.pair(phone_id, hello.get('demoUsed', 0))
             session = Session(self.output, self.access)
-            await self.send(socket, [session.ack('ready'), self.access.snapshot(False)])
+            self.session = session
+            await self.send(socket, [session.ack('ready'), self.access.snapshot(False)] + session.activate(self.active))
 
             async def tick():
                 last_access = 0
@@ -185,12 +284,32 @@ class ReceiverServer:
 
             ticker = asyncio.create_task(tick())
             async for text in socket:
-                await self.send(socket, session.handle(decode(text)))
+                message = decode(text, adoption=True)
+                if message.get('type') in ('profiles-list', 'profile-select', 'profile-adopt'):
+                    task = asyncio.create_task(self.profile_request(socket, session, message))
+                    profile_tasks.add(task)
+                    # Bound work even when a peer ignores the single-request protocol.
+                    if len(profile_tasks) >= 4:
+                        await asyncio.gather(*profile_tasks)
+                        profile_tasks.clear()
+                else:
+                    await self.send(socket, session.handle(message))
+                # Retrieve errors from completed tasks rather than accumulating them.
+                completed = {task for task in profile_tasks if task.done()}
+                if completed:
+                    await asyncio.gather(*completed)
+                    profile_tasks -= completed
         except (ValueError, TypeError, KeyError, OSError, RuntimeError, TimeoutError, ConnectionClosed):
             if session:
                 session.pause()
             await socket.close(code=1008)
         finally:
+            # A transaction already dispatched to the worker may finish after a peer
+            # disconnects, but its callback may never activate a replacement session.
+            for task in profile_tasks:
+                task.cancel()
+            if profile_tasks:
+                await asyncio.gather(*profile_tasks, return_exceptions=True)
             if ticker:
                 ticker.cancel()
                 with contextlib.suppress(asyncio.CancelledError, ConnectionClosed):
@@ -203,21 +322,53 @@ class ReceiverServer:
                         self.output.release()
                 finally:
                     self.peer = None
+                    self.session = None
                     self.renew()
             self.clients -= 1
 
     async def run(self, host, port, context, stop):
-        async with serve(self.handler, host, port, ssl=context, max_size=4096,
+        try:
+            await self._run(host, port, context, stop)
+        finally:
+            with contextlib.suppress(OSError, ValueError):
+                await self.work(self.profiles.write_status, dict(updatedAt=time.time() * 1000,
+                                connected=False, ready=False, revision=self.active['revision'] if self.active else 0,
+                                pro=False, receiverId=self.access.receiver_id))
+            self.worker.shutdown(wait=True, cancel_futures=True)
+
+    async def _run(self, host, port, context, stop):
+        _, self.active = await self.work(self.catalog)
+        await self.work(self.sync.poll, True)
+        async with serve(self.handler, host, port, ssl=context, max_size=65536,
                          max_queue=4, compression=None, open_timeout=5,
                          close_timeout=1, ping_interval=20, ping_timeout=5) as server:
             self.invitation.port = server.sockets[0].getsockname()[1]
             self.renew()
 
             async def refresh():
+                count = 0
                 while True:
-                    await asyncio.sleep(1)
+                    await asyncio.sleep(0.25)
                     if self.peer is None and time.time() > self.invitation.expires:
                         self.renew()
+                    count += 1
+                    try:
+                        if count % 8 == 0 and self.sync.roots:
+                            await self.work(self.sync.poll)
+                        _, active = await self.work(self.catalog)
+                        if active and (not self.active or active['revision'] > self.active['revision']):
+                            self.active = active
+                            if self.peer and self.session:
+                                await self.send(self.peer, self.session.activate(active))
+                        status = self.session.status() if self.session else dict(
+                            updatedAt=time.time() * 1000, connected=False, ready=False,
+                            revision=self.active['revision'] if self.active else 0,
+                            pro=False, receiverId=self.access.receiver_id)
+                        await self.work(self.profiles.write_status, status)
+                    except (OSError, ValueError, TypeError, KeyError) as error:
+                        self.profile_error = str(error)
+                    except (ConnectionClosed, TimeoutError):
+                        pass
 
             refresh_task = asyncio.create_task(refresh())
             try:

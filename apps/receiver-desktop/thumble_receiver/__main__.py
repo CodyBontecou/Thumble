@@ -12,6 +12,7 @@ from .lock import DirectoryLock
 from .output import GuardedOutput, MemoryOutput, native_output
 from .pairing import Invitation, detect_address, identity, private_ipv4
 from .server import ReceiverServer
+from .profiles import ProfileStore
 
 
 def data_directory():
@@ -38,7 +39,9 @@ async def run(args):
     try:
         lock = DirectoryLock(args.data_dir)
         access = Access(args.data_dir)
-        server = ReceiverServer(output, access, Invitation(address, args.port, fingerprint), display_invitation)
+        profile_dir = args.profile_dir or Path(args.data_dir) / 'profiles'
+        server = ReceiverServer(output, access, Invitation(address, args.port, fingerprint), display_invitation,
+                                profiles=ProfileStore(profile_dir), wow_roots=args.wow_dir)
         stop = asyncio.Event()
         loop = asyncio.get_running_loop()
         previous = {}
@@ -66,11 +69,17 @@ def main():
     parser.add_argument('--address', help='Private IPv4 address of this computer on the phone Wi-Fi')
     parser.add_argument('--port', type=int, default=0, help='WSS port (default: an available port)')
     parser.add_argument('--data-dir', type=Path, default=data_directory())
+    parser.add_argument('--profile-dir', type=Path, default=os.environ.get('TAPPING_PROFILE_DIR'),
+                        help='Local-agent profile store (default: data directory / profiles)')
+    parser.add_argument('--wow-dir', type=Path, action='append', default=[],
+                        help='WoW install/client folder for saved ConsolePort sync; may be repeated')
     parser.add_argument('--dry-run', action='store_true', help='Pair normally but emit no native gamepad input')
     parser.add_argument('--self-test', action='store_true', help='Check TLS and input protocol on loopback with no native output')
     args = parser.parse_args()
     if not 0 <= args.port <= 65535:
         parser.error('port must be between 0 and 65535')
+    if len(args.wow_dir) > 8:
+        parser.error('at most eight WoW roots are supported')
     try:
         if args.self_test:
             from .selftest import selftest

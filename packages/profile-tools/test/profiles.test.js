@@ -5,6 +5,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { ProfileStore } from '../src/store.js';
 import { callProfileTool, profileTools } from '../src/tools.js';
 import { xboxProfile } from '../../controller/src/index.js';
@@ -86,7 +87,7 @@ test('tool surface has no input execution tools, rejects extra arguments, and va
 });
 test('MCP stdio saves and activates profiles without a purchase and reports revision conflicts', async t => {
   const store = await fixture(t);
-  const child = spawn(process.execPath, [new URL('../src/server.js', import.meta.url).pathname], { env: { ...process.env, TAPPING_PROFILE_DIR: store.directory }, stdio: ['pipe', 'pipe', 'pipe'] });
+  const child = spawn(process.execPath, [fileURLToPath(new URL('../src/server.js', import.meta.url))], { env: { ...process.env, TAPPING_PROFILE_DIR: store.directory }, stdio: ['pipe', 'pipe', 'pipe'] });
   t.after(() => child.kill());
   let output = '', errors = '';
   child.stdout.on('data', chunk => output += chunk);

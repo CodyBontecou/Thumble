@@ -2,16 +2,24 @@ name: Desktop receiver
 
 on:
   push:
-    branches: [main, 'codex/**']
+    branches: [main]
     paths:
       - 'apps/receiver-desktop/**'
       - '.github/workflows/desktop-receiver.yml'
       - 'config/monetization.json'
+      - 'packages/profile-tools/**'
+      - 'packages/controller/**'
+      - 'tools/export-builtin-profiles.mjs'
+      - 'apps/receiver/Resources/BuiltInProfiles.json'
   pull_request:
     paths:
       - 'apps/receiver-desktop/**'
       - '.github/workflows/desktop-receiver.yml'
       - 'config/monetization.json'
+      - 'packages/profile-tools/**'
+      - 'packages/controller/**'
+      - 'tools/export-builtin-profiles.mjs'
+      - 'apps/receiver/Resources/BuiltInProfiles.json'
   workflow_dispatch:
 
 permissions:
@@ -42,16 +50,31 @@ jobs:
           cache-dependency-path: apps/receiver-desktop/pyproject.toml
       - name: Install receiver and packaging tools
         run: python -m pip install ./apps/receiver-desktop pyinstaller==6.16.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install local agent tool dependencies
+        run: npm ci --workspace @tapping/controller --workspace @tapping/profile-tools --include-workspace-root --ignore-scripts
+      - name: Test shared controller and local agent tools
+        run: node --test packages/controller/test/*.test.js packages/profile-tools/test/profiles.test.js packages/profile-tools/test/paths.test.js packages/profile-tools/test/consoleport.test.js packages/profile-tools/test/character-tools.test.js packages/profile-tools/test/addon-export.test.js packages/profile-tools/test/assets.test.js tools/test/connection.test.js
+      - name: Test POSIX private pairing image export
+        if: runner.os == 'Linux'
+        run: node --test packages/profile-tools/test/pairing-code.test.js
+      - name: Verify checked-in profile resources
+        run: |
+          node tools/export-builtin-profiles.mjs
+          git diff --exit-code -- apps/receiver/Resources/BuiltInProfiles.json apps/receiver-desktop/thumble_receiver/BuiltInProfiles.json
       - name: Test protocol, TLS, access ledger, and both native adapter contracts
         run: python -m unittest discover -s apps/receiver-desktop/tests -v
       - name: Test installed command
         run: thumble-receiver --self-test
       - name: Package Windows executable
         if: runner.os == 'Windows'
-        run: python -m PyInstaller --noconfirm --clean --onefile --name thumble-receiver --additional-hooks-dir apps/receiver-desktop/hooks --exclude-module vgamepad.lin apps/receiver-desktop/launcher.py
+        run: python -m PyInstaller --noconfirm --clean --onefile --name thumble-receiver --collect-data thumble_receiver --additional-hooks-dir apps/receiver-desktop/hooks --exclude-module vgamepad.lin apps/receiver-desktop/launcher.py
       - name: Package Linux executable
         if: runner.os == 'Linux'
-        run: python -m PyInstaller --noconfirm --clean --onefile --name thumble-receiver --collect-all evdev apps/receiver-desktop/launcher.py
+        run: python -m PyInstaller --noconfirm --clean --onefile --name thumble-receiver --collect-data thumble_receiver --collect-all evdev apps/receiver-desktop/launcher.py
       - name: Test frozen Windows runtime
         if: runner.os == 'Windows'
         run: ./dist/thumble-receiver.exe --self-test

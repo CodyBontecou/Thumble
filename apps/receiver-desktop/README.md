@@ -4,7 +4,7 @@ Windows 10/11 x64 and Linux x64 receiver for the existing Thumble phone app. Thi
 is a separate Python implementation of the Mac receiver's v3 LAN protocol. The
 signed Swift macOS app continues to live in `apps/receiver`.
 
-Implemented in this first port:
+Implemented in the preview:
 
 - Process-local TLS identity, SHA-256 certificate pin in a two-minute, single-use
   QR invitation, and one authenticated phone at a time.
@@ -20,11 +20,17 @@ Implemented in this first port:
   The entitlement public key and wire fields match the existing purchase service.
 - A terminal QR, configurable LAN interface/port, single-instance data-directory
   lock, clean signal shutdown, explicit dry-run mode, and packaged-runtime test.
+- Saved profile catalogs/selection, immutable cloud adoption, layout render
+  acknowledgement, neutral recovery, and saved layout restore on reconnect.
+  Activations pause play; resume controls explicitly after the layout is ready.
+- Shared local-agent profile storage and receiver delivery status. Built-in
+  profiles come from the same generated resource as the Mac and phone.
+- Saved ConsolePort addon snapshot sync with all eight modifier layers, actual
+  modifier assignments, character-specific profiles, and preserved geometry.
 
-The preview uses the phone's built-in controller at layout revision zero. Custom
-profile catalogs/adoption, ConsolePort settings sync, chat delivery, UDP input,
-hosted ChatGPT pairing, tray UI, auto-start, installers, signing, and automatic
-updates are follow-up work. Unsupported capabilities are not advertised to the
+Chat delivery, UDP input, hosted ChatGPT pairing, local MCP pairing-image export,
+general spell artwork lookup, tray UI, auto-start, installers, signing, and
+automatic updates are follow-up work. Unsupported capabilities are not advertised to the
 phone. Existing phone copy still calls the computer “Mac”; **Connect Mac** also
 scans this receiver's invitation. No mobile changes are needed for basic input.
 
@@ -132,13 +138,80 @@ process can own a data directory at a time. Files are replaced atomically and
 flushed before time is granted. OS account permissions protect this state;
 local administrator tampering is outside the ledger's trust boundary.
 
+## Profiles and local agent tools
+
+The phone's profile menu lists the Xbox and ConsolePort starters plus saved local
+profiles. Selecting or explicitly adopting a cloud revision copies validated data
+into the local store, releases controls, waits for the phone to render, and then
+requires a fresh neutral acknowledgement. Gameplay stays paused until Resume.
+Lost-response cloud-adoption retries reuse the same immutable copy and activation.
+An expired lease or stale activation revision cannot overwrite a newer selection.
+
+The profile directory defaults to `profiles` inside the data directory above.
+The local Node MCP server (`node packages/profile-tools/src/server.js`) now uses
+the matching Windows/Linux defaults, and keeps the existing Mac directory.
+Use `--profile-dir` or `TAPPING_PROFILE_DIR` when sharing an alternate store with
+local agent tools. Set the same override in the agent process. The receiver polls
+external activations, so agent writes use the same render/neutral handshake.
+`receiver-status.json` is ready only after current-layout neutral recovery; local
+tools treat status older than five seconds as unavailable. A directory
+`write.lock` serializes transactions with the existing agent tools. Never remove
+that lock while a writer is running; a crashed writer's lock requires manual
+recovery after confirming that no process owns it.
+
+Profile selection, validation, saved-file reads, ConsolePort polling, and store
+writes run on a separate worker. They never hold the networking loop while
+waiting for a file lock. Only an authenticated `profile-adopt` may exceed the
+normal 4 KiB request limit (up to 64 KiB); profiles themselves are limited to
+60,000 bytes and stores to 8 MiB / 256 entries. Profiles cannot contain scripts,
+URLs for artwork, keyboard actions, or arbitrary output types.
+
+## ConsolePort sync
+
+Install the ThumbleBridge addon in WoW and enable sync with `/thumblebridge sync on`.
+Start the receiver with the WoW installation root or an individual client folder:
+
+```powershell
+.\thumble-receiver.exe --address 192.168.1.20 --wow-dir 'C:\Program Files (x86)\World of Warcraft'
+```
+
+```sh
+./thumble-receiver --address 192.168.1.20 --wow-dir '/path/to/World of Warcraft/_classic_era_'
+```
+
+For Linux/Wine, point to the game folder inside the selected Wine prefix. The
+receiver does not guess Wine/Steam installation paths. `--wow-dir` may be repeated
+for up to eight roots; omitting it disables filesystem sync. With no active
+profile, sync uses the ConsolePort starter; otherwise select a ConsolePort-themed
+profile on the phone before reloading WoW.
+
+The first scan records a baseline and does not activate an old logged-out
+character. After a new `/reload` or logout saves
+`WTF/Account/.../SavedVariables/ThumbleBridge.lua`, the receiver reads only the
+`syncText` Lua string and validates its JSON snapshot. No Lua is evaluated and no
+game files are written. Snapshots must be within five minutes of the computer's
+clock. Invalid/stale exports, changed files, and non-ConsolePort active profiles
+retain the previous controller. Symlink escapes and directory traversal are
+bounded and rejected. Disable addon export with `/thumblebridge sync off`, then
+reload; the existing controller stays in place.
+
+Labels, all modifier layers, modifier assignments, and utility icons sync in this
+batch. Attack has embedded fallback artwork. Other spell/item artwork lookup
+remains a follow-up; there is no external artwork request during sync. Geometry
+and gamepad mappings are retained from the selected ConsolePort layout. Phone
+summaries expose the character name and sync state, not account paths or GUIDs.
+
 ## CI and validation limits
 
 `.github/workflows/desktop-receiver.yml` runs a complete batch on Windows and
 Ubuntu: native dependency installation (without driver installation), protocol
-and adapter unit tests, real loopback TLS integration tests, installed CLI smoke
-test, PyInstaller executable build, frozen executable TLS/input/watchdog smoke
-test, then artifact upload. Test failures prevent artifact publication.
+and adapter unit tests, ConsolePort/profile fixtures, real phone connection
+integration over loopback TLS, shared Node controller/agent-tool tests, installed
+CLI smoke test, PyInstaller build, frozen executable TLS/input/profile-adoption
+smoke test, then artifact upload. Test failures prevent artifact publication.
+The existing POSIX pairing-image file tests run on Linux only; Windows pairing
+currently uses the terminal QR. PR updates run one Windows/Linux matrix, avoiding
+duplicate push/PR builds of the same branch batch.
 
 Adapter tests check Windows API calls and Linux event capabilities, axis signs,
 button masks, hats, neutral release, and device cleanup with driver doubles.
@@ -148,6 +221,6 @@ machine with its driver configured. The self-test prints no pairing secret and
 does not install drivers or emit OS input.
 
 Production follow-up should evaluate a maintained Windows virtual controller
-driver, add native device/game acceptance coverage, port profile/ConsolePort
+driver, add native device/game acceptance coverage, finish the remaining Mac
 features, and add signed installation/update paths before calling this release
 parity with the Mac app.

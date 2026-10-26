@@ -20,3 +20,6 @@ thumble-receiver = "thumble_receiver.__main__:main"
 
 [tool.setuptools.packages.find]
 include = ["thumble_receiver*"]
+
+[tool.setuptools.package-data]
+thumble_receiver = ["BuiltInProfiles.json"]

@@ -58,9 +58,36 @@ async def selftest():
                     await receive('paused')
                     if output.backend.state != NEUTRAL:
                         raise RuntimeError('Watchdog did not release input')
+                    paused = await receive('paused')
+                    await socket.send(json.dumps(dict(type='profile-select', id='select',
+                        profileId='consoleport-standard', profileRevision=1, expectedActivationRevision=0,
+                        lease=paused['lease'])))
+                    layout = await receive('layout')
+                    result = await receive('profiles-result')
+                    if result.get('catalog', {}).get('activationRevision') != layout['revision']:
+                        raise RuntimeError('Profile selection was not confirmed')
+                    await socket.send(json.dumps(dict(type='layout-ready', revision=layout['revision'])))
+                    paused = await receive('paused')
+                    await socket.send(json.dumps(dict(type='input', seq=2, revision=layout['revision'],
+                                                       lease=paused['lease'], state=NEUTRAL.__dict__)))
+                    ack = await receive('ack')
+                    profile = {**layout['profile'], 'id': 'selftest-cloud', 'name': 'Self-test cloud profile'}
+                    source = dict(service='https://thumble.example/v1', accountId='a' * 64,
+                                  profileId=profile['id'], revision=1)
+                    await socket.send(json.dumps(dict(type='profile-adopt', id='adopt', profile=profile,
+                        source=source, expectedActivationRevision=layout['revision'], lease=ack['lease'])))
+                    adopted = await receive('layout')
+                    receipt = await receive('profiles-result')
+                    if receipt.get('catalog', {}).get('adoption', {}).get('profileId') != adopted['profile']['id']:
+                        raise RuntimeError('Cloud adoption was not confirmed')
+                    await socket.send(json.dumps(dict(type='layout-ready', revision=adopted['revision'])))
+                    paused = await receive('paused')
+                    await socket.send(json.dumps(dict(type='input', seq=3, revision=adopted['revision'],
+                                                       lease=paused['lease'], state=NEUTRAL.__dict__)))
+                    await receive('ack')
             finally:
                 stop.set()
                 await asyncio.wait_for(task, 5)
     finally:
         output.close()
-    print('PASS: packaged TLS, certificate pin, pairing, demo, input, acknowledgement, watchdog')
+    print('PASS: packaged TLS, certificate pin, pairing, demo, input, watchdog, profile selection, cloud adoption, layout acknowledgement')
