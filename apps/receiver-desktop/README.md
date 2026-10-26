@@ -85,7 +85,7 @@ multiple adapters select the wrong network. The phone must be on the same LAN.
 Allow inbound TCP for the chosen port on the private network in the OS firewall.
 No router port forwarding is needed. Omitting `--port` chooses an available port.
 
-Scan the QR in Thumble's **Connect Mac** screen, then use **Start demo / Resume**.
+Scan the QR in Thumble's **Connect computer** screen, then use **Start demo / Resume**.
 The QR renews after expiry or disconnect. Ctrl+C releases the pad and exits.
 Keep the QR private; do not capture it in CI logs or share it with other people.
 TLS keys are removed after loading the process-local identity. OAuth credentials
@@ -257,6 +257,10 @@ run the installed protocol test, exercise the registered custom URI handler, and
 capture a synthetic GUI screenshot. These gates must pass before artifacts upload.
 `--self-test` prints no pairing secret and uses memory output; `--native-self-test`
 intentionally emits a short known gamepad report and requires the driver.
+The Windows Server runner additionally stages Microsoft's hash-pinned, signed
+Xbox 360 driver from Update Catalog; client Windows includes that function driver.
+This CI setup neither disables signature enforcement nor ships that legacy driver
+in the desktop installer. Windows Server is not a supported receiver target.
 
 ## ChatGPT pairing and chat
 
