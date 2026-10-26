@@ -86,4 +86,4 @@ npm run website:dev
 npm run website:deploy
 ```
 
-The build creates `dist/website`, excludes database and maintenance sources from public assets, regenerates Markdown and verifies the published CLI download hashes. Wrangler v4 and an authorized Cloudflare login are required for preview/deployment. See [website tooling](tools/website/README.md) for optional image/CSS optimization and offline CLI-archive input.
+The build creates `dist/website`, excludes database and maintenance sources from public assets, regenerates Markdown and verifies the published CLI download hashes. Relevant pushes to `main` now deploy automatically after tests and build; pull requests only run checks. Wrangler v4 and an authorized Cloudflare login are required for local preview/deployment. See [website tooling](tools/website/README.md) for optional image/CSS optimization and offline CLI-archive input.
