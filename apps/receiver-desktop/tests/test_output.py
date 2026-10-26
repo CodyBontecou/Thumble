@@ -4,11 +4,35 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import MagicMock, patch
 
-from thumble_receiver.output import LinuxOutput, WindowsOutput, native_output
+from thumble_receiver.output import LinuxOutput, WindowsOutput, GuardedOutput, native_output
 from thumble_receiver.state import NEUTRAL, State
 
 
 class OutputTests(unittest.TestCase):
+    def test_report_failure_detaches_device_and_cannot_rearm_or_break_cleanup(self):
+        backend = MagicMock()
+        output = GuardedOutput(backend)
+        try:
+            backend.write.side_effect = OSError('device lost')
+            with self.assertRaises(RuntimeError):
+                output.apply(State(buttons=1), output.clock() + 0.3, output.generation)
+            backend.close.assert_called_once()
+            self.assertTrue(output.closed)
+            output.release()
+            with self.assertRaises(RuntimeError):
+                output.apply(State(buttons=1), output.clock() + 0.3, output.generation)
+        finally:
+            output.close()
+        backend.close.assert_called_once()
+
+    def test_windows_close_drops_target_even_if_neutral_update_fails(self):
+        output = object.__new__(WindowsOutput)
+        output.pad = MagicMock()
+        output.pad.update.side_effect = OSError('driver unavailable')
+        with self.assertRaises(OSError):
+            output.close()
+        self.assertIsNone(output.pad)
+        output.close()
     def test_windows_report_uses_xinput_axes_and_releases_buttons(self):
         pad = MagicMock()
         module = SimpleNamespace(VX360Gamepad=MagicMock(return_value=pad))

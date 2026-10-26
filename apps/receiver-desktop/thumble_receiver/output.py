@@ -36,9 +36,12 @@ class WindowsOutput:
         self.pad.update()
 
     def close(self):
-        self.write(NEUTRAL)
-        # vgamepad removes its target when the final object reference is dropped.
-        self.pad = None
+        if self.pad is not None:
+            try:
+                self.write(NEUTRAL)
+            finally:
+                # Detach even if the driver refuses the final neutral report.
+                self.pad = None
 
 
 class LinuxOutput:
@@ -98,10 +101,33 @@ class GuardedOutput:
         self.deadline = 0
         self.generation = 0
         self.error = None
+        self.closed = False
         self.stopped = threading.Event()
-        backend.write(NEUTRAL)
+        try:
+            backend.write(NEUTRAL)
+        except Exception:
+            try:
+                backend.close()
+            finally:
+                raise
         self.thread = threading.Thread(target=self._watch, name='thumble-watchdog', daemon=True)
         self.thread.start()
+
+    def _write(self, state):
+        try:
+            self.backend.write(state)
+        except Exception as error:
+            # Do not retain native exception tracebacks containing a gamepad
+            # reference: Windows target removal depends on dropping that object.
+            self.error = RuntimeError(str(error))
+            self.deadline = 0
+            self.generation += 1
+            try:
+                self.backend.close()
+            except Exception:
+                pass
+            self.closed = True
+            raise RuntimeError('Virtual gamepad report failed; the device was closed') from None
 
     def apply(self, state, deadline, generation):
         with self.lock:
@@ -110,20 +136,21 @@ class GuardedOutput:
             # A watchdog release invalidates input already parsed on the event loop.
             if generation != self.generation or self.clock() >= deadline:
                 return False
-            self.backend.write(state)
+            self._write(state)
             self.deadline = deadline
             return True
 
     def release(self):
         with self.lock:
-            self.backend.write(NEUTRAL)
+            if not self.closed:
+                self._write(NEUTRAL)
             self.deadline = 0
             self.generation += 1
 
     def expire(self):
         with self.lock:
             if self.deadline and self.clock() >= self.deadline:
-                self.backend.write(NEUTRAL)
+                self._write(NEUTRAL)
                 self.deadline = 0
                 self.generation += 1
 
@@ -131,17 +158,15 @@ class GuardedOutput:
         while not self.stopped.wait(0.02):
             try:
                 self.expire()
-            except Exception as error:
-                self.error = error
-                # A failing native device must be removed even if neutral writes fail.
-                try:
-                    self.backend.close()
-                except Exception:
-                    pass
+            except Exception:
                 return
 
     def close(self):
         self.stopped.set()
         self.thread.join()
         with self.lock:
-            self.backend.close()
+            if not self.closed:
+                try:
+                    self.backend.close()
+                finally:
+                    self.closed = True

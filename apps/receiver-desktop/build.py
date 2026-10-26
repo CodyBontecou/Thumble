@@ -39,7 +39,9 @@ def main():
     shutil.copy2(APP / 'thumble_receiver/Icon.png', folder / 'Icon.png')
     licenses = folder / 'ThirdParty'
     licenses.mkdir(exist_ok=True)
-    for package in ('PySide6-Essentials', 'shiboken6', 'cryptography', 'qrcode', 'pypng', 'websockets'):
+    packages = ['PySide6-Essentials', 'shiboken6', 'cryptography', 'qrcode', 'pypng', 'websockets']
+    packages.append('vgamepad' if sys.platform == 'win32' else 'evdev')
+    for package in packages:
         metadata = distribution(package)
         for file in metadata.files or []:
             if any(part.lower().startswith(('license', 'copying')) for part in file.parts):

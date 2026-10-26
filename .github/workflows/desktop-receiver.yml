@@ -58,6 +58,7 @@ jobs:
           sudo modprobe uinput
       - name: Prepare Windows driver and installer compiler
         if: runner.os == 'Windows'
+        timeout-minutes: 5
         shell: pwsh
         run: ./apps/receiver-desktop/packaging/setup-windows-ci.ps1
       - uses: actions/setup-node@v4
