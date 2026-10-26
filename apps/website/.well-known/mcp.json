@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "thumble": {
+      "url": "https://thumble.io/mcp",
+      "transport": "streamable-http",
+      "description": "OAuth-authenticated pairing and read-only inspection for phone gamepad controllers for WoW on Mac. AI generation is disabled."
+    }
+  }
+}

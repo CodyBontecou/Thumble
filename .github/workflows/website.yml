@@ -1,0 +1,33 @@
+name: Website checks
+on:
+  pull_request:
+    paths:
+      - apps/website/**
+      - tools/website/**
+      - packages/cli/**
+      - package.json
+      - .github/workflows/website.yml
+  push:
+    branches: [main]
+    paths:
+      - apps/website/**
+      - tools/website/**
+      - packages/cli/**
+      - package.json
+      - .github/workflows/website.yml
+permissions:
+  contents: read
+jobs:
+  website:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: actions/cache@v4
+        with:
+          path: build/website-downloads
+          key: website-cli-${{ hashFiles('apps/website/cli-distribution.json') }}
+      - run: npm run website:test
+      - run: npm run website:build

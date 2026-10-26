@@ -1,0 +1,10 @@
+{
+  "name": "Thumble",
+  "description": "OAuth-authenticated pairing and read-only inspection for phone gamepad controllers for WoW on Mac. AI generation is disabled.",
+  "mcp": {
+    "url": "https://thumble.io/mcp",
+    "transport": "streamable-http"
+  },
+  "documentation": "https://thumble.io/developers",
+  "openapi": "https://thumble.io/openapi.json"
+}

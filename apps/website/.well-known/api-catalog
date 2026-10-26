@@ -1,0 +1,19 @@
+{
+  "linkset": [
+    {
+      "anchor": "https://thumble.io",
+      "service-desc": [
+        {
+          "href": "https://thumble.io/openapi.json",
+          "type": "application/vnd.oai.openapi+json"
+        }
+      ],
+      "service-doc": [
+        {
+          "href": "https://thumble.io/developers",
+          "type": "text/html"
+        }
+      ]
+    }
+  ]
+}

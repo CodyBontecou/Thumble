@@ -1,0 +1,42 @@
+{
+  "name": "Thumble",
+  "description": "OAuth-authenticated pairing and read-only inspection for phone gamepad controllers for WoW on Mac. AI generation is disabled.",
+  "version": "0.2.3",
+  "homepage": "https://thumble.io",
+  "documentation": "https://thumble.io/developers",
+  "transport": {
+    "type": "streamable-http",
+    "url": "https://thumble.io/mcp"
+  },
+  "authentication": {
+    "type": "oauth2",
+    "authorization_server": "https://thumble.io/api/auth",
+    "metadata_url": "https://thumble.io/.well-known/oauth-authorization-server/api/auth"
+  },
+  "tools": [
+    {
+      "name": "show_pairing_code",
+      "description": "Show a current QR explicitly shared by the requesting Mac owner."
+    },
+    {
+      "name": "profile_schema",
+      "description": "Read the controller data schema."
+    },
+    {
+      "name": "list_profiles",
+      "description": "List saved controllers for the signed-in account."
+    },
+    {
+      "name": "get_profile",
+      "description": "Read a saved controller revision."
+    },
+    {
+      "name": "list_devices",
+      "description": "List registered phones for the signed-in account."
+    },
+    {
+      "name": "delivery_status",
+      "description": "Read an existing delivery receipt."
+    }
+  ]
+}
