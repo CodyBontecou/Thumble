@@ -33,7 +33,7 @@ def authorization_url(audience, verifier, state):
         resource=audience, state=state, code_challenge_method='S256', code_challenge=challenge))
 
 
-def callback_code(url, state):
+def callback_values(url, state):
     if not isinstance(url, str) or len(url) > 8192:
         raise ValueError('Invalid OAuth callback')
     parts = urlsplit(url)
@@ -41,9 +41,15 @@ def callback_code(url, state):
             or parts.fragment or '#' in url):
         raise ValueError('Invalid OAuth callback')
     values = parse_qs(parts.query, keep_blank_values=True)
-    if (values.get('state') != [state] or values.get('iss') != [ISSUER] or 'error' in values
-            or len(values.get('code', [])) != 1 or not 0 < len(values['code'][0]) <= 4096):
+    if values.get('state') != [state] or values.get('iss') != [ISSUER]:
         raise ValueError('OAuth state, issuer, or code mismatch')
+    return values
+
+
+def callback_code(url, state):
+    values = callback_values(url, state)
+    if ('error' in values or len(values.get('code', [])) != 1 or not 0 < len(values['code'][0]) <= 4096):
+        raise ValueError('OAuth authorization was denied or the code is invalid')
     return values['code'][0]
 
 
@@ -100,10 +106,16 @@ class CallbackBroker:
             if not self.pending:
                 raise ValueError('No authorization in progress')
             state, future = self.pending
-            callback_code(body.get('callback'), state)
+            values = callback_values(body.get('callback'), state)
             if future.done():
                 raise ValueError('Callback already consumed')
-            future.set_result(body['callback'])
+            if 'error' in values:
+                if len(values['error']) != 1:
+                    raise ValueError('Duplicate authorization error')
+                future.set_exception(ValueError('Authorization was cancelled or denied'))
+            else:
+                callback_code(body.get('callback'), state)
+                future.set_result(body['callback'])
             status = '200 OK'
         except (ValueError, TypeError, AttributeError, asyncio.IncompleteReadError,
                 asyncio.LimitOverrunError, TimeoutError, UnicodeError):

@@ -11,6 +11,11 @@ on:
       - 'packages/controller/**'
       - 'tools/export-builtin-profiles.mjs'
       - 'apps/receiver/Resources/BuiltInProfiles.json'
+      - 'apps/mobile/src/**'
+      - 'apps/cloud/src/identity.js'
+      - 'apps/cloud/src/pairing.js'
+      - 'apps/cloud/src/mcp.js'
+      - 'apps/cloud/src/auth-pages.js'
   pull_request:
     paths:
       - 'apps/receiver-desktop/**'
@@ -20,6 +25,11 @@ on:
       - 'packages/controller/**'
       - 'tools/export-builtin-profiles.mjs'
       - 'apps/receiver/Resources/BuiltInProfiles.json'
+      - 'apps/mobile/src/**'
+      - 'apps/cloud/src/identity.js'
+      - 'apps/cloud/src/pairing.js'
+      - 'apps/cloud/src/mcp.js'
+      - 'apps/cloud/src/auth-pages.js'
   workflow_dispatch:
 
 permissions:
@@ -66,42 +76,47 @@ jobs:
           node-version: '22'
           cache: npm
       - name: Install local agent tool dependencies
-        run: npm ci --workspace @tapping/controller --workspace @tapping/profile-tools --include-workspace-root --ignore-scripts
+        run: npm ci --workspace @tapping/controller --workspace @tapping/profile-tools --workspace @tapping/cloud-contracts --workspace @tapping/cloud --include-workspace-root --ignore-scripts
       - name: Test shared controller and local agent tools
         run: node --test packages/controller/test/*.test.js packages/profile-tools/test/profiles.test.js packages/profile-tools/test/paths.test.js packages/profile-tools/test/pairing-permissions.test.js packages/profile-tools/test/consoleport.test.js packages/profile-tools/test/character-tools.test.js packages/profile-tools/test/addon-export.test.js packages/profile-tools/test/assets.test.js tools/test/connection.test.js
       - name: Test POSIX private pairing image export
         if: runner.os == 'Linux'
         run: node --test packages/profile-tools/test/pairing-code.test.js
+      - name: Test shared cloud pairing and OAuth contracts
+        run: node --test apps/cloud/test/identity.test.js apps/cloud/test/pairing.test.js
       - name: Verify checked-in profile resources
         run: |
           node tools/export-builtin-profiles.mjs
           git diff --exit-code -- apps/receiver/Resources/BuiltInProfiles.json apps/receiver-desktop/thumble_receiver/BuiltInProfiles.json
       - name: Test protocol, TLS, access ledger, and both native adapter contracts
+        if: ${{ !cancelled() }}
         run: python -m unittest discover -s apps/receiver-desktop/tests -v
       - name: Test installed command
+        if: ${{ !cancelled() }}
         run: thumble-receiver --self-test
       - name: Verify Windows text delivery to an isolated native widget
-        if: runner.os == 'Windows'
+        if: ${{ !cancelled() && runner.os == 'Windows' }}
         env:
           THUMBLE_NATIVE_DESKTOP_QA: '1'
           QT_QPA_PLATFORM: windows
         run: python -m unittest discover -s apps/receiver-desktop/tests -p test_native_chat.py -v
       - name: Verify Linux text delivery on an isolated X11 display
-        if: runner.os == 'Linux'
+        if: ${{ !cancelled() && runner.os == 'Linux' }}
         run: xvfb-run -a env THUMBLE_NATIVE_DESKTOP_QA=1 QT_QPA_PLATFORM=xcb python -m unittest discover -s apps/receiver-desktop/tests -p test_native_chat.py -v
       - name: Verify native Windows gamepad via XInput
-        if: runner.os == 'Windows'
+        if: ${{ !cancelled() && runner.os == 'Windows' }}
         run: thumble-receiver --native-self-test
       - name: Verify native Linux gamepad via evdev
-        if: runner.os == 'Linux'
+        if: ${{ !cancelled() && runner.os == 'Linux' }}
         run: sudo -E "$(which python)" -m thumble_receiver --native-self-test
       - name: Build desktop directory bundle and installer
+        if: ${{ !cancelled() }}
         run: python apps/receiver-desktop/build.py
       - name: Test frozen Windows runtime and GUI
-        if: runner.os == 'Windows'
+        if: ${{ !cancelled() && runner.os == 'Windows' }}
         run: python apps/receiver-desktop/packaging/verify-package.py
       - name: Test installed Linux runtime and GUI
-        if: runner.os == 'Linux'
+        if: ${{ !cancelled() && runner.os == 'Linux' }}
         run: python apps/receiver-desktop/packaging/verify-package.py
       - name: Save desktop GUI verification image
         if: always()

@@ -27,7 +27,7 @@ export default function RootLayout() {
     <Stack.Screen name="pro" options={{ ...modal, title: 'Thumble Pro' }} />
     <Stack.Screen name="cloud" options={{ ...modal, title: AI_CONTROLLER_GENERATOR_ENABLED ? 'Cloud controllers' : 'Cloud account' }} />
     <Stack.Screen name="profiles" options={{ ...modal, title: 'Profiles' }} />
-    <Stack.Screen name="pair" options={{ ...modal, title: 'Connect Mac' }} />
+    <Stack.Screen name="pair" options={{ ...modal, title: 'Connect computer' }} />
     <Stack.Screen name="wow-setup" options={{ ...modal, title: 'WoW setup' }} />
   </Stack>;
 }

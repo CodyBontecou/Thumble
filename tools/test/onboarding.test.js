@@ -115,7 +115,7 @@ test('WoW cloud request carries saved preferences and binds preview to exact pho
   const { cloudLayoutPrompt } = await import('../../apps/mobile/src/onboarding-core.js');
   const state = { ...initialSetup(), wowClient: 'classic-era', layoutMode: 'consoleport', movementSide: 'right', character: 'Warrior' };
   const prompt = cloudLayoutPrompt(state, { service: 'https://example.test', device: { id: 'phone-a', name: 'My phone' } });
-  for (const expected of ['WoW Classic Era', 'ConsolePort', 'both triggers', 'D-pad', 'View and Menu', 'movement on the right', 'phone-a', 'exact saved revision', 'not working Mac input', 'separate local agent handoff', 'not a verified export']) assert.ok(prompt.includes(expected), expected);
+  for (const expected of ['WoW Classic Era', 'ConsolePort', 'both triggers', 'D-pad', 'View and Menu', 'movement on the right', 'phone-a', 'exact saved revision', 'not working computer input', 'separate local agent handoff', 'not a verified export']) assert.ok(prompt.includes(expected), expected);
   assert.equal(cloudLayoutPrompt({ ...initialSetup(), layoutMode: 'familiar' }, { service: 'https://example.test', device: { id: 'phone-a', name: 'My phone' } }).includes('I play'), false);
 });
 

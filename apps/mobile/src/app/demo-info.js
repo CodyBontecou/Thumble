@@ -22,7 +22,7 @@ export default function DemoInfo() {
       <View style={s.header}><Text style={ui.heading}>{pro ? 'Thumble Pro' : 'Your free controller time'}</Text><Pressable accessibilityRole="button" accessibilityLabel="Close free time information" onPress={close} style={s.close}><Text style={s.closeText}>Done</Text></Pressable></View>
       <ScrollView contentContainerStyle={s.content} contentInsetAdjustmentBehavior="automatic">
         <Text style={s.time}>{pro ? 'Unlimited' : formatDemoTime(remaining)}</Text>
-        <Text style={ui.body}>{pro ? 'You have unlimited controller time. Enjoy every feature, for as long as you like.' : 'Try every feature free for 30 minutes across all sessions. Time counts down while you view the controller connected to your Mac.'}</Text>
+        <Text style={ui.body}>{pro ? 'You have unlimited controller time. Enjoy every feature, for as long as you like.' : 'Try every feature free for 30 minutes across all sessions. Time counts down while you view the controller connected to your computer.'}</Text>
         {!pro && <Text style={ui.small}>Leaving the controller pauses the timer. Offline practice is always free. No automatic charge.</Text>}
       </ScrollView>
       {!pro && <View style={s.footer}><Button onPress={() => router.replace('/pro')}>Unlock Pro</Button><Text style={[ui.small, { textAlign: 'center' }]}>Unlimited controller time. One lifetime purchase.</Text></View>}

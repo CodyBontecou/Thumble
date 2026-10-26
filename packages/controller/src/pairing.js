@@ -17,7 +17,7 @@ export function parseInvitation(value, now = Date.now()) {
   const octets = url.hostname.split('.').map(Number);
   const privateIP = octets.length === 4 && octets.every(part => Number.isInteger(part) && part >= 0 && part <= 255) &&
     (octets[0] === 10 || (octets[0] === 192 && octets[1] === 168) || (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31));
-  if (url.protocol !== 'wss:' || !privateIP || !url.port || url.username || url.password || url.pathname !== '/controller' || url.search || url.hash) throw new Error('Pairing requires a Mac on local Wi-Fi.');
-  if (!Number.isSafeInteger(data.expires) || data.expires * 1000 <= now || data.expires * 1000 > now + 180_000) throw new Error('Pairing code expired. Scan the current code on your Mac.');
+  if (url.protocol !== 'wss:' || !privateIP || !url.port || url.username || url.password || url.pathname !== '/controller' || url.search || url.hash) throw new Error('Pairing requires a computer on local Wi-Fi.');
+  if (!Number.isSafeInteger(data.expires) || data.expires * 1000 <= now || data.expires * 1000 > now + 180_000) throw new Error('Pairing code expired. Scan the current code on your computer.');
   return Object.freeze({ url: url.href, pin: data.pin, token: data.token, expires: data.expires });
 }

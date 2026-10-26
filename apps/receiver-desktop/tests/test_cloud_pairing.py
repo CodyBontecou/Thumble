@@ -67,6 +67,14 @@ class BrokerTests(unittest.IsolatedAsyncioTestCase):
             writer.close()
             await writer.wait_closed()
 
+    async def test_denied_authorization_finishes_immediately_without_waiting_for_timeout(self):
+        operation = asyncio.create_task(self.broker.authorize('https://thumble.io/test', 'state', lambda _: True))
+        await asyncio.sleep(0.02)
+        url = REDIRECT + '?' + urlencode(dict(state='state', iss=ISSUER, error='access_denied'))
+        await asyncio.to_thread(forward_callback, self.temporary.name, url)
+        with self.assertRaisesRegex(ValueError, 'cancelled or denied'):
+            await asyncio.wait_for(operation, 1)
+
 
 class CloudTests(unittest.IsolatedAsyncioTestCase):
     async def test_registration_publication_connection_clear_and_revoke(self):

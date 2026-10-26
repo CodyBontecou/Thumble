@@ -2,6 +2,7 @@
 import json
 from urllib.parse import urlencode, urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
+from urllib.error import HTTPError
 
 
 class NoRedirect(HTTPRedirectHandler):
@@ -22,7 +23,12 @@ def request_json(url, method='GET', token=None, body=None, form=None, timeout=10
     elif body is not None:
         data = json.dumps(body, allow_nan=False, separators=(',', ':')).encode()
         headers['Content-Type'] = 'application/json'
-    with build_opener(NoRedirect()).open(Request(url, data=data, headers=headers, method=method), timeout=timeout) as response:
+    try:
+        response = build_opener(NoRedirect()).open(Request(url, data=data, headers=headers, method=method), timeout=timeout)
+    except HTTPError as error:
+        error.close()
+        raise
+    with response:
         data = response.read(limit + 1)
         if len(data) > limit:
             raise ValueError('Response exceeds size limit')

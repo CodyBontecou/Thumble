@@ -37,8 +37,9 @@ Implemented in the preview:
 - Bounded, cached spell/item icon-name lookup, matching the Mac endpoint.
 
 These builds are unsigned previews; production signing and an automatic update
-service are separate release work. Existing phone copy still calls the computer “Mac”; **Connect Mac** also
-scans this receiver's invitation. No mobile changes are needed for basic input.
+service are separate release work. The current phone source uses **Connect computer**.
+Older builds call this **Connect Mac** and also scan this receiver's invitation;
+the pairing protocol is unchanged.
 
 ## Run a CI artifact
 

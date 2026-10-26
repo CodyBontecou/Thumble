@@ -64,8 +64,8 @@ export default function ControllerChat({ chat, network, top }) {
     </View>
     <TextInput testID="chat-draft" accessibilityLabel="Chat message" value={chat.draft} onChangeText={chat.setDraft} maxLength={240} editable={!chat.sending} placeholder="Type or tap Chat to dictate…" placeholderTextColor="#A1A1A1" style={s.input} />
     {!!chat.error && <Text accessibilityRole="alert" style={s.error}>{chat.error}</Text>}
-    {network.phase !== 'connected' && <Text style={s.detail}>Connect your Mac to send.</Text>}
-    {network.phase === 'connected' && !network.chat && <Text style={s.detail}>Update the Mac receiver to send chat.</Text>}
+    {network.phase !== 'connected' && <Text style={s.detail}>Connect your computer to send.</Text>}
+    {network.phase === 'connected' && !network.chat && <Text style={s.detail}>Update the receiver to send chat.</Text>}
     {chat.options && <View style={s.options}>
       <View style={s.channels}>{channels.map(([value, label]) => <Pressable key={value} accessibilityRole="radio" accessibilityState={{ checked: chat.channel === value }} onPress={() => chat.setChannel(value)} style={[s.tool, chat.channel === value && s.selected]}><Text style={s.muted}>{label}</Text></Pressable>)}</View>
       <View style={s.online}><Text style={s.detail}>Allow Apple or Android to process audio online if needed</Text><Switch accessibilityLabel="Allow online recognition" value={chat.allowNetwork} onValueChange={chat.setAllowNetwork} /></View>

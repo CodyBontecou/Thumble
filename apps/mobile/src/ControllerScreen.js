@@ -90,9 +90,9 @@ export function WowSetupScreen() {
   return (
       <SafeAreaProvider><SafeAreaView style={s.screen} edges={['left', 'right', 'bottom']} accessibilityViewIsModal>
         <ScrollView contentContainerStyle={s.setupContent}>
-          <Text style={s.detail}>Connect your Mac first, then follow these steps to prepare WoW and ConsolePort. You can test the controller locally before entering the game.</Text>
+          <Text style={s.detail}>Connect your computer first, then follow these steps to prepare WoW and ConsolePort. You can test the controller locally before entering the game.</Text>
           {[
-            ['1. Prepare your Mac', 'Install the receiver and connect both devices to the same Wi-Fi. Verify the virtual gamepad before starting WoW.'],
+            ['1. Prepare your computer', 'Install the receiver and connect both devices to the same Wi-Fi. Verify the virtual gamepad before starting WoW.'],
             ['2. Install ConsolePort', 'Select the WoW installation you play in CurseForge, install its matching ConsolePort release, then restart WoW and confirm the addon is enabled.'],
             ['3. Check in-game controls', 'Follow ConsolePort’s controller setup. Test movement, camera, targeting, jump and trigger modifiers. Configure your spells and actions in WoW.'],
           ].map(([title, detail]) => <View key={title} style={s.step}><Text style={s.stepTitle}>{title}</Text><Text style={s.detail}>{detail}</Text></View>)}

@@ -21,13 +21,13 @@ export default function ProScreen() {
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 16 }}><Text style={ui.heading}>Thumble Pro</Text><Text style={[ui.label, { color: colors.text }]}>ONE TIME</Text></View>
       <Text style={[ui.title, { fontVariant: ['tabular-nums'] }]}>{owned ? 'Unlocked' : store.price || `$${config.basePriceUSD.toFixed(2)} USD`}</Text>
       {!store.price && !owned && <Text style={ui.small}>Base price · final price shown by your store.</Text>}
-      {owned ? <Button onPress={leave}>Return to controller</Button> : purchased ? <Button onPress={() => router.replace('/pair')}>Connect Mac to verify Pro</Button> : <Button disabled={store.busy || !store.price || !purchases.configured()} onPress={() => purchases.act('purchase')}>{store.busy ? 'Contacting store…' : store.price ? `Unlock Pro · ${store.price}` : 'Purchases coming soon'}</Button>}
+      {owned ? <Button onPress={leave}>Return to controller</Button> : purchased ? <Button onPress={() => router.replace('/pair')}>Connect computer to verify Pro</Button> : <Button disabled={store.busy || !store.price || !purchases.configured()} onPress={() => purchases.act('purchase')}>{store.busy ? 'Contacting store…' : store.price ? `Unlock Pro · ${store.price}` : 'Purchases coming soon'}</Button>}
     </View>
       {!owned && <Button secondary onPress={leave}>{welcome ? 'Try the 30-minute demo' : 'Return to demo'}</Button>}
       <Text style={ui.small}>Pay once. No subscription. iOS and Android purchases are separate.</Text>
       {!purchases.configured() && <Text style={ui.small}>Purchases aren’t available in this build yet. The full-featured 30-minute demo is available.</Text>}
       {!!store.error && <Text accessibilityRole="alert" style={ui.error}>{store.error}</Text>}
-      {!access && purchased && <Text style={ui.body}>Your store purchase is saved. Connect your Mac to verify access.</Text>}
+      {!access && purchased && <Text style={ui.body}>Your store purchase is saved. Connect your computer to verify access.</Text>}
       <View style={{ flexDirection: 'row', gap: 24, flexWrap: 'wrap' }}>
         <Pressable accessibilityRole="button" disabled={store.busy} onPress={() => purchases.act('restore')} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={{ color: colors.text, fontSize: 14 }}>Restore Purchases</Text></Pressable>
         <Pressable accessibilityRole="button" disabled={store.busy} onPress={() => purchases.refresh()} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={ui.small}>Retry store</Text></Pressable>

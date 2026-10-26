@@ -9,7 +9,7 @@ function fixture() {
   const state = { cloud: { session: { service: source.service, accountId: source.accountId, device: { id: 'phone-1' } }, selected, macAdoption: { pairing: 'pair-1', source, profileId: 'cloud-local', activationRevision: 8 } }, setup: { ...initialSetup(), wowClient: 'retail' }, network: { phase: 'connected' }, pairing: 'pair-1', layout: { profile: { id: 'cloud-local' }, revision: 8 }, access: { receiverId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee' }, layoutPending: false, recovering: false };
   return state;
 }
-test('phone sign-in, queued delivery and practice receipt cannot claim Mac readiness or WoW', () => {
+test('phone sign-in, queued delivery and practice receipt cannot claim Computer readiness or WoW', () => {
   const state = fixture();
   state.cloud.macAdoption = null;
   assert.equal(cloudJourney(state).complete, 2);
@@ -19,7 +19,7 @@ test('phone sign-in, queued delivery and practice receipt cannot claim Mac readi
   state.cloud.selected.delivery = null;
   assert.equal(cloudJourney(state).complete, 0);
 });
-test('Mac-ready requires the exact account, source revision, pairing and acknowledged activation', () => {
+test('Computer-ready requires the exact account, source revision, pairing and acknowledged activation', () => {
   assert.equal(cloudJourney(fixture()).complete, 3);
   for (const mutate of [s => s.pairing = 'other', s => s.layout.revision++, s => s.layout.profile.id = 'different', s => s.cloud.session.accountId = 'different', s => s.cloud.session.service = 'https://different.example', s => s.layoutPending = true, s => s.recovering = true, s => s.network.phase = 'offline']) {
     const state = fixture(); mutate(state); assert.equal(cloudJourney(state).ready, false);

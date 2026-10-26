@@ -10,7 +10,7 @@ export async function showPairingCode(store, now = Date.now()) {
   try {
     const path = join(store.directory, 'pairing-code.json');
     if ((await lstat(path)).isSymbolicLink()) throw Error('unsafe');
-    file = await open(path, constants.O_RDONLY | (constants.O_NOFOLLOW || 0));
+    file = await open(path, constants.O_RDONLY | (process.platform === 'win32' ? 0 : (constants.O_NOFOLLOW || 0)));
     const stat = await file.stat();
     if (!stat.isFile() || stat.size > 512 * 1024) throw Error('unsafe');
     if (process.platform === 'win32') await checkWindowsPairingFile(path);
@@ -29,7 +29,7 @@ export async function showPairingCode(store, now = Date.now()) {
   }
   return {
     content: [
-      { type: 'text', text: `Scan this QR code in Thumble → Connect Mac on the same Wi-Fi. Expires at ${new Date(payload.expiresAt).toISOString()}; single use. Display the returned image inline. Call show_pairing_code again if it expires. This tool does not open the receiver window.` },
+      { type: 'text', text: `Scan this QR code in Thumble → Connect computer on the same Wi-Fi. Expires at ${new Date(payload.expiresAt).toISOString()}; single use. Display the returned image inline. Call show_pairing_code again if it expires. This tool does not open the receiver window.` },
       { type: 'image', mimeType: 'image/png', data: payload.png },
     ],
   };

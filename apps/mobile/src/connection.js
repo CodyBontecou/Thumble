@@ -6,16 +6,16 @@ import { Connection } from './connection-core';
 export const connection = new Connection(native, { beforeConnect: async () => {
   if (Platform.OS === 'android' && Number(Platform.Version) >= 37) {
     const result = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.ACCESS_LOCAL_NETWORK);
-    if (result !== PermissionsAndroid.RESULTS.GRANTED) throw new Error('Allow local network access to connect to your Mac.');
+    if (result !== PermissionsAndroid.RESULTS.GRANTED) throw new Error('Allow local network access to connect to your computer.');
   }
   connection.phoneId = await purchases.installationId();
   connection.demoUsed = await purchases.demoUsed();
-  if (AppState.currentState !== 'active') throw new Error('Open Thumble before connecting to your Mac.');
+  if (AppState.currentState !== 'active') throw new Error('Open Thumble before connecting to your computer.');
 } });
 AppState.addEventListener('change', phase => {
   // Permission dialogs briefly make iOS inactive. The controller releases held
   // controls on inactivity; keep pairing alive until the app is backgrounded.
-  if (phase === 'background' && connection.snapshot().phase !== 'offline') connection.disconnect('Practice · Mac disconnected');
+  if (phase === 'background' && connection.snapshot().phase !== 'offline') connection.disconnect('Practice · Computer disconnected');
 });
 
 purchases.initialize(connection);

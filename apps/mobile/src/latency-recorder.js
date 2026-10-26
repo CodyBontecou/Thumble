@@ -8,8 +8,8 @@ export class LatencyRecorder {
     const nativeRtt = receivedAt - sent.native;
     const jsRtt = jsNow - sent.js;
     if (![nativeRtt, jsRtt, receivedMs, hidMs, ackMs].every(Number.isFinite) || nativeRtt < 0 || jsRtt < 0 || hidMs < receivedMs || ackMs < hidMs) return;
-    // Each row: kind, JS RTT, native RTT, Mac receive→HID submission,
-    // Mac receive→ACK, native receive→JS callback + outbound bridge cost.
+    // Each row: kind, JS RTT, native RTT, Computer receive→HID submission,
+    // Computer receive→ACK, native receive→JS callback + outbound bridge cost.
     this.counts.acked++;
     this.rows.push([sent.kind, jsRtt, nativeRtt, hidMs - receivedMs, ackMs - receivedMs, jsRtt - nativeRtt, sent.native, receivedMs, hidMs, ackMs, receivedAt, sent.transport ?? 'wss']);
     if (this.rows.length === 20) this.flush();

@@ -159,7 +159,7 @@ async function provisionClients(env) {
   const auth = await createIdentity(env), context = await auth.$context, config = identityConfig(env);
   const clients = [
     { clientId: 'thumble-mobile', name: 'Thumble phone', redirectUris: [MOBILE_REDIRECT_URI], applicationType: 'native', tokenEndpointAuthMethod: 'none', requirePKCE: true },
-    { clientId: 'thumble-receiver', name: 'Thumble Mac pairing', redirectUris: [RECEIVER_REDIRECT_URI], applicationType: 'native', tokenEndpointAuthMethod: 'none', requirePKCE: true },
+    { clientId: 'thumble-receiver', name: 'Thumble computer pairing', redirectUris: [RECEIVER_REDIRECT_URI], applicationType: 'native', tokenEndpointAuthMethod: 'none', requirePKCE: true },
   ];
   if (chatgpt) clients.push(chatgpt);
   else await context.adapter.update({ model: 'oauthClient', where: [{ field: 'clientId', value: 'thumble-chatgpt' }], update: { disabled: true, updatedAt: new Date() } });

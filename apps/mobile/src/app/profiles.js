@@ -36,7 +36,7 @@ function Profiles() {
   }
   return <SafeAreaView style={s.safeArea} edges={['left', 'right', 'bottom']}><View style={s.screen}>
     <View style={{ gap: 8, paddingTop: 16 }}><Eyebrow>YOUR CONTROLLER LIBRARY</Eyebrow><Text accessibilityRole="header" style={ui.title}>Ready when you are.</Text></View><View style={s.intro}>
-      <Text style={s.detail}>Choose a saved controller from your Mac.</Text>
+      <Text style={s.detail}>Choose a saved controller from your computer.</Text>
       <Pressable accessibilityRole="button" onPress={refresh} disabled={loading || !!selecting} style={s.refresh}><Text style={s.action}>Refresh</Text></Pressable>
     </View>
     <Button secondary onPress={() => router.push('/first-layout')}>{AI_CONTROLLER_GENERATOR_ENABLED ? 'Choose or create a layout' : 'Use ConsolePort controls'}</Button>
@@ -51,7 +51,7 @@ function Profiles() {
           return <Pressable accessibilityRole="button" accessibilityLabel={item.name} accessibilityState={{ selected, disabled: !!selecting || network.phase !== 'connected' }}
             disabled={!!selecting || network.phase !== 'connected'} onPress={() => choose(item)}
             style={({ pressed }) => [s.row, pressed && s.pressed]}>
-            <View style={{ flex: 1, gap: 4 }}><Text style={s.name}>{item.name}</Text><Text style={ui.small}>Saved on your Mac</Text></View>
+            <View style={{ flex: 1, gap: 4 }}><Text style={s.name}>{item.name}</Text><Text style={ui.small}>Saved on your computer</Text></View>
             {busy ? <ActivityIndicator accessibilityLabel="Switching profile" color="#EDEDED" /> : selected ? <Text style={s.selected}>Selected</Text> : null}
           </Pressable>;
         }} />}

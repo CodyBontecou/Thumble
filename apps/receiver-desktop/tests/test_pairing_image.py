@@ -35,7 +35,7 @@ class PairingImageTests(unittest.TestCase):
             invitation = Invitation('192.168.1.2', 1234, '0' * 64)
             export.publish(invitation.renew(), invitation.expires)
             module = Path(__file__).resolve().parents[3] / 'packages/profile-tools/src/pairing-code.js'
-            script = "const {showPairingCode}=await import(process.env.THUMBLE_QA_MODULE); const result=await showPairingCode({directory:process.env.THUMBLE_QA_DIR}); if(result.content[1].mimeType!=='image/png')process.exit(1); console.log('PASS private MCP PNG');"
+            script = "const {showPairingCode}=await import(process.env.THUMBLE_QA_MODULE); if(process.platform==='win32'){const {checkWindowsPairingFile}=await import(new URL('./pairing-permissions.js',process.env.THUMBLE_QA_MODULE));try{await checkWindowsPairingFile(process.env.THUMBLE_QA_DIR+'/pairing-code.json')}catch(e){console.error(JSON.stringify({message:e.message,acl:e.acl,stderr:e.stderr}));throw e}} const result=await showPairingCode({directory:process.env.THUMBLE_QA_DIR}); if(result.content[1].mimeType!=='image/png')process.exit(1); console.log('PASS private MCP PNG');"
             result = subprocess.run(['node', '--input-type=module', '-e', script],
                 capture_output=True, text=True, timeout=10,
                 env={**os.environ, 'THUMBLE_QA_MODULE': module.as_uri(), 'THUMBLE_QA_DIR': temporary})

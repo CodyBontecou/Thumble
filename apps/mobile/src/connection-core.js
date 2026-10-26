@@ -31,7 +31,7 @@ export class Connection {
   profileListeners = new Set();
   layout = { revision: 0, profile: assertProfile(defaultProfile) };
   layoutPending = false;
-  view = { phase: 'offline', detail: 'Practice · Mac not connected', rtt: null, chat: false };
+  view = { phase: 'offline', detail: 'Practice · Computer not connected', rtt: null, chat: false };
   /** @type {{id: string, resolve: (value?: any) => void, reject: (error: Error) => void, timer: ReturnType<typeof setTimeout>} | null} */
   chatRequest = null;
   profilesSupported = false;
@@ -133,7 +133,7 @@ export class Connection {
           return;
         }
         if (message.type === 'layout') { this.receiveLayout(message); return; }
-        if (message.type === 'ready' && message.access !== 1) { this.disconnect('Update your Mac receiver to use the demo and Pro features.'); return; }
+        if (message.type === 'ready' && message.access !== 1) { this.disconnect('Update your receiver to use the demo and Pro features.'); return; }
         if (!['ready', 'ack', 'paused'].includes(message.type) || typeof message.lease !== 'string') throw new Error('Invalid receiver response');
         if (this.view.phase !== 'connecting' && this.view.phase !== 'connected') return;
         if (!message.lease || message.lease.length > 128 || !Number.isSafeInteger(message.seq)) throw new Error('Invalid receiver response');
@@ -225,7 +225,7 @@ export class Connection {
     try {
       this.session = this.native.connect(invitation.url, invitation.pin);
       if (typeof this.session !== 'string' || !this.session) throw new Error('Invalid native connection');
-      this.timer = this.timers.setTimeout(() => this.disconnect('Could not reach Mac. Check Wi-Fi and rescan.'), 5000);
+      this.timer = this.timers.setTimeout(() => this.disconnect('Could not reach computer. Check Wi-Fi and rescan.'), 5000);
     } catch (error) { this.disconnect('Could not connect. Check Wi-Fi and rescan.'); throw error; }
   }
   requestProfiles() { return this.profileOperation('profiles-list'); }
@@ -234,27 +234,27 @@ export class Connection {
     return this.profileOperation('profile-select', { profileId: profile.id, profileRevision: profile.revision, expectedActivationRevision });
   }
   adoptProfile(profile, source, expectedActivationRevision) {
-    if (!this.cloudAdoptionSupported) return Promise.reject(Error('Update your Mac receiver to use cloud controllers.'));
+    if (!this.cloudAdoptionSupported) return Promise.reject(Error('Update your receiver to use cloud controllers.'));
     const checked = assertProfile(profile);
     if (source.profileId !== checked.id || !Number.isSafeInteger(source.revision) || source.revision < 1) return Promise.reject(Error('Invalid cloud revision.'));
     this.pausePlay();
     return this.profileOperation('profile-adopt', { profile: checked, source: { ...source }, expectedActivationRevision });
   }
   profileOperation(operation, fields = {}) {
-    if (this.view.phase !== 'connected') return Promise.reject(Error('Connect your Mac to see saved profiles.'));
-    if (!this.profilesSupported) return Promise.reject(Error('Update your Mac receiver to choose profiles here.'));
+    if (this.view.phase !== 'connected') return Promise.reject(Error('Connect your computer to see saved profiles.'));
+    if (!this.profilesSupported) return Promise.reject(Error('Update your receiver to choose profiles here.'));
     if (this.profileRequest) return Promise.reject(Error('A profile request is already in progress.'));
     const id = `profiles-${++this.profileSequence}`;
     return new Promise((resolve, reject) => {
       const timer = this.timers.setTimeout(() => this.finishProfileRequest(Error('Could not confirm the profile. Refresh and try again.')), 7000);
       this.profileRequest = { id, operation, profileId: fields.profileId, source: fields.source, profile: fields.profile, result: null, resolve, reject, timer };
-      if (!this.native.send(JSON.stringify({ type: operation, id, ...fields, lease: this.lease }))) this.finishProfileRequest(Error('Could not reach your Mac.'));
+      if (!this.native.send(JSON.stringify({ type: operation, id, ...fields, lease: this.lease }))) this.finishProfileRequest(Error('Could not reach your computer.'));
     });
   }
   completeProfileSelection() {
     const r = this.profileRequest;
     if (['profile-select', 'profile-adopt'].includes(r?.operation) && r.result && this.layout.profile.id === r.profileId && this.layout.revision === r.result.activationRevision && !this.layoutPending && !this.recovering) {
-      if (r.operation === 'profile-adopt' && canonical({ ...this.layout.profile, id: r.profile.id }) !== canonical(r.profile)) this.finishProfileRequest(Error('The Mac activated a different controller. Refresh and try again.'));
+      if (r.operation === 'profile-adopt' && canonical({ ...this.layout.profile, id: r.profile.id }) !== canonical(r.profile)) this.finishProfileRequest(Error('The Computer activated a different controller. Refresh and try again.'));
       else this.finishProfileRequest();
     }
   }
@@ -270,7 +270,7 @@ export class Connection {
     if (!this.canPlay) return Promise.reject(Error('Start your demo or unlock Pro to send chat.'));
     const error = chatValidation(text, channel);
     if (error) return Promise.reject(Error(error));
-    if (this.view.phase !== 'connected' || !this.view.chat || !this.lease || this.layoutPending) return Promise.reject(Error('Connect to an updated Mac receiver to send chat.'));
+    if (this.view.phase !== 'connected' || !this.view.chat || !this.lease || this.layoutPending) return Promise.reject(Error('Connect to an updated receiver to send chat.'));
     if (this.chatRequest) return Promise.reject(Error('A message is already being delivered.'));
     const id = `${this.session}-chat-${++this.chatSequence}`;
     return new Promise((resolve, reject) => {
@@ -336,7 +336,7 @@ export class Connection {
     else sent = this.native.send(text);
     if (!sent) this.disconnect('Connection stalled · controls released');
   }
-  disconnect(detail = 'Practice · Mac not connected', { keepLayout = false } = {}) {
+  disconnect(detail = 'Practice · Computer not connected', { keepLayout = false } = {}) {
     const connected = this.view.phase === 'connected';
     ++this.attempt;
     // Invalidate the bridge identity before cancelling: queued callbacks from the
@@ -354,7 +354,7 @@ export class Connection {
     this.lease = null; this.invitation = null; this.state = neutralState(); this.pending.clear();
     this.profilesSupported = false;
     this.cloudAdoptionSupported = false;
-    this.finishProfileRequest(Error('Disconnected from your Mac.'));
+    this.finishProfileRequest(Error('Disconnected from your computer.'));
     if (this.chatRequest) { this.timers.clearTimeout(this.chatRequest.timer); this.chatRequest.reject(Error('Disconnected. Check WoW before sending again.')); this.chatRequest = null; }
     this.update({phase:'offline',detail,rtt:null,chat:false});
     for (const reset of this.resetListeners) reset();
