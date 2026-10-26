@@ -1,0 +1,17 @@
+name = "pocketpad-site"
+compatibility_date = "2026-07-04"
+pages_build_output_dir = "."
+
+# Existing production resources; do not recreate them during website deployment.
+# Local preview applies apps/website/schema.sql only to local D1.
+[[d1_databases]]
+binding = "DB"
+database_name = "pocketpad-waitlist"
+database_id = "018ff4bd-ae0e-4a12-847f-263e97e4f8cd"
+
+# Stores notarized macOS release zips and macos/latest.json.
+# Create once with:
+#   wrangler r2 bucket create pocketpad-releases
+[[r2_buckets]]
+binding = "RELEASES"
+bucket_name = "pocketpad-releases"

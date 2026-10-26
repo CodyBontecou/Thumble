@@ -7,7 +7,7 @@
     "apps/*"
   ],
   "scripts": {
-    "test": "node --test packages/cli/test/*.test.mjs packages/controller/test/*.test.js packages/profile-tools/test/*.test.js apps/cloud/test/*.test.js tools/test/*.test.js",
+    "test": "node --test packages/cli/test/*.test.mjs packages/controller/test/*.test.js packages/profile-tools/test/*.test.js apps/cloud/test/*.test.js tools/test/*.test.js tools/website/test/*.test.mjs",
     "check": "node --check packages/controller/src/index.js",
     "profiles": "node packages/profile-tools/src/server.js",
     "test:consoleport-sync": "node tools/test-consoleport-sync.mjs",
@@ -17,7 +17,12 @@
     "test:access": "mkdir -p build/access-check && xcrun swiftc -swift-version 5 -module-cache-path build/monetization-swift-cache apps/receiver/Sources/AccessSession.swift tools/access-tests/main.swift -o build/access-check/tests && build/access-check/tests",
     "test:cloud": "node --test apps/cloud/test/*.test.js tools/test/cloud-*.test.js",
     "test:cloud:runtime": "node apps/cloud/test-runtime.mjs",
-    "test:cloud:identity:runtime": "node apps/cloud/test-identity-runtime.mjs"
+    "test:cloud:identity:runtime": "node apps/cloud/test-identity-runtime.mjs",
+    "website:build": "node tools/website/build.mjs",
+    "website:test": "node --test tools/website/test/*.test.mjs",
+    "website:dev": "node tools/website/deploy.mjs --preview",
+    "website:deploy": "node tools/website/deploy.mjs",
+    "website:optimize": "node tools/website/optimize-lighthouse.mjs apps/website"
   },
   "engines": {
     "node": ">=22"

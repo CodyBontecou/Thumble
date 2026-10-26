@@ -1,0 +1,3766 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Thumble read API",
+    "version": "1.0.0",
+    "description": "Public discovery and authenticated account-read subset for Thumble phone gamepad controllers. Generation and writes are disabled on the hosted agent integration. Native device management is outside this contract. REST URL major versioning and deprecation policy: https://thumble.io/api-policy. Free zero-auth synthetic sandbox: /v1/sandbox.",
+    "contact": {
+      "name": "Thumble developer support",
+      "url": "https://thumble.io/support",
+      "email": "codybontecou@gmail.com"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://thumble.io"
+    }
+  ],
+  "externalDocs": {
+    "url": "https://thumble.io/developers"
+  },
+  "paths": {
+    "/v1/config": {
+      "get": {
+        "operationId": "getThumbleConfiguration",
+        "summary": "Read public OAuth endpoints and MCP configuration without credentials.",
+        "description": "Read public OAuth endpoints and MCP configuration without credentials.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Successful read.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "apiVersion": {
+                      "type": "integer",
+                      "const": 1
+                    },
+                    "auth": {
+                      "type": "object",
+                      "properties": {
+                        "issuer": {
+                          "type": "string"
+                        },
+                        "authorizationEndpoint": {
+                          "type": "string"
+                        },
+                        "tokenEndpoint": {
+                          "type": "string"
+                        },
+                        "mobileClientId": {
+                          "type": "string"
+                        },
+                        "audience": {
+                          "type": "string"
+                        },
+                        "scopes": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "issuer",
+                        "authorizationEndpoint",
+                        "tokenEndpoint",
+                        "mobileClientId",
+                        "audience",
+                        "scopes"
+                      ]
+                    },
+                    "mcpUrl": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "apiVersion",
+                    "auth",
+                    "mcpUrl"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "RateLimit-Policy": {
+                "description": "Enforced quota: 600 requests per 60 seconds per credential, or per source IP for anonymous requests, in each Cloudflare location.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "\"thumble-rest\";q=600;w=60"
+              },
+              "X-RateLimit-Limit": {
+                "description": "Configured request threshold; this is not a remaining counter.",
+                "schema": {
+                  "type": "integer"
+                },
+                "example": 600
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "RateLimit-Policy": {
+                "description": "Enforced quota: 600 requests per 60 seconds per credential, or per source IP for anonymous requests, in each Cloudflare location.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "\"thumble-rest\";q=600;w=60"
+              },
+              "X-RateLimit-Limit": {
+                "description": "Configured request threshold; this is not a remaining counter.",
+                "schema": {
+                  "type": "integer"
+                },
+                "example": 600
+              }
+            }
+          },
+          "403": {
+            "description": "Required read scope is absent.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "RateLimit-Policy": {
+                "description": "Enforced quota: 600 requests per 60 seconds per credential, or per source IP for anonymous requests, in each Cloudflare location.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "\"thumble-rest\";q=600;w=60"
+              },
+              "X-RateLimit-Limit": {
+                "description": "Configured request threshold; this is not a remaining counter.",
+                "schema": {
+                  "type": "integer"
+                },
+                "example": 600
+              }
+            }
+          },
+          "404": {
+            "description": "Record or route not found for this account.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "RateLimit-Policy": {
+                "description": "Enforced quota: 600 requests per 60 seconds per credential, or per source IP for anonymous requests, in each Cloudflare location.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "\"thumble-rest\";q=600;w=60"
+              },
+              "X-RateLimit-Limit": {
+                "description": "Configured request threshold; this is not a remaining counter.",
+                "schema": {
+                  "type": "integer"
+                },
+                "example": 600
+              }
+            }
+          },
+          "429": {
+            "description": "REST quota exceeded. Honor Retry-After; do not retry immediately.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative retry delay in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              },
+              "RateLimit-Policy": {
+                "description": "Enforced quota: 600 requests per 60 seconds per credential, or per source IP for anonymous requests, in each Cloudflare location.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "\"thumble-rest\";q=600;w=60"
+              },
+              "X-RateLimit-Limit": {
+                "description": "Configured request threshold; this is not a remaining counter.",
+                "schema": {
+                  "type": "integer"
+                },
+                "example": 600
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected service failure. Retry with bounded backoff.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service temporarily unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "RateLimit-Policy": {
+                "description": "Enforced quota: 600 requests per 60 seconds per credential, or per source IP for anonymous requests, in each Cloudflare location.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "\"thumble-rest\";q=600;w=60"
+              },
+              "X-RateLimit-Limit": {
+                "description": "Configured request threshold; this is not a remaining counter.",
+                "schema": {
+                  "type": "integer"
+                },
+                "example": 600
+              }
+            }
+          }
+        },
+        "parameters": []
+      }
+    },
+    "/v1/me": {
+      "get": {
+        "operationId": "getThumbleAccount",
+        "summary": "Read the authenticated account identifier.",
+        "description": "Read the authenticated account identifier.",
+        "security": [
+          {
+            "OAuth2": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful read.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "accountId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "accountId"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "RateLimit-Policy": {
+                "description": "Enforced quota: 600 requests per 60 seconds per credential, or per source IP for anonymous requests, in each Cloudflare location.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "\"thumble-rest\";q=600;w=60"
+              },
+              "X-RateLimit-Limit": {
+                "description": "Configured request threshold; this is not a remaining counter.",
+                "schema": {
+                  "type": "integer"
+                },
+                "example": 600
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "RateLimit-Policy": {
+                "description": "Enforced quota: 600 requests per 60 seconds per credential, or per source IP for anonymous requests, in each Cloudflare location.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "\"thumble-rest\";q=600;w=60"
+              },
+              "X-RateLimit-Limit": {
+                "description": "Configured request threshold; this is not a remaining counter.",
+                "schema": {
+                  "type": "integer"
+                },
+                "example": 600
+              }
+            }
+          },
+          "403": {
+            "description": "Required read scope is absent.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "RateLimit-Policy": {
+                "description": "Enforced quota: 600 requests per 60 seconds per credential, or per source IP for anonymous requests, in each Cloudflare location.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "\"thumble-rest\";q=600;w=60"
+              },
+              "X-RateLimit-Limit": {
+                "description": "Configured request threshold; this is not a remaining counter.",
+                "schema": {
+                  "type": "integer"
+                },
+                "example": 600
+              }
+            }
+          },
+          "404": {
+            "description": "Record or route not found for this account.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "RateLimit-Policy": {
+                "description": "Enforced quota: 600 requests per 60 seconds per credential, or per source IP for anonymous requests, in each Cloudflare location.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "\"thumble-rest\";q=600;w=60"
+              },
+              "X-RateLimit-Limit": {
+                "description": "Configured request threshold; this is not a remaining counter.",
+                "schema": {
+                  "type": "integer"
+                },
+                "example": 600
+              }
+            }
+          },
+          "429": {
+            "description": "REST quota exceeded. Honor Retry-After; do not retry immediately.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative retry delay in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              },
+              "RateLimit-Policy": {
+                "description": "Enforced quota: 600 requests per 60 seconds per credential, or per source IP for anonymous requests, in each Cloudflare location.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "\"thumble-rest\";q=600;w=60"
+              },
+              "X-RateLimit-Limit": {
+                "description": "Configured request threshold; this is not a remaining counter.",
+                "schema": {
+                  "type": "integer"
+                },
+                "example": 600
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected service failure. Retry with bounded backoff.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service temporarily unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "RateLimit-Policy": {
+                "description": "Enforced quota: 600 requests per 60 seconds per credential, or per source IP for anonymous requests, in each Cloudflare location.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "\"thumble-rest\";q=600;w=60"
+              },
+              "X-RateLimit-Limit": {
+                "description": "Configured request threshold; this is not a remaining counter.",
+                "schema": {
+                  "type": "integer"
+                },
+                "example": 600
+              }
+            }
+          }
+        },
+        "parameters": []
+      }
+    },
+    "/v1/devices": {
+      "get": {
+        "operationId": "listThumbleDevices",
+        "summary": "List the authenticated account’s registered, non-revoked phones.",
+        "description": "List the authenticated account’s registered, non-revoked phones.",
+        "security": [
+          {
+            "OAuth2": [
+              "devices:read"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful read.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "devices": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "platform": {
+                            "type": "string",
+                            "enum": [
+                              "ios",
+                              "android"
+                            ]
+                          },
+                          "viewport": {
+                            "type": "object",
+                            "properties": {
+                              "width": {
+                                "type": "number"
+                              },
+                              "height": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "width",
+                              "height"
+                            ]
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "lastSeenAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "revokedAt": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "date-time"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "platform",
+                          "viewport"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "devices"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "RateLimit-Policy": {
+                "description": "Enforced quota: 600 requests per 60 seconds per credential, or per source IP for anonymous requests, in each Cloudflare location.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "\"thumble-rest\";q=600;w=60"
+              },
+              "X-RateLimit-Limit": {
+                "description": "Configured request threshold; this is not a remaining counter.",
+                "schema": {
+                  "type": "integer"
+                },
+                "example": 600
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "RateLimit-Policy": {
+                "description": "Enforced quota: 600 requests per 60 seconds per credential, or per source IP for anonymous requests, in each Cloudflare location.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "\"thumble-rest\";q=600;w=60"
+              },
+              "X-RateLimit-Limit": {
+                "description": "Configured request threshold; this is not a remaining counter.",
+                "schema": {
+                  "type": "integer"
+                },
+                "example": 600
+              }
+            }
+          },
+          "403": {
+            "description": "Required read scope is absent.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "RateLimit-Policy": {
+                "description": "Enforced quota: 600 requests per 60 seconds per credential, or per source IP for anonymous requests, in each Cloudflare location.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "\"thumble-rest\";q=600;w=60"
+              },
+              "X-RateLimit-Limit": {
+                "description": "Configured request threshold; this is not a remaining counter.",
+                "schema": {
+                  "type": "integer"
+                },
+                "example": 600
+              }
+            }
+          },
+          "404": {
+            "description": "Record or route not found for this account.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "RateLimit-Policy": {
+                "description": "Enforced quota: 600 requests per 60 seconds per credential, or per source IP for anonymous requests, in each Cloudflare location.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "\"thumble-rest\";q=600;w=60"
+              },
+              "X-RateLimit-Limit": {
+                "description": "Configured request threshold; this is not a remaining counter.",
+                "schema": {
+                  "type": "integer"
+                },
+                "example": 600
+              }
+            }
+          },
+          "429": {
+            "description": "REST quota exceeded. Honor Retry-After; do not retry immediately.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative retry delay in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              },
+              "RateLimit-Policy": {
+                "description": "Enforced quota: 600 requests per 60 seconds per credential, or per source IP for anonymous requests, in each Cloudflare location.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "\"thumble-rest\";q=600;w=60"
+              },
+              "X-RateLimit-Limit": {
+                "description": "Configured request threshold; this is not a remaining counter.",
+                "schema": {
+                  "type": "integer"
+                },
+                "example": 600
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected service failure. Retry with bounded backoff.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service temporarily unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "RateLimit-Policy": {
+                "description": "Enforced quota: 600 requests per 60 seconds per credential, or per source IP for anonymous requests, in each Cloudflare location.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "\"thumble-rest\";q=600;w=60"
+              },
+              "X-RateLimit-Limit": {
+                "description": "Configured request threshold; this is not a remaining counter.",
+                "schema": {
+                  "type": "integer"
+                },
+                "example": 600
+              }
+            }
+          }
+        },
+        "parameters": []
+      }
+    },
+    "/v1/profiles": {
+      "get": {
+        "operationId": "listThumbleProfiles",
+        "summary": "List the authenticated account’s saved controllers and latest revisions.",
+        "description": "List the authenticated account’s saved controllers and latest revisions.",
+        "security": [
+          {
+            "OAuth2": [
+              "profiles:read"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful read.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "profiles": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "revision": {
+                            "type": "integer"
+                          },
+                          "updatedAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "revision",
+                          "updatedAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "profiles"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "RateLimit-Policy": {
+                "description": "Enforced quota: 600 requests per 60 seconds per credential, or per source IP for anonymous requests, in each Cloudflare location.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "\"thumble-rest\";q=600;w=60"
+              },
+              "X-RateLimit-Limit": {
+                "description": "Configured request threshold; this is not a remaining counter.",
+                "schema": {
+                  "type": "integer"
+                },
+                "example": 600
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "RateLimit-Policy": {
+                "description": "Enforced quota: 600 requests per 60 seconds per credential, or per source IP for anonymous requests, in each Cloudflare location.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "\"thumble-rest\";q=600;w=60"
+              },
+              "X-RateLimit-Limit": {
+                "description": "Configured request threshold; this is not a remaining counter.",
+                "schema": {
+                  "type": "integer"
+                },
+                "example": 600
+              }
+            }
+          },
+          "403": {
+            "description": "Required read scope is absent.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "RateLimit-Policy": {
+                "description": "Enforced quota: 600 requests per 60 seconds per credential, or per source IP for anonymous requests, in each Cloudflare location.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "\"thumble-rest\";q=600;w=60"
+              },
+              "X-RateLimit-Limit": {
+                "description": "Configured request threshold; this is not a remaining counter.",
+                "schema": {
+                  "type": "integer"
+                },
+                "example": 600
+              }
+            }
+          },
+          "404": {
+            "description": "Record or route not found for this account.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "RateLimit-Policy": {
+                "description": "Enforced quota: 600 requests per 60 seconds per credential, or per source IP for anonymous requests, in each Cloudflare location.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "\"thumble-rest\";q=600;w=60"
+              },
+              "X-RateLimit-Limit": {
+                "description": "Configured request threshold; this is not a remaining counter.",
+                "schema": {
+                  "type": "integer"
+                },
+                "example": 600
+              }
+            }
+          },
+          "429": {
+            "description": "REST quota exceeded. Honor Retry-After; do not retry immediately.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative retry delay in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              },
+              "RateLimit-Policy": {
+                "description": "Enforced quota: 600 requests per 60 seconds per credential, or per source IP for anonymous requests, in each Cloudflare location.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "\"thumble-rest\";q=600;w=60"
+              },
+              "X-RateLimit-Limit": {
+                "description": "Configured request threshold; this is not a remaining counter.",
+                "schema": {
+                  "type": "integer"
+                },
+                "example": 600
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected service failure. Retry with bounded backoff.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service temporarily unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "RateLimit-Policy": {
+                "description": "Enforced quota: 600 requests per 60 seconds per credential, or per source IP for anonymous requests, in each Cloudflare location.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "\"thumble-rest\";q=600;w=60"
+              },
+              "X-RateLimit-Limit": {
+                "description": "Configured request threshold; this is not a remaining counter.",
+                "schema": {
+                  "type": "integer"
+                },
+                "example": 600
+              }
+            }
+          }
+        },
+        "parameters": []
+      }
+    },
+    "/v1/profiles/{profileId}": {
+      "get": {
+        "operationId": "getThumbleProfile",
+        "summary": "Read the latest saved controller revision for this account.",
+        "description": "Read the latest saved controller revision for this account.",
+        "security": [
+          {
+            "OAuth2": [
+              "profiles:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "profileId",
+            "in": "path",
+            "required": true,
+            "description": "Requested profileId.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful read.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "profile": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "schemaVersion",
+                        "id",
+                        "name",
+                        "controls",
+                        "mappings"
+                      ],
+                      "properties": {
+                        "schemaVersion": {
+                          "const": 1,
+                          "type": "integer"
+                        },
+                        "id": {
+                          "type": "string",
+                          "pattern": "^[a-z0-9][a-z0-9-]{0,63}$"
+                        },
+                        "name": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 80
+                        },
+                        "theme": {
+                          "enum": [
+                            "consoleport"
+                          ],
+                          "type": "string"
+                        },
+                        "modifiers": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "shift": {
+                              "enum": [
+                                "a",
+                                "b",
+                                "x",
+                                "y",
+                                "lb",
+                                "rb",
+                                "back",
+                                "start",
+                                "ls",
+                                "rs",
+                                "up",
+                                "down",
+                                "left",
+                                "right",
+                                "guide",
+                                "lt",
+                                "rt",
+                                "none"
+                              ],
+                              "type": "string"
+                            },
+                            "ctrl": {
+                              "enum": [
+                                "a",
+                                "b",
+                                "x",
+                                "y",
+                                "lb",
+                                "rb",
+                                "back",
+                                "start",
+                                "ls",
+                                "rs",
+                                "up",
+                                "down",
+                                "left",
+                                "right",
+                                "guide",
+                                "lt",
+                                "rt",
+                                "none"
+                              ],
+                              "type": "string"
+                            },
+                            "alt": {
+                              "enum": [
+                                "a",
+                                "b",
+                                "x",
+                                "y",
+                                "lb",
+                                "rb",
+                                "back",
+                                "start",
+                                "ls",
+                                "rs",
+                                "up",
+                                "down",
+                                "left",
+                                "right",
+                                "guide",
+                                "lt",
+                                "rt",
+                                "none"
+                              ],
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "controls": {
+                          "type": "array",
+                          "minItems": 1,
+                          "maxItems": 64,
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "id",
+                              "type",
+                              "label",
+                              "frame"
+                            ],
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 80
+                              },
+                              "type": {
+                                "enum": [
+                                  "button",
+                                  "stick",
+                                  "trigger"
+                                ],
+                                "type": "string"
+                              },
+                              "label": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 80
+                              },
+                              "color": {
+                                "type": "string",
+                                "pattern": "^#[0-9a-fA-F]{6}$"
+                              },
+                              "icon": {
+                                "type": "string",
+                                "pattern": "^[a-z0-9_]{1,128}$"
+                              },
+                              "badge": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 80
+                              },
+                              "layers": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "label"
+                                    ],
+                                    "properties": {
+                                      "label": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 80
+                                      },
+                                      "icon": {
+                                        "type": "string",
+                                        "pattern": "^[a-z0-9_]{1,128}$"
+                                      }
+                                    }
+                                  },
+                                  "SHIFT-": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "label"
+                                    ],
+                                    "properties": {
+                                      "label": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 80
+                                      },
+                                      "icon": {
+                                        "type": "string",
+                                        "pattern": "^[a-z0-9_]{1,128}$"
+                                      }
+                                    }
+                                  },
+                                  "CTRL-": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "label"
+                                    ],
+                                    "properties": {
+                                      "label": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 80
+                                      },
+                                      "icon": {
+                                        "type": "string",
+                                        "pattern": "^[a-z0-9_]{1,128}$"
+                                      }
+                                    }
+                                  },
+                                  "ALT-": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "label"
+                                    ],
+                                    "properties": {
+                                      "label": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 80
+                                      },
+                                      "icon": {
+                                        "type": "string",
+                                        "pattern": "^[a-z0-9_]{1,128}$"
+                                      }
+                                    }
+                                  },
+                                  "CTRL-SHIFT-": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "label"
+                                    ],
+                                    "properties": {
+                                      "label": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 80
+                                      },
+                                      "icon": {
+                                        "type": "string",
+                                        "pattern": "^[a-z0-9_]{1,128}$"
+                                      }
+                                    }
+                                  },
+                                  "ALT-SHIFT-": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "label"
+                                    ],
+                                    "properties": {
+                                      "label": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 80
+                                      },
+                                      "icon": {
+                                        "type": "string",
+                                        "pattern": "^[a-z0-9_]{1,128}$"
+                                      }
+                                    }
+                                  },
+                                  "ALT-CTRL-": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "label"
+                                    ],
+                                    "properties": {
+                                      "label": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 80
+                                      },
+                                      "icon": {
+                                        "type": "string",
+                                        "pattern": "^[a-z0-9_]{1,128}$"
+                                      }
+                                    }
+                                  },
+                                  "ALT-CTRL-SHIFT-": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "label"
+                                    ],
+                                    "properties": {
+                                      "label": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 80
+                                      },
+                                      "icon": {
+                                        "type": "string",
+                                        "pattern": "^[a-z0-9_]{1,128}$"
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              "frame": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "x",
+                                  "y",
+                                  "width",
+                                  "height"
+                                ],
+                                "properties": {
+                                  "x": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "maximum": 1
+                                  },
+                                  "y": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "maximum": 1
+                                  },
+                                  "width": {
+                                    "type": "number",
+                                    "minimum": 0.01,
+                                    "maximum": 1
+                                  },
+                                  "height": {
+                                    "type": "number",
+                                    "minimum": 0.01,
+                                    "maximum": 1
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "mappings": {
+                          "type": "array",
+                          "maxItems": 64,
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "controlId",
+                              "outputs"
+                            ],
+                            "properties": {
+                              "controlId": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 80
+                              },
+                              "outputs": {
+                                "type": "array",
+                                "minItems": 1,
+                                "maxItems": 2,
+                                "items": {
+                                  "enum": [
+                                    "a",
+                                    "b",
+                                    "x",
+                                    "y",
+                                    "lb",
+                                    "rb",
+                                    "back",
+                                    "start",
+                                    "ls",
+                                    "rs",
+                                    "up",
+                                    "down",
+                                    "left",
+                                    "right",
+                                    "guide",
+                                    "lx",
+                                    "ly",
+                                    "rx",
+                                    "ry",
+                                    "lt",
+                                    "rt"
+                                  ],
+                                  "type": "string"
+                                }
+                              },
+                              "deadzone": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 0.5
+                              },
+                              "sensitivity": {
+                                "type": "number",
+                                "minimum": 0.1,
+                                "maximum": 3
+                              },
+                              "invertX": {
+                                "type": "boolean"
+                              },
+                              "invertY": {
+                                "type": "boolean"
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "description": "Normalized usable-canvas coordinates; x+width and y+height must fit within 1. Read list_devices for logical canvas dimensions. Cloud validate_profile and save_profile require deviceId: targets must be at least 48 points on both axes, sticks at least 96 points in diameter, and touch areas must not overlap controls or the top Chat/menu areas. IDs must be unique. Each control needs exactly one mapping: button to one button, trigger to lt/rt, stick to [lx,ly] or [rx,ry]. Optional invertX/invertY booleans reverse stick output axes without changing thumb visuals. Analog outputs have one owner. Labels do not bind WoW spells. No executable code, macros, timers or generated input."
+                    },
+                    "revision": {
+                      "type": "integer"
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "profile",
+                    "revision",
+                    "createdAt"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "RateLimit-Policy": {
+                "description": "Enforced quota: 600 requests per 60 seconds per credential, or per source IP for anonymous requests, in each Cloudflare location.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "\"thumble-rest\";q=600;w=60"
+              },
+              "X-RateLimit-Limit": {
+                "description": "Configured request threshold; this is not a remaining counter.",
+                "schema": {
+                  "type": "integer"
+                },
+                "example": 600
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "RateLimit-Policy": {
+                "description": "Enforced quota: 600 requests per 60 seconds per credential, or per source IP for anonymous requests, in each Cloudflare location.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "\"thumble-rest\";q=600;w=60"
+              },
+              "X-RateLimit-Limit": {
+                "description": "Configured request threshold; this is not a remaining counter.",
+                "schema": {
+                  "type": "integer"
+                },
+                "example": 600
+              }
+            }
+          },
+          "403": {
+            "description": "Required read scope is absent.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "RateLimit-Policy": {
+                "description": "Enforced quota: 600 requests per 60 seconds per credential, or per source IP for anonymous requests, in each Cloudflare location.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "\"thumble-rest\";q=600;w=60"
+              },
+              "X-RateLimit-Limit": {
+                "description": "Configured request threshold; this is not a remaining counter.",
+                "schema": {
+                  "type": "integer"
+                },
+                "example": 600
+              }
+            }
+          },
+          "404": {
+            "description": "Record or route not found for this account.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "RateLimit-Policy": {
+                "description": "Enforced quota: 600 requests per 60 seconds per credential, or per source IP for anonymous requests, in each Cloudflare location.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "\"thumble-rest\";q=600;w=60"
+              },
+              "X-RateLimit-Limit": {
+                "description": "Configured request threshold; this is not a remaining counter.",
+                "schema": {
+                  "type": "integer"
+                },
+                "example": 600
+              }
+            }
+          },
+          "429": {
+            "description": "REST quota exceeded. Honor Retry-After; do not retry immediately.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative retry delay in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              },
+              "RateLimit-Policy": {
+                "description": "Enforced quota: 600 requests per 60 seconds per credential, or per source IP for anonymous requests, in each Cloudflare location.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "\"thumble-rest\";q=600;w=60"
+              },
+              "X-RateLimit-Limit": {
+                "description": "Configured request threshold; this is not a remaining counter.",
+                "schema": {
+                  "type": "integer"
+                },
+                "example": 600
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected service failure. Retry with bounded backoff.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service temporarily unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "RateLimit-Policy": {
+                "description": "Enforced quota: 600 requests per 60 seconds per credential, or per source IP for anonymous requests, in each Cloudflare location.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "\"thumble-rest\";q=600;w=60"
+              },
+              "X-RateLimit-Limit": {
+                "description": "Configured request threshold; this is not a remaining counter.",
+                "schema": {
+                  "type": "integer"
+                },
+                "example": 600
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/profiles/{profileId}/revisions/{revision}": {
+      "get": {
+        "operationId": "getThumbleProfileRevision",
+        "summary": "Read an immutable saved controller revision for this account.",
+        "description": "Read an immutable saved controller revision for this account.",
+        "security": [
+          {
+            "OAuth2": [
+              "profiles:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "profileId",
+            "in": "path",
+            "required": true,
+            "description": "Requested profileId.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "revision",
+            "in": "path",
+            "required": true,
+            "description": "Requested revision.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful read.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "profile": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "schemaVersion",
+                        "id",
+                        "name",
+                        "controls",
+                        "mappings"
+                      ],
+                      "properties": {
+                        "schemaVersion": {
+                          "const": 1,
+                          "type": "integer"
+                        },
+                        "id": {
+                          "type": "string",
+                          "pattern": "^[a-z0-9][a-z0-9-]{0,63}$"
+                        },
+                        "name": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 80
+                        },
+                        "theme": {
+                          "enum": [
+                            "consoleport"
+                          ],
+                          "type": "string"
+                        },
+                        "modifiers": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "shift": {
+                              "enum": [
+                                "a",
+                                "b",
+                                "x",
+                                "y",
+                                "lb",
+                                "rb",
+                                "back",
+                                "start",
+                                "ls",
+                                "rs",
+                                "up",
+                                "down",
+                                "left",
+                                "right",
+                                "guide",
+                                "lt",
+                                "rt",
+                                "none"
+                              ],
+                              "type": "string"
+                            },
+                            "ctrl": {
+                              "enum": [
+                                "a",
+                                "b",
+                                "x",
+                                "y",
+                                "lb",
+                                "rb",
+                                "back",
+                                "start",
+                                "ls",
+                                "rs",
+                                "up",
+                                "down",
+                                "left",
+                                "right",
+                                "guide",
+                                "lt",
+                                "rt",
+                                "none"
+                              ],
+                              "type": "string"
+                            },
+                            "alt": {
+                              "enum": [
+                                "a",
+                                "b",
+                                "x",
+                                "y",
+                                "lb",
+                                "rb",
+                                "back",
+                                "start",
+                                "ls",
+                                "rs",
+                                "up",
+                                "down",
+                                "left",
+                                "right",
+                                "guide",
+                                "lt",
+                                "rt",
+                                "none"
+                              ],
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "controls": {
+                          "type": "array",
+                          "minItems": 1,
+                          "maxItems": 64,
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "id",
+                              "type",
+                              "label",
+                              "frame"
+                            ],
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 80
+                              },
+                              "type": {
+                                "enum": [
+                                  "button",
+                                  "stick",
+                                  "trigger"
+                                ],
+                                "type": "string"
+                              },
+                              "label": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 80
+                              },
+                              "color": {
+                                "type": "string",
+                                "pattern": "^#[0-9a-fA-F]{6}$"
+                              },
+                              "icon": {
+                                "type": "string",
+                                "pattern": "^[a-z0-9_]{1,128}$"
+                              },
+                              "badge": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 80
+                              },
+                              "layers": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "label"
+                                    ],
+                                    "properties": {
+                                      "label": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 80
+                                      },
+                                      "icon": {
+                                        "type": "string",
+                                        "pattern": "^[a-z0-9_]{1,128}$"
+                                      }
+                                    }
+                                  },
+                                  "SHIFT-": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "label"
+                                    ],
+                                    "properties": {
+                                      "label": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 80
+                                      },
+                                      "icon": {
+                                        "type": "string",
+                                        "pattern": "^[a-z0-9_]{1,128}$"
+                                      }
+                                    }
+                                  },
+                                  "CTRL-": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "label"
+                                    ],
+                                    "properties": {
+                                      "label": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 80
+                                      },
+                                      "icon": {
+                                        "type": "string",
+                                        "pattern": "^[a-z0-9_]{1,128}$"
+                                      }
+                                    }
+                                  },
+                                  "ALT-": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "label"
+                                    ],
+                                    "properties": {
+                                      "label": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 80
+                                      },
+                                      "icon": {
+                                        "type": "string",
+                                        "pattern": "^[a-z0-9_]{1,128}$"
+                                      }
+                                    }
+                                  },
+                                  "CTRL-SHIFT-": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "label"
+                                    ],
+                                    "properties": {
+                                      "label": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 80
+                                      },
+                                      "icon": {
+                                        "type": "string",
+                                        "pattern": "^[a-z0-9_]{1,128}$"
+                                      }
+                                    }
+                                  },
+                                  "ALT-SHIFT-": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "label"
+                                    ],
+                                    "properties": {
+                                      "label": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 80
+                                      },
+                                      "icon": {
+                                        "type": "string",
+                                        "pattern": "^[a-z0-9_]{1,128}$"
+                                      }
+                                    }
+                                  },
+                                  "ALT-CTRL-": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "label"
+                                    ],
+                                    "properties": {
+                                      "label": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 80
+                                      },
+                                      "icon": {
+                                        "type": "string",
+                                        "pattern": "^[a-z0-9_]{1,128}$"
+                                      }
+                                    }
+                                  },
+                                  "ALT-CTRL-SHIFT-": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "label"
+                                    ],
+                                    "properties": {
+                                      "label": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 80
+                                      },
+                                      "icon": {
+                                        "type": "string",
+                                        "pattern": "^[a-z0-9_]{1,128}$"
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              "frame": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "x",
+                                  "y",
+                                  "width",
+                                  "height"
+                                ],
+                                "properties": {
+                                  "x": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "maximum": 1
+                                  },
+                                  "y": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "maximum": 1
+                                  },
+                                  "width": {
+                                    "type": "number",
+                                    "minimum": 0.01,
+                                    "maximum": 1
+                                  },
+                                  "height": {
+                                    "type": "number",
+                                    "minimum": 0.01,
+                                    "maximum": 1
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "mappings": {
+                          "type": "array",
+                          "maxItems": 64,
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "controlId",
+                              "outputs"
+                            ],
+                            "properties": {
+                              "controlId": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 80
+                              },
+                              "outputs": {
+                                "type": "array",
+                                "minItems": 1,
+                                "maxItems": 2,
+                                "items": {
+                                  "enum": [
+                                    "a",
+                                    "b",
+                                    "x",
+                                    "y",
+                                    "lb",
+                                    "rb",
+                                    "back",
+                                    "start",
+                                    "ls",
+                                    "rs",
+                                    "up",
+                                    "down",
+                                    "left",
+                                    "right",
+                                    "guide",
+                                    "lx",
+                                    "ly",
+                                    "rx",
+                                    "ry",
+                                    "lt",
+                                    "rt"
+                                  ],
+                                  "type": "string"
+                                }
+                              },
+                              "deadzone": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 0.5
+                              },
+                              "sensitivity": {
+                                "type": "number",
+                                "minimum": 0.1,
+                                "maximum": 3
+                              },
+                              "invertX": {
+                                "type": "boolean"
+                              },
+                              "invertY": {
+                                "type": "boolean"
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "description": "Normalized usable-canvas coordinates; x+width and y+height must fit within 1. Read list_devices for logical canvas dimensions. Cloud validate_profile and save_profile require deviceId: targets must be at least 48 points on both axes, sticks at least 96 points in diameter, and touch areas must not overlap controls or the top Chat/menu areas. IDs must be unique. Each control needs exactly one mapping: button to one button, trigger to lt/rt, stick to [lx,ly] or [rx,ry]. Optional invertX/invertY booleans reverse stick output axes without changing thumb visuals. Analog outputs have one owner. Labels do not bind WoW spells. No executable code, macros, timers or generated input."
+                    },
+                    "revision": {
+                      "type": "integer"
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "profile",
+                    "revision",
+                    "createdAt"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "RateLimit-Policy": {
+                "description": "Enforced quota: 600 requests per 60 seconds per credential, or per source IP for anonymous requests, in each Cloudflare location.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "\"thumble-rest\";q=600;w=60"
+              },
+              "X-RateLimit-Limit": {
+                "description": "Configured request threshold; this is not a remaining counter.",
+                "schema": {
+                  "type": "integer"
+                },
+                "example": 600
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "RateLimit-Policy": {
+                "description": "Enforced quota: 600 requests per 60 seconds per credential, or per source IP for anonymous requests, in each Cloudflare location.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "\"thumble-rest\";q=600;w=60"
+              },
+              "X-RateLimit-Limit": {
+                "description": "Configured request threshold; this is not a remaining counter.",
+                "schema": {
+                  "type": "integer"
+                },
+                "example": 600
+              }
+            }
+          },
+          "403": {
+            "description": "Required read scope is absent.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "RateLimit-Policy": {
+                "description": "Enforced quota: 600 requests per 60 seconds per credential, or per source IP for anonymous requests, in each Cloudflare location.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "\"thumble-rest\";q=600;w=60"
+              },
+              "X-RateLimit-Limit": {
+                "description": "Configured request threshold; this is not a remaining counter.",
+                "schema": {
+                  "type": "integer"
+                },
+                "example": 600
+              }
+            }
+          },
+          "404": {
+            "description": "Record or route not found for this account.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "RateLimit-Policy": {
+                "description": "Enforced quota: 600 requests per 60 seconds per credential, or per source IP for anonymous requests, in each Cloudflare location.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "\"thumble-rest\";q=600;w=60"
+              },
+              "X-RateLimit-Limit": {
+                "description": "Configured request threshold; this is not a remaining counter.",
+                "schema": {
+                  "type": "integer"
+                },
+                "example": 600
+              }
+            }
+          },
+          "429": {
+            "description": "REST quota exceeded. Honor Retry-After; do not retry immediately.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative retry delay in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              },
+              "RateLimit-Policy": {
+                "description": "Enforced quota: 600 requests per 60 seconds per credential, or per source IP for anonymous requests, in each Cloudflare location.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "\"thumble-rest\";q=600;w=60"
+              },
+              "X-RateLimit-Limit": {
+                "description": "Configured request threshold; this is not a remaining counter.",
+                "schema": {
+                  "type": "integer"
+                },
+                "example": 600
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected service failure. Retry with bounded backoff.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service temporarily unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "RateLimit-Policy": {
+                "description": "Enforced quota: 600 requests per 60 seconds per credential, or per source IP for anonymous requests, in each Cloudflare location.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "\"thumble-rest\";q=600;w=60"
+              },
+              "X-RateLimit-Limit": {
+                "description": "Configured request threshold; this is not a remaining counter.",
+                "schema": {
+                  "type": "integer"
+                },
+                "example": 600
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/deliveries/{deliveryId}": {
+      "get": {
+        "operationId": "getThumbleDelivery",
+        "summary": "Read an existing delivery receipt. Queued does not mean displayed or tested in WoW.",
+        "description": "Read an existing delivery receipt. Queued does not mean displayed or tested in WoW.",
+        "security": [
+          {
+            "OAuth2": [
+              "deliveries:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "deliveryId",
+            "in": "path",
+            "required": true,
+            "description": "Requested deliveryId.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful read.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "delivery": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "deviceId": {
+                          "type": "string"
+                        },
+                        "profileId": {
+                          "type": "string"
+                        },
+                        "profileRevision": {
+                          "type": "integer"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "type": "string",
+                          "enum": [
+                            "queued",
+                            "received",
+                            "rendered",
+                            "failed",
+                            "superseded"
+                          ]
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "error": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "deviceId",
+                        "profileId",
+                        "profileRevision",
+                        "state"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "delivery"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "RateLimit-Policy": {
+                "description": "Enforced quota: 600 requests per 60 seconds per credential, or per source IP for anonymous requests, in each Cloudflare location.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "\"thumble-rest\";q=600;w=60"
+              },
+              "X-RateLimit-Limit": {
+                "description": "Configured request threshold; this is not a remaining counter.",
+                "schema": {
+                  "type": "integer"
+                },
+                "example": 600
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "RateLimit-Policy": {
+                "description": "Enforced quota: 600 requests per 60 seconds per credential, or per source IP for anonymous requests, in each Cloudflare location.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "\"thumble-rest\";q=600;w=60"
+              },
+              "X-RateLimit-Limit": {
+                "description": "Configured request threshold; this is not a remaining counter.",
+                "schema": {
+                  "type": "integer"
+                },
+                "example": 600
+              }
+            }
+          },
+          "403": {
+            "description": "Required read scope is absent.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "RateLimit-Policy": {
+                "description": "Enforced quota: 600 requests per 60 seconds per credential, or per source IP for anonymous requests, in each Cloudflare location.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "\"thumble-rest\";q=600;w=60"
+              },
+              "X-RateLimit-Limit": {
+                "description": "Configured request threshold; this is not a remaining counter.",
+                "schema": {
+                  "type": "integer"
+                },
+                "example": 600
+              }
+            }
+          },
+          "404": {
+            "description": "Record or route not found for this account.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "RateLimit-Policy": {
+                "description": "Enforced quota: 600 requests per 60 seconds per credential, or per source IP for anonymous requests, in each Cloudflare location.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "\"thumble-rest\";q=600;w=60"
+              },
+              "X-RateLimit-Limit": {
+                "description": "Configured request threshold; this is not a remaining counter.",
+                "schema": {
+                  "type": "integer"
+                },
+                "example": 600
+              }
+            }
+          },
+          "429": {
+            "description": "REST quota exceeded. Honor Retry-After; do not retry immediately.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative retry delay in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              },
+              "RateLimit-Policy": {
+                "description": "Enforced quota: 600 requests per 60 seconds per credential, or per source IP for anonymous requests, in each Cloudflare location.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "\"thumble-rest\";q=600;w=60"
+              },
+              "X-RateLimit-Limit": {
+                "description": "Configured request threshold; this is not a remaining counter.",
+                "schema": {
+                  "type": "integer"
+                },
+                "example": 600
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected service failure. Retry with bounded backoff.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service temporarily unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "RateLimit-Policy": {
+                "description": "Enforced quota: 600 requests per 60 seconds per credential, or per source IP for anonymous requests, in each Cloudflare location.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "\"thumble-rest\";q=600;w=60"
+              },
+              "X-RateLimit-Limit": {
+                "description": "Configured request threshold; this is not a remaining counter.",
+                "schema": {
+                  "type": "integer"
+                },
+                "example": 600
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sandbox": {
+      "get": {
+        "operationId": "getThumbleSandbox",
+        "summary": "Try synthetic controller, phone and delivery records without credentials.",
+        "description": "Read a fixed demonstration snapshot. No account, key, credit card, storage access, live phone, receiver, pairing credential or gameplay input is available. All writes are rejected.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Synthetic read-only examples.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "sandbox": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "profiles": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "revision": {
+                            "type": "integer"
+                          },
+                          "updatedAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "revision",
+                          "updatedAt"
+                        ]
+                      }
+                    },
+                    "profile": {
+                      "type": "object",
+                      "properties": {
+                        "profile": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "schemaVersion",
+                            "id",
+                            "name",
+                            "controls",
+                            "mappings"
+                          ],
+                          "properties": {
+                            "schemaVersion": {
+                              "const": 1,
+                              "type": "integer"
+                            },
+                            "id": {
+                              "type": "string",
+                              "pattern": "^[a-z0-9][a-z0-9-]{0,63}$"
+                            },
+                            "name": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 80
+                            },
+                            "theme": {
+                              "enum": [
+                                "consoleport"
+                              ],
+                              "type": "string"
+                            },
+                            "modifiers": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "shift": {
+                                  "enum": [
+                                    "a",
+                                    "b",
+                                    "x",
+                                    "y",
+                                    "lb",
+                                    "rb",
+                                    "back",
+                                    "start",
+                                    "ls",
+                                    "rs",
+                                    "up",
+                                    "down",
+                                    "left",
+                                    "right",
+                                    "guide",
+                                    "lt",
+                                    "rt",
+                                    "none"
+                                  ],
+                                  "type": "string"
+                                },
+                                "ctrl": {
+                                  "enum": [
+                                    "a",
+                                    "b",
+                                    "x",
+                                    "y",
+                                    "lb",
+                                    "rb",
+                                    "back",
+                                    "start",
+                                    "ls",
+                                    "rs",
+                                    "up",
+                                    "down",
+                                    "left",
+                                    "right",
+                                    "guide",
+                                    "lt",
+                                    "rt",
+                                    "none"
+                                  ],
+                                  "type": "string"
+                                },
+                                "alt": {
+                                  "enum": [
+                                    "a",
+                                    "b",
+                                    "x",
+                                    "y",
+                                    "lb",
+                                    "rb",
+                                    "back",
+                                    "start",
+                                    "ls",
+                                    "rs",
+                                    "up",
+                                    "down",
+                                    "left",
+                                    "right",
+                                    "guide",
+                                    "lt",
+                                    "rt",
+                                    "none"
+                                  ],
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "controls": {
+                              "type": "array",
+                              "minItems": 1,
+                              "maxItems": 64,
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "id",
+                                  "type",
+                                  "label",
+                                  "frame"
+                                ],
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 80
+                                  },
+                                  "type": {
+                                    "enum": [
+                                      "button",
+                                      "stick",
+                                      "trigger"
+                                    ],
+                                    "type": "string"
+                                  },
+                                  "label": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 80
+                                  },
+                                  "color": {
+                                    "type": "string",
+                                    "pattern": "^#[0-9a-fA-F]{6}$"
+                                  },
+                                  "icon": {
+                                    "type": "string",
+                                    "pattern": "^[a-z0-9_]{1,128}$"
+                                  },
+                                  "badge": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 80
+                                  },
+                                  "layers": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "": {
+                                        "type": "object",
+                                        "additionalProperties": false,
+                                        "required": [
+                                          "label"
+                                        ],
+                                        "properties": {
+                                          "label": {
+                                            "type": "string",
+                                            "minLength": 1,
+                                            "maxLength": 80
+                                          },
+                                          "icon": {
+                                            "type": "string",
+                                            "pattern": "^[a-z0-9_]{1,128}$"
+                                          }
+                                        }
+                                      },
+                                      "SHIFT-": {
+                                        "type": "object",
+                                        "additionalProperties": false,
+                                        "required": [
+                                          "label"
+                                        ],
+                                        "properties": {
+                                          "label": {
+                                            "type": "string",
+                                            "minLength": 1,
+                                            "maxLength": 80
+                                          },
+                                          "icon": {
+                                            "type": "string",
+                                            "pattern": "^[a-z0-9_]{1,128}$"
+                                          }
+                                        }
+                                      },
+                                      "CTRL-": {
+                                        "type": "object",
+                                        "additionalProperties": false,
+                                        "required": [
+                                          "label"
+                                        ],
+                                        "properties": {
+                                          "label": {
+                                            "type": "string",
+                                            "minLength": 1,
+                                            "maxLength": 80
+                                          },
+                                          "icon": {
+                                            "type": "string",
+                                            "pattern": "^[a-z0-9_]{1,128}$"
+                                          }
+                                        }
+                                      },
+                                      "ALT-": {
+                                        "type": "object",
+                                        "additionalProperties": false,
+                                        "required": [
+                                          "label"
+                                        ],
+                                        "properties": {
+                                          "label": {
+                                            "type": "string",
+                                            "minLength": 1,
+                                            "maxLength": 80
+                                          },
+                                          "icon": {
+                                            "type": "string",
+                                            "pattern": "^[a-z0-9_]{1,128}$"
+                                          }
+                                        }
+                                      },
+                                      "CTRL-SHIFT-": {
+                                        "type": "object",
+                                        "additionalProperties": false,
+                                        "required": [
+                                          "label"
+                                        ],
+                                        "properties": {
+                                          "label": {
+                                            "type": "string",
+                                            "minLength": 1,
+                                            "maxLength": 80
+                                          },
+                                          "icon": {
+                                            "type": "string",
+                                            "pattern": "^[a-z0-9_]{1,128}$"
+                                          }
+                                        }
+                                      },
+                                      "ALT-SHIFT-": {
+                                        "type": "object",
+                                        "additionalProperties": false,
+                                        "required": [
+                                          "label"
+                                        ],
+                                        "properties": {
+                                          "label": {
+                                            "type": "string",
+                                            "minLength": 1,
+                                            "maxLength": 80
+                                          },
+                                          "icon": {
+                                            "type": "string",
+                                            "pattern": "^[a-z0-9_]{1,128}$"
+                                          }
+                                        }
+                                      },
+                                      "ALT-CTRL-": {
+                                        "type": "object",
+                                        "additionalProperties": false,
+                                        "required": [
+                                          "label"
+                                        ],
+                                        "properties": {
+                                          "label": {
+                                            "type": "string",
+                                            "minLength": 1,
+                                            "maxLength": 80
+                                          },
+                                          "icon": {
+                                            "type": "string",
+                                            "pattern": "^[a-z0-9_]{1,128}$"
+                                          }
+                                        }
+                                      },
+                                      "ALT-CTRL-SHIFT-": {
+                                        "type": "object",
+                                        "additionalProperties": false,
+                                        "required": [
+                                          "label"
+                                        ],
+                                        "properties": {
+                                          "label": {
+                                            "type": "string",
+                                            "minLength": 1,
+                                            "maxLength": 80
+                                          },
+                                          "icon": {
+                                            "type": "string",
+                                            "pattern": "^[a-z0-9_]{1,128}$"
+                                          }
+                                        }
+                                      }
+                                    }
+                                  },
+                                  "frame": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "x",
+                                      "y",
+                                      "width",
+                                      "height"
+                                    ],
+                                    "properties": {
+                                      "x": {
+                                        "type": "number",
+                                        "minimum": 0,
+                                        "maximum": 1
+                                      },
+                                      "y": {
+                                        "type": "number",
+                                        "minimum": 0,
+                                        "maximum": 1
+                                      },
+                                      "width": {
+                                        "type": "number",
+                                        "minimum": 0.01,
+                                        "maximum": 1
+                                      },
+                                      "height": {
+                                        "type": "number",
+                                        "minimum": 0.01,
+                                        "maximum": 1
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            "mappings": {
+                              "type": "array",
+                              "maxItems": 64,
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "controlId",
+                                  "outputs"
+                                ],
+                                "properties": {
+                                  "controlId": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 80
+                                  },
+                                  "outputs": {
+                                    "type": "array",
+                                    "minItems": 1,
+                                    "maxItems": 2,
+                                    "items": {
+                                      "enum": [
+                                        "a",
+                                        "b",
+                                        "x",
+                                        "y",
+                                        "lb",
+                                        "rb",
+                                        "back",
+                                        "start",
+                                        "ls",
+                                        "rs",
+                                        "up",
+                                        "down",
+                                        "left",
+                                        "right",
+                                        "guide",
+                                        "lx",
+                                        "ly",
+                                        "rx",
+                                        "ry",
+                                        "lt",
+                                        "rt"
+                                      ],
+                                      "type": "string"
+                                    }
+                                  },
+                                  "deadzone": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "maximum": 0.5
+                                  },
+                                  "sensitivity": {
+                                    "type": "number",
+                                    "minimum": 0.1,
+                                    "maximum": 3
+                                  },
+                                  "invertX": {
+                                    "type": "boolean"
+                                  },
+                                  "invertY": {
+                                    "type": "boolean"
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          "description": "Normalized usable-canvas coordinates; x+width and y+height must fit within 1. Read list_devices for logical canvas dimensions. Cloud validate_profile and save_profile require deviceId: targets must be at least 48 points on both axes, sticks at least 96 points in diameter, and touch areas must not overlap controls or the top Chat/menu areas. IDs must be unique. Each control needs exactly one mapping: button to one button, trigger to lt/rt, stick to [lx,ly] or [rx,ry]. Optional invertX/invertY booleans reverse stick output axes without changing thumb visuals. Analog outputs have one owner. Labels do not bind WoW spells. No executable code, macros, timers or generated input."
+                        },
+                        "revision": {
+                          "type": "integer"
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      },
+                      "required": [
+                        "profile",
+                        "revision",
+                        "createdAt"
+                      ]
+                    },
+                    "devices": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "platform": {
+                            "type": "string",
+                            "enum": [
+                              "ios",
+                              "android"
+                            ]
+                          },
+                          "viewport": {
+                            "type": "object",
+                            "properties": {
+                              "width": {
+                                "type": "number"
+                              },
+                              "height": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "width",
+                              "height"
+                            ]
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "lastSeenAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "revokedAt": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "date-time"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "platform",
+                          "viewport"
+                        ]
+                      }
+                    },
+                    "delivery": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "deviceId": {
+                          "type": "string"
+                        },
+                        "profileId": {
+                          "type": "string"
+                        },
+                        "profileRevision": {
+                          "type": "integer"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "type": "string",
+                          "enum": [
+                            "queued",
+                            "received",
+                            "rendered",
+                            "failed",
+                            "superseded"
+                          ]
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "error": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "deviceId",
+                        "profileId",
+                        "profileRevision",
+                        "state"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "sandbox",
+                    "description",
+                    "profiles",
+                    "profile",
+                    "devices",
+                    "delivery"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "RateLimit-Policy": {
+                "description": "Enforced quota: 600 requests per 60 seconds per credential, or per source IP for anonymous requests, in each Cloudflare location.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "\"thumble-rest\";q=600;w=60"
+              },
+              "X-RateLimit-Limit": {
+                "description": "Configured request threshold; this is not a remaining counter.",
+                "schema": {
+                  "type": "integer"
+                },
+                "example": 600
+              }
+            }
+          },
+          "429": {
+            "description": "REST quota exceeded. Honor Retry-After; do not retry immediately.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative retry delay in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              },
+              "RateLimit-Policy": {
+                "description": "Enforced quota: 600 requests per 60 seconds per credential, or per source IP for anonymous requests, in each Cloudflare location.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "\"thumble-rest\";q=600;w=60"
+              },
+              "X-RateLimit-Limit": {
+                "description": "Configured request threshold; this is not a remaining counter.",
+                "schema": {
+                  "type": "integer"
+                },
+                "example": 600
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected service failure. Retry with bounded backoff.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": []
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Configuration": {
+        "type": "object",
+        "properties": {
+          "apiVersion": {
+            "type": "integer",
+            "const": 1
+          },
+          "auth": {
+            "type": "object",
+            "properties": {
+              "issuer": {
+                "type": "string"
+              },
+              "authorizationEndpoint": {
+                "type": "string"
+              },
+              "tokenEndpoint": {
+                "type": "string"
+              },
+              "mobileClientId": {
+                "type": "string"
+              },
+              "audience": {
+                "type": "string"
+              },
+              "scopes": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "issuer",
+              "authorizationEndpoint",
+              "tokenEndpoint",
+              "mobileClientId",
+              "audience",
+              "scopes"
+            ]
+          },
+          "mcpUrl": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "apiVersion",
+          "auth",
+          "mcpUrl"
+        ]
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ]
+          }
+        },
+        "required": [
+          "error"
+        ]
+      },
+      "Device": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "platform": {
+            "type": "string",
+            "enum": [
+              "ios",
+              "android"
+            ]
+          },
+          "viewport": {
+            "type": "object",
+            "properties": {
+              "width": {
+                "type": "number"
+              },
+              "height": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "width",
+              "height"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "lastSeenAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "revokedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "platform",
+          "viewport"
+        ]
+      },
+      "ProfileSummary": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "revision",
+          "updatedAt"
+        ]
+      },
+      "ProfileRevision": {
+        "type": "object",
+        "properties": {
+          "profile": {
+            "$ref": "#/components/schemas/Controller"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "profile",
+          "revision",
+          "createdAt"
+        ]
+      },
+      "Delivery": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "deviceId": {
+            "type": "string"
+          },
+          "profileId": {
+            "type": "string"
+          },
+          "profileRevision": {
+            "type": "integer"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "received",
+              "rendered",
+              "failed",
+              "superseded"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "deviceId",
+          "profileId",
+          "profileRevision",
+          "state"
+        ]
+      },
+      "Controller": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schemaVersion",
+          "id",
+          "name",
+          "controls",
+          "mappings"
+        ],
+        "properties": {
+          "schemaVersion": {
+            "const": 1,
+            "type": "integer"
+          },
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]{0,63}$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "theme": {
+            "enum": [
+              "consoleport"
+            ],
+            "type": "string"
+          },
+          "modifiers": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "shift": {
+                "enum": [
+                  "a",
+                  "b",
+                  "x",
+                  "y",
+                  "lb",
+                  "rb",
+                  "back",
+                  "start",
+                  "ls",
+                  "rs",
+                  "up",
+                  "down",
+                  "left",
+                  "right",
+                  "guide",
+                  "lt",
+                  "rt",
+                  "none"
+                ],
+                "type": "string"
+              },
+              "ctrl": {
+                "enum": [
+                  "a",
+                  "b",
+                  "x",
+                  "y",
+                  "lb",
+                  "rb",
+                  "back",
+                  "start",
+                  "ls",
+                  "rs",
+                  "up",
+                  "down",
+                  "left",
+                  "right",
+                  "guide",
+                  "lt",
+                  "rt",
+                  "none"
+                ],
+                "type": "string"
+              },
+              "alt": {
+                "enum": [
+                  "a",
+                  "b",
+                  "x",
+                  "y",
+                  "lb",
+                  "rb",
+                  "back",
+                  "start",
+                  "ls",
+                  "rs",
+                  "up",
+                  "down",
+                  "left",
+                  "right",
+                  "guide",
+                  "lt",
+                  "rt",
+                  "none"
+                ],
+                "type": "string"
+              }
+            }
+          },
+          "controls": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 64,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "type",
+                "label",
+                "frame"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 80
+                },
+                "type": {
+                  "enum": [
+                    "button",
+                    "stick",
+                    "trigger"
+                  ],
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 80
+                },
+                "color": {
+                  "type": "string",
+                  "pattern": "^#[0-9a-fA-F]{6}$"
+                },
+                "icon": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9_]{1,128}$"
+                },
+                "badge": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 80
+                },
+                "layers": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "label"
+                      ],
+                      "properties": {
+                        "label": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 80
+                        },
+                        "icon": {
+                          "type": "string",
+                          "pattern": "^[a-z0-9_]{1,128}$"
+                        }
+                      }
+                    },
+                    "SHIFT-": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "label"
+                      ],
+                      "properties": {
+                        "label": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 80
+                        },
+                        "icon": {
+                          "type": "string",
+                          "pattern": "^[a-z0-9_]{1,128}$"
+                        }
+                      }
+                    },
+                    "CTRL-": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "label"
+                      ],
+                      "properties": {
+                        "label": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 80
+                        },
+                        "icon": {
+                          "type": "string",
+                          "pattern": "^[a-z0-9_]{1,128}$"
+                        }
+                      }
+                    },
+                    "ALT-": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "label"
+                      ],
+                      "properties": {
+                        "label": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 80
+                        },
+                        "icon": {
+                          "type": "string",
+                          "pattern": "^[a-z0-9_]{1,128}$"
+                        }
+                      }
+                    },
+                    "CTRL-SHIFT-": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "label"
+                      ],
+                      "properties": {
+                        "label": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 80
+                        },
+                        "icon": {
+                          "type": "string",
+                          "pattern": "^[a-z0-9_]{1,128}$"
+                        }
+                      }
+                    },
+                    "ALT-SHIFT-": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "label"
+                      ],
+                      "properties": {
+                        "label": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 80
+                        },
+                        "icon": {
+                          "type": "string",
+                          "pattern": "^[a-z0-9_]{1,128}$"
+                        }
+                      }
+                    },
+                    "ALT-CTRL-": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "label"
+                      ],
+                      "properties": {
+                        "label": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 80
+                        },
+                        "icon": {
+                          "type": "string",
+                          "pattern": "^[a-z0-9_]{1,128}$"
+                        }
+                      }
+                    },
+                    "ALT-CTRL-SHIFT-": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "label"
+                      ],
+                      "properties": {
+                        "label": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 80
+                        },
+                        "icon": {
+                          "type": "string",
+                          "pattern": "^[a-z0-9_]{1,128}$"
+                        }
+                      }
+                    }
+                  }
+                },
+                "frame": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "x",
+                    "y",
+                    "width",
+                    "height"
+                  ],
+                  "properties": {
+                    "x": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "y": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "width": {
+                      "type": "number",
+                      "minimum": 0.01,
+                      "maximum": 1
+                    },
+                    "height": {
+                      "type": "number",
+                      "minimum": 0.01,
+                      "maximum": 1
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "mappings": {
+            "type": "array",
+            "maxItems": 64,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "controlId",
+                "outputs"
+              ],
+              "properties": {
+                "controlId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 80
+                },
+                "outputs": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 2,
+                  "items": {
+                    "enum": [
+                      "a",
+                      "b",
+                      "x",
+                      "y",
+                      "lb",
+                      "rb",
+                      "back",
+                      "start",
+                      "ls",
+                      "rs",
+                      "up",
+                      "down",
+                      "left",
+                      "right",
+                      "guide",
+                      "lx",
+                      "ly",
+                      "rx",
+                      "ry",
+                      "lt",
+                      "rt"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "deadzone": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 0.5
+                },
+                "sensitivity": {
+                  "type": "number",
+                  "minimum": 0.1,
+                  "maximum": 3
+                },
+                "invertX": {
+                  "type": "boolean"
+                },
+                "invertY": {
+                  "type": "boolean"
+                }
+              }
+            }
+          }
+        },
+        "description": "Normalized usable-canvas coordinates; x+width and y+height must fit within 1. Read list_devices for logical canvas dimensions. Cloud validate_profile and save_profile require deviceId: targets must be at least 48 points on both axes, sticks at least 96 points in diameter, and touch areas must not overlap controls or the top Chat/menu areas. IDs must be unique. Each control needs exactly one mapping: button to one button, trigger to lt/rt, stick to [lx,ly] or [rx,ry]. Optional invertX/invertY booleans reverse stick output axes without changing thumb visuals. Analog outputs have one owner. Labels do not bind WoW spells. No executable code, macros, timers or generated input."
+      },
+      "Sandbox": {
+        "type": "object",
+        "properties": {
+          "sandbox": {
+            "type": "boolean",
+            "const": true
+          },
+          "description": {
+            "type": "string"
+          },
+          "profiles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProfileSummary"
+            }
+          },
+          "profile": {
+            "$ref": "#/components/schemas/ProfileRevision"
+          },
+          "devices": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Device"
+            }
+          },
+          "delivery": {
+            "$ref": "#/components/schemas/Delivery"
+          }
+        },
+        "required": [
+          "sandbox",
+          "description",
+          "profiles",
+          "profile",
+          "devices",
+          "delivery"
+        ]
+      }
+    },
+    "securitySchemes": {
+      "OAuth2": {
+        "type": "oauth2",
+        "description": "Registered client, authorization code flow, PKCE S256 and explicit user consent. Issuer: https://thumble.io/api/auth.",
+        "flows": {
+          "authorizationCode": {
+            "authorizationUrl": "https://thumble.io/api/auth/oauth2/authorize",
+            "tokenUrl": "https://thumble.io/api/auth/oauth2/token",
+            "scopes": {
+              "profiles:read": "Read saved controllers",
+              "devices:read": "Read registered phones",
+              "deliveries:read": "Read delivery receipts"
+            }
+          }
+        }
+      }
+    }
+  }
+}

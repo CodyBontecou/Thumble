@@ -1,0 +1,11 @@
+{
+  "script": {
+    "source": "packages/cli/src/thumble.mjs",
+    "sha256": "f55074577b88db2548f10e2266c86ad72cbe4ebc6de741e93e43ff6622db8c2b"
+  },
+  "archive": {
+    "url": "https://thumble.io/cli/thumble-cli-0.1.0.tgz",
+    "filename": "thumble-cli-0.1.0.tgz",
+    "sha256": "b43fdc54f37095ef08b0132d0bb2d7da2e6c11c553e125404676cce5539dae6b"
+  }
+}

@@ -1,0 +1,55 @@
+/* Reading surfaces for evergreen guides; no script is needed to reveal content. */
+.guide-page { background: #000; }
+.guide-page .docs-hero { padding-block: 64px; }
+.guide-page .docs-hero h1 { max-width: 680px; font-size: 48px; line-height: 1; text-wrap: balance; }
+.guide-page .docs-hero .lede { max-width: 680px; font-size: 18px; line-height: 28px; text-wrap: pretty; }
+.guide-breadcrumb { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 24px; font-size: 14px; line-height: 20px; }
+.guide-meta { margin-top: 24px; color: #aaa; font-size: 14px; line-height: 20px; }
+.guide-page .docs-copy { max-width: 800px; }
+.guide-page .docs-copy p, .guide-page .docs-copy li { font-size: 16px; line-height: 24px; text-wrap: pretty; }
+.guide-page .docs-copy h2, .guide-start h2 { font-size: 30px; line-height: 36px; text-wrap: balance; }
+.guide-page .docs-copy h3 { font-size: 20px; line-height: 28px; margin-top: 24px; }
+.guide-page .docs-toc { background: #181818; border-radius: 8px; padding: 16px; }
+.guide-page .docs-toc a { text-transform: none; }
+.guide-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; padding-block: 48px; }
+.guide-card { display: flex; flex-direction: column; min-width: 0; gap: 16px; padding: 24px; border: 1px solid #313131; border-radius: 16px; background: #181818; text-decoration: none; }
+.guide-card > span:first-child { color: #aaa; font-size: 14px; line-height: 20px; }
+.guide-card :is(h2, h3) { font-size: 24px; line-height: 32px; margin: 0; text-wrap: balance; }
+.guide-card p { font-size: 16px; line-height: 24px; margin: 0; color: #aaa; text-wrap: pretty; }
+.guide-card .text-link { margin-top: auto; font-size: 14px; line-height: 20px; }
+.guide-card:hover { background: #272727; border-color: #aaa; }
+.guide-card:active { transform: scale(.98); }
+.guide-page a:focus-visible { outline: 2px solid #fff; outline-offset: 4px; }
+.guide-start { max-width: 800px; padding-block: 32px 64px; }
+.guide-next { background: #181818; border: 1px solid #313131; border-radius: 16px; padding: 24px; }
+.guide-next .form-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; margin-block: 12px; }
+.guide-next input[type="email"] { width: 100%; min-width: 0; font-size: 16px; line-height: 24px; padding: 12px; }
+.guide-next button { padding: 8px 12px; font-size: 16px; line-height: 24px; font-weight: 600; }
+.guide-next button:active { transform: scale(.98); }
+.guide-next button:focus-visible, .guide-next input:focus-visible { outline: 2px solid #fff; outline-offset: 4px; }
+.guide-figure { margin: 32px 0; }
+.guide-figure img { width: 100%; height: auto; }
+.guide-figure figcaption { margin-top: 12px; font-size: 14px; line-height: 20px; color: #aaa; }
+.guide-table-wrap { max-width: 100%; overflow-x: auto; margin-block: 24px; }
+.guide-table-wrap table { width: 100%; border-collapse: collapse; font-size: 16px; line-height: 24px; }
+.guide-table-wrap caption { text-align: left; margin-bottom: 12px; font-weight: 600; }
+.guide-table-wrap th, .guide-table-wrap td { border: 1px solid #313131; padding: 12px; text-align: left; vertical-align: top; }
+.guide-table-wrap thead { background: #181818; }
+.guide-table-wrap th { font-weight: 600; }
+.launch-page .site-header nav a[aria-current] { color: #fff; text-decoration: underline; text-underline-offset: 4px; }
+@media (max-width: 900px) { .guide-grid { grid-template-columns: 1fr; } }
+@media (max-width: 640px) {
+  .guide-page .docs-hero { padding-block: 40px; }
+  .guide-page .docs-hero h1 { font-size: 36px; line-height: 40px; }
+  .guide-page .docs-hero .lede { font-size: 16px; line-height: 24px; }
+  .guide-next .form-row { grid-template-columns: 1fr; }
+  .guide-next { padding: 16px; }
+  .guide-page .site-header { flex-wrap: wrap; gap: 16px; }
+  .guide-page .site-header nav { flex-wrap: wrap; }
+}
+
+.guide-jump-links { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 24px; font-size: 16px; line-height: 24px; }
+.guide-group { padding-block: 40px; scroll-margin-top: 24px; }
+.guide-group > h2 { margin: 0; font-size: 30px; line-height: 36px; text-wrap: balance; }
+.guide-group-intro { max-width: 680px; margin-block: 12px 0; color: #aaa; font-size: 16px; line-height: 24px; text-wrap: pretty; }
+.guide-group .guide-grid { padding-block: 24px 0; }

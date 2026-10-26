@@ -73,3 +73,17 @@ The local MCP server calls the same validation and profile API. Agents can read,
 The name “Xbox-style” describes the familiar control arrangement. The diagnostic also implements Thumble's Xbox-compatible HID descriptor and neutral report shape; this is not Xbox certification or evidence of universal game compatibility. The [MIT notice](ThirdParty/SteamControllerBridge-LICENSE.txt) accompanies the retained descriptor.
 
 The LAN receiver and QR pairing implementation are in [apps/receiver](apps/receiver/README.md). The iOS/Android app uses a local Expo native module for certificate-pinned TLS WebSockets. See [the wire protocol](docs/lan-protocol.md) for authentication, input freshness and release behavior. A bundled phone build can run without Metro; development builds use port 8088.
+
+## Website
+
+The production source for [thumble.io](https://thumble.io) is in [apps/website](apps/website/README.md), including the landing pages, 14 guides/comparisons, Pages Functions, waitlist migrations and agent-discovery documents. The legacy checkout is no longer needed to build or publish the website.
+
+```sh
+npm run website:test
+npm run website:build
+npm run website:dev
+# Publish to the existing Cloudflare Pages production project:
+npm run website:deploy
+```
+
+The build creates `dist/website`, excludes database and maintenance sources from public assets, regenerates Markdown and verifies the published CLI download hashes. Wrangler v4 and an authorized Cloudflare login are required for preview/deployment. See [website tooling](tools/website/README.md) for optional image/CSS optimization and offline CLI-archive input.
