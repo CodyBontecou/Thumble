@@ -21,7 +21,7 @@ Two built-in profiles work without an agent: `xbox-standard` (Xbox-style control
 Node 22+ is required. MCP uses newline-delimited JSON-RPC over local stdio, with no network listener or additional runtime dependency.
 
 ```sh
-codex mcp add tapping-profiles -- node /Users/codybontecou/dev/tapping/packages/profile-tools/src/server.js
+codex mcp add tapping-profiles -- node /Users/codybontecou/dev/Thumble/packages/profile-tools/src/server.js
 ```
 
 For other MCP clients:
@@ -31,7 +31,7 @@ For other MCP clients:
   "mcpServers": {
     "tapping-profiles": {
       "command": "node",
-      "args": ["/Users/codybontecou/dev/tapping/packages/profile-tools/src/server.js"]
+      "args": ["/Users/codybontecou/dev/Thumble/packages/profile-tools/src/server.js"]
     }
   }
 }

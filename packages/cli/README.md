@@ -32,4 +32,4 @@ node thumble.mjs delivery delivery-id
 
 Required scopes: profiles:read, devices:read or deliveries:read for the corresponding command. Output is JSON; failures exit nonzero. On HTTP 429, wait for Retry-After. There is no automatic retry, login flow, persistent credential store, write command, or hardware control.
 
-[Package source](https://github.com/CodyBontecou/tapping/tree/main/packages/cli) · [Developer documentation](https://thumble.io/developers#cli).
+[Package source](https://github.com/CodyBontecou/Thumble/tree/main/packages/cli) · [Developer documentation](https://thumble.io/developers#cli).

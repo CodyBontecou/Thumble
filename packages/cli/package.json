@@ -8,6 +8,6 @@
   "engines": { "node": ">=22" },
   "license": "MIT",
   "homepage": "https://thumble.io/developers#cli",
-  "repository": { "type": "git", "url": "git+https://github.com/CodyBontecou/tapping.git", "directory": "packages/cli" },
+  "repository": { "type": "git", "url": "git+https://github.com/CodyBontecou/Thumble.git", "directory": "packages/cli" },
   "scripts": { "test": "node --test test/*.test.mjs" }
 }
