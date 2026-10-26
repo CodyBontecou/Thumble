@@ -1,18 +1,23 @@
-import { open } from 'node:fs/promises';
+import { open, lstat } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { join } from 'node:path';
+import { checkWindowsPairingFile } from './pairing-permissions.js';
 
 /** Read only the receiver's private ephemeral image; never return the raw invitation. */
 export async function showPairingCode(store, now = Date.now()) {
   let file;
   let payload;
   try {
-    file = await open(join(store.directory, 'pairing-code.json'), constants.O_RDONLY | constants.O_NOFOLLOW);
+    const path = join(store.directory, 'pairing-code.json');
+    if ((await lstat(path)).isSymbolicLink()) throw Error('unsafe');
+    file = await open(path, constants.O_RDONLY | (constants.O_NOFOLLOW || 0));
     const stat = await file.stat();
-    if (!stat.isFile() || stat.size > 512 * 1024 || (stat.mode & 0o077) !== 0 || stat.uid !== process.getuid()) throw Error('unsafe');
+    if (!stat.isFile() || stat.size > 512 * 1024) throw Error('unsafe');
+    if (process.platform === 'win32') await checkWindowsPairingFile(path);
+    else if ((stat.mode & 0o077) !== 0 || stat.uid !== process.getuid()) throw Error('unsafe');
     payload = JSON.parse(await file.readFile('utf8'));
   } catch {
-    throw Error('No current pairing code. Start the updated Thumble Receiver on this Mac. If a phone is already paired, use controller_status; disconnect it manually only if you want to pair another phone.');
+    throw Error('No current pairing code. Start the updated Thumble Receiver on this computer. If a phone is already paired, use controller_status; disconnect it manually only if you want to pair another phone.');
   } finally { await file?.close(); }
   if (payload.version !== 1 || !Number.isSafeInteger(payload.updatedAt) || now < payload.updatedAt || now - payload.updatedAt >= 5000 ||
       !Number.isSafeInteger(payload.expiresAt) || payload.expiresAt <= now || payload.expiresAt > now + 120_000) {

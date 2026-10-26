@@ -271,7 +271,8 @@ class TransportTests(unittest.IsolatedAsyncioTestCase):
         self.context, self.fingerprint = identity()
         self.invitation = Invitation('127.0.0.1', 0, self.fingerprint)
         self.ready = asyncio.Queue()
-        self.server = ReceiverServer(self.output, Access(self.directory.name), self.invitation, self.ready.put_nowait)
+        self.server = ReceiverServer(self.output, Access(self.directory.name), self.invitation,
+                                     lambda value: self.ready.put_nowait(value) if value else None)
         self.stop = asyncio.Event()
         self.task = asyncio.create_task(self.server.run('127.0.0.1', 0, self.context, self.stop))
         await asyncio.wait_for(self.ready.get(), 5)
@@ -416,6 +417,9 @@ class TransportTests(unittest.IsolatedAsyncioTestCase):
                     await socket.recv()
 
     async def test_real_phone_connection_selects_and_adopts_with_layout_receipts(self):
+        await self.run_phone_client()
+
+    async def run_phone_client(self, udp=False, chat=False):
         if not shutil.which('node'):
             self.skipTest('Node is required for the real phone connection test')
         self.invitation.address = '192.168.1.2'
@@ -423,13 +427,62 @@ class TransportTests(unittest.IsolatedAsyncioTestCase):
         process = await asyncio.create_subprocess_exec('node', str(Path(__file__).with_name('phone-client.mjs')),
                     stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
         try:
-            stdout, stderr = await asyncio.wait_for(process.communicate(json.dumps(dict(invitation=link)).encode()), 12)
+            stdout, stderr = await asyncio.wait_for(process.communicate(json.dumps(
+                dict(invitation=link, expectUdp=udp, expectChat=chat)).encode()), 12)
             self.assertEqual(process.returncode, 0, stderr.decode() + '\nReceiver: ' + self.server.profile_error)
             self.assertIn('PASS real phone connection', stdout.decode())
         finally:
             if process.returncode is None:
                 process.kill()
                 await process.wait()
+
+    async def test_real_phone_uses_encrypted_udp_and_chat_control_over_tls(self):
+        calls = []
+
+        class Chat:
+            def send(self, text, channel, cancelled):
+                calls.append((text, channel))
+
+        self.server.enable_udp = True
+        self.server.chat = Chat()
+        await self.run_phone_client(udp=True, chat=True)
+        self.assertEqual(calls, [('literal hello 😀', 'say')])
+
+    async def test_chat_replay_cannot_type_twice_and_pause_cancels_delivery(self):
+        calls, started = [], threading.Event()
+
+        class Chat:
+            def send(self, text, channel, cancelled):
+                calls.append((text, channel))
+                started.set()
+                if cancelled.wait(2):
+                    from thumble_receiver.chat import ChatError
+                    raise ChatError('Delivery cancelled.')
+
+        self.server.chat = Chat()
+        async with connect(self.url, ssl=self.client_context, proxy=None) as socket:
+            await self.hello(socket)
+            ready = await self.receive(socket, 'ready')
+            self.assertEqual(ready['chat'], 1)
+            await socket.send(json.dumps(dict(type='access-resume')))
+            paused = await self.receive(socket, 'paused')
+            frame = dict(type='input', revision=0, seq=0, lease=paused['lease'], state=NEUTRAL.__dict__)
+            await socket.send(json.dumps(frame))
+            ack = await self.receive(socket, 'ack')
+            request = dict(type='chat', id='one-chat', revision=0, lease=ack['lease'], text='hello', channel='say')
+            await socket.send(json.dumps(request))
+            await self.receive(socket, 'paused')
+            deadline = time.monotonic() + 1
+            while not started.is_set() and time.monotonic() < deadline:
+                await asyncio.sleep(0.005)
+            self.assertTrue(started.is_set())
+            await socket.send(json.dumps(request))
+            result = await self.receive(socket, 'chat-result')
+            self.assertIn('already submitted', result['error'])
+            await socket.send(json.dumps(dict(type='access-pause')))
+            result = await self.receive(socket, 'chat-result')
+            self.assertIn('cancelled', result['error'])
+            self.assertEqual(calls, [('hello', 'say')])
 
     async def test_slow_profile_disk_work_releases_controls_without_blocking_input(self):
         gate = threading.Event()

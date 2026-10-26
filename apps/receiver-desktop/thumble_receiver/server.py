@@ -1,9 +1,11 @@
 """Bounded WSS transport and the v3 phone protocol; no gameplay cloud relay."""
 import asyncio
+import base64
 import contextlib
 from concurrent.futures import ThreadPoolExecutor
 import json
 import time
+import threading
 import uuid
 
 from websockets.asyncio.server import serve
@@ -13,6 +15,9 @@ from .state import NEUTRAL, State, integer
 from .clock import monotonic
 from .consoleport import ConsolePortSync
 from .profiles import ProfileStore, ProfileError, load_json
+from .chat import ChatError, validate as validate_chat
+from .datagram import DatagramInput
+from .pairing_image import PairingImage
 
 
 class ProtocolError(ValueError):
@@ -31,7 +36,7 @@ def decode(text, adoption=False):
 
 
 class Session:
-    def __init__(self, output, access, clock=monotonic):
+    def __init__(self, output, access, clock=monotonic, chat_available=False):
         self.output, self.access, self.clock = output, access, clock
         self.sequence, self.last_input, self.last_pause = -1, clock(), 0
         self.leases = {}
@@ -39,6 +44,8 @@ class Session:
         self.generation = output.generation
         self.revision, self.profile, self.layout_pending, self.layout_deadline = 0, None, False, 0
         self.profile_busy = False
+        self.chat_available, self.chat_busy, self.chat_cancel = chat_available, False, None
+        self.chat_results = {}
 
     def activate(self, active):
         if not active or active['revision'] <= self.revision:
@@ -55,6 +62,8 @@ class Session:
                     revision=self.revision, pro=self.access.pro, receiverId=self.access.receiver_id)
 
     def pause(self, revoke=True):
+        if self.chat_cancel:
+            self.chat_cancel.set()
         self.output.release()
         self.generation = self.output.generation
         if revoke:
@@ -72,9 +81,11 @@ class Session:
         value = dict(type=kind, seq=self.sequence, lease=lease)
         if kind == 'ready':
             value.update(access=1, profiles=1, cloudAdoption=1)
+            if self.chat_available:
+                value['chat'] = 1
         return value
 
-    def handle(self, message):
+    def handle(self, message, udp=False):
         kind = message.get('type')
         if kind == 'bye':
             raise ProtocolError('Phone disconnected')
@@ -120,6 +131,8 @@ class Session:
         if self.layout_pending or type(message.get('revision')) is not int or message['revision'] != self.revision:
             return []
         sequence = message.get('seq')
+        if udp and integer(sequence) and sequence <= self.sequence:
+            return []  # Datagram reordering is normal; TCP replay is a protocol error.
         if not integer(sequence) or sequence <= self.sequence:
             raise ProtocolError('Invalid or stale sequence')
         state = State.parse(message.get('state'))
@@ -137,7 +150,7 @@ class Session:
         self.sequence, self.last_input = sequence, self.clock()
         if self.enabled:
             self.access.start()
-        allowed = self.enabled and self.access.running
+        allowed = self.enabled and self.access.running and not self.chat_busy
         deadline = self.last_input + 0.3
         if allowed and not self.access.pro:
             deadline = min(deadline, self.access.deadline)
@@ -169,7 +182,8 @@ class Session:
 
 
 class ReceiverServer:
-    def __init__(self, output, access, invitation, on_invitation=lambda _: None, profiles=None, wow_roots=()):
+    def __init__(self, output, access, invitation, on_invitation=lambda _: None, profiles=None, wow_roots=(),
+                 enable_udp=False, chat=None):
         self.output, self.access, self.invitation = output, access, invitation
         self.on_invitation = on_invitation
         self.peer = None
@@ -180,6 +194,59 @@ class ReceiverServer:
         self.active = None
         self.session = None
         self.profile_error = ''
+        self.enable_udp, self.chat = enable_udp, chat
+        self.chat_worker = ThreadPoolExecutor(max_workers=1, thread_name_prefix='thumble-chat')
+        self.pairing_image = PairingImage(self.profiles.directory)
+        self.current_invitation = ''
+        self.on_status = lambda _: None
+        self.closing = False
+
+    async def chat_request(self, socket, session, message):
+        request = message.get('id')
+        if not isinstance(request, str) or not 0 < len(request.encode()) <= 80:
+            return
+        if request in session.chat_results:
+            await self.send(socket, [session.chat_results[request]])
+            return
+        result = dict(type='chat-result', id=request)
+        try:
+            if self.chat is None:
+                raise ChatError('WoW chat is unavailable on this desktop. Check the receiver setup instructions.')
+            validate_chat(message.get('text'), message.get('channel'))
+            lease = message.get('lease')
+            if session.chat_busy:
+                raise ChatError('Another chat message is being delivered. Please wait.')
+            if not session.enabled or not self.access.running or (
+                    not self.access.pro and session.clock() >= self.access.deadline):
+                raise ChatError('Start or resume the demo, or restore Pro, before sending chat.')
+            if (session.layout_pending or type(message.get('revision')) is not int
+                    or message['revision'] != session.revision or not isinstance(lease, str)
+                    or session.clock() > session.leases.get(lease, float('-inf'))):
+                raise ChatError('Connection changed. Review your message and try again.')
+            if len(session.chat_results) >= 1000:
+                raise ChatError('Reconnect the phone to continue chatting.')
+        except (ChatError, UnicodeError) as error:
+            result['error'] = str(error)
+            await self.send(socket, [result])
+            return
+        session.pause()
+        session.chat_busy = True
+        session.chat_cancel = threading.Event()
+        session.chat_results[request] = dict(type='chat-result', id=request,
+            error='This message was already submitted. Check WoW before trying again.')
+        try:
+            await self.send(socket, [session.ack('paused')])
+            await asyncio.get_running_loop().run_in_executor(self.chat_worker, self.chat.send,
+                message['text'], message['channel'], session.chat_cancel)
+        except (ChatError, OSError, RuntimeError) as error:
+            result['error'] = str(error) if isinstance(error, ChatError) else 'Delivery could not be confirmed. Check WoW before retrying.'
+        finally:
+            session.chat_busy = False
+            session.chat_cancel.set()
+        session.chat_results[request] = result
+        if self.peer is socket:
+            session.pause(revoke=False)
+            await self.send(socket, [result] + ([] if session.layout_pending else [session.ack('paused')]))
 
     async def work(self, function, *args):
         return await asyncio.get_running_loop().run_in_executor(self.worker, function, *args)
@@ -206,7 +273,7 @@ class ReceiverServer:
                 catalog, active = await self.work(self.catalog)
             else:
                 lease = message.get('lease')
-                if (session.layout_pending or not isinstance(lease, str)
+                if (session.layout_pending or session.chat_busy or not isinstance(lease, str)
                         or session.clock() > session.leases.get(lease, float('-inf'))):
                     raise ProfileError('Connection changed. Refresh and try again.')
                 # Disk locks, validation, and atomic writes never retain held input.
@@ -235,7 +302,27 @@ class ReceiverServer:
             session.profile_busy = False
 
     def renew(self):
-        self.on_invitation(self.invitation.renew())
+        if self.closing:
+            return
+        self.current_invitation = self.invitation.renew()
+        self.on_invitation(self.current_invitation)
+
+    async def reset_pairing(self):
+        if self.session:
+            self.session.pause()
+        if self.peer:
+            await self.peer.close(code=1000)
+        else:
+            self.renew()
+
+    async def configure_sync(self, roots):
+        def configure():
+            self.sync.roots = list(roots)
+            self.sync.pending = None
+            self.sync.stamps = {}
+            self.sync.detail = 'ConsolePort: waiting for /reload' if roots else 'ConsolePort sync off'
+            self.sync.poll(baseline=True)
+        await self.work(configure)
 
     async def send(self, socket, values):
         for value in values:
@@ -250,6 +337,7 @@ class ReceiverServer:
         self.clients += 1
         ticker = None
         session = None
+        datagram = None
         profile_tasks = set()
         try:
             hello = decode(await asyncio.wait_for(socket.recv(), timeout=5))
@@ -262,11 +350,27 @@ class ReceiverServer:
                     or not self.invitation.redeem(hello.get('token'))):
                 raise ProtocolError('Pairing unavailable')
             self.peer = socket
+            self.current_invitation = ''
+            self.on_invitation('')
             self.output.release()
+            await self.work(self.pairing_image.clear)
             self.access.pair(phone_id, hello.get('demoUsed', 0))
-            session = Session(self.output, self.access)
+            session = Session(self.output, self.access, chat_available=self.chat is not None)
             self.session = session
             await self.send(socket, [session.ack('ready'), self.access.snapshot(False)] + session.activate(self.active))
+            if self.enable_udp and type(hello.get('datagram')) is int and hello['datagram'] == 1:
+                def datagram_failed():
+                    if self.peer is socket:
+                        with contextlib.suppress(OSError, RuntimeError):
+                            session.pause()
+                        asyncio.create_task(socket.close(code=1008))
+                try:
+                    host = socket.local_address[0]
+                    datagram = await DatagramInput.create(host, session, datagram_failed)
+                    await self.send(socket, [dict(type='udp-offer', port=datagram.port,
+                                                 key=base64.b64encode(datagram.key).decode())])
+                except OSError:
+                    pass  # WSS remains fully functional if UDP cannot bind.
 
             async def tick():
                 last_access = 0
@@ -285,8 +389,9 @@ class ReceiverServer:
             ticker = asyncio.create_task(tick())
             async for text in socket:
                 message = decode(text, adoption=True)
-                if message.get('type') in ('profiles-list', 'profile-select', 'profile-adopt'):
-                    task = asyncio.create_task(self.profile_request(socket, session, message))
+                if message.get('type') in ('profiles-list', 'profile-select', 'profile-adopt', 'chat'):
+                    operation = self.chat_request if message.get('type') == 'chat' else self.profile_request
+                    task = asyncio.create_task(operation(socket, session, message))
                     profile_tasks.add(task)
                     # Bound work even when a peer ignores the single-request protocol.
                     if len(profile_tasks) >= 4:
@@ -304,6 +409,10 @@ class ReceiverServer:
                 session.pause()
             await socket.close(code=1008)
         finally:
+            if session and session.chat_cancel:
+                session.chat_cancel.set()
+            if datagram:
+                datagram.close()
             # A transaction already dispatched to the worker may finish after a peer
             # disconnects, but its callback may never activate a replacement session.
             for task in profile_tasks:
@@ -330,11 +439,17 @@ class ReceiverServer:
         try:
             await self._run(host, port, context, stop)
         finally:
+            self.closing = True
+            self.current_invitation = ''
+            self.on_invitation('')
+            with contextlib.suppress(OSError):
+                await self.work(self.pairing_image.clear)
             with contextlib.suppress(OSError, ValueError):
                 await self.work(self.profiles.write_status, dict(updatedAt=time.time() * 1000,
                                 connected=False, ready=False, revision=self.active['revision'] if self.active else 0,
                                 pro=False, receiverId=self.access.receiver_id))
             self.worker.shutdown(wait=True, cancel_futures=True)
+            self.chat_worker.shutdown(wait=True, cancel_futures=True)
 
     async def _run(self, host, port, context, stop):
         _, self.active = await self.work(self.catalog)
@@ -365,6 +480,9 @@ class ReceiverServer:
                             revision=self.active['revision'] if self.active else 0,
                             pro=False, receiverId=self.access.receiver_id)
                         await self.work(self.profiles.write_status, status)
+                        self.on_status({**status, 'sync': self.sync.detail})
+                        if count % 4 == 0:
+                            await self.work(self.pairing_image.publish, self.current_invitation, self.invitation.expires)
                     except (OSError, ValueError, TypeError, KeyError) as error:
                         self.profile_error = str(error)
                     except (ConnectionClosed, TimeoutError):
@@ -374,6 +492,7 @@ class ReceiverServer:
             try:
                 await stop.wait()
             finally:
+                self.closing = True
                 refresh_task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
                     await refresh_task

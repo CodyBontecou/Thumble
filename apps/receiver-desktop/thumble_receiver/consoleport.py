@@ -7,6 +7,7 @@ import time
 
 from .profiles import (MODIFIERS, ProfileError, bounded_read, finite, integer,
                        load_json, matches, require, text, validate_profile)
+from .artwork import IconLookup
 
 KEY_MAP = dict(zip(('PAD1 PAD2 PAD3 PAD4 PADLSHOULDER PADRSHOULDER PADLTRIGGER PADRTRIGGER '
                    'PADBACK PADFORWARD PADLSTICK PADRSTICK PADDUP PADDDOWN PADDLEFT PADDRIGHT PADSYSTEM').split(),
@@ -107,7 +108,7 @@ def short_label(value):
     return result or 'Unbound'
 
 
-def make_profile(snapshot, source):
+def make_profile(snapshot, source, lookup=None):
     profile = validate_profile(source)
     require(profile.get('theme') == 'consoleport', 'Select a ConsolePort controller to enable automatic sync.')
     guid = snapshot['character']['guid']
@@ -136,6 +137,8 @@ def make_profile(snapshot, source):
             # Embedded fallback; the port never needs network access to sync labels.
             if layer.get('kind') == 'spell' and layer.get('id') == 6603:
                 icon = 'ability_meleedamage'
+            elif lookup and layer.get('kind') in ('spell', 'item'):
+                icon = lookup(layer['kind'], layer['id']) or icon
             if label != 'Unbound' and icon:
                 display['icon'] = icon
             layers[layer['modifier']] = display
@@ -213,10 +216,11 @@ def snapshot_files(roots):
 
 
 class ConsolePortSync:
-    def __init__(self, store, roots=(), wall=time.time):
+    def __init__(self, store, roots=(), wall=time.time, lookup=None):
         self.store, self.roots, self.wall = store, list(roots), wall
         self.stamps = {}
         self.pending = None
+        self.lookup = lookup if lookup is not None else IconLookup()
         self.detail = 'ConsolePort: waiting for /reload' if roots else 'ConsolePort: choose your WoW folder with --wow-dir'
 
     def poll(self, baseline=False):
@@ -249,7 +253,9 @@ class ConsolePortSync:
                 active = store.get('active')
                 source = active['profile'] if active else next(
                     entry['profile'] for entry in store['profiles'] if entry['profile']['id'] == 'consoleport-standard')
-                profile = make_profile(snapshot, source)
+                if hasattr(self.lookup, 'begin'):
+                    self.lookup.begin()
+                profile = make_profile(snapshot, source, self.lookup)
                 require(decode_saved(bounded_read(file, 4 * 1024 * 1024)) == data,
                         'Snapshot changed during sync. Reload WoW to retry.')
                 commit(self.store, profile, snapshot, file, active['revision'] if active else 0)

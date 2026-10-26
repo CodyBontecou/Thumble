@@ -1,16 +1,24 @@
 // Drive the real portable phone connection through a TLS-backed native bridge double.
 // Invitation arrives over stdin and is never printed or passed on the command line.
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
+import { createHash, createCipheriv, createDecipheriv } from 'node:crypto';
+import dgram from 'node:dgram';
 import WebSocket from 'ws';
 import { Connection } from '../../mobile/src/connection-core.js';
 import { neutralState } from '@tapping/controller';
 
 let input = '';
 for await (const chunk of process.stdin) input += chunk;
-const { invitation } = JSON.parse(input);
+const { invitation, expectUdp = false, expectChat = false } = JSON.parse(input);
 const listeners = {};
 let socket, serial = 0;
+let udp, udpKey, udpPort, sending = 0n, received = 0n;
+const seal = text => {
+  const nonce = Buffer.alloc(12); nonce.writeUInt32BE(1); nonce.writeBigUInt64BE(++sending, 4);
+  const cipher = createCipheriv('aes-256-gcm', udpKey, nonce);
+  cipher.setAAD(Buffer.from('tapping-udp-v1'));
+  return Buffer.concat([nonce, cipher.update(text), cipher.final(), cipher.getAuthTag()]);
+};
 const native = {
   addListener: (name, handler) => { listeners[name] = handler; },
   connect: (url, pin) => {
@@ -28,7 +36,29 @@ const native = {
     return id;
   },
   send: value => { if (socket?.readyState !== WebSocket.OPEN) return false; socket.send(value); return true; },
-  disconnect: () => socket?.close(),
+  configureDatagram: (port, key) => {
+    udpKey = Buffer.from(key, 'base64'); udpPort = port;
+    udp = dgram.createSocket('udp4');
+    const id = String(serial);
+    udp.on('message', packet => {
+      try {
+        const nonce = packet.subarray(0, 12), count = nonce.readBigUInt64BE(4);
+        assert.equal(nonce.readUInt32BE(), 2); assert(count > received);
+        const decipher = createDecipheriv('aes-256-gcm', udpKey, nonce);
+        decipher.setAAD(Buffer.from('tapping-udp-v1')); decipher.setAuthTag(packet.subarray(-16));
+        const value = Buffer.concat([decipher.update(packet.subarray(12, -16)), decipher.final()]).toString();
+        received = count;
+        listeners.message({ id, value, transport: 'udp' });
+      } catch { /* Corrupt and replayed datagrams cannot refresh the phone watchdog. */ }
+    });
+    udp.on('error', () => listeners.status({ id, value: 'udp error' }));
+    udp.bind(0, '127.0.0.1', () => udp.send(seal('{"type":"probe"}'), port, '127.0.0.1'));
+  },
+  sendDatagram: text => {
+    if (!udp) return false;
+    udp.send(seal(text), udpPort, '127.0.0.1'); return true;
+  },
+  disconnect: () => { socket?.close(); if (udp) { udp.close(); udp = null; } },
 };
 const connection = new Connection(native);
 connection.phoneId = '11111111-1111-1111-1111-111111111111';
@@ -45,6 +75,7 @@ connection.subscribeProfile(() => {
 try {
   await connection.connect(invitation);
   await wait(() => connection.snapshot().phase === 'connected' && connection.access);
+  if (expectUdp) await wait(() => connection.inputTransport === 'udp');
   const catalog = await connection.requestProfiles();
   const starter = catalog.profiles.find(profile => profile.id === 'consoleport-standard');
   const selected = await connection.selectProfile(starter, catalog.activationRevision);
@@ -56,6 +87,7 @@ try {
   const before = connection.sequence;
   connection.submit({ ...neutralState(), buttons: 1 });
   await wait(() => connection.sequence > before && connection.pending.size === 0);
+  if (expectChat) await connection.sendChat('literal hello 😀', 'say');
   const profile = { ...structuredClone(connection.layout.profile), id: 'cloud-phone-test', name: 'Cloud phone test' };
   const source = { service: 'https://thumble.example/v1', accountId: 'a'.repeat(64), profileId: profile.id, revision: 1 };
   const adopted = await connection.adoptProfile(profile, source, selected.activationRevision);
@@ -65,7 +97,7 @@ try {
   const retried = await connection.adoptProfile(profile, source, adopted.activationRevision);
   assert.equal(retried.activationRevision, adopted.activationRevision);
   assert.equal(retried.adoption.profileId, adopted.adoption.profileId);
-  console.log('PASS real phone connection: TLS, select, render, neutral ACK, resume, input, cloud adoption');
+  console.log(`PASS real phone connection: TLS, select, render, neutral ACK, resume, input, cloud adoption, transport=${connection.inputTransport}, chat=${expectChat}`);
 } finally {
   connection.disconnect();
 }

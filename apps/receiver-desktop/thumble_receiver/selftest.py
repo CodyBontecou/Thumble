@@ -9,16 +9,27 @@ import uuid
 from websockets.asyncio.client import connect
 
 from .access import Access
-from .output import GuardedOutput, MemoryOutput
+from .output import GuardedOutput, MemoryOutput, native_output
 from .pairing import Invitation, identity
 from .server import ReceiverServer
 from .state import NEUTRAL, State
 
 
-async def selftest():
+async def selftest(native=False):
     context, fingerprint = identity()
-    output = GuardedOutput(MemoryOutput())
+    backend = native_output() if native else MemoryOutput()
+    output = GuardedOutput(backend)
+    native_probe = None
+    async def verify(state):
+        if native_probe:
+            from .native_probe import wait_for
+            await asyncio.to_thread(wait_for, native_probe, state)
+        elif output.backend.state != state:
+            raise RuntimeError('Output state did not match the authenticated input')
     try:
+        if native:
+            from .native_probe import probe
+            native_probe = probe(backend)
         with tempfile.TemporaryDirectory(prefix='thumble-selftest-') as directory:
             ready = asyncio.Event()
             invitation = Invitation('127.0.0.1', 0, fingerprint)
@@ -50,14 +61,12 @@ async def selftest():
                     frame = dict(type='input', seq=0, revision=0, lease=paused['lease'], state=NEUTRAL.__dict__)
                     await socket.send(json.dumps(frame))
                     ack = await receive('ack')
-                    await socket.send(json.dumps({**frame, 'seq': 1, 'lease': ack['lease'],
-                                                  'state': State(buttons=1).__dict__}))
+                    held = State(buttons=1, lx=-0.25, ly=0.5, rx=0.75, ry=-1, lt=0.25, rt=0.75)
+                    await socket.send(json.dumps({**frame, 'seq': 1, 'lease': ack['lease'], 'state': held.__dict__}))
                     await receive('ack')
-                    if output.backend.state.buttons != 1:
-                        raise RuntimeError('Input did not reach output adapter')
+                    await verify(held)
                     await receive('paused')
-                    if output.backend.state != NEUTRAL:
-                        raise RuntimeError('Watchdog did not release input')
+                    await verify(NEUTRAL)
                     paused = await receive('paused')
                     await socket.send(json.dumps(dict(type='profile-select', id='select',
                         profileId='consoleport-standard', profileRevision=1, expectedActivationRevision=0,
@@ -90,4 +99,4 @@ async def selftest():
                 await asyncio.wait_for(task, 5)
     finally:
         output.close()
-    print('PASS: packaged TLS, certificate pin, pairing, demo, input, watchdog, profile selection, cloud adoption, layout acknowledgement')
+    print('PASS: ' + ('native OS gamepad, ' if native else '') + 'TLS, certificate pin, pairing, demo, input, watchdog, profile selection, cloud adoption, layout acknowledgement')

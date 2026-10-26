@@ -27,28 +27,53 @@ Implemented in the preview:
   profiles come from the same generated resource as the Mac and phone.
 - Saved ConsolePort addon snapshot sync with all eight modifier layers, actual
   modifier assignments, character-specific profiles, and preserved geometry.
+- Encrypted AES-GCM UDP input, with TLS control traffic and WSS fallback.
+- Focus-checked, literal WoW chat delivery to an identified window. Windows uses
+  targeted Unicode window messages; Linux uses xdotool on X11/XWayland.
+- Native pairing/settings window, tray controls, per-user installation and
+  optional start at sign-in. Closing the window retains the tray when available.
+- Local MCP pairing PNG export with POSIX permissions or a protected Windows ACL,
+  browser OAuth/PKCE sign-in, and explicit ten-minute ChatGPT QR sharing.
+- Bounded, cached spell/item icon-name lookup, matching the Mac endpoint.
 
-Chat delivery, UDP input, hosted ChatGPT pairing, local MCP pairing-image export,
-general spell artwork lookup, tray UI, auto-start, installers, signing, and
-automatic updates are follow-up work. Unsupported capabilities are not advertised to the
-phone. Existing phone copy still calls the computer “Mac”; **Connect Mac** also
+These builds are unsigned previews; production signing and an automatic update
+service are separate release work. Existing phone copy still calls the computer “Mac”; **Connect Mac** also
 scans this receiver's invitation. No mobile changes are needed for basic input.
 
 ## Run a CI artifact
 
 Download the artifact for your OS from the **Desktop receiver** GitHub Actions
-run. Extract the executable, complete driver setup below, and run it in a terminal:
+run. Windows includes a per-user setup executable; run it, complete the separate
+gamepad driver setup below, and open **Thumble Receiver** from Start. Setup registers
+the browser sign-in callback without administrator privileges. It does not install
+the kernel driver. Uninstall through Windows Apps settings; your profiles and
+purchase/demo records are retained.
 
-```powershell
-# Windows PowerShell
-.\thumble-receiver.exe --address 192.168.1.20 --port 8765
-```
+For Linux, extract the archive and install the application for your user:
 
 ```sh
-# Linux: restore executable permission after extracting the ZIP.
-chmod +x ./thumble-receiver
-./thumble-receiver --address 192.168.1.20 --port 8765
+# Linux
+tar -xzf Thumble-Receiver-0.1.0-linux-x64.tar.gz
+./thumble-receiver/thumble-receiver --install-user
 ```
+
+Open **Thumble Receiver** from the applications menu. The installer registers the
+browser callback and adds `~/.local/bin/thumble-receiver`. It requires `xdg-utils`
+and uses `${XDG_DATA_HOME:-~/.local/share}/thumble/receiver/0.1.0`. Run the installed
+binary with `--uninstall-user` to remove the app while retaining receiver data.
+Keep the bundle's `_internal` directory alongside the executable; libraries stay
+replaceable and third-party licenses are included. SHA-256 checksums accompany
+both platform packages.
+
+The window shows the QR, current connection status, ChatGPT sharing controls,
+ConsolePort folder selection, start-at-sign-in, and Wi-Fi interface selection.
+**Restart here** releases controls before rebinding to a selected LAN address.
+The tray includes pairing, sharing, disconnect, and quit actions. On desktops
+without a tray, closing the window releases controls and exits.
+
+For a terminal-only receiver, run the installed executable with
+`--headless --address 192.168.1.20 --port 8765`. Portable bundles can register
+browser sign-in with `--register-protocol`; normal installers already do this.
 
 Use this computer's Wi-Fi IPv4 address. With no `--address`, the receiver selects
 the default route's private IPv4 interface; specify it explicitly if a VPN or
@@ -59,10 +84,13 @@ No router port forwarding is needed. Omitting `--port` chooses an available port
 Scan the QR in Thumble's **Connect Mac** screen, then use **Start demo / Resume**.
 The QR renews after expiry or disconnect. Ctrl+C releases the pad and exits.
 Keep the QR private; do not capture it in CI logs or share it with other people.
-No credentials, TLS keys, or invitations are retained in the data directory.
+TLS keys are removed after loading the process-local identity. OAuth credentials
+stay in memory. The private local MCP PNG is ephemeral: it is refreshed while
+unpaired, removed on pairing/quit, and rejected by local tools after five seconds
+without a heartbeat. A crash may leave a stale image file, which is not accepted.
 
-These are unsigned preview executables. Native game/Steam/Proton recognition and
-sleep/resume behavior still require verification on real target machines.
+Native game/Steam/Proton behavior and sleep/resume still need player acceptance;
+CI's native gates observe virtual-device state through XInput and evdev.
 
 ## Windows driver
 
@@ -195,9 +223,11 @@ retain the previous controller. Symlink escapes and directory traversal are
 bounded and rejected. Disable addon export with `/thumblebridge sync off`, then
 reload; the existing controller stays in place.
 
-Labels, all modifier layers, modifier assignments, and utility icons sync in this
-batch. Attack has embedded fallback artwork. Other spell/item artwork lookup
-remains a follow-up; there is no external artwork request during sync. Geometry
+Labels, all modifier layers, modifier assignments, and utility icons sync.
+Attack has embedded fallback artwork. Other spell/item icon names are looked up
+from the same fixed Wowhead tooltip endpoint as the Mac receiver, with a two-second
+budget, at most six requests per sync, and a bounded cache. Lookup failures keep
+labels usable; no profile can supply a URL. Geometry
 and gamepad mappings are retained from the selected ConsolePort layout. Phone
 summaries expose the character name and sync state, not account paths or GUIDs.
 
@@ -209,18 +239,48 @@ and adapter unit tests, ConsolePort/profile fixtures, real phone connection
 integration over loopback TLS, shared Node controller/agent-tool tests, installed
 CLI smoke test, PyInstaller build, frozen executable TLS/input/profile-adoption
 smoke test, then artifact upload. Test failures prevent artifact publication.
-The existing POSIX pairing-image file tests run on Linux only; Windows pairing
-currently uses the terminal QR. PR updates run one Windows/Linux matrix, avoiding
+The existing POSIX permission fixtures run on Linux; a cross-runtime test verifies
+the protected Windows QR file through the actual Node MCP reader. PR updates run one Windows/Linux matrix, avoiding
 duplicate push/PR builds of the same branch batch.
 
 Adapter tests check Windows API calls and Linux event capabilities, axis signs,
-button masks, hats, neutral release, and device cleanup with driver doubles.
-Hosted CI does **not** prove that a kernel driver is installed, a virtual pad is
-enumerated, or a game accepts it. That final acceptance requires a Windows/Linux
-machine with its driver configured. The self-test prints no pairing secret and
-does not install drivers or emit OS input.
+button masks, hats, neutral release, and cleanup. Native CI gates separately install
+the checksum/signature-verified Windows driver on the ephemeral runner, load Linux
+uinput, and use `--native-self-test` to observe real XInput/evdev state from
+authenticated TLS input and watchdog release. Native chat QA types into isolated
+test widgets, never a game or human chat. Package checks install/uninstall the app,
+run the installed protocol test, exercise the registered custom URI handler, and
+capture a synthetic GUI screenshot. These gates must pass before artifacts upload.
+`--self-test` prints no pairing secret and uses memory output; `--native-self-test`
+intentionally emits a short known gamepad report and requires the driver.
+
+## ChatGPT pairing and chat
+
+Choose **Pair through ChatGPT…**, sign in to the same Thumble account as the
+ChatGPT connector, and allow `pairing:manage`. The installed custom URI handler
+forwards the callback to the existing receiver's loopback broker. PKCE, exact
+issuer/redirect checks, and one-use state protect authorization. No refresh token
+is saved. Sharing lasts ten minutes, heartbeats every ten seconds, clears the QR
+when paired, and revokes on Stop/quit; hosted freshness expires within 30 seconds
+if a final revoke cannot reach the service.
+
+Ask the local or hosted MCP tool for `show_pairing_code` to display the native PNG.
+Gameplay remains LAN-only. The private local reader enforces owner-only POSIX
+permissions or an explicit Windows ACL permitting only the current SID and SYSTEM.
+
+Phone chat supports Say, Party, Raid, Guild, and Instance. Bring WoW to the front
+first. Only literal single-line text up to 240 UTF-8 bytes is accepted; the receiver
+adds the channel prefix. Controls release while typing, focus/cancellation is
+checked throughout, and request IDs prevent duplicate delivery. Windows messages
+target the captured WoW window instead of global SendInput. Linux requires
+`xdotool` and a usable X11/XWayland display; pure Wayland cannot provide this
+targeted API. Delivery confirms OS submission, not a game-server receipt.
+
+Enable lower-latency input with `--transport udp`. The fresh key travels only over
+pinned TLS. Directional counters, AES-GCM authentication, anti-replay checks, and
+an authenticated probe bind one UDP endpoint per phone. Profile, access, and chat
+messages stay on TLS. If the encrypted probe cannot complete, the phone keeps WSS.
 
 Production follow-up should evaluate a maintained Windows virtual controller
-driver, add native device/game acceptance coverage, finish the remaining Mac
-features, and add signed installation/update paths before calling this release
-parity with the Mac app.
+driver, finish real-game/sleep acceptance, and configure production signing/update
+credentials before treating these preview artifacts as a public production release.
