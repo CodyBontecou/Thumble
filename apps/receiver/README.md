@@ -1,5 +1,8 @@
 # Thumble Receiver
 
+The Windows/Linux preview is in [receiver-desktop](../receiver-desktop/README.md),
+with a separate protocol implementation and GitHub Actions test/package matrix.
+
 Small AppKit menu-bar app for macOS 15+. Receives one phone over local Wi-Fi and emits the Xbox-compatible 20-byte HID report. A paired phone can explicitly adopt a validated cloud controller as an immutable local profile. The LAN controller needs no cloud account. Optional ChatGPT pairing shares a temporary QR through your Thumble account; gameplay stays on the local network. There are no game scripts or keyboard emulation.
 
 ```sh

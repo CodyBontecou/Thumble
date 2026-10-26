@@ -24,6 +24,10 @@ xcuserdata/
 npm-debug.*
 yarn-debug.*
 yarn-error.*
+__pycache__/
+*.egg-info/
+.venv-desktop/
+*.spec
 
 # Local purchase-verifier secret backup (never commit)
 .secrets/
