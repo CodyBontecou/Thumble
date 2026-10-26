@@ -1,0 +1,50 @@
+[
+  {
+    "route": "/",
+    "width": 390,
+    "state": "initial",
+    "differences": []
+  },
+  {
+    "route": "/",
+    "width": 390,
+    "state": "interactive",
+    "differences": []
+  },
+  {
+    "route": "/",
+    "width": 1440,
+    "state": "initial",
+    "differences": []
+  },
+  {
+    "route": "/",
+    "width": 1440,
+    "state": "interactive",
+    "differences": []
+  },
+  {
+    "route": "/waitlist",
+    "width": 390,
+    "state": "initial",
+    "differences": []
+  },
+  {
+    "route": "/waitlist",
+    "width": 390,
+    "state": "interactive",
+    "differences": []
+  },
+  {
+    "route": "/waitlist",
+    "width": 1440,
+    "state": "initial",
+    "differences": []
+  },
+  {
+    "route": "/waitlist",
+    "width": 1440,
+    "state": "interactive",
+    "differences": []
+  }
+]

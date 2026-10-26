@@ -1,0 +1,20 @@
+[
+  {
+    "route": "/",
+    "status": 200,
+    "stylesMatch": true,
+    "inlineStyles": 3,
+    "compressedBytes": null,
+    "contentEncoding": "br",
+    "indexable": true
+  },
+  {
+    "route": "/waitlist",
+    "status": 200,
+    "stylesMatch": true,
+    "inlineStyles": 3,
+    "compressedBytes": null,
+    "contentEncoding": "br",
+    "indexable": true
+  }
+]
