@@ -48,7 +48,6 @@ def main():
             binary = target / 'thumble-receiver.exe'
             try:
                 run(binary, '--self-test')
-                run(binary, '--native-self-test')
                 run(binary, '--gui-smoke', str(report), env=environment)
                 import winreg
                 with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r'Software\Classes\thumble-receiver\shell\open\command') as key:
@@ -57,6 +56,7 @@ def main():
                         raise RuntimeError('Installed OAuth protocol handler does not target this receiver')
                 from thumble_receiver.__main__ import data_directory
                 asyncio.run(verify_callback(data_directory(), environment))
+                run(binary, '--native-self-test')
             finally:
                 run(target / 'unins000.exe', '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART')
         else:

@@ -106,7 +106,7 @@ jobs:
       - name: Verify native Windows gamepad via XInput
         if: ${{ !cancelled() && runner.os == 'Windows' }}
         run: |
-          python -c "from thumble_receiver.output import WindowsOutput; pad=WindowsOutput(); pad.close(); print('PASS native ViGEm client connection')"
+          python apps/receiver-desktop/packaging/verify-windows-driver.py
           thumble-receiver --native-self-test
       - name: Verify native Linux gamepad via evdev
         if: ${{ !cancelled() && runner.os == 'Linux' }}

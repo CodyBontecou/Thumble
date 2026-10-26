@@ -24,10 +24,26 @@ def windows_sid():
 
 def protect(path):
     if os.name == 'nt':
-        command = Path(os.environ.get('SystemRoot', 'C:/Windows')) / 'System32/icacls.exe'
-        subprocess.run([str(command), str(path), '/inheritance:r', '/grant:r',
-                        '*' + windows_sid() + ':(F)', '*S-1-5-18:(F)'],
-                       capture_output=True, timeout=5, check=True, creationflags=0x08000000)
+        import ctypes
+        from ctypes import wintypes
+        security = ctypes.WinDLL('advapi32', use_last_error=True)
+        kernel = ctypes.WinDLL('kernel32', use_last_error=True)
+        security.ConvertStringSecurityDescriptorToSecurityDescriptorW.argtypes = (
+            wintypes.LPCWSTR, wintypes.DWORD, ctypes.POINTER(ctypes.c_void_p), ctypes.c_void_p)
+        security.SetFileSecurityW.argtypes = (wintypes.LPCWSTR, wintypes.DWORD, ctypes.c_void_p)
+        kernel.LocalFree.argtypes = (ctypes.c_void_p,)
+        kernel.LocalFree.restype = ctypes.c_void_p
+        descriptor = ctypes.c_void_p()
+        # Replace the entire DACL: /grant:r only replaces entries for the named
+        # trustees and can leave existing explicit grants on temporary files.
+        sddl = f'D:P(A;;FA;;;{windows_sid()})(A;;FA;;;SY)'
+        if not security.ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl, 1, ctypes.byref(descriptor), None):
+            raise ctypes.WinError(ctypes.get_last_error())
+        try:
+            if not security.SetFileSecurityW(str(path), 0x80000004, descriptor):
+                raise ctypes.WinError(ctypes.get_last_error())
+        finally:
+            kernel.LocalFree(descriptor)
     else:
         os.chmod(path, 0o600)
 
