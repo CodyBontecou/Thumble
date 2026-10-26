@@ -1,19 +1,41 @@
 # Thumble receiver downloads
 
-This Worker serves only the signed release DMG and its SHA-256 checksum from
-`pocketpad-releases/macos/receiver/`. The existing website and older app download
-manifest are independent of this endpoint.
+This Worker serves an explicit allowlist of public receiver releases from
+`pocketpad-releases`. Other bucket objects and the legacy Mac app manifest remain
+private to their existing endpoints. Large files stream directly from R2.
 
-- `/downloads/receiver-latest.dmg` redirects to the current version.
-- `/downloads/Thumble-Receiver-1.0.0.dmg` serves the immutable release.
-- `/downloads/Thumble-Receiver-1.0.0.dmg.sha256` serves its checksum.
+| Download | Alias | R2 prefix |
+| --- | --- | --- |
+| Signed/notarized macOS 1.0.0 DMG | `/downloads/receiver-latest.dmg` | `macos/receiver/` |
+| Unsigned Windows x64 0.1.0 preview setup | `/downloads/receiver-latest-windows.exe` | `windows/receiver/` |
+| Linux x64 0.1.0 preview archive | `/downloads/receiver-latest-linux.tar.gz` | `linux/receiver/` |
+| Desktop setup instructions | `/downloads/receiver-desktop-setup.txt` | `desktop/receiver/` |
 
-Build with `tools/build-macos-receiver.sh`, then run
-`tools/package-macos-receiver.sh`. Both the app and DMG must pass notarization,
-stapling and Gatekeeper assessment before upload. Publish the DMG and checksum with
-`wrangler r2 object put --remote --file …`, then deploy this Worker with
-`wrangler deploy --config apps/downloads/wrangler.jsonc`.
+Aliases redirect without caching. Versioned filenames and their `.sha256` files
+are immutable. The allowlist also publishes
+`/downloads/Thumble-Receiver-0.1.0-desktop.json` with the preview's source commit,
+validation run, file sizes and hashes. See `docs/releases/desktop-receiver-0.1.0.json`.
 
-For a subsequent release, use a new versioned filename and update the explicit
-allowlist in `src/worker.js`. Retain published immutable artifacts. Verify the
-downloaded SHA-256 against the local stapled DMG after deployment.
+## Publish
+
+Download Windows and Linux artifacts only from a fully passing **Desktop receiver**
+Actions run. Verify their bundled `SHA256SUMS`; retain the tested package bytes.
+The Windows installer is an unsigned preview and requires separate ViGEmBus setup.
+Linux requires uinput permissions. Public copy must retain these requirements and
+must not imply real-game acceptance solely from native CI checks.
+
+Build macOS with `tools/build-macos-receiver.sh`, then
+`tools/package-macos-receiver.sh`. Both app and DMG must pass notarization,
+stapling and Gatekeeper assessment before upload.
+
+Use a new versioned filename for every release, update `src/worker.js`, and retain
+published artifacts. Upload files/checksums with
+`wrangler r2 object put pocketpad-releases/<prefix>/<filename> --remote --file <file>`.
+Run `node --test tools/test/downloads-worker.test.js`, dry-run the Worker deployment,
+then deploy with `wrangler deploy --config apps/downloads/wrangler.jsonc`.
+Verify public GET/HEAD, alias targets and downloaded SHA-256 before adding links.
+
+The website source is currently `../Thumble-legacy/Website`, deployed to Pages
+project `pocketpad-site`. Its download cards and `/docs#desktop-receivers` explain
+all three platforms. Preserve the published `/cli/` files when deploying that
+source, since CLI archives are generated outputs stored separately.

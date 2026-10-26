@@ -1,0 +1,28 @@
+name: Receiver downloads
+
+on:
+  pull_request:
+    paths: ['apps/downloads/**', 'tools/test/downloads-worker.test.js', '.github/workflows/receiver-downloads.yml']
+  push:
+    branches: [main]
+    paths: ['apps/downloads/**', 'tools/test/downloads-worker.test.js', '.github/workflows/receiver-downloads.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    env:
+      WRANGLER_SEND_METRICS: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --workspace @tapping/cloud --include-workspace-root --ignore-scripts
+      - run: node --test tools/test/downloads-worker.test.js
+      - run: npx --no-install wrangler deploy --config apps/downloads/wrangler.jsonc --dry-run --outdir /tmp/receiver-downloads
