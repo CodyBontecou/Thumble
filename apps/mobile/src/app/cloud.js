@@ -82,7 +82,7 @@ function CloudGenerator() {
   }
   return <Page><Columns><View style={ui.column}>
     <Eyebrow>{wow ? 'WOW + CONSOLEPORT' : 'CONTROLLERS FROM YOUR AI'}</Eyebrow><Text accessibilityRole="header" style={ui.title}>Build it anywhere.<Text>{'\n'}Try it here.</Text></Text>
-    <Text style={ui.body}>Ask your AI to create a controller, then try it on this phone. Your cloud library works without a Mac connection.</Text>
+    <Text style={ui.body}>Ask your AI to create a controller, then try it on this phone. Your cloud library works without a computer connection.</Text>
     {session && <View style={ui.card}>
       <Text style={ui.heading}>{session.device.name}</Text><Text selectable style={ui.small}>{session.service}</Text><Text selectable style={ui.small}>Device: {session.device.id}</Text>
       <Text style={ui.small}>Keep Thumble open to receive controllers. Saved previews remain available offline until you sign out.</Text>
@@ -100,12 +100,12 @@ function CloudGenerator() {
       <Row title={editingService ? 'Hide service address' : 'Change cloud service'} onPress={() => setEditingService(!editingService)} />
     </View>}
     {session && <View style={ui.card}>
-      <Text style={ui.heading}>{adopted ? 'Ready on your Mac' : state.pending ? 'A controller has arrived' : state.selected ? 'Your cloud controller' : 'Ready for your first controller'}</Text>
+      <Text style={ui.heading}>{adopted ? 'Ready on your computer' : state.pending ? 'A controller has arrived' : state.selected ? 'Your cloud controller' : 'Ready for your first controller'}</Text>
       <Text style={ui.body}>{state.selected ? `${state.selected.profile.name} · revision ${state.selected.revision}` : 'Share a request with your AI, or choose a saved controller below.'}</Text>
-      {state.selected && state.lanOffline && <><Button onPress={() => router.dismissTo('/?practice=1')}>Try controller in practice</Button><Button secondary onPress={() => router.push('/pair')}>Connect Mac to use this controller</Button></>}
-      {state.selected && network.phase === 'connected' && <Button disabled={busy || state.busy} onPress={useOnMac}>{busy ? 'Confirming on Mac…' : adopted ? 'Open this controller on Mac' : 'Use this controller on Mac'}</Button>}
-      {adopted && <Text accessibilityLiveRegion="polite" style={ui.small}>Saved as a separate Mac profile and acknowledged by this phone. Resume controls when you are ready, then test your bindings in ConsolePort.</Text>}
-      {state.pending && <Text accessibilityLiveRegion="polite" style={ui.small}>Downloaded. Open it in practice, or choose Use on Mac and open the confirmed controller to finish the phone render receipt.</Text>}
+      {state.selected && state.lanOffline && <><Button onPress={() => router.dismissTo('/?practice=1')}>Try controller in practice</Button><Button secondary onPress={() => router.push('/pair')}>Connect computer to use this controller</Button></>}
+      {state.selected && network.phase === 'connected' && <Button disabled={busy || state.busy} onPress={useOnMac}>{busy ? 'Confirming on computer…' : adopted ? 'Open this controller on computer' : 'Use this controller on computer'}</Button>}
+      {adopted && <Text accessibilityLiveRegion="polite" style={ui.small}>Saved as a separate Computer profile and acknowledged by this phone. Resume controls when you are ready, then test your bindings in ConsolePort.</Text>}
+      {state.pending && <Text accessibilityLiveRegion="polite" style={ui.small}>Downloaded. Open it in practice, or choose Use on computer and open the confirmed controller to finish the phone render receipt.</Text>}
     </View>}
     {session && <View style={ui.card}><Text style={ui.heading}>Saved controllers</Text>
       <Button secondary disabled={state.busy || busy} onPress={() => { void cloud.refreshProfiles(); }}>Refresh library</Button>

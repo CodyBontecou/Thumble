@@ -244,7 +244,7 @@ test('pause blocks held input until fresh neutral is acknowledged and clears que
 
 test('chat requires receiver support and never enters the datagram input path', async () => {
   const h = harness(); await h.connection.connect(invitation()); h.ready();
-  await assert.rejects(h.connection.sendChat('Ready to pull', 'party'), /updated Mac receiver/);
+  await assert.rejects(h.connection.sendChat('Ready to pull', 'party'), /updated receiver/);
   h.connection.view = { ...h.connection.view, chat: true };
   h.connection.inputTransport = 'udp';
   h.native.sendDatagram = () => { throw Error('Chat must use reliable control transport'); };
@@ -320,12 +320,12 @@ test('profile conflicts, invalid catalogs, and disconnect reject without claimin
   await assert.rejects(first,/invalid profile/);
   const second=h.connection.selectProfile({id:'warrior',revision:1},2);h.emit('message',{type:'profiles-result',id:h.sent.at(-1).id,error:'Profiles changed. Refresh.'});await assert.rejects(second,/Refresh/);
   const third=h.connection.requestProfiles();h.connection.disconnect();await assert.rejects(third,/Disconnected/);
-  await assert.rejects(h.connection.requestProfiles(),/Connect your Mac/);
+  await assert.rejects(h.connection.requestProfiles(),/Connect your computer/);
 });
 
 test('older receivers cannot be sent profile requests and duplicate requests are rejected', async () => {
   const h=harness();await h.connection.connect(invitation());h.ready();
-  const before=h.sent.length;await assert.rejects(h.connection.requestProfiles(),/Update your Mac receiver/);assert.equal(h.sent.length,before);
+  const before=h.sent.length;await assert.rejects(h.connection.requestProfiles(),/Update your receiver/);assert.equal(h.sent.length,before);
   h.connection.profilesSupported=true;const pending=h.connection.requestProfiles();
   await assert.rejects(h.connection.requestProfiles(),/already in progress/);
   h.emit('message',{type:'profiles-result',id:h.sent.at(-1).id,catalog:{profiles:[null],activationRevision:0}});
@@ -357,7 +357,7 @@ test('legacy receivers without access negotiation cannot become an unmetered con
   const h = harness(); await h.connection.connect(invitation()); h.emit('status', 'open');
   h.emit('message', { type: 'ready', seq: -1, lease: 'legacy' });
   assert.equal(h.connection.snapshot().phase, 'offline');
-  assert.match(h.connection.snapshot().detail, /Update your Mac receiver/);
+  assert.match(h.connection.snapshot().detail, /Update your receiver/);
 });
 
 test('cloud adoption pauses input and confirms exact content only after receiver activation and neutral ACK', async () => {
@@ -385,7 +385,7 @@ test('cloud adoption pauses input and confirms exact content only after receiver
 test('cloud adoption refuses old receivers and rejects forged provenance before success', async () => {
   const h = harness(); await h.connection.connect(invitation()); h.ready(); h.connection.profilesSupported = true;
   const source = { service: 'https://pilot.example', accountId: 'a'.repeat(64), profileId: xboxProfile.id, revision: 1 };
-  await assert.rejects(h.connection.adoptProfile(xboxProfile, source, 0), /Update your Mac receiver/);
+  await assert.rejects(h.connection.adoptProfile(xboxProfile, source, 0), /Update your receiver/);
   h.connection.cloudAdoptionSupported = true;
   const pending = h.connection.adoptProfile(xboxProfile, source, 0);
   const request = h.sent.at(-1);

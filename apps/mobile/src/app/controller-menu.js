@@ -23,9 +23,9 @@ export default function ControllerMenu() {
     <View style={s.panel}>
       <View style={s.heading}><Image source={thumbleIcon} style={s.icon} accessible={false} /><Text style={s.brand}>thumble.</Text><Pressable accessibilityRole="button" onPress={close} style={s.done}><Text style={{ color: colors.text, fontSize: 16 }}>Done</Text></Pressable></View>
       <ScrollView contentContainerStyle={{ padding: 16, gap: 16, flexDirection: width >= 680 ? 'row' : 'column' }}>
-        <View style={[s.summary, { flex: 1 }]}><Eyebrow>{online ? 'CONNECTED TO YOUR MAC' : 'YOUR CONTROLLER'}</Eyebrow><Text style={[ui.title, { fontSize: 28, lineHeight: 32 }]}>{displayedProfile.name}</Text>
+        <View style={[s.summary, { flex: 1 }]}><Eyebrow>{online ? 'CONNECTED TO YOUR COMPUTER' : 'YOUR CONTROLLER'}</Eyebrow><Text style={[ui.title, { fontSize: 28, lineHeight: 32 }]}>{displayedProfile.name}</Text>
           <Text style={ui.small}>{network.detail}{network.rtt != null ? ` · ${network.rtt} ms` : ''}</Text>
-          <Button onPress={() => online ? (connection.disconnect(), close()) : router.replace('/pair')} secondary={online}>{online ? 'Disconnect Mac' : 'Connect Mac'}</Button>
+          <Button onPress={() => online ? (connection.disconnect(), close()) : router.replace('/pair')} secondary={online}>{online ? 'Disconnect computer' : 'Connect computer'}</Button>
           <Text style={ui.small}>{access?.pro ? 'PRO · UNLIMITED PLAY' : access ? `${Math.ceil(access.remaining / 60)} minutes of demo remaining` : '30-minute total controller demo'}</Text>
         </View>
         <View style={{ flex: 1.15, flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>

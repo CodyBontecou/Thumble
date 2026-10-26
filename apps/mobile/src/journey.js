@@ -16,10 +16,10 @@ export function cloudJourney({ cloud, setup, network, layout, access, pairing, l
   const steps = [
     { id: 'agent', title: 'AI connected', done: delivered, detail: delivered ? 'Your AI’s controller reached this signed-in phone.' : session ? 'Phone signed in. Share your request; a delivery confirms the connection.' : 'Sign in on this phone, then connect your AI to the same account.' },
     { id: 'delivery', title: 'Controller delivered', done: delivered, detail: delivered ? `${selected.profile.name} · revision ${selected.revision}${delivery.state === 'rendered' ? ' · rendered on this phone' : ' · downloaded'}` : 'Keep Thumble open while your AI validates and sends the controller.' },
-    { id: 'mac', title: 'Mac ready', done: ready, detail: ready ? 'This exact controller is acknowledged on your paired Mac.' : network.phase !== 'connected' ? 'Connect your Mac, then explicitly use the delivered controller there.' : 'Use this controller on Mac. A practice preview does not activate it.' },
+    { id: 'mac', title: 'Computer ready', done: ready, detail: ready ? 'This exact controller is acknowledged on your paired computer.' : network.phase !== 'connected' ? 'Connect your computer, then explicitly use the delivered controller there.' : 'Use this controller on computer. A practice preview does not activate it.' },
     { id: 'wow', title: 'Tested in WoW', done: tested, detail: tested ? 'You confirmed all five checks for this controller and WoW installation.' : 'Prepare ConsolePort, then confirm movement, camera, an action, modifiers and menus.' },
   ];
   const route = !delivered ? '/cloud' : network.phase !== 'connected' ? '/pair?setup=1&returnTo=journey' : !ready ? '/cloud' : !tested ? '/wow-setup' : '/?practice=1';
-  const action = !session ? 'Sign in and connect your AI' : !delivered ? 'Request your controller' : network.phase !== 'connected' ? 'Connect Mac' : !ready ? 'Use controller on Mac' : !tested ? 'Test this controller in WoW' : 'Open controller';
+  const action = !session ? 'Sign in and connect your AI' : !delivered ? 'Request your controller' : network.phase !== 'connected' ? 'Connect computer' : !ready ? 'Use controller on computer' : !tested ? 'Test this controller in WoW' : 'Open controller';
   return { steps, complete: steps.filter(step => step.done).length, route, action, ready, tested };
 }

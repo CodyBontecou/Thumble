@@ -43,7 +43,7 @@ export default function FirstLayout() {
       if (layout.profile.id !== profile.id) {
         const catalog = await connection.requestProfiles();
         const standard = catalog.profiles.find(entry => entry.id === profile.id);
-        if (!standard) throw Error('This built-in controller is missing on your Mac. Update your receiver, then try again.');
+        if (!standard) throw Error('This built-in controller is missing on your computer. Update your receiver, then try again.');
         await connection.selectProfile(standard, catalog.activationRevision);
       }
       if (await save({ personalized: true, profileId: '', layoutMode: profile.id === consolePortProfile.id ? 'consoleport' : 'familiar' })) router.dismissTo('/onboarding');
@@ -54,8 +54,8 @@ export default function FirstLayout() {
   const share = () => { void Share.share({ message: prompt }).catch(failure => setError(failure.message)); };
   const delivery = state.personalized ? 'You confirmed this layout arrived on your phone.' : layout.profile.id === state.profileId ? 'Requested layout rendered. Confirm delivery below.' : 'Waiting for your agent to save and activate this layout.';
   const nextAction = state.personalized ? () => router.dismissTo('/onboarding') : !state.profileId ? prepare : network.phase === 'connected' ? checkDelivery : () => router.push('/pair?setup=1');
-  const nextLabel = state.personalized ? 'Continue setup' : !state.profileId ? 'Prepare layout request' : network.phase === 'connected' ? 'Check layout delivery' : 'Connect Mac';
-  if (!AI_CONTROLLER_GENERATOR_ENABLED) return <Page><Columns><View style={ui.column}><Eyebrow>CONSOLEPORT CONTROLLER</Eyebrow><Text accessibilityRole="header" style={ui.title}>{'Ready for\nyour next game.'}</Text><Text style={ui.body}>Two sticks, face buttons, D-pad, shoulders and triggers. Set your actions and modifier bindings in ConsolePort on your Mac.</Text><Button disabled={!state.loaded || busy} onPress={() => chooseBuiltIn()}>{busy ? 'Please wait…' : 'Use ConsolePort controls'}</Button><Button secondary onPress={() => router.push('/calibration')}>Stick calibration</Button>{!!error && <Text accessibilityRole="alert" style={ui.error}>{error}</Text>}</View></Columns></Page>;
+  const nextLabel = state.personalized ? 'Continue setup' : !state.profileId ? 'Prepare layout request' : network.phase === 'connected' ? 'Check layout delivery' : 'Connect computer';
+  if (!AI_CONTROLLER_GENERATOR_ENABLED) return <Page><Columns><View style={ui.column}><Eyebrow>CONSOLEPORT CONTROLLER</Eyebrow><Text accessibilityRole="header" style={ui.title}>{'Ready for\nyour next game.'}</Text><Text style={ui.body}>Two sticks, face buttons, D-pad, shoulders and triggers. Set your actions and modifier bindings in ConsolePort on your computer.</Text><Button disabled={!state.loaded || busy} onPress={() => chooseBuiltIn()}>{busy ? 'Please wait…' : 'Use ConsolePort controls'}</Button><Button secondary onPress={() => router.push('/calibration')}>Stick calibration</Button>{!!error && <Text accessibilityRole="alert" style={ui.error}>{error}</Text>}</View></Columns></Page>;
   return <Page footer={<Actions status={state.profileId ? delivery : 'Choose preferences, then prepare your request.'}>
     <View style={{ flex: 1 }}><Button secondary disabled={!state.loaded || busy} onPress={state.profileId ? share : () => chooseBuiltIn(consolePortProfile)}>{state.profileId ? 'Share layout request' : 'Keep ConsolePort controls'}</Button></View>
     <View style={{ flex: 1 }}><Button disabled={!state.loaded || busy} onPress={nextAction}>{busy ? 'Please wait…' : nextLabel}</Button></View>
@@ -67,7 +67,7 @@ export default function FirstLayout() {
         <Button secondary onPress={() => router.push('/agent-setup')}>{state.agentVerified ? 'Check agent connection again' : 'Connect your AI'}</Button>
         {!!state.profileId && <Button secondary disabled={!state.loaded || busy} onPress={prepare}>Prepare a new request</Button>}
       </View>
-      {!!state.profileId && <View style={ui.card}><Row title={showRequest ? 'Hide layout request' : 'View layout request'} detail="Your saved request for your Mac agent" trailing={showRequest ? '−' : '+'} onPress={() => setShowRequest(!showRequest)} />{showRequest && <Text selectable style={ui.body}>{prompt}</Text>}</View>}
+      {!!state.profileId && <View style={ui.card}><Row title={showRequest ? 'Hide layout request' : 'View layout request'} detail="Your saved request for your computer agent" trailing={showRequest ? '−' : '+'} onPress={() => setShowRequest(!showRequest)} />{showRequest && <Text selectable style={ui.body}>{prompt}</Text>}</View>}
 
     </View></Columns></Page>;
 }

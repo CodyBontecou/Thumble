@@ -1,10 +1,10 @@
 import { mkdir, readFile, writeFile, rename, rm, open } from 'node:fs/promises';
-import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { assertProfile, builtInProfiles } from '../../controller/src/index.js';
+import { profileDirectory } from './paths.js';
 
-export const defaultDirectory = () => process.env.TAPPING_PROFILE_DIR || join(homedir(), 'Library/Application Support/Tapping/profiles');
+export const defaultDirectory = profileDirectory;
 const initial = () => ({ version: 1, profiles: [], active: null });
 function withBuiltIns(data) {
   for (const profile of builtInProfiles) if (!data.profiles.some(entry => entry.profile.id === profile.id)) {
@@ -55,7 +55,7 @@ export class ProfileStore {
       const json = JSON.stringify(data);
       if (Buffer.byteLength(json) > 8 * 1024 * 1024) throw Error('Profile store exceeds 8 MiB');
       await writeFile(temporary, json, { mode: 0o600, flag: 'wx' });
-      const file = await open(temporary, 'r');
+      const file = await open(temporary, 'r+');
       try { await file.sync(); } finally { await file.close(); }
       await rename(temporary, join(this.directory, 'store.json'));
       return result;

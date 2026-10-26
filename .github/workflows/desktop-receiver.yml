@@ -1,0 +1,139 @@
+name: Desktop receiver
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/receiver-desktop/**'
+      - '.github/workflows/desktop-receiver.yml'
+      - 'config/monetization.json'
+      - 'packages/profile-tools/**'
+      - 'packages/controller/**'
+      - 'tools/export-builtin-profiles.mjs'
+      - 'apps/receiver/Resources/BuiltInProfiles.json'
+      - 'apps/mobile/src/**'
+      - 'apps/cloud/src/identity.js'
+      - 'apps/cloud/src/pairing.js'
+      - 'apps/cloud/src/mcp.js'
+      - 'apps/cloud/src/auth-pages.js'
+  pull_request:
+    paths:
+      - 'apps/receiver-desktop/**'
+      - '.github/workflows/desktop-receiver.yml'
+      - 'config/monetization.json'
+      - 'packages/profile-tools/**'
+      - 'packages/controller/**'
+      - 'tools/export-builtin-profiles.mjs'
+      - 'apps/receiver/Resources/BuiltInProfiles.json'
+      - 'apps/mobile/src/**'
+      - 'apps/cloud/src/identity.js'
+      - 'apps/cloud/src/pairing.js'
+      - 'apps/cloud/src/mcp.js'
+      - 'apps/cloud/src/auth-pages.js'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-receiver-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-and-package:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-22.04]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    env:
+      # Kernel driver installation is explicit in the isolated CI runner, never a pip side effect.
+      VGAMEPAD_SKIP_VIGEMBUS_INSTALL: 'true'
+      PYTHONUTF8: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: apps/receiver-desktop/pyproject.toml
+      - name: Install receiver and packaging tools
+        run: python -m pip install ./apps/receiver-desktop pyinstaller==6.16.0
+      - name: Prepare Linux desktop libraries and native virtual input
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libgl1 libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-keysyms1 libxcb-render-util0 libxcb-xinerama0 libxcb-shape0 xdotool xvfb openbox xdg-utils libglib2.0-bin
+          sudo modprobe uinput
+      - name: Prepare Windows driver and installer compiler
+        if: runner.os == 'Windows'
+        timeout-minutes: 5
+        shell: pwsh
+        run: ./apps/receiver-desktop/packaging/setup-windows-ci.ps1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install local agent tool dependencies
+        run: npm ci --workspace @tapping/controller --workspace @tapping/profile-tools --workspace @tapping/cloud-contracts --workspace @tapping/cloud --include-workspace-root --ignore-scripts
+      - name: Test shared controller and local agent tools
+        run: node --test packages/controller/test/*.test.js packages/profile-tools/test/profiles.test.js packages/profile-tools/test/paths.test.js packages/profile-tools/test/pairing-permissions.test.js packages/profile-tools/test/consoleport.test.js packages/profile-tools/test/character-tools.test.js packages/profile-tools/test/addon-export.test.js packages/profile-tools/test/assets.test.js tools/test/connection.test.js
+      - name: Test POSIX private pairing image export
+        if: runner.os == 'Linux'
+        run: node --test packages/profile-tools/test/pairing-code.test.js
+      - name: Test shared cloud pairing and OAuth contracts
+        run: node --test apps/cloud/test/identity.test.js apps/cloud/test/pairing.test.js
+      - name: Verify checked-in profile resources
+        run: |
+          node tools/export-builtin-profiles.mjs
+          git diff --exit-code -- apps/receiver/Resources/BuiltInProfiles.json apps/receiver-desktop/thumble_receiver/BuiltInProfiles.json
+      - name: Test protocol, TLS, access ledger, and both native adapter contracts
+        if: ${{ !cancelled() }}
+        run: python -m unittest discover -s apps/receiver-desktop/tests -v
+      - name: Test installed command
+        if: ${{ !cancelled() }}
+        run: thumble-receiver --self-test
+      - name: Verify Windows text delivery to an isolated native widget
+        if: ${{ !cancelled() && runner.os == 'Windows' }}
+        env:
+          THUMBLE_NATIVE_DESKTOP_QA: '1'
+          QT_QPA_PLATFORM: windows
+        run: python -m unittest discover -s apps/receiver-desktop/tests -p test_native_chat.py -v
+      - name: Verify Linux text delivery on an isolated X11 display
+        if: ${{ !cancelled() && runner.os == 'Linux' }}
+        run: xvfb-run -a env THUMBLE_NATIVE_DESKTOP_QA=1 QT_QPA_PLATFORM=xcb python -m unittest discover -s apps/receiver-desktop/tests -p test_native_chat.py -v
+      - name: Verify native Windows gamepad via XInput
+        if: ${{ !cancelled() && runner.os == 'Windows' }}
+        run: |
+          python apps/receiver-desktop/packaging/verify-windows-driver.py
+          thumble-receiver --native-self-test
+      - name: Verify native Linux gamepad via evdev
+        if: ${{ !cancelled() && runner.os == 'Linux' }}
+        run: sudo -E "$(which python)" -m thumble_receiver --native-self-test
+      - name: Build desktop directory bundle and installer
+        if: ${{ !cancelled() }}
+        run: python apps/receiver-desktop/build.py
+      - name: Test frozen Windows runtime and GUI
+        if: ${{ !cancelled() && runner.os == 'Windows' }}
+        run: python apps/receiver-desktop/packaging/verify-package.py
+      - name: Test installed Linux runtime and GUI
+        if: ${{ !cancelled() && runner.os == 'Linux' }}
+        run: python apps/receiver-desktop/packaging/verify-package.py
+      - name: Save desktop GUI verification image
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: thumble-receiver-${{ runner.os }}-gui
+          path: build/desktop/*.png
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Save preview installer and setup instructions
+        uses: actions/upload-artifact@v4
+        with:
+          name: thumble-receiver-${{ runner.os }}-x64-preview
+          path: |
+            dist/desktop-releases/*
+            apps/receiver-desktop/README.md
+          if-no-files-found: error
+          retention-days: 14

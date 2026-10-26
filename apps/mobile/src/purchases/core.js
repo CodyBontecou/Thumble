@@ -50,7 +50,7 @@ export function createPurchaseStore(native, config, fetcher = fetch) {
       });
       if (!response.ok) throw Error('Your purchase could not be verified. Retry Restore Purchases.');
       const grant = await response.json();
-      // Ignore a response for an old pairing, even when the new Mac has the same name.
+      // Ignore a response for an old pairing, even when the new Computer has the same name.
       const current = connector?.accessSnapshot();
       if (state.proof !== proof || current?.receiverId !== receiverId || current?.nonce !== nonce) return;
       connector.sendGrant(grant);

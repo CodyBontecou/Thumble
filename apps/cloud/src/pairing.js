@@ -3,7 +3,7 @@ import { authenticateAccount, bearerToken, sha256 } from './auth.js';
 
 export const PAIRING_SESSION_MS = 10 * 60_000;
 export const PAIRING_FRESH_MS = 30_000;
-const unavailable = () => new CloudError('pairing_unavailable', 'On your Mac, choose Pair through ChatGPT… in the Thumble Receiver menu, sign in to the same Thumble account, then ask for the QR code again.', 404);
+const unavailable = () => new CloudError('pairing_unavailable', 'On your computer, choose Pair through ChatGPT… in the Thumble Receiver menu, sign in to the same Thumble account, then ask for the QR code again.', 404);
 export async function cleanPairingSessions(env, now = Date.now()) {
   await env.DB.batch([
     env.DB.prepare('DELETE FROM receiver_pairing_sessions WHERE session_expires_at <= ?').bind(now),
@@ -31,9 +31,9 @@ export async function handlePairingApi(request, env, path, { body, json }) {
     const { results } = await env.DB.prepare('SELECT id,name,connected,png,code_expires_at FROM receiver_pairing_sessions WHERE account_id = ? AND session_expires_at > ? AND updated_at > ? ORDER BY id LIMIT 5').bind(principal.accountId, now, now - PAIRING_FRESH_MS).all();
     const candidates = results.filter(row => !id || row.id === id);
     if (!candidates.length) throw unavailable();
-    if (candidates.length > 1) throw new CloudError('choose_receiver', 'Ask which Mac to pair, then call show_pairing_code with its receiverId.', 409, { receivers: candidates.map(({ id, name }) => ({ receiverId: id, name })) });
+    if (candidates.length > 1) throw new CloudError('choose_receiver', 'Ask which computer to pair, then call show_pairing_code with its receiverId.', 409, { receivers: candidates.map(({ id, name }) => ({ receiverId: id, name })) });
     const row = candidates[0];
-    if (row.connected) throw new CloudError('already_paired', 'This Mac already has a paired phone. It has not been disconnected. Use the receiver menu to disconnect only if you want to pair another phone.', 409);
+    if (row.connected) throw new CloudError('already_paired', 'This Computer already has a paired phone. It has not been disconnected. Use the receiver menu to disconnect only if you want to pair another phone.', 409);
     if (!row.png || row.code_expires_at <= now) throw unavailable();
     return json({ receiverId: row.id, name: row.name, expiresAt: row.code_expires_at, png: row.png });
   }
@@ -42,7 +42,7 @@ export async function handlePairingApi(request, env, path, { body, json }) {
     const principal = await authenticateAccount(request, env);
     requireScope(principal, SCOPES.pairingManage);
     const value = await body(request);
-    if (Object.keys(value).some(key => key !== 'name') || typeof value.name !== 'string' || !value.name.trim() || value.name.length > 100) throw new CloudError('invalid_request', 'Provide a Mac name.');
+    if (Object.keys(value).some(key => key !== 'name') || typeof value.name !== 'string' || !value.name.trim() || value.name.length > 100) throw new CloudError('invalid_request', 'Provide a computer name.');
     await cleanPairingSessions(env, now);
     const receiverId = crypto.randomUUID(), publisherToken = `rp_${Array.from(crypto.getRandomValues(new Uint8Array(32)), b => b.toString(16).padStart(2, '0')).join('')}`;
     const expiresAt = now + PAIRING_SESSION_MS;

@@ -16,7 +16,7 @@ function fixture() {
   } };
   return { cloud, connection, selected, adopts: () => adopts };
 }
-test('adoption is explicit and connects an exact cloud revision to one paired Mac activation', async () => {
+test('adoption is explicit and connects an exact cloud revision to one paired computer activation', async () => {
   const f = fixture();
   assert.equal(f.cloud.snapshot().macAdoption, null);
   await f.cloud.rendered(f.selected); assert.equal(f.cloud.snapshot().pending.id, 'delivery-1');

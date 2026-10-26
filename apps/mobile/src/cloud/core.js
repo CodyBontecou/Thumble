@@ -7,7 +7,7 @@ import { validServiceUrl } from '@tapping/cloud-contracts';
 /** @typedef {{profile: ReturnType<typeof assertProfile>, revision: number, delivery?: Delivery | null, cached?: boolean}} Selection */
 /** @typedef {{id: string, name: string, revision: number}} ProfileSummary */
 
-/** Cloud deliveries remain previews until explicit adoption through the paired Mac. */
+/** Cloud deliveries remain previews until explicit adoption through the paired computer. */
 export class CloudController {
   /** @param {{fetch?: typeof globalThis.fetch, storage: {load: () => Promise<any>, save: (value: any) => Promise<void>}, refreshToken?: ((session: Session) => Promise<any>) | null, now?: () => number, allowLocalhost?: boolean}} options */
   constructor({ fetch: request = globalThis.fetch, storage, refreshToken = null, now = Date.now, allowLocalhost = false }) {
