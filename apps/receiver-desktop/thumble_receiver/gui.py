@@ -17,6 +17,7 @@ from .access import atomic_json
 from .pairing import Invitation, private_ipv4
 from .pairing_image import pairing_png
 from .install import autostart_enabled, set_autostart
+from .power import PowerMonitor
 
 
 class Signals(QObject):
@@ -83,11 +84,25 @@ class Runtime:
         if self.loop and self.stop_event:
             self.loop.call_soon_threadsafe(self.stop_event.set)
 
+    def pause_for_sleep(self):
+        server = self.server
+        if server:
+            # This thread-safe guard runs immediately, even if asyncio is busy.
+            try:
+                server.output.release()
+            except (OSError, RuntimeError):
+                pass
+            if server.session and server.session.chat_cancel:
+                server.session.chat_cancel.set()
+            self.command(lambda: server.reset_pairing())
+
 
 class Window(QMainWindow):
     def __init__(self, runtime, args, settings):
         super().__init__()
         self.runtime, self.args, self.settings = runtime, args, settings
+        self.power = PowerMonitor(runtime.pause_for_sleep, self)
+        self.destroyed.connect(self.power.close)
         self.invitation, self.quitting, self.restarting = '', False, False
         self.setWindowTitle('Thumble Receiver')
         self.resize(520, 720)
@@ -201,7 +216,7 @@ class Window(QMainWindow):
                                           Qt.TransformationMode.FastTransformation))
         else:
             self.qr.clear()
-            self.qr.setText('Phone connected · pairing code cleared')
+            self.qr.setText('Pairing code cleared')
 
     def set_status(self, status):
         if status['connected']:

@@ -15,6 +15,9 @@ Implemented in the preview:
   A separate output thread releases controls if the network loop stalls. No
   user-space watchdog can run while the entire OS is suspended; stale input is
   rejected and neutral recovery is required when execution resumes.
+  The desktop window additionally handles Windows power broadcasts and Linux
+  logind sleep/resume signals, immediately releasing the thread-safe output
+  guard and disconnecting the old pairing. Pair again after a system suspend.
 - Durable 30-minute demo with crash-conservative five-second reservations,
   phone usage mirroring, signed Ed25519 Pro grants, and explicit Resume.
   The entitlement public key and wire fields match the existing purchase service.

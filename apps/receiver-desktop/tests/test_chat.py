@@ -42,14 +42,19 @@ class ChatTests(unittest.TestCase):
         target.user = MagicMock()
         target.user.MapVirtualKeyW.return_value = 28
         target.focused = lambda _: True
-        target.message = MagicMock()
+        target.message = MagicMock(return_value=0)
+        target.queue_message = MagicMock()
         window = (12345, 678)
         target.type(window, 'A😀')
-        self.assertEqual([call.args[2] for call in target.message.call_args_list], [65, 0xd83d, 0xde00])
-        self.assertTrue(all(call.args[0] == window for call in target.message.call_args_list))
+        self.assertEqual([call.args[2] for call in target.queue_message.call_args_list], [65, 0xd83d, 0xde00])
+        self.assertTrue(all(call.args[0] == window for call in target.queue_message.call_args_list))
         target.key(window, 'Return')
-        self.assertEqual(target.message.call_args_list[-2].args[1], 0x100)
-        self.assertEqual(target.message.call_args_list[-1].args[1], 0x101)
+        self.assertEqual(target.queue_message.call_args_list[-2].args[1], 0x100)
+        self.assertEqual(target.queue_message.call_args_list[-1].args[1], 0x101)
+        target.queue_message.reset_mock()
+        target.message.return_value = 1
+        target.type(window, '😀')
+        target.queue_message.assert_called_once_with(window, 0x109, 0x1f600)
 
     def test_x11_types_over_stdin_with_an_explicit_window_and_no_shell(self):
         target = object.__new__(X11Target)

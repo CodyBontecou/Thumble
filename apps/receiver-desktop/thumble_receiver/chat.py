@@ -75,6 +75,8 @@ class WindowsTarget:
                                                   ctypes.POINTER(ctypes.c_size_t))
         self.user.SendMessageTimeoutW.restype = ctypes.c_ssize_t
         self.user.MapVirtualKeyW.argtypes = (wintypes.UINT, wintypes.UINT)
+        self.user.PostMessageW.argtypes = (wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM)
+        self.user.PostMessageW.restype = wintypes.BOOL
         self.kernel.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
         self.kernel.OpenProcess.restype = wintypes.HANDLE
         self.kernel.QueryFullProcessImageNameW.argtypes = (wintypes.HANDLE, wintypes.DWORD,
@@ -113,17 +115,28 @@ class WindowsTarget:
         result = ctypes.c_size_t()
         if not self.user.SendMessageTimeoutW(target[0], kind, value, flags, 0x3, 250, ctypes.byref(result)):
             raise ChatError('WoW did not accept window input. Check its chat box before retrying.')
+        return result.value
+
+    def queue_message(self, target, kind, value, flags=1):
+        if not self.focused(target):
+            raise ChatError('WoW lost focus. Check its chat box before trying again.')
+        if not self.user.PostMessageW(target[0], kind, value, flags):
+            raise ChatError('WoW did not accept window input. Check its chat box before retrying.')
 
     def key(self, target, key):
         code = {'Escape': 0x1b, 'Return': 0x0d}[key]
         flags = 1 | (self.user.MapVirtualKeyW(code, 0) << 16)
-        self.message(target, 0x100, code, flags)
-        self.message(target, 0x101, code, flags | 0xc0000000)
+        self.queue_message(target, 0x100, code, flags)
+        self.queue_message(target, 0x101, code, flags | 0xc0000000)
 
     def type(self, target, text):
+        if any(ord(character) > 0xffff for character in text) and self.message(target, 0x109, 0xffff):
+            for character in text:
+                self.queue_message(target, 0x109, ord(character))
+            return
         units = text.encode('utf-16-le')
         for index in range(0, len(units), 2):
-            self.message(target, 0x102, int.from_bytes(units[index:index + 2], 'little'))
+            self.queue_message(target, 0x102, int.from_bytes(units[index:index + 2], 'little'))
 
 
 class X11Target:

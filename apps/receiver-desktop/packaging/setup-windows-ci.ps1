@@ -12,5 +12,6 @@ if (-not $process.WaitForExit(180000)) { taskkill /PID $process.Id /T /F; throw 
 $process.Refresh()
 if ($process.ExitCode -notin @(0,3010)) { throw "Driver install failed with exit code $($process.ExitCode)" }
 Write-Output "Verified and installed official ViGEmBus 1.22.0 (exit $($process.ExitCode)); native XInput verification follows."
+Get-CimInstance Win32_SystemDriver | Where-Object { $_.Name -match 'ViGEm' } | Select-Object Name,State,StartMode,PathName | Format-List
 $compiler = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
 if (-not (Test-Path $compiler)) { choco install innosetup --no-progress -y; if ($LASTEXITCODE -ne 0) { throw 'Inno Setup installation failed' } }

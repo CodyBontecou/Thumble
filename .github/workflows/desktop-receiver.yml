@@ -105,7 +105,9 @@ jobs:
         run: xvfb-run -a env THUMBLE_NATIVE_DESKTOP_QA=1 QT_QPA_PLATFORM=xcb python -m unittest discover -s apps/receiver-desktop/tests -p test_native_chat.py -v
       - name: Verify native Windows gamepad via XInput
         if: ${{ !cancelled() && runner.os == 'Windows' }}
-        run: thumble-receiver --native-self-test
+        run: |
+          python -c "from thumble_receiver.output import WindowsOutput; pad=WindowsOutput(); pad.close(); print('PASS native ViGEm client connection')"
+          thumble-receiver --native-self-test
       - name: Verify native Linux gamepad via evdev
         if: ${{ !cancelled() && runner.os == 'Linux' }}
         run: sudo -E "$(which python)" -m thumble_receiver --native-self-test

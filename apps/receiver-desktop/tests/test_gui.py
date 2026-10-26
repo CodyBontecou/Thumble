@@ -7,7 +7,8 @@ import tempfile
 import unittest
 from unittest.mock import MagicMock
 
-from thumble_receiver.gui import Signals, Window
+from thumble_receiver.gui import Signals, Window, Runtime
+from thumble_receiver.power import WindowsEvents
 from thumble_receiver.pairing import Invitation
 from PySide6.QtWidgets import QApplication
 
@@ -54,3 +55,26 @@ class GuiTests(unittest.TestCase):
         self.window.restart()
         self.assertIn('private IPv4', self.window.status.text())
         self.runtime.stop.assert_not_called()
+
+    def test_suspend_and_resume_hooks_release_before_async_cleanup(self):
+        self.window.power.sleep_changed(True)
+        self.window.power.sleep_changed(False)
+        self.assertEqual(self.runtime.pause_for_sleep.call_count, 2)
+        runtime = Runtime(self.args)
+        runtime.server = MagicMock()
+        runtime.command = MagicMock()
+        runtime.pause_for_sleep()
+        runtime.server.output.release.assert_called_once()
+        runtime.server.session.chat_cancel.set.assert_called_once()
+        runtime.command.assert_called_once()
+
+    def test_windows_power_broadcast_revokes_input_on_both_edges(self):
+        import ctypes
+        from ctypes import wintypes
+        release = MagicMock()
+        event_filter = WindowsEvents(release)
+        for parameter in (4, 7, 18):
+            event = wintypes.MSG()
+            event.message, event.wParam = 0x218, parameter
+            self.assertEqual(event_filter.nativeEventFilter(b'windows_generic_MSG', ctypes.addressof(event)), (False, 0))
+        self.assertEqual(release.call_count, 3)
