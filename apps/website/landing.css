@@ -122,3 +122,9 @@
  .launch-page .site-header nav { max-width: 100%; flex-wrap: wrap; gap: 12px; }
  .launch-page .site-footer .footer-links { max-width: 100%; min-width: 0; flex-wrap: wrap; }
 }
+
+.hero-downloads { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 12px 16px; margin: 24px auto; font-size: 14px; line-height: 20px; }
+.hero-downloads > span { color: var(--muted); font-size: 12px; line-height: 16px; }
+.hero-downloads a { color: var(--ink); text-underline-offset: 4px; }
+.hero-downloads a:hover { color: #fff; }
+.hero-downloads a:active { opacity: .7; }
