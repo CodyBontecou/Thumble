@@ -23,7 +23,7 @@ class InstallTests(unittest.TestCase):
                     patch.dict('os.environ', {'XDG_DATA_HOME': str(home / 'data'), 'XDG_CONFIG_HOME': str(home / 'config')}), \
                     patch('thumble_receiver.install.register_protocol'):
                 install_user()
-            self.assertIn('/0.1.1/thumble-receiver', startup.read_text())
+            self.assertIn(desktop_exec([str(home / 'data/thumble/receiver/0.1.1/thumble-receiver')]), startup.read_text())
             self.assertIn('--background', startup.read_text())
 
     def test_desktop_entry_treats_paths_as_data_and_keeps_uri_placeholder_separate(self):
