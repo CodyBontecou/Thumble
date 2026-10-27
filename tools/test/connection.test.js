@@ -411,3 +411,53 @@ test('explicit practice retains character appearance while disconnecting input a
   h.connection.disconnect();
   assert.notEqual(h.connection.profileSnapshot().profile.id, profile.id);
 });
+
+test('a paired phone reconnects after background and process restart without reusing its QR token', async () => {
+  const saved = { value: null, async load() { return this.value; }, async save(value) { this.value = value; } };
+  const h = harness(); h.connection.pairingStorage = saved;
+  h.connection.phoneId = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
+  await h.connection.connect(invitation()); h.emit('status', 'open');
+  h.emit('message', { type: 'ready', seq: -1, lease: 'first', access: 1, reconnectToken: 'c'.repeat(64) });
+  await Promise.resolve();
+  h.connection.suspend();
+  assert.equal(h.connection.snapshot().phase, 'offline');
+  await h.connection.reconnect(); h.emit('status', 'open');
+  assert.equal(h.sent.at(-1).reconnectToken, 'c'.repeat(64));
+  assert.equal(h.sent.at(-1).token, undefined, 'the single-use QR credential is never replayed');
+  h.emit('message', { type: 'ready', seq: -1, lease: 'new', access: 1 });
+  assert.equal(h.connection.snapshot().phase, 'connected');
+  h.connection.suspend();
+  const restarted = harness(); restarted.connection.pairingStorage = saved;
+  restarted.connection.phoneId = h.connection.phoneId;
+  await restarted.connection.reconnect(); restarted.emit('status', 'open');
+  assert.equal(restarted.sent.at(-1).reconnectToken, 'c'.repeat(64));
+  restarted.emit('message', { type: 'ready', seq: -1, lease: 'restart', access: 1 });
+  assert.equal(restarted.connection.snapshot().phase, 'connected');
+});
+
+test('explicit disconnect forgets trust and never reconnects a stale saved computer', async () => {
+  const saved = { value: { url: 'wss://192.168.1.2:1234/controller', pin: 'a'.repeat(64), reconnectToken: 'c'.repeat(64) }, async load() { return this.value; }, async save(value) { this.value = value; } };
+  const h = harness(); h.connection.pairingStorage = saved;
+  h.connection.disconnect(); await h.connection.reconnect();
+  assert.equal(saved.value, null); assert.equal(h.connection.session, null);
+});
+
+test('remembered connections reject public or malformed endpoints before opening a socket', async () => {
+  for (const url of ['wss://example.com:1234/controller', 'ws://192.168.1.2:1234/controller', 'wss://192.168.1.2:1234/controller?token=secret']) {
+    const saved = { value: { url, pin: 'a'.repeat(64), reconnectToken: 'c'.repeat(64) }, async load() { return this.value; }, async save(value) { this.value = value; } };
+    const h = harness(); h.connection.pairingStorage = saved;
+    await h.connection.reconnect(); await h.connection.storageWrite;
+    assert.equal(h.connection.session, null); assert.equal(saved.value, null);
+  }
+});
+
+test('background during secure storage loading cannot open a late connection', async () => {
+  let finish;
+  const h = harness(); h.connection.pairingStorage = { load: () => new Promise(resolve => finish = resolve), save: async () => {} };
+  const opening = h.connection.reconnect();
+  while (!finish) await Promise.resolve();
+  h.connection.suspend();
+  finish({ url: 'wss://192.168.1.2:1234/controller', pin: 'a'.repeat(64), reconnectToken: 'c'.repeat(64) });
+  await opening;
+  assert.equal(h.connection.session, null);
+});

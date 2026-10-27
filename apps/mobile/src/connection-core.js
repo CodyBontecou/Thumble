@@ -1,5 +1,5 @@
 import { LatencyRecorder } from './latency-recorder.js';
-import { neutralState, parseInvitation, assertProfile, defaultProfile } from '@tapping/controller';
+import { neutralState, parseInvitation, parseReceiverEndpoint, assertProfile, defaultProfile } from '@tapping/controller';
 
 const canonical = value => JSON.stringify(value, (_, item) => item && typeof item === 'object' && !Array.isArray(item) ? Object.fromEntries(Object.keys(item).sort().map(key => [key, item[key]])) : item);
 
@@ -40,7 +40,7 @@ export class Connection {
   /** @type {any} */
   profileRequest = null;
   chatSequence = 0;
-  /** @type {ReturnType<typeof parseInvitation> | null} */
+  /** @type {{url: string, pin: string, token?: string, expires?: number, reconnectToken?: string} | null} */
   invitation = null;
   /** @type {string | null} */
   lease = null;
@@ -64,6 +64,11 @@ export class Connection {
   attempt = 0;
   /** @type {number | null} */
   inputTime = null;
+  /** @type {any} */
+  remembered = null;
+  /** @type {any} */
+  pairingStorage = null;
+  storageWrite = Promise.resolve();
   native;
   beforeConnect;
   timers;
@@ -72,8 +77,8 @@ export class Connection {
     this.native = native; this.beforeConnect = beforeConnect; this.timers = timers; this.now = now;
     native.addListener('status', ({ value, id }) => {
       if (!this.session || id !== this.session) return;
-      if (value === 'open' && this.invitation) this.native.send(JSON.stringify({ type: 'hello', v: 3, phoneId: this.phoneId, demoUsed: this.demoUsed, token: this.invitation.token, datagram: typeof this.native.configureDatagram === 'function' ? 1 : 0 }));
-      else if (value !== 'open' && this.view.phase !== 'offline') this.disconnect(value);
+      if (value === 'open' && this.invitation) this.native.send(JSON.stringify({ type: 'hello', v: 3, phoneId: this.phoneId, demoUsed: this.demoUsed, ...(this.invitation.reconnectToken ? { reconnectToken: this.invitation.reconnectToken } : { token: this.invitation.token }), datagram: typeof this.native.configureDatagram === 'function' ? 1 : 0 }));
+      else if (value !== 'open' && this.view.phase !== 'offline') this.disconnect(value, { keepPairing: true });
     });
     native.addListener('message', ({ value, id, receivedAt, transport }) => {
       if (!this.session || id !== this.session) return;
@@ -159,6 +164,10 @@ export class Connection {
         this.lease = message.lease;
         if (message.type === 'ready') {
           if (this.timer) this.timers.clearTimeout(this.timer);
+          if (this.invitation && /^[a-f0-9]{64}$/.test(message.reconnectToken)) {
+            this.remembered = { url: this.invitation.url, pin: this.invitation.pin, reconnectToken: message.reconnectToken };
+            this.savePairing(this.remembered);
+          }
           this.invitation = null;
           this.profilesSupported = message.profiles === 1;
           this.cloudAdoptionSupported = message.cloudAdoption === 1;
@@ -167,7 +176,7 @@ export class Connection {
           this.submit(neutralState(), 'neutral');
           if (this.view.phase !== 'connected') return;
           this.timer = this.timers.setInterval(() => {
-            if (this.now() - this.lastAck > 1500) this.disconnect('Connection stalled · controls released');
+            if (this.now() - this.lastAck > 1500) this.disconnect('Connection stalled · controls released', { keepPairing: true });
             else this.submit(this.state, 'heartbeat');
           }, 33);
         } else {
@@ -216,17 +225,41 @@ export class Connection {
   update(view) { this.view = view; for (const listener of this.listeners) listener(); }
   async connect(value) {
     const invitation = parseInvitation(value);
+    return this.open(invitation);
+  }
+  async open(invitation) {
     const attempt = ++this.attempt;
     await this.beforeConnect();
     if (attempt !== this.attempt) return;
-    this.disconnect();
+    this.disconnect(undefined, { keepPairing: !!invitation.reconnectToken });
     this.invitation = invitation; this.sequence = 0;
     this.update({ phase: 'connecting', detail: 'Connecting securely…', rtt: null, chat: false });
     try {
       this.session = this.native.connect(invitation.url, invitation.pin);
       if (typeof this.session !== 'string' || !this.session) throw new Error('Invalid native connection');
-      this.timer = this.timers.setTimeout(() => this.disconnect('Could not reach computer. Check Wi-Fi and rescan.'), 5000);
-    } catch (error) { this.disconnect('Could not connect. Check Wi-Fi and rescan.'); throw error; }
+      this.timer = this.timers.setTimeout(() => this.disconnect('Could not reach computer. Check Wi-Fi and try again.', { keepPairing: true }), 5000);
+    } catch (error) { this.disconnect('Could not connect. Check Wi-Fi and try again.', { keepPairing: true }); throw error; }
+  }
+  savePairing(value) {
+    // Serialize writes so disconnect cannot be undone by an older save finishing late.
+    this.storageWrite = this.storageWrite.catch(() => {}).then(() => this.pairingStorage?.save(value));
+    void this.storageWrite.catch(() => {
+      this.update({ ...this.view, detail: 'Connected · could not remember computer; pair again after restart' });
+    });
+  }
+  suspend() { this.pausePlay(); this.disconnect('Practice · Computer disconnected', { keepPairing: true }); }
+  async reconnect() {
+    if (this.view.phase !== 'offline') return;
+    const attempt = this.attempt;
+    await this.storageWrite.catch(() => {});
+    const value = this.remembered ?? await this.pairingStorage?.load();
+    if (attempt !== this.attempt || this.view.phase !== 'offline' || !value) return;
+    try {
+      parseReceiverEndpoint(value.url);
+      if (!/^[a-f0-9]{64}$/.test(value.pin) || !/^[a-f0-9]{64}$/.test(value.reconnectToken)) throw Error('Invalid remembered computer');
+    } catch { this.remembered = null; this.savePairing(null); return; }
+    this.remembered = value;
+    return this.open(value);
   }
   requestProfiles() { return this.profileOperation('profiles-list'); }
   selectProfile(profile, expectedActivationRevision) {
@@ -334,9 +367,10 @@ export class Connection {
     if (this.inputTransport === 'udp') { timing.native = this.native.sendDatagram(text); sent = timing.native >= 0; }
     else if (this.diagnostics) { timing.native = this.native.sendTimed(text); sent = timing.native >= 0; }
     else sent = this.native.send(text);
-    if (!sent) this.disconnect('Connection stalled · controls released');
+    if (!sent) this.disconnect('Connection stalled · controls released', { keepPairing: true });
   }
-  disconnect(detail = 'Practice · Computer not connected', { keepLayout = false } = {}) {
+  disconnect(detail = 'Practice · Computer not connected', { keepLayout = false, keepPairing = false } = {}) {
+    if (!keepPairing) { this.remembered = null; this.savePairing(null); }
     const connected = this.view.phase === 'connected';
     ++this.attempt;
     // Invalidate the bridge identity before cancelling: queued callbacks from the
