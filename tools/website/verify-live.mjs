@@ -19,8 +19,15 @@ const requests = [
   { route: '/guides/wow-controller-mac', accept: 'text/markdown', method: 'HEAD' },
   { route: '/downloads/receiver-latest.dmg', method: 'HEAD' },
 ];
-function withoutAnalytics(html) {
-  return html.replace(/<script\b[^>]*src="https:\/\/static\.cloudflareinsights\.com\/[^\"]*"[^>]*>[\s\S]*?<\/script>\n?/g, '');
+function withoutEdgeDecorations(html, route) {
+  let source = html.replace(/<script\b[^>]*src="https:\/\/static\.cloudflareinsights\.com\/[^\"]*"[^>]*>[\s\S]*?<\/script>\n?/g, '');
+  // Production adds these exact localization links outside the Pages artifact.
+  // Keep the rest of the homepage byte-for-byte strict, including release links.
+  if (route === '/') {
+    source = source.replace('<link rel="alternate" hreflang="en" href="https://thumble.io/"><link rel="alternate" hreflang="zh-Hans" href="https://thumble.io/zh-hans/"><link rel="alternate" hreflang="x-default" href="https://thumble.io/">', '')
+      .replace('<nav aria-label="Language"><a href="/zh-hans/" lang="zh-Hans" hreflang="zh-Hans">简体中文</a></nav>', '');
+  }
+  return source;
 }
 async function check(request) {
   const { route, accept = '*/*', method = 'GET', status = 200 } = request;
@@ -37,9 +44,13 @@ async function check(request) {
   } else if (accept === 'text/html') {
     assert.match(response.headers.get('content-type'), /text\/html/);
     const file = route === '/' ? 'index.html' : route.slice(1) + '.html';
-    assert.ok(withoutAnalytics(bytes.toString()) === await fs.readFile(path.join(artifact, file), 'utf8'), `HTML mismatch: ${route}`);
+    assert.ok(withoutEdgeDecorations(bytes.toString(), route) === await fs.readFile(path.join(artifact, file), 'utf8'), `HTML mismatch: ${route}`);
   } else {
-    assert.ok(bytes.equals(await fs.readFile(path.join(artifact, route.slice(1)))), `Asset mismatch: ${route}`);
+    // The production edge also adds its existing Chinese landing page to the sitemap.
+    const source = route === '/sitemap.xml'
+      ? Buffer.from(bytes.toString().replace('<url><loc>https://thumble.io/zh-hans/</loc><lastmod>2026-10-26</lastmod></url>', ''))
+      : bytes;
+    assert.ok(source.equals(await fs.readFile(path.join(artifact, route.slice(1)))), `Asset mismatch: ${route}`);
   }
 }
 // Retry propagation and transient fetch failures, then fail the workflow visibly.

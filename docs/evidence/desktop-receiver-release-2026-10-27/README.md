@@ -18,3 +18,7 @@ Linux: https://thumble.io/downloads/Thumble-Receiver-0.1.1-linux-x64.tar.gz
 Manifest: https://thumble.io/downloads/Thumble-Receiver-0.1.1-desktop.json
 
 These remain unsigned desktop previews. Real WoW/Steam/Proton acceptance remains separate from automated native-device validation. Existing installations need one QR pairing with the updated phone app to establish durable reconnect trust.
+
+Website deployed from clean release commit `1a15100bb9ab54129697ddfaa1445f13be0c8c6d`: https://9dc8f03f.pocketpad-site.pages.dev . Live homepage and docs show the 0.1.1 installer/checksum links.
+
+All 39 live website checks passed after accounting for the exact existing homepage language links and Chinese sitemap entry added by the production edge. The direct Pages artifact matched the clean build, and the existing Chinese route remained HTTP 200. Negative checks confirmed changed installer links and unknown HTML still fail verification.
