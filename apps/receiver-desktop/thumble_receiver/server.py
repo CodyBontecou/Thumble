@@ -40,6 +40,7 @@ class Session:
     def __init__(self, output, access, clock=monotonic, chat_available=False):
         self.output, self.access, self.clock = output, access, clock
         self.sequence, self.last_input, self.last_pause = -1, clock(), 0
+        self.tcp_sequence = -1
         self.leases = {}
         self.paused, self.enabled = True, False
         self.generation = output.generation
@@ -134,8 +135,13 @@ class Session:
         sequence = message.get('seq')
         if udp and integer(sequence) and sequence <= self.sequence:
             return []  # Datagram reordering is normal; TCP replay is a protocol error.
-        if not integer(sequence) or sequence <= self.sequence:
+        if not integer(sequence) or (not udp and sequence <= self.tcp_sequence):
             raise ProtocolError('Invalid or stale sequence')
+        if sequence <= self.sequence:
+            # TLS preserves its own order, but a newer UDP frame may overtake
+            # queued TLS input while switching transports. Never replay its state.
+            self.tcp_sequence = sequence
+            return []
         state = State.parse(message.get('state'))
         lease = message.get('lease')
         if not isinstance(lease, str) or self.clock() > self.leases.get(lease, float('-inf')):
@@ -149,6 +155,8 @@ class Session:
             return []
         self.paused = False
         self.sequence, self.last_input = sequence, self.clock()
+        if not udp:
+            self.tcp_sequence = sequence
         if self.enabled:
             self.access.start()
         allowed = self.enabled and self.access.running and not self.chat_busy

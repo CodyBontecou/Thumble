@@ -183,6 +183,15 @@ class SessionTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.session.handle({**self.frame(seq=1), 'state': dict(buttons=1)})
 
+    def test_udp_overtaking_queued_tls_input_drops_old_state_without_disconnect(self):
+        self.session.handle(self.frame(seq=0))
+        self.session.handle(self.frame(seq=2), udp=True)
+        self.assertEqual(self.session.handle(self.frame(State(buttons=1), seq=1)), [])
+        self.assertEqual(self.session.sequence, 2)
+        self.assertEqual(self.output.backend.state, NEUTRAL)
+        with self.assertRaises(ProtocolError):
+            self.session.handle(self.frame(seq=1))
+
     def test_watchdog_revokes_leases_and_requires_neutral(self):
         self.session.handle(self.frame())
         self.clock.value += 0.301
