@@ -22,6 +22,7 @@ from thumble_receiver.access import Access, PUBLIC_KEY
 from thumble_receiver.lock import DirectoryLock
 from thumble_receiver.output import GuardedOutput, MemoryOutput
 from thumble_receiver.pairing import Invitation, identity, private_ipv4
+from thumble_receiver.pairing_store import PairingStore
 from thumble_receiver.server import ReceiverServer, Session, ProtocolError, decode
 from thumble_receiver.state import NEUTRAL, State
 
@@ -182,6 +183,15 @@ class SessionTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.session.handle({**self.frame(seq=1), 'state': dict(buttons=1)})
 
+    def test_udp_overtaking_queued_tls_input_drops_old_state_without_disconnect(self):
+        self.session.handle(self.frame(seq=0))
+        self.session.handle(self.frame(seq=2), udp=True)
+        self.assertEqual(self.session.handle(self.frame(State(buttons=1), seq=1)), [])
+        self.assertEqual(self.session.sequence, 2)
+        self.assertEqual(self.output.backend.state, NEUTRAL)
+        with self.assertRaises(ProtocolError):
+            self.session.handle(self.frame(seq=1))
+
     def test_watchdog_revokes_leases_and_requires_neutral(self):
         self.session.handle(self.frame())
         self.clock.value += 0.301
@@ -245,6 +255,29 @@ class SessionTests(unittest.TestCase):
 
 
 class PairingTests(unittest.TestCase):
+    def test_identity_persists_and_corrupt_storage_never_silently_rotates(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = PairingStore(directory)
+            _, pin = identity(store)
+            phone = str(uuid.uuid4())
+            token = store.remember(phone)
+            store.update(port=8765)
+            restored = PairingStore(directory)
+            self.assertEqual(identity(restored)[1], pin)
+            self.assertEqual(restored.value['port'], 8765)
+            self.assertTrue(restored.accepts(phone, token))
+            self.assertFalse(restored.accepts(str(uuid.uuid4()), token))
+            self.assertFalse(restored.accepts(phone, 'é'))
+            import os
+            if os.name != 'nt':
+                self.assertEqual(store.path.stat().st_mode & 0o777, 0o600)
+            restored.forget()
+            self.assertFalse(PairingStore(directory).accepts(phone, token))
+            store.path.write_text('{broken')
+            with self.assertRaisesRegex(ValueError, 'refusing to replace'):
+                PairingStore(directory)
+            self.assertEqual(store.path.read_text(), '{broken')
+
     def test_private_addresses_and_single_use_expiry(self):
         for address in ('192.168.1.2', '10.0.0.2', '172.31.255.1'):
             self.assertEqual(private_ipv4(address), address)
@@ -268,7 +301,7 @@ class TransportTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.directory = tempfile.TemporaryDirectory()
         self.output = GuardedOutput(MemoryOutput())
-        self.context, self.fingerprint = identity()
+        self.context, self.fingerprint = identity(PairingStore(self.directory.name))
         self.invitation = Invitation('127.0.0.1', 0, self.fingerprint)
         self.ready = asyncio.Queue()
         self.server = ReceiverServer(self.output, Access(self.directory.name), self.invitation,
@@ -340,6 +373,65 @@ class TransportTests(unittest.IsolatedAsyncioTestCase):
                 with self.assertRaises(ConnectionClosed):
                     await second.recv()
             self.assertIsNotNone(self.server.peer)
+
+    async def test_phone_reconnects_without_another_qr_and_gets_fresh_lease(self):
+        phone = str(uuid.uuid4())
+        async with connect(self.url, ssl=self.client_context, proxy=None) as first:
+            await first.send(json.dumps(dict(type='hello', v=3, phoneId=phone,
+                                             token=self.invitation.token)))
+            ready = await self.receive(first, 'ready')
+            self.assertRegex(ready.get('reconnectToken', ''), r'^[0-9a-f]{64}$')
+            async with connect(self.url, ssl=self.client_context, proxy=None) as second:
+                await second.send(json.dumps(dict(type='hello', v=3, phoneId=phone,
+                                                  reconnectToken=ready['reconnectToken'])))
+                resumed = await self.receive(second, 'ready')
+                self.assertNotEqual(resumed['lease'], ready['lease'])
+                self.assertEqual(self.output.backend.state, NEUTRAL)
+                self.assertEqual(self.invitation.token, '')
+                self.assertIsNotNone(self.server.peer)
+
+    async def test_receiver_restart_keeps_pin_port_and_phone_and_reset_revokes(self):
+        phone = str(uuid.uuid4())
+        async with connect(self.url, ssl=self.client_context, proxy=None) as socket:
+            await socket.send(json.dumps(dict(type='hello', v=3, phoneId=phone,
+                                              token=self.invitation.token)))
+            original = await self.receive(socket, 'ready')
+        self.stop.set()
+        await asyncio.wait_for(self.task, 5)
+        store = PairingStore(self.directory.name)
+        context, pin = identity(store)
+        self.assertEqual(pin, self.fingerprint)
+        self.assertEqual(store.value['port'], self.invitation.port)
+        self.ready = asyncio.Queue()
+        self.invitation = Invitation('127.0.0.1', store.value['port'], pin)
+        self.server = ReceiverServer(self.output, Access(self.directory.name), self.invitation,
+                                     lambda value: self.ready.put_nowait(value) if value else None,
+                                     pairing_store=store)
+        self.stop = asyncio.Event()
+        self.task = asyncio.create_task(self.server.run('127.0.0.1', store.value['port'], context, self.stop))
+        await asyncio.wait_for(self.ready.get(), 5)
+        hello = dict(type='hello', v=3, phoneId=phone, reconnectToken=original['reconnectToken'])
+        for invalid in ({**hello, 'phoneId': str(uuid.uuid4())}, {**hello, 'reconnectToken': '0' * 64}):
+            async with connect(self.url, ssl=self.client_context, proxy=None) as socket:
+                await socket.send(json.dumps(invalid))
+                with self.assertRaises(ConnectionClosed):
+                    await socket.recv()
+        async with connect(self.url, ssl=self.client_context, proxy=None) as socket:
+            await socket.send(json.dumps(hello))
+            ready = await self.receive(socket, 'ready')
+            self.assertNotEqual(ready['lease'], original['lease'])
+            self.assertFalse(self.server.session.enabled)
+            self.assertFalse(self.server.access.pro)
+            await self.server.disconnect_peer()  # Sleep retains remembered trust.
+        async with connect(self.url, ssl=self.client_context, proxy=None) as socket:
+            await socket.send(json.dumps(hello))
+            await self.receive(socket, 'ready')
+            await self.server.reset_pairing()
+        self.assertFalse(PairingStore(self.directory.name).accepts(phone, original['reconnectToken']))
+        async with connect(self.url, ssl=self.client_context, proxy=None) as socket:
+            await socket.send(json.dumps(hello))
+            with self.assertRaises(ConnectionClosed):
+                await socket.recv()
 
     async def test_watchdog_pauses_then_closes_idle_peer(self):
         async with connect(self.url, ssl=self.client_context, proxy=None) as socket:

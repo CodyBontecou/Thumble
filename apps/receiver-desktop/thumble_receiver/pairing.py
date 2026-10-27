@@ -1,4 +1,4 @@
-"""Process-local TLS identity and private-IPv4 pairing invitations."""
+"""Pinned TLS identity and private-IPv4 pairing invitations."""
 import base64
 from datetime import datetime, timedelta, timezone
 import hashlib
@@ -15,6 +15,7 @@ from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.x509.oid import NameOID
+from .private_files import protect
 
 
 def private_ipv4(value):
@@ -32,25 +33,33 @@ def detect_address():
         return private_ipv4(probe.getsockname()[0])
 
 
-def identity():
-    key = ec.generate_private_key(ec.SECP256R1())
-    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, 'Thumble Receiver')])
-    now = datetime.now(timezone.utc)
-    certificate = (x509.CertificateBuilder().subject_name(name).issuer_name(name)
-                   .public_key(key.public_key()).serial_number(x509.random_serial_number())
-                   .not_valid_before(now - timedelta(minutes=5)).not_valid_after(now + timedelta(days=2))
-                   .sign(key, hashes.SHA256()))
+def identity(store=None):
+    saved = store.value['tls'] if store else None
+    if saved is None:
+        key = ec.generate_private_key(ec.SECP256R1())
+        name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, 'Thumble Receiver')])
+        now = datetime.now(timezone.utc)
+        certificate = (x509.CertificateBuilder().subject_name(name).issuer_name(name)
+                       .public_key(key.public_key()).serial_number(x509.random_serial_number())
+                       .not_valid_before(now - timedelta(minutes=5)).not_valid_after(now + timedelta(days=7300))
+                       .sign(key, hashes.SHA256()))
+        saved = dict(cert=certificate.public_bytes(serialization.Encoding.PEM).decode(),
+                     key=key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
+                                           serialization.NoEncryption()).decode())
+    else:
+        certificate = x509.load_pem_x509_certificate(saved['cert'].encode())
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     context.minimum_version = ssl.TLSVersion.TLSv1_2
     # Close handles before loading/removing files so this works on Windows too.
     with tempfile.TemporaryDirectory(prefix='thumble-tls-') as temporary:
         cert_path, key_path = Path(temporary) / 'cert.pem', Path(temporary) / 'key.pem'
-        cert_path.write_bytes(certificate.public_bytes(serialization.Encoding.PEM))
+        cert_path.write_text(saved['cert'], encoding='ascii')
         key_path.touch(mode=0o600)
-        key_path.write_bytes(key.private_bytes(serialization.Encoding.PEM,
-                                              serialization.PrivateFormat.PKCS8,
-                                              serialization.NoEncryption()))
+        protect(key_path)
+        key_path.write_text(saved['key'], encoding='ascii')
         context.load_cert_chain(cert_path, key_path)
+    if store and store.value['tls'] is None:
+        store.update(tls=saved)
     fingerprint = hashlib.sha256(certificate.public_bytes(serialization.Encoding.DER)).hexdigest()
     return context, fingerprint
 

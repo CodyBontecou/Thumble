@@ -3,11 +3,11 @@ import assert from 'node:assert/strict';
 import worker from '../../apps/downloads/src/worker.js';
 
 const files = [
-  ['Thumble-Receiver-1.0.0.dmg', 'macos/receiver', 'application/x-apple-diskimage'],
-  ['Thumble-Receiver-0.1.0-windows-x64-setup.exe', 'windows/receiver', 'application/vnd.microsoft.portable-executable'],
-  ['Thumble-Receiver-0.1.0-linux-x64.tar.gz', 'linux/receiver', 'application/gzip'],
-  ['Thumble-Receiver-0.1.0-desktop-setup.txt', 'desktop/receiver', 'text/plain'],
-  ['Thumble-Receiver-0.1.0-desktop.json', 'desktop/receiver', 'application/json'],
+  ['Thumble-Receiver-1.0.1.dmg', 'macos/receiver', 'application/x-apple-diskimage'],
+  ['Thumble-Receiver-0.1.1-windows-x64-setup.exe', 'windows/receiver', 'application/vnd.microsoft.portable-executable'],
+  ['Thumble-Receiver-0.1.1-linux-x64.tar.gz', 'linux/receiver', 'application/gzip'],
+  ['Thumble-Receiver-0.1.1-desktop-setup.txt', 'desktop/receiver', 'text/plain'],
+  ['Thumble-Receiver-0.1.1-desktop.json', 'desktop/receiver', 'application/json'],
 ];
 
 test('versioned releases and checksums stream only from their allowlisted keys', async () => {

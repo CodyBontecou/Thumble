@@ -14,6 +14,7 @@ from .lock import DirectoryLock
 from .output import GuardedOutput, MemoryOutput, native_output
 from .pairing import Invitation, detect_address, identity, private_ipv4
 from .server import ReceiverServer
+from .pairing_store import PairingStore
 from .profiles import ProfileStore
 from .chat import native_chat
 from .cloud_pairing import CallbackBroker, CloudPairing, forward_callback
@@ -36,12 +37,14 @@ def display_invitation(link):
 
 async def run(args, ui=None):
     address = private_ipv4(args.address) if args.address else detect_address()
-    context, fingerprint = identity()
     # No fallback: missing drivers/permissions are a startup failure.
     output = GuardedOutput(MemoryOutput() if args.dry_run else native_output())
     lock = None
     try:
         lock = DirectoryLock(args.data_dir)
+        pairing_store = PairingStore(args.data_dir)
+        context, fingerprint = identity(pairing_store)
+        port = args.port or pairing_store.value['port']
         access = Access(args.data_dir)
         profile_dir = args.profile_dir or Path(args.data_dir) / 'profiles'
         cloud = None
@@ -52,9 +55,10 @@ async def run(args, ui=None):
                 display_invitation(value)
             if cloud and cloud.token:
                 asyncio.create_task(cloud.publish())
-        server = ReceiverServer(output, access, Invitation(address, args.port, fingerprint), invitation_changed,
+        server = ReceiverServer(output, access, Invitation(address, port, fingerprint), invitation_changed,
                                 profiles=ProfileStore(profile_dir), wow_roots=[] if args.no_consoleport_sync else args.wow_dir,
-                                enable_udp=args.transport == 'udp', chat=None if args.dry_run else native_chat())
+                                enable_udp=args.transport == 'udp', chat=None if args.dry_run else native_chat(),
+                                pairing_store=pairing_store)
         stop = asyncio.Event()
         loop = asyncio.get_running_loop()
         broker = CallbackBroker(args.data_dir)
@@ -73,7 +77,7 @@ async def run(args, ui=None):
             print(f'Listening on {address}; Ctrl+C releases controls and exits.', flush=True)
         try:
             # Bind the selected LAN interface rather than every interface.
-            await server.run(address, args.port, context, stop)
+            await server.run(address, port, context, stop)
         finally:
             await cloud.stop()
             await broker.close()
@@ -97,7 +101,7 @@ def main():
             sys.stderr = open('CONOUT$', 'w', encoding='utf-8')
     parser = argparse.ArgumentParser(description='Thumble Windows/Linux receiver preview')
     parser.add_argument('--address', help='Private IPv4 address of this computer on the phone Wi-Fi')
-    parser.add_argument('--port', type=int, default=0, help='WSS port (default: an available port)')
+    parser.add_argument('--port', type=int, default=0, help='WSS port (default: saved port, or an available port on first launch)')
     parser.add_argument('--data-dir', type=Path, default=data_directory())
     parser.add_argument('--profile-dir', type=Path, default=os.environ.get('TAPPING_PROFILE_DIR'),
                         help='Local-agent profile store (default: data directory / profiles)')

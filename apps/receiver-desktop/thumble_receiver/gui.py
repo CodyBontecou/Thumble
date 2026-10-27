@@ -94,7 +94,7 @@ class Runtime:
                 pass
             if server.session and server.session.chat_cancel:
                 server.session.chat_cancel.set()
-            self.command(lambda: server.reset_pairing())
+            self.command(lambda: server.disconnect_peer())
 
 
 class Window(QMainWindow):

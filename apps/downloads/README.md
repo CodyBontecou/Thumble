@@ -13,7 +13,7 @@ private to their existing endpoints. Large files stream directly from R2.
 
 Aliases redirect without caching. Versioned filenames and their `.sha256` files
 are immutable. The allowlist also publishes
-`/downloads/Thumble-Receiver-0.1.0-desktop.json` with the preview's source commit,
+`/downloads/Thumble-Receiver-0.1.1-desktop.json` with the preview's source commit,
 validation run, file sizes and hashes. See `docs/releases/desktop-receiver-0.1.0.json`.
 
 ## Publish
@@ -39,3 +39,5 @@ The website source is currently `../Thumble-legacy/Website`, deployed to Pages
 project `pocketpad-site`. Its download cards and `/docs#desktop-receivers` explain
 all three platforms. Preserve the published `/cli/` files when deploying that
 source, since CLI archives are generated outputs stored separately.
+
+Desktop preview 0.1.1 retains phone pairing across checkout, app/receiver restarts, and sleep. Publish only installers from the successful native Windows/Linux workflow run recorded in `docs/releases/desktop-receiver-0.1.1.json`. Keep previous versioned objects immutable. The private reviewer ZIP retains its separate authentication requirement.
