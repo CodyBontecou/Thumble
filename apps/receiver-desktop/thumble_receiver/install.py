@@ -65,6 +65,9 @@ def install_user():
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copytree(source, target, dirs_exist_ok=True)
     register_protocol([str(target / 'thumble-receiver')])
+    startup = Path(os.environ.get('XDG_CONFIG_HOME', Path.home() / '.config')) / 'autostart/io.thumble.receiver.desktop'
+    if startup.exists() and str(target.parent) in startup.read_text(encoding='utf-8'):
+        startup.write_text(desktop_entry([str(target / 'thumble-receiver')], background=True), encoding='utf-8')
     binaries = Path.home() / '.local/bin'
     binaries.mkdir(parents=True, exist_ok=True)
     link = binaries / 'thumble-receiver'
