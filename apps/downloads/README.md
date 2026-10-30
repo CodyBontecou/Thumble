@@ -5,8 +5,8 @@ This Worker serves only the signed release DMG and its SHA-256 checksum from
 manifest are independent of this endpoint.
 
 - `/downloads/receiver-latest.dmg` redirects to the current version.
-- `/downloads/Thumble-Receiver-1.0.0.dmg` serves the immutable release.
-- `/downloads/Thumble-Receiver-1.0.0.dmg.sha256` serves its checksum.
+- `/downloads/Thumble-Receiver-1.0.2.dmg` serves the immutable release.
+- `/downloads/Thumble-Receiver-1.0.2.dmg.sha256` serves its checksum.
 
 Build with `tools/build-macos-receiver.sh`, then run
 `tools/package-macos-receiver.sh`. Both the app and DMG must pass notarization,
@@ -17,3 +17,8 @@ stapling and Gatekeeper assessment before upload. Publish the DMG and checksum w
 For a subsequent release, use a new versioned filename and update the explicit
 allowlist in `src/worker.js`. Retain published immutable artifacts. Verify the
 downloaded SHA-256 against the local stapled DMG after deployment.
+
+The public latest Mac download is 1.0.2. Previous versioned releases remain available.
+Packaging also runs `tools/check-macos-receiver-hid.py` through Launch Services
+to verify native gamepad creation and a neutral report without inheriting terminal
+controller access. Complete the app’s controller-access setup before packaging.

@@ -57,7 +57,7 @@ final class Receiver {
     private var port: UInt16 = 0
     private func status(_ text: String) { onStatus?(text) }
     func start() throws {
-        guard let device = tapping_gamepad_create() else { throw ReceiverError.message("Virtual HID creation failed. Check the signed HID profile.") }
+        guard let device = tapping_gamepad_create() else { throw ReceiverError.virtualGamepadUnavailable }
         gamepad = device
         let directory = URL(fileURLWithPath: ProcessInfo.processInfo.environment["TAPPING_PROFILE_DIR"] ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/Tapping/profiles").path)
         let config = Bundle.main.url(forResource: "Monetization", withExtension: "json").flatMap { try? Data(contentsOf: $0) }.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }

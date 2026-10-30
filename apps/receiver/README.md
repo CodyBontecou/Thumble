@@ -12,6 +12,19 @@ open 'build/Thumble Receiver.app'
 
 The bundle retains `com.codybontecou.PocketPadMac`, whose production virtual HID capability is already approved. The visible name is Thumble Receiver. The default build requires a matching Developer ID profile for all devices, a Developer ID Application identity, and production purchase configuration. Notarization is a separate release step. The receiver starts with its pairing window hidden. Ask an agent to call the local `show_pairing_code` tool to display the QR in chat, or choose **Pair phone…** in the menu bar. Launch with `--show-pairing` to open the window immediately. The window also offers “Copy pairing link”. Codes expire in two minutes and can be redeemed once. Disconnecting generates another code.
 
+If macOS blocks controller creation, the receiver opens its setup window. Choose
+**Enable controller access…** and enable Thumble Receiver in Privacy & Security
+(Accessibility, called Device Control and Data Access on newer macOS). Return to
+the receiver or choose **Try again** to continue pairing. When replacing a local
+development-signed app, remove its old privacy entry and add the distribution app
+again if the enabled entry is no longer recognized.
+
+Before packaging, run `python3 tools/check-macos-receiver-hid.py 'build/Thumble Receiver.app'`.
+This launches the signed app through Launch Services and checks actual gamepad
+creation and neutral-report submission without opening a listener or loading
+profiles. Direct terminal execution can inherit the terminal's controller access
+and is insufficient as a distribution check. The packaging script enforces this gate.
+
 The receiver creates a process-local TLS certificate with macOS's `/usr/bin/openssl`, imports its identity into memory only, and deletes temporary key files. The phone pins the exact SHA-256 leaf certificate from the QR. A new receiver process has a new certificate. LAN changes currently require restarting the receiver. Automatic discovery, remembered pairing, distribution signing and launch-at-login remain follow-up work.
 
 Input processing and the watchdog use their own serial queue. A 20 ms timer releases the gamepad after 300 ms without valid input, uses a separate 500 ms server-clock lease budget, requires fresh-lease neutral recovery, and closes the session after two seconds without valid input. The UI thread does not own that timer. On Mac sleep, disconnect or quit, all controls release. Rumble is unsupported.

@@ -1,0 +1,20 @@
+{
+  "version": "1.0.2",
+  "platform": "macos",
+  "architecture": [
+    "arm64",
+    "x86_64"
+  ],
+  "filename": "Thumble-Receiver-1.0.2.dmg",
+  "bytes": 1868921,
+  "sha256": "3f6cd8aef0f3fcf0eb4e8db305a2aae84ab5c1e2d0fe19f7a9c7d9eba9451d24",
+  "url": "https://thumble.io/downloads/Thumble-Receiver-1.0.2.dmg",
+  "notarization": {
+    "app": "ecea7119-aad7-4187-92d1-ee46f8796dc7",
+    "dmg": "c8c335b7-37a3-47fe-86a3-c49c2dba587b"
+  },
+  "status": "published",
+  "pairingVerification": "Owner confirmed successful phone QR pairing with the exact packaged receiver.",
+  "downloadWorkerVersion": "92ee5085-75c9-48f9-b366-6565f2354005",
+  "publicVerification": "Latest redirect, GET SHA-256, published checksum and HEAD size match the verified package."
+}

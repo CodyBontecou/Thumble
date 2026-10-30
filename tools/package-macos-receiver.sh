@@ -15,6 +15,7 @@ task_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "
 task_dmg="$task_release/Thumble-Receiver-$task_version.dmg"
 mkdir -p "$task_release"
 codesign --verify --strict "$task_app"
+python3 "$task_root/tools/check-macos-receiver-hid.py" "$task_app"
 codesign -dv --verbose=4 "$task_app" 2> "$task_release/app-signature.txt"
 if ! rg -q '^Authority=Developer ID Application:' "$task_release/app-signature.txt" || ! rg -q '^Timestamp=' "$task_release/app-signature.txt"; then
   echo 'Build with Developer ID Application signing and a secure timestamp first.' >&2

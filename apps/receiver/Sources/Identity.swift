@@ -33,4 +33,4 @@ struct ReceiverIdentity {
         return ReceiverIdentity(identity: identity, fingerprint: fingerprint)
     }
 }
-enum ReceiverError: Error { case message(String) }
+enum ReceiverError: Error { case message(String), virtualGamepadUnavailable }
