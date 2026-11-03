@@ -36,9 +36,11 @@ Family ranks above Individual so switching to Family is an upgrade, matching
 Health.md. `thumble_pro_lifetime` (6826421543) moved from $19.99 to **$49.99**
 (US base, automatic equalization). `thumble_family_lifetime` (6830171148) is a
 Family-sharable non-consumable at **$89.99** in all territories. All new
-products are Ready to Submit; submit them with the next app version. The review
-screenshot is a development-build capture of the Plans slide; replace it with a
-release capture before review.
+products are Ready to Submit with Release-build captures of the Plans slide
+(Individual and Family views) as review screenshots; submit them with the next
+app version. Lifetime is already waiting for review, so its earlier screenshot
+is locked. A Release simulator build loads all six products from StoreKit at
+these prices, each subscription with its 7-day trial.
 
 ### Google Play (not created yet)
 
