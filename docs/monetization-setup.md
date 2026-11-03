@@ -18,11 +18,36 @@ Health.md's catalog:
 | Family Lifetime | `thumble_family_lifetime` | — | $89.99 | none |
 
 Lifetime keeps the existing product ID so earlier Pro purchases remain valid.
-Its store price still needs to move from $19.99 to $49.99. Create the
-subscriptions in one Apple subscription group with a 7-day free-trial
-introductory offer, and the Family products with Family Sharing enabled. On
-Google Play create each subscription with one base plan and an eligible 7-day
-free-trial offer. None of these store products exist yet.
+
+### App Store Connect (created November 3, 2026)
+
+Subscription group **Thumble Plans** (`22541028`), all 175 territories plus new
+territories, US base price with Apple's equalized matrix, one-week free-trial
+introductory offer in every territory, App Review screenshot attached:
+
+| Product | Apple ID | Level | Family Sharing | US price |
+| --- | --- | --- | --- | --- |
+| `thumble_family_yearly` | 6830168329 | 1 | yes | $49.99 |
+| `thumble_family_weekly` | 6830168176 | 1 | yes | $1.99 |
+| `thumble_yearly` | 6830167151 | 2 | no | $29.99 |
+| `thumble_weekly` | 6830168168 | 2 | no | $0.99 |
+
+Family ranks above Individual so switching to Family is an upgrade, matching
+Health.md. `thumble_pro_lifetime` (6826421543) moved from $19.99 to **$49.99**
+(US base, automatic equalization). `thumble_family_lifetime` (6830171148) is a
+Family-sharable non-consumable at **$89.99** in all territories. All new
+products are Ready to Submit; submit them with the next app version. The review
+screenshot is a development-build capture of the Plans slide; replace it with a
+release capture before review.
+
+### Google Play (not created yet)
+
+The `thumble-play-verifier` service account can read products but not create
+or price them (`PERMISSION_DENIED`). Grant it product-management permission in
+Play Console, or create the products there: subscriptions `thumble_weekly`
+(base plan `P1W`, $0.99) and `thumble_yearly` (base plan `P1Y`, $29.99), each
+with a 7-day free-trial offer for new subscribers, and raise the one-time
+`thumble_pro_lifetime` from $19.99 to $49.99. Google Play has no Family plans.
 
 `TappingPurchases.catalog(ids)` returns localized prices and trial eligibility
 from the store; `purchase(id)` buys a plan; `status()` reports `active`,
