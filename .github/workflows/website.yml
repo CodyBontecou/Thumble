@@ -1,5 +1,6 @@
-name: Website checks
+name: Website checks and deploy
 on:
+  workflow_dispatch:
   pull_request:
     paths:
       - apps/website/**
@@ -17,9 +18,13 @@ on:
       - .github/workflows/website.yml
 permissions:
   contents: read
+concurrency:
+  group: website-${{ github.ref }}
+  cancel-in-progress: false
 jobs:
   website:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -31,3 +36,16 @@ jobs:
           key: website-cli-${{ hashFiles('apps/website/cli-distribution.json') }}
       - run: npm run website:test
       - run: npm run website:build
+      - name: Deploy production
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        working-directory: dist/website
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_PAGES_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN" || { echo 'Missing CLOUDFLARE_PAGES_API_TOKEN repository secret'; exit 1; }
+          test -n "$CLOUDFLARE_ACCOUNT_ID" || { echo 'Missing CLOUDFLARE_ACCOUNT_ID repository variable'; exit 1; }
+          npx --yes wrangler@4.153.0 pages deploy . --project-name pocketpad-site --branch main --commit-hash "$GITHUB_SHA"
+      - name: Verify production
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        run: npm run website:verify

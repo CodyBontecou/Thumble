@@ -67,6 +67,9 @@ class GuiTests(unittest.TestCase):
         runtime.server.output.release.assert_called_once()
         runtime.server.session.chat_cancel.set.assert_called_once()
         runtime.command.assert_called_once()
+        runtime.command.call_args.args[0]()
+        runtime.server.disconnect_peer.assert_called_once()
+        runtime.server.reset_pairing.assert_not_called()
 
     def test_windows_power_broadcast_revokes_input_on_both_edges(self):
         import ctypes

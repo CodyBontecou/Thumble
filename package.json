@@ -22,7 +22,8 @@
     "website:test": "node --test tools/website/test/*.test.mjs",
     "website:dev": "node tools/website/deploy.mjs --preview",
     "website:deploy": "node tools/website/deploy.mjs",
-    "website:optimize": "node tools/website/optimize-lighthouse.mjs apps/website"
+    "website:optimize": "node tools/website/optimize-lighthouse.mjs apps/website",
+    "website:verify": "node tools/website/verify-live.mjs"
   },
   "engines": {
     "node": ">=22"

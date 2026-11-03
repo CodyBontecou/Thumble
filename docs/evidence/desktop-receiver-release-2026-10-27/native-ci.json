@@ -1,0 +1,460 @@
+{
+  "conclusion": "success",
+  "headSha": "85ea6d605e3ef7660a66b4b86dc6cb8fd5c90d4e",
+  "jobs": [
+    {
+      "completedAt": "2026-10-27T13:20:48Z",
+      "conclusion": "success",
+      "databaseId": 122207996845,
+      "name": "test-and-package (windows-latest)",
+      "startedAt": "2026-10-27T13:17:18Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-10-27T13:17:21Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-10-27T13:17:19Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-27T13:17:29Z",
+          "conclusion": "success",
+          "name": "Run actions/checkout@v4",
+          "number": 2,
+          "startedAt": "2026-10-27T13:17:21Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-27T13:17:36Z",
+          "conclusion": "success",
+          "name": "Run actions/setup-python@v5",
+          "number": 3,
+          "startedAt": "2026-10-27T13:17:29Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-27T13:18:20Z",
+          "conclusion": "success",
+          "name": "Install receiver and packaging tools",
+          "number": 4,
+          "startedAt": "2026-10-27T13:17:36Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-27T13:18:20Z",
+          "conclusion": "skipped",
+          "name": "Prepare Linux desktop libraries and native virtual input",
+          "number": 5,
+          "startedAt": "2026-10-27T13:18:20Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-27T13:18:32Z",
+          "conclusion": "success",
+          "name": "Prepare Windows driver and installer compiler",
+          "number": 6,
+          "startedAt": "2026-10-27T13:18:20Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-27T13:18:47Z",
+          "conclusion": "success",
+          "name": "Run actions/setup-node@v4",
+          "number": 7,
+          "startedAt": "2026-10-27T13:18:32Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-27T13:19:06Z",
+          "conclusion": "success",
+          "name": "Install local agent tool dependencies",
+          "number": 8,
+          "startedAt": "2026-10-27T13:18:47Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-27T13:19:11Z",
+          "conclusion": "success",
+          "name": "Test shared controller and local agent tools",
+          "number": 9,
+          "startedAt": "2026-10-27T13:19:06Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-27T13:19:11Z",
+          "conclusion": "skipped",
+          "name": "Test POSIX private pairing image export",
+          "number": 10,
+          "startedAt": "2026-10-27T13:19:11Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-27T13:19:16Z",
+          "conclusion": "success",
+          "name": "Test shared cloud pairing and OAuth contracts",
+          "number": 11,
+          "startedAt": "2026-10-27T13:19:11Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-27T13:19:18Z",
+          "conclusion": "success",
+          "name": "Verify checked-in profile resources",
+          "number": 12,
+          "startedAt": "2026-10-27T13:19:16Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-27T13:19:32Z",
+          "conclusion": "success",
+          "name": "Test protocol, TLS, access ledger, and both native adapter contracts",
+          "number": 13,
+          "startedAt": "2026-10-27T13:19:18Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-27T13:19:34Z",
+          "conclusion": "success",
+          "name": "Test installed command",
+          "number": 14,
+          "startedAt": "2026-10-27T13:19:32Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-27T13:19:35Z",
+          "conclusion": "success",
+          "name": "Verify Windows text delivery to an isolated native widget",
+          "number": 15,
+          "startedAt": "2026-10-27T13:19:34Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-27T13:19:35Z",
+          "conclusion": "skipped",
+          "name": "Verify Linux text delivery on an isolated X11 display",
+          "number": 16,
+          "startedAt": "2026-10-27T13:19:35Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-27T13:19:37Z",
+          "conclusion": "success",
+          "name": "Verify native Windows gamepad via XInput",
+          "number": 17,
+          "startedAt": "2026-10-27T13:19:35Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-27T13:19:37Z",
+          "conclusion": "skipped",
+          "name": "Verify native Linux gamepad via evdev",
+          "number": 18,
+          "startedAt": "2026-10-27T13:19:37Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-27T13:20:23Z",
+          "conclusion": "success",
+          "name": "Build desktop directory bundle and installer",
+          "number": 19,
+          "startedAt": "2026-10-27T13:19:37Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-27T13:20:34Z",
+          "conclusion": "success",
+          "name": "Test frozen Windows runtime and GUI",
+          "number": 20,
+          "startedAt": "2026-10-27T13:20:23Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-27T13:20:34Z",
+          "conclusion": "skipped",
+          "name": "Test installed Linux runtime and GUI",
+          "number": 21,
+          "startedAt": "2026-10-27T13:20:34Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-27T13:20:36Z",
+          "conclusion": "success",
+          "name": "Save desktop GUI verification image",
+          "number": 22,
+          "startedAt": "2026-10-27T13:20:34Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-27T13:20:39Z",
+          "conclusion": "success",
+          "name": "Save preview installer and setup instructions",
+          "number": 23,
+          "startedAt": "2026-10-27T13:20:36Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-27T13:20:39Z",
+          "conclusion": "success",
+          "name": "Post Run actions/setup-node@v4",
+          "number": 44,
+          "startedAt": "2026-10-27T13:20:39Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-27T13:20:43Z",
+          "conclusion": "success",
+          "name": "Post Run actions/setup-python@v5",
+          "number": 45,
+          "startedAt": "2026-10-27T13:20:39Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-27T13:20:46Z",
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@v4",
+          "number": 46,
+          "startedAt": "2026-10-27T13:20:43Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-27T13:20:46Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 47,
+          "startedAt": "2026-10-27T13:20:46Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/CodyBontecou/Thumble/actions/runs/40509685547/job/122207996845"
+    },
+    {
+      "completedAt": "2026-10-27T13:19:32Z",
+      "conclusion": "success",
+      "databaseId": 122207997415,
+      "name": "test-and-package (ubuntu-22.04)",
+      "startedAt": "2026-10-27T13:17:30Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-10-27T13:17:32Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-10-27T13:17:31Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-27T13:17:35Z",
+          "conclusion": "success",
+          "name": "Run actions/checkout@v4",
+          "number": 2,
+          "startedAt": "2026-10-27T13:17:32Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-27T13:17:37Z",
+          "conclusion": "success",
+          "name": "Run actions/setup-python@v5",
+          "number": 3,
+          "startedAt": "2026-10-27T13:17:35Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-27T13:17:46Z",
+          "conclusion": "success",
+          "name": "Install receiver and packaging tools",
+          "number": 4,
+          "startedAt": "2026-10-27T13:17:37Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-27T13:18:03Z",
+          "conclusion": "success",
+          "name": "Prepare Linux desktop libraries and native virtual input",
+          "number": 5,
+          "startedAt": "2026-10-27T13:17:46Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-27T13:18:03Z",
+          "conclusion": "skipped",
+          "name": "Prepare Windows driver and installer compiler",
+          "number": 6,
+          "startedAt": "2026-10-27T13:18:03Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-27T13:18:07Z",
+          "conclusion": "success",
+          "name": "Run actions/setup-node@v4",
+          "number": 7,
+          "startedAt": "2026-10-27T13:18:03Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-27T13:18:13Z",
+          "conclusion": "success",
+          "name": "Install local agent tool dependencies",
+          "number": 8,
+          "startedAt": "2026-10-27T13:18:07Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-27T13:18:15Z",
+          "conclusion": "success",
+          "name": "Test shared controller and local agent tools",
+          "number": 9,
+          "startedAt": "2026-10-27T13:18:13Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-27T13:18:16Z",
+          "conclusion": "success",
+          "name": "Test POSIX private pairing image export",
+          "number": 10,
+          "startedAt": "2026-10-27T13:18:15Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-27T13:18:19Z",
+          "conclusion": "success",
+          "name": "Test shared cloud pairing and OAuth contracts",
+          "number": 11,
+          "startedAt": "2026-10-27T13:18:16Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-27T13:18:20Z",
+          "conclusion": "success",
+          "name": "Verify checked-in profile resources",
+          "number": 12,
+          "startedAt": "2026-10-27T13:18:19Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-27T13:18:27Z",
+          "conclusion": "success",
+          "name": "Test protocol, TLS, access ledger, and both native adapter contracts",
+          "number": 13,
+          "startedAt": "2026-10-27T13:18:20Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-27T13:18:28Z",
+          "conclusion": "success",
+          "name": "Test installed command",
+          "number": 14,
+          "startedAt": "2026-10-27T13:18:27Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-27T13:18:28Z",
+          "conclusion": "skipped",
+          "name": "Verify Windows text delivery to an isolated native widget",
+          "number": 15,
+          "startedAt": "2026-10-27T13:18:28Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-27T13:18:29Z",
+          "conclusion": "success",
+          "name": "Verify Linux text delivery on an isolated X11 display",
+          "number": 16,
+          "startedAt": "2026-10-27T13:18:28Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-27T13:18:29Z",
+          "conclusion": "skipped",
+          "name": "Verify native Windows gamepad via XInput",
+          "number": 17,
+          "startedAt": "2026-10-27T13:18:29Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-27T13:18:30Z",
+          "conclusion": "success",
+          "name": "Verify native Linux gamepad via evdev",
+          "number": 18,
+          "startedAt": "2026-10-27T13:18:29Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-27T13:19:21Z",
+          "conclusion": "success",
+          "name": "Build desktop directory bundle and installer",
+          "number": 19,
+          "startedAt": "2026-10-27T13:18:30Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-27T13:19:21Z",
+          "conclusion": "skipped",
+          "name": "Test frozen Windows runtime and GUI",
+          "number": 20,
+          "startedAt": "2026-10-27T13:19:21Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-27T13:19:25Z",
+          "conclusion": "success",
+          "name": "Test installed Linux runtime and GUI",
+          "number": 21,
+          "startedAt": "2026-10-27T13:19:21Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-27T13:19:26Z",
+          "conclusion": "success",
+          "name": "Save desktop GUI verification image",
+          "number": 22,
+          "startedAt": "2026-10-27T13:19:25Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-27T13:19:30Z",
+          "conclusion": "success",
+          "name": "Save preview installer and setup instructions",
+          "number": 23,
+          "startedAt": "2026-10-27T13:19:26Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-27T13:19:30Z",
+          "conclusion": "success",
+          "name": "Post Run actions/setup-node@v4",
+          "number": 44,
+          "startedAt": "2026-10-27T13:19:30Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-27T13:19:30Z",
+          "conclusion": "success",
+          "name": "Post Run actions/setup-python@v5",
+          "number": 45,
+          "startedAt": "2026-10-27T13:19:30Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-27T13:19:30Z",
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@v4",
+          "number": 46,
+          "startedAt": "2026-10-27T13:19:30Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-27T13:19:30Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 47,
+          "startedAt": "2026-10-27T13:19:30Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/CodyBontecou/Thumble/actions/runs/40509685547/job/122207997415"
+    }
+  ]
+}

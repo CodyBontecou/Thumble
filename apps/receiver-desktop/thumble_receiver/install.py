@@ -60,11 +60,14 @@ def install_user():
     if sys.platform != 'linux' or not getattr(sys, 'frozen', False):
         raise RuntimeError('Use the packaged Linux receiver with --install-user, or the Windows setup executable')
     source = Path(sys.executable).resolve().parent
-    target = data_home() / 'thumble/receiver/0.1.0'
+    target = data_home() / 'thumble/receiver/0.1.1'
     if source != target:
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copytree(source, target, dirs_exist_ok=True)
     register_protocol([str(target / 'thumble-receiver')])
+    startup = Path(os.environ.get('XDG_CONFIG_HOME', Path.home() / '.config')) / 'autostart/io.thumble.receiver.desktop'
+    if startup.exists() and desktop_exec([str(target.parent)])[:-1] in startup.read_text(encoding='utf-8'):
+        startup.write_text(desktop_entry([str(target / 'thumble-receiver')], background=True), encoding='utf-8')
     binaries = Path.home() / '.local/bin'
     binaries.mkdir(parents=True, exist_ok=True)
     link = binaries / 'thumble-receiver'

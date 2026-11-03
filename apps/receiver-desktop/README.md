@@ -6,8 +6,9 @@ signed Swift macOS app continues to live in `apps/receiver`.
 
 Implemented in the preview:
 
-- Process-local TLS identity, SHA-256 certificate pin in a two-minute, single-use
-  QR invitation, and one authenticated phone at a time.
+- Persistent TLS identity, SHA-256 certificate pin in a two-minute, single-use
+  QR invitation, and one authenticated phone at a time. Remembered phones can
+  reconnect after checkout, phone restarts, receiver restarts, and sleep.
 - Native Xbox 360 output on Windows and a Linux uinput gamepad with matching
   buttons, sticks, triggers, and opposing D-pad cancellation.
 - Monotonic 500 ms server leases, increasing sequences, 300 ms input watchdog,
@@ -17,7 +18,7 @@ Implemented in the preview:
   rejected and neutral recovery is required when execution resumes.
   The desktop window additionally handles Windows power broadcasts and Linux
   logind sleep/resume signals, immediately releasing the thread-safe output
-  guard and disconnecting the old pairing. Pair again after a system suspend.
+  guard and closing the old connection while retaining the remembered phone.
 - Durable 30-minute demo with crash-conservative five-second reservations,
   phone usage mirroring, signed Ed25519 Pro grants, and explicit Resume.
   The entitlement public key and wire fields match the existing purchase service.
@@ -57,13 +58,13 @@ For Linux, extract the archive and install the application for your user:
 
 ```sh
 # Linux
-tar -xzf Thumble-Receiver-0.1.0-linux-x64.tar.gz
+tar -xzf Thumble-Receiver-0.1.1-linux-x64.tar.gz
 ./thumble-receiver/thumble-receiver --install-user
 ```
 
 Open **Thumble Receiver** from the applications menu. The installer registers the
 browser callback and adds `~/.local/bin/thumble-receiver`. It requires `xdg-utils`
-and uses `${XDG_DATA_HOME:-~/.local/share}/thumble/receiver/0.1.0`. Run the installed
+and uses `${XDG_DATA_HOME:-~/.local/share}/thumble/receiver/0.1.1`. Run the installed
 binary with `--uninstall-user` to remove the app while retaining receiver data.
 Keep the bundle's `_internal` directory alongside the executable; libraries stay
 replaceable and third-party licenses are included. SHA-256 checksums accompany
@@ -83,13 +84,23 @@ Use this computer's Wi-Fi IPv4 address. With no `--address`, the receiver select
 the default route's private IPv4 interface; specify it explicitly if a VPN or
 multiple adapters select the wrong network. The phone must be on the same LAN.
 Allow inbound TCP for the chosen port on the private network in the OS firewall.
-No router port forwarding is needed. Omitting `--port` chooses an available port.
+No router port forwarding is needed. Omitting `--port` chooses an available port
+on first launch and reuses it on later launches. If it is occupied, startup fails
+instead of silently changing the saved endpoint.
 
 Scan the QR in Thumble's **Connect computer** screen, then use **Start demo / Resume**.
 The QR renews after expiry or disconnect. Ctrl+C releases the pad and exits.
 Keep the QR private; do not capture it in CI logs or share it with other people.
-TLS keys are removed after loading the process-local identity. OAuth credentials
-stay in memory. The private local MCP PNG is ephemeral: it is refreshed while
+The TLS identity, listener port, and phone-bound reconnect credential are stored
+in `pairing-identity.json` in the receiver data directory, with a protected Windows
+DACL allowing only the current account and SYSTEM, or mode 0600 on Linux.
+Invalid or unreadable saved identity data fails startup instead of rotating trust.
+**Disconnect and pair again** durably revokes the remembered phone. Sleep and
+normal shutdown retain it; each reconnect requires fresh input leases and Resume.
+An existing installation needs one QR pairing with the updated phone app to save
+these credentials. Changing the computer's LAN IP or explicitly changing its port
+still requires pairing at the new endpoint. OAuth credentials stay in memory.
+The private local MCP PNG is ephemeral: it is refreshed while
 unpaired, removed on pairing/quit, and rejected by local tools after five seconds
 without a heartbeat. A crash may leave a stale image file, which is not accepted.
 

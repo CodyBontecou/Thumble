@@ -17,6 +17,7 @@ from .consoleport import ConsolePortSync
 from .profiles import ProfileStore, ProfileError, load_json
 from .chat import ChatError, validate as validate_chat
 from .datagram import DatagramInput
+from .pairing_store import PairingStore
 from .pairing_image import PairingImage
 
 
@@ -39,6 +40,7 @@ class Session:
     def __init__(self, output, access, clock=monotonic, chat_available=False):
         self.output, self.access, self.clock = output, access, clock
         self.sequence, self.last_input, self.last_pause = -1, clock(), 0
+        self.tcp_sequence = -1
         self.leases = {}
         self.paused, self.enabled = True, False
         self.generation = output.generation
@@ -133,8 +135,13 @@ class Session:
         sequence = message.get('seq')
         if udp and integer(sequence) and sequence <= self.sequence:
             return []  # Datagram reordering is normal; TCP replay is a protocol error.
-        if not integer(sequence) or sequence <= self.sequence:
+        if not integer(sequence) or (not udp and sequence <= self.tcp_sequence):
             raise ProtocolError('Invalid or stale sequence')
+        if sequence <= self.sequence:
+            # TLS preserves its own order, but a newer UDP frame may overtake
+            # queued TLS input while switching transports. Never replay its state.
+            self.tcp_sequence = sequence
+            return []
         state = State.parse(message.get('state'))
         lease = message.get('lease')
         if not isinstance(lease, str) or self.clock() > self.leases.get(lease, float('-inf')):
@@ -148,6 +155,8 @@ class Session:
             return []
         self.paused = False
         self.sequence, self.last_input = sequence, self.clock()
+        if not udp:
+            self.tcp_sequence = sequence
         if self.enabled:
             self.access.start()
         allowed = self.enabled and self.access.running and not self.chat_busy
@@ -183,7 +192,7 @@ class Session:
 
 class ReceiverServer:
     def __init__(self, output, access, invitation, on_invitation=lambda _: None, profiles=None, wow_roots=(),
-                 enable_udp=False, chat=None):
+                 enable_udp=False, chat=None, pairing_store=None):
         self.output, self.access, self.invitation = output, access, invitation
         self.on_invitation = on_invitation
         self.peer = None
@@ -200,6 +209,9 @@ class ReceiverServer:
         self.current_invitation = ''
         self.on_status = lambda _: None
         self.closing = False
+        self.pairing_store = pairing_store or PairingStore(access.directory)
+        self.pairing_lock = asyncio.Lock()
+        self.peer_done = None
 
     async def chat_request(self, socket, session, message):
         request = message.get('id')
@@ -308,6 +320,13 @@ class ReceiverServer:
         self.on_invitation(self.current_invitation)
 
     async def reset_pairing(self):
+        async with self.pairing_lock:
+            if self.session:
+                self.session.pause()
+            self.pairing_store.forget()
+            await self.disconnect_peer()
+
+    async def disconnect_peer(self):
         if self.session:
             self.session.pause()
         if self.peer:
@@ -339,25 +358,43 @@ class ReceiverServer:
         session = None
         datagram = None
         profile_tasks = set()
+        done = asyncio.Event()
         try:
             hello = decode(await asyncio.wait_for(socket.recv(), timeout=5))
             phone_id = hello.get('phoneId')
             if not isinstance(phone_id, str) or len(phone_id) != 36:
                 raise ProtocolError('Invalid phone identity')
             uuid.UUID(phone_id)
-            if (self.peer is not None or hello.get('type') != 'hello'
-                    or type(hello.get('v')) is not int or hello['v'] != 3
-                    or not self.invitation.redeem(hello.get('token'))):
+            if (hello.get('type') != 'hello'
+                    or type(hello.get('v')) is not int or hello['v'] != 3 or self.closing):
                 raise ProtocolError('Pairing unavailable')
-            self.peer = socket
-            self.current_invitation = ''
-            self.on_invitation('')
-            self.output.release()
-            await self.work(self.pairing_image.clear)
-            self.access.pair(phone_id, hello.get('demoUsed', 0))
-            session = Session(self.output, self.access, chat_available=self.chat is not None)
-            self.session = session
-            await self.send(socket, [session.ack('ready'), self.access.snapshot(False)] + session.activate(self.active))
+            async with self.pairing_lock:
+                if self.closing:
+                    raise ProtocolError('Receiver is stopping')
+                reconnect = self.pairing_store.accepts(phone_id, hello.get('reconnectToken'))
+                if 'reconnectToken' in hello and not reconnect:
+                    raise ProtocolError('Pairing unavailable')
+                if reconnect:
+                    credential = hello['reconnectToken']
+                    if self.peer:
+                        previous_done = self.peer_done
+                        await self.disconnect_peer()
+                        await previous_done.wait()
+                else:
+                    if self.peer is not None or not self.invitation.redeem(hello.get('token')):
+                        raise ProtocolError('Pairing unavailable')
+                    credential = self.pairing_store.remember(phone_id)
+                self.invitation.token = ''
+                self.peer, self.peer_done = socket, done
+                self.current_invitation = ''
+                self.on_invitation('')
+                self.output.release()
+                await self.work(self.pairing_image.clear)
+                self.access.pair(phone_id, hello.get('demoUsed', 0))
+                session = Session(self.output, self.access, chat_available=self.chat is not None)
+                self.session = session
+                await self.send(socket, [{**session.ack('ready'), 'reconnectToken': credential},
+                                        self.access.snapshot(False)] + session.activate(self.active))
             if self.enable_udp and type(hello.get('datagram')) is int and hello['datagram'] == 1:
                 def datagram_failed():
                     if self.peer is socket:
@@ -434,6 +471,7 @@ class ReceiverServer:
                     self.session = None
                     self.renew()
             self.clients -= 1
+            done.set()
 
     async def run(self, host, port, context, stop):
         try:
@@ -458,6 +496,8 @@ class ReceiverServer:
                          max_queue=4, compression=None, open_timeout=5,
                          close_timeout=1, ping_interval=20, ping_timeout=5) as server:
             self.invitation.port = server.sockets[0].getsockname()[1]
+            if self.pairing_store.value['port'] != self.invitation.port:
+                self.pairing_store.update(port=self.invitation.port)
             self.renew()
 
             async def refresh():

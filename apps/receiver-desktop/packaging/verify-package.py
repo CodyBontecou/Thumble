@@ -68,7 +68,7 @@ def main():
             environment.update(XDG_DATA_HOME=str(folder / 'user-data'), XDG_CONFIG_HOME=str(folder / 'user-config'),
                                XDG_STATE_HOME=str(folder / 'user-state'))
             run(binary, '--install-user', env=environment)
-            installed = folder / 'user-data/thumble/receiver/0.1.0/thumble-receiver'
+            installed = folder / 'user-data/thumble/receiver/0.1.1/thumble-receiver'
             run(installed, '--self-test', env=environment)
             run(installed, '--gui-smoke', str(report), env=environment)
             entry = folder / 'user-data/applications/io.thumble.receiver.desktop'

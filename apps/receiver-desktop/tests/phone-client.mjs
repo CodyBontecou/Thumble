@@ -37,6 +37,7 @@ const native = {
   },
   send: value => { if (socket?.readyState !== WebSocket.OPEN) return false; socket.send(value); return true; },
   configureDatagram: (port, key) => {
+    sending = received = 0n;
     udpKey = Buffer.from(key, 'base64'); udpPort = port;
     udp = dgram.createSocket('udp4');
     const id = String(serial);
@@ -97,7 +98,18 @@ try {
   const retried = await connection.adoptProfile(profile, source, adopted.activationRevision);
   assert.equal(retried.activationRevision, adopted.activationRevision);
   assert.equal(retried.adoption.profileId, adopted.adoption.profileId);
-  console.log(`PASS real phone connection: TLS, select, render, neutral ACK, resume, input, cloud adoption, transport=${connection.inputTransport}, chat=${expectChat}`);
+  assert.match(connection.remembered?.reconnectToken ?? '', /^[a-f0-9]{64}$/);
+  const remembered = { ...connection.remembered };
+  connection.suspend(); // Checkout/background must retain trust and release input.
+  await connection.reconnect();
+  await wait(() => connection.snapshot().phase === 'connected' && connection.access && !connection.layoutPending && !connection.recovering);
+  if (expectUdp) await wait(() => connection.inputTransport === 'udp');
+  assert.deepEqual(connection.remembered, remembered);
+  assert.equal(connection.layout.profile.id, adopted.adoption.profileId);
+  assert(!connection.canPlay);
+  connection.resumePlay();
+  await wait(() => connection.canPlay && !connection.recovering);
+  console.log(`PASS real phone connection: TLS, select, render, neutral ACK, resume, input, cloud adoption, reconnect, transport=${connection.inputTransport}, chat=${expectChat}`);
 } finally {
   connection.disconnect();
 }

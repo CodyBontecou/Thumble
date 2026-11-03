@@ -10,7 +10,7 @@ import tarfile
 
 ROOT = Path(__file__).resolve().parents[2]
 APP = ROOT / 'apps/receiver-desktop'
-VERSION = '0.1.0'
+VERSION = '0.1.1'
 
 
 def main():

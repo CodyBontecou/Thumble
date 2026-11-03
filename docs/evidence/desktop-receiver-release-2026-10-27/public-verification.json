@@ -1,0 +1,42 @@
+[
+  {
+    "filename": "Thumble-Receiver-0.1.1-desktop-setup.txt",
+    "bytes": 17943,
+    "sha256": "f0cab216efdf6788c2eca1dab3fca6b6476998055c9faebca220aed1ff9412ab"
+  },
+  {
+    "filename": "Thumble-Receiver-0.1.1-desktop-setup.txt.sha256",
+    "bytes": 107,
+    "sha256": "324a9792d48abedd7b743d3345c1d8685d54412f230b50be8512863ae4c56a92"
+  },
+  {
+    "filename": "Thumble-Receiver-0.1.1-desktop.json",
+    "bytes": 893,
+    "sha256": "5f81d476c6ad4575513761b5f53a71981f1c9770678d14b29a31f72eb6ec341d"
+  },
+  {
+    "filename": "Thumble-Receiver-0.1.1-desktop.json.sha256",
+    "bytes": 102,
+    "sha256": "0e059cdf9659f356ba19346a02a749cc031cb203f754ab0592e7801d6d0dc159"
+  },
+  {
+    "filename": "Thumble-Receiver-0.1.1-linux-x64.tar.gz",
+    "bytes": 80451954,
+    "sha256": "c3933c05fec4c360c8c00680eea01a5961f680356d500ce056cb7b3d2f88fa5a"
+  },
+  {
+    "filename": "Thumble-Receiver-0.1.1-linux-x64.tar.gz.sha256",
+    "bytes": 106,
+    "sha256": "c59d1440eeb95d386a22b53976113ee9061bb9ae27adc833a80d1216c840bd3d"
+  },
+  {
+    "filename": "Thumble-Receiver-0.1.1-windows-x64-setup.exe",
+    "bytes": 33900528,
+    "sha256": "b5ad5ceb6c076a68144a844c5c43c317c9297bce89e1ef147366755a90877175"
+  },
+  {
+    "filename": "Thumble-Receiver-0.1.1-windows-x64-setup.exe.sha256",
+    "bytes": 111,
+    "sha256": "75f3f1f49730f7f7a9e97cba89ff1b305f84a201cb359d687b4156b8c0deb2dd"
+  }
+]

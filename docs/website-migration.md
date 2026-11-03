@@ -32,4 +32,4 @@ The imported build preserved all 105 files in the previously deployed artifact. 
 
 Ten website tests cover content discovery, all article routes derived from the hub, canonical/link/attribution coverage, HTML/Markdown negotiation, real SQLite signup/rollback behavior and deployment source exclusion. A new regression assertion preserves related links in Markdown. Local Pages Functions served the home, guide hub, keybindings article, sitemap, CLI and real missing-page response, and accepted a synthetic signup against local-only D1.
 
-The CI workflow builds and tests website changes without production credentials. Deployment remains an explicit action through an authorized Cloudflare session.
+The CI workflow checks pull requests without production credentials. Relevant pushes to `main` automatically deploy the tested artifact and run `npm run website:verify`. A manual workflow dispatch on `main` supports retries.
