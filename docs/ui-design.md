@@ -1,25 +1,31 @@
 # Thumble supporting UI
 
-The non-controller UI takes its direction from https://myself.md: near-black
-surfaces, off-white system type, small monospace section labels, thin neutral
-borders, and generous spacing. The controller's geometry, spell art, touch
-ownership, stick directions, and input transport are preserved.
+The redesign is published as a Design canvas (Thumble WoW Redesign). Two looks,
+one rule: the controller follows ConsolePort, everything around it follows
+Thumble's "Cartridge" style, taken from the app icon.
 
 ## Design system
 
-`apps/mobile/src/ui/design.js` holds the palette and shared primitives:
+`apps/mobile/src/ui/design.js` holds the tokens and primitives:
 
-- Background #0A0A0A; surface #141414; raised surface #1F1F1F.
-- Text #EDEDED; secondary text #A1A1A1; border #2E2E2E.
-- System sans for display/body; Menlo on iOS and monospace on Android for labels.
-- 8pt spacing rhythm; 24pt surface corners, 16pt grouped controls, pill actions.
-- Landscape uses two columns at 680pt and up, with a single column below that.
-- Safe areas belong to each modal. Longer content scrolls and type scales.
-- Native modal transitions and a short fade for the controller menu/welcome.
-  Press feedback uses opacity or a row highlight; no decorative motion.
+- Ground #9F9E9C (the icon's own grey); bone #EAE1D0 panels; inset #D6CCB9;
+  ink #24211F outlines and text; orange #F56807 for one primary action per screen.
+- 3px ink outlines, 4–6px corners, hard offset shadows; pressed controls lose
+  their shadow and shift 3px.
+- Pixelify Sans for headlines and buttons, Silkscreen for small labels, Inter
+  Tight for body copy, loaded with expo-font.
+- Every new screen adapts to portrait and landscape. Setup can be done upright;
+  the controller stays landscape and the Rotate screen hands off to it.
+- The ConsolePort controller keeps its own dark palette, artwork and ABXY
+  colours. Its Thumble chrome is a bone status pill, Chat and an orange menu.
 
-The app currently deliberately uses its configured dark appearance. This change
-introduces no third-party fonts or native UI dependencies.
+## Flow
+
+Welcome → paywall carousel (Controller preview with full screen, Setup
+features, Plans with the trial timeline) → Connect (three detected lights:
+paired, gamepad live, ConsolePort labels) → Rotate (portrait only) → coached
+Practice on the controller → controller. A lapsed plan shows Access ended; a
+dropped link shows Connection lost over the controller.
 
 ## Surfaces
 

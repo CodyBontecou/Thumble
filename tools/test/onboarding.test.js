@@ -173,3 +173,16 @@ test('legacy completed setups stay ready while malformed label confirmations can
   }
   assert.equal(wowSetupStep({ ...prepared, wowTested: true, controlsTested: true, controlsCheckContext: context.controlKey, wowCheckContext: context.wowKey }, true, context), 'ready');
 });
+
+test('setup lights are detected, not self-reported, and labels may be skipped per context', async () => {
+  const { setupSignals, initialSetup: fresh } = await import('../../apps/mobile/src/onboarding-core.js');
+  const state = fresh();
+  assert.deepEqual(setupSignals({ state, online: false, recovering: false, labelsFollowing: false, context: '' }).stage, 0);
+  assert.deepEqual(setupSignals({ state: { ...state, paired: true }, online: false, recovering: false, labelsFollowing: false, context: '' }).stage, 1);
+  assert.equal(setupSignals({ state, online: true, recovering: true, labelsFollowing: true, context: 'c' }).stage, 1, 'input must recover before the gamepad counts as live');
+  assert.equal(setupSignals({ state, online: true, recovering: false, labelsFollowing: false, context: 'c' }).stage, 2);
+  assert.equal(setupSignals({ state, online: true, recovering: false, labelsFollowing: true, context: 'c' }).stage, 3);
+  const skipped = { ...state, wowSyncStatus: 'skipped', wowSyncContext: 'c' };
+  assert.equal(setupSignals({ state: skipped, online: true, recovering: false, labelsFollowing: false, context: 'c' }).stage, 3);
+  assert.equal(setupSignals({ state: skipped, online: true, recovering: false, labelsFollowing: false, context: 'other' }).stage, 2, 'a new controller or receiver needs labels again');
+});

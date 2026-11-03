@@ -56,6 +56,29 @@ const wowSyncResolved = (state, context) => ['confirmed', 'skipped'].includes(st
 /** @param {any} state @param {boolean} online @param {{controlKey:string, wowKey:string} | null} [context] */
 export const canCompleteWowSetup = (state, online, context = null) => online && !!state.wowClient && state.consolePortReady && wowSyncResolved(state, context) && (!context || (!!context.controlKey && !!context.wowKey && state.wowCheckContext === context.wowKey)) && WOW_CHECKS.every(check => state.wowChecks?.[check.id] === true);
 
+/**
+ * The three setup lights, each detected rather than self-reported:
+ * paired (receiver handshake), gamepad live (connected with input recovered)
+ * and spell labels (ConsolePort sync is following this controller, which only
+ * happens when ConsolePort and the Thumble addon both work). A player may skip
+ * labels for the current context and play with button names.
+ * @param {{ state: any, online: boolean, recovering: boolean, labelsFollowing: boolean, context: string }} input
+ */
+export function setupSignals({ state, online, recovering, labelsFollowing, context }) {
+  const labelsSkipped = state.wowSyncStatus === 'skipped' && !!context && state.wowSyncContext === context;
+  const done = [state.paired || online, online && !recovering, online && !recovering && (labelsFollowing || labelsSkipped)];
+  const stage = done.indexOf(false) === -1 ? 3 : done.indexOf(false);
+  return { done, stage, labelsSkipped };
+}
+/** Practice completion records the same milestones as the former five checks. */
+export const PRACTICE_STEPS = [
+  { id: 'movement', title: 'Push Move forward, then let go. You should stop.', fix: 'Still moving? Check the receiver is running, then try again.' },
+  { id: 'camera', title: 'Use Look to turn the camera all the way around.', fix: 'Reversed? Turn on Invert look in Stick calibration.' },
+  { id: 'action', title: 'Press A. ConsolePort binds Jump here by default.', fix: 'No jump? In ConsolePort’s setup, choose Xbox-style buttons.' },
+  { id: 'modifier', title: 'Hold a modifier, press A, then release both.', fix: 'Nothing on that layer? Bind it in ConsolePort, then /reload.' },
+  { id: 'menu', title: 'Press Menu to open the game menu, then close it.', fix: 'Keep a keyboard nearby for anything ConsolePort can’t reach.' },
+];
+
 export function cloudLayoutPrompt(state, session) {
   const wow = state.layoutMode === 'consoleport' || state.layoutMode === 'character';
   const context = wow

@@ -40,9 +40,9 @@ test('production verification checks current transaction identity and refunds wi
     verifier: { verifyAndDecodeTransaction: async proof => proof === 'original' ? value : current },
     client: { getTransactionInfo: async id => { assert.equal(id, '123'); reads++; return { signedTransactionInfo: 'current' }; } },
   };
-  assert.equal(await verifyAppleTransaction('original', primary), true);
+  assert.deepEqual(await verifyAppleTransaction('original', primary), { pro: true, until: null });
   current = { ...value, revocationDate: 123 };
-  assert.equal(await verifyAppleTransaction('original', primary), false);
+  assert.deepEqual(await verifyAppleTransaction('original', primary), { pro: false, until: null });
   current = { ...value, transactionId: '456' };
   await assert.rejects(verifyAppleTransaction('original', primary));
   assert.equal(reads, 3);
@@ -59,6 +59,27 @@ test('App Review fallback requires a verified environment mismatch and rechecks 
   for (const status of [VerificationStatus.INVALID_CERTIFICATE, VerificationStatus.VERIFICATION_FAILURE, VerificationStatus.INVALID_APP_IDENTIFIER]) await assert.rejects(verifyAppleTransaction('untrusted', rejecting(status), review));
   assert.equal(reviewReads, 0);
   await assert.rejects(verifyAppleTransaction('sandbox', rejecting(VerificationStatus.INVALID_ENVIRONMENT)));
-  assert.equal(await verifyAppleTransaction('sandbox', rejecting(VerificationStatus.INVALID_ENVIRONMENT), review), true);
+  assert.equal((await verifyAppleTransaction('sandbox', rejecting(VerificationStatus.INVALID_ENVIRONMENT), review)).pro, true);
   assert.equal(reviewReads, 2);
+});
+
+test('subscriptions grant access only while current and cap the grant at the plan expiry', async () => {
+  const now = 1_800_000_000_000;
+  let current = { transactionId: '9', productId: 'thumble_yearly', type: 'Auto-Renewable Subscription', expiresDate: now + 3 * 86400_000 };
+  const primary = {
+    verifier: { verifyAndDecodeTransaction: async proof => proof === 'original' ? { transactionId: '9', productId: 'thumble_yearly' } : current },
+    client: { getTransactionInfo: async () => ({ signedTransactionInfo: 'current' }) },
+  };
+  assert.deepEqual(await verifyAppleTransaction('original', primary, null, () => now), { pro: true, until: (now + 3 * 86400_000) / 1000 });
+  current = { ...current, expiresDate: now - 1000 };
+  assert.deepEqual(await verifyAppleTransaction('original', primary, null, () => now), { pro: false, until: null });
+  current = { ...current, type: 'Non-Consumable', expiresDate: now + 1000 };
+  await assert.rejects(verifyAppleTransaction('original', primary, null, () => now), /Wrong product/);
+  const until = Date.now() / 1000 + 3600;
+  const response = await createWorker(async () => async (_proof, productId) => { assert.equal(productId, 'thumble_weekly'); return { pro: true, until }; })
+    .fetch(request({ ...body, productId: 'thumble_weekly' }), env);
+  const payload = JSON.parse(Buffer.from((await response.json()).payload, 'base64'));
+  assert.equal(payload.productId, 'thumble_pro_lifetime');
+  assert.equal(payload.expiresAt, until);
+  assert.equal((await createWorker(async () => async () => true).fetch(request({ ...body, productId: 'thumble_monthly' }), env)).status, 400);
 });

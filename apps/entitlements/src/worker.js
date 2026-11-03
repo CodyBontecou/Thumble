@@ -1,7 +1,7 @@
 import { createAppleVerifier, googleVerifier } from './stores.js';
 import { Buffer } from 'node:buffer';
 import { createPrivateKey, sign } from 'node:crypto';
-import { createGrant } from './grants.js';
+import { PLAN_IDS, createGrant } from './grants.js';
 
 function json(value, status = 200) {
   return Response.json(value, { status, headers: { 'Cache-Control': 'no-store' } });
@@ -39,12 +39,14 @@ export function createWorker(appleFactory = createAppleVerifier) {
           if (size > 32768) return json({}, 413);
           chunks.push(chunk);
         }
-        const { platform, proof, receiverId, nonce, phoneId } = JSON.parse(Buffer.concat(chunks).toString());
+        const { platform, proof, receiverId, nonce, phoneId, productId = 'thumble_pro_lifetime' } = JSON.parse(Buffer.concat(chunks).toString());
         if (platform !== 'ios' && !(platform === 'android' && env.GOOGLE_PACKAGE_NAME && env.GOOGLE_CREDENTIALS_JSON)) return json({ error: 'This store is not configured.' }, 503);
-        if (typeof proof !== 'string' || proof.length < 8 || proof.length > 24000 || ![receiverId, nonce, phoneId].every(value => typeof value === 'string' && /^[a-f0-9-]{36}$/i.test(value))) return json({}, 400);
+        if (typeof productId !== 'string' || !PLAN_IDS.includes(productId) || typeof proof !== 'string' || proof.length < 8 || proof.length > 24000 || ![receiverId, nonce, phoneId].every(value => typeof value === 'string' && /^[a-f0-9-]{36}$/i.test(value))) return json({}, 400);
         const verify = platform === 'ios' ? await appleFactory(appleConfig(env)) : googleVerifier({ packageName: env.GOOGLE_PACKAGE_NAME, credentials: JSON.parse(env.GOOGLE_CREDENTIALS_JSON) });
-        const pro = await verify(proof);
-        return json(createGrant({ receiverId, nonce, phoneId, pro }, env.GRANT_PRIVATE_KEY));
+        // Older verifiers and test doubles return a bare boolean.
+        const result = await verify(proof, productId);
+        const { pro, until } = typeof result === 'boolean' ? { pro: result, until: null } : result;
+        return json(createGrant({ receiverId, nonce, phoneId, pro, until }, env.GRANT_PRIVATE_KEY));
       } catch {
         // Purchase proofs and credentials must never appear in logs or error responses.
         return json({ error: 'Purchase verification failed. Retry Restore Purchases.' }, 422);

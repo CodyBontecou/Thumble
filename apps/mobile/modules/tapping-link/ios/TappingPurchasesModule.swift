@@ -4,7 +4,10 @@ import Security
 
 // StoreKit owns the payment UI and verification. No purchase secrets enter JS logs.
 public final class TappingPurchasesModule: Module {
-    private let productID = "thumble_pro_lifetime"
+    // Lifetime keeps the original product ID so earlier purchases still unlock.
+    private let lifetimeIDs: Set<String> = ["thumble_pro_lifetime", "thumble_family_lifetime"]
+    private let subscriptionIDs: Set<String> = ["thumble_weekly", "thumble_yearly", "thumble_family_weekly", "thumble_family_yearly"]
+    private var productIDs: Set<String> { lifetimeIDs.union(subscriptionIDs) }
     private var updates: Task<Void, Never>?
     private var buying = false
     public func definition() -> ModuleDefinition {
@@ -14,7 +17,7 @@ public final class TappingPurchasesModule: Module {
             self.updates = Task { [weak self] in
                 for await result in StoreKit.Transaction.updates {
                     guard let self, !Task.isCancelled else { return }
-                    if case .verified(let transaction) = result, transaction.productID == self.productID {
+                    if case .verified(let transaction) = result, self.productIDs.contains(transaction.productID) {
                         await transaction.finish()
                         self.sendEvent("purchaseChanged", [:])
                     }
@@ -23,15 +26,33 @@ public final class TappingPurchasesModule: Module {
         }
         OnDestroy { self.updates?.cancel() }
         AsyncFunction("status") { () async throws -> [String: Any] in try await self.snapshot() }
+        AsyncFunction("catalog") { (ids: [String]) async throws -> [[String: Any]] in
+            let wanted = Set(ids).intersection(self.productIDs)
+            var items: [[String: Any]] = []
+            for product in try await Product.products(for: wanted) {
+                var item: [String: Any] = ["id": product.id, "price": product.displayPrice, "amount": NSDecimalNumber(decimal: product.price).doubleValue,
+                                           "currency": product.priceFormatStyle.currencyCode, "family": product.isFamilyShareable,
+                                           "kind": product.type == .autoRenewable ? "subscription" : "lifetime"]
+                if let subscription = product.subscription {
+                    item["period"] = subscription.subscriptionPeriod.unit == .week ? "week" : subscription.subscriptionPeriod.unit == .year ? "year" : "other"
+                    if let offer = subscription.introductoryOffer, offer.paymentMode == .freeTrial {
+                        item["trialEligible"] = await subscription.isEligibleForIntroOffer
+                        item["trialDays"] = offer.period.unit == .week ? offer.period.value * 7 : offer.period.unit == .day ? offer.period.value : 0
+                    } else { item["trialEligible"] = false }
+                }
+                items.append(item)
+            }
+            return items
+        }
         AsyncFunction("restore") { () async throws -> [String: Any] in
             try await AppStore.sync()
             return try await self.snapshot()
         }
-        AsyncFunction("purchase") { () async throws -> [String: Any] in
+        AsyncFunction("purchase") { (id: String) async throws -> [String: Any] in
             guard !self.buying else { throw PurchaseError.message("A purchase is already in progress.") }
+            guard self.productIDs.contains(id) else { throw PurchaseError.message("This plan is not available.") }
             self.buying = true; defer { self.buying = false }
-            guard let product = try await Product.products(for: [self.productID]).first,
-                  product.type == .nonConsumable else { throw PurchaseError.message("Pro is not available in this store yet.") }
+            guard let product = try await Product.products(for: [id]).first else { throw PurchaseError.message("This plan is not available in your store yet.") }
             switch try await product.purchase() {
             case .success(let result):
                 guard case .verified(let transaction) = result else { throw PurchaseError.message("Apple could not verify this purchase. Try Restore Purchases.") }
@@ -79,17 +100,43 @@ public final class TappingPurchasesModule: Module {
             try self.writeUsed(max(self.readUsed(), used))
         }
     }
+    // Lifetime wins over subscriptions; otherwise the latest-expiring active plan.
+    // Without an entitlement, StoreKit's renewal state separates a lapsed plan
+    // from a billing problem so the app can show the right recovery.
     private func snapshot() async throws -> [String: Any] {
         var result: [String: Any] = ["platform": "ios", "status": "free"]
+        var best: (transaction: StoreKit.Transaction, jws: String)?
         for await entry in StoreKit.Transaction.currentEntitlements {
-            if case .verified(let transaction) = entry, transaction.productID == productID,
-               transaction.revocationDate == nil, !transaction.isUpgraded {
-                result["status"] = "owned"; result["proof"] = entry.jwsRepresentation
-                UserDefaults.standard.set(entry.jwsRepresentation, forKey: "tapping.lastPurchaseProof")
+            guard case .verified(let transaction) = entry, productIDs.contains(transaction.productID),
+                  transaction.revocationDate == nil, !transaction.isUpgraded else { continue }
+            if let expires = transaction.expirationDate, expires <= Date() { continue }
+            if let current = best?.transaction, lifetimeIDs.contains(current.productID) { continue }
+            if best == nil || lifetimeIDs.contains(transaction.productID) || (transaction.expirationDate ?? .distantPast) > (best!.transaction.expirationDate ?? .distantPast) {
+                best = (transaction, entry.jwsRepresentation)
             }
         }
-        if result["proof"] == nil, let previous = UserDefaults.standard.string(forKey: "tapping.lastPurchaseProof") { result["proof"] = previous }
-        if let products = try? await Product.products(for: [productID]), let product = products.first { result["price"] = product.displayPrice }
+        if let best {
+            result["status"] = "active"; result["productId"] = best.transaction.productID; result["proof"] = best.jws
+            if let expires = best.transaction.expirationDate { result["expiresAt"] = expires.timeIntervalSince1970 * 1000 }
+            result["inTrial"] = best.transaction.offerType == .introductory
+            UserDefaults.standard.set(best.jws, forKey: "tapping.lastPurchaseProof")
+            UserDefaults.standard.set(best.transaction.productID, forKey: "tapping.lastPurchaseProduct")
+        }
+        if let products = try? await Product.products(for: subscriptionIDs) {
+            var lapsed = false, billing = false
+            for product in products {
+                for status in (try? await product.subscription?.status) ?? [] {
+                    if case .verified(let renewal) = status.renewalInfo, best?.transaction.productID == renewal.currentProductID { result["willRenew"] = renewal.willAutoRenew }
+                    if status.state == .inBillingRetryPeriod { billing = true }
+                    if status.state == .expired || status.state == .revoked { lapsed = true }
+                }
+            }
+            if best == nil { result["status"] = billing ? "billing" : lapsed ? "expired" : "free" }
+        }
+        if best == nil, let previous = UserDefaults.standard.string(forKey: "tapping.lastPurchaseProof") {
+            result["proof"] = previous
+            result["productId"] = UserDefaults.standard.string(forKey: "tapping.lastPurchaseProduct") ?? "thumble_pro_lifetime"
+        }
         return result
     }
     private var keyQuery: [String: Any] { [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: "tapping.demo", kSecAttrAccount as String: "used"] }

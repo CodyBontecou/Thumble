@@ -1,10 +1,71 @@
+// Hard paywall: weekly/yearly subscriptions with a store-run 7-day trial, plus
+// Lifetime. Apple also offers Family variants; Google Play has none. Prices
+// always come from the store catalog; list prices only label an unavailable
+// catalog and never enable a purchase.
+export const PLAN_KEYS = ['yearly', 'weekly', 'lifetime'];
+const STATUSES = ['active', 'expired', 'billing', 'pending', 'free'];
+
+/** Store-neutral view of the plans for one audience. */
+export function planOptions({ catalog = [], config, audience = 'individual', platform = 'ios' }) {
+  const family = audience === 'family' && platform === 'ios';
+  const keyFor = plan => family ? `family${plan[0].toUpperCase()}${plan.slice(1)}` : plan;
+  const byId = new Map(catalog.map(item => [item.id, item]));
+  const list = config.listPricesUSD ?? {};
+  const weekly = byId.get(config.products[keyFor('weekly')]);
+  const options = PLAN_KEYS.map(plan => {
+    const key = keyFor(plan), id = config.products[key], item = byId.get(id);
+    const listPrice = typeof list[key] === 'number' ? `$${list[key].toFixed(2)}` : '';
+    return {
+      plan, id, family, available: !!item?.price,
+      price: item?.price || listPrice,
+      amount: Number.isFinite(item?.amount) ? item.amount : list[key] ?? null,
+      currency: item?.currency || 'USD',
+      trial: plan !== 'lifetime' && (item ? item.trialEligible === true : true),
+      trialDays: item?.trialDays || config.trialDays || 7,
+      perWeek: '', save: '',
+    };
+  });
+  const yearly = options[0], weeklyAmount = Number.isFinite(weekly?.amount) ? weekly.amount : list[keyFor('weekly')];
+  if (Number.isFinite(yearly.amount) && Number.isFinite(weeklyAmount) && weeklyAmount > 0) {
+    yearly.perWeek = formatAmount(yearly.amount / 52, yearly.currency);
+    const save = Math.round((1 - yearly.amount / (weeklyAmount * 52)) * 100);
+    if (save > 0) yearly.save = `SAVE ${save}%`;
+  }
+  return options;
+}
+function formatAmount(value, currency) {
+  try { return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(value); }
+  catch { return `$${value.toFixed(2)}`; }
+}
+export const familyAvailable = platform => platform === 'ios';
+
+/** What the root gate shows. Development builds without store access may pass. */
+export function accessGate(state, { allowUnconfigured = false } = {}) {
+  if (state.status === 'active') return 'open';
+  if (!state.loaded) return 'loading';
+  if (allowUnconfigured && (state.unavailable || state.devBypass)) return 'open';
+  if (state.status === 'expired' || state.status === 'billing') return 'expired';
+  return 'paywall';
+}
+
 export function createPurchaseStore(native, config, fetcher = fetch) {
-  let state = { busy: false, status: 'unknown', price: '', error: '', proof: '', platform: '' };
+  let state = { loaded: false, busy: false, status: 'unknown', productId: '', proof: '', platform: '', expiresAt: null, inTrial: false, willRenew: false, catalog: [], error: '', unavailable: !native };
   const listeners = new Set();
   let refreshing = null;
   let connector = null;
   let generation = 0;
   function update(value) { state = { ...state, ...value }; for (const listener of listeners) listener(); }
+  function entitlement(value) {
+    const status = STATUSES.includes(value.status) ? value.status : value.status === 'owned' ? 'active' : 'free';
+    return {
+      status, platform: value.platform || state.platform,
+      productId: typeof value.productId === 'string' ? value.productId : '',
+      expiresAt: Number.isFinite(value.expiresAt) ? value.expiresAt : null,
+      inTrial: value.inTrial === true, willRenew: value.willRenew === true,
+      ...(typeof value.proof === 'string' && value.proof ? { proof: value.proof } : {}),
+    };
+  }
+  const ids = () => Object.values(config.products ?? { lifetime: config.productId });
   const purchases = {
     subscribe: listener => { listeners.add(listener); return () => listeners.delete(listener); },
     snapshot: () => state,
@@ -14,30 +75,34 @@ export function createPurchaseStore(native, config, fetcher = fetch) {
       const started = generation;
       refreshing = Promise.resolve().then(async () => {
         try {
-          if (!native) throw Error('Install the updated app to enable native purchases.');
-          const value = await native.status();
+          if (!native) throw Error('Install the updated app to enable purchases.');
+          const [value, catalog] = await Promise.all([native.status(), native.catalog ? native.catalog(ids()).catch(() => null) : null]);
           if (started !== generation) return;
-          update({ ...value, error: '' });
+          update({ ...entitlement(value), ...(Array.isArray(catalog) ? { catalog } : {}), loaded: true, error: '', unavailable: !Array.isArray(catalog) || catalog.length === 0 });
           await purchases.verifyOnMac();
-        } catch (error) { update({ error: error.message }); }
+        } catch (error) { update({ loaded: true, unavailable: true, error: error.message }); }
       }).finally(() => { refreshing = null; });
       return refreshing;
     },
-    async act(action) {
+    async act(action, productId = '') {
       if (state.busy) return;
       ++generation;
       update({ busy: true, error: '' });
       try {
-        if (!native) throw Error('Install the updated app to enable native purchases.');
-        const value = await native[action]();
+        if (!native) throw Error('Install the updated app to enable purchases.');
+        const value = action === 'purchase' ? await native.purchase(productId) : await native[action]();
         if (value.status === 'cancelled') { update({ error: '' }); return; }
-        update(value);
-        if (value.status === 'pending') update({ error: 'Awaiting store approval. Pro will unlock after payment is confirmed.' });
-        else if (value.status === 'free' && !value.proof) update({ error: 'No Pro purchase was found for this store account.' });
+        update({ ...entitlement(value), loaded: true });
+        if (value.status === 'pending') update({ error: 'Waiting for store approval. Your plan unlocks once payment is confirmed.' });
+        else if (action === 'restore' && state.status !== 'active') update({ error: 'No active plan was found for this store account.' });
         else await purchases.verifyOnMac();
       } catch (error) { update({ error: error.message }); }
       finally { update({ busy: false }); }
     },
+    buy: productId => purchases.act('purchase', productId),
+    restore: () => purchases.act('restore'),
+    // Development builds only: continue without a plan for simulator testing.
+    bypass: () => update({ devBypass: true }),
     async verifyOnMac() {
       const access = connector?.accessSnapshot();
       if (!access || !state.proof) return;
@@ -46,9 +111,9 @@ export function createPurchaseStore(native, config, fetcher = fetch) {
       const receiverId = access.receiverId, nonce = access.nonce, proof = state.proof;
       const response = await fetcher(`${config.entitlementServiceURL.replace(/\/$/, '')}/v1/grants`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ platform: state.platform, proof: state.proof, receiverId, nonce, phoneId: connector.phoneId }), signal: AbortSignal.timeout(15000),
+        body: JSON.stringify({ platform: state.platform, productId: state.productId || config.productId, proof: state.proof, receiverId, nonce, phoneId: connector.phoneId }), signal: AbortSignal.timeout(15000),
       });
-      if (!response.ok) throw Error('Your purchase could not be verified. Retry Restore Purchases.');
+      if (!response.ok) throw Error('Your plan could not be verified. Retry Restore Purchases.');
       const grant = await response.json();
       // Ignore a response for an old pairing, even when the new Computer has the same name.
       const current = connector?.accessSnapshot();

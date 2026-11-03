@@ -1,6 +1,22 @@
 {
   "productId": "thumble_pro_lifetime",
-  "basePriceUSD": 19.99,
+  "trialDays": 7,
+  "products": {
+    "weekly": "thumble_weekly",
+    "yearly": "thumble_yearly",
+    "lifetime": "thumble_pro_lifetime",
+    "familyWeekly": "thumble_family_weekly",
+    "familyYearly": "thumble_family_yearly",
+    "familyLifetime": "thumble_family_lifetime"
+  },
+  "listPricesUSD": {
+    "weekly": 0.99,
+    "yearly": 29.99,
+    "lifetime": 49.99,
+    "familyWeekly": 1.99,
+    "familyYearly": 49.99,
+    "familyLifetime": 89.99
+  },
   "demoSeconds": 1800,
   "entitlementPublicKey": "PP/12jQNJrLFJTantpP71kZUXHl34HVPB+J1uyFRhI4=",
   "entitlementServiceURL": "https://thumble-purchases-sandbox.costream.workers.dev",

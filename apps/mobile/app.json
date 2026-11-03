@@ -27,7 +27,8 @@
       ],
       "./plugins/with-speech.cjs",
       "expo-secure-store",
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-font"
     ],
     "version": "1.0.0",
     "orientation": "default",
@@ -57,11 +58,23 @@
       },
       "permissions": [
         "android.permission.ACCESS_LOCAL_NETWORK",
-        "android.permission.RECORD_AUDIO"
+        "android.permission.RECORD_AUDIO",
+        "android.permission.CAMERA"
       ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "extra": {
+      "router": {
+        "asyncRoutes": {
+          "web": true
+        }
+      },
+      "eas": {
+        "projectId": "33a59fef-e85d-4af9-9d7d-8bd6f59727eb"
+      }
+    },
+    "owner": "codybontecou"
   }
 }

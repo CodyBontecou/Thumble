@@ -1,10 +1,44 @@
-# Native purchases and the 30-minute demo
+# Native purchases and plans
 
 The implementation uses StoreKit 2 on iOS and Google Play Billing 8.3 on Android.
-There is no RevenueCat dependency. The full app has a total 1,800-second
-connected-use demo. Custom layouts, saved profiles and integrated dictation are
-available without purchase. Pro only removes the usage limit. Calibration,
-pairing, setup and local practice are free. No visual editor is included.
+There is no RevenueCat dependency.
+
+## Hard paywall (November 2026)
+
+The phone gates the controller behind a plan, right after Welcome. Plans match
+Health.md's catalog:
+
+| Plan | iOS product | Google Play product | US list price | Trial |
+| --- | --- | --- | --- | --- |
+| Weekly | `thumble_weekly` | `thumble_weekly` | $0.99 | 7 days |
+| Yearly | `thumble_yearly` | `thumble_yearly` | $29.99 | 7 days |
+| Lifetime | `thumble_pro_lifetime` | `thumble_pro_lifetime` | $49.99 | none |
+| Family weekly | `thumble_family_weekly` | — | $1.99 | 7 days |
+| Family yearly | `thumble_family_yearly` | — | $49.99 | 7 days |
+| Family Lifetime | `thumble_family_lifetime` | — | $89.99 | none |
+
+Lifetime keeps the existing product ID so earlier Pro purchases remain valid.
+Its store price still needs to move from $19.99 to $49.99. Create the
+subscriptions in one Apple subscription group with a 7-day free-trial
+introductory offer, and the Family products with Family Sharing enabled. On
+Google Play create each subscription with one base plan and an eligible 7-day
+free-trial offer. None of these store products exist yet.
+
+`TappingPurchases.catalog(ids)` returns localized prices and trial eligibility
+from the store; `purchase(id)` buys a plan; `status()` reports `active`,
+`expired`, `billing`, `pending` or `free` with the current plan's proof,
+expiry and trial flag. Google Play only reports current subscriptions, so a
+previously entitled Android account without one is shown as `expired`.
+
+The entitlement worker accepts any plan product, checks that a subscription is
+current (Apple `expiresDate`; Google `subscriptionsv2` state), acknowledges
+Google subscriptions and signs the existing receiver grant. The grant keeps the
+`thumble_pro_lifetime` entitlement name and caps `expiresAt` at the plan's
+expiry, so the macOS and desktop receivers need no update. Receivers still
+meter their 30-minute allowance for phones that have not delivered a grant;
+the phone's paywall means a subscriber normally never sees it.
+
+The sections below record the original one-time Pro setup.
 
 ## App Store Connect record (October 23, 2026)
 

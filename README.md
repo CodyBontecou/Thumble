@@ -31,14 +31,19 @@ Metro uses port 8088. The Android build command is `npm run android --workspace 
 
 For bundled hardware testing without Metro, run `npx expo run:ios --configuration Release --device IPHONE_UDID --no-bundler` or `npx expo run:android --variant release --device ANDROID_SERIAL --no-bundler` from `apps/mobile`. Configure `ANDROID_HOME` to the installed SDK. Build the Mac receiver using [its instructions](apps/receiver/README.md), then open Connect Mac on the phone.
 
-## Demo and Pro
+## Plans
 
-The full app has a 30-minute total connected-use demo, including agent-created
-custom layouts, saved profiles and integrated dictation. Pro is a $19.99 USD
-base-price one-time native store purchase that only removes the time limit.
-No visual editor is planned. Setup and local practice remain free. Purchase initiation stays
-disabled until production store products and first-party verification are configured.
-See [monetization setup and verification](docs/monetization-setup.md).
+Thumble has a hard paywall after Welcome, matched to Health.md's pricing.
+Weekly ($0.99) and yearly ($29.99) subscriptions start with a store-run 7-day
+free trial; Lifetime ($49.99) is a one-time purchase that keeps the original
+`thumble_pro_lifetime` product, so earlier Pro owners stay unlocked. iOS also
+offers Family plans through Family Sharing ($1.99/week, $49.99/year, $89.99
+Lifetime); Google Play has none. Prices shown in the app always come from the
+store; product IDs are in `config/monetization.json`. The entitlement worker
+verifies the current plan and signs the existing receiver grant, capped at the
+subscription's expiry, so receivers need no changes. Development builds without
+a store catalog can continue past the paywall for simulator testing. No visual
+editor is planned. See [monetization setup and verification](docs/monetization-setup.md).
 
 ## Shared controller API
 

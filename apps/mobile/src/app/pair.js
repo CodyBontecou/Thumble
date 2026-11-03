@@ -16,23 +16,29 @@ export default function PairScreen() {
   const state = useSyncExternalStore(connection.subscribe, connection.snapshot);
   const params = useLocalSearchParams();
   const barcodeClaimed = useRef(false);
+  const autoScanHandled = useRef(false);
   async function connect(value) {
     setScanning(false); setError('');
     try { await connection.connect(value); } catch (failure) { setError(failure.message); }
   }
-  async function scan() {
+  const scan = useCallback(async () => {
     setError('');
     const result = permission?.granted ? permission : await requestPermission();
     if (result.granted) { barcodeClaimed.current = false; setScanning(true); }
     else setError('Allow Camera in Settings, or paste the pairing link from your computer.');
-  }
+  }, [permission, requestPermission]);
+  useEffect(() => {
+    if (params.scan !== '1' || params.data || !permission || autoScanHandled.current || state.phase !== 'offline') return;
+    autoScanHandled.current = true;
+    void scan().catch(failure => setError(failure.message));
+  }, [params.scan, params.data, permission, scan, state.phase]);
   useFocusEffect(useCallback(() => {
     if (typeof params.data !== 'string') return;
     setError('');
     return followPairingLink(connection, AppState, `thumble://pair?data=${params.data}`, failure => setError(failure.message));
   }, [params.data]));
   useEffect(() => {
-    if (state.phase === 'connected') void onboarding.update({ paired: true }).then(() => router.dismissTo(params.returnTo === 'wow' ? '/wow-setup' : params.returnTo === 'journey' ? '/journey' : params.setup === '1' ? '/onboarding' : '/')).catch(failure => setError(failure.message));
+    if (state.phase === 'connected') void onboarding.update({ paired: true }).then(() => router.dismissTo(params.returnTo === 'connect' ? '/connect' : params.returnTo === 'wow' ? '/wow-setup' : params.returnTo === 'journey' ? '/journey' : params.setup === '1' ? '/connect' : '/')).catch(failure => setError(failure.message));
   }, [state.phase, router, params.setup, params.returnTo]);
   const failure = error || (state.phase === 'offline' && !state.detail.startsWith('Practice') ? state.detail : '');
   return <Page style={{ paddingTop: 16 }} footer={<Actions status={state.phase === 'connecting' ? state.detail : failure ? 'Could not pair. Scan the current code on your computer.' : 'Same Wi-Fi · encrypted connection'}>
