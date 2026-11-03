@@ -373,13 +373,20 @@ class ReceiverServer:
                     raise ProtocolError('Receiver is stopping')
                 reconnect = self.pairing_store.accepts(phone_id, hello.get('reconnectToken'))
                 if 'reconnectToken' in hello and not reconnect:
+                    # Tell a phone holding a stale reconnect credential to stop retrying and rescan.
+                    with contextlib.suppress(ConnectionClosed, TimeoutError, asyncio.TimeoutError):
+                        await self.send(socket, [dict(type='forgotten')])
                     raise ProtocolError('Pairing unavailable')
                 if reconnect:
                     credential = hello['reconnectToken']
                     if self.peer:
                         previous_done = self.peer_done
                         await self.disconnect_peer()
-                        await previous_done.wait()
+                        # Bounded so a slow old handler cannot hold pairing_lock indefinitely.
+                        try:
+                            await asyncio.wait_for(previous_done.wait(), timeout=2)
+                        except (TimeoutError, asyncio.TimeoutError):
+                            raise ProtocolError('Previous connection is still closing') from None
                 else:
                     if self.peer is not None or not self.invitation.redeem(hello.get('token')):
                         raise ProtocolError('Pairing unavailable')
@@ -473,9 +480,9 @@ class ReceiverServer:
             self.clients -= 1
             done.set()
 
-    async def run(self, host, port, context, stop):
+    async def run(self, host, port, context, stop, saved_port=False):
         try:
-            await self._run(host, port, context, stop)
+            await self._run(host, port, context, stop, saved_port)
         finally:
             self.closing = True
             self.current_invitation = ''
@@ -489,12 +496,21 @@ class ReceiverServer:
             self.worker.shutdown(wait=True, cancel_futures=True)
             self.chat_worker.shutdown(wait=True, cancel_futures=True)
 
-    async def _run(self, host, port, context, stop):
+    async def _run(self, host, port, context, stop, saved_port=False):
         _, self.active = await self.work(self.catalog)
         await self.work(self.sync.poll, True)
-        async with serve(self.handler, host, port, ssl=context, max_size=65536,
-                         max_queue=4, compression=None, open_timeout=5,
-                         close_timeout=1, ping_interval=20, ping_timeout=5) as server:
+        options = dict(ssl=context, max_size=65536, max_queue=4, compression=None, open_timeout=5,
+                       close_timeout=1, ping_interval=20, ping_timeout=5)
+        try:
+            listening = await serve(self.handler, host, port, **options)
+        except OSError:
+            if not saved_port:
+                raise
+            # Another app took the saved port. Remembered phones must pair again on
+            # the new port, but the receiver itself stays usable.
+            self.pairing_store.update(port=0)
+            listening = await serve(self.handler, host, 0, **options)
+        async with listening as server:
             self.invitation.port = server.sockets[0].getsockname()[1]
             if self.pairing_store.value['port'] != self.invitation.port:
                 self.pairing_store.update(port=self.invitation.port)

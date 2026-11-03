@@ -54,6 +54,12 @@ try write(data)
 sync.poll()
 let store = try ProfileCatalog.read(directory)
 let active = store["active"] as! [String:Any], profile = active["profile"] as! [String:Any]
+let summary = try ProfileCatalog.summary(store)
+let provenance = summary["consolePortSync"] as! [String:Any]
+try check(provenance["characterName"] as? String == "Hero" && provenance["following"] as? Bool == true)
+try check(provenance["sourcePath"] == nil && provenance["character"] == nil, "private filesystem/character identifiers leaked")
+try check(provenance["buttonCount"] as? Int == 2)
+try check((provenance["modifiers"] as? [String:String])?["shift"] == "lt")
 try check(active["revision"] as? Int == 1 && lookups == 1)
 let original = ((store["profiles"] as! [[String:Any]]).first { ($0["profile"] as? [String:Any])?["id"] as? String == "consoleport-standard" })!["profile"] as! [String:Any]
 try check(try encode(profile["mappings"]!) == encode(original["mappings"]!))
@@ -80,6 +86,7 @@ try check(((try ProfileCatalog.read(directory))["active"] as! [String:Any])["rev
 rejects { try ConsolePortSync.commit(directory:directory, profile:profile, snapshot:snapshot(), sourcePath:file.path, expectedActivation:1) }
 let other = try ProfileCatalog.activate(directory, id:"xbox-standard", profileRevision:1, expectedActivationRevision:2)
 try check(other["activationRevision"] as? Int == 3)
+try check((other["consolePortSync"] as? [String:Any])?["following"] as? Bool == false, "another profile was reported as following")
 try write(encode(snapshot("Other", guid:"Player-123-789"))); sync.poll()
 try check(((try ProfileCatalog.read(directory))["active"] as! [String:Any])["revision"] as? Int == 3, "sync replaced a non-ConsolePort controller")
 _ = try ProfileCatalog.activate(directory, id:profile["id"] as! String, profileRevision:2, expectedActivationRevision:3)

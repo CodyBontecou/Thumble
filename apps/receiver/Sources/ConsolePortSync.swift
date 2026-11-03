@@ -260,7 +260,10 @@ final class ConsolePortSync {
             store["profiles"] = entries
             store["active"] = ["revision":expectedActivation + 1, "profileRevision":revision, "profile":profile]
         }
-        store["consolePortSync"] = ["sourcePath":sourcePath, "exportedAt":snapshot["exportedAt"]!, "character":snapshot["character"]!, "profileId":profile["id"]!]
+        var provenance: [String: Any] = ["sourcePath":sourcePath, "exportedAt":snapshot["exportedAt"]!, "character":snapshot["character"]!, "profileId":profile["id"]!, "modifiers":profile["modifiers"]!, "buttonCount":(snapshot["consolePortLayout"] as! [[String: Any]]).count]
+        if let version = snapshot["consolePortVersion"] as? String, version.utf8.count <= 80 { provenance["consolePortVersion"] = version }
+        if let page = ProfileCatalog.revision(snapshot["actionPage"]), page <= 100 { provenance["actionPage"] = page }
+        store["consolePortSync"] = provenance
         let data = try encode(store)
         guard data.count <= 8 * 1024 * 1024 else { throw Failure.invalid }
         let path = directory.appendingPathComponent("store.json")

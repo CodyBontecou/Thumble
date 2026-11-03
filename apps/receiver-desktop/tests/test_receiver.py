@@ -5,6 +5,7 @@ import hashlib
 import json
 from pathlib import Path
 import shutil
+import socket as socket_module
 import ssl
 import tempfile
 import threading
@@ -414,6 +415,7 @@ class TransportTests(unittest.IsolatedAsyncioTestCase):
         for invalid in ({**hello, 'phoneId': str(uuid.uuid4())}, {**hello, 'reconnectToken': '0' * 64}):
             async with connect(self.url, ssl=self.client_context, proxy=None) as socket:
                 await socket.send(json.dumps(invalid))
+                self.assertEqual(json.loads(await socket.recv()), dict(type='forgotten'))
                 with self.assertRaises(ConnectionClosed):
                     await socket.recv()
         async with connect(self.url, ssl=self.client_context, proxy=None) as socket:
@@ -430,8 +432,31 @@ class TransportTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(PairingStore(self.directory.name).accepts(phone, original['reconnectToken']))
         async with connect(self.url, ssl=self.client_context, proxy=None) as socket:
             await socket.send(json.dumps(hello))
+            self.assertEqual(json.loads(await socket.recv()), dict(type='forgotten'))
             with self.assertRaises(ConnectionClosed):
                 await socket.recv()
+
+    async def test_saved_port_in_use_falls_back_to_a_new_port(self):
+        self.stop.set()
+        await asyncio.wait_for(self.task, 5)
+        store = PairingStore(self.directory.name)
+        context, _ = identity(store)
+        with socket_module.socket() as blocker:
+            blocker.bind(('127.0.0.1', store.value['port']))
+            blocker.listen()
+            ready = asyncio.Queue()
+            invitation = Invitation('127.0.0.1', store.value['port'], self.fingerprint)
+            server = ReceiverServer(self.output, Access(self.directory.name), invitation,
+                                    lambda value: ready.put_nowait(value) if value else None, pairing_store=store)
+            stop = asyncio.Event()
+            task = asyncio.create_task(server.run('127.0.0.1', store.value['port'], context, stop, saved_port=True))
+            try:
+                await asyncio.wait_for(ready.get(), 5)
+                self.assertNotEqual(invitation.port, blocker.getsockname()[1])
+                self.assertEqual(PairingStore(self.directory.name).value['port'], invitation.port)
+            finally:
+                stop.set()
+                await asyncio.wait_for(task, 5)
 
     async def test_watchdog_pauses_then_closes_idle_peer(self):
         async with connect(self.url, ssl=self.client_context, proxy=None) as socket:

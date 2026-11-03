@@ -9,6 +9,7 @@ final class ProfileBridge {
     private var lastPayload: Data?
     private var ticks = 0
     private var pairing: [String: Any]?
+    private var consolePortStatus = "ConsolePort: waiting for /reload"
     private let directory: URL = {
         if let path = ProcessInfo.processInfo.environment["TAPPING_PROFILE_DIR"] { return URL(fileURLWithPath: path, isDirectory: true) }
         return FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/Tapping/profiles", isDirectory: true)
@@ -19,7 +20,10 @@ final class ProfileBridge {
     var onConsolePortSyncStatus: ((String) -> Void)?
     private lazy var consolePortSync = ConsolePortSync(directory: directory)
     func start() {
-        consolePortSync.onStatus = { [weak self] text in self?.onConsolePortSyncStatus?(text) }
+        consolePortSync.onStatus = { [weak self] text in
+            self?.queue.async { [weak self] in self?.consolePortStatus = text }
+            self?.onConsolePortSyncStatus?(text)
+        }
         consolePortSync.start()
         let timer = DispatchSource.makeTimerSource(queue: queue)
         timer.schedule(deadline: .now(), repeating: .milliseconds(250))
@@ -99,7 +103,9 @@ final class ProfileBridge {
                 } else {
                     result = try ProfileCatalog.summary(ProfileCatalog.read(directory))
                 }
-                completion(.success(result))
+                var catalog = result
+                catalog["consolePortBridge"] = ["enabled": !UserDefaults.standard.bool(forKey: "consolePortSyncDisabled"), "detail": consolePortStatus]
+                completion(.success(catalog))
             } catch { completion(.failure(error)) }
         }
     }

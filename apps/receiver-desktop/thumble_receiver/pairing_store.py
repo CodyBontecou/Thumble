@@ -19,7 +19,8 @@ class PairingStore:
             try:
                 value = json.loads(self.path.read_text(encoding='utf-8'))
                 if (value['v'] != 1 or type(value['port']) is not int
-                        or not 0 <= value['port'] <= 65535 or not isinstance(value['tls'], dict)):
+                        or not 0 <= value['port'] <= 65535
+                        or not (value['tls'] is None or isinstance(value['tls'], dict))):
                     raise ValueError()
                 if value['phone'] is not None:
                     uuid.UUID(value['phone']['id'])

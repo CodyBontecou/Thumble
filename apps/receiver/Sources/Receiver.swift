@@ -33,6 +33,8 @@ final class Receiver {
     private var layoutDeadline = 0.0
     private var datagram: DatagramInput?
     private var listener: NWListener?
+    private var listenerParameters: NWParameters?
+    private var usingSavedPort = false
     private var timer: DispatchSourceTimer?
     private var gamepad: UnsafeMutableRawPointer?
     private var clients: [ObjectIdentifier: NWConnection] = [:]
@@ -43,6 +45,7 @@ final class Receiver {
     private var activity: NSObjectProtocol?
     private var paused = false
     private var lastPause = 0.0
+    private var rememberedPhone = RememberedPhone()
     private var token = ""
     private var expiry = 0.0
     private var fingerprint = ""
@@ -55,9 +58,11 @@ final class Receiver {
     private var chatBusy = false
     private var chatResults: [String: [String: Any]] = [:]
     private var port: UInt16 = 0
+    private let secrets: ReceiverSecretStore
+    init(secrets: ReceiverSecretStore = KeychainReceiverSecrets()) { self.secrets = secrets }
     private func status(_ text: String) { onStatus?(text) }
     func start() throws {
-        guard let device = tapping_gamepad_create() else { throw ReceiverError.message("Virtual HID creation failed. Check the signed HID profile.") }
+        guard let device = tapping_gamepad_create() else { throw ReceiverError.virtualGamepadUnavailable }
         gamepad = device
         let directory = URL(fileURLWithPath: ProcessInfo.processInfo.environment["TAPPING_PROFILE_DIR"] ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/Tapping/profiles").path)
         let config = Bundle.main.url(forResource: "Monetization", withExtension: "json").flatMap { try? Data(contentsOf: $0) }.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
@@ -82,7 +87,8 @@ final class Receiver {
             }
         }
         access.begin()
-        let identity = try ReceiverIdentity.create(); fingerprint = identity.fingerprint
+        let identity = try ReceiverIdentity.create(secrets: secrets); fingerprint = identity.fingerprint
+        try rememberedPhone.restore(from: secrets)
         let tls = NWProtocolTLS.Options()
         guard let local = sec_identity_create(identity.identity) else { throw ReceiverError.message("TLS identity unavailable.") }
         sec_protocol_options_set_local_identity(tls.securityProtocolOptions, local)
@@ -91,10 +97,11 @@ final class Receiver {
         let parameters = NWParameters(tls: tls, tcp: tcp)
         let websocket = NWProtocolWebSocket.Options(); websocket.autoReplyPing = true; websocket.maximumMessageSize = 65536
         parameters.defaultProtocolStack.applicationProtocols.insert(websocket, at: 0)
-        let listener = try NWListener(using: parameters, on: .any)
-        self.listener = listener
-        listener.stateUpdateHandler = { [weak self, weak listener] phase in self?.handleListenerState(phase, port: listener?.port?.rawValue) }
-        listener.newConnectionHandler = { [weak self] connection in self?.accept(connection) }
+        // An unreadable saved port is not worth refusing to start over; pick a fresh one.
+        let savedPort = (try? secrets.load("listener-port")).flatMap { $0 }.flatMap { UInt16(String(decoding: $0, as: UTF8.self)) }.flatMap(NWEndpoint.Port.init(rawValue:))
+        listenerParameters = parameters
+        usingSavedPort = savedPort != nil
+        let listener = try makeListener(on: savedPort ?? .any)
         profiles.onActivation = { [weak self] revision, profile in
             self?.queue.async { [weak self] in self?.activateLayout(revision: revision, profile: profile) }
         }
@@ -125,6 +132,14 @@ final class Receiver {
         }
         self.timer = timer; timer.resume()
     }
+    private func makeListener(on port: NWEndpoint.Port) throws -> NWListener {
+        guard let listenerParameters else { throw ReceiverError.message("Receiver network settings unavailable.") }
+        let listener = try NWListener(using: listenerParameters, on: port)
+        self.listener = listener
+        listener.stateUpdateHandler = { [weak self, weak listener] phase in self?.handleListenerState(phase, port: listener?.port?.rawValue) }
+        listener.newConnectionHandler = { [weak self] connection in self?.accept(connection) }
+        return listener
+    }
     func stop() {
         access.stop()
         queue.sync { if let activity = self.activity { ProcessInfo.processInfo.endActivity(activity); self.activity = nil }; self.release(); self.datagram?.stop(); self.datagram = nil; self.timer?.cancel(); self.listener?.cancel(); self.clients.values.forEach { $0.cancel() }; self.clients.removeAll(); if let gamepad = self.gamepad { tapping_gamepad_destroy(gamepad); self.gamepad = nil } }
@@ -132,14 +147,31 @@ final class Receiver {
     }
     // Called on the receiver queue by the listener's state callback.
     func handleListenerState(_ phase: NWListener.State, port: UInt16?) {
-        if case .ready = phase, let port { self.port = port; newInvitation(); status("Ready · scan to connect") }
+        if case .ready = phase, let port {
+            do { try secrets.save(Data(String(port).utf8), account: "listener-port") }
+            catch { listener?.cancel(); status("Could not save receiver port · restart to retry"); return }
+            self.port = port; newInvitation(); status("Ready · scan to connect")
+        }
         if case .failed(let error) = phase {
+            // Another app may hold the saved port. Remembered phones must pair again
+            // on the new port, but the receiver itself stays usable.
+            if usingSavedPort, let failed = listener {
+                usingSavedPort = false
+                failed.stateUpdateHandler = nil; failed.cancel()
+                try? secrets.remove("listener-port")
+                if let replacement = try? makeListener(on: .any) { replacement.start(queue: queue); return }
+            }
             self.port = 0; token = ""; release(); profiles.updatePairingCode("")
             onPairingUnavailable?()
             status("Network error: \(error.localizedDescription)")
         }
     }
-    func resetPairing() { queue.async { self.disconnect("Ready · scan to connect"); self.newInvitation() } }
+    func suspend() { queue.async { self.disconnect("Computer sleeping · controls released") } }
+    func resetPairing() { queue.async {
+        do { try self.rememberedPhone.reset() }
+        catch { self.disconnect("Could not forget phone · unlock Keychain and retry"); return }
+        self.disconnect("Ready · scan to connect"); self.newInvitation()
+    } }
     private func newInvitation() {
         guard port > 0 else { return }
         var random = [UInt8](repeating: 0, count: 32)
@@ -188,10 +220,23 @@ final class Receiver {
     }
     private func handle(_ message: [String: Any], connection: NWConnection, receivedMs: Double, udp: NWConnection? = nil) {
         if peer !== connection {
-            guard peer == nil, message["type"] as? String == "hello", message["v"] as? Int == 3,
-                  let phoneID = message["phoneId"] as? String, UUID(uuidString: phoneID) != nil,
-                  Date().timeIntervalSince1970 <= expiry, message["token"] as? String == token else { connection.cancel(); return }
-            token = "" // Single-use pairing credential.
+            guard udp == nil, message["type"] as? String == "hello", message["v"] as? Int == 3,
+                  let phoneID = message["phoneId"] as? String, UUID(uuidString: phoneID) != nil else { connection.cancel(); return }
+            let resuming = (message["reconnectToken"] as? String).map { rememberedPhone.accepts(phoneID: phoneID, credential: $0) } ?? false
+            let pairing = peer == nil && !token.isEmpty && Date().timeIntervalSince1970 <= expiry && message["token"] as? String == token
+            guard resuming || pairing else {
+                // Tell a phone holding a stale reconnect credential to stop retrying and rescan.
+                if message["reconnectToken"] != nil { forget(connection) } else { connection.cancel() }
+                return
+            }
+            // Only the authenticated remembered phone may replace its lingering old socket.
+            if resuming, peer != nil { disconnect("Reconnecting phone · controls released") }
+            var reconnectToken: String?
+            if pairing {
+                guard let credential = rememberedPhone.pair(phoneID) else { connection.cancel(); return }
+                reconnectToken = credential
+            }
+            token = "" // Consumed or superseded QR credentials never authorize reconnect.
             profiles.updatePairingCode("")
             activity = ProcessInfo.processInfo.beginActivity(options: [.userInitiatedAllowingIdleSystemSleep, .latencyCritical], reason: "Receive real-time phone controller input")
             chatResults.removeAll(); chatBusy = false; profileRequestBusy = false
@@ -201,7 +246,7 @@ final class Receiver {
             playRequested = false; accessDeadline = 0; accessStarting = false
             let mirrored = (message["demoUsed"] as? Double).flatMap { $0.isFinite && (0...1800).contains($0) ? $0 : nil } ?? 0
             access.pair(phoneID: phoneID, mirroredUsed: mirrored)
-            acknowledge(connection, type: "ready", sequence: -1)
+            acknowledge(connection, type: "ready", sequence: -1, reconnectToken: reconnectToken)
             if activeProfile != nil { pushLayout() }
             if message["datagram"] as? Int == 1 && ProcessInfo.processInfo.environment["TAPPING_INPUT_TRANSPORT"] == "udp" { offerDatagram(connection) }
             publishAccess()
@@ -387,7 +432,7 @@ final class Receiver {
         profiles.writeStatus(["updatedAt": Date().timeIntervalSince1970 * 1000, "connected": peer != nil,
                               "ready": peer != nil && !layoutPending && (profileCapable || profileRevision == 0), "revision": profileRevision, "pro": pro, "receiverId": accessInfo["receiverId"] ?? ""])
     }
-    private func acknowledge(_ connection: NWConnection, type: String, sequence: Int, timing: [String: Double]? = nil, udp: NWConnection? = nil) {
+    private func acknowledge(_ connection: NWConnection, type: String, sequence: Int, timing: [String: Double]? = nil, udp: NWConnection? = nil, reconnectToken: String? = nil) {
         let now = ProcessInfo.processInfo.systemUptime
         leases = leases.filter { $0.value > now }
         // Server-clock leases prevent delayed TCP packets from reviving old held buttons.
@@ -395,9 +440,15 @@ final class Receiver {
         if leases.count > 256 { disconnect("Input rate exceeded"); return }
         var response: [String: Any] = ["type": type, "seq": sequence, "lease": lease]
         if type == "ready" { response["chat"] = 1; response["profiles"] = 1; response["access"] = 1; response["cloudAdoption"] = 1 }
+        if let reconnectToken { response["reconnectToken"] = reconnectToken }
         if type == "ready", diagnostics != nil { response["diagnostics"] = true }
         if var timing { timing["ackMs"] = ProcessInfo.processInfo.systemUptime * 1000; response["timing"] = timing }
         if let udp { datagram?.send(response, to: udp) } else { send(response, to: connection) }
+    }
+    private func forget(_ connection: NWConnection) {
+        guard let data = try? JSONSerialization.data(withJSONObject: ["type": "forgotten"]) else { connection.cancel(); return }
+        let context = NWConnection.ContentContext(identifier: "input", metadata: [NWProtocolWebSocket.Metadata(opcode: .text)])
+        connection.send(content: data, contentContext: context, isComplete: true, completion: .contentProcessed { _ in connection.cancel() })
     }
     private func send(_ object: [String: Any], to connection: NWConnection) {
         guard let data = try? JSONSerialization.data(withJSONObject: object) else { return }

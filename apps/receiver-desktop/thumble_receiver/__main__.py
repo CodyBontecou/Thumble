@@ -77,7 +77,7 @@ async def run(args, ui=None):
             print(f'Listening on {address}; Ctrl+C releases controls and exits.', flush=True)
         try:
             # Bind the selected LAN interface rather than every interface.
-            await server.run(address, port, context, stop)
+            await server.run(address, port, context, stop, saved_port=not args.port)
         finally:
             await cloud.stop()
             await broker.close()

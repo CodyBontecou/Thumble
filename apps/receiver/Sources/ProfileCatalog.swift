@@ -73,6 +73,25 @@ enum ProfileCatalog {
             let age = Date().timeIntervalSince1970 - checkedAt.doubleValue / 1000
             if age.isFinite && age >= 0 && age <= 600 { result["agentConnection"] = ["code": code, "ageSeconds": age] }
         }
+        if let sync = store["consolePortSync"] as? [String: Any],
+           let profileId = sync["profileId"] as? String,
+           profileId.range(of: "^[a-z0-9][a-z0-9-]{0,63}$", options: .regularExpression) != nil,
+           let character = sync["character"] as? [String: Any], let name = character["name"] as? String,
+           !name.isEmpty, name.utf16.count <= 80, !name.unicodeScalars.contains(where: { $0.value < 32 || $0.value == 127 }),
+           let exportedAt = sync["exportedAt"] as? NSNumber, CFGetTypeID(exportedAt) != CFBooleanGetTypeID(),
+           exportedAt.doubleValue.isFinite, exportedAt.doubleValue > 0, exportedAt.doubleValue <= 9_007_199_254_740_991 {
+            var status: [String: Any] = ["profileId":profileId, "characterName":name, "exportedAt":exportedAt,
+                "following":(active?["profile"] as? [String: Any])?["id"] as? String == profileId]
+            if let count = revision(sync["buttonCount"]), (1...17).contains(count) { status["buttonCount"] = count }
+            if let version = sync["consolePortVersion"] as? String, version.utf8.count <= 80 { status["consolePortVersion"] = version }
+            if let page = revision(sync["actionPage"]), page <= 100 { status["actionPage"] = page }
+            if let modifiers = sync["modifiers"] as? [String: String], modifiers.count <= 3,
+               Set(modifiers.keys).isSubset(of: ["shift", "ctrl", "alt"]),
+               modifiers.values.allSatisfy({ CloudProfile.buttons.contains($0) || CloudProfile.triggers.contains($0) || $0 == "none" }) {
+                status["modifiers"] = modifiers
+            }
+            result["consolePortSync"] = status
+        }
         return result
     }
     static func activate(_ directory: URL, id: String, profileRevision: Int, expectedActivationRevision: Int) throws -> [String: Any] {
