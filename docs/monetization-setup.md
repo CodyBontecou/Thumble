@@ -42,14 +42,21 @@ app version. Lifetime is already waiting for review, so its earlier screenshot
 is locked. A Release simulator build loads all six products from StoreKit at
 these prices, each subscription with its 7-day trial.
 
-### Google Play (not created yet)
+### Google Play (created November 3, 2026)
 
-The `thumble-play-verifier` service account can read products but not create
-or price them (`PERMISSION_DENIED`). Grant it product-management permission in
-Play Console, or create the products there: subscriptions `thumble_weekly`
-(base plan `P1W`, $0.99) and `thumble_yearly` (base plan `P1Y`, $29.99), each
-with a 7-day free-trial offer for new subscribers, and raise the one-time
-`thumble_pro_lifetime` from $19.99 to $49.99. Google Play has no Family plans.
+The `thumble-play-verifier` service account was granted **Manage store presence**
+for com.thumble.android (it already had View financial data). Prices use Google's
+regional conversion of the US price, regions version 2026/01, 174 regions:
+
+| Product | Type | US price | Trial | State |
+| --- | --- | --- | --- | --- |
+| `thumble_weekly` | Subscription, base plan `weekly` (P1W) | $0.99 | `free-trial` offer, 1 week, new subscribers | Active |
+| `thumble_yearly` | Subscription, base plan `yearly` (P1Y) | $29.99 | `free-trial` offer, 1 week, new subscribers | Active |
+| `thumble_pro_lifetime` | One-time, option `lifetime` | $49.99 (was $19.99) | none | Active |
+
+The Lifetime listing copy now describes unlimited play rather than removing a
+time limit. Google Play has no Family plans. Billing only answers Play-installed
+builds, so test purchases need an internal-testing install.
 
 `TappingPurchases.catalog(ids)` returns localized prices and trial eligibility
 from the store; `purchase(id)` buys a plan; `status()` reports `active`,
