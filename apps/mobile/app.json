@@ -63,6 +63,12 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "33a59fef-e85d-4af9-9d7d-8bd6f59727eb"
+      }
+    },
+    "owner": "codybontecou"
   }
 }
