@@ -17,7 +17,7 @@ export default function WelcomeScreen() {
     }
     else setBusy(false);
   }
-  return <Page style={{ paddingTop: 16 }} footer={<Actions><View style={{ flex: 1 }}><Button disabled={!state.loaded || busy} onPress={() => begin()}>Set up WoW</Button></View></Actions>}><StatusBar hidden />
+  return <Page style={{ paddingTop: 16 }} footer={<Actions><View style={{ flex: 1 }}><Button testID="welcome-start" disabled={!state.loaded || busy} onPress={() => begin()}>Set up WoW</Button></View></Actions>}><StatusBar hidden />
     <View style={s.top}><View style={s.brand}><Image source={thumbleIcon} style={s.icon} /><Text style={s.wordmark}>thumble<Text style={{ color: colors.secondary }}>.</Text></Text></View>
       <Pressable accessibilityRole="button" disabled={!state.loaded || busy} onPress={() => begin(true)} style={s.skip}><Text style={ui.small}>Try the controls</Text></Pressable></View>
     <Columns><View style={[ui.column, { justifyContent: 'center', gap: 16 }]}><Eyebrow>WOW + CONSOLEPORT</Eyebrow><Text accessibilityRole="header" style={[ui.title, { fontSize: 40, lineHeight: 44 }]}>{'WoW on desktop.\nControls on your phone.'}</Text><Text style={ui.body}>Move, look around and use your WoW actions from your phone. Start with ConsolePort controls and set your bindings in WoW.</Text><Text style={ui.small}>WoW runs on your computer. Keep your phone and computer on the same Wi-Fi.</Text></View>

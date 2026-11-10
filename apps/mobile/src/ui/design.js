@@ -34,8 +34,8 @@ export function Columns({ children, style = {} }) {
   return <View style={[{ flexDirection: width >= 680 ? 'row' : 'column', gap: 32, alignItems: 'stretch' }, style]}>{children}</View>;
 }
 export function Eyebrow({ children }) { return <Text style={ui.label}>{children}</Text>; }
-export function Button({ children, onPress, disabled = false, secondary = false, accessibilityLabel = undefined }) {
-  return <Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress}
+export function Button({ children, onPress, disabled = false, secondary = false, accessibilityLabel = undefined, testID = undefined }) {
+  return <Pressable testID={testID} accessibilityRole="button" accessibilityLabel={accessibilityLabel} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress}
     style={({ pressed }) => ({ minHeight: 52, borderRadius: 28, borderCurve: 'continuous', paddingHorizontal: 24, paddingVertical: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: secondary ? colors.raised : colors.accent, opacity: disabled ? 0.4 : pressed ? 0.7 : 1 })}>
     <Text style={{ color: secondary ? colors.text : colors.onAccent, fontSize: 16, lineHeight: 24, fontWeight: '600', textAlign: 'center' }}>{children}</Text>
   </Pressable>;

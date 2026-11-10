@@ -16,6 +16,7 @@
         }
       ],
       "./plugins/with-scene-delegate.cjs",
+      "./plugins/with-release-provenance.cjs",
       [
         "expo-build-properties",
         {
