@@ -59,7 +59,11 @@ final class Receiver {
     private var chatResults: [String: [String: Any]] = [:]
     private var port: UInt16 = 0
     private let secrets: ReceiverSecretStore
-    init(secrets: ReceiverSecretStore = KeychainReceiverSecrets()) { self.secrets = secrets }
+    private let copyBindingProposal: @MainActor (String) -> Bool
+    init(secrets: ReceiverSecretStore = KeychainReceiverSecrets(), copyBindingProposal: @escaping @MainActor (String) -> Bool = { PhoneBindings.copy($0) }) {
+        self.secrets = secrets
+        self.copyBindingProposal = copyBindingProposal
+    }
     private func status(_ text: String) { onStatus?(text) }
     func start() throws {
         guard let device = tapping_gamepad_create() else { throw ReceiverError.virtualGamepadUnavailable }
@@ -213,7 +217,7 @@ final class Receiver {
                   let metadata = context?.protocolMetadata(definition: NWProtocolWebSocket.definition) as? NWProtocolWebSocket.Metadata,
                   metadata.opcode == .text,
                   let message = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { connection.cancel(); return }
-            guard data.count <= 4096 || (self.peer === connection && message["type"] as? String == "profile-adopt") else { connection.cancel(); return }
+            guard data.count <= 4096 || (self.peer === connection && ["profile-adopt", "profile-save", "bindings-copy"].contains(message["type"] as? String ?? "")) else { connection.cancel(); return }
             self.handle(message, connection: connection, receivedMs: receivedMs)
             if self.clients[ObjectIdentifier(connection)] != nil { self.receive(connection) }
         }
@@ -275,7 +279,10 @@ final class Receiver {
             publishProfileStatus()
             return
         }
-        if let type = message["type"] as? String, ["profiles-list", "profile-select", "profile-adopt"].contains(type) {
+        if let type = message["type"] as? String, ["bindings-read", "bindings-copy"].contains(type) {
+            handleBindings(message, connection: connection); return
+        }
+        if let type = message["type"] as? String, ["profiles-list", "profile-select", "profile-adopt", "profile-save"].contains(type) {
             handleProfiles(message, connection: connection)
             return
         }
@@ -313,8 +320,9 @@ final class Receiver {
         }
         var selection: (String, Int, Int)?
         let adopting = message["type"] as? String == "profile-adopt"
-        if adopting {
-            guard let profile = message["profile"] as? [String: Any], let source = message["source"] as? [String: Any],
+        if adopting || message["type"] as? String == "profile-save" {
+            let source = adopting ? message["source"] as? [String: Any] : nil
+            guard !adopting || source != nil, adopting || ProfileCatalog.revision(message["expectedProfileRevision"]) != nil, let profile = message["profile"] as? [String: Any],
                   let activation = ProfileCatalog.revision(message["expectedActivationRevision"]),
                   !layoutPending, !chatBusy,
                   let lease = message["lease"] as? String, let deadline = leases[lease],
@@ -323,7 +331,7 @@ final class Receiver {
             }
             profileRequestBusy = true
             pauseAccess()
-            profiles.adopt(profile: profile, source: source, expectedActivationRevision: activation) { [weak self, weak connection] result in
+            profiles.saveAndActivate(profile: profile, source: source, expectedActivationRevision: activation, expectedProfileRevision: ProfileCatalog.revision(message["expectedProfileRevision"]) ?? 0) { [weak self, weak connection] result in
                 guard let self, let connection else { return }
                 self.queue.async {
                     guard self.peer === connection else { return }
@@ -356,6 +364,44 @@ final class Receiver {
                 switch result {
                 case .success(let catalog): self.send(["type": "profiles-result", "id": request, "catalog": catalog], to: connection)
                 case .failure(let error): self.send(["type": "profiles-result", "id": request, "error": error.localizedDescription], to: connection)
+                }
+            }
+        }
+    }
+    private func handleBindings(_ message: [String: Any], connection: NWConnection) {
+        guard let id = message["id"] as? String, !id.isEmpty, id.utf8.count <= 80 else { return }
+        func finish(_ result: Result<[String: Any], Error>) {
+            queue.async { [weak self, weak connection] in
+                guard let self, let connection, self.peer === connection else { return }
+                self.profileRequestBusy = false
+                switch result {
+                case .success(let data): self.send(["type": "bindings-result", "id": id, "data": data], to: connection)
+                case .failure(let error): self.send(["type": "bindings-result", "id": id, "error": error.localizedDescription], to: connection)
+                }
+            }
+        }
+        guard !profileRequestBusy else {
+            send(["type": "bindings-result", "id": id, "error": "Another controller request is in progress."], to: connection); return
+        }
+        if message["type"] as? String == "bindings-read" {
+            guard let offset = ProfileCatalog.revision(message["offset"]), offset <= 2048,
+                  message["snapshotId"] == nil || message["snapshotId"] is String else { finish(.failure(PhoneBindings.Failure.invalid)); return }
+            profileRequestBusy = true
+            profiles.bindingPage(offset: offset, snapshot: message["snapshotId"] as? String, completion: finish)
+        } else {
+            guard let plan = message["plan"] as? [String: Any], !layoutPending, !chatBusy,
+                  let lease = message["lease"] as? String, let deadline = leases[lease],
+                  InputTiming.leaseIsFresh(now: ProcessInfo.processInfo.systemUptime, deadline: deadline) else { finish(.failure(PhoneBindings.Failure.changed)); return }
+            profileRequestBusy = true
+            pauseAccess()
+            profiles.bindingPlan(plan) { result in
+                switch result {
+                case .failure(let error): finish(.failure(error))
+                case .success(let text):
+                    Task { @MainActor in
+                        if self.copyBindingProposal(text) { finish(.success(["planId": plan["id"]!])) }
+                        else { finish(.failure(PhoneBindings.Failure.invalid)) }
+                    }
                 }
             }
         }
@@ -439,7 +485,7 @@ final class Receiver {
         let lease = UUID().uuidString; leases[lease] = InputTiming.leaseDeadline(issuedAt: now)
         if leases.count > 256 { disconnect("Input rate exceeded"); return }
         var response: [String: Any] = ["type": type, "seq": sequence, "lease": lease]
-        if type == "ready" { response["chat"] = 1; response["profiles"] = 1; response["access"] = 1; response["cloudAdoption"] = 1 }
+        if type == "ready" { response["chat"] = 1; response["profiles"] = 1; response["access"] = 1; response["cloudAdoption"] = 1; response["phoneProfileSave"] = 1; response["phoneBindings"] = 1 }
         if let reconnectToken { response["reconnectToken"] = reconnectToken }
         if type == "ready", diagnostics != nil { response["diagnostics"] = true }
         if var timing { timing["ackMs"] = ProcessInfo.processInfo.systemUptime * 1000; response["timing"] = timing }

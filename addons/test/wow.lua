@@ -141,3 +141,37 @@ assert(not apply.enabled)
 reviewButton.scripts.OnClick(); assert(apply.enabled)
 window.scripts.OnEvent(); assert(not apply.enabled and bindings.PAD3 == 'ACTIONBUTTON3')
 print('PASS UI opens disabled, reviews without writes, and invalidates apply on edit/combat')
+
+local manualID = ThumbleBridgeDB.snapshot.snapshotId
+ns.ExportPhoneCharacter()
+local phone = ns.Decode(ThumbleBridgeDB.phoneExportText)
+assert(phone.snapshotId ~= manualID and ThumbleBridgeDB.snapshot.snapshotId == manualID)
+local phonePlan = ns.Decode(ns.Encode(plan))
+phonePlan.id = 'phone-spell-plan'; phonePlan.snapshotId = phone.snapshotId
+editor:SetText(ns.Encode(phonePlan)); reviewButton.scripts.OnClick()
+assert(apply.enabled and bindings.PAD3 == 'ACTIONBUTTON3')
+apply.scripts.OnClick()
+assert(bindings.PAD3 == 'SPELL Charge')
+assert(ns.Decode(ns.ExportResult()).planId == phonePlan.id)
+ns.Undo()
+combat = true
+assert(not pcall(ns.ExportPhoneCharacter))
+combat = false
+print('PASS independent phone snapshots preserve manual exports and complete UI review, Apply, receipt and Restore')
+
+assert(loadfile(addonPath .. '/Sync.lua'))('ThumbleBridge', ns)
+local logout = frames[#frames].scripts.OnEvent
+local beforeLogout = ns.Encode(ns.AllBindings())
+ThumbleBridgeDB.autoSync = true
+logout(nil, 'PLAYER_LOGOUT')
+assert(ThumbleBridgeDB.phoneExportText and ThumbleBridgeDB.phoneSnapshot)
+assert(ns.Decode(ThumbleBridgeDB.phoneExportText).snapshotId == ThumbleBridgeDB.phoneSnapshot.snapshotId)
+ThumbleBridgeDB.autoSync = false
+logout(nil, 'PLAYER_LOGOUT')
+assert(ThumbleBridgeDB.phoneExportText == nil and ThumbleBridgeDB.phoneSnapshot == nil)
+ThumbleBridgeDB.autoSync = true; combat = true
+logout(nil, 'PLAYER_LOGOUT')
+assert(ThumbleBridgeDB.phoneExportText == nil and ThumbleBridgeDB.phoneSnapshot == nil)
+combat = false
+assert(ns.Encode(ns.AllBindings()) == beforeLogout)
+print('PASS phone character exports run through logout, respect sync opt-out and combat, and perform zero binding writes')

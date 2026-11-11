@@ -13,7 +13,11 @@ const { calibration } = await import('../../apps/mobile/src/calibration.js');
 hooks.deregister();
 
 test('ConsolePort movement sends negative Y upward, positive Y downward, before and after calibration', () => {
-  for (const profile of [defaultProfile, calibration.standard()]) {
+  const mirrored = { ...defaultProfile, id: 'consoleport-0123456789abcdef01234567' };
+  const legacy = structuredClone(mirrored);
+  delete legacy.mappings.find(mapping => mapping.outputs.includes('ly')).invertY;
+  const legacyDefault = { ...legacy, id: defaultProfile.id };
+  for (const profile of [defaultProfile, calibration.standard(), calibration.standard(undefined, mirrored), calibration.standard(undefined, legacy), calibration.standard(undefined, legacyDefault)]) {
     const controller = new TouchController(profile);
     controller.setViewport(740, 380);
     const { frame } = profile.controls.find(control => control.id === 'left-stick');

@@ -1,1 +1,1 @@
-export const gamepadKeys = Object.freeze({ a: 'PAD1', b: 'PAD2', x: 'PAD3', y: 'PAD4', lb: 'PADLSHOULDER', rb: 'PADRSHOULDER', back: 'PADBACK', start: 'PADFORWARD', ls: 'PADLSTICK', rs: 'PADRSTICK', up: 'PADDUP', down: 'PADDDOWN', left: 'PADDLEFT', right: 'PADDRIGHT', guide: 'PADSYSTEM', lt: 'PADLTRIGGER', rt: 'PADRTRIGGER' });
+export { gamepadKeys } from '../../controller/src/gamepad-keys.js';

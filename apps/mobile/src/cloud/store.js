@@ -1,7 +1,7 @@
 import { AI_CONTROLLER_GENERATOR_ENABLED } from '../features';
 import { AppState, Platform } from 'react-native';
 import * as AuthSession from 'expo-auth-session';
-import * as SecureStore from 'expo-secure-store';
+import { secureRecord } from '../secure-record';
 import * as Crypto from 'expo-crypto';
 import * as WebBrowser from 'expo-web-browser';
 import { validServiceUrl } from '@tapping/cloud-contracts';
@@ -13,50 +13,8 @@ import { CLOUD_REDIRECT_PATH, CLOUD_REDIRECT_URI } from './redirect';
 import { accountDeletionUrl, ACCOUNT_RETURN_URI } from './account';
 
 WebBrowser.maybeCompleteAuthSession();
-const pointer = 'thumble.cloud.v1';
-const secureOptions = { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY };
-async function eraseRecord(key) {
-  const count = Number(await SecureStore.getItemAsync(key, secureOptions));
-  if (Number.isSafeInteger(count) && count > 0 && count < 2000) {
-    for (let index = 0; index < count; index++) await SecureStore.deleteItemAsync(`${key}.${index}`, secureOptions);
-  }
-  await SecureStore.deleteItemAsync(key, secureOptions);
-}
-// Small encrypted chunks work on platforms with limited per-item keychain sizes.
-const storage = {
-  async load() {
-    const key = await SecureStore.getItemAsync(pointer, secureOptions);
-    if (!key) return null;
-    const count = Number(await SecureStore.getItemAsync(key, secureOptions));
-    if (!Number.isSafeInteger(count) || count < 1 || count > 2000) throw Error('Invalid saved cloud record.');
-    const parts = [];
-    for (let index = 0; index < count; index++) {
-      const part = await SecureStore.getItemAsync(`${key}.${index}`, secureOptions);
-      if (part == null) throw Error('Incomplete saved cloud record.');
-      parts.push(part);
-    }
-    return JSON.parse(parts.join(''));
-  },
-  async save(value) {
-    const previous = await SecureStore.getItemAsync(pointer, secureOptions);
-    if (!value) {
-      await SecureStore.deleteItemAsync(pointer, secureOptions);
-      if (previous) await eraseRecord(previous);
-      return;
-    }
-    const scope = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, `${value.session.service}\n${value.session.accountId}`);
-    const key = `thumble.cloud.${scope}.${Crypto.randomUUID()}`;
-    const chars = Array.from(JSON.stringify(value));
-    const parts = [];
-    for (let index = 0; index < chars.length; index += 350) parts.push(chars.slice(index, index + 350).join(''));
-    try {
-      await SecureStore.setItemAsync(key, String(parts.length), secureOptions);
-      for (let index = 0; index < parts.length; index++) await SecureStore.setItemAsync(`${key}.${index}`, parts[index], secureOptions);
-      await SecureStore.setItemAsync(pointer, key, secureOptions);
-    } catch (failure) { await eraseRecord(key).catch(() => {}); throw failure; }
-    if (previous) await eraseRecord(previous);
-  },
-};
+const storage = secureRecord('thumble.cloud.v1', 'thumble.cloud', value =>
+  Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, `${value.session.service}\n${value.session.accountId}`));
 export const cloud = new CloudController({ storage, allowLocalhost: __DEV__, refreshToken: async session => {
   const result = await AuthSession.refreshAsync(refreshConfig(session), session.auth);
   return tokenFields(result, session);

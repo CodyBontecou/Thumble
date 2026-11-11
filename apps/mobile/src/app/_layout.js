@@ -39,6 +39,8 @@ export default function RootLayout() {
     </Stack.Protected>
     <Stack.Screen name="first-layout" options={{ ...modal, title: 'Your first layout' }} />
     <Stack.Screen name="calibration" options={{ ...modal, title: 'Stick calibration' }} />
+    <Stack.Screen name="layout-editor" options={{ ...screen, orientation: 'landscape', presentation: 'fullScreenModal' }} />
+    <Stack.Screen name="wow-bindings" options={{ ...modal, title: 'WoW actions' }} />
     <Stack.Screen name="controller-settings" options={{ ...modal, title: 'Controller settings' }} />
     <Stack.Screen name="cloud" options={{ ...modal, title: AI_CONTROLLER_GENERATOR_ENABLED ? 'Cloud controllers' : 'Cloud account' }} />
     <Stack.Screen name="profiles" options={{ ...modal, title: 'Controllers' }} />

@@ -27,7 +27,7 @@ try {
   const directory = join(folder, 'profiles');
   await mkdir(directory);
   const invitationPath = join(folder, 'invitation');
-  child = spawn(binary, [], { env: { ...process.env, TAPPING_PROFILE_DIR: directory, TAPPING_TEST_INVITATION: invitationPath, TAPPING_TEST_REPORTS: join(folder, 'reports') }, stdio: ['ignore', 'ignore', 'pipe'] });
+  child = spawn(binary, [], { env: { ...process.env, TAPPING_PROFILE_DIR: directory, TAPPING_WOW_CLIENT_DIR: join(folder, 'wow'), TAPPING_TEST_INVITATION: invitationPath, TAPPING_TEST_REPORTS: join(folder, 'reports') }, stdio: ['ignore', 'ignore', 'pipe'] });
   let errors = ''; child.stderr.on('data', value => errors += value);
   async function until(get) {
     const deadline = Date.now() + 7000;

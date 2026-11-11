@@ -126,3 +126,12 @@ test('agent connection check is validated, persists through the shared store and
   await store.save(warrior(), 0);
   assert.deepEqual((await store.read()).agentConnection, check);
 });
+
+test('agent edits retain phone profile ownership for subsequent phone revisions', async t => {
+  const store = await fixture(t);
+  const profile = { ...warrior(), id: 'phone-' + 'a'.repeat(32) };
+  await store.save(profile, 0);
+  await store.transaction(data => { data.profiles.find(entry => entry.profile.id === profile.id).phoneEdited = true; });
+  await store.save({ ...profile, name: 'Updated name' }, 1);
+  assert.equal((await store.get(profile.id)).phoneEdited, true);
+});

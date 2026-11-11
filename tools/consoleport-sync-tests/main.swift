@@ -116,3 +116,27 @@ let fallback = try offline.makeProfile(snapshot:snapshot(), source:original)
 let offlineA = (fallback["controls"] as! [[String:Any]]).first { $0["id"] as? String == aID }!
 try check(offlineA["icon"] == nil && offlineA["label"] as? String == "Attack", "unsafe artwork name escaped validation")
 print("PASS file-replacement race rejection and safe text fallback when artwork cannot resolve")
+
+// A refreshed spell belongs to the mapped output. An edited profile keeps
+// its own identity, placement, user labels and future write ownership.
+var edited = profile
+edited["id"] = "phone-" + String(repeating: "1", count: 32)
+edited["name"] = "My layout"
+var editedControls = controls
+let aIndex = editedControls.firstIndex { $0["id"] as? String == aID }!
+editedControls[aIndex]["label"] = "My label"
+editedControls[aIndex]["frame"] = ["x":0.1, "y":0.2, "width":0.1, "height":0.2]
+edited["controls"] = editedControls
+let previous = ((try ProfileCatalog.read(directory))["active"] as! [String:Any])["revision"] as! Int
+_ = try ProfileCatalog.savePhoneProfile(directory, profile:edited, expectedActivationRevision:previous)
+try write(encode(snapshot("Hero", label:"New ability"))); sync.poll()
+let refreshedActive = (try ProfileCatalog.read(directory))["active"] as! [String:Any]
+let refreshed = refreshedActive["profile"] as! [String:Any]
+let refreshedControl = (refreshed["controls"] as! [[String:Any]])[aIndex]
+try check(refreshed["id"] as? String == edited["id"] as? String && refreshed["name"] as? String == "My layout")
+try check(try encode(refreshed["mappings"]!) == encode(edited["mappings"]!))
+try check(try encode(refreshedControl["frame"]!) == encode(editedControls[aIndex]["frame"]!))
+try check(refreshedControl["label"] as? String == "My label")
+try check((refreshedControl["layers"] as? [String:[String:Any]])?[""]?["label"] as? String == "New ability")
+_ = try ProfileCatalog.savePhoneProfile(directory, profile:refreshed, expectedActivationRevision:refreshedActive["revision"] as! Int)
+print("PASS edited layouts retain identity, geometry, labels, mappings and write ownership through ConsolePort reload")

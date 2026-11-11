@@ -19,7 +19,13 @@ struct IsolatedReceiverSecrets: ReceiverSecretStore {
         if FileManager.default.fileExists(atPath: path.path) { try FileManager.default.removeItem(at: path) }
     }
 }
-let receiver = Receiver(secrets: IsolatedReceiverSecrets())
+let receiver = Receiver(secrets: IsolatedReceiverSecrets(), copyBindingProposal: { text in
+    guard let directory = ProcessInfo.processInfo.environment["TAPPING_PROFILE_DIR"] else { return false }
+    do {
+        try Data(text.utf8).write(to: URL(fileURLWithPath: directory).appendingPathComponent("binding-proposal.json"), options: .atomic)
+        return true
+    } catch { return false }
+})
 receiver.onInvitation = { value in
     if !value.isEmpty, let path = ProcessInfo.processInfo.environment["TAPPING_TEST_INVITATION"] { try? Data(value.utf8).write(to: URL(fileURLWithPath: path), options: [.atomic]) }
 }

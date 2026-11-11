@@ -9,7 +9,7 @@ export const profileSchema = {
     modifiers: { type: 'object', additionalProperties: false, properties: Object.fromEntries(['shift', 'ctrl', 'alt'].map(key => [key, { enum: [...BUTTONS, ...TRIGGERS, 'none'] }])) },
     controls: { type: 'array', minItems: 1, maxItems: 64, items: {
       type: 'object', additionalProperties: false, required: ['id', 'type', 'label', 'frame'], properties: {
-        id: text, type: { enum: ['button', 'stick', 'trigger'] }, label: text, color: { type: 'string', pattern: '^#[0-9a-fA-F]{6}$' },
+        id: text, type: { enum: ['button', 'stick', 'trigger'] }, label: text, customLabel: text, color: { type: 'string', pattern: '^#[0-9a-fA-F]{6}$' },
         icon: { type: 'string', pattern: '^[a-z0-9_]{1,128}$' }, badge: text,
         layers: { type: 'object', additionalProperties: false, properties: Object.fromEntries(['', 'SHIFT-', 'CTRL-', 'ALT-', 'CTRL-SHIFT-', 'ALT-SHIFT-', 'ALT-CTRL-', 'ALT-CTRL-SHIFT-'].map(key => [key, { type: 'object', additionalProperties: false, required: ['label'], properties: { label: text, icon: { type: 'string', pattern: '^[a-z0-9_]{1,128}$' } } }])) },
         frame: { type: 'object', additionalProperties: false, required: ['x', 'y', 'width', 'height'], properties: { x: number(0, 1), y: number(0, 1), width: number(0.01, 1), height: number(0.01, 1) } },

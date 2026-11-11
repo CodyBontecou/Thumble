@@ -10,3 +10,5 @@ export { validateLayout, validViewport, layoutLimits } from './layout-quality.js
 
 export { aiControllerGeneratorEnabled } from './features.js';
 export { consolePortProfile as defaultProfile } from './consoleport-profile.js';
+export { gamepadKeys } from './gamepad-keys.js';
+export { bindingChange, utilityActions } from './binding-plan.js';

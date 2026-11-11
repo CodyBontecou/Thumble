@@ -123,10 +123,10 @@ final class ConsolePortSync {
         catch { status("ConsolePort: \(error.localizedDescription)") }
     }
 
-    /// Decode the single syncText Lua string, without loading any Lua code.
-    static func decodeSavedSnapshot(_ source: Data) throws -> Data {
+    /// Decode one named SavedVariables string without loading Lua code.
+    static func decodeSavedSnapshot(_ source: Data, field: String = "syncText") throws -> Data {
         guard source.count <= 4 * 1024 * 1024, let text = String(data: source, encoding: .utf8), text.range(of: "^\\s*ThumbleBridgeDB\\s*=\\s*\\{", options: .regularExpression) != nil else { throw Failure.invalid }
-        guard let range = text.range(of: "\\[\"syncText\"\\]\\s*=\\s*\"", options: .regularExpression) else { throw Failure.unsupported }
+        guard let range = text.range(of: "\\[\"\(NSRegularExpression.escapedPattern(for: field))\"\\]\\s*=\\s*\"", options: .regularExpression) else { throw Failure.unsupported }
         let bytes = Array(text[range.upperBound...].utf8)
         var output = Data(), index = 0
         let escapes: [UInt8: UInt8] = [97:7, 98:8, 102:12, 110:10, 114:13, 116:9, 118:11, 92:92, 34:34, 39:39]
@@ -182,7 +182,8 @@ final class ConsolePortSync {
         try CloudProfile.validate(source)
         let character = snapshot["character"] as! [String: Any]
         let guid = character["guid"] as! String
-        let id = "consoleport-" + SHA256.hash(data: Data(guid.utf8)).prefix(12).map { String(format: "%02x", $0) }.joined()
+        let edited = CloudProfile.matches(source["id"], "^phone-[a-f0-9]{32}$")
+        let id = edited ? source["id"] as! String : "consoleport-" + SHA256.hash(data: Data(guid.utf8)).prefix(12).map { String(format: "%02x", $0) }.joined()
         let exported = snapshot["consolePortLayout"] as! [[String: Any]]
         let byOutput = Dictionary(uniqueKeysWithValues: exported.map { (Self.keyMap[$0["key"] as! String]!, $0) })
         let mods = snapshot["modifiers"] as! [String: String]
@@ -193,11 +194,11 @@ final class ConsolePortSync {
         let deadline = ProcessInfo.processInfo.systemUptime + 8
         var attempted = Set<String>()
         let controls = try (source["controls"] as! [[String: Any]]).map { control -> [String: Any] in
-            guard control["type"] as? String != "stick", let output = outputByControl[control["id"] as! String] else { return control }
+            guard control["type"] as? String != "stick", !(edited && control["id"] as? String == "chat"), let output = outputByControl[control["id"] as! String] else { return control }
             var result = control
             result.removeValue(forKey: "layers"); result.removeValue(forKey: "icon")
             guard let button = byOutput[output] else {
-                if control["layers"] != nil { result["label"] = control["badge"] as? String ?? output.uppercased() }
+                if !edited, control["layers"] != nil { result["label"] = control["badge"] as? String ?? output.uppercased() }
                 return result
             }
             var layers: [String: [String: Any]] = [:]
@@ -218,10 +219,11 @@ final class ConsolePortSync {
                 layers[layer["modifier"] as! String] = display
             }
             guard let base = layers[""] else { throw Failure.invalid }
-            result["label"] = base["label"]; result["icon"] = base["icon"]; result["layers"] = layers
+            if !edited { result["label"] = base["label"] }
+            result["icon"] = base["icon"]; result["layers"] = layers
             return result
         }
-        let profile: [String: Any] = ["schemaVersion":1, "id":id, "name":Self.shortLabel("\(character["name"] as! String) · ConsolePort"), "theme":"consoleport", "controls":controls, "mappings":mappings,
+        let profile: [String: Any] = ["schemaVersion":1, "id":id, "name":edited ? source["name"]! : Self.shortLabel("\(character["name"] as! String) · ConsolePort"), "theme":"consoleport", "controls":controls, "mappings":mappings,
             "modifiers":Dictionary(uniqueKeysWithValues: [("shift","GamePadEmulateShift"), ("ctrl","GamePadEmulateCtrl"), ("alt","GamePadEmulateAlt")].map { ($0.0, Self.keyMap[mods[$0.1]!] ?? "none") })]
         try CloudProfile.validate(profile)
         return profile
@@ -255,7 +257,8 @@ final class ConsolePortSync {
             let index = entries.firstIndex { ($0["profile"] as? [String: Any])?["id"] as? String == profile["id"] as? String }
             let revision = (index.flatMap { ProfileCatalog.revision(entries[$0]["revision"]) } ?? 0) + 1
             guard revision <= 9_007_199_254_740_991, expectedActivation < 9_007_199_254_740_991, index != nil || entries.count < 256 else { throw Failure.invalid }
-            let entry: [String: Any] = ["revision": revision, "profile": profile]
+            var entry: [String: Any] = ["revision": revision, "profile": profile]
+            if let index, entries[index]["phoneEdited"] as? Bool == true { entry["phoneEdited"] = true }
             if let index { entries[index] = entry } else { entries.append(entry) }
             store["profiles"] = entries
             store["active"] = ["revision":expectedActivation + 1, "profileRevision":revision, "profile":profile]

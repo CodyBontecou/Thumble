@@ -35,11 +35,12 @@ export default function ControllerMenu() {
   const plan = planSummary(purchase);
   function close() { if (router.canGoBack()) router.back(); else router.replace('/'); }
   const items = [
+    ['Edit layout', 'Drag and resize your controls', '/layout-editor'],
     ['Setup', online ? 'Paired · gamepad live' : 'Pair and check your three lights', '/connect'],
     ['Stick calibration', 'Dead zone, invert look', '/calibration'],
     ['Controllers', displayedProfile.name, '/profiles'],
     ['Practice run', 'Redo the five-move test', landscape ? '/?practice=coach' : '/rotate'],
-    ['Label sync', 'ConsolePort, chat and dictation', '/controller-settings'],
+    ['Controller settings', 'Edit layout, WoW actions and label sync', '/controller-settings'],
     ['Plan & billing', plan.detail, '/pro'],
     ...(AI_CONTROLLER_GENERATOR_ENABLED ? [['AI to WoW', 'Connect your AI to a controller', '/journey'], ['Cloud controllers', 'Saved in your account', '/cloud']] : [['Cloud account', 'Sign in and manage your account', '/cloud']]),
   ];

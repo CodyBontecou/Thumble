@@ -48,7 +48,7 @@ export function ControlArtwork({ label, icon }) {
   </View>;
 }
 
-function Control({ control, size, visuals, onAccessiblePress, profile, prefix, chatState }) {
+export function Control({ control, size, visuals, onAccessiblePress, profile, prefix, chatState }) {
   const [pressed, setPressed] = useState(false);
   const [position] = useState(() => new Animated.ValueXY());
   const { frame } = control;
@@ -78,11 +78,11 @@ function Control({ control, size, visuals, onAccessiblePress, profile, prefix, c
       {stick ? (
         <View style={[s.well, { width: diameter, height: diameter }, pressed && s.active]}>
           <Animated.View style={[s.cap, { width: diameter * 0.64, height: diameter * 0.64, transform: position.getTranslateTransform() }]}><View style={s.grip} /></Animated.View>
-          <Text style={s.stickLabel}>{control.label}</Text>
+          <Text style={s.stickLabel}>{baseDisplay.label}</Text>
         </View>
       ) : (
         <View style={[s.button, { width: shoulder && !consolePort ? width : diameter, height: shoulder && !consolePort ? height : diameter }, shoulder && !consolePort && s.shoulder, dpad && !consolePort && s.dpad, consolePort && s.consolePortButton, pressed && s.active, face && pressed && { borderColor: control.color }, chatting && s.chatActive]}>
-          {consolePort ? <ControlArtwork key={`${display.icon ?? ''}:${display.label}`} label={display.label} icon={chatting ? undefined : display.icon} /> : <Text numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.55} style={[s.buttonLabel, control.color && { color: control.color }, face && { fontSize: control.label.length > 3 ? 14 : 22 }, dpad && { fontSize: 22 }]}>{chatting ? display.label : control.label === xboxProfile.controls.find(item => item.id === control.id)?.label ? (glyph[control.id] ?? control.label) : control.label}</Text>}
+          {consolePort ? <ControlArtwork key={`${display.icon ?? ''}:${display.label}`} label={display.label} icon={chatting ? undefined : display.icon} /> : <Text numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.55} style={[s.buttonLabel, control.color && { color: control.color }, face && { fontSize: control.label.length > 3 ? 14 : 22 }, dpad && { fontSize: 22 }]}>{chatting || control.customLabel ? display.label : control.label === xboxProfile.controls.find(item => item.id === control.id)?.label ? (glyph[control.id] ?? control.label) : control.label}</Text>}
           {consolePort && <Text style={[s.badge, control.color && { color: control.color }]}>{control.badge}</Text>}
         </View>
       )}

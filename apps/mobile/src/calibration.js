@@ -1,5 +1,6 @@
 import { requireOptionalNativeModule } from 'expo-modules-core';
 import { assertProfile, defaultProfile } from '@tapping/controller';
+import { usesPhoneCalibration } from './consoleport-sync.js';
 const native = requireOptionalNativeModule('TappingPurchases');
 const defaults = () => ({ left: { invertX: false, invertY: false, deadzone: 0.12 }, right: { invertX: false, invertY: false, deadzone: 0.12 } });
 let current = defaults();
@@ -26,10 +27,13 @@ export const calibration = {
   },
   standard(value = current, profile = defaultProfile) {
     return assertProfile({ ...profile, mappings: profile.mappings.map(mapping => {
-      const stick = mapping.controlId === 'left-stick' ? value.left : mapping.controlId === 'right-stick' ? value.right : null;
+      const stick = mapping.outputs[0] === 'lx' ? value.left : mapping.outputs[0] === 'rx' ? value.right : null;
       if (!stick) return mapping;
+      // Existing receiver mirrors can retain mappings from before the movement
+      // direction fix. Give all standard/synced movement sticks the same baseline.
+      const invertY = usesPhoneCalibration(profile) && mapping.outputs[0] === 'lx' ? true : !!mapping.invertY;
       // Calibration reverses the profile's default direction when enabled.
-      return { ...mapping, ...stick, invertX: !!mapping.invertX !== stick.invertX, invertY: !!mapping.invertY !== stick.invertY };
+      return { ...mapping, ...stick, invertX: !!mapping.invertX !== stick.invertX, invertY: invertY !== stick.invertY };
     }) });
   },
 };

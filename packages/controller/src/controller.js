@@ -31,7 +31,7 @@ export function validateProfile(profile) {
   Array.from(profile.controls).forEach((control, index) => {
     const path = `controls[${index}]`;
     if (!record(control)) { errors.push(`${path} must be an object`); return; }
-    if (!onlyKeys(control, ['id', 'type', 'label', 'frame', 'color', 'icon', 'badge', 'layers'])) errors.push(`${path} has unknown fields`);
+    if (!onlyKeys(control, ['id', 'type', 'label', 'customLabel', 'frame', 'color', 'icon', 'badge', 'layers'])) errors.push(`${path} has unknown fields`);
     const icon = value => typeof value === 'string' && /^[a-z0-9_]{1,128}$/.test(value);
     if (control.icon !== undefined && !icon(control.icon)) errors.push(`${path}.icon must be a WoW icon name`);
     if (control.badge !== undefined && !shortText(control.badge)) errors.push(`${path}.badge is invalid`);
@@ -42,6 +42,7 @@ export function validateProfile(profile) {
     if (!shortText(control.id) || ids.has(control.id)) errors.push(`${path}.id must be unique and contain 1–80 characters`);
     else ids.set(control.id, control.type);
     if (!TYPES.includes(control.type)) errors.push(`${path}.type is unsupported`);
+    if (control.customLabel !== undefined && !shortText(control.customLabel)) errors.push(`${path}.customLabel must contain 1–80 characters`);
     if (!shortText(control.label)) errors.push(`${path}.label must contain 1–80 characters`);
     if (control.color !== undefined && (typeof control.color !== 'string' || !/^#[0-9a-f]{6}$/i.test(control.color))) errors.push(`${path}.color must be a hex RGB color`);
     const frame = control.frame;

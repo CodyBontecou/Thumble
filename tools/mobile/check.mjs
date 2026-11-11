@@ -9,7 +9,7 @@ if (releaseLock && fileHash(path.join(root, 'package-lock.json')) !== releaseLoc
 
 run('npm', ['run', 'lint', '--workspace', '@tapping/mobile']);
 run('npm', ['run', 'typecheck', '--workspace', '@tapping/mobile']);
-const tests = ['connection', 'calibration', 'onboarding', 'monetization', 'cloud-mobile', 'mobile-release']
+const tests = ['connection', 'calibration', 'layout-editor', 'onboarding', 'monetization', 'cloud-mobile', 'mobile-release']
   .map(name => `tools/test/${name}.test.js`);
 const directory = 'packages/controller/test';
 for (const name of readdirSync(path.join(root, directory)).sort()) {
