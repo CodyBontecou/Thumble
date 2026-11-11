@@ -7,6 +7,7 @@ import tempfile
 import uuid
 
 from websockets.asyncio.client import connect
+from websockets.exceptions import ConnectionClosed
 
 from .access import Access
 from .output import GuardedOutput, MemoryOutput, native_output
@@ -49,7 +50,13 @@ async def selftest(native=False):
 
                     async def receive(kind):
                         while True:
-                            value = json.loads(await asyncio.wait_for(socket.recv(), 3))
+                            try:
+                                value = json.loads(await asyncio.wait_for(socket.recv(), 3))
+                            except ConnectionClosed as error:
+                                # CI must distinguish a native driver failure from
+                                # a wire assertion, without logging pairing data.
+                                native_error = str(output.error) if output.error else 'none recorded'
+                                raise RuntimeError(f'Receiver closed while waiting for {kind}; native output error: {native_error}') from error
                             if value['type'] == kind:
                                 return value
 

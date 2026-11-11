@@ -35,9 +35,14 @@ For isolated macOS WebKit QA, run `bash tools/workspace-ui-tests/build-macos.sh`
 
 ## Verification recorded during implementation
 
-- Shared editing tests pass; the existing 299 source tests pass.
+- All 10 shared editing tests pass; the existing 299 source tests pass. The Python receiver suite passes 86 tests (two platform-specific skips on macOS).
 - One transaction fixture runs against Swift and Python. It covers draft persistence, optimistic revision checks, unchanged active content after draft saves, stale selection refusal and active-profile deletion protection.
 - Native macOS WebKit window: create, save and exact-revision selection verified through the UI against an isolated real store.
 - Native Qt WebEngine window on macOS: automated create/save/select flow and screenshot pass, including clean process exit. This verifies the Qt bridge but does not substitute for Windows/Linux packaging execution.
 - Chromium/Argent: actual pointer dragging, saving, profile selection and connection page inspected using the simulated receiver.
-- Windows/Linux CI and real-phone acceptance remain to be verified for this branch. The previously observed Linux native gamepad self-test failure must be investigated from an actual runner result; it is not waived by the shared UI checks.
+- Windows and Linux packaged-application checks passed on the initial implementation, including native gamepad output and installed workspace save/send. The final recovery changes require another package pass and visual inspection of its stable-canvas captures.
+- WoW label sync preserves desktop identity and unsent drafts in both Swift and Python. The real phone Connection class negotiates and saves profiles against the Python receiver in transport integration tests.
+
+## Scope
+
+This workspace edits the current gamepad/WoW profile format. Arbitrary keyboard shortcuts and trackpad controls from the older ThumbConsole are not yet implemented. The preview canvas uses a chosen logical viewport; it does not automatically discover the connected phone's screen dimensions. Physical-phone and real-game acceptance on Windows/Linux remains outstanding.

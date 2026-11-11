@@ -165,6 +165,11 @@ import ServiceManagement
         }
     }
     @objc private func quit() { NSApp.terminate(nil) }
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard let studio else { return .terminateNow }
+        studio.confirmQuit { sender.reply(toApplicationShouldTerminate: $0) }
+        return .terminateLater
+    }
     func applicationWillTerminate(_ notification: Notification) { cloudPairing.stop(); receiver.stop() }
 }
 // Exercise the real signed HID backend without opening a listener or reading user data.

@@ -98,6 +98,12 @@ try {
   const retried = await connection.adoptProfile(profile, source, adopted.activationRevision);
   assert.equal(retried.activationRevision, adopted.activationRevision);
   assert.equal(retried.adoption.profileId, adopted.adoption.profileId);
+  assert.equal(connection.phoneProfileSaveSupported, true);
+  const phoneDraft = { ...structuredClone(connection.layout.profile), id: 'phone-' + 'a'.repeat(32), name: 'Phone-edited controller' };
+  const savedPhone = await connection.savePhoneProfile(phoneDraft, retried.activationRevision, 0);
+  assert.equal(connection.layout.profile.id, phoneDraft.id);
+  assert.equal(connection.layout.revision, savedPhone.activationRevision);
+  assert(!connection.canPlay && !connection.recovering && !connection.layoutPending);
   assert.match(connection.remembered?.reconnectToken ?? '', /^[a-f0-9]{64}$/);
   const remembered = { ...connection.remembered };
   connection.suspend(); // Checkout/background must retain trust and release input.
@@ -105,11 +111,11 @@ try {
   await wait(() => connection.snapshot().phase === 'connected' && connection.access && !connection.layoutPending && !connection.recovering);
   if (expectUdp) await wait(() => connection.inputTransport === 'udp');
   assert.deepEqual(connection.remembered, remembered);
-  assert.equal(connection.layout.profile.id, adopted.adoption.profileId);
+  assert.equal(connection.layout.profile.id, phoneDraft.id);
   assert(!connection.canPlay);
   connection.resumePlay();
   await wait(() => connection.canPlay && !connection.recovering);
-  console.log(`PASS real phone connection: TLS, select, render, neutral ACK, resume, input, cloud adoption, reconnect, transport=${connection.inputTransport}, chat=${expectChat}`);
+  console.log(`PASS real phone connection: TLS, select, render, neutral ACK, resume, input, cloud adoption, phone editing, reconnect, transport=${connection.inputTransport}, chat=${expectChat}`);
 } finally {
   connection.disconnect();
 }

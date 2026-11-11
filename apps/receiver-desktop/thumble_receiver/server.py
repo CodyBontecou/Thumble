@@ -83,7 +83,7 @@ class Session:
         self.leases[lease] = now + 0.5
         value = dict(type=kind, seq=self.sequence, lease=lease)
         if kind == 'ready':
-            value.update(access=1, profiles=1, cloudAdoption=1)
+            value.update(access=1, profiles=1, cloudAdoption=1, phoneProfileSave=1)
             if self.chat_available:
                 value['chat'] = 1
         return value

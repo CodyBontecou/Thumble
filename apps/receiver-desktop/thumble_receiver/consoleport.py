@@ -112,19 +112,21 @@ def make_profile(snapshot, source, lookup=None):
     profile = validate_profile(source)
     require(profile.get('theme') == 'consoleport', 'Select a ConsolePort controller to enable automatic sync.')
     guid = snapshot['character']['guid']
-    profile['id'] = 'consoleport-' + hashlib.sha256(guid.encode()).hexdigest()[:24]
-    profile['name'] = short_label(snapshot['character']['name'] + ' · ConsolePort')
+    edited = re.fullmatch(r'(?:phone|desktop)-[a-f0-9]{32}', profile['id']) is not None
+    if not edited:
+        profile['id'] = 'consoleport-' + hashlib.sha256(guid.encode()).hexdigest()[:24]
+        profile['name'] = short_label(snapshot['character']['name'] + ' · ConsolePort')
     by_output = {KEY_MAP[button['key']]: button for button in snapshot['consolePortLayout']}
     mappings = {mapping['controlId']: mapping['outputs'][0] for mapping in profile['mappings']}
     for control in profile['controls']:
-        if control['type'] == 'stick':
+        if control['type'] == 'stick' or (edited and control['id'] == 'chat'):
             continue
         output = mappings[control['id']]
         previous_layers = control.pop('layers', None)
         control.pop('icon', None)
         button = by_output.get(output)
         if button is None:
-            if previous_layers is not None:
+            if previous_layers is not None and not edited:
                 control['label'] = control.get('badge', output.upper())
             continue
         layers = {}
@@ -142,7 +144,9 @@ def make_profile(snapshot, source, lookup=None):
             if label != 'Unbound' and icon:
                 display['icon'] = icon
             layers[layer['modifier']] = display
-        control.update(label=layers['']['label'], layers=layers)
+        if not edited:
+            control['label'] = layers['']['label']
+        control['layers'] = layers
         if 'icon' in layers['']:
             control['icon'] = layers['']['icon']
     profile['modifiers'] = {key: KEY_MAP.get(snapshot['modifiers'][cvar], 'none')
@@ -157,9 +161,15 @@ def commit(store, profile, snapshot, source_path, expected):
         active = data.get('active')
         if not active or active['profile'] != profile:
             entry = next((entry for entry in data['profiles'] if entry['profile']['id'] == profile['id']), None)
+            if entry and (entry.get('phoneEdited') or entry.get('desktopEdited')) and active and active['profile']['id'] == profile['id']:
+                require(entry['revision'] == active['profileRevision'], 'Saved draft changed. Send it before syncing WoW labels.')
             revision = (entry['revision'] if entry else 0) + 1
             require(integer(revision, 1) and (entry or len(data['profiles']) < 256))
             updated = dict(revision=revision, profile=profile)
+            if entry:
+                for key in ('phoneEdited', 'desktopEdited'):
+                    if entry.get(key) is True:
+                        updated[key] = True
             if entry:
                 data['profiles'][data['profiles'].index(entry)] = updated
             else:

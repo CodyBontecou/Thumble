@@ -7,7 +7,7 @@ from pathlib import Path
 import sys
 
 from PySide6.QtCore import QObject, Signal, Slot, QUrl
-from PySide6.QtWidgets import QMainWindow, QFileDialog, QApplication
+from PySide6.QtWidgets import QMainWindow, QFileDialog, QApplication, QMessageBox
 from PySide6.QtWebChannel import QWebChannel
 from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineSettings
 from PySide6.QtWebEngineWidgets import QWebEngineView
@@ -108,6 +108,8 @@ class Bridge(QObject):
                     path, _ = QFileDialog.getSaveFileName(owner.studio, 'Export controller', 'controller.json', 'Controller JSON (*.json)')
                     if path:
                         Path(path).write_bytes(encoded(profile))
+                    self.finish(request_id, dict(exported=bool(path)), None)
+                    return
                 else:
                     raise ValueError('Unknown workspace operation.')
                 action = lambda: None
@@ -167,9 +169,23 @@ class WorkspaceWindow(QMainWindow):
         if self.owner.quitting:
             event.accept()
             return
-        # Native beforeunload handling preserves unsaved editor changes.
         event.ignore()
-        self.page.triggerAction(QWebEnginePage.WebAction.RequestClose)
+        # Closing to tray preserves the page and its draft. Actual Quit checks
+        # unsaved changes before terminating the receiver.
+        if self.owner.tray.isVisible():
+            self.hide()
+        else:
+            self.owner.quit()
 
     def dispose(self):
         self.bridge.executor.shutdown(wait=True, cancel_futures=True)
+
+    def confirm_quit(self, completion):
+        def received(dirty):
+            if dirty:
+                result = QMessageBox.question(self, 'Discard unsaved changes?', 'Your controller has unsaved changes. Quit without saving?',
+                    QMessageBox.StandardButton.Discard | QMessageBox.StandardButton.Cancel, QMessageBox.StandardButton.Cancel)
+                completion(result == QMessageBox.StandardButton.Discard)
+            else:
+                completion(True)
+        self.page.runJavaScript('Boolean(window.thumbleHasUnsavedChanges?.())', received)

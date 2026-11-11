@@ -292,6 +292,12 @@ class Window(QMainWindow):
         self.studio.activateWindow()
 
     def quit(self):
+        if not self.quitting and self.studio is not None:
+            self.studio.confirm_quit(lambda confirmed: self.finish_quit() if confirmed else None)
+            return
+        self.finish_quit()
+
+    def finish_quit(self):
         self.quitting = True
         self.status.setText('Releasing controls…')
         if self.runtime.thread and self.runtime.thread.is_alive():
@@ -373,12 +379,11 @@ def smoke(args, path):
                 active = ProfileStore(args.profile_dir).read().get('active')
                 if not active or active['profileRevision'] != 1 or not active['profile']['id'].startswith('desktop-'):
                     raise RuntimeError('Native bridge did not select the exact saved revision')
-                destination = Path(path); destination.parent.mkdir(parents=True, exist_ok=True)
-                if not window.studio.grab().save(str(destination)):
-                    raise RuntimeError('Could not save desktop workspace screenshot')
                 result['step'] = 4
-                application.exit(0)
-            if result['step'] < 4:
+            elif step == 4:
+                window.studio.page.runJavaScript("document.querySelectorAll('.pad-control').length > 0 && document.querySelector('#canvas').getBoundingClientRect().width > 300 && Number(getComputedStyle(document.querySelector('.device')).opacity) >= 0.99 && document.getAnimations().every(a => a.playState !== 'running')", ready_to_capture)
+                return
+            if result['step'] < 6:
                 QTimer.singleShot(100, poll)
         except Exception as error:
             result['error'] = error
@@ -387,9 +392,26 @@ def smoke(args, path):
     def poll():
         window.studio.page.runJavaScript('document.body.innerText', received)
 
+    def ready_to_capture(ready):
+        if ready:
+            result['step'] = 5
+            # Give Qt's compositor a frame after the DOM reports stable paint.
+            QTimer.singleShot(100, capture)
+        else:
+            QTimer.singleShot(100, poll)
+
+    def capture():
+        destination = Path(path); destination.parent.mkdir(parents=True, exist_ok=True)
+        if not window.studio.grab().save(str(destination)):
+            result['error'] = RuntimeError('Could not save desktop workspace screenshot')
+            application.exit(1)
+            return
+        result['step'] = 6
+        application.exit(0)
+
     QTimer.singleShot(100, poll)
     def timeout():
-        if result['step'] < 4:
+        if result['step'] < 6:
             result['error'] = RuntimeError('Workspace renderer timed out before completing step ' + str(result['step']))
             application.exit(1)
     QTimer.singleShot(65000, timeout)
@@ -397,7 +419,7 @@ def smoke(args, path):
         application.exec()
         if result['error']:
             raise result['error']
-        if result['step'] != 4:
+        if result['step'] != 6:
             raise RuntimeError('Workspace smoke ended before completing the native save/send flow')
     finally:
         window.studio.dispose()

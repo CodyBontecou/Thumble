@@ -1,4 +1,4 @@
-import { Editor, copy, newProfile, canvasSize, outputNames, outputs, issues, moveControl, updateControl, setOutput, addControl, removeControl, acknowledged } from './model.js';
+import { Editor, copy, newProfile, canvasSize, outputNames, outputs, issues, moveControl, updateControl, setOutput, addControl, removeControl, acknowledged, signature, controlBox, labelColor, profileState } from './model.js';
 import { defaultProfile } from '../../controller/src/index.js';
 import { request } from './bridge.js';
 
@@ -25,6 +25,7 @@ const actions = (...children) => el('div', { class: 'actions' }, children);
 const small = text => el('p', { class: 'muted' }, text);
 const field = (label, node, help) => el('label', { class: 'field' }, label, node, help && el('span', { class: 'field-help' }, help));
 const currentEntry = () => snapshot?.profiles.find(entry => entry.profile.id === editor?.profile.id);
+window.thumbleHasUnsavedChanges = () => !!editor?.dirty;
 const dirtyConfirm = action => {
   if (!editor?.dirty) return action();
   confirmDialog('Discard unsaved changes?', 'Your last saved controller will remain available.', 'Discard changes', action);
@@ -104,13 +105,13 @@ function header() {
     el('div', { class: 'connection-chip' }, el('span', { class: `dot ${receiver.connected ? 'online' : ''}` }), receiver.connected ? 'Phone connected' : receiver.running ? 'Ready to pair' : 'Receiver unavailable'));
 }
 function toolbarActions() {
-  return actions(button('Undo', () => { editor.undo(); render(); }, { disabled: busy || !editor.past.length, title: 'Undo (⌘/Ctrl Z)' }), button('Redo', () => { editor.redo(); render(); }, { disabled: busy || !editor.future.length }),
+  return actions(button(editor.dirty ? 'Export draft' : 'Export', () => exportProfile(editor.profile), { disabled: busy }), button('Undo', () => { editor.undo(); render(); }, { disabled: busy || !editor.past.length, title: 'Undo (⌘/Ctrl Z)' }), button('Redo', () => { editor.redo(); render(); }, { disabled: busy || !editor.future.length }),
     button('Save controller', save, { disabled: busy || !editor.dirty, class: 'accent' }), button('Send to phone', send, { disabled: busy || editor.dirty || !currentEntry(), class: 'primary' }));
 }
 function design() {
   const toolbar = el('div', { class: 'toolbar' }, el('div', {}, el('h1', {}, editor.profile.name), el('small', {}, editor.dirty ? 'Unsaved changes' : `Revision ${editor.revision || 'new'} · ${currentEntry()?.editable ? 'Your controller' : 'Original controller'}`)), el('div', { id: 'toolbar-actions' }, toolbarActions()));
   const sidebar = el('aside', { class: 'sidebar', 'aria-label': 'Controllers and controls' }, el('p', { class: 'eyebrow' }, 'Your controllers'),
-    snapshot.profiles.map(entry => button([el('strong', {}, entry.profile.name), el('small', {}, snapshot.active?.profile.id === entry.profile.id ? 'Selected for phone' : entry.editable ? 'Custom controller' : 'Original')], () => dirtyConfirm(() => loadEntry(entry)), { class: 'profile-row', 'aria-pressed': editor.profile.id === entry.profile.id })),
+    snapshot.profiles.map(entry => button([el('strong', {}, entry.profile.name), el('small', {}, profileState(entry, snapshot) === 'selected' ? 'Selected for phone' : profileState(entry, snapshot) === 'draft' ? `Draft r${entry.revision} · phone r${snapshot.active.profileRevision}` : entry.editable ? 'Custom controller' : 'Original')], () => dirtyConfirm(() => loadEntry(entry)), { class: 'profile-row', 'aria-pressed': editor.profile.id === entry.profile.id })),
     button('+ New controller', createController, { class: 'new' }), el('hr', { class: 'separator' }), el('p', { class: 'eyebrow' }, 'Controls'), el('div', { id: 'layers' }, layers()));
   const center = el('section', { class: 'canvas-region', 'aria-label': 'Design canvas' }, el('div', { class: 'canvas-heading' }, el('span', {}, 'LANDSCAPE CONTROLLER'), el('span', {}, `${viewport.width} × ${viewport.height} PT`)), el('div', { class: 'device' }, el('div', { id: 'canvas', class: 'canvas', role: 'group', 'aria-label': 'Controller layout', tabIndex: 0, style: { aspectRatio: `${viewport.width}/${viewport.height}` } })),
     el('p', { class: 'canvas-caption' }, 'Select a control to edit it. Drag to move; drag its corner to resize. Arrow keys nudge, Shift moves faster.'), el('div', { class: 'canvas-tools' }, button('+ Button', () => add('button')), button('+ Trigger', () => add('trigger')), button('+ Stick', () => add('stick'))));
@@ -134,8 +135,8 @@ function renderCanvas() {
   const canvas = document.querySelector('#canvas'); if (!canvas) return;
   canvas.replaceChildren(el('span', { class: 'chrome chat' }, 'CHAT'), el('span', { class: 'chrome menu' }, 'MENU'));
   for (const control of editor.profile.controls) {
-    const f = control.frame;
-    const node = button(el('span', { class: 'control-label' }, control.customLabel ?? control.label), () => {}, { class: `pad-control ${editor.selected === control.id ? 'selected' : ''}`, 'aria-label': `${control.customLabel ?? control.label}, ${control.type}`, 'aria-pressed': editor.selected === control.id, 'data-id': control.id, 'data-type': control.type, style: { left: `${f.x * 100}%`, top: `${f.y * 100}%`, width: `${f.width * 100}%`, height: `${f.height * 100}%`, ...(control.color ? { backgroundColor: control.color } : {}) } });
+    const f = controlBox(control, viewport);
+    const node = button(el('span', { class: 'control-label', style: { color: labelColor(control.color) } }, control.customLabel ?? control.label), () => {}, { class: `pad-control ${editor.selected === control.id ? 'selected' : ''}`, 'aria-label': `${control.customLabel ?? control.label}, ${control.type}`, 'aria-pressed': editor.selected === control.id, 'data-id': control.id, 'data-type': control.type, style: { left: `${f.x * 100}%`, top: `${f.y * 100}%`, width: `${f.width * 100}%`, height: `${f.height * 100}%`, ...(control.color ? { backgroundColor: control.color } : {}) } });
     if (editor.selected === control.id) node.append(el('span', { class: 'resize', 'aria-label': 'Resize control', role: 'presentation' }));
     node.addEventListener('pointerdown', event => beginDrag(event, control.id));
     node.addEventListener('keydown', event => {
@@ -158,7 +159,7 @@ function beginDrag(event, id) {
   const move = e => {
     if (e.pointerId !== event.pointerId) return;
     const profile = moveControl(original, id, (e.clientX - startX) / bounds.width, (e.clientY - startY) / bounds.height, resize, viewport);
-    const f = profile.controls.find(c => c.id === id).frame;
+    const f = controlBox(profile.controls.find(c => c.id === id), viewport);
     Object.assign(node.style, { left: `${f.x * 100}%`, top: `${f.y * 100}%`, width: `${f.width * 100}%`, height: `${f.height * 100}%` });
     editor.profile = profile;
   };
@@ -211,7 +212,7 @@ function add(type) {
 function createController(source = defaultProfile) {
   dirtyConfirm(() => { editor = new Editor(newProfile(uid('desktop'), source), 0); editor.saved = null; page = 'design'; status('New controller. Save it when you’re ready.'); render(); });
 }
-function exportProfile(profile) { perform('export', { profile }, () => status('Controller export finished.')); }
+function exportProfile(profile) { perform('export', { profile }, result => status(result.exported ? 'Controller exported.' : 'Export cancelled.')); }
 function controllers() {
   return el('main', { class: 'panel-page' }, el('h1', {}, 'A controller for every setup.'), el('p', { class: 'intro' }, 'Design on your computer. Keep originals intact, save your own controllers, and send a specific revision to your phone.'),
     actions(button('+ New controller', () => createController(), { class: 'primary' }), field('Import controller JSON', el('input', { type: 'file', accept: '.json,application/json', 'aria-label': 'Import controller JSON', onChange: async e => {
@@ -224,7 +225,8 @@ function controllers() {
       } catch (error) { status(`Could not import controller: ${error.message}`, true); }
     } }))), el('div', { class: 'cards', style: { marginTop: '24px' } }, snapshot.profiles.map(entry => {
       const selected = snapshot.active?.profile.id === entry.profile.id;
-      return el('article', { class: 'card' }, el('span', { class: 'badge' }, selected ? 'SELECTED FOR PHONE' : entry.editable ? 'YOUR CONTROLLER' : 'ORIGINAL'), el('h2', {}, entry.profile.name), el('p', {}, `${entry.profile.controls.length} controls · revision ${entry.revision}`), actions(
+      const state = profileState(entry, snapshot);
+      return el('article', { class: 'card' }, el('span', { class: 'badge' }, state === 'selected' ? 'SELECTED FOR PHONE' : state === 'draft' ? `NEWER DRAFT · PHONE USES REVISION ${snapshot.active.profileRevision}` : entry.editable ? 'YOUR CONTROLLER' : 'ORIGINAL'), el('h2', {}, entry.profile.name), el('p', {}, `${entry.profile.controls.length} controls · revision ${entry.revision}`), actions(
         button('Open in editor', () => dirtyConfirm(() => { loadEntry(entry); page = 'design'; render(); })), button('Duplicate', () => createController(entry.profile)), button('Export', () => exportProfile(entry.profile)),
         entry.editable && button('Delete', () => confirmDialog('Delete this controller?', 'This removes the saved controller from this computer. Export a copy first if you want a backup.', 'Delete controller', () => perform('delete', { profileId: entry.profile.id, expectedProfileRevision: entry.revision, expectedActivationRevision: snapshot.activationRevision }, () => { if (editor.profile.id === entry.profile.id) loadEntry(snapshot.profiles[0]); status('Controller deleted.'); })), { class: 'danger', disabled: selected || busy, title: selected ? 'Select another controller before deleting this one.' : 'Delete saved controller' })));
     })));
@@ -272,12 +274,12 @@ async function refresh() {
         else status('This controller changed elsewhere. Export your draft or reopen the saved controller before saving.', true);
       }
       if (!document.querySelector('[role=dialog]') && !/INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName)) {
-        if (page === 'connections' || JSON.stringify(previous?.profiles) !== JSON.stringify(next.profiles)) render();
+        if (page === 'connections' || signature(previous?.profiles) !== signature(next.profiles)) render();
         else { document.querySelector('header')?.replaceWith(header()); renderActions(); renderStatus(); }
       }
     }
   } catch (error) {
-    if (!snapshot) root.replaceChildren(el('main', { class: 'panel-page' }, el('h1', {}, 'The workspace couldn’t open.'), el('p', { class: 'intro' }, error.message), button('Try again', refresh, { class: 'primary' })));
+    if (!snapshot || !editor) root.replaceChildren(el('main', { class: 'panel-page' }, el('h1', {}, 'The workspace couldn’t open.'), el('p', { class: 'intro' }, error.message), button('Try again', refresh, { class: 'primary' })));
     else status(error.message, true);
   }
 }

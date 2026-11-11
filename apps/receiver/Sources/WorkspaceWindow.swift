@@ -32,6 +32,16 @@ import ServiceManagement
         }
     }
     func show() { NSApp.activate(ignoringOtherApps: true); window.makeKeyAndOrderFront(nil) }
+    func confirmQuit(_ completion: @escaping (Bool) -> Void) {
+        web.evaluateJavaScript("Boolean(window.thumbleHasUnsavedChanges?.())") { value, error in
+            if value as? Bool == true || error != nil {
+                let alert = NSAlert(); alert.messageText = "Discard unsaved changes?"
+                alert.informativeText = "Your controller has unsaved changes. Quit without saving?"
+                alert.addButton(withTitle: "Cancel"); alert.addButton(withTitle: "Discard and Quit")
+                completion(alert.runModal() == .alertSecondButtonReturn)
+            } else { completion(true) }
+        }
+    }
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
         decisionHandler(navigationAction.request.url?.standardizedFileURL == entry?.standardizedFileURL && navigationAction.targetFrame != nil ? .allow : .cancel)
     }
@@ -49,6 +59,8 @@ import ServiceManagement
                 try CloudProfile.validate(profile)
                 let panel = NSSavePanel(); panel.nameFieldStringValue = "controller.json"; panel.canCreateDirectories = true
                 if panel.runModal() == .OK, let url = panel.url { try JSONSerialization.data(withJSONObject: profile, options: [.prettyPrinted, .sortedKeys]).write(to: url, options: .atomic) }
+                else { reply(id, result: ["exported": false], error: nil); return }
+                reply(id, result: ["exported": true], error: nil); return
             case "settings":
                 guard Set(payload.keys).isSubset(of: ["syncEnabled", "startAtLogin"]), payload.values.allSatisfy({ CloudProfile.boolean($0) }) else { throw ProfileCatalog.Failure.invalid }
                 if let enabled = payload["syncEnabled"] as? Bool { UserDefaults.standard.set(!enabled, forKey: "consolePortSyncDisabled") }

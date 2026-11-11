@@ -1,9 +1,26 @@
 import { assertProfile, validateLayout, BUTTONS, TRIGGERS, defaultProfile } from '../../controller/src/index.js';
 
 export const copy = value => JSON.parse(JSON.stringify(value));
+export const signature = value => JSON.stringify(value, (_key, item) => item && typeof item === 'object' && !Array.isArray(item) ? Object.fromEntries(Object.keys(item).sort().map(key => [key, item[key]])) : item);
 export const canvasSize = { width: 844, height: 390 };
 export const outputNames = { a: 'A', b: 'B', x: 'X', y: 'Y', lb: 'LB', rb: 'RB', lt: 'LT', rt: 'RT', ls: 'L3', rs: 'R3', start: 'Menu', back: 'View', guide: 'Guide', up: 'D-pad up', down: 'D-pad down', left: 'D-pad left', right: 'D-pad right', lx: 'Move', rx: 'Look' };
 export const acknowledged = snapshot => !!snapshot?.receiver.running && !!snapshot.receiver.connected && !!snapshot.receiver.layoutAcknowledged && snapshot.receiver.revision === snapshot.activationRevision;
+export function profileState(entry, snapshot) {
+  if (snapshot.active?.profile.id !== entry.profile.id) return 'saved';
+  return snapshot.active.profileRevision === entry.revision ? 'selected' : 'draft';
+}
+export function labelColor(color = '#3c473d') {
+  const channels = color.slice(1).match(/../g).map(hex => parseInt(hex, 16) / 255).map(value => value <= .04045 ? value / 12.92 : ((value + .055) / 1.055) ** 2.4);
+  const luminance = channels[0] * .2126 + channels[1] * .7152 + channels[2] * .0722;
+  return luminance > .179 ? '#000000' : '#ffffff';
+}
+export function controlBox(control, viewport = canvasSize) {
+  const f = control.frame;
+  if (control.type !== 'stick') return f;
+  const side = Math.min(f.width * viewport.width, f.height * viewport.height);
+  const width = side / viewport.width, height = side / viewport.height;
+  return { x: f.x+(f.width-width)/2, y: f.y+(f.height-height)/2, width, height };
+}
 const clamp = (n, low, high) => Math.min(high, Math.max(low, n));
 
 export function issues(profile, viewport = canvasSize) {
@@ -79,9 +96,9 @@ export class Editor {
     this.profile = copy(profile); this.saved = copy(profile); this.revision = revision;
     this.past = []; this.future = []; this.selected = null;
   }
-  get dirty() { return JSON.stringify(this.profile) !== JSON.stringify(this.saved); }
+  get dirty() { return signature(this.profile) !== signature(this.saved); }
   commit(profile) {
-    if (JSON.stringify(profile) === JSON.stringify(this.profile)) return;
+    if (signature(profile) === signature(this.profile)) return;
     this.past.push(copy(this.profile)); if (this.past.length > 100) this.past.shift();
     this.profile = copy(profile); this.future = [];
   }

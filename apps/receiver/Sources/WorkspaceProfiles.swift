@@ -9,6 +9,10 @@ enum WorkspaceProfiles {
     static func snapshot(_ directory: URL) throws -> [String: Any] {
         let store = try ProfileCatalog.read(directory)
         let entries = store["profiles"] as? [[String: Any]] ?? []
+        for entry in entries {
+            guard let profile = entry["profile"] as? [String: Any] else { throw ProfileCatalog.Failure.invalid }
+            try CloudProfile.validate(profile)
+        }
         let active = store["active"] as? [String: Any]
         return ["profiles": entries.map { ["profile": $0["profile"]!, "revision": $0["revision"]!, "editable": editable($0)] },
                 "active": active as Any? ?? NSNull(), "activationRevision": ProfileCatalog.revision(active?["revision"]) ?? 0]

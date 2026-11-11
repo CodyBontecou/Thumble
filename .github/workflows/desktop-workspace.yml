@@ -35,6 +35,8 @@ jobs:
           mkdir -p build/workspace-tests
           swiftc -swift-version 5 apps/receiver/Sources/ProfileCatalog.swift apps/receiver/Sources/CloudProfile.swift apps/receiver/Sources/WorkspaceProfiles.swift tools/workspace-profile-tests/main.swift -o build/workspace-tests/contracts
           build/workspace-tests/contracts packages/desktop-workspace/test/contracts.json
+      - name: Verify WoW label sync preserves desktop drafts
+        run: npm run test:consoleport-sync
       - name: Typecheck the production Mac receiver and build the native workspace
         run: |
           swiftc -swift-version 5 -typecheck -import-objc-header apps/receiver/Sources/Gamepad.h apps/receiver/Sources/*.swift

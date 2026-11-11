@@ -47,5 +47,5 @@ window.thumblePreviewHost = async (operation, payload) => {
     const blob = new Blob([JSON.stringify(payload.profile, null, 2)], { type: 'application/json' });
     const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = 'controller.json'; link.click(); setTimeout(() => URL.revokeObjectURL(link.href), 1000);
   } else if (!['snapshot', 'copy-pairing', 'setup-driver'].includes(operation)) throw Error('Unknown preview operation.');
-  persist(); return copy(state);
+  persist(); return operation === 'export' ? { exported: true } : copy(state);
 };

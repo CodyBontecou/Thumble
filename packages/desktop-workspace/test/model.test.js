@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { defaultProfile } from '../../controller/src/index.js';
-import { Editor, copy, newProfile, moveControl, addControl, removeControl, setOutput, issues, acknowledged } from '../src/model.js';
+import { Editor, copy, newProfile, moveControl, addControl, removeControl, setOutput, issues, acknowledged, controlBox, labelColor, profileState } from '../src/model.js';
 
 test('undo/redo restores the exact saved profile and does not mutate originals', () => {
   const editor = new Editor(defaultProfile, 1), original = copy(defaultProfile);
@@ -48,4 +48,29 @@ test('an old phone acknowledgement cannot confirm a newer selected controller', 
   assert.equal(acknowledged(snapshot), false);
   snapshot.receiver.revision = 3; assert.equal(acknowledged(snapshot), true);
   snapshot.receiver.connected = false; assert.equal(acknowledged(snapshot), false);
+});
+test('native JSON key order does not create false edits or undo steps', () => {
+  const editor = new Editor(defaultProfile, 1);
+  const reordered = Object.fromEntries(Object.entries(copy(defaultProfile)).reverse());
+  editor.commit(reordered);
+  assert.equal(editor.dirty, false); assert.equal(editor.past.length, 0);
+});
+test('stick preview matches the actual centered circular touch area', () => {
+  const control = { type: 'stick', frame: { x: .1, y: .2, width: .3, height: .3 } };
+  const box = controlBox(control);
+  assert.ok(Math.abs(box.width * 844 - box.height * 390) < .0001);
+  assert.ok(Math.abs(box.x + box.width/2 - .25) < .0001);
+  assert.ok(Math.abs(box.y + box.height/2 - .35) < .0001);
+});
+test('bright custom controls use dark labels and dark controls use light labels', () => {
+  assert.equal(labelColor('#ffdd44'), '#000000');
+  assert.equal(labelColor('#ffffff'), '#000000');
+  assert.equal(labelColor('#101a13'), '#ffffff');
+});
+test('a newer saved draft is not presented as the revision selected for the phone', () => {
+  const entry = { profile: { id: 'desktop-test' }, revision: 2 };
+  const snapshot = { active: { profile: { id: 'desktop-test' }, profileRevision: 1 } };
+  assert.equal(profileState(entry, snapshot), 'draft');
+  snapshot.active.profileRevision = 2; assert.equal(profileState(entry, snapshot), 'selected');
+  snapshot.active.profile.id = 'another'; assert.equal(profileState(entry, snapshot), 'saved');
 });
