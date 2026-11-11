@@ -32,7 +32,8 @@
     "start": "expo start --dev-client --port 8088",
     "android": "expo run:android --port 8088",
     "ios": "expo run:ios --port 8088",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "eas-build-post-install": "node ../../tools/mobile/check.mjs"
   },
   "private": true,
   "devDependencies": {

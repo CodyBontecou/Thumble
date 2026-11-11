@@ -23,7 +23,10 @@
     "website:dev": "node tools/website/deploy.mjs --preview",
     "website:deploy": "node tools/website/deploy.mjs",
     "website:optimize": "node tools/website/optimize-lighthouse.mjs apps/website",
-    "website:verify": "node tools/website/verify-live.mjs"
+    "website:verify": "node tools/website/verify-live.mjs",
+    "mobile:check": "node tools/mobile/check.mjs",
+    "mobile:smoke:ios": "node tools/mobile/ios-smoke.mjs",
+    "mobile:release": "node tools/mobile/release.mjs"
   },
   "engines": {
     "node": ">=22"

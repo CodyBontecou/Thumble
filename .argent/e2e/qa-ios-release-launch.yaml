@@ -1,0 +1,9 @@
+# Run with npm run mobile:smoke:ios so the install target is bound to the artifact.
+steps:
+  - script:
+      path: ../../tools/mobile/clean-install.mjs
+      timeout: 60000
+  - launch: com.thumble.ios
+  - await: { visible: { id: welcome-start }, timeout: 15000 }
+  - await: { idle: true, stableFor: 3000, timeout: 15000 }
+  - assert: { visible: { id: welcome-start } }

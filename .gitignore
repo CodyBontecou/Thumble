@@ -38,3 +38,5 @@ __pycache__/
 
 # Machine-local Argent test credentials
 .argent/secrets.env
+
+/apps/mobile/credentials.json
