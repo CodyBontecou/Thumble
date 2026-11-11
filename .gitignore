@@ -40,3 +40,4 @@ __pycache__/
 .argent/secrets.env
 
 /apps/mobile/credentials.json
+apps/receiver-desktop/thumble_receiver/workspace/

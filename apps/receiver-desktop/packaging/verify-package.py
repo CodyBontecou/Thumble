@@ -40,7 +40,7 @@ def main():
     report = ROOT / 'build/desktop/gui-installed.png'
     # The Windows offscreen plugin doesn't discover system fonts and produces
     # missing-glyph boxes. Exercise the actual shipped Windows renderer instead.
-    environment = {**os.environ, 'QT_QPA_PLATFORM': 'windows' if sys.platform == 'win32' else 'offscreen'}
+    environment = {**os.environ, 'QT_QPA_PLATFORM': 'windows' if sys.platform == 'win32' else 'xcb'}
     with tempfile.TemporaryDirectory(prefix='thumble install ') as temporary:
         folder = Path(temporary)
         if sys.platform == 'win32':

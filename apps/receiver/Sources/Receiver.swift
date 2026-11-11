@@ -171,6 +171,7 @@ final class Receiver {
         }
     }
     func suspend() { queue.async { self.disconnect("Computer sleeping · controls released") } }
+    func workspaceDisconnect() { queue.async { self.disconnect("Phone disconnected · controls released") } }
     func resetPairing() { queue.async {
         do { try self.rememberedPhone.reset() }
         catch { self.disconnect("Could not forget phone · unlock Keychain and retry"); return }
@@ -476,6 +477,7 @@ final class Receiver {
     }
     private func publishProfileStatus() {
         profiles.writeStatus(["updatedAt": Date().timeIntervalSince1970 * 1000, "connected": peer != nil,
+                              "running": gamepad != nil && port > 0, "layoutAcknowledged": peer != nil && !layoutPending,
                               "ready": peer != nil && !layoutPending && (profileCapable || profileRevision == 0), "revision": profileRevision, "pro": pro, "receiverId": accessInfo["receiverId"] ?? ""])
     }
     private func acknowledge(_ connection: NWConnection, type: String, sequence: Int, timing: [String: Double]? = nil, udp: NWConnection? = nil, reconnectToken: String? = nil) {

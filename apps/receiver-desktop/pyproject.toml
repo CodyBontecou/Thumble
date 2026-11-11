@@ -13,6 +13,7 @@ dependencies = [
   "qrcode==8.2",
   "pypng==0.20220715.0",
   "PySide6-Essentials==6.10.3",
+  "PySide6-Addons==6.10.3",
   "evdev==1.9.2; sys_platform == 'linux'",
   "vgamepad @ https://github.com/yannbouteiller/vgamepad/archive/3f910aa8bbde49a576683db74ad5e4a0879f8a80.zip ; sys_platform == 'win32'",
 ]
@@ -24,4 +25,4 @@ thumble-receiver = "thumble_receiver.__main__:main"
 include = ["thumble_receiver*"]
 
 [tool.setuptools.package-data]
-thumble_receiver = ["BuiltInProfiles.json", "Icon.png"]
+thumble_receiver = ["BuiltInProfiles.json", "Icon.png", "workspace/*"]

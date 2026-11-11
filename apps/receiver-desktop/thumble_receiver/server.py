@@ -31,7 +31,7 @@ def decode(text, adoption=False):
     value = load_json(text)
     if not isinstance(value, dict):
         raise ProtocolError('Expected object')
-    if len(text.encode('utf-8')) > 4096 and value.get('type') != 'profile-adopt':
+    if len(text.encode('utf-8')) > 4096 and value.get('type') not in ('profile-adopt', 'profile-save'):
         raise ProtocolError('Only authenticated profile adoption accepts large messages')
     return value
 
@@ -60,6 +60,7 @@ class Session:
 
     def status(self):
         return dict(updatedAt=time.time() * 1000, connected=True,
+                    layoutAcknowledged=not self.layout_pending,
                     ready=not self.layout_pending and not self.paused,
                     revision=self.revision, pro=self.access.pro, receiverId=self.access.receiver_id)
 
@@ -119,7 +120,7 @@ class Session:
             self.pause()
             self.last_input = self.clock()
             return [self.ack('paused')]
-        if kind in ('profiles-list', 'profile-select', 'profile-adopt', 'chat'):
+        if kind in ('profiles-list', 'profile-select', 'profile-adopt', 'profile-save', 'chat'):
             # Do not advertise unfinished features, or leave older clients waiting.
             request = message.get('id')
             if isinstance(request, str) and 0 < len(request.encode()) <= 80:
@@ -296,6 +297,9 @@ class ReceiverServer:
                 if kind == 'profile-select':
                     catalog, active = await self.work(self.profiles.select, message.get('profileId'),
                                                        message.get('profileRevision'), message.get('expectedActivationRevision'))
+                elif kind == 'profile-save':
+                    catalog, active = await self.work(self.profiles.save_phone, message.get('profile'),
+                                                       message.get('expectedActivationRevision'), message.get('expectedProfileRevision'))
                 else:
                     catalog, active = await self.work(self.profiles.adopt, message.get('profile'),
                                                        message.get('source'), message.get('expectedActivationRevision'))
@@ -433,7 +437,7 @@ class ReceiverServer:
             ticker = asyncio.create_task(tick())
             async for text in socket:
                 message = decode(text, adoption=True)
-                if message.get('type') in ('profiles-list', 'profile-select', 'profile-adopt', 'chat'):
+                if message.get('type') in ('profiles-list', 'profile-select', 'profile-adopt', 'profile-save', 'chat'):
                     operation = self.chat_request if message.get('type') == 'chat' else self.profile_request
                     task = asyncio.create_task(operation(socket, session, message))
                     profile_tasks.add(task)
@@ -536,7 +540,7 @@ class ReceiverServer:
                             revision=self.active['revision'] if self.active else 0,
                             pro=False, receiverId=self.access.receiver_id)
                         await self.work(self.profiles.write_status, status)
-                        self.on_status({**status, 'sync': self.sync.detail})
+                        self.on_status({**status, 'sync': self.sync.detail, 'running': True})
                         if count % 4 == 0:
                             await self.work(self.pairing_image.publish, self.current_invitation, self.invitation.expires)
                     except (OSError, ValueError, TypeError, KeyError) as error:

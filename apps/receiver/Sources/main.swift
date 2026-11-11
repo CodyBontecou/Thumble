@@ -1,5 +1,6 @@
 import AppKit
 import CoreImage
+import ServiceManagement
 
 @MainActor final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
@@ -18,6 +19,8 @@ import CoreImage
     private let qr = NSImageView()
     private let code = NSTextField(wrappingLabelWithString: "")
     private var invitation = ""
+    private var studio: WorkspaceWindow!
+    private var workspaceRunning = false
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem.button?.image = NSImage(systemSymbolName: "gamecontroller", accessibilityDescription: "Thumble Wi-Fi controller")
@@ -27,7 +30,7 @@ import CoreImage
         testing.isEnabled = false
         menu.addItem(.separator())
 #endif
-        menu.addItem(withTitle: "Pair phone…", action: #selector(showPairing), keyEquivalent: "")
+        menu.addItem(withTitle: "Open Thumble Studio…", action: #selector(showPairing), keyEquivalent: "")
         shareItem = menu.addItem(withTitle: "Pair through ChatGPT…", action: #selector(sharePairing), keyEquivalent: "")
         stopShareItem = menu.addItem(withTitle: "Stop ChatGPT pairing", action: #selector(stopSharing), keyEquivalent: "")
         stopShareItem.isHidden = true
@@ -65,6 +68,32 @@ import CoreImage
         cloudPairing.onStatus = { [weak self] message in self?.label.stringValue = message }
         cloudPairing.onSharing = { [weak self] sharing in self?.shareItem.isHidden = sharing; self?.stopShareItem.isHidden = !sharing }
         NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(sleep), name: NSWorkspace.willSleepNotification, object: nil)
+        let directory = ProcessInfo.processInfo.environment["TAPPING_PROFILE_DIR"].map { URL(fileURLWithPath: $0, isDirectory: true) }
+            ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/Tapping/profiles", isDirectory: true)
+        studio = WorkspaceWindow(directory: directory)
+        studio.receiverState = { [weak self] in
+            guard let self else { return [:] }
+            var pairing: [String: Any]?
+            if let data = try? Data(contentsOf: directory.appendingPathComponent("pairing-code.json")), data.count < 262144,
+               let value = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let expires = value["expiresAt"] as? Double, expires > Date().timeIntervalSince1970*1000 { pairing = value }
+            return ["platform": "macOS", "receiver": ["running": self.workspaceRunning, "connected": false, "ready": false, "detail": self.label.stringValue],
+                    "pairing": pairing as Any? ?? NSNull(), "sync": ["detail": self.syncStatusItem.title],
+                    "settings": ["syncEnabled": !UserDefaults.standard.bool(forKey: "consolePortSyncDisabled"), "startAtLogin": SMAppService.mainApp.status == .enabled,
+                                 "wowPaths": UserDefaults.standard.string(forKey: "consolePortWoWFolder").map { [$0] } ?? []]]
+        }
+        studio.action = { [weak self] operation, _ in
+            guard let self else { return }
+            switch operation {
+            case "disconnect": self.receiver.workspaceDisconnect()
+            case "forget": self.reset()
+            case "retry": if !self.workspaceRunning { self.startReceiver() }
+            case "copy-pairing": self.copyLink()
+            case "choose-wow-folder": self.chooseWoWFolder()
+            case "setup-driver": self.enableControllerAccess()
+            default: break
+            }
+        }
         startReceiver()
         // Agents can display the code in chat; the menu still opens this window on demand.
         if ProcessInfo.processInfo.arguments.contains("--show-pairing") { showPairing() }
@@ -72,9 +101,11 @@ import CoreImage
     private func startReceiver() {
         do {
             try receiver.start()
+            workspaceRunning = true
             waitingForControllerAccess = false
             accessButton.isHidden = true; retryButton.isHidden = true; qr.isHidden = false
         } catch ReceiverError.virtualGamepadUnavailable {
+            workspaceRunning = false
             waitingForControllerAccess = true
             qr.isHidden = true
             if !CGPreflightPostEventAccess() {
@@ -87,6 +118,7 @@ import CoreImage
             retryButton.isHidden = false
             showPairing()
         } catch {
+            workspaceRunning = false
             if case ReceiverError.message(let message) = error { label.stringValue = message }
             else { label.stringValue = "Receiver could not start: \(error.localizedDescription)" }
             showPairing()
@@ -113,7 +145,7 @@ import CoreImage
         // Opt-in local QA export. Contains a temporary pairing secret; never log it.
         if let path = ProcessInfo.processInfo.environment["TAPPING_INVITATION_FILE"] { FileManager.default.createFile(atPath: path, contents: Data(value.utf8), attributes: [.posixPermissions: 0o600]) }
     }
-    @objc private func showPairing() { NSApp.activate(ignoringOtherApps: true); window.makeKeyAndOrderFront(nil) }
+    @objc private func showPairing() { studio?.show() }
     @objc private func sharePairing() { cloudPairing.start(window: window) }
     @objc private func stopSharing() { cloudPairing.stop() }
     @objc private func copyLink() { guard !invitation.isEmpty else { return }; NSPasteboard.general.clearContents(); NSPasteboard.general.setString(invitation, forType: .string) }

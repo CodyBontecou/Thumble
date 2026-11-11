@@ -189,7 +189,7 @@ class Window(QMainWindow):
         self.tray = QSystemTrayIcon(self.windowIcon(), self)
         self.tray.setToolTip('Thumble Receiver')
         menu = QMenu(self)
-        for label, action in (('Pair phone…', self.show_pairing), ('Pair through ChatGPT…', runtime.share),
+        for label, action in (('Open Thumble Studio…', self.show_pairing), ('Pair through ChatGPT…', runtime.share),
                               ('Stop ChatGPT sharing', runtime.unshare),
                               ('Disconnect and pair again', runtime.disconnect), ('Quit Thumble Receiver', self.quit)):
             item = QAction(label, self)
@@ -204,6 +204,7 @@ class Window(QMainWindow):
         runtime.events.cloud.connect(self.cloud_status.setText)
         runtime.events.error.connect(lambda message: self.status.setText('Receiver unavailable: ' + message))
         runtime.events.finished.connect(self.finished)
+        self.studio = None
 
     def set_invitation(self, invitation):
         self.invitation = invitation
@@ -282,9 +283,13 @@ class Window(QMainWindow):
             QTimer.singleShot(100, self.runtime.start)
 
     def show_pairing(self):
-        self.showNormal()
-        self.raise_()
-        self.activateWindow()
+        if self.studio is None:
+            from .workspace import WorkspaceWindow
+            self.studio = WorkspaceWindow(self)
+            self.studio.page.windowCloseRequested.connect(self.studio.hide)
+        self.studio.showNormal()
+        self.studio.raise_()
+        self.studio.activateWindow()
 
     def quit(self):
         self.quitting = True
@@ -295,6 +300,9 @@ class Window(QMainWindow):
             QApplication.instance().quit()
 
     def closeEvent(self, event):
+        if self.quitting:
+            event.accept()
+            return
         event.ignore()
         if self.tray.isVisible() and not self.quitting:
             self.hide()
@@ -311,9 +319,11 @@ def run_gui(args, settings=None):
     runtime = Runtime(args)
     window = Window(runtime, args, settings or {})
     if not args.background or not window.tray.isVisible():
-        window.show()
+        window.show_pairing()
     runtime.start()
     result = application.exec()
+    if window.studio is not None:
+        window.studio.dispose()
     runtime.stop()
     if runtime.thread:
         runtime.thread.join(timeout=15)
@@ -321,20 +331,75 @@ def run_gui(args, settings=None):
 
 
 def smoke(args, path):
+    import json
+    import tempfile
+    from time import monotonic
+    from .profiles import ProfileStore
     application = QApplication.instance() or QApplication([])
+    temporary = tempfile.TemporaryDirectory(prefix='thumble-workspace-smoke-')
+    args = copy(args)
+    args.data_dir = Path(temporary.name)
+    args.profile_dir = args.data_dir / 'profiles'
+    args.wow_dir = []
     runtime = Runtime(args)
     window = Window(runtime, args, {})
     window.set_invitation(Invitation('192.168.1.2', 8765, '0' * 64).renew())
     window.status.setText('UI test · synthetic pairing code')
-    window.show()
+    window.show_pairing()
+    deadline = monotonic() + 60
+    result = {'step': 0, 'error': None}
+    click = "Array.from(document.querySelectorAll('button')).find(b=>b.textContent===%s)?.click()"
 
-    def capture():
-        destination = Path(path)
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        if not window.grab().save(str(destination)):
-            raise RuntimeError('Could not save desktop UI screenshot')
-        application.quit()
+    def received(text):
+        try:
+            if monotonic() > deadline:
+                raise RuntimeError('Shared desktop workspace did not finish its native save/send flow: ' + str(text)[:200])
+            step = result['step']
+            if step == 0 and text and 'your controllers' in text.lower():
+                result['step'] = 1
+                window.studio.page.runJavaScript(click % json.dumps('+ New controller'))
+            elif step == 1 and text and 'Unsaved changes' in text:
+                result['step'] = 2
+                window.studio.page.runJavaScript(click % json.dumps('Save controller'))
+            elif step == 2 and text and 'Saved on this computer.' in text:
+                store = ProfileStore(args.profile_dir).read()
+                if store.get('active') is not None:
+                    raise RuntimeError('Saving a draft activated it')
+                if not any(e.get('desktopEdited') for e in store['profiles']):
+                    raise RuntimeError('Native bridge did not save a desktop controller')
+                result['step'] = 3
+                window.studio.page.runJavaScript(click % json.dumps('Send to phone'))
+            elif step == 3 and text and 'Selected. This controller' in text:
+                active = ProfileStore(args.profile_dir).read().get('active')
+                if not active or active['profileRevision'] != 1 or not active['profile']['id'].startswith('desktop-'):
+                    raise RuntimeError('Native bridge did not select the exact saved revision')
+                destination = Path(path); destination.parent.mkdir(parents=True, exist_ok=True)
+                if not window.studio.grab().save(str(destination)):
+                    raise RuntimeError('Could not save desktop workspace screenshot')
+                result['step'] = 4
+                application.exit(0)
+            if result['step'] < 4:
+                QTimer.singleShot(100, poll)
+        except Exception as error:
+            result['error'] = error
+            application.exit(1)
 
-    QTimer.singleShot(150, capture)
-    application.exec()
-    print('PASS: desktop pairing window and QR rendering')
+    def poll():
+        window.studio.page.runJavaScript('document.body.innerText', received)
+
+    QTimer.singleShot(100, poll)
+    def timeout():
+        if result['step'] < 4:
+            result['error'] = RuntimeError('Workspace renderer timed out before completing step ' + str(result['step']))
+            application.exit(1)
+    QTimer.singleShot(65000, timeout)
+    try:
+        application.exec()
+        if result['error']:
+            raise result['error']
+        if result['step'] != 4:
+            raise RuntimeError('Workspace smoke ended before completing the native save/send flow')
+    finally:
+        window.studio.dispose()
+        temporary.cleanup()
+    print('PASS: bundled shared workspace, native bridge, isolated draft save, exact revision selection and native rendering')

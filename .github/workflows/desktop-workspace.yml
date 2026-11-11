@@ -1,0 +1,41 @@
+name: Desktop workspace
+on:
+  pull_request:
+    paths:
+      - 'packages/desktop-workspace/**'
+      - 'apps/receiver/Sources/**'
+      - 'tools/workspace-*/**'
+      - 'package*.json'
+      - '.github/workflows/desktop-workspace.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'packages/desktop-workspace/**'
+      - 'apps/receiver/Sources/**'
+      - 'tools/workspace-*/**'
+      - 'package*.json'
+      - '.github/workflows/desktop-workspace.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  macos-workspace:
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --workspace @tapping/controller --workspace @tapping/desktop-workspace --include-workspace-root --ignore-scripts
+      - run: npm run desktop:test
+      - name: Verify native Mac revision and activation contract
+        run: |
+          mkdir -p build/workspace-tests
+          swiftc -swift-version 5 apps/receiver/Sources/ProfileCatalog.swift apps/receiver/Sources/CloudProfile.swift apps/receiver/Sources/WorkspaceProfiles.swift tools/workspace-profile-tests/main.swift -o build/workspace-tests/contracts
+          build/workspace-tests/contracts packages/desktop-workspace/test/contracts.json
+      - name: Typecheck the production Mac receiver and build the native workspace
+        run: |
+          swiftc -swift-version 5 -typecheck -import-objc-header apps/receiver/Sources/Gamepad.h apps/receiver/Sources/*.swift
+          bash tools/workspace-ui-tests/build-macos.sh

@@ -1,0 +1,29 @@
+{
+  "viewport": { "width": 844, "height": 390 },
+  "profile": {
+    "schemaVersion": 1,
+    "id": "desktop-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "name": "Shared contract controller",
+    "controls": [
+      { "id": "jump", "type": "button", "label": "Jump", "customLabel": "Jump", "frame": { "x": 0.1, "y": 0.3, "width": 0.08, "height": 0.15 } },
+      { "id": "move", "type": "stick", "label": "Move", "frame": { "x": 0.5, "y": 0.3, "width": 0.2, "height": 0.3 } }
+    ],
+    "mappings": [
+      { "controlId": "jump", "outputs": ["a"] },
+      { "controlId": "move", "outputs": ["lx", "ly"], "deadzone": 0.14, "sensitivity": 1.1, "invertX": false }
+    ]
+  },
+  "steps": [
+    { "operation": "save", "expected": 0, "name": "First draft", "profileRevision": 1, "activationRevision": 0 },
+    { "operation": "save", "expected": 1, "name": "Second draft", "profileRevision": 2, "activationRevision": 0 },
+    { "operation": "save", "expected": 1, "name": "Stale phone edit", "error": true, "profileRevision": 2, "activationRevision": 0 },
+    { "operation": "save", "expected": 2, "name": "  ", "error": true, "profileRevision": 2, "activationRevision": 0 },
+    { "operation": "save", "expected": 2, "name": "Too small", "small": true, "error": true, "profileRevision": 2, "activationRevision": 0 },
+    { "operation": "activate", "expected": 1, "activation": 0, "error": true, "profileRevision": 2, "activationRevision": 0 },
+    { "operation": "activate", "expected": 2, "activation": 0, "profileRevision": 2, "activationRevision": 1, "activeName": "Second draft" },
+    { "operation": "save", "expected": 2, "name": "Saved without sending", "profileRevision": 3, "activationRevision": 1, "activeName": "Second draft" },
+    { "operation": "delete", "expected": 3, "activation": 1, "error": true, "profileRevision": 3, "activationRevision": 1, "activeName": "Second draft" },
+    { "operation": "activate", "expected": 3, "activation": 0, "error": true, "profileRevision": 3, "activationRevision": 1, "activeName": "Second draft" },
+    { "operation": "activate", "expected": 3, "activation": 1, "profileRevision": 3, "activationRevision": 2, "activeName": "Saved without sending" }
+  ]
+}
