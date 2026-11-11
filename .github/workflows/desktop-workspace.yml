@@ -5,6 +5,9 @@ on:
       - 'packages/desktop-workspace/**'
       - 'apps/receiver/Sources/**'
       - 'tools/workspace-*/**'
+      - 'tools/desktop-input-tests/**'
+      - 'packages/controller/**'
+      - 'apps/receiver/Resources/DesktopKeys.json'
       - 'package*.json'
       - '.github/workflows/desktop-workspace.yml'
   push:
@@ -13,6 +16,9 @@ on:
       - 'packages/desktop-workspace/**'
       - 'apps/receiver/Sources/**'
       - 'tools/workspace-*/**'
+      - 'tools/desktop-input-tests/**'
+      - 'packages/controller/**'
+      - 'apps/receiver/Resources/DesktopKeys.json'
       - 'package*.json'
       - '.github/workflows/desktop-workspace.yml'
   workflow_dispatch:
@@ -41,3 +47,7 @@ jobs:
         run: |
           swiftc -swift-version 5 -typecheck -import-objc-header apps/receiver/Sources/Gamepad.h apps/receiver/Sources/*.swift
           bash tools/workspace-ui-tests/build-macos.sh
+      - name: Verify native Mac keyboard and pointer event construction
+        run: |
+          swiftc -swift-version 5 apps/receiver/Sources/ProfileCatalog.swift apps/receiver/Sources/CloudProfile.swift apps/receiver/Sources/Report.swift apps/receiver/Sources/DesktopInput.swift tools/desktop-input-tests/main.swift -o build/workspace-tests/desktop-input
+          build/workspace-tests/desktop-input

@@ -29,17 +29,25 @@ class State:
     ry: float = 0
     lt: float = 0
     rt: float = 0
+    desktop: object = None
 
     @classmethod
     def parse(cls, value):
-        if not isinstance(value, dict) or set(value) != set(cls.__dataclass_fields__):
+        if not isinstance(value, dict) or set(value) - {'desktop'} != set(cls.__dataclass_fields__) - {'desktop'}:
             raise ValueError("Expected exactly seven state fields")
         if not integer(value['buttons'], maximum=32767):
             raise ValueError("Invalid buttons")
         for key in ('lx', 'ly', 'rx', 'ry', 'lt', 'rt'):
             if not number(value[key]) or not (-1 if key[1] != 't' else 0) <= value[key] <= 1:
                 raise ValueError("Invalid axis")
+        if value.get('desktop') is not None:
+            from .desktop_input import validate
+            value = {**value, 'desktop': validate(value['desktop'])}
         return cls(**value)
+
+    @property
+    def is_neutral(self):
+        return not any((self.buttons,self.lx,self.ly,self.rx,self.ry,self.lt,self.rt)) and (not self.desktop or not any(self.desktop.values()))
 
     @property
     def mask(self):

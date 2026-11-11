@@ -6,6 +6,7 @@ mkdir -p "$task_app/Contents/MacOS" "$task_app/Contents/Resources/Workspace"
 node "$task_root/packages/desktop-workspace/build.mjs"
 cp "$task_root/build/desktop-workspace/"* "$task_app/Contents/Resources/Workspace/"
 cp "$task_root/apps/receiver/Resources/BuiltInProfiles.json" "$task_app/Contents/Resources/"
+cp "$task_root/apps/receiver/Resources/DesktopKeys.json" "$task_app/Contents/Resources/"
 xcrun swiftc -swift-version 5 -module-cache-path "$task_root/build/workspace-tests/swift-cache" \
   "$task_root/apps/receiver/Sources/WorkspaceWindow.swift" "$task_root/apps/receiver/Sources/WorkspaceProfiles.swift" \
   "$task_root/apps/receiver/Sources/CloudProfile.swift" "$task_root/apps/receiver/Sources/ProfileCatalog.swift" \

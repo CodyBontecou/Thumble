@@ -1,9 +1,9 @@
-import { assertProfile, validateLayout, BUTTONS, TRIGGERS, defaultProfile } from '../../controller/src/index.js';
+import { assertProfile, validateLayout, BUTTONS, TRIGGERS, defaultProfile, desktopKeys, desktopLabels, mouseOutputs } from '../../controller/src/index.js';
 
 export const copy = value => JSON.parse(JSON.stringify(value));
 export const signature = value => JSON.stringify(value, (_key, item) => item && typeof item === 'object' && !Array.isArray(item) ? Object.fromEntries(Object.keys(item).sort().map(key => [key, item[key]])) : item);
 export const canvasSize = { width: 844, height: 390 };
-export const outputNames = { a: 'A', b: 'B', x: 'X', y: 'Y', lb: 'LB', rb: 'RB', lt: 'LT', rt: 'RT', ls: 'L3', rs: 'R3', start: 'Menu', back: 'View', guide: 'Guide', up: 'D-pad up', down: 'D-pad down', left: 'D-pad left', right: 'D-pad right', lx: 'Move', rx: 'Look' };
+export const outputNames = { ...desktopLabels, 'mouse:left': 'Left click', 'mouse:right': 'Right click', 'mouse:middle': 'Middle click', pointer: 'Trackpad', a: 'A', b: 'B', x: 'X', y: 'Y', lb: 'LB', rb: 'RB', lt: 'LT', rt: 'RT', ls: 'L3', rs: 'R3', start: 'Menu', back: 'View', guide: 'Guide', up: 'D-pad up', down: 'D-pad down', left: 'D-pad left', right: 'D-pad right', lx: 'Move', rx: 'Look' };
 export const acknowledged = snapshot => !!snapshot?.receiver.running && !!snapshot.receiver.connected && !!snapshot.receiver.layoutAcknowledged && snapshot.receiver.revision === snapshot.activationRevision;
 export function profileState(entry, snapshot) {
   if (snapshot.active?.profile.id !== entry.profile.id) return 'saved';
@@ -32,7 +32,7 @@ export function issues(profile, viewport = canvasSize) {
 }
 
 export function outputs(type) {
-  return type === 'stick' ? ['lx', 'rx'] : type === 'trigger' ? [...TRIGGERS] : [...BUTTONS];
+  return type === 'key' ? [...desktopKeys] : type === 'mouse' ? [...mouseOutputs] : type === 'trackpad' ? ['pointer'] : type === 'stick' ? ['lx', 'rx'] : type === 'trigger' ? [...TRIGGERS] : [...BUTTONS];
 }
 
 export function newProfile(id, source = defaultProfile) {
@@ -61,7 +61,7 @@ export function setOutput(profile, id, output, settings = {}) {
   const control = profile.controls.find(item => item.id === id);
   if (!control || !outputs(control.type).includes(output)) throw Error('Choose a compatible gamepad output.');
   const target = control.type === 'stick' ? [output, output === 'lx' ? 'ly' : 'ry'] : [output];
-  if (control.type !== 'button' && profile.mappings.some(m => m.controlId !== id && m.outputs.some(o => target.includes(o)))) throw Error('That analog output is already assigned.');
+  if (['stick', 'trigger'].includes(control.type) && profile.mappings.some(m => m.controlId !== id && m.outputs.some(o => target.includes(o)))) throw Error('That analog output is already assigned.');
   return { ...profile, mappings: profile.mappings.map(mapping => mapping.controlId === id ? { ...mapping, ...settings, outputs: target } : mapping) };
 }
 
@@ -71,14 +71,14 @@ export function removeControl(profile, id) {
 }
 
 export function addControl(profile, type, id, viewport = canvasSize) {
-  if (!['button', 'trigger', 'stick'].includes(type)) throw Error('Unknown control type.');
+  if (!['button', 'trigger', 'stick', 'key', 'mouse', 'trackpad'].includes(type)) throw Error('Unknown control type.');
   if (profile.controls.length >= 64) throw Error('A controller can have up to 64 controls.');
   let available = outputs(type);
   const used = new Set(profile.mappings.flatMap(m => m.outputs));
-  if (type !== 'button') available = available.filter(o => !used.has(o));
+  if (['stick', 'trigger'].includes(type)) available = available.filter(o => !used.has(o));
   const output = available.find(o => !used.has(o)) ?? available[0];
   if (!output) throw Error('Both analog outputs are assigned. Remove or remap one first.');
-  const side = type === 'stick' ? 104 : 56;
+  const side = ['stick', 'trackpad'].includes(type) ? 104 : 56;
   for (let y = 56; y + side <= viewport.height; y += 8) {
     for (let x = 0; x + side <= viewport.width; x += 8) {
       const control = { id, type, label: outputNames[output], frame: { x: x / viewport.width, y: y / viewport.height, width: side / viewport.width, height: side / viewport.height } };
@@ -106,3 +106,18 @@ export class Editor {
   redo() { if (this.future.length) { this.past.push(this.profile); this.profile = this.future.pop(); } }
   markSaved(revision) { this.saved = copy(this.profile); this.revision = revision; }
 }
+
+export function setChord(profile, id, keys) {
+  const next = { ...profile, mappings: profile.mappings.map(m => m.controlId === id ? { controlId: id, outputs: keys } : m) };
+  assertProfile(next); return next;
+}
+export const desktopProfile = {
+  schemaVersion: 1, id: 'keyboard-mouse', name: 'Keyboard and mouse',
+  controls: [
+    { id: 'trackpad', type: 'trackpad', label: 'Trackpad', frame: { x: .35, y: .2, width: .58, height: .64 } },
+    { id: 'left-click', type: 'mouse', label: 'Left click', frame: { x: .04, y: .4, width: .13, height: .2 } },
+    { id: 'right-click', type: 'mouse', label: 'Right click', frame: { x: .19, y: .4, width: .13, height: .2 } },
+    { id: 'space', type: 'key', label: 'Space', frame: { x: .04, y: .67, width: .28, height: .17 } },
+  ],
+  mappings: [{ controlId: 'trackpad', outputs: ['pointer'] },{ controlId: 'left-click', outputs: ['mouse:left'] },{ controlId: 'right-click', outputs: ['mouse:right'] },{ controlId: 'space', outputs: ['key:Space'] }],
+};

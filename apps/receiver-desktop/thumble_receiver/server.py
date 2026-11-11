@@ -83,7 +83,7 @@ class Session:
         self.leases[lease] = now + 0.5
         value = dict(type=kind, seq=self.sequence, lease=lease)
         if kind == 'ready':
-            value.update(access=1, profiles=1, cloudAdoption=1, phoneProfileSave=1)
+            value.update(access=1, profiles=1, cloudAdoption=1, phoneProfileSave=1, desktopInput=1)
             if self.chat_available:
                 value['chat'] = 1
         return value
@@ -144,6 +144,9 @@ class Session:
             self.tcp_sequence = sequence
             return []
         state = State.parse(message.get('state'))
+        from .desktop_input import matches_profile
+        if not matches_profile(state.desktop, self.profile):
+            raise ProtocolError('Keyboard/mouse input does not match the selected controller')
         lease = message.get('lease')
         if not isinstance(lease, str) or self.clock() > self.leases.get(lease, float('-inf')):
             return []
@@ -152,7 +155,7 @@ class Session:
                 or (not self.paused and self.clock() - self.last_input >= 0.3)):
             self.pause()
             return [self.ack('paused')]
-        if self.paused and state != NEUTRAL:
+        if self.paused and not state.is_neutral:
             return []
         self.paused = False
         self.sequence, self.last_input = sequence, self.clock()

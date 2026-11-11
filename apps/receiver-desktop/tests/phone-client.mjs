@@ -5,7 +5,9 @@ import { createHash, createCipheriv, createDecipheriv } from 'node:crypto';
 import dgram from 'node:dgram';
 import WebSocket from 'ws';
 import { Connection } from '../../mobile/src/connection-core.js';
-import { neutralState } from '@tapping/controller';
+import { Controller, neutralState } from '@tapping/controller';
+
+import { desktopProfile } from '../../../packages/desktop-workspace/src/model.js';
 
 let input = '';
 for await (const chunk of process.stdin) input += chunk;
@@ -99,7 +101,8 @@ try {
   assert.equal(retried.activationRevision, adopted.activationRevision);
   assert.equal(retried.adoption.profileId, adopted.adoption.profileId);
   assert.equal(connection.phoneProfileSaveSupported, true);
-  const phoneDraft = { ...structuredClone(connection.layout.profile), id: 'phone-' + 'a'.repeat(32), name: 'Phone-edited controller' };
+  assert.equal(connection.desktopInputSupported, true);
+  const phoneDraft = { ...structuredClone(desktopProfile), id: 'phone-' + 'a'.repeat(32), name: 'Phone-edited controller' };
   const savedPhone = await connection.savePhoneProfile(phoneDraft, retried.activationRevision, 0);
   assert.equal(connection.layout.profile.id, phoneDraft.id);
   assert.equal(connection.layout.revision, savedPhone.activationRevision);
@@ -109,12 +112,20 @@ try {
   connection.suspend(); // Checkout/background must retain trust and release input.
   await connection.reconnect();
   await wait(() => connection.snapshot().phase === 'connected' && connection.access && !connection.layoutPending && !connection.recovering);
-  if (expectUdp) await wait(() => connection.inputTransport === 'udp');
+  assert.equal(connection.inputTransport, 'wss');
   assert.deepEqual(connection.remembered, remembered);
   assert.equal(connection.layout.profile.id, phoneDraft.id);
   assert(!connection.canPlay);
   connection.resumePlay();
   await wait(() => connection.canPlay && !connection.recovering);
+  const desktop = new Controller(phoneDraft);
+  connection.submit(desktop.update('space',true));
+  await wait(() => connection.pending.size === 0);
+  connection.submit(desktop.update('left-click',true));
+  connection.submit(desktop.update('trackpad',[12,8,0,1]));
+  await wait(() => connection.pending.size === 0);
+  connection.submit(desktop.releaseAll());
+  await wait(() => connection.pending.size === 0);
   console.log(`PASS real phone connection: TLS, select, render, neutral ACK, resume, input, cloud adoption, phone editing, reconnect, transport=${connection.inputTransport}, chat=${expectChat}`);
 } finally {
   connection.disconnect();

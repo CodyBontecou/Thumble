@@ -62,6 +62,7 @@ mkdir -p "$task_app/Contents/Resources/Workspace"
 cp "$task_root/build/desktop-workspace/"* "$task_app/Contents/Resources/Workspace/"
 node "$task_root/tools/export-builtin-profiles.mjs"
 cp "$task_root/apps/receiver/Resources/BuiltInProfiles.json" "$task_app/Contents/Resources/BuiltInProfiles.json"
+cp "$task_root/apps/receiver/Resources/DesktopKeys.json" "$task_app/Contents/Resources/"
 cp "$task_root/apps/receiver/Info.plist" "$task_app/Contents/Info.plist"
 if [[ "$task_mode" == '--testflight' ]]; then
   /usr/libexec/PlistBuddy -c 'Set :CFBundleName Thumble TestFlight Receiver' "$task_app/Contents/Info.plist"

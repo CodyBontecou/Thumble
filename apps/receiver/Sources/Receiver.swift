@@ -49,6 +49,7 @@ final class Receiver {
     private var token = ""
     private var expiry = 0.0
     private var fingerprint = ""
+    private let desktopOutput = DesktopInput()
     private var state = PadState.neutral
     var onStatus: ((String) -> Void)?
     var onInvitation: ((String) -> Void)?
@@ -299,10 +300,11 @@ final class Receiver {
         guard message["type"] as? String == "input", let sequence = message["seq"] as? Int, sequence > lastSequence, sequence <= 9_007_199_254_740_991,
               let object = message["state"] as? [String: Any], let next = PadState.parse(object)
         else { disconnect("Invalid or stale input · controls released"); return }
+        guard next.desktop?.matches(activeProfile) ?? true else { disconnect("Keyboard/mouse input does not match the selected controller"); return }
         // Expired packets are discarded without refreshing the watchdog. The peer can
         // recover only through a fresh server-clock lease and neutral input.
         guard let lease = message["lease"] as? String, let deadline = leases[lease], InputTiming.leaseIsFresh(now: now, deadline: deadline) else { diagnostics?.note(udp == nil ? "wssExpiredLease" : "udpExpiredLease"); return }
-        guard !paused || next == .neutral else { return }
+        guard !paused || next.isNeutral else { return }
         let wasPaused = paused; paused = false
         diagnostics?.note(udp == nil ? "wssAccepted" : "udpAccepted")
         lastSequence = sequence; lastInput = now
@@ -487,7 +489,7 @@ final class Receiver {
         let lease = UUID().uuidString; leases[lease] = InputTiming.leaseDeadline(issuedAt: now)
         if leases.count > 256 { disconnect("Input rate exceeded"); return }
         var response: [String: Any] = ["type": type, "seq": sequence, "lease": lease]
-        if type == "ready" { response["chat"] = 1; response["profiles"] = 1; response["access"] = 1; response["cloudAdoption"] = 1; response["phoneProfileSave"] = 1; response["phoneBindings"] = 1 }
+        if type == "ready" { response["chat"] = 1; response["profiles"] = 1; response["access"] = 1; response["cloudAdoption"] = 1; response["phoneProfileSave"] = 1; response["phoneBindings"] = 1; response["desktopInput"] = 1 }
         if let reconnectToken { response["reconnectToken"] = reconnectToken }
         if type == "ready", diagnostics != nil { response["diagnostics"] = true }
         if var timing { timing["ackMs"] = ProcessInfo.processInfo.systemUptime * 1000; response["timing"] = timing }
@@ -510,6 +512,7 @@ final class Receiver {
         let result = next.report.withUnsafeBufferPointer { tapping_gamepad_send(gamepad, $0.baseAddress!) }
         audit?.record(next.report, result: result)
         state = next
+        do { try desktopOutput.write(next.desktop) } catch { status(error.localizedDescription); return false }
         return result == 0
     }
     private func release() { apply(.neutral) }

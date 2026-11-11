@@ -5,3 +5,7 @@ header{height:72px;border-bottom:1px solid var(--line);display:flex;align-items:
 @media(max-width:1100px){.workspace{grid-template-columns:175px minmax(340px,1fr) 225px}.inspector{padding:16px}.canvas-region{padding:30px 16px}.studio{display:none}header{gap:18px;padding:0 18px}}@media(prefers-reduced-motion:no-preference){button{transition:background-color .12s ease,border-color .12s ease}}
 
 .toolbar>div:first-child{min-width:0;flex:1}.toolbar h1{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#toolbar-actions{flex-shrink:0}
+
+.pad-control[data-type=trackpad] { border-radius: 16px; background-image: radial-gradient(#ffffff22 1px, transparent 1px); background-size: 12px 12px; }
+.pad-control[data-type=key], .pad-control[data-type=mouse] { border-radius: 10px; }
+.canvas-tools { max-width: 100%; flex-wrap: wrap; justify-content: center; }

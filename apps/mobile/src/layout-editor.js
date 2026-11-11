@@ -4,6 +4,7 @@ const names = { back: 'View', start: 'Menu', guide: 'Guide', lb: 'Left bumper', 
 export const outputName = output => names[output] ?? output.toUpperCase();
 
 export function availableOutputs(profile, control) {
+  if (['key', 'mouse', 'trackpad'].includes(control.type)) return [profile.mappings.find(item => item.controlId === control.id).outputs];
   const options = control.type === 'stick' ? [['lx', 'ly'], ['rx', 'ry']]
     : (control.type === 'trigger' ? TRIGGERS : BUTTONS).map(output => [output]);
   if (control.type === 'button') return options;

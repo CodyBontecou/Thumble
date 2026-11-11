@@ -18,6 +18,7 @@ AXES = {'lx', 'ly', 'rx', 'ry'}
 TRIGGERS = {'lt', 'rt'}
 MODIFIERS = {'', 'SHIFT-', 'CTRL-', 'ALT-', 'CTRL-SHIFT-', 'ALT-SHIFT-', 'ALT-CTRL-', 'ALT-CTRL-SHIFT-'}
 MAX_REVISION = 9_007_199_254_740_991
+DESKTOP_KEYS = {'key:' + key['code'] for key in json.loads(files('thumble_receiver').joinpath('DesktopKeys.json').read_bytes())}
 
 
 class ProfileError(ValueError):
@@ -91,7 +92,7 @@ def validate_profile(profile):
     for control in controls:
         require(only(control, ('id', 'type', 'label', 'customLabel', 'frame', 'color', 'icon', 'badge', 'layers')))
         require(text(control.get('id')) and text(control.get('label')))
-        require(control['id'] not in ids and control.get('type') in ('button', 'trigger', 'stick'))
+        require(control['id'] not in ids and control.get('type') in ('button', 'trigger', 'stick', 'key', 'mouse', 'trackpad'))
         frame = control.get('frame')
         require(only(frame, ('x', 'y', 'width', 'height')))
         require(all(finite(frame.get(key), 0, 1) for key in ('x', 'y')))
@@ -119,10 +120,16 @@ def validate_profile(profile):
             require(len(outputs) == 1 and outputs[0] in BUTTONS)
         elif kind == 'trigger':
             require(len(outputs) == 1 and outputs[0] in TRIGGERS)
+        elif kind == 'key':
+            require(1 <= len(outputs) <= 6 and len(set(outputs)) == len(outputs) and set(outputs) <= DESKTOP_KEYS)
+        elif kind == 'mouse':
+            require(len(outputs) == 1 and outputs[0] in ('mouse:left', 'mouse:right', 'mouse:middle'))
+        elif kind == 'trackpad':
+            require(outputs == ['pointer'])
         else:
             require(outputs in (['lx', 'ly'], ['rx', 'ry']))
         for key, low, high in (('deadzone', 0, 0.5), ('sensitivity', 0.1, 3)):
-            require(key not in mapping or (kind == 'stick' and finite(mapping[key], low, high)))
+            require(key not in mapping or ((kind == 'stick' or (key == 'sensitivity' and kind == 'trackpad')) and finite(mapping[key], low, high)))
         for key in ('invertX', 'invertY'):
             require(key not in mapping or (kind == 'stick' and type(mapping[key]) is bool))
         for output in outputs:

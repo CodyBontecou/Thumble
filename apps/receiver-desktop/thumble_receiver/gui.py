@@ -363,7 +363,7 @@ def smoke(args, path):
             step = result['step']
             if step == 0 and text and 'your controllers' in text.lower():
                 result['step'] = 1
-                window.studio.page.runJavaScript(click % json.dumps('+ New controller'))
+                window.studio.page.runJavaScript((click % json.dumps('Controllers')) + ';' + (click % json.dumps('Keyboard & mouse starter')))
             elif step == 1 and text and 'Unsaved changes' in text:
                 result['step'] = 2
                 window.studio.page.runJavaScript(click % json.dumps('Save controller'))
@@ -379,6 +379,9 @@ def smoke(args, path):
                 active = ProfileStore(args.profile_dir).read().get('active')
                 if not active or active['profileRevision'] != 1 or not active['profile']['id'].startswith('desktop-'):
                     raise RuntimeError('Native bridge did not select the exact saved revision')
+                types = {c['type'] for c in active['profile']['controls']}
+                if not {'key', 'mouse', 'trackpad'} <= types:
+                    raise RuntimeError('Keyboard/mouse starter did not survive native persistence')
                 result['step'] = 4
             elif step == 4:
                 window.studio.page.runJavaScript("document.querySelectorAll('.pad-control').length > 0 && document.querySelector('#canvas').getBoundingClientRect().width > 300 && Number(getComputedStyle(document.querySelector('.device')).opacity) >= 0.99 && document.getAnimations().every(a => a.playState !== 'running')", ready_to_capture)

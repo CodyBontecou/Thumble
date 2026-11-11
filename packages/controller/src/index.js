@@ -12,3 +12,5 @@ export { aiControllerGeneratorEnabled } from './features.js';
 export { consolePortProfile as defaultProfile } from './consoleport-profile.js';
 export { gamepadKeys } from './gamepad-keys.js';
 export { bindingChange, utilityActions } from './binding-plan.js';
+
+export { desktopKeys, desktopLabels, mouseOutputs, desktopTypes, hasDesktopInput, isNeutralInput } from './desktop-input.js';

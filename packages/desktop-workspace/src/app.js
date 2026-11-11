@@ -1,4 +1,4 @@
-import { Editor, copy, newProfile, canvasSize, outputNames, outputs, issues, moveControl, updateControl, setOutput, addControl, removeControl, acknowledged, signature, controlBox, labelColor, profileState } from './model.js';
+import { Editor, copy, newProfile, canvasSize, outputNames, outputs, issues, moveControl, updateControl, setOutput, addControl, removeControl, acknowledged, signature, controlBox, labelColor, profileState, setChord, desktopProfile } from './model.js';
 import { defaultProfile } from '../../controller/src/index.js';
 import { request } from './bridge.js';
 
@@ -114,7 +114,7 @@ function design() {
     snapshot.profiles.map(entry => button([el('strong', {}, entry.profile.name), el('small', {}, profileState(entry, snapshot) === 'selected' ? 'Selected for phone' : profileState(entry, snapshot) === 'draft' ? `Draft r${entry.revision} · phone r${snapshot.active.profileRevision}` : entry.editable ? 'Custom controller' : 'Original')], () => dirtyConfirm(() => loadEntry(entry)), { class: 'profile-row', 'aria-pressed': editor.profile.id === entry.profile.id })),
     button('+ New controller', createController, { class: 'new' }), el('hr', { class: 'separator' }), el('p', { class: 'eyebrow' }, 'Controls'), el('div', { id: 'layers' }, layers()));
   const center = el('section', { class: 'canvas-region', 'aria-label': 'Design canvas' }, el('div', { class: 'canvas-heading' }, el('span', {}, 'LANDSCAPE CONTROLLER'), el('span', {}, `${viewport.width} × ${viewport.height} PT`)), el('div', { class: 'device' }, el('div', { id: 'canvas', class: 'canvas', role: 'group', 'aria-label': 'Controller layout', tabIndex: 0, style: { aspectRatio: `${viewport.width}/${viewport.height}` } })),
-    el('p', { class: 'canvas-caption' }, 'Select a control to edit it. Drag to move; drag its corner to resize. Arrow keys nudge, Shift moves faster.'), el('div', { class: 'canvas-tools' }, button('+ Button', () => add('button')), button('+ Trigger', () => add('trigger')), button('+ Stick', () => add('stick'))));
+    el('p', { class: 'canvas-caption' }, 'Select a control to edit it. Drag to move; drag its corner to resize. Arrow keys nudge, Shift moves faster.'), el('div', { class: 'canvas-tools' }, button('+ Button', () => add('button')), button('+ Trigger', () => add('trigger')), button('+ Stick', () => add('stick')), button('+ Key', () => add('key')), button('+ Mouse', () => add('mouse')), button('+ Trackpad', () => add('trackpad'))));
   const inspector = el('aside', { id: 'inspector', class: 'inspector', 'aria-label': 'Control inspector' });
   const container = el('div', {}, toolbar, el('main', { class: 'workspace' }, sidebar, center, inspector));
   queueMicrotask(() => { renderCanvas(); renderInspector(); });
@@ -184,8 +184,27 @@ function renderInspector() {
   if (control) {
     const mapping = editor.profile.mappings.find(m => m.controlId === control.id);
     content.push(el('hr', { class: 'separator' }), field('Button label', textInput(control.customLabel ?? control.label, label => edit(updateControl(editor.profile, control.id, { label, customLabel: label })), { maxlength: 80, 'aria-label': 'Button label' })),
-      field('Gamepad output', el('select', { 'aria-label': 'Gamepad output', onChange: e => { try { edit(setOutput(editor.profile, control.id, e.target.value)); } catch (error) { status(error.message, true); } } }, outputs(control.type).map(output => el('option', { value: output, selected: output === mapping.outputs[0] ? 'selected' : undefined }, outputNames[output] ?? output)))),
+      field(['key', 'mouse', 'trackpad'].includes(control.type) ? 'Output' : 'Gamepad output', el('select', { 'aria-label': 'Gamepad output', onChange: e => { try { edit(setOutput(editor.profile, control.id, e.target.value)); } catch (error) { status(error.message, true); } } }, outputs(control.type).map(output => el('option', { value: output, selected: output === mapping.outputs[0] ? 'selected' : undefined }, outputNames[output] ?? output)))),
       field('Control color', textInput(control.color ?? '#3c473d', color => edit(updateControl(editor.profile, control.id, { color })), { type: 'color', 'aria-label': 'Control color' })));
+    if (control.type === 'key') {
+      const modifiers = [['key:ControlLeft','Ctrl'],['key:ShiftLeft','Shift'],['key:AltLeft','Alt / Option'],['key:MetaLeft','Win / Command']];
+      const base = mapping.outputs.find(output => !/key:(Control|Shift|Alt|Meta)/.test(output)) ?? 'key:Space';
+      content.push(small('Shortcut: ' + mapping.outputs.map(output => outputNames[output]).join(' + ')), ...modifiers.map(([key, title]) => field(title, el('input', { type: 'checkbox', checked: mapping.outputs.includes(key), onChange: event => {
+        const next = event.target.checked ? [...new Set([...mapping.outputs, key])] : mapping.outputs.filter(output => output !== key);
+        try { edit(setChord(editor.profile, control.id, next.length ? next : [base])); } catch(error) { status(error.message,true); }
+      } }))), field('Record shortcut', el('input', { placeholder: 'Focus here, then press your shortcut', readonly: 'readonly', 'aria-label': 'Record shortcut', onKeyDown: event => {
+        if (event.key === 'Tab') return;
+        event.preventDefault(); event.stopPropagation();
+        const key = 'key:' + event.code;
+        if (!outputs('key').includes(key)) return status('Choose a supported keyboard key.',true);
+        if (/^(Control|Shift|Alt|Meta)/.test(event.code)) return;
+        const chord = [event.ctrlKey && 'key:ControlLeft',event.shiftKey && 'key:ShiftLeft',event.altKey && 'key:AltLeft',event.metaKey && 'key:MetaLeft',key].filter(Boolean);
+        try { edit(setChord(editor.profile,control.id,[...new Set(chord)])); } catch(error) { status(error.message,true); }
+      } })));
+    }
+    if (control.type === 'trackpad') content.push(small('One finger moves the pointer. Two fingers scroll. Hold a mouse button while moving to drag.'), field('Pointer sensitivity', textInput(mapping.sensitivity ?? 1, value => {
+      const n=Number(value); if (Number.isFinite(n)) edit(setOutput(editor.profile,control.id,'pointer',{sensitivity:n}));
+    }, { type: 'number', min: .1, max: 3, step: .1, 'aria-label': 'Pointer sensitivity' })));
     for (const pair of [['x', 'y'], ['width', 'height']]) content.push(el('div', { class: 'field-pair' }, pair.map(key => field(key === 'x' ? 'Left' : key === 'y' ? 'Top' : key === 'width' ? 'Width' : 'Height', textInput(Math.round(control.frame[key] * viewport[key === 'x' || key === 'width' ? 'width' : 'height']), value => {
       const dimension = key === 'x' || key === 'width' ? 'width' : 'height', n = Number(value);
       if (!Number.isFinite(n)) return;
@@ -215,7 +234,7 @@ function createController(source = defaultProfile) {
 function exportProfile(profile) { perform('export', { profile }, result => status(result.exported ? 'Controller exported.' : 'Export cancelled.')); }
 function controllers() {
   return el('main', { class: 'panel-page' }, el('h1', {}, 'A controller for every setup.'), el('p', { class: 'intro' }, 'Design on your computer. Keep originals intact, save your own controllers, and send a specific revision to your phone.'),
-    actions(button('+ New controller', () => createController(), { class: 'primary' }), field('Import controller JSON', el('input', { type: 'file', accept: '.json,application/json', 'aria-label': 'Import controller JSON', onChange: async e => {
+    actions(button('+ New controller', () => createController(), { class: 'primary' }), button('Keyboard & mouse starter', () => createController(desktopProfile)), field('Import controller JSON', el('input', { type: 'file', accept: '.json,application/json', 'aria-label': 'Import controller JSON', onChange: async e => {
       const file = e.target.files[0]; if (!file) return;
       if (file.size > 60000) return status('Choose a controller JSON file smaller than 60 KB.', true);
       try {

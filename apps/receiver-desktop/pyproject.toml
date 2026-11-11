@@ -25,4 +25,4 @@ thumble-receiver = "thumble_receiver.__main__:main"
 include = ["thumble_receiver*"]
 
 [tool.setuptools.package-data]
-thumble_receiver = ["BuiltInProfiles.json", "Icon.png", "workspace/*"]
+thumble_receiver = ["DesktopKeys.json", "BuiltInProfiles.json", "Icon.png", "workspace/*"]

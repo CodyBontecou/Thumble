@@ -97,7 +97,7 @@ jobs:
       - name: Verify checked-in profile resources
         run: |
           node tools/export-builtin-profiles.mjs
-          git diff --exit-code -- apps/receiver/Resources/BuiltInProfiles.json apps/receiver-desktop/thumble_receiver/BuiltInProfiles.json
+          git diff --exit-code -- apps/receiver/Resources/BuiltInProfiles.json apps/receiver-desktop/thumble_receiver/BuiltInProfiles.json apps/receiver/Resources/DesktopKeys.json apps/receiver-desktop/thumble_receiver/DesktopKeys.json
       - name: Test protocol, TLS, access ledger, and both native adapter contracts
         if: ${{ !cancelled() }}
         run: python -m unittest discover -s apps/receiver-desktop/tests -v
@@ -109,7 +109,7 @@ jobs:
         env:
           THUMBLE_NATIVE_DESKTOP_QA: '1'
           QT_QPA_PLATFORM: windows
-        run: python -m unittest discover -s apps/receiver-desktop/tests -p test_native_chat.py -v
+        run: python -m unittest discover -s apps/receiver-desktop/tests -p 'test_native_*.py' -v
       - name: Verify Linux text delivery on an isolated X11 display
         if: ${{ !cancelled() && runner.os == 'Linux' }}
         run: xvfb-run -a env THUMBLE_NATIVE_DESKTOP_QA=1 QT_QPA_PLATFORM=xcb python -m unittest discover -s apps/receiver-desktop/tests -p test_native_chat.py -v
@@ -118,6 +118,9 @@ jobs:
         run: |
           python apps/receiver-desktop/packaging/verify-windows-driver.py
           thumble-receiver --native-self-test
+      - name: Verify native Linux keyboard and pointer via evdev
+        if: ${{ !cancelled() && runner.os == 'Linux' }}
+        run: sudo -E env THUMBLE_NATIVE_DESKTOP_QA=1 "$(which python)" -m unittest discover -s apps/receiver-desktop/tests -p test_native_desktop.py -v
       - name: Verify native Linux gamepad via evdev
         if: ${{ !cancelled() && runner.os == 'Linux' }}
         run: sudo -E "$(which python)" -m thumble_receiver --native-self-test
