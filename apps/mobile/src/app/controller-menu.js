@@ -69,8 +69,8 @@ export default function ControllerMenu() {
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 28 }}>
           <Text style={ui.label}>MENU · INPUTS RELEASED WHILE OPEN</Text>
         </View>
-        <View style={{ flexDirection: landscape ? 'row' : 'column', flexWrap: 'wrap', gap: 10 }}>
-          {items.map(([title, detail, path]) => <View key={path} style={landscape ? { width: '48%', flexGrow: 1 } : undefined}><Row title={title} detail={detail} onPress={() => router.replace(path)} /></View>)}
+        <View style={{ flexDirection: landscape ? 'row' : 'column', flexWrap: landscape ? 'wrap' : 'nowrap', gap: 10 }}>
+          {items.map(([title, detail, path]) => <View key={path} style={landscape ? { width: '48%', flexGrow: 1 } : { width: '100%' }}><Row title={title} detail={detail} onPress={() => router.replace(path)} /></View>)}
         </View>
         <View style={{ flexDirection: 'row', gap: 10, flexWrap: 'wrap' }}>
           <Button ghost compact onPress={() => online ? (connection.disconnect(), close()) : router.replace('/pair?scan=1')}>{online ? 'Disconnect computer' : 'Connect computer'}</Button>

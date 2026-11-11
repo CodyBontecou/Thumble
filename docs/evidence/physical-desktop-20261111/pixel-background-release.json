@@ -1,0 +1,29 @@
+{
+  "status": {
+    "connected": false,
+    "qaOutputAllowed": false,
+    "qaPlayRequested": false
+  },
+  "events": [
+    {
+      "at": 1794425262.7714272,
+      "code": 49,
+      "flags": 0,
+      "scrollX": 0,
+      "scrollY": 0,
+      "type": 10,
+      "x": 403.0859375,
+      "y": 484.64453125
+    },
+    {
+      "at": 1794425262.7961578,
+      "code": 49,
+      "flags": 0,
+      "scrollX": 0,
+      "scrollY": 0,
+      "type": 11,
+      "x": 403.6015625,
+      "y": 484.3828125
+    }
+  ]
+}
