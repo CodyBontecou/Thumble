@@ -36,3 +36,20 @@ class DesktopTests(unittest.TestCase):
             with self.assertRaises(ValueError):state(**kwargs)
         self.assertGreater(len(KEYS),75)
         self.assertTrue(state().is_neutral)
+    def test_one_failed_key_release_does_not_leave_other_controls_held(self):
+        class FaultyTarget(Target):
+            failed = False
+            def key(self,key,down):
+                super().key(key,down)
+                if not down and key['code'] == 'KeyA' and not self.failed:
+                    self.failed=True
+                    raise OSError('One native release failed')
+        t=FaultyTarget();g=GuardedOutput(DesktopOutput(t))
+        try:
+            g.apply(state(['key:ControlLeft','key:KeyA'],3),g.clock()+1,g.generation)
+            with self.assertRaises(RuntimeError):g.release()
+            self.assertIn(('key','ControlLeft',False),t.events)
+            self.assertIn(('button',0,False),t.events)
+            self.assertIn(('button',1,False),t.events)
+            self.assertTrue(g.closed)
+        finally:g.close()

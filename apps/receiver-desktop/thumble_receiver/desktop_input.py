@@ -56,9 +56,19 @@ class DesktopOutput:
         self.position = position
 
     def close(self):
-        from .state import NEUTRAL
-        try: self.write(NEUTRAL)
-        finally: self.target.close()
+        failure = None
+        # A failed native report must not prevent releases for the other keys.
+        for key in sorted(self.keys, key=lambda k: (k in MODIFIERS, k)):
+            try: self.target.key(KEYS[key], False)
+            except Exception as error: failure = failure or error
+        for index in range(3):
+            if self.buttons & (1 << index):
+                try: self.target.button(index, False)
+                except Exception as error: failure = failure or error
+        self.keys.clear(); self.buttons = 0; self.position = [0]*4
+        try: self.target.close()
+        finally:
+            if failure: raise failure
 
 
 class CombinedOutput:
