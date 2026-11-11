@@ -19,6 +19,7 @@ from .chat import ChatError, validate as validate_chat
 from .datagram import DatagramInput
 from .pairing_store import PairingStore
 from .pairing_image import PairingImage
+from .desktop_input import matches_profile
 
 
 class ProtocolError(ValueError):
@@ -144,7 +145,6 @@ class Session:
             self.tcp_sequence = sequence
             return []
         state = State.parse(message.get('state'))
-        from .desktop_input import matches_profile
         if not matches_profile(state.desktop, self.profile):
             raise ProtocolError('Keyboard/mouse input does not match the selected controller')
         lease = message.get('lease')
