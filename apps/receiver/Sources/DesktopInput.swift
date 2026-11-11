@@ -9,6 +9,7 @@ final class DesktopInput {
         self.post = post; self.trusted = trusted
     }
     private var keys = Set<String>(), buttons = 0
+    private var capsLock = CGEventSource.flagsState(.combinedSessionState).contains(.maskAlphaShift)
     private var position = [Double](repeating: 0, count: 4)
     private let modifiers: [String: CGEventFlags] = ["ControlLeft": .maskControl, "ControlRight": .maskControl, "ShiftLeft": .maskShift, "ShiftRight": .maskShift, "AltLeft": .maskAlternate, "AltRight": .maskAlternate, "MetaLeft": .maskCommand, "MetaRight": .maskCommand]
     enum Failure: LocalizedError {
@@ -23,24 +24,24 @@ final class DesktopInput {
     }
     private func isModifier(_ key: String) -> Bool { modifiers[String(key.dropFirst(4))] != nil }
     private func flagsForKeys(_ keys: Set<String>) -> CGEventFlags {
-        keys.reduce(into: CGEventFlags()) { flags, key in
+        keys.reduce(into: capsLock ? CGEventFlags.maskAlphaShift : CGEventFlags()) { flags, key in
             if let flag = modifiers[String(key.dropFirst(4))] { flags.insert(flag) }
         }
     }
     func write(_ state: DesktopState?) throws {
         if state != nil && !trusted() { throw Failure.permission }
         let next = Set(state?.keys ?? [])
-        var flags = CGEventFlags()
-        for key in next { if let flag = modifiers[String(key.dropFirst(4))] { flags.insert(flag) } }
         for down in [false, true] {
             let changed = down ? next.subtracting(keys) : keys.subtracting(next)
             for key in changed.sorted(by: { isModifier($0) == isModifier($1) ? $0 < $1 : (down ? isModifier($0) : !isModifier($0)) }) {
                 guard let code = CloudProfile.desktopDefinitions[key]?["mac"] as? Int,
                       let event = CGEvent(keyboardEventSource: nil, virtualKey: CGKeyCode(code), keyDown: down) else { throw Failure.event }
                 if down { keys.insert(key) } else { keys.remove(key) }
+                if down && key == "key:CapsLock" { capsLock.toggle() }
                 event.flags = flagsForKeys(keys); post(event)
             }
         }
+        let flags = flagsForKeys(keys)
         let location = CGEvent(source: nil)?.location ?? .zero
         let nextButtons = state?.buttons ?? 0
         let kinds: [(CGEventType, CGEventType, CGMouseButton)] = [(.leftMouseDown,.leftMouseUp,.left),(.rightMouseDown,.rightMouseUp,.right),(.otherMouseDown,.otherMouseUp,.center)]

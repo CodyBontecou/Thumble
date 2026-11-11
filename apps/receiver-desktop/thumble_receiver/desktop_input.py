@@ -122,7 +122,7 @@ class WindowsDesktop:
 
     def key(self, key, down):
         event=self.Input(); event.type=1
-        event.keyboard=self.Keyboard(0,key['scan'],8 | (1 if key['extended'] else 0) | (0 if down else 2),0,0)
+        event.keyboard=self.Keyboard(key.get('vk',0),key['scan'],(0 if key.get('vk') else 8) | (1 if key['extended'] else 0) | (0 if down else 2),0,0)
         self.send(event)
 
     def mouse(self, flags, x=0, y=0, data=0):

@@ -654,5 +654,213 @@
     "linux": 88,
     "scan": 88,
     "extended": false
+  },
+  {
+    "code": "Numpad0",
+    "label": "Numpad 0",
+    "mac": 82,
+    "linux": 82,
+    "scan": 82,
+    "extended": false
+  },
+  {
+    "code": "Numpad1",
+    "label": "Numpad 1",
+    "mac": 83,
+    "linux": 79,
+    "scan": 79,
+    "extended": false
+  },
+  {
+    "code": "Numpad2",
+    "label": "Numpad 2",
+    "mac": 84,
+    "linux": 80,
+    "scan": 80,
+    "extended": false
+  },
+  {
+    "code": "Numpad3",
+    "label": "Numpad 3",
+    "mac": 85,
+    "linux": 81,
+    "scan": 81,
+    "extended": false
+  },
+  {
+    "code": "Numpad4",
+    "label": "Numpad 4",
+    "mac": 86,
+    "linux": 75,
+    "scan": 75,
+    "extended": false
+  },
+  {
+    "code": "Numpad5",
+    "label": "Numpad 5",
+    "mac": 87,
+    "linux": 76,
+    "scan": 76,
+    "extended": false
+  },
+  {
+    "code": "Numpad6",
+    "label": "Numpad 6",
+    "mac": 88,
+    "linux": 77,
+    "scan": 77,
+    "extended": false
+  },
+  {
+    "code": "Numpad7",
+    "label": "Numpad 7",
+    "mac": 89,
+    "linux": 71,
+    "scan": 71,
+    "extended": false
+  },
+  {
+    "code": "Numpad8",
+    "label": "Numpad 8",
+    "mac": 91,
+    "linux": 72,
+    "scan": 72,
+    "extended": false
+  },
+  {
+    "code": "Numpad9",
+    "label": "Numpad 9",
+    "mac": 92,
+    "linux": 73,
+    "scan": 73,
+    "extended": false
+  },
+  {
+    "code": "NumpadDecimal",
+    "label": "Numpad .",
+    "mac": 65,
+    "linux": 83,
+    "scan": 83,
+    "extended": false
+  },
+  {
+    "code": "NumpadAdd",
+    "label": "Numpad +",
+    "mac": 69,
+    "linux": 78,
+    "scan": 78,
+    "extended": false
+  },
+  {
+    "code": "NumpadSubtract",
+    "label": "Numpad −",
+    "mac": 78,
+    "linux": 74,
+    "scan": 74,
+    "extended": false
+  },
+  {
+    "code": "NumpadMultiply",
+    "label": "Numpad ×",
+    "mac": 67,
+    "linux": 55,
+    "scan": 55,
+    "extended": false
+  },
+  {
+    "code": "NumpadDivide",
+    "label": "Numpad /",
+    "mac": 75,
+    "linux": 98,
+    "scan": 53,
+    "extended": true
+  },
+  {
+    "code": "NumpadEnter",
+    "label": "Numpad Enter",
+    "mac": 76,
+    "linux": 96,
+    "scan": 28,
+    "extended": true
+  },
+  {
+    "code": "Insert",
+    "label": "Insert / Help",
+    "mac": 114,
+    "linux": 110,
+    "scan": 82,
+    "extended": true
+  },
+  {
+    "code": "F13",
+    "label": "F13",
+    "mac": 105,
+    "linux": 183,
+    "scan": 0,
+    "vk": 124,
+    "extended": false
+  },
+  {
+    "code": "F14",
+    "label": "F14",
+    "mac": 107,
+    "linux": 184,
+    "scan": 0,
+    "vk": 125,
+    "extended": false
+  },
+  {
+    "code": "F15",
+    "label": "F15",
+    "mac": 113,
+    "linux": 185,
+    "scan": 0,
+    "vk": 126,
+    "extended": false
+  },
+  {
+    "code": "F16",
+    "label": "F16",
+    "mac": 106,
+    "linux": 186,
+    "scan": 0,
+    "vk": 127,
+    "extended": false
+  },
+  {
+    "code": "F17",
+    "label": "F17",
+    "mac": 64,
+    "linux": 187,
+    "scan": 0,
+    "vk": 128,
+    "extended": false
+  },
+  {
+    "code": "F18",
+    "label": "F18",
+    "mac": 79,
+    "linux": 188,
+    "scan": 0,
+    "vk": 129,
+    "extended": false
+  },
+  {
+    "code": "F19",
+    "label": "F19",
+    "mac": 80,
+    "linux": 189,
+    "scan": 0,
+    "vk": 130,
+    "extended": false
+  },
+  {
+    "code": "F20",
+    "label": "F20",
+    "mac": 90,
+    "linux": 190,
+    "scan": 0,
+    "vk": 131,
+    "extended": false
   }
 ]
