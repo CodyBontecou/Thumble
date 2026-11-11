@@ -274,7 +274,7 @@ async function refresh() {
         else status('This controller changed elsewhere. Export your draft or reopen the saved controller before saving.', true);
       }
       if (!document.querySelector('[role=dialog]') && !/INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName)) {
-        if (page === 'connections' || signature(previous?.profiles) !== signature(next.profiles)) render();
+        if (page === 'connections' || previous?.activationRevision !== next.activationRevision || signature(previous?.profiles) !== signature(next.profiles)) render();
         else { document.querySelector('header')?.replaceWith(header()); renderActions(); renderStatus(); }
       }
     }
