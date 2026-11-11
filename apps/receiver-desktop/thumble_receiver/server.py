@@ -207,6 +207,7 @@ class ReceiverServer:
         self.active = None
         self.session = None
         self.profile_error = ''
+        self.peer_error = ''
         self.enable_udp, self.chat = enable_udp, chat
         self.chat_worker = ThreadPoolExecutor(max_workers=1, thread_name_prefix='thumble-chat')
         self.pairing_image = PairingImage(self.profiles.directory)
@@ -433,7 +434,8 @@ class ReceiverServer:
                             replies.append(self.access.snapshot(session.enabled))
                             last_access = time.monotonic()
                         await self.send(socket, replies)
-                except (ProtocolError, OSError, RuntimeError, TimeoutError):
+                except (ProtocolError, OSError, RuntimeError, TimeoutError) as error:
+                    self.peer_error = (type(error).__name__ + ': ' + str(error))[:200]
                     session.pause()
                     await socket.close(code=1008)
 
@@ -455,7 +457,8 @@ class ReceiverServer:
                 if completed:
                     await asyncio.gather(*completed)
                     profile_tasks -= completed
-        except (ValueError, TypeError, KeyError, OSError, RuntimeError, TimeoutError, ConnectionClosed):
+        except (ValueError, TypeError, KeyError, OSError, RuntimeError, TimeoutError, ConnectionClosed) as error:
+            self.peer_error = (type(error).__name__ + ': ' + str(error))[:200]
             if session:
                 session.pause()
             await socket.close(code=1008)

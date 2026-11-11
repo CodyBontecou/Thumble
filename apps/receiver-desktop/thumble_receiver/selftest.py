@@ -56,7 +56,9 @@ async def selftest(native=False):
                                 # CI must distinguish a native driver failure from
                                 # a wire assertion, without logging pairing data.
                                 native_error = str(output.error) if output.error else 'none recorded'
-                                raise RuntimeError(f'Receiver closed while waiting for {kind}; native output error: {native_error}') from error
+                                raise RuntimeError(f'Receiver closed while waiting for {kind}; native output error: {native_error}; transport: {server.peer_error}') from error
+                            if value.get('type') == 'profiles-result' and value.get('error'):
+                                raise RuntimeError('Profile operation failed: ' + str(value['error']))
                             if value['type'] == kind:
                                 return value
 
@@ -92,9 +94,10 @@ async def selftest(native=False):
                     await receive('paused')
                     await verify(NEUTRAL)
                     paused = await receive('paused')
+                    fresh = await neutral(0, paused['lease'])
                     await socket.send(json.dumps(dict(type='profile-select', id='select',
                         profileId='consoleport-standard', profileRevision=1, expectedActivationRevision=0,
-                        lease=paused['lease'])))
+                        lease=fresh['lease'])))
                     layout = await receive('layout')
                     result = await receive('profiles-result')
                     if result.get('catalog', {}).get('activationRevision') != layout['revision']:
