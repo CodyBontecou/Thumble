@@ -48,14 +48,14 @@ function status(text, error = false) { message = text; failure = error; renderSt
 async function perform(operation, payload = {}, success) {
   if (busy) return;
   mutationEpoch++;
-  busy = true; renderActions();
+  busy = true; root.inert = true; renderActions();
   try {
     const result = await request(operation, payload);
     if (result?.profiles) snapshot = result;
     if (success) await success(result);
     return result;
   } catch (error) { status(error.message, true); }
-  finally { busy = false; render(); }
+  finally { busy = false; root.inert = false; render(); }
 }
 
 function loadEntry(entry) {
@@ -245,7 +245,7 @@ function connections() {
 }
 
 document.addEventListener('keydown', event => {
-  if (page !== 'design' || document.querySelector('[role=dialog]') || /INPUT|SELECT|TEXTAREA/.test(event.target.tagName)) return;
+  if (busy || page !== 'design' || document.querySelector('[role=dialog]') || /INPUT|SELECT|TEXTAREA/.test(event.target.tagName)) return;
   if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') { event.preventDefault(); save(); }
   if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'z') { event.preventDefault(); event.shiftKey ? editor.redo() : editor.undo(); render(); }
   if (editor?.selected && ['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(event.key)) {
