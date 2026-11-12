@@ -441,7 +441,7 @@ final class Receiver {
         // Bound memory and disallow unlimited replays for the lifetime of a pairing.
         guard chatResults.count < 1000 else { reject("Reconnect your phone to continue chatting."); return }
         chatBusy = true
-        chatResults[id] = ["type": "chat-result", "id": id, "error": "This message is already being delivered. Check WoW before trying again."]
+        chatResults[id] = ["type": "chat-result", "id": id, "error": "This message is already being delivered. Check World of Warcraft before trying again."]
         release()
         chatTask = Task { @MainActor [weak self, weak connection] in
             let error = await ChatDelivery.send(text: text, channel: channel)

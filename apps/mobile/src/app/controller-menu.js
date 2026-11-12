@@ -40,13 +40,13 @@ export default function ControllerMenu() {
   function close() { if (router.canGoBack()) router.back(); else router.replace('/'); }
   const items = [
     ['Edit layout', 'Move, resize, add and remap controls', '/layout-editor'],
-    ['Controller settings', 'Layouts, WoW actions, label sync', '/controller-settings'],
+    ['Controller settings', 'Layouts, calibration, game setup', '/controller-settings'],
     ['Stick calibration', 'Dead zone, invert look', '/calibration'],
     ['Controllers', displayedProfile.name, '/profiles'],
-    ['Getting started', online ? 'Connected · set up WoW next' : 'Make it yours, connect, set up WoW', '/onboarding'],
+    ['Getting started', online ? 'Connected · set up your game next' : 'Make it yours, connect, set up your game', '/onboarding'],
     ['Replay the tour', 'Pick a preset, customize, connect', 'tour'],
     ['Plan & billing', plan.detail, '/pro'],
-    ...(AI_CONTROLLER_GENERATOR_ENABLED ? [['AI to WoW', 'Connect your AI to a controller', '/journey'], ['Cloud controllers', 'Saved in your account', '/cloud']] : [['Cloud account', 'Sign in and manage your account', '/cloud']]),
+    ...(AI_CONTROLLER_GENERATOR_ENABLED ? [['AI to game', 'Connect your AI to a controller', '/journey'], ['Cloud controllers', 'Saved in your account', '/cloud']] : [['Cloud account', 'Sign in and manage your account', '/cloud']]),
   ];
   const status = <View style={[s.status, landscape ? { width: 290 } : {}]}>
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
@@ -64,7 +64,7 @@ export default function ControllerMenu() {
       <Text style={ui.muted}>{plan.detail}</Text>
     </View>
     <View style={{ flex: landscape ? 1 : 0 }} />
-    <Button onPress={close}>Back to WoW</Button>
+    <Button onPress={close}>Back to your game</Button>
   </View>;
   return <SafeAreaProvider><SafeAreaView style={[s.screen, landscape && { backgroundColor: 'rgba(0,0,0,0.55)' }]} accessibilityViewIsModal>
     <StatusBar hidden={landscape} style={scheme === 'light' ? 'dark' : 'light'} />

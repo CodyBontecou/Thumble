@@ -154,7 +154,7 @@ struct StatusPopoverView: View {
             VStack(spacing: 6) {
                 StatusRow(title: "Controller access", value: "Waiting", color: .orange)
                 StatusRow(title: "Phone paired", value: "Next", color: .secondary)
-                StatusRow(title: "WoW folder", value: "Optional", color: .secondary)
+                StatusRow(title: "World of Warcraft folder", value: "Optional", color: .secondary)
             }
         }
     }
@@ -211,11 +211,11 @@ struct StatusPopoverView: View {
             VStack(spacing: 6) {
                 if let transport = model.receiver?.transport { StatusRow(title: "Connection", value: transport, color: .green) }
                 StatusRow(title: "Layout", value: layoutText, color: model.activeLayout == nil ? .secondary : .green)
-                StatusRow(title: "Spell labels", value: spellLabelText, color: model.consolePortSync == nil ? .secondary : .green)
+                StatusRow(title: "World of Warcraft labels", value: spellLabelText, color: model.consolePortSync == nil ? .secondary : .green)
                 if let free = model.freeTimeText { StatusRow(title: "Plan", value: free, color: model.receiver?.pro == true || ReceiverUIModel.localTesting ? .green : .orange) }
                 if let error = model.receiver?.accessError, !error.isEmpty { StatusRow(title: "Purchase", value: error, color: .red) }
             }
-            Toggle("Sync ConsolePort automatically", isOn: Binding(get: { model.syncEnabled }, set: { model.setSyncEnabled($0) }))
+            Toggle("Sync World of Warcraft labels", isOn: Binding(get: { model.syncEnabled }, set: { model.setSyncEnabled($0) }))
                 .toggleStyle(.switch).controlSize(.small).font(.system(size: 12))
         }
     }

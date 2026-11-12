@@ -14,7 +14,7 @@ import { BackButton, Button, Eyebrow, Lamp, colors, fonts, ui } from '../ui/desi
 const LIGHTS = [
   { title: 'Paired with your computer', wait: 'Scan once, remembered after', done: 'Encrypted, on your home network' },
   { title: 'Gamepad live', wait: 'The receiver adds a virtual pad', done: 'Xbox-style controller ready' },
-  { title: 'Spell labels from WoW', wait: 'Proves ConsolePort works', done: 'Labels synced from ConsolePort' },
+  { title: 'Labels for your game', wait: 'Spell sync for World of Warcraft, or button names', done: 'Labels ready' },
 ];
 // WoW: Forever reads the gamepad natively, so there are no labels to sync.
 const NATIVE_LIGHT = { title: 'Ready for WoW: Forever', wait: 'Built-in gamepad support', done: 'Built-in gamepad · no addons needed' };
@@ -104,22 +104,22 @@ export default function ConnectScreen() {
     {stage === 2 && <>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
         <Text style={{ fontFamily: fonts.label, fontSize: 20, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: colors.raised, color: colors.text, borderRadius: 8, overflow: 'hidden' }}>/reload</Text>
-        <Text style={[ui.small, { flex: 1, fontFamily: fonts.bodyBold, fontSize: 15, lineHeight: 20, color: colors.text }]}>Type it in WoW chat once your character has loaded.</Text>
+        <Text style={[ui.small, { flex: 1, fontFamily: fonts.bodyBold, fontSize: 15, lineHeight: 20, color: colors.text }]}>World of Warcraft? Type it in chat once your character has loaded.</Text>
       </View>
       <Text style={ui.label}>No labels? On your computer:</Text>
-      <Text style={ui.muted}>1. Install ConsolePort and the Thumble addon in CurseForge{'\n'}2. Restart WoW and enable both at character select{'\n'}3. Another WoW install? Receiver → Choose WoW folder…</Text>
+      <Text style={ui.muted}>1. Install ConsolePort and the Thumble addon in CurseForge{'\n'}2. Restart World of Warcraft and enable both at character select{'\n'}3. Another installation? Receiver → Choose World of Warcraft folder…</Text>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
         <Button ghost compact onPress={() => { void Linking.openURL('https://www.curseforge.com/wow/addons/console-port'); }}>ConsolePort</Button>
         <Button ghost compact onPress={() => { void Linking.openURL('https://www.curseforge.com/wow/addons/thumble'); }}>Thumble addon</Button>
         <Button ghost compact disabled={busy || !context} onPress={skipLabels}>Play with button names</Button>
       </View>
-      <Text style={ui.muted}>Playing WoW: Forever? It has built-in gamepad support, so you can skip the addons.</Text>
+      <Text style={ui.muted}>Not playing World of Warcraft? Choose Play with button names. WoW: Forever has built-in gamepad support, so it needs no addons.</Text>
       <Button secondary compact disabled={busy || !state.loaded} onPress={playForever}>I play WoW: Forever</Button>
       {!!sync.receiverDetail && <Text style={ui.small}>{sync.receiverDetail}</Text>}
     </>}
     {stage === 3 && <>
       <Eyebrow inverse>{!native && sync.character ? `${sync.character} · ConsolePort found` : 'All three lights on'}</Eyebrow>
-      <Text style={[ui.heading, { fontSize: 26, lineHeight: 28 }]}>{native ? 'Your gamepad is live.' : 'Your bars are on your phone.'}</Text>
+      <Text style={[ui.heading, { fontSize: 26, lineHeight: 28 }]}>{native ? 'Your gamepad is live.' : 'Your controls are on your phone.'}</Text>
       <Text style={ui.muted}>Next, a one-minute practice run on the real controller. Stand somewhere quiet in game.</Text>
       {landscape && <Button onPress={practice} testID="connect-practice">Open controller</Button>}
     </>}

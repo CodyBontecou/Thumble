@@ -8,7 +8,7 @@ enum PhoneBindings {
         case unavailable, changed, invalid
         var errorDescription: String? {
             switch self {
-            case .unavailable: return "Install the updated Thumble addon, then type /reload in WoW with ConsolePort sync enabled."
+            case .unavailable: return "Install the updated Thumble addon, then type /reload in World of Warcraft with ConsolePort sync enabled."
             case .changed: return "Your character, layout or bindings changed. Refresh and choose the action again."
             case .invalid: return "The binding proposal could not be validated."
             }

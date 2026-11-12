@@ -14,10 +14,10 @@ import { BackButton, Button, Segmented, colors, fonts, scheme, ui } from '../ui/
 
 const ios = Platform.OS === 'ios';
 const FEATURES = [
-  { tag: '●', color: '#30D158', title: 'Setup checks itself', detail: 'Pairing, gamepad and spell labels light up on their own.' },
+  { tag: '●', color: '#30D158', title: 'Setup checks itself', detail: 'Pairing and the gamepad light up on their own.' },
   { tag: '⇄', color: '#0A64D8', title: 'Rearrange everything', detail: 'Move, resize and remap any control. Start from Xbox or a preset.' },
-  { tag: '▭', color: '#5E5CE6', title: 'Mac, Windows, Linux', detail: 'One small receiver. WoW keeps running on your computer.' },
-  { tag: '◉', color: '#FF9F0A', title: 'Talk to type in chat', detail: 'Dictate a message to your group without a keyboard.' },
+  { tag: '▭', color: '#5E5CE6', title: 'Mac, Windows, Linux', detail: 'One small receiver. Your game keeps running on your computer.' },
+  { tag: '◉', color: '#FF9F0A', title: 'Talk to type in chat', detail: 'Dictate chat in supported games, no keyboard needed.' },
   { tag: '✓', color: '#FF453A', title: 'Nothing gets stuck', detail: 'Lose Wi-Fi and every button releases. Your character stops.' },
 ];
 const STEPS = ['Controller', 'Setup', 'Plans'];
@@ -69,12 +69,12 @@ export default function Paywall() {
 
   const slides = [
     <View key="controller" style={{ flex: 1, gap: 10 }}>
-      <Text accessibilityRole="header" style={[ui.title, { fontSize: landscape ? 26 : 30, lineHeight: landscape ? 28 : 32 }]}>Your spells, under your thumbs.</Text>
+      <Text accessibilityRole="header" style={[ui.title, { fontSize: landscape ? 26 : 30, lineHeight: landscape ? 28 : 32 }]}>Your game, under your thumbs.</Text>
       <PreviewCard width={Math.min(landscape ? 440 : pageWidth || width - 40, 520)} onFull={() => setFull(true)} />
-      <Text style={ui.body}>Every button shows the spell it casts after a /reload. Hold a bumper for a second layer, and move anything that doesn’t sit right.</Text>
+      <Text style={ui.body}>Label any button, hold a bumper for a second layer, and move anything that doesn’t sit right.</Text>
     </View>,
     <View key="setup" style={{ flex: 1, gap: 10 }}>
-      <Text accessibilityRole="header" style={[ui.title, { fontSize: landscape ? 26 : 30, lineHeight: landscape ? 28 : 32 }]}>Couch to raid in three lights.</Text>
+      <Text accessibilityRole="header" style={[ui.title, { fontSize: landscape ? 26 : 30, lineHeight: landscape ? 28 : 32 }]}>Couch to game in minutes.</Text>
       <View style={{ flexDirection: landscape ? 'row' : 'column', flexWrap: landscape ? 'wrap' : 'nowrap', gap: 10 }}>
         {FEATURES.map(feature => <View key={feature.title} style={[ui.card, { padding: 12, gap: 12, flexBasis: landscape ? '47%' : 'auto', flexGrow: 1, flexDirection: 'row', alignItems: 'center' }]}>
           <View style={{ width: 30, height: 30, borderRadius: 8, backgroundColor: feature.color, alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: '#fff', fontFamily: fonts.bodyBold, fontSize: 14 }}>{feature.tag}</Text></View>

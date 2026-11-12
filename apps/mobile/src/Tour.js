@@ -100,7 +100,7 @@ export default function Tour({ state, save, connected, connecting, rtt, pill, on
     <View style={s.scrim} />
     <Hud chapter={2} />
     <View style={[s.lights, { top: 64 }]} accessibilityRole="list">
-      <Light on={false} wait={connecting} label="Paired" /><Light on={false} label="Gamepad" /><Light on={false} label="Spell labels" />
+      <Light on={false} wait={connecting} label="Paired" /><Light on={false} label="Gamepad" /><Light on={false} label="Labels" />
     </View>
     <View style={[s.card, { position: 'absolute', top: 108, alignSelf: 'center', width: 460, padding: 18 }]}>
       <Text style={s.n}>CONNECT · THREE LIGHTS AND YOU’RE IN</Text>
@@ -119,12 +119,12 @@ export default function Tour({ state, save, connected, connecting, rtt, pill, on
   return <View style={s.fill} accessibilityViewIsModal>
     {spot ? <View pointerEvents="none" style={[s.spot, spot]} /> : <View style={s.scrim} />}
     <View style={[s.lights, { top: 16, left: undefined, right: 16 }]} accessibilityRole="list">
-      <Light on label="Paired" /><Light on label="Gamepad" /><Light on={false} label="Labels after /reload" />
+      <Light on label="Paired" /><Light on label="Gamepad" /><Light on={false} label="Labels" />
     </View>
     <View style={[s.card, { position: 'absolute', top: (spot ? spot.top + spot.height : 60) + 16, left: Math.max(16, (spot?.left ?? 16)), width: 320 }]}>
       <Text style={[s.n, { color: '#1F7A35' }]}>YOU’RE LINKED{rtt != null ? ` · ${rtt} MS` : ''}</Text>
       <Text accessibilityRole="header" style={s.b}>This pill is your connection.</Text>
-      <Text style={s.p}>Tap it to check or reconnect. Everything else lives behind ≡ Menu. With ConsolePort, type /reload in WoW and your spell names appear on the buttons.</Text>
+      <Text style={s.p}>Tap it to check or reconnect. Everything else lives behind ≡ Menu. Playing World of Warcraft with ConsolePort? Type /reload and your spell names appear on the buttons.</Text>
       {!!sending && <Text accessibilityLiveRegion="polite" style={[s.p, { color: ink, fontFamily: fonts.bodyMedium }]}>{sending}</Text>}
       <View style={s.r2}><Text style={s.note}>Replay any time from the menu</Text><Go label="Start playing" testID="tour-finish" onPress={finish} /></View>
     </View>

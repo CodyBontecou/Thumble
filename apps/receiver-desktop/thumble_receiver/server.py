@@ -228,7 +228,7 @@ class ReceiverServer:
         result = dict(type='chat-result', id=request)
         try:
             if self.chat is None:
-                raise ChatError('WoW chat is unavailable on this desktop. Check the receiver setup instructions.')
+                raise ChatError('World of Warcraft chat is unavailable on this desktop. Check the receiver setup instructions.')
             validate_chat(message.get('text'), message.get('channel'))
             lease = message.get('lease')
             if session.chat_busy:
@@ -250,13 +250,13 @@ class ReceiverServer:
         session.chat_busy = True
         session.chat_cancel = threading.Event()
         session.chat_results[request] = dict(type='chat-result', id=request,
-            error='This message was already submitted. Check WoW before trying again.')
+            error='This message was already submitted. Check World of Warcraft before trying again.')
         try:
             await self.send(socket, [session.ack('paused')])
             await asyncio.get_running_loop().run_in_executor(self.chat_worker, self.chat.send,
                 message['text'], message['channel'], session.chat_cancel)
         except (ChatError, OSError, RuntimeError) as error:
-            result['error'] = str(error) if isinstance(error, ChatError) else 'Delivery could not be confirmed. Check WoW before retrying.'
+            result['error'] = str(error) if isinstance(error, ChatError) else 'Delivery could not be confirmed. Check World of Warcraft before retrying.'
         finally:
             session.chat_busy = False
             session.chat_cancel.set()

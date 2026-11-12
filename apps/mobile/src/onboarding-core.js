@@ -33,9 +33,9 @@ export const firstLayoutDelivered = (state, network, layout, pending, recovering
 export const WOW_CLIENTS = [
   { id: 'forever', name: 'WoW: Forever', detail: 'Built-in gamepad support · no addons needed', native: true },
   { id: 'retail', name: 'World of Warcraft', detail: 'The current Retail installation' },
-  { id: 'classic', name: 'WoW Classic', detail: 'Your progression Classic installation' },
-  { id: 'classic-era', name: 'WoW Classic Era', detail: 'Era, Hardcore or a seasonal Era realm' },
-  { id: 'other', name: 'Another WoW installation', detail: 'Check that ConsolePort supports the client you launch' },
+  { id: 'classic', name: 'World of Warcraft Classic', detail: 'Your progression Classic installation' },
+  { id: 'classic-era', name: 'World of Warcraft Classic Era', detail: 'Era, Hardcore or a seasonal Era realm' },
+  { id: 'other', name: 'Another World of Warcraft installation', detail: 'Check that ConsolePort supports the client you launch' },
 ];
 export const WOW_CHECKS = [
   { id: 'movement', title: 'Move and stop', detail: 'Walk with the movement stick. Release it and check that your character stops.' },
@@ -44,7 +44,7 @@ export const WOW_CHECKS = [
   { id: 'modifier', title: 'Hold a modifier and act', detail: 'Hold a shoulder or trigger modifier, press an action, then release both. Confirm the intended action and return to the base layer.' },
   { id: 'menu', title: 'Navigate and return', detail: 'Open a game menu, move through it and close it. Keep keyboard and mouse within reach.' },
 ];
-export const wowClientName = state => WOW_CLIENTS.find(client => client.id === state.wowClient)?.name || 'your WoW installation';
+export const wowClientName = state => WOW_CLIENTS.find(client => client.id === state.wowClient)?.name || 'your World of Warcraft installation';
 /** WoW: Forever reads the gamepad natively: no ConsolePort, no Thumble addon, no spell-label sync. */
 export const nativeGamepad = state => WOW_CLIENTS.find(client => client.id === state?.wowClient)?.native === true;
 /** Setup stages for the chosen client; native clients skip addon and label sync. */
@@ -86,19 +86,19 @@ export function setupSignals({ state, online, recovering, labelsFollowing, conte
 export const PRACTICE_STEPS = [
   { id: 'movement', title: 'Push Move forward, then let go. You should stop.', fix: 'Still moving? Check the receiver is running, then try again.' },
   { id: 'camera', title: 'Use Look to turn the camera all the way around.', fix: 'Reversed? Turn on Invert look in Stick calibration.' },
-  { id: 'action', title: 'Press A. Jump is on A by default.', fix: 'No jump? Choose Xbox-style buttons in the game’s gamepad settings or ConsolePort’s setup.' },
-  { id: 'modifier', title: 'Hold a modifier, press A, then release both.', fix: 'Nothing on that layer? Bind it in the game’s gamepad settings or in ConsolePort, then /reload.' },
+  { id: 'action', title: 'Press A. Jump is on A by default.', fix: 'No jump? Choose Xbox-style buttons in the game’s gamepad settings, or in ConsolePort for World of Warcraft.' },
+  { id: 'modifier', title: 'Hold a modifier, press A, then release both.', fix: 'Nothing on that layer? Bind it in the game’s gamepad settings. With ConsolePort in World of Warcraft, /reload after binding.' },
   { id: 'menu', title: 'Press Menu to open the game menu, then close it.', fix: 'Keep a keyboard nearby for anything the gamepad can’t reach.' },
 ];
 
 export function cloudLayoutPrompt(state, session) {
   const wow = state.layoutMode === 'consoleport' || state.layoutMode === 'character';
   const context = nativeGamepad(state)
-    ? `I play ${wowClientName(state)} with its built-in gamepad support (no ConsolePort or addons). Build a complete standard gamepad layout for WoW: movement and camera sticks, A/B/X/Y, shoulders, both triggers, D-pad, stick clicks, View and Menu. Keep shoulder/trigger combinations reachable while moving. Preserve standard Xbox-style gamepad outputs; the game owns the in-game action bindings. Label buttons by their gamepad names. Do not invent spells or claim a binding is applied.`
+    ? `I play ${wowClientName(state)} with its built-in gamepad support (no ConsolePort or addons). Build a complete standard gamepad layout for World of Warcraft: movement and camera sticks, A/B/X/Y, shoulders, both triggers, D-pad, stick clicks, View and Menu. Keep shoulder/trigger combinations reachable while moving. Preserve standard Xbox-style gamepad outputs; the game owns the in-game action bindings. Label buttons by their gamepad names. Do not invent spells or claim a binding is applied.`
     : wow
-    ? `I play ${wowClientName(state)} with ConsolePort${state.character ? `. Character/class note (user supplied, not a verified export): ${JSON.stringify(state.character)}` : ''}. Build a complete standard gamepad layout for WoW: movement and camera sticks, A/B/X/Y, shoulders, both triggers, D-pad, stick clicks, View and Menu. Keep shoulder/trigger modifier combinations reachable while moving. Preserve standard gamepad outputs; ConsolePort owns the in-game action bindings. Label buttons by their gamepad names unless I provide a fresh verified character export. Do not invent spells, modifier assignments or claim a binding is applied. Ask which character export I want to share before using character data. The hosted service does not expose the local Thumble import/mirror/binding tools; those require a separate local agent handoff and player Review and Apply in-game.`
+    ? `I play ${wowClientName(state)} with ConsolePort${state.character ? `. Character/class note (user supplied, not a verified export): ${JSON.stringify(state.character)}` : ''}. Build a complete standard gamepad layout for World of Warcraft: movement and camera sticks, A/B/X/Y, shoulders, both triggers, D-pad, stick clicks, View and Menu. Keep shoulder/trigger modifier combinations reachable while moving. Preserve standard gamepad outputs; ConsolePort owns the in-game action bindings. Label buttons by their gamepad names unless I provide a fresh verified character export. Do not invent spells, modifier assignments or claim a binding is applied. Ask which character export I want to share before using character data. The hosted service does not expose the local Thumble import/mirror/binding tools; those require a separate local agent handoff and player Review and Apply in-game.`
     : 'Build a comfortable controller with familiar gamepad mappings.';
-  return `Connect to my Thumble MCP service at ${session.mcpUrl || `${session.service}/mcp`} and sign in to the same account as my phone. Read profile_schema and list_devices before designing. ${context}\nI prefer ${state.buttonSize === 'larger' ? 'larger action buttons' : 'standard-size buttons'} and movement on the ${state.movementSide}. Use the phone viewport, keep every control inside the usable area and prevent overlapping touch targets. Validate the complete profile with deviceId for this phone: use at least 48 logical points on both target dimensions and 96 for stick diameters, with no overlapping touch targets or top Chat/menu obstruction. Pass deviceId when saving a new profile ID without overwriting my existing controllers. Deliver that exact saved revision to device ${session.device.id} (${JSON.stringify(session.device.name)}) using a fresh requestId. Check delivery_status; queued and received are not rendered. I will open the downloaded controller in practice or explicitly choose Use this controller on computer while paired. A rendered receipt confirms the phone layout, not working computer input or WoW bindings. Every gameplay press stays mine.`;
+  return `Connect to my Thumble MCP service at ${session.mcpUrl || `${session.service}/mcp`} and sign in to the same account as my phone. Read profile_schema and list_devices before designing. ${context}\nI prefer ${state.buttonSize === 'larger' ? 'larger action buttons' : 'standard-size buttons'} and movement on the ${state.movementSide}. Use the phone viewport, keep every control inside the usable area and prevent overlapping touch targets. Validate the complete profile with deviceId for this phone: use at least 48 logical points on both target dimensions and 96 for stick diameters, with no overlapping touch targets or top Chat/menu obstruction. Pass deviceId when saving a new profile ID without overwriting my existing controllers. Deliver that exact saved revision to device ${session.device.id} (${JSON.stringify(session.device.name)}) using a fresh requestId. Check delivery_status; queued and received are not rendered. I will open the downloaded controller in practice or explicitly choose Use this controller on computer while paired. A rendered receipt confirms the phone layout, not working computer input or game bindings. Every gameplay press stays mine.`;
 }
 
 // Serialize reads and writes so rapid edits cannot lose another milestone.

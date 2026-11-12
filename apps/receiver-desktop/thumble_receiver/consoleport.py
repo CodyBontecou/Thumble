@@ -64,7 +64,7 @@ def validate_snapshot(data, now=None):
             and value.get('kind') == 'consoleport-sync')
     require(finite(value.get('exportedAt'), 1, 9_007_199_254_740_991))
     require(abs((time.time() if now is None else now) - value['exportedAt']) <= 300,
-            'Reload WoW to save a fresh ConsolePort snapshot.')
+            'Reload World of Warcraft to save a fresh ConsolePort snapshot.')
     character = value.get('character')
     require(isinstance(character, dict) and text(character.get('name'))
             and not any(ord(c) < 32 or ord(c) == 127 for c in character['name'])
@@ -162,7 +162,7 @@ def commit(store, profile, snapshot, source_path, expected):
         if not active or active['profile'] != profile:
             entry = next((entry for entry in data['profiles'] if entry['profile']['id'] == profile['id']), None)
             if entry and (entry.get('phoneEdited') or entry.get('desktopEdited')) and active and active['profile']['id'] == profile['id']:
-                require(entry['revision'] == active['profileRevision'], 'Saved draft changed. Send it before syncing WoW labels.')
+                require(entry['revision'] == active['profileRevision'], 'Saved draft changed. Send it before syncing World of Warcraft labels.')
             revision = (entry['revision'] if entry else 0) + 1
             require(integer(revision, 1) and (entry or len(data['profiles']) < 256))
             updated = dict(revision=revision, profile=profile)
@@ -231,7 +231,7 @@ class ConsolePortSync:
         self.stamps = {}
         self.pending = None
         self.lookup = lookup if lookup is not None else IconLookup()
-        self.detail = 'ConsolePort: waiting for /reload' if roots else 'ConsolePort: choose your WoW folder with --wow-dir'
+        self.detail = 'ConsolePort: waiting for /reload' if roots else 'ConsolePort: choose your World of Warcraft folder with --wow-dir'
 
     def poll(self, baseline=False):
         files = snapshot_files(self.roots)
@@ -267,7 +267,7 @@ class ConsolePortSync:
                     self.lookup.begin()
                 profile = make_profile(snapshot, source, self.lookup)
                 require(decode_saved(bounded_read(file, 4 * 1024 * 1024)) == data,
-                        'Snapshot changed during sync. Reload WoW to retry.')
+                        'Snapshot changed during sync. Reload World of Warcraft to retry.')
                 commit(self.store, profile, snapshot, file, active['revision'] if active else 0)
                 self.pending = None
                 self.detail = f"ConsolePort: {snapshot['character']['name']} synced after reload"

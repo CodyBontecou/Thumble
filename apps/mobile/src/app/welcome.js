@@ -23,9 +23,9 @@ export default function WelcomeScreen() {
   }
   const footnote = `Mac · Windows · Linux${landscape ? '  ·  ' : '\n'}7 days free, then from $0.99/week${familyAvailable(Platform.OS) ? ' · family plans' : ''}`;
   const copy = <View style={{ gap: 12 }}>
-    <Eyebrow>For World of Warcraft</Eyebrow>
-    <Text accessibilityRole="header" style={[ui.title, { fontSize: landscape ? 34 : 34, lineHeight: 40 }]}>{'Eyes on the pull.\nThumbs on your phone.'}</Text>
-    <Text style={[ui.body, { maxWidth: 420 }]}>A full gamepad on your phone, laid out the way your hands like it. WoW keeps running on your computer.</Text>
+    <Eyebrow>For games on your computer</Eyebrow>
+    <Text accessibilityRole="header" style={[ui.title, { fontSize: landscape ? 34 : 34, lineHeight: 40 }]}>{'Eyes on the game.\nThumbs on your phone.'}</Text>
+    <Text style={[ui.body, { maxWidth: 420 }]}>A full gamepad on your phone, laid out the way your hands like it. Your game keeps running on your computer.</Text>
     {!!error && <Text accessibilityRole="alert" style={ui.error}>{error}</Text>}
   </View>;
   const actions = <View style={{ gap: 12, ...(landscape ? { flexDirection: 'row', alignItems: 'center' } : {}) }}>

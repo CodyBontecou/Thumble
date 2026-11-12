@@ -37,11 +37,11 @@ class ChatDelivery:
 
         def check():
             if time.monotonic() > deadline:
-                raise ChatError('Chat delivery timed out. Check WoW before trying again.')
+                raise ChatError('Chat delivery timed out. Check World of Warcraft before trying again.')
             if cancelled.is_set():
-                raise ChatError('Delivery cancelled. Check WoW before trying again.')
+                raise ChatError('Delivery cancelled. Check World of Warcraft before trying again.')
             if not self.target.focused(target):
-                raise ChatError('WoW lost focus. Check its chat box before trying again.')
+                raise ChatError('World of Warcraft lost focus. Check its chat box before trying again.')
 
         check()
         self.target.key(target, 'Escape')
@@ -111,17 +111,17 @@ class WindowsTarget:
 
     def message(self, target, kind, value, flags=1):
         if not self.focused(target):
-            raise ChatError('WoW lost focus. Check its chat box before trying again.')
+            raise ChatError('World of Warcraft lost focus. Check its chat box before trying again.')
         result = ctypes.c_size_t()
         if not self.user.SendMessageTimeoutW(target[0], kind, value, flags, 0x3, 250, ctypes.byref(result)):
-            raise ChatError('WoW did not accept window input. Check its chat box before retrying.')
+            raise ChatError('World of Warcraft did not accept window input. Check its chat box before retrying.')
         return result.value
 
     def queue_message(self, target, kind, value, flags=1):
         if not self.focused(target):
-            raise ChatError('WoW lost focus. Check its chat box before trying again.')
+            raise ChatError('World of Warcraft lost focus. Check its chat box before trying again.')
         if not self.user.PostMessageW(target[0], kind, value, flags):
-            raise ChatError('WoW did not accept window input. Check its chat box before retrying.')
+            raise ChatError('World of Warcraft did not accept window input. Check its chat box before retrying.')
 
     def key(self, target, key):
         code = {'Escape': 0x1b, 'Return': 0x0d}[key]
@@ -143,7 +143,7 @@ class X11Target:
     def __init__(self, executable=None):
         self.executable = executable or shutil.which('xdotool')
         if not self.executable or not os.environ.get('DISPLAY'):
-            raise ChatError('WoW chat on Linux requires X11/XWayland, DISPLAY, and xdotool.')
+            raise ChatError('World of Warcraft chat on Linux requires X11/XWayland, DISPLAY, and xdotool.')
 
     def command(self, *args, content=None):
         try:
@@ -151,7 +151,7 @@ class X11Target:
                                     text=True, encoding='utf-8', timeout=0.25, check=True)
             return result.stdout.strip()
         except (OSError, subprocess.SubprocessError) as error:
-            raise ChatError('WoW window input failed. Check its chat box before retrying.') from error
+            raise ChatError('World of Warcraft window input failed. Check its chat box before retrying.') from error
 
     def capture(self):
         window = self.command('getactivewindow')
@@ -161,7 +161,7 @@ class X11Target:
         try:
             command = (Path('/proc') / pid / 'cmdline').read_bytes().split(b'\0')
         except OSError as error:
-            raise ChatError('Could not verify the focused WoW process.') from error
+            raise ChatError('Could not verify the focused World of Warcraft process.') from error
         # Wine may expose the Windows image as argv[0] or a following argument.
         if not any(PureWindowsPath(os.fsdecode(part)).name.lower() in WOW_IMAGES for part in command[:8]):
             raise ChatError('Bring World of Warcraft to the front and try again.')
@@ -172,12 +172,12 @@ class X11Target:
 
     def key(self, target, key):
         if not self.focused(target):
-            raise ChatError('WoW lost focus. Check its chat box before trying again.')
+            raise ChatError('World of Warcraft lost focus. Check its chat box before trying again.')
         self.command('key', '--window', target[0], key)
 
     def type(self, target, text):
         if not self.focused(target):
-            raise ChatError('WoW lost focus. Check its chat box before trying again.')
+            raise ChatError('World of Warcraft lost focus. Check its chat box before trying again.')
         self.command('type', '--window', target[0], '--delay', '0', '--file', '-', content=text)
 
 

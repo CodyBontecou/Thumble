@@ -3,8 +3,8 @@ steps:
   - launch: com.thumble.wowsetupqa
   - await: { visible: { text: WoW on your Mac. } }
   - await: { idle: true }
-  - tap: { text: Set up WoW }
-  - await: { visible: { text: Which WoW } }
+  - tap: { text: Set up your game }
+  - await: { visible: { text: Which version of } }
   - await: { idle: true }
   - tap: { text: World of Warcraft }
   - await: { visible: { text: Keep your Mac ready. } }

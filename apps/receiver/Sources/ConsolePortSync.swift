@@ -9,8 +9,8 @@ final class ConsolePortSync {
         var errorDescription: String? {
             switch self {
             case .invalid: return "Invalid ConsolePort snapshot; the previous controller is retained."
-            case .stale: return "Reload WoW to save a fresh ConsolePort snapshot."
-            case .changed: return "Controller changed during sync; reload WoW to sync again."
+            case .stale: return "Reload World of Warcraft to save a fresh ConsolePort snapshot."
+            case .changed: return "Controller changed during sync; reload World of Warcraft to sync again."
             case .unsupported: return "Select a ConsolePort controller to enable automatic sync."
             }
         }
@@ -101,7 +101,7 @@ final class ConsolePortSync {
         }
         if let newest { pending = (newest.0, newest.1) }
         guard let (file, data) = pending else {
-            if lastStatus.isEmpty { status(files.isEmpty ? "ConsolePort: choose your WoW folder" : "ConsolePort: waiting for /reload") }
+            if lastStatus.isEmpty { status(files.isEmpty ? "ConsolePort: choose your World of Warcraft folder" : "ConsolePort: waiting for /reload") }
             return
         }
         do {
