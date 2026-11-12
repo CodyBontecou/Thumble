@@ -1,0 +1,23 @@
+{
+  "version": "1.0.3",
+  "build": "4",
+  "platform": "macos",
+  "architecture": [
+    "arm64",
+    "x86_64"
+  ],
+  "filename": "Thumble-Receiver-1.0.3.dmg",
+  "bytes": 1874432,
+  "sha256": "785cef6e370c5f9028899fff61b5e2e9a2273ef00d381ca576a2847565c4bf02",
+  "url": "https://thumble.io/downloads/Thumble-Receiver-1.0.3.dmg",
+  "source": "branch release/receiver-1.0.3 (aeb4303 + virtual gamepad fix)",
+  "change": "macOS 27.2 only lets virtual HID devices match GameController personalities marked GCIOMatchVirtual; the Xbox 360 identity (045E:028E) is not, so games such as WoW saw no controller. The virtual pad now presents as an Xbox Series X|S Bluetooth controller (045E:0B13) with that controller's 17-byte report.",
+  "notarization": {
+    "app": "8fb3fa25-f0eb-42f2-8f0d-1e20fe9a8046",
+    "dmg": "b83a709a-218e-46b4-9815-391a2ce9deef"
+  },
+  "status": "published",
+  "verification": "Release build on macOS 27.2: phone auto-reconnected with same receiver identity; GameController lists it as an extended Xbox gamepad. Pre-release local build of the same gamepad code moved a WoW Forever character from the iPhone's left stick; WoW logged 'GamePad 1 connected: Xbox Series X Controller'. Not tested on macOS 15/26.",
+  "downloadWorkerVersion": "216e9285-6bce-4171-b891-2e80d5a73210",
+  "publicVerification": "Latest alias redirects to 1.0.3 (no-store); public GET SHA-256 and published checksum match the notarized package; downloaded DMG passes Gatekeeper as Notarized Developer ID; 1.0.2 remains available."
+}
