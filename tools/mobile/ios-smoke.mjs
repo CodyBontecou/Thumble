@@ -49,10 +49,12 @@ function validateLaunch({ output, device, simApp, productionApp, allowDirty = fa
   // while a freshly booted simulator keeps CoreSimulator busy; retry before giving up.
   let devices = [];
   for (let attempt = 1; attempt <= 8; attempt++) {
-    ({ devices } = argentTool('list-devices'));
+    let failure = '';
+    try { ({ devices } = argentTool('list-devices')); }
+    catch (error) { if (attempt === 8) throw error; failure = `: ${error.message}`; }
     if (devices.some(item => item.platform === 'ios' && (!device || item.udid === device))) break;
     if (attempt < 8) {
-      console.error(`Simulator list is incomplete (attempt ${attempt}/8); retrying in 15 s.`);
+      console.error(`Simulator list is incomplete (attempt ${attempt}/8)${failure}; retrying in 15 s.`);
       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 15e3);
     }
   }
