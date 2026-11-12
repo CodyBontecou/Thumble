@@ -1,6 +1,7 @@
 {
   "name": "tapping",
   "private": true,
+  "license": "AGPL-3.0-only",
   "type": "module",
   "workspaces": [
     "packages/*",
