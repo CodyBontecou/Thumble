@@ -29,6 +29,7 @@
   "scripts": {
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
+    "eas-build-post-install": "node ../../tools/mobile/check.mjs",
     "start": "expo start --dev-client --port 8088",
     "android": "expo run:android --port 8088",
     "ios": "expo run:ios --port 8088",

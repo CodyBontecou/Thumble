@@ -9,7 +9,7 @@ const center = id => {
 
 test('separate fingers can move, hold a modifier, and press an action concurrently', () => {
   const controller = new TouchController(xboxProfile);
-  controller.down(1, 0.29, 0.42);
+  controller.down(1, 0.235, 0.43);
   controller.down(2, ...center('lt'));
   controller.down(3, ...center('a'));
   assert.ok(controller.snapshot().lx > 0.8);
@@ -43,13 +43,13 @@ test('releasing one finger on the same button preserves the other hold', () => {
 
 test('a second finger cannot steal a stick, and cancellation neutralizes every input', () => {
   const controller = new TouchController(xboxProfile);
-  controller.down(1, 0.29, 0.42);
+  controller.down(1, 0.235, 0.43);
   controller.down(2, ...center('left-stick'));
   assert.ok(controller.snapshot().lx > 0.8);
   controller.up(2);
   assert.ok(controller.snapshot().lx > 0.8);
   controller.releaseAll();
-  controller.move(1, 0.29, 0.42);
+  controller.move(1, 0.235, 0.43);
   assert.deepEqual(controller.snapshot(), neutralState());
 });
 

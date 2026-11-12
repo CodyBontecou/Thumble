@@ -79,7 +79,7 @@ export class ProfileStore {
       const previous = index < 0 ? 0 : data.profiles[index].revision;
       if (previous !== expectedRevision) throw Error(`Revision conflict: expected ${expectedRevision}, current ${previous}. Read again before editing.`);
       if (previous === Number.MAX_SAFE_INTEGER) throw Error('Revision exhausted');
-      const entry = { revision: previous + 1, profile: checked };
+      const entry = { revision: previous + 1, profile: checked, ...(index >= 0 && data.profiles[index].phoneEdited === true ? { phoneEdited: true } : {}) };
       if (index < 0) { if (data.profiles.length >= 256) throw Error('Profile limit reached'); data.profiles.push(entry); }
       else data.profiles[index] = entry;
       return entry;

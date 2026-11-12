@@ -1,9 +1,9 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { assertProfile } from '../../controller/src/index.js';
+import { assertProfile, bindingChange, utilityActions } from '../../controller/src/index.js';
 import { validateConsolePortLayout } from './consoleport.js';
 import { gamepadKeys } from './gamepad-keys.js';
 export { gamepadKeys } from './gamepad-keys.js';
-export const utilityActions = ['JUMP', 'OPENCHAT', 'TARGETNEARESTENEMY', 'TARGETPREVIOUSENEMY', 'TARGETSELF', 'OPENALLBAGS', 'TOGGLEWORLDMAP', 'TOGGLECHARACTER0', 'TOGGLEGAMEMENU', 'INTERACTTARGET'];
+export { utilityActions };
 const labelActions = new Map([['jump', 'JUMP'], ['chat', 'OPENCHAT'], ['target', 'TARGETNEARESTENEMY'], ['bags', 'OPENALLBAGS'], ['map', 'TOGGLEWORLDMAP'], ['menu', 'TOGGLEGAMEMENU'], ['interact', 'INTERACTTARGET']]);
 const buttons = new Set(Object.values(gamepadKeys));
 const mods = ['', 'SHIFT-', 'CTRL-', 'ALT-', 'CTRL-SHIFT-', 'ALT-SHIFT-', 'ALT-CTRL-', 'ALT-CTRL-SHIFT-'];
@@ -94,22 +94,10 @@ export async function proposeBindings(store, { snapshotId, profileId, profileRev
       check(control && mapping && control.type !== 'stick' && mapping.outputs.length === 1, `Control ${intent.controlId} must have one gamepad button or trigger output`);
       const key = gamepadKeys[mapping.outputs[0]];
       check(key && !used.has(key), `Two controls propose the same gamepad button: ${key}`); used.add(key);
-      check(!snapshot.reserved[key], `${key} is reserved for ${snapshot.reserved[key]}`);
+      const change = bindingChange(snapshot, profile, intent);
       const binding = snapshot.bindings.find(binding => binding.key === key);
-      const proxy = binding.consolePortProxy === true && binding.effective === `CLICK CPB_${key}:ControllerInput` && /^(?:ACTIONBUTTON\d+|MULTIACTIONBAR\d+BUTTON\d+)$/.test(binding.base);
-      check(binding.base === binding.effective || proxy, `${key} has an override binding; resolve it in ConsolePort first`);
-      let command, name;
-      if (intent.spellId !== undefined && intent.action === undefined) {
-        const spell = learned.find(spell => spell.id === intent.spellId);
-        check(integer(intent.spellId) && spell, `Spell ${intent.spellId} is not an available learned spell`);
-        name = spell.name; command = 'SPELL ' + name;
-      } else {
-        check(intent.spellId === undefined && utilityActions.includes(intent.action), 'Intent must name one learned spellId or supported utility action');
-        command = intent.action; name = intent.action === 'OPENCHAT' ? 'Chat' : intent.action === 'JUMP' ? 'Jump' : control.label;
-      }
-      const label = intent.label ?? (name.length <= 80 ? name : control.label);
-      check(text(label, 80), 'Phone labels must contain 1–80 plain characters');
-      const change = { controlId: control.id, label, key, expectedBase: binding.base, expectedEffective: binding.effective, ...(intent.spellId !== undefined ? { spellId: intent.spellId } : { action: intent.action }) };
+      const command = intent.spellId !== undefined ? 'SPELL ' + learned.find(spell => spell.id === intent.spellId).name : intent.action;
+      const label = change.label;
       changes.push(change);
       preview.push({ controlId: control.id, key, label, before: binding.base || 'Unbound', after: command, replacesExisting: binding.base !== '' && binding.base !== command });
     }

@@ -19,5 +19,6 @@ export function controlDisplay(control, prefix, profile) {
   for (const [name, key] of Object.entries(profile?.modifiers ?? {})) {
     if (key !== 'none' && key === output) prefix = prefix.replace(`${name.toUpperCase()}-`, '');
   }
-  return control.layers?.[prefix] ?? { label: control.label, icon: control.icon };
+  const layer = control.layers?.[prefix] ?? { label: control.label, icon: control.icon };
+  return control.customLabel && !prefix ? { label: control.customLabel } : layer;
 }

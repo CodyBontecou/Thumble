@@ -39,7 +39,7 @@ export default function AgentSetup() {
     <View style={{ flex: 1 }}><Button secondary disabled={!state.agentCode} onPress={share}>Share check request</Button></View>
     <View style={{ flex: 1 }}><Button disabled={busy || (online && !state.agentCode)} onPress={verified ? () => router.dismissTo('/first-layout') : !online ? () => router.push('/pair?setup=1') : check}>{verified ? 'Create my first layout' : !online ? 'Connect computer' : busy ? 'Checking…' : 'Check connection'}</Button></View>
   </Actions>}><Columns><View style={ui.column}>
-    <Eyebrow>CONNECT YOUR AI</Eyebrow><Text accessibilityRole="header" style={ui.title}>{'Your agent.\nYour controller.'}</Text>
+    <Eyebrow>Connect your AI</Eyebrow><Text accessibilityRole="header" style={ui.title}>{'Your agent.\nYour controller.'}</Text>
     <Text style={ui.body}>Share a check request with your computer agent, then verify it here.</Text>
     <Text style={ui.small}>Checks are free. Custom layouts are included in the demo.</Text>
   </View><View style={ui.column}>

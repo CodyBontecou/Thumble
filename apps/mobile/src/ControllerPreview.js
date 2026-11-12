@@ -24,7 +24,7 @@ export default function ControllerPreview({ width, height, interactive = false }
   const prefix = modifierPrefix(profile, state);
   const modifiers = modifierKeys(profile);
   const toggle = id => setHeld(current => current.includes(id) ? current.filter(key => key !== id) : [...current, id]);
-  return <View style={{ width, height, overflow: 'hidden', backgroundColor: '#17191b' }} accessible={!interactive} accessibilityLabel="Preview of the ConsolePort controller">
+  return <View style={{ width, height, overflow: 'hidden', backgroundColor: '#1C1C1E' }} accessible={!interactive} accessibilityLabel="Preview of the ConsolePort controller">
     <View style={{ position: 'absolute', width: BASE.width, height: BASE.height, left: (width - BASE.width) / 2, top: (height - BASE.height) / 2, transform: [{ scale }] }}>
       {profile.controls.map(control => {
         const { frame } = control;

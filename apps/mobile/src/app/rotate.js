@@ -17,7 +17,7 @@ export default function RotateScreen() {
     <View style={{ flex: 1, paddingHorizontal: 20, paddingBottom: 8, gap: 16 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 44 }}>
         <BackButton />
-        <Text style={ui.label}>ALL 3 LIGHTS ON</Text>
+        <Text style={ui.label}>All three lights on</Text>
       </View>
       <View style={{ height: 260, alignItems: 'center', justifyContent: 'center' }} accessible accessibilityLabel="Turn the phone from upright to sideways">
         <View style={{ position: 'absolute', left: '8%', top: 30, width: 74, height: 132, borderRadius: 10, borderWidth: 4, borderColor: colors.border, backgroundColor: colors.surface, opacity: 0.55, boxShadow: `4px 4px 0px ${colors.border}` }} />
@@ -33,9 +33,9 @@ export default function RotateScreen() {
         </View>
       </View>
       <Text accessibilityRole="header" style={[ui.title, { fontSize: 36, lineHeight: 37 }]}>Turn your phone sideways.</Text>
-      <Text style={ui.body}>The ConsolePort controller is landscape. Hold the phone like a gamepad, one thumb on each side.</Text>
+      <Text style={ui.body}>The controller is landscape. Hold the phone like a gamepad, one thumb on each side.</Text>
       <View style={[ui.card, { gap: 6 }]}>
-        <Text style={ui.label}>PRACTICE · ABOUT A MINUTE</Text>
+        <Text style={ui.label}>Practice · about a minute</Text>
         <Text style={ui.muted}>Move, look, jump, a modifier layer, then the game menu. Stand somewhere quiet in WoW first.</Text>
       </View>
       <View style={{ flex: 1 }} />

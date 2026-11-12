@@ -30,12 +30,17 @@ export class Connection {
   resetListeners = new Set();
   profileListeners = new Set();
   layout = { revision: 0, profile: assertProfile(defaultProfile) };
+  /** @type {any} A phone-made layout shown while offline, until a computer sends one. */
+  preview = null;
   layoutPending = false;
   view = { phase: 'offline', detail: 'Practice · Computer not connected', rtt: null, chat: false };
   /** @type {{id: string, resolve: (value?: any) => void, reject: (error: Error) => void, timer: ReturnType<typeof setTimeout>} | null} */
   chatRequest = null;
   profilesSupported = false;
   cloudAdoptionSupported = false;
+  phoneProfileSaveSupported = false;
+  phoneBindingsSupported = false;
+  bindingRequest = /** @type {any} */ (null);
   profileSequence = 0;
   /** @type {any} */
   profileRequest = null;
@@ -98,6 +103,11 @@ export class Connection {
             this.outbox = []; this.state = neutralState();
             for (const reset of this.resetListeners) reset();
           }
+          return;
+        }
+        if (message.type === 'bindings-result') {
+          if (transport === 'udp' || !this.bindingRequest || this.bindingRequest.id !== message.id) return;
+          this.finishBindingRequest(message.error ? Error(String(message.error)) : null, message.data);
           return;
         }
         if (message.type === 'profiles-result') {
@@ -177,6 +187,8 @@ export class Connection {
           this.invitation = null;
           this.profilesSupported = message.profiles === 1;
           this.cloudAdoptionSupported = message.cloudAdoption === 1;
+          this.phoneProfileSaveSupported = message.phoneProfileSave === 1;
+          this.phoneBindingsSupported = message.phoneBindings === 1;
           this.diagnostics = message.diagnostics === true && typeof this.native.sendTimed === 'function' ? new LatencyRecorder(text => this.native.send(text)) : null;
           this.update({ phase: 'connected', detail: 'Connected · Xbox gamepad', rtt: null, chat: message.chat === 1 });
           this.submit(neutralState(), 'neutral');
@@ -205,10 +217,19 @@ export class Connection {
   }
   subscribeProfile = listener => { this.profileListeners.add(listener); return () => { this.profileListeners.delete(listener); }; };
   profileSnapshot = () => this.layout;
+  /** Show a phone-side layout while no computer is connected; a receiver's layout replaces it on connect. */
+  previewLayout(profile) {
+    if (this.view.phase === 'connected') return false;
+    this.preview = assertProfile(profile);
+    this.layout = { revision: 0, profile: this.preview };
+    for (const listener of this.profileListeners) listener();
+    return true;
+  }
   receiveLayout(message) {
     if (this.view.phase !== 'connected' || !Number.isSafeInteger(message.revision) || message.revision < 1) throw Error('Invalid layout revision');
     if (message.revision <= this.layout.revision) throw Error('Stale layout revision');
     const profile = assertProfile(message.profile);
+    this.preview = null;
     this.layoutPending = true;
     this.outbox = [];
     this.recovering = true;
@@ -279,21 +300,50 @@ export class Connection {
     this.pausePlay();
     return this.profileOperation('profile-adopt', { profile: checked, source: { ...source }, expectedActivationRevision });
   }
+  bindingOperation(type, fields) {
+    if (this.view.phase !== 'connected') return Promise.reject(Error('Connect your Mac to edit WoW actions.'));
+    if (!this.phoneBindingsSupported) return Promise.reject(Error('Update your Mac receiver to edit WoW actions.'));
+    if (this.bindingRequest || this.profileRequest) return Promise.reject(Error('A controller request is already in progress.'));
+    if (type === 'bindings-copy') this.pausePlay();
+    const id = `bindings-${++this.profileSequence}`;
+    return new Promise((resolve, reject) => {
+      const timer = this.timers.setTimeout(() => this.finishBindingRequest(Error('Could not confirm the request. Refresh and try again.')), 10000);
+      this.bindingRequest = { id, resolve, reject, timer };
+      if (!this.native.send(JSON.stringify({ type, id, ...fields, lease: this.lease }))) this.finishBindingRequest(Error('Could not reach your Mac.'));
+    });
+  }
+  finishBindingRequest(error, data = null) {
+    const request = this.bindingRequest;
+    if (!request) return;
+    this.bindingRequest = null;
+    this.timers.clearTimeout(request.timer);
+    if (error) request.reject(error); else request.resolve(data);
+  }
+  /** @param {number} [offset] @param {string} [snapshotId] */
+  readBindings(offset = 0, snapshotId = undefined) { return this.bindingOperation('bindings-read', { offset, ...(snapshotId ? { snapshotId } : {}) }); }
+  copyBindingPlan(plan) { return this.bindingOperation('bindings-copy', { plan }); }
+  savePhoneProfile(profile, expectedActivationRevision, expectedProfileRevision = 0) {
+    if (!this.phoneProfileSaveSupported) return Promise.reject(Error('Update your Mac receiver to use edited layouts.'));
+    const checked = assertProfile(profile);
+    if (!/^phone-[a-f0-9]{32}$/.test(checked.id)) return Promise.reject(Error('Invalid edited layout ID.'));
+    this.pausePlay();
+    return this.profileOperation('profile-save', { profile: checked, expectedActivationRevision, expectedProfileRevision });
+  }
   profileOperation(operation, fields = {}) {
     if (this.view.phase !== 'connected') return Promise.reject(Error('Connect your computer to see saved profiles.'));
     if (!this.profilesSupported) return Promise.reject(Error('Update your receiver to choose profiles here.'));
-    if (this.profileRequest) return Promise.reject(Error('A profile request is already in progress.'));
+    if (this.profileRequest || this.bindingRequest) return Promise.reject(Error('A profile request is already in progress.'));
     const id = `profiles-${++this.profileSequence}`;
     return new Promise((resolve, reject) => {
       const timer = this.timers.setTimeout(() => this.finishProfileRequest(Error('Could not confirm the profile. Refresh and try again.')), 7000);
-      this.profileRequest = { id, operation, profileId: fields.profileId, source: fields.source, profile: fields.profile, result: null, resolve, reject, timer };
+      this.profileRequest = { id, operation, profileId: fields.profileId ?? fields.profile?.id, source: fields.source, profile: fields.profile, result: null, resolve, reject, timer };
       if (!this.native.send(JSON.stringify({ type: operation, id, ...fields, lease: this.lease }))) this.finishProfileRequest(Error('Could not reach your computer.'));
     });
   }
   completeProfileSelection() {
     const r = this.profileRequest;
-    if (['profile-select', 'profile-adopt'].includes(r?.operation) && r.result && this.layout.profile.id === r.profileId && this.layout.revision === r.result.activationRevision && !this.layoutPending && !this.recovering) {
-      if (r.operation === 'profile-adopt' && canonical({ ...this.layout.profile, id: r.profile.id }) !== canonical(r.profile)) this.finishProfileRequest(Error('The Computer activated a different controller. Refresh and try again.'));
+    if (['profile-select', 'profile-adopt', 'profile-save'].includes(r?.operation) && r.result && this.layout.profile.id === r.profileId && this.layout.revision === r.result.activationRevision && !this.layoutPending && !this.recovering) {
+      if (r.profile && canonical({ ...this.layout.profile, id: r.profile.id }) !== canonical(r.profile)) this.finishProfileRequest(Error('The Mac activated a different controller. Refresh and try again.'));
       else this.finishProfileRequest();
     }
   }
@@ -389,11 +439,14 @@ export class Connection {
     this.outbox = []; this.recovering = false;
     this.layoutPending = false;
     this.setAccess(null);
-    this.layout = { revision: 0, profile: assertProfile(keepLayout ? this.layout.profile : defaultProfile) };
+    this.layout = { revision: 0, profile: assertProfile(keepLayout ? this.layout.profile : this.preview ?? defaultProfile) };
     for (const listener of this.profileListeners) listener();
     this.lease = null; this.invitation = null; this.state = neutralState(); this.pending.clear();
     this.profilesSupported = false;
     this.cloudAdoptionSupported = false;
+    this.phoneProfileSaveSupported = false;
+    this.phoneBindingsSupported = false;
+    this.finishBindingRequest(Error('Connection closed. Refresh your WoW actions.'));
     this.finishProfileRequest(Error('Disconnected from your computer.'));
     if (this.chatRequest) { this.timers.clearTimeout(this.chatRequest.timer); this.chatRequest.reject(Error('Disconnected. Check WoW before sending again.')); this.chatRequest = null; }
     this.update({phase:'offline',detail,rtt:null,chat:false});

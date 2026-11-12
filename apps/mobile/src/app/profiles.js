@@ -1,4 +1,3 @@
-import { AI_CONTROLLER_GENERATOR_ENABLED } from '../features';
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
@@ -35,11 +34,11 @@ function Profiles() {
     finally { setSelecting(''); }
   }
   return <SafeAreaView style={s.safeArea} edges={['left', 'right', 'bottom']}><View style={s.screen}>
-    <View style={{ gap: 8, paddingTop: 16 }}><Eyebrow>YOUR CONTROLLER LIBRARY</Eyebrow><Text accessibilityRole="header" style={ui.title}>Ready when you are.</Text></View><View style={s.intro}>
+    <View style={{ gap: 8, paddingTop: 16 }}><Eyebrow>Your controller library</Eyebrow><Text accessibilityRole="header" style={ui.title}>Ready when you are.</Text></View><View style={s.intro}>
       <Text style={s.detail}>Choose a saved controller from your computer.</Text>
       <Pressable accessibilityRole="button" onPress={refresh} disabled={loading || !!selecting} style={s.refresh}><Text style={s.action}>Refresh</Text></Pressable>
     </View>
-    <Button secondary onPress={() => router.push('/first-layout')}>{AI_CONTROLLER_GENERATOR_ENABLED ? 'Choose or create a layout' : 'Use ConsolePort controls'}</Button>
+    <Button secondary onPress={() => router.push('/layout-editor')}>Edit a layout</Button>
     {error ? <Text accessibilityRole="alert" style={s.error}>{error}</Text> : null}
     {loading ? <ActivityIndicator accessibilityLabel="Loading profiles" color="#EDEDED" style={s.loading} /> :
       <FlatList data={catalog.profiles} keyExtractor={item => item.id} contentContainerStyle={s.list}

@@ -16,6 +16,9 @@
         }
       ],
       "./plugins/with-scene-delegate.cjs",
+      "./plugins/with-scrawl.cjs",
+      "./plugins/with-scrawl-android.cjs",
+      "./plugins/with-release-provenance.cjs",
       [
         "expo-build-properties",
         {
@@ -30,10 +33,10 @@
       "expo-web-browser",
       "expo-font"
     ],
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "default",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.thumble.ios",

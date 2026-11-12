@@ -165,15 +165,26 @@ function ns.Capture()
         consolePortLayout = consolePortLayout(page, spells),
     }
 end
-function ns.ExportCharacter()
+local function characterExport()
     local snapshot = ns.Capture()
     counter = counter + 1
     snapshot.snapshotId = snapshot.character.guid .. ':' .. snapshot.exportedAt .. ':' .. counter .. ':' .. math.floor(GetTime() * 1000)
-    local encoded = ns.Encode(snapshot)
+    return snapshot, ns.Encode(snapshot)
+end
+function ns.ExportCharacter()
+    local snapshot, encoded = characterExport()
     ThumbleBridgeDB = ThumbleBridgeDB or {}
     ThumbleBridgeDB.snapshot = snapshot
     ThumbleBridgeDB.exportText = encoded
     return encoded
+end
+function ns.ExportPhoneCharacter()
+    if InCombatLockdown() then error('Leave combat before exporting phone bindings') end
+    local snapshot, encoded = characterExport()
+    if #encoded > 262144 then error('Character snapshot exceeds 256 KiB') end
+    ThumbleBridgeDB = ThumbleBridgeDB or {}
+    ThumbleBridgeDB.phoneSnapshot = snapshot
+    ThumbleBridgeDB.phoneExportText = encoded
 end
 function ns.Environment()
     return {
@@ -193,12 +204,16 @@ function ns.Environment()
 end
 function ns.ReviewText(text)
     local plan = ns.Decode(text)
-    local rows = ns.Review(plan, ThumbleBridgeDB and ThumbleBridgeDB.snapshot, ns.Capture())
+    local baseline = ThumbleBridgeDB and ThumbleBridgeDB.snapshot
+    if ThumbleBridgeDB and ThumbleBridgeDB.phoneSnapshot and ThumbleBridgeDB.phoneSnapshot.snapshotId == plan.snapshotId then baseline = ThumbleBridgeDB.phoneSnapshot end
+    local rows = ns.Review(plan, baseline, ns.Capture())
     return plan, rows
 end
 function ns.ApplyReviewed(plan)
     ThumbleBridgeDB = ThumbleBridgeDB or {}
-    local rows, before = ns.Apply(plan, ThumbleBridgeDB.snapshot, ns.Environment())
+    local baseline = ThumbleBridgeDB.snapshot
+    if ThumbleBridgeDB.phoneSnapshot and ThumbleBridgeDB.phoneSnapshot.snapshotId == plan.snapshotId then baseline = ThumbleBridgeDB.phoneSnapshot end
+    local rows, before = ns.Apply(plan, baseline, ns.Environment())
     ThumbleBridgeDB.undo = { characterGuid = UnitGUID('player'), bindingSet = plan.bindingSet, before = before, after = ns.AllBindings() }
     local result = ns.Array()
     for _, row in ipairs(rows) do result[#result + 1] = { key = row.key, controlId = row.controlId, command = row.after, base = ns.GetBinding(row.key, false), effective = ns.GetBinding(row.key, true) } end

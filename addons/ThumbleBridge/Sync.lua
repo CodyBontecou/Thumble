@@ -56,7 +56,14 @@ for _, event in ipairs({ 'PLAYER_LOGIN', 'PLAYER_LOGOUT', 'PLAYER_ENTERING_WORLD
     'ACTIONBAR_SLOT_CHANGED', 'ACTIONBAR_PAGE_CHANGED', 'UPDATE_SHAPESHIFT_FORM', 'SPELLS_CHANGED',
     'PLAYER_REGEN_ENABLED', 'DISPLAY_SIZE_CHANGED', 'UI_SCALE_CHANGED', 'CVAR_UPDATE' }) do frame:RegisterEvent(event) end
 frame:SetScript('OnEvent', function(_, event, name)
-    if event == 'PLAYER_LOGOUT' then sync:Capture(true)
+    if event == 'PLAYER_LOGOUT' then
+        sync:Capture(true)
+        if InCombatLockdown() or (ThumbleBridgeDB and ThumbleBridgeDB.autoSync == false) then
+            if ThumbleBridgeDB then ThumbleBridgeDB.phoneExportText = nil; ThumbleBridgeDB.phoneSnapshot = nil end
+        else
+            local ok = pcall(ns.ExportPhoneCharacter)
+            if not ok and ThumbleBridgeDB then ThumbleBridgeDB.phoneExportText = nil; ThumbleBridgeDB.phoneSnapshot = nil end
+        end
     elseif event ~= 'CVAR_UPDATE' or (type(name) == 'string' and name:lower():match('^gamepad')) then sync:Changed() end
     if event == 'PLAYER_LOGIN' and ConsolePort and ConsolePort.GetData then
         local db = ConsolePort:GetData()
