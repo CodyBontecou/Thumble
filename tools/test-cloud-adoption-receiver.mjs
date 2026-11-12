@@ -9,6 +9,7 @@ import WebSocket from 'ws';
 import { Connection } from '../apps/mobile/src/connection-core.js';
 import { xboxProfile, parseInvitation, neutralState, bindingChange } from '@tapping/controller';
 import { ProfileStore } from '../packages/profile-tools/src/store.js';
+import { createGrant } from '../apps/entitlements/src/grants.js';
 const fixture = spawn(process.execPath, ['tools/test-onboarding-receiver.mjs', '--preview'], { stdio: ['ignore', 'pipe', 'pipe'] });
 let output = ''; fixture.stdout.on('data', d => { output += d; }); fixture.stderr.on('data', d => { output += d; });
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -57,6 +58,12 @@ try {
   };
   const neutral = async () => { const bytes = await lastReport(); return bytes?.length === 20 && bytes.subarray(2).every(value => value === 0); };
   await until(() => connection.accessSnapshot());
+  // Output requires a plan: sign one with the fixture's throwaway entitlement key.
+  const grantKey = await readFile(await readFile('build/onboarding-preview-grant-key', 'utf8'), 'utf8');
+  const access = connection.accessSnapshot();
+  assert.equal(access.pro, false); assert.equal(access.remaining, 0);
+  connection.sendGrant(createGrant({ receiverId: access.receiverId, nonce: access.nonce, phoneId: connection.phoneId, pro: true }, grantKey));
+  await until(() => connection.accessSnapshot().pro);
   connection.resumePlay(); await until(() => connection.canPlay && !connection.recovering);
   // This fixture never creates HID: combinations are checked at the real
   // receiver's report boundary without sending them into a running game.

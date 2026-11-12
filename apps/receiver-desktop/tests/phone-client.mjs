@@ -6,12 +6,14 @@ import dgram from 'node:dgram';
 import WebSocket from 'ws';
 import { Connection } from '../../mobile/src/connection-core.js';
 import { Controller, neutralState } from '@tapping/controller';
+import { createGrant } from '../../entitlements/src/grants.js';
 
 import { desktopProfile } from '../../../packages/desktop-workspace/src/model.js';
 
 let input = '';
 for await (const chunk of process.stdin) input += chunk;
-const { invitation, expectUdp = false, expectChat = false } = JSON.parse(input);
+// grantKey is the test's throwaway entitlement key; the receiver under test trusts only it.
+const { invitation, grantKey, expectUdp = false, expectChat = false } = JSON.parse(input);
 const listeners = {};
 let socket, serial = 0;
 let udp, udpKey, udpPort, sending = 0n, received = 0n;
@@ -78,6 +80,11 @@ connection.subscribeProfile(() => {
 try {
   await connection.connect(invitation);
   await wait(() => connection.snapshot().phase === 'connected' && connection.access);
+  assert.equal(connection.access.pro, false); assert.equal(connection.access.remaining, 0);
+  // Restore a plan as the phone does after a store purchase or restore.
+  connection.sendGrant(createGrant({ receiverId: connection.access.receiverId, nonce: connection.access.nonce,
+    phoneId: connection.phoneId, pro: true }, grantKey));
+  await wait(() => connection.access?.pro);
   if (expectUdp) await wait(() => connection.inputTransport === 'udp');
   const catalog = await connection.requestProfiles();
   const starter = catalog.profiles.find(profile => profile.id === 'consoleport-standard');
@@ -126,7 +133,7 @@ try {
   await wait(() => connection.pending.size === 0);
   connection.submit(desktop.releaseAll());
   await wait(() => connection.pending.size === 0);
-  console.log(`PASS real phone connection: TLS, select, render, neutral ACK, resume, input, cloud adoption, phone editing, reconnect, transport=${connection.inputTransport}, chat=${expectChat}`);
+  console.log(`PASS real phone connection: TLS, plan grant, select, render, neutral ACK, resume, input, cloud adoption, phone editing, reconnect, transport=${connection.inputTransport}, chat=${expectChat}`);
 } finally {
   connection.disconnect();
 }

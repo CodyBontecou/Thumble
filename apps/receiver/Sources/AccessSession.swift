@@ -1,21 +1,19 @@
 import Foundation
 import CryptoKit
 
-// All disk and signature work happens on this utility queue, never on HID's queue.
+// Controller output requires a signed plan grant. All disk and signature work happens
+// on this utility queue, never on HID's queue.
 final class AccessSession {
     private let queue = DispatchQueue(label: "tapping.receiver.access", qos: .utility)
     private var timer: DispatchSourceTimer?
     private let directory: URL
     private let publicKey: String
-    private let now: () -> Double
     private let wallNow: () -> Double
     private var current: [String: Any] = [:]
-    private var used = 0.0
-    private var deadline = 0.0
     private var running = false
     private var pro = false
     // This branch is compiled only into the separately named local QA receiver.
-    // Store ownership and the durable demo ledger remain unchanged.
+    // Grant verification and the receiver record remain unchanged.
     private var unlimited: Bool {
 #if THUMBLE_LOCAL_TESTING
         return true
@@ -30,23 +28,33 @@ final class AccessSession {
     private var phoneID = ""
     private var cachedGrant: [String: Any]?
     private var error = ""
-    var onChange: (([String: Any], Double) -> Void)?
-    init(directory: URL, publicKey: String, now: @escaping () -> Double = { ProcessInfo.processInfo.systemUptime }, wallNow: @escaping () -> Double = { Date().timeIntervalSince1970 }) {
-        self.directory = directory; self.publicKey = publicKey; self.now = now; self.wallNow = wallNow
+    /// Called with the access snapshot and whether output may run.
+    var onChange: (([String: Any], Bool) -> Void)?
+    init(directory: URL, publicKey: String, wallNow: @escaping () -> Double = { Date().timeIntervalSince1970 }) {
+        self.directory = directory; self.publicKey = publicKey; self.wallNow = wallNow
+        // demo.json is the receiver record. It once also metered the retired free demo;
+        // it stays because plan grants are bound to its receiverId, which must never
+        // rotate for existing installs. New records keep a spent `used` value so the
+        // file stays readable by older receivers; this receiver ignores it.
+        let url = directory.appendingPathComponent("demo.json")
         do {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
-            let url = directory.appendingPathComponent("demo.json")
             if FileManager.default.fileExists(atPath: url.path) {
                 let object = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any]
-                guard let id = object?["receiverId"] as? String, UUID(uuidString: id) != nil,
-                      let seconds = object?["used"] as? Double, seconds.isFinite, (0...1800).contains(seconds) else { throw AccessError.invalid }
-                receiverID = id; used = seconds
-            } else { try persist() }
+                guard let id = object?["receiverId"] as? String, UUID(uuidString: id) != nil else { throw AccessError.invalid }
+                receiverID = id
+            } else {
+                do { try write(["version": 1, "receiverId": receiverID, "used": 1800], name: "demo.json") }
+                catch { self.error = "Receiver record could not be saved. Restore your plan in Thumble on your phone, or contact support."; return }
+            }
             if let data = try? Data(contentsOf: directory.appendingPathComponent("pro-grant.json")),
                let grant = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
                 cachedGrant = grant
             }
-        } catch { used = 1800; self.error = "Demo record could not be loaded. Restore Pro or contact support." }
+        } catch {
+            // Never replace an unreadable record: that would rotate the receiver ID.
+            self.error = "Receiver record could not be loaded. Restore your plan in Thumble on your phone, or contact support."
+        }
     }
     func snapshot() -> [String: Any] { queue.sync { tick(); return current } }
     func begin() {
@@ -57,75 +65,44 @@ final class AccessSession {
             self.timer = timer; timer.resume()
         }
     }
-    func stop() { queue.sync { pauseNow(); timer?.cancel(); timer = nil } }
-    func pair(phoneID: String, mirroredUsed: Double) {
+    func stop() { queue.sync { running = false; timer?.cancel(); timer = nil } }
+    func pair(phoneID: String) {
         queue.async {
-            self.pauseNow(); self.nonce = UUID().uuidString
+            self.running = false; self.nonce = UUID().uuidString
             self.phoneID = phoneID; self.pro = false
             if let grant = self.cachedGrant { try? self.acceptGrant(grant, requireNonce: false) }
-            self.used = max(self.used, min(1800, max(0, mirroredUsed)))
-            self.saveOrExhaust(); self.emit()
+            self.emit()
         }
     }
     func start() {
         queue.async {
-            guard !self.running else { self.emit(); return }
-            let now = self.now()
-            if self.unlimited { self.running = true; self.emit(); return }
-            let reserve = min(5, 1800 - self.used)
-            guard reserve > 0 else { self.emit(); return }
-            self.used += reserve
-            guard self.saveOrExhaust() else { self.emit(); return }
-            self.running = true; self.deadline = now + reserve
+            if self.unlimited { self.running = true }
             self.emit()
         }
     }
-    func pause() { queue.async { self.pauseNow(); self.emit() } }
+    func pause() { queue.async { self.running = false; self.emit() } }
     func submitGrant(_ grant: [String: Any]) {
         queue.async {
             do {
                 try self.acceptGrant(grant, requireNonce: true)
                 try self.write(grant, name: "pro-grant.json"); self.cachedGrant = grant
-                // Ownership changes always require an explicit Resume from neutral input.
-                self.pauseNow(); self.error = ""
-            } catch { self.error = "Pro could not be verified on this Mac. Retry Restore Purchases." }
+                self.error = ""
+            } catch { self.error = "Your plan could not be verified on this Mac. Tap Restore in Thumble on your phone." }
             self.emit()
         }
     }
     private func tick() {
-        let now = self.now()
-        if pro && self.wallNow() >= grantExpires { pro = false; pauseNow() }
-        if running && !unlimited {
-            if now >= deadline { running = false }
-            else if deadline - now <= 1 && used < 1800 {
-                let reserve = min(5, 1800 - used)
-                used += reserve
-                if saveOrExhaust() { deadline += reserve } else { running = false }
-            }
-        }
+        if pro && wallNow() >= grantExpires { pro = false; running = false }
         emit()
     }
-    private func pauseNow() {
-        if running && !unlimited {
-            used = max(0, used - max(0, deadline - self.now()))
-            saveOrExhaust()
-        }
-        running = false; deadline = 0
-    }
     private func emit() {
-        let now = self.now()
-        let remaining = max(0, 1800 - used + (running && !unlimited ? max(0, deadline - now) : 0))
-        let value: [String: Any] = ["v": 1, "pro": unlimited, "remaining": remaining,
-            "debitedUsed": used, "running": running, "receiverId": receiverID, "nonce": nonce,
+        // remaining and debitedUsed stay on the wire for older phone builds; there is no free time.
+        let value: [String: Any] = ["v": 1, "pro": unlimited, "remaining": 0.0,
+            "debitedUsed": 1800.0, "running": running, "receiverId": receiverID, "nonce": nonce,
             "error": error, "grantExpires": grantExpires]
         current = value
-        onChange?(value, running ? (unlimited ? Double.greatestFiniteMagnitude : deadline) : 0)
+        onChange?(value, running)
     }
-    @discardableResult private func saveOrExhaust() -> Bool {
-        do { try persist(); return true }
-        catch { used = 1800; running = false; deadline = 0; self.error = "Demo time could not be saved. Restore Pro or contact support."; return false }
-    }
-    private func persist() throws { try write(["version": 1, "receiverId": receiverID, "used": used], name: "demo.json") }
     private func write(_ value: [String: Any], name: String) throws {
         let data = try JSONSerialization.data(withJSONObject: value, options: [.sortedKeys])
         let destination = directory.appendingPathComponent(name)
@@ -148,8 +125,8 @@ final class AccessSession {
               issued <= self.wallNow() + 60, expires > self.wallNow(),
               expires - issued <= 7 * 86400,
               !requireNonce || payload["nonce"] as? String == nonce else { throw AccessError.invalid }
-        // Debit/refund outstanding demo reservation before changing the ownership flag.
-        pauseNow(); grantIssued = issued; grantExpires = expires; pro = owned
+        // Ownership changes always require an explicit Resume from neutral input.
+        running = false; grantIssued = issued; grantExpires = expires; pro = owned
     }
     private enum AccessError: Error { case invalid }
 }

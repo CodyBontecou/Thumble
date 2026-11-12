@@ -1,5 +1,6 @@
-"""Durable, prepaid demo time and the existing Ed25519 entitlement contract."""
+"""Plan grants under the existing Ed25519 entitlement contract, and the receiver record."""
 import base64
+import contextlib
 import json
 import os
 from pathlib import Path
@@ -9,9 +10,11 @@ import uuid
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
 from .state import number
-from .clock import monotonic
 
 PUBLIC_KEY = 'iZ110UZOAtUhFZirDAp6EiuA11GEixRYzkmeXRJ88sM='
+LOAD_ERROR = 'Receiver record could not be loaded. Restore your plan in Thumble on your phone, or contact support.'
+SAVE_ERROR = 'Receiver record could not be saved. Restore your plan in Thumble on your phone, or contact support.'
+GRANT_ERROR = 'Your plan could not be verified on this computer. Tap Restore in Thumble on your phone.'
 
 
 def atomic_json(path, value):
@@ -28,87 +31,58 @@ def atomic_json(path, value):
 
 
 class Access:
-    def __init__(self, directory, public_key=PUBLIC_KEY, clock=monotonic, wall=time.time):
+    """Controller output requires a valid plan grant; there is no free time."""
+
+    def __init__(self, directory, public_key=PUBLIC_KEY, wall=time.time):
         self.directory = Path(directory)
-        self.public_key, self.clock, self.wall = public_key, clock, wall
+        self.public_key, self.wall = public_key, wall
         self.receiver_id, self.nonce = str(uuid.uuid4()), str(uuid.uuid4())
         self.phone_id = ''
-        self.used = self.deadline = self.grant_expires = self.grant_issued = 0
+        self.grant_expires = self.grant_issued = 0
         self.pro = self.running = False
         self.error = ''
         self.cached = None
+        # demo.json is the receiver record. It once also metered the retired free demo;
+        # it stays because plan grants are bound to its receiverId, which must never
+        # rotate for existing installs. New records keep a spent `used` value so the
+        # file stays readable by older receivers; this receiver ignores it.
+        record = self.directory / 'demo.json'
         try:
             self.directory.mkdir(mode=0o700, parents=True, exist_ok=True)
-            ledger = self.directory / 'demo.json'
-            if ledger.exists():
-                value = json.loads(ledger.read_text(encoding='utf-8'))
-                self.receiver_id = str(uuid.UUID(value['receiverId']))
-                if not number(value['used']) or not 0 <= value['used'] <= 1800:
-                    raise ValueError('Invalid demo ledger')
-                self.used = value['used']
+            if record.exists():
+                self.receiver_id = str(uuid.UUID(json.loads(record.read_text(encoding='utf-8'))['receiverId']))
             else:
-                self.persist()
-            grant = self.directory / 'pro-grant.json'
-            if grant.exists():
-                self.cached = json.loads(grant.read_text(encoding='utf-8'))
-        except (OSError, ValueError, KeyError, TypeError):
-            self.used = 1800
-            self.error = 'Demo record could not be loaded. Restore Pro or contact support.'
-
-    def persist(self):
-        atomic_json(self.directory / 'demo.json',
-                    dict(version=1, receiverId=self.receiver_id, used=self.used))
-
-    def save(self):
-        try:
-            self.persist()
-            return True
-        except OSError:
-            self.used, self.deadline, self.running = 1800, 0, False
-            self.error = 'Demo time could not be saved. Restore Pro or contact support.'
-            return False
+                try:
+                    atomic_json(record, dict(version=1, receiverId=self.receiver_id, used=1800))
+                except OSError:
+                    self.error = SAVE_ERROR
+                    return
+        except (OSError, ValueError, KeyError, TypeError, AttributeError):
+            # Never replace an unreadable record: that would rotate the receiver ID.
+            self.error = LOAD_ERROR
+            return
+        with contextlib.suppress(OSError, ValueError):
+            self.cached = json.loads((self.directory / 'pro-grant.json').read_text(encoding='utf-8'))
 
     def pause(self):
-        if self.running and not self.pro:
-            self.used = max(0, self.used - max(0, self.deadline - self.clock()))
-            self.save()
-        self.running, self.deadline = False, 0
+        self.running = False
 
-    def pair(self, phone_id, mirrored):
-        self.pause()
+    def pair(self, phone_id):
+        self.running = False
         self.phone_id, self.nonce, self.pro = phone_id, str(uuid.uuid4()), False
         if self.cached:
             try:
                 self.accept(self.cached, require_nonce=False)
             except Exception:
                 pass
-        self.used = max(self.used, mirrored if number(mirrored) and 0 <= mirrored <= 1800 else 0)
-        self.save()
 
     def start(self):
-        if self.running:
-            return
         if self.pro:
             self.running = True
-            return
-        reserve = min(5, 1800 - self.used)
-        if reserve > 0:
-            self.used += reserve
-            if self.save():
-                self.running, self.deadline = True, self.clock() + reserve
 
     def tick(self):
         if self.pro and self.wall() >= self.grant_expires:
-            self.pause()
-            self.pro = False
-        if self.running and not self.pro:
-            if self.clock() >= self.deadline:
-                self.running = False
-            elif self.deadline - self.clock() <= 1 and self.used < 1800:
-                reserve = min(5, 1800 - self.used)
-                self.used += reserve
-                if self.save():
-                    self.deadline += reserve
+            self.running = self.pro = False
 
     def accept(self, grant, require_nonce=True):
         data = base64.b64decode(grant['payload'], validate=True)
@@ -124,7 +98,8 @@ class Access:
                 and 0 < expires - issued <= 7 * 86400
                 and (not require_nonce or payload['nonce'] == self.nonce)):
             raise ValueError('Invalid entitlement')
-        self.pause()
+        # Ownership changes always require an explicit Resume from neutral input.
+        self.running = False
         self.grant_issued, self.grant_expires, self.pro = issued, expires, payload['pro']
 
     def submit(self, grant):
@@ -133,13 +108,11 @@ class Access:
             atomic_json(self.directory / 'pro-grant.json', grant)
             self.cached, self.error = grant, ''
         except Exception:
-            self.pause()
-            self.pro = False
-            self.error = 'Pro could not be verified on this computer. Retry Restore Purchases.'
+            self.running = self.pro = False
+            self.error = GRANT_ERROR
 
     def snapshot(self, enabled):
-        remaining = max(0, 1800 - self.used + (max(0, self.deadline - self.clock())
-                                             if self.running and not self.pro else 0))
-        return dict(type='access', v=1, pro=self.pro, remaining=remaining,
-                    debitedUsed=self.used, running=self.running, receiverId=self.receiver_id,
+        # remaining and debitedUsed stay on the wire for older phone builds.
+        return dict(type='access', v=1, pro=self.pro, remaining=0,
+                    debitedUsed=1800, running=self.running, receiverId=self.receiver_id,
                     nonce=self.nonce, error=self.error, grantExpires=self.grant_expires, enabled=enabled)

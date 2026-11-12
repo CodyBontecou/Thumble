@@ -68,9 +68,10 @@ The entitlement worker accepts any plan product, checks that a subscription is
 current (Apple `expiresDate`; Google `subscriptionsv2` state), acknowledges
 Google subscriptions and signs the existing receiver grant. The grant keeps the
 `thumble_pro_lifetime` entitlement name and caps `expiresAt` at the plan's
-expiry, so the macOS and desktop receivers need no update. Receivers still
-meter their 30-minute allowance for phones that have not delivered a grant;
-the phone's paywall means a subscriber normally never sees it.
+expiry, so the macOS and desktop receivers need no grant changes. Receivers
+no longer give a free 30-minute demo: controller output and chat require a valid,
+unexpired grant. `demo.json` stays as the receiver record because grants are
+bound to its receiver ID.
 
 The sections below record the original one-time Pro setup.
 
@@ -316,10 +317,11 @@ node tools/test-profile-catalog.mjs
 npm run test:chat
 ```
 
-The access unit tests use a fake monotonic clock to exercise the full 30 minutes
-without waiting in real time. The integration test compiles an isolated TLS
-receiver linked to a reporting stub, never a real HID device. Its short residual
-allowance verifies expiry during held input and a signed Pro grant after expiry.
+The access unit tests use a fake wall clock and a throwaway signing key to check
+that a phone without a grant cannot start, that a valid grant can, that expiry
+stops output, and that demo-era records keep their receiver ID. The integration
+test compiles an isolated TLS receiver linked to a reporting stub, never a real
+HID device, and signs its own short-lived grant to verify expiry during held input.
 `--preview` runs that fake-HID receiver for manual simulator inspection; stop with
 Ctrl-C and do not share its private invitation file.
 
@@ -395,6 +397,6 @@ THUMBLE_SIGNING_KEYCHAIN="$PWD/.secrets/mac-signing/thumble-signing.keychain-db"
 
 Quit the normal receiver, open `build/Thumble Local Test Receiver.app`, and pair the test phone. This build includes `THUMBLE_LOCAL_TESTING`, grants unlimited controller access over the existing access protocol, and labels its menu **Local testing · unlimited controller time**. The phone displays its existing unlimited/Pro badge; this does not create a store purchase or signed ownership grant. Returning to the normal receiver restores ordinary access enforcement. Demo usage and saved layouts are preserved. The normal receiver and release packaging paths do not include the testing flag; this local app is not a public release or a purchase-validation test.
 
-`node tools/test-local-test-access.mjs` compiles both variants and checks exhausted-phone resume, 24-hour use, reconnect, unchanged ledger, absence of fabricated grants, and normal-build enforcement. The existing `npm run test:access` purchase-signature and demo-metering tests also pass.
+`node tools/test-local-test-access.mjs` compiles both variants and checks resume for a phone with no plan, 24-hour use, reconnect, unchanged ledger, absence of fabricated grants, and normal-build enforcement. The existing `npm run test:access` grant and receiver-record tests also pass.
 
 On October 24 the cabled iPhone 13 Pro Max was paired to this local build for ConsolePort auto-sync/layer-switching QA. Argent observed **Thumble Pro, unlimited controller time**, and the receiver reported an acknowledged ConsolePort layout at activation 16 with unlimited access. The app's existing purchase/free-time settings were not changed.

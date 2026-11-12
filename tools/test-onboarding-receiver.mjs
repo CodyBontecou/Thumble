@@ -4,7 +4,7 @@ import { mkdtemp, mkdir, writeFile, readFile, rm, readdir } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawn, execFileSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
+import { createHash, generateKeyPairSync } from 'node:crypto';
 import { once } from 'node:events';
 import assert from 'node:assert/strict';
 import WebSocket from 'ws';
@@ -16,10 +16,16 @@ const preview = process.argv.includes('--preview');
 let child, socket;
 const invitationExport = resolve('build/onboarding-preview-invitation');
 const directoryExport = resolve('build/onboarding-preview-directory');
+const grantKeyExport = resolve('build/onboarding-preview-grant-key');
 try {
   const contents = join(folder, 'OnboardingTest.app/Contents');
-  await mkdir(join(contents, 'MacOS'), { recursive: true });
+  await mkdir(join(contents, 'MacOS'), { recursive: true }); await mkdir(join(contents, 'Resources'));
   const binary = join(contents, 'MacOS/receiver');
+  // A throwaway entitlement key: tests sign their own plan grants for this fixture only.
+  const keys = generateKeyPairSync('ed25519');
+  const grantKeyPath = join(folder, 'grant-key.pem');
+  await writeFile(grantKeyPath, keys.privateKey.export({ type: 'pkcs8', format: 'pem' }), { mode: 0o600 });
+  await writeFile(join(contents, 'Resources/Monetization.json'), JSON.stringify({ entitlementPublicKey: keys.publicKey.export({ type: 'spki', format: 'der' }).subarray(-32).toString('base64') }));
   await writeFile(join(contents, 'Info.plist'), '<?xml version="1.0"?><plist version="1.0"><dict><key>CFBundleExecutable</key><string>receiver</string><key>CFBundleIdentifier</key><string>test.tapping.onboarding</string></dict></plist>');
   execFileSync('xcrun', ['clang', '-c', 'tools/access-receiver-tests/GamepadStub.c', '-o', join(folder, 'stub.o')]);
   const sources = (await readdir('apps/receiver/Sources')).filter(name => name.endsWith('.swift') && name !== 'main.swift').map(name => `apps/receiver/Sources/${name}`);
@@ -39,6 +45,7 @@ try {
     // The invitation rotates after disconnect; export its path, never its secret.
     await writeFile(invitationExport, invitationPath, { mode: 0o600 });
     await writeFile(directoryExport, directory, { mode: 0o600 });
+    await writeFile(grantKeyExport, grantKeyPath, { mode: 0o600 });
     console.log('Isolated onboarding preview ready. Input goes only to the test stub.');
     await new Promise(resolve => { process.once('SIGTERM', resolve); process.once('SIGINT', resolve); });
   } else {
@@ -73,6 +80,6 @@ try {
 } finally {
   socket?.terminate();
   if (child) { child.kill('SIGTERM'); await once(child, 'exit').catch(() => {}); }
-  if (preview) { await rm(invitationExport, { force: true }); await rm(directoryExport, { force: true }); }
+  if (preview) { await rm(invitationExport, { force: true }); await rm(directoryExport, { force: true }); await rm(grantKeyExport, { force: true }); }
   await rm(folder, { recursive: true, force: true });
 }

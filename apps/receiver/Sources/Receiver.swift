@@ -11,17 +11,18 @@ final class Receiver {
     private var access: AccessSession!
     private var accessInfo: [String: Any] = [:]
     private var playRequested = false
-    private var accessDeadline = 0.0
+    private var accessRunning = false
     private var accessStarting = false
+    // Output requires a plan grant (or the local testing build); there is no free time.
     private var pro: Bool { accessInfo["pro"] as? Bool == true }
-    private var outputAllowed: Bool { playRequested && ProcessInfo.processInfo.systemUptime < accessDeadline }
+    private var outputAllowed: Bool { playRequested && accessRunning }
     private func publishAccess() {
         guard let peer, accessInfo["v"] as? Int == 1 else { return }
         var value = accessInfo; value["type"] = "access"; value["enabled"] = playRequested
         send(value, to: peer)
     }
     private func pauseAccess() {
-        playRequested = false; accessDeadline = 0; accessStarting = false
+        playRequested = false; accessRunning = false; accessStarting = false
         chatTask?.cancel(); release(); access.pause(); publishAccess()
     }
     private var profileRevision = 0
@@ -72,19 +73,17 @@ final class Receiver {
         let directory = URL(fileURLWithPath: ProcessInfo.processInfo.environment["TAPPING_PROFILE_DIR"] ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/Tapping/profiles").path)
         let config = Bundle.main.url(forResource: "Monetization", withExtension: "json").flatMap { try? Data(contentsOf: $0) }.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
         access = AccessSession(directory: directory, publicKey: config?["entitlementPublicKey"] as? String ?? "")
-        access.onChange = { [weak self] info, deadline in
+        access.onChange = { [weak self] info, running in
             self?.queue.async { [weak self] in
                 guard let self else { return }
                 let wasPro = self.pro
                 self.accessInfo = info; self.accessStarting = false
-                if !self.pro && (info["remaining"] as? Double ?? 0) <= 0 {
-                    self.playRequested = false; self.chatTask?.cancel()
-                }
+                if !self.pro { self.playRequested = false; self.chatTask?.cancel() }
                 self.publishAccess()
-                self.accessDeadline = self.playRequested ? deadline : 0
+                self.accessRunning = self.playRequested && running
                 if !self.outputAllowed { self.release() }
                 if wasPro != self.pro {
-                    self.playRequested = false; self.accessDeadline = 0; self.release()
+                    self.playRequested = false; self.accessRunning = false; self.release()
                     self.chatTask?.cancel(); self.leases.removeAll(); self.paused = true
                     if let peer = self.peer, !self.layoutPending { self.acknowledge(peer, type: "paused", sequence: self.lastSequence) }
                 }
@@ -120,17 +119,13 @@ final class Receiver {
         timer.setEventHandler { [weak self] in
             guard let self else { return }
             let now = ProcessInfo.processInfo.systemUptime
-            if self.playRequested && self.accessDeadline > 0 && now >= self.accessDeadline {
-                self.accessDeadline = 0; self.playRequested = false
-                self.chatTask?.cancel(); self.release(); self.access.pause(); self.publishAccess()
-            }
             if self.layoutPending {
                 if now > self.layoutDeadline { self.disconnect("Phone did not acknowledge layout · reconnect to retry") }
                 return
             }
             if self.peer != nil && now - self.lastInput > 2 { self.disconnect("Input timed out · controls released") }
             else if let peer = self.peer, InputTiming.shouldPause(now: now, lastInput: self.lastInput) {
-                if !self.paused { self.diagnostics?.note("pauses"); self.release(); self.accessDeadline = 0; self.access.pause(); self.paused = true; self.leases.removeAll(); self.status("Wi-Fi paused · controls released") }
+                if !self.paused { self.diagnostics?.note("pauses"); self.release(); self.accessRunning = false; self.access.pause(); self.paused = true; self.leases.removeAll(); self.status("Wi-Fi paused · controls released") }
                 if now - self.lastPause > 0.08 { self.acknowledge(peer, type: "paused", sequence: self.lastSequence); self.lastPause = now }
             }
             if self.peer == nil && Date().timeIntervalSince1970 > self.expiry { self.newInvitation() }
@@ -184,7 +179,7 @@ final class Receiver {
             let now = ProcessInfo.processInfo.systemUptime
             let value = ReceiverSnapshot(connected: peer != nil, paused: paused, layoutPending: layoutPending,
                 rememberedPhone: rememberedPhone.isRemembered, transport: peer == nil ? nil : (datagram == nil ? "WebSocket (TLS)" : "UDP + WebSocket"),
-                port: port, pro: pro, remaining: accessInfo["remaining"] as? Double, running: accessInfo["running"] as? Bool ?? false,
+                port: port, pro: pro, accessKnown: accessInfo["v"] != nil,
                 playRequested: playRequested, accessError: accessInfo["error"] as? String ?? "",
                 lastInputAge: peer == nil ? nil : max(0, now - lastInput), inputSequence: lastSequence, profileRevision: profileRevision,
                 latencyExport: diagnostics != nil, inputAudit: audit != nil)
@@ -264,20 +259,20 @@ final class Receiver {
             accessInfo = [:]; profileRevision = 0
             peer = connection; paused = false; lastSequence = -1; lastInput = ProcessInfo.processInfo.systemUptime; leases.removeAll(); release()
             profileCapable = true
-            playRequested = false; accessDeadline = 0; accessStarting = false
-            let mirrored = (message["demoUsed"] as? Double).flatMap { $0.isFinite && (0...1800).contains($0) ? $0 : nil } ?? 0
-            access.pair(phoneID: phoneID, mirroredUsed: mirrored)
+            playRequested = false; accessRunning = false; accessStarting = false
+            // Older phones still send demoUsed. The free demo is retired, so it is ignored.
+            access.pair(phoneID: phoneID)
             acknowledge(connection, type: "ready", sequence: -1, reconnectToken: reconnectToken)
             if activeProfile != nil { pushLayout() }
             if message["datagram"] as? Int == 1 && ProcessInfo.processInfo.environment["TAPPING_INPUT_TRANSPORT"] == "udp" { offerDatagram(connection) }
             publishAccess()
-            status("Connected · start demo or restore Pro")
+            status("Connected · tap Resume on your phone to play")
             onInvitation?("")
             return
         }
         if message["type"] as? String == "access-pause" { pauseAccess(); return }
         if message["type"] as? String == "access-resume" {
-            guard !layoutPending, pro || (accessInfo["remaining"] as? Double ?? 0) > 0 else { publishAccess(); return }
+            guard !layoutPending, pro else { publishAccess(); return }
             playRequested = true; publishAccess(); return
         }
         if message["type"] as? String == "access-grant", let grant = message["grant"] as? [String: Any] {
@@ -324,7 +319,7 @@ final class Receiver {
         diagnostics?.note(udp == nil ? "wssAccepted" : "udpAccepted")
         lastSequence = sequence; lastInput = now
         if wasPaused { status("Connected · Xbox gamepad ready") }
-        if playRequested && !accessStarting && accessDeadline == 0 {
+        if playRequested && !accessStarting && !accessRunning {
             accessStarting = true; access.start()
         }
         if !apply(chatBusy || !outputAllowed ? .neutral : next) { disconnect("Virtual gamepad report failed"); return }
@@ -431,7 +426,8 @@ final class Receiver {
             let result: [String: Any] = ["type": "chat-result", "id": id, "error": reason]
             send(result, to: connection)
         }
-        guard outputAllowed else { reject("Start or resume your controller demo, or unlock Pro."); return }
+        guard pro else { reject("Start a free trial or restore your plan in Thumble on your phone."); return }
+        guard outputAllowed else { reject("Tap Resume on your phone, then send your message again."); return }
         guard !chatBusy else { reject("Another chat message is being delivered. Please wait."); return }
         guard !layoutPending, message["revision"] as? Int == profileRevision,
               let lease = message["lease"] as? String, let deadline = leases[lease], ProcessInfo.processInfo.systemUptime <= deadline,
@@ -484,7 +480,7 @@ final class Receiver {
     }
     private func pushLayout() {
         guard let peer, let activeProfile else { return }
-        // Reconnect restores the saved layout for demo and Pro alike.
+        // Reconnect restores the saved layout whether or not the phone has a plan.
         profileRevision = savedProfileRevision
         guard apply(.neutral) else { disconnect("Could not release controls before changing layout"); return }
         leases.removeAll(); layoutPending = true; paused = true
@@ -569,8 +565,8 @@ struct ReceiverSnapshot {
     let transport: String?
     let port: UInt16
     let pro: Bool
-    let remaining: Double?
-    let running: Bool
+    /// The access snapshot for the connected phone has arrived.
+    let accessKnown: Bool
     let playRequested: Bool
     let accessError: String
     let lastInputAge: Double?
