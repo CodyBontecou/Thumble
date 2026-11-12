@@ -1,0 +1,212 @@
+[
+  {
+    "path": "blog.html",
+    "before": "89829291cd633666d5dc095b6fd3131b27101ead6292aa63dab000b6a3b3b990",
+    "after": "faf5111674740a12fe367e3852a4888a77f774e53f519480dcd5d59bc9803ccf"
+  },
+  {
+    "path": "index.html",
+    "before": "cef22656e9c23d1f2f78631bb46296a8b04fa76fe8091b376600adb0d8e9c196",
+    "after": "7fb3ea99f2568be093be400a67272ede34e70cae7397d41b1d5601e12a320097"
+  },
+  {
+    "path": "about.html",
+    "before": "102644a441fe7ce953624e18654e298d004dab7426f04b5a66aab2ec35db951b",
+    "after": "15d4f477f419b6eefff9e128e180ad0e90b396dedfd7f0d5e44f06e89bbc45db"
+  },
+  {
+    "path": "support.html",
+    "before": "d7abe525b6586ea2e999fda951778ef4f8d52f0869654009d82be30d407add85",
+    "after": "ea13acda3f4bc042f1e5aefb83cc9feb029a1f07acaa23a754ce78e4f082fa35"
+  },
+  {
+    "path": "terms.html",
+    "before": "27e0e9919f70d517a78dc4d0fc7de86c25312738b63a36698a6585a3a74a4dde",
+    "after": "ad92d5a4ab8c2a91d2651f0fb23e80945fc193035daeceb9213ee092460b668b"
+  },
+  {
+    "path": "skins.html",
+    "before": "9c1d9f64abe391282391e4bc7e89f15762bc8ae3b0f13dae8fb9b224b43787e4",
+    "after": "f8b089ec2d6a861a5713f6e10c3d2c9000e03dc361843d56ed5263a7d9e4eea6"
+  },
+  {
+    "path": "404.html",
+    "before": "cf6df4d9983cdd71dcf31fb1e3d991f3293ed844646f74f5bfe51eeaaba590cb",
+    "after": "297c150055e08cb10757881ddecc4da26d458cd75e09a886c779f516d614d8a0"
+  },
+  {
+    "path": "developers.html",
+    "before": "90dfde78b2270f9bdc23d0716907bc9a12e4ef36b4a69477a4f77fd1776a7894",
+    "after": "2aef6e00a5f2a39d3cce923a9f0d20314aa0d3b599c6f2a0123eac283da848eb"
+  },
+  {
+    "path": "guides.html",
+    "before": "7c94f9c5ad9769968d1a3089f9776b8c07bf3fccc97d47963e5c7387dcbb9c13",
+    "after": "88d07ddd3eb26a15fff4afcb3df15100b62b6fb8b24f086b15fd4911bde5b4bc"
+  },
+  {
+    "path": "thanks.html",
+    "before": "a6939cb74e84ba34258f73de6c9fb7d79b7946ad7c1a67a4ff5d5ba84de3aa60",
+    "after": "ae5df673be280506d964c97d8aec3e108db1243eff9a89b8cf94ddf57d3983b7"
+  },
+  {
+    "path": "docs.html",
+    "before": "e85e78a925ada2869357d384322cc5900923a6c492c2bd9b030984d95b359ce0",
+    "after": "52749801bc58c22786f90995ee27616c8f81680a78fc7b7766e0e6d8fc02ca0a"
+  },
+  {
+    "path": "waitlist.html",
+    "before": "e9eaf1f55a9c702577b80c7938ac45eeefc4be58d7fccf27c0742d59d5e940d0",
+    "after": "d5e16c0b7c7466cc981e4c51750b752d0dcab8006cee977353b6f688ad564886"
+  },
+  {
+    "path": "api-policy.html",
+    "before": "0f73b7289f59387822838e03989de8d8be7398fabeac2d13bae89a2a34b53749",
+    "after": "d9e9e106bb4d00437e8ba482bc9fdcf0a29c57b5f58c98f53101285c02bc23e7"
+  },
+  {
+    "path": "privacy.html",
+    "before": "f998a1d539c1e35ce9f9ee52815656bfef7c4bae14a45731c515e7b6b8c78547",
+    "after": "2f0bdb4fa4687078a6568625999f61f27c2ea5706c9e6012eab9f226774d7f01"
+  },
+  {
+    "path": "blog/connect-chatgpt-claude.html",
+    "before": "214af8fd1cb407ee59d85d8d8122fa59d42c7f2358357339fc3d38cbf05fdd34",
+    "after": "920d87c28f8e7ec4935a05171ae0d793102d410e45256f779965387cf7e9247f"
+  },
+  {
+    "path": "blog/development-update-october-2026.html",
+    "before": "52bba23c55c1b6ff1513a909648f1b70758cf5d9bec430c91208d0aa455a3d0a",
+    "after": "71e8575bc10c465cb86c5f10a9510559d69c3ce422375d9c3dd00889a2de4545"
+  },
+  {
+    "path": "guides/consoleport-spell-labels-not-syncing.html",
+    "before": "f384dfb754c63bbd0a377738c4cb974536be4284f66bffd02ada2b48bc249c53",
+    "after": "5d4524a517025fc6c06f7b4f51536793282e93fa260f47c5d05d6efe04f862af"
+  },
+  {
+    "path": "guides/iphone-controller-mac.html",
+    "before": "2879d8d583e2bed8ecab175d5ce19076060207e6e2c08c16cc092163b647336a",
+    "after": "4ae7f4d0114279c142f4850d296b9f84457cb8aab464ae49847e0bc9285b8cfd"
+  },
+  {
+    "path": "guides/thumble-phone-mac-pairing.html",
+    "before": "9ec29b88bebed83006351a40a9d8b959e4e5669a1726b4c44038e06cc43bf321",
+    "after": "c14f0a99988fc5b5acaa4aff20d35ad22517d4e2c0196a5f7ef21b507885642e"
+  },
+  {
+    "path": "guides/wow-controller-camera-reversed-mac.html",
+    "before": "5ab7da57e880f1eb01a420af899c15ecf6df9c27bb28e1bcf434b178e8d20c7f",
+    "after": "874f2923cc9e8f6ea879635d8f963f2097732919ca515b1cc09d391d03c6c580"
+  },
+  {
+    "path": "guides/wow-controller-mac.html",
+    "before": "9dd155614a4d84c5b19db6f79d6814d2e81e5b1884975b516286018a456bc300",
+    "after": "b74588b2b6e62e9b01dcbf19d8c8ea7814a438bdfb4c9119a438e0d30c101893"
+  },
+  {
+    "path": "guides/wow-controller-not-detected-mac.html",
+    "before": "f07d4735b7747a19acfb2dfdd03b1031be3feec20f8448276e10f053b0a48813",
+    "after": "e6da17edfdf2e5cb75b06cb75151c6e1a70fb36b1be097bf84fc62aaa7c04052"
+  },
+  {
+    "path": "guides/consoleport-mac-setup.html",
+    "before": "6f8a42853f15547cff0ca3878e3a5def33fb6b62ad7887843b2717723355984f",
+    "after": "0149eac93cb63e4a8be4bb001cf59305f436b68a700149057e5be6f79591dc3e"
+  },
+  {
+    "path": "guides/wow-classic-controller-mac.html",
+    "before": "a17bfc1d34aa69d603f08e5dae449f45278aa3cdd33cd6863ef43e14b044d747",
+    "after": "7fbbaa75624f0ef760e0a52a6212ae9fff5dfffca713914355b3e5ab6c176044"
+  },
+  {
+    "path": "guides/install-thumble-wow-addon.html",
+    "before": "47c4549d22a383db10e4fb808664ff421b98a9f236b4b4067bae8756d816d351",
+    "after": "c9136e6962d346990d3251842a6b7edcd3e062b96a6dfabfd155b5791785306a"
+  },
+  {
+    "path": "guides/consoleport-wrong-action-modifier.html",
+    "before": "089306d8648ce2628291ecf1ae1789f068d356ecff529286bc31e34f789eb24d",
+    "after": "3e8dee9d0e40a054d9b48007cd553d3a8e65b9d6a83aa8da3d4fd276b01fd313"
+  },
+  {
+    "path": "compare/wow-phone-vs-gamepad.html",
+    "before": "b095332196233c88404001a45bec27a9cdd513481e5ee76ae0bb08bfa15d55da",
+    "after": "3695f9f6db3e3d5476b983b51efba573bfa68555dc8006fe823bc0f899887dd2"
+  },
+  {
+    "path": "assets/app-icon-96-f04ca1fbba18.webp",
+    "before": null,
+    "after": "f04ca1fbba1860d6b76d8ace074aa30ffed9630b485fcec4ee0703e4bdf0e822"
+  },
+  {
+    "path": "assets/screenshots/consoleport-circles-78393f9ef12f-1800-a4787d0fae81.webp",
+    "before": null,
+    "after": "a4787d0fae811496493527e6ac5f7a5c73ad234f08d3673d887de782a05f8693"
+  },
+  {
+    "path": "assets/screenshots/consoleport-circles-78393f9ef12f-1200-9e371fa0f531.webp",
+    "before": null,
+    "after": "9e371fa0f531618100add273323c88438f9445cfb3283765d4c6a30821b607a0"
+  },
+  {
+    "path": "assets/screenshots/consoleport-circles-78393f9ef12f-800-bc2d17ab6692.webp",
+    "before": null,
+    "after": "bc2d17ab66920928ddbc439ec937635af66d2d54b04ff592b40e06fc1ca675a6"
+  },
+  {
+    "path": "assets/screenshots/consoleport-circles-78393f9ef12f-480-079fb59f918d.webp",
+    "before": null,
+    "after": "079fb59f918da2ee5871e085936da409fe5bec31e524a6744ce13360991c88de"
+  },
+  {
+    "path": "assets/screenshots/abilities/bloodthirst-80f4b6cabb8c-128-8bc7f389cced.webp",
+    "before": null,
+    "after": "8bc7f389cced5b85e1edf0c6c2fcfc06b946e517c253f361294570f08b527373"
+  },
+  {
+    "path": "assets/screenshots/abilities/target-enemy-688961a16135-128-23288b57d58d.webp",
+    "before": null,
+    "after": "23288b57d58d67f6a59393aafa7e5addf04224c52cef405a6c356f5d29200757"
+  },
+  {
+    "path": "assets/screenshots/abilities/recklessness-bb5df09de551-128-f81b23b67113.webp",
+    "before": null,
+    "after": "f81b23b67113053acb3a5482d495d4416f96cacb69b3719d6f5936134d76bdc9"
+  },
+  {
+    "path": "assets/screenshots/abilities/target-neutral-fbca3cea1b00-128-ec1f92cbbc74.webp",
+    "before": null,
+    "after": "ec1f92cbbc74c509df3bbb5c1fe8d8ec9a219b6a3e8b6380345fdffa2155ef45"
+  },
+  {
+    "path": "assets/screenshots/abilities/charge-c153bdf02988-128-615b8c593b7e.webp",
+    "before": null,
+    "after": "615b8c593b7ea9cb406f4edb90c682b9f6b0770f27dc27f123d33e0868f3350e"
+  },
+  {
+    "path": "assets/screenshots/abilities/sunder-armor-da23ae30ad37-128-aac353875fc9.webp",
+    "before": null,
+    "after": "aac353875fc9fd28fe7aab8da98f14bff38a270ec09242ef6ab2381aa4229ce9"
+  },
+  {
+    "path": "assets/screenshots/abilities/berserker-rage-e2047ebb222c-128-47b432a69477.webp",
+    "before": null,
+    "after": "47b432a69477f1203da9bd8be7a025aeb955b27929f8b5d2878ed70ae1d4c9f8"
+  },
+  {
+    "path": "assets/screenshots/abilities/whirlwind-ecb8f8889507-128-b922de2cfc04.webp",
+    "before": null,
+    "after": "b922de2cfc0444c70b894de4d85186ce5272d730a3d1deded9b5a51e0b686a8b"
+  },
+  {
+    "path": "assets/screenshots/abilities/cleave-adb5f1dad9b0-128-1c7a67266c39.webp",
+    "before": null,
+    "after": "1c7a67266c39a36daf89a83db4bb1422530c7c203acfda00c10c86bf97da7362"
+  },
+  {
+    "path": "assets/screenshots/abilities/execute-4ab74733e048-128-dc29def54f4a.webp",
+    "before": null,
+    "after": "dc29def54f4a4e665fae628b59e96f53e6dc9a0904953ce5c59e0bc69fe3de2c"
+  }
+]

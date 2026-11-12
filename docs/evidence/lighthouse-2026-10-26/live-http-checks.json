@@ -1,0 +1,160 @@
+[
+  {
+    "url": "https://thumble.io/blog/connect-chatgpt-claude",
+    "status": 200,
+    "indexable": true,
+    "canonical": true
+  },
+  {
+    "url": "https://thumble.io/blog/development-update-october-2026",
+    "status": 200,
+    "indexable": true,
+    "canonical": true
+  },
+  {
+    "url": "https://thumble.io/blog",
+    "status": 200,
+    "indexable": true,
+    "canonical": true
+  },
+  {
+    "url": "https://thumble.io/docs",
+    "status": 200,
+    "indexable": true,
+    "canonical": true
+  },
+  {
+    "url": "https://thumble.io/",
+    "status": 200,
+    "indexable": true,
+    "canonical": true
+  },
+  {
+    "url": "https://thumble.io/privacy",
+    "status": 200,
+    "indexable": true,
+    "canonical": true
+  },
+  {
+    "url": "https://thumble.io/waitlist",
+    "status": 200,
+    "indexable": true,
+    "canonical": true
+  },
+  {
+    "url": "https://thumble.io/support",
+    "status": 200,
+    "indexable": true,
+    "canonical": true
+  },
+  {
+    "url": "https://thumble.io/terms",
+    "status": 200,
+    "indexable": true,
+    "canonical": true
+  },
+  {
+    "url": "https://thumble.io/about",
+    "status": 200,
+    "indexable": true,
+    "canonical": true
+  },
+  {
+    "url": "https://thumble.io/developers",
+    "status": 200,
+    "indexable": true,
+    "canonical": true
+  },
+  {
+    "url": "https://thumble.io/api-policy",
+    "status": 200,
+    "indexable": true,
+    "canonical": true
+  },
+  {
+    "url": "https://thumble.io/guides",
+    "status": 200,
+    "indexable": true,
+    "canonical": true
+  },
+  {
+    "url": "https://thumble.io/guides/wow-controller-mac",
+    "status": 200,
+    "indexable": true,
+    "canonical": true
+  },
+  {
+    "url": "https://thumble.io/guides/consoleport-mac-setup",
+    "status": 200,
+    "indexable": true,
+    "canonical": true
+  },
+  {
+    "url": "https://thumble.io/guides/install-thumble-wow-addon",
+    "status": 200,
+    "indexable": true,
+    "canonical": true
+  },
+  {
+    "url": "https://thumble.io/guides/wow-controller-not-detected-mac",
+    "status": 200,
+    "indexable": true,
+    "canonical": true
+  },
+  {
+    "url": "https://thumble.io/guides/thumble-phone-mac-pairing",
+    "status": 200,
+    "indexable": true,
+    "canonical": true
+  },
+  {
+    "url": "https://thumble.io/guides/iphone-controller-mac",
+    "status": 200,
+    "indexable": true,
+    "canonical": true
+  },
+  {
+    "url": "https://thumble.io/compare/wow-phone-vs-gamepad",
+    "status": 200,
+    "indexable": true,
+    "canonical": true
+  },
+  {
+    "url": "https://thumble.io/guides/consoleport-wrong-action-modifier",
+    "status": 200,
+    "indexable": true,
+    "canonical": true
+  },
+  {
+    "url": "https://thumble.io/guides/wow-controller-camera-reversed-mac",
+    "status": 200,
+    "indexable": true,
+    "canonical": true
+  },
+  {
+    "url": "https://thumble.io/guides/consoleport-spell-labels-not-syncing",
+    "status": 200,
+    "indexable": true,
+    "canonical": true
+  },
+  {
+    "url": "https://thumble.io/guides/wow-classic-controller-mac",
+    "status": 200,
+    "indexable": true,
+    "canonical": true
+  },
+  {
+    "url": "https://thumble.io/cli/thumble.mjs",
+    "status": 200,
+    "identical": true
+  },
+  {
+    "url": "https://thumble.io/cli/thumble-cli-0.1.0.tgz",
+    "status": 200,
+    "identical": true
+  },
+  {
+    "markdownStatus": 200,
+    "contentType": "text/markdown; charset=utf-8"
+  }
+]

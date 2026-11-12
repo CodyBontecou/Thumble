@@ -1,0 +1,92 @@
+[
+  {
+    "path": "index.html",
+    "before": "cef22656e9c23d1f2f78631bb46296a8b04fa76fe8091b376600adb0d8e9c196",
+    "after": "8bb1db139edb7c34edd5ead6adcafb959490bf318fa131353f80f5749cda808d"
+  },
+  {
+    "path": "waitlist.html",
+    "before": "e9eaf1f55a9c702577b80c7938ac45eeefc4be58d7fccf27c0742d59d5e940d0",
+    "after": "001ff9f3646664a655452f2399e7f1a5f6ba1916305d031dd4a661e831703580"
+  },
+  {
+    "path": "guides/iphone-controller-mac.html",
+    "before": "2879d8d583e2bed8ecab175d5ce19076060207e6e2c08c16cc092163b647336a",
+    "after": "354c6282e9df7ec7eb8bb9dce1775e5ef66c25c575786ae16d0e561386c5f476"
+  },
+  {
+    "path": "guides/wow-controller-mac.html",
+    "before": "9dd155614a4d84c5b19db6f79d6814d2e81e5b1884975b516286018a456bc300",
+    "after": "9332cb79f474a284d1d50694bc59b5a36596fa867fa528f0caa2ee3f7238bb2d"
+  },
+  {
+    "path": "assets/screenshots/consoleport-circles-78393f9ef12f-1800-a4787d0fae81.webp",
+    "before": null,
+    "after": "a4787d0fae811496493527e6ac5f7a5c73ad234f08d3673d887de782a05f8693"
+  },
+  {
+    "path": "assets/screenshots/consoleport-circles-78393f9ef12f-1200-9e371fa0f531.webp",
+    "before": null,
+    "after": "9e371fa0f531618100add273323c88438f9445cfb3283765d4c6a30821b607a0"
+  },
+  {
+    "path": "assets/screenshots/consoleport-circles-78393f9ef12f-800-bc2d17ab6692.webp",
+    "before": null,
+    "after": "bc2d17ab66920928ddbc439ec937635af66d2d54b04ff592b40e06fc1ca675a6"
+  },
+  {
+    "path": "assets/screenshots/consoleport-circles-78393f9ef12f-480-079fb59f918d.webp",
+    "before": null,
+    "after": "079fb59f918da2ee5871e085936da409fe5bec31e524a6744ce13360991c88de"
+  },
+  {
+    "path": "assets/screenshots/abilities/bloodthirst-80f4b6cabb8c-128-8bc7f389cced.webp",
+    "before": null,
+    "after": "8bc7f389cced5b85e1edf0c6c2fcfc06b946e517c253f361294570f08b527373"
+  },
+  {
+    "path": "assets/screenshots/abilities/target-enemy-688961a16135-128-23288b57d58d.webp",
+    "before": null,
+    "after": "23288b57d58d67f6a59393aafa7e5addf04224c52cef405a6c356f5d29200757"
+  },
+  {
+    "path": "assets/screenshots/abilities/recklessness-bb5df09de551-128-f81b23b67113.webp",
+    "before": null,
+    "after": "f81b23b67113053acb3a5482d495d4416f96cacb69b3719d6f5936134d76bdc9"
+  },
+  {
+    "path": "assets/screenshots/abilities/target-neutral-fbca3cea1b00-128-ec1f92cbbc74.webp",
+    "before": null,
+    "after": "ec1f92cbbc74c509df3bbb5c1fe8d8ec9a219b6a3e8b6380345fdffa2155ef45"
+  },
+  {
+    "path": "assets/screenshots/abilities/charge-c153bdf02988-128-615b8c593b7e.webp",
+    "before": null,
+    "after": "615b8c593b7ea9cb406f4edb90c682b9f6b0770f27dc27f123d33e0868f3350e"
+  },
+  {
+    "path": "assets/screenshots/abilities/sunder-armor-da23ae30ad37-128-aac353875fc9.webp",
+    "before": null,
+    "after": "aac353875fc9fd28fe7aab8da98f14bff38a270ec09242ef6ab2381aa4229ce9"
+  },
+  {
+    "path": "assets/screenshots/abilities/berserker-rage-e2047ebb222c-128-47b432a69477.webp",
+    "before": null,
+    "after": "47b432a69477f1203da9bd8be7a025aeb955b27929f8b5d2878ed70ae1d4c9f8"
+  },
+  {
+    "path": "assets/screenshots/abilities/whirlwind-ecb8f8889507-128-b922de2cfc04.webp",
+    "before": null,
+    "after": "b922de2cfc0444c70b894de4d85186ce5272d730a3d1deded9b5a51e0b686a8b"
+  },
+  {
+    "path": "assets/screenshots/abilities/cleave-adb5f1dad9b0-128-1c7a67266c39.webp",
+    "before": null,
+    "after": "1c7a67266c39a36daf89a83db4bb1422530c7c203acfda00c10c86bf97da7362"
+  },
+  {
+    "path": "assets/screenshots/abilities/execute-4ab74733e048-128-dc29def54f4a.webp",
+    "before": null,
+    "after": "dc29def54f4a4e665fae628b59e96f53e6dc9a0904953ce5c59e0bc69fe3de2c"
+  }
+]

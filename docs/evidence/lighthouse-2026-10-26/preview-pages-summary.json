@@ -1,0 +1,669 @@
+[
+  {
+    "route": "/blog/connect-chatgpt-claude",
+    "scores": {
+      "performance": 100,
+      "accessibility": 100,
+      "best-practices": 100,
+      "seo": 69
+    },
+    "failures": [
+      {
+        "id": "is-crawlable",
+        "details": {
+          "type": "table",
+          "headings": [
+            {
+              "key": "source",
+              "valueType": "code",
+              "label": "Blocking Directive Source"
+            }
+          ],
+          "items": [
+            {
+              "source": "x-robots-tag: noindex"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "route": "/blog/development-update-october-2026",
+    "scores": {
+      "performance": 100,
+      "accessibility": 100,
+      "best-practices": 100,
+      "seo": 69
+    },
+    "failures": [
+      {
+        "id": "is-crawlable",
+        "details": {
+          "type": "table",
+          "headings": [
+            {
+              "key": "source",
+              "valueType": "code",
+              "label": "Blocking Directive Source"
+            }
+          ],
+          "items": [
+            {
+              "source": "x-robots-tag: noindex"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "route": "/blog",
+    "scores": {
+      "performance": 100,
+      "accessibility": 100,
+      "best-practices": 100,
+      "seo": 69
+    },
+    "failures": [
+      {
+        "id": "is-crawlable",
+        "details": {
+          "type": "table",
+          "headings": [
+            {
+              "key": "source",
+              "valueType": "code",
+              "label": "Blocking Directive Source"
+            }
+          ],
+          "items": [
+            {
+              "source": "x-robots-tag: noindex"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "route": "/docs",
+    "scores": {
+      "performance": 100,
+      "accessibility": 100,
+      "best-practices": 100,
+      "seo": 66
+    },
+    "failures": [
+      {
+        "id": "is-crawlable",
+        "details": {
+          "type": "table",
+          "headings": [
+            {
+              "key": "source",
+              "valueType": "code",
+              "label": "Blocking Directive Source"
+            }
+          ],
+          "items": [
+            {
+              "source": "x-robots-tag: noindex"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "route": "/privacy",
+    "scores": {
+      "performance": 100,
+      "accessibility": 100,
+      "best-practices": 100,
+      "seo": 66
+    },
+    "failures": [
+      {
+        "id": "is-crawlable",
+        "details": {
+          "type": "table",
+          "headings": [
+            {
+              "key": "source",
+              "valueType": "code",
+              "label": "Blocking Directive Source"
+            }
+          ],
+          "items": [
+            {
+              "source": "x-robots-tag: noindex"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "route": "/waitlist",
+    "scores": {
+      "performance": 100,
+      "accessibility": 100,
+      "best-practices": 100,
+      "seo": 69
+    },
+    "failures": [
+      {
+        "id": "is-crawlable",
+        "details": {
+          "type": "table",
+          "headings": [
+            {
+              "key": "source",
+              "valueType": "code",
+              "label": "Blocking Directive Source"
+            }
+          ],
+          "items": [
+            {
+              "source": "x-robots-tag: noindex"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "route": "/support",
+    "scores": {
+      "performance": 100,
+      "accessibility": 100,
+      "best-practices": 100,
+      "seo": 66
+    },
+    "failures": [
+      {
+        "id": "is-crawlable",
+        "details": {
+          "type": "table",
+          "headings": [
+            {
+              "key": "source",
+              "valueType": "code",
+              "label": "Blocking Directive Source"
+            }
+          ],
+          "items": [
+            {
+              "source": "x-robots-tag: noindex"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "route": "/terms",
+    "scores": {
+      "performance": 100,
+      "accessibility": 100,
+      "best-practices": 100,
+      "seo": 66
+    },
+    "failures": [
+      {
+        "id": "is-crawlable",
+        "details": {
+          "type": "table",
+          "headings": [
+            {
+              "key": "source",
+              "valueType": "code",
+              "label": "Blocking Directive Source"
+            }
+          ],
+          "items": [
+            {
+              "source": "x-robots-tag: noindex"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "route": "/about",
+    "scores": {
+      "performance": 100,
+      "accessibility": 100,
+      "best-practices": 100,
+      "seo": 66
+    },
+    "failures": [
+      {
+        "id": "is-crawlable",
+        "details": {
+          "type": "table",
+          "headings": [
+            {
+              "key": "source",
+              "valueType": "code",
+              "label": "Blocking Directive Source"
+            }
+          ],
+          "items": [
+            {
+              "source": "x-robots-tag: noindex"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "route": "/developers",
+    "scores": {
+      "performance": 100,
+      "accessibility": 100,
+      "best-practices": 100,
+      "seo": 66
+    },
+    "failures": [
+      {
+        "id": "is-crawlable",
+        "details": {
+          "type": "table",
+          "headings": [
+            {
+              "key": "source",
+              "valueType": "code",
+              "label": "Blocking Directive Source"
+            }
+          ],
+          "items": [
+            {
+              "source": "x-robots-tag: noindex"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "route": "/api-policy",
+    "scores": {
+      "performance": 100,
+      "accessibility": 100,
+      "best-practices": 100,
+      "seo": 66
+    },
+    "failures": [
+      {
+        "id": "is-crawlable",
+        "details": {
+          "type": "table",
+          "headings": [
+            {
+              "key": "source",
+              "valueType": "code",
+              "label": "Blocking Directive Source"
+            }
+          ],
+          "items": [
+            {
+              "source": "x-robots-tag: noindex"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "route": "/guides",
+    "scores": {
+      "performance": 100,
+      "accessibility": 100,
+      "best-practices": 100,
+      "seo": 66
+    },
+    "failures": [
+      {
+        "id": "is-crawlable",
+        "details": {
+          "type": "table",
+          "headings": [
+            {
+              "key": "source",
+              "valueType": "code",
+              "label": "Blocking Directive Source"
+            }
+          ],
+          "items": [
+            {
+              "source": "x-robots-tag: noindex"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "route": "/guides/wow-controller-mac",
+    "scores": {
+      "performance": 100,
+      "accessibility": 100,
+      "best-practices": 100,
+      "seo": 69
+    },
+    "failures": [
+      {
+        "id": "is-crawlable",
+        "details": {
+          "type": "table",
+          "headings": [
+            {
+              "key": "source",
+              "valueType": "code",
+              "label": "Blocking Directive Source"
+            }
+          ],
+          "items": [
+            {
+              "source": "x-robots-tag: noindex"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "route": "/guides/consoleport-mac-setup",
+    "scores": {
+      "performance": 100,
+      "accessibility": 100,
+      "best-practices": 100,
+      "seo": 66
+    },
+    "failures": [
+      {
+        "id": "is-crawlable",
+        "details": {
+          "type": "table",
+          "headings": [
+            {
+              "key": "source",
+              "valueType": "code",
+              "label": "Blocking Directive Source"
+            }
+          ],
+          "items": [
+            {
+              "source": "x-robots-tag: noindex"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "route": "/guides/install-thumble-wow-addon",
+    "scores": {
+      "performance": 100,
+      "accessibility": 100,
+      "best-practices": 100,
+      "seo": 66
+    },
+    "failures": [
+      {
+        "id": "is-crawlable",
+        "details": {
+          "type": "table",
+          "headings": [
+            {
+              "key": "source",
+              "valueType": "code",
+              "label": "Blocking Directive Source"
+            }
+          ],
+          "items": [
+            {
+              "source": "x-robots-tag: noindex"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "route": "/guides/wow-controller-not-detected-mac",
+    "scores": {
+      "performance": 100,
+      "accessibility": 100,
+      "best-practices": 100,
+      "seo": 66
+    },
+    "failures": [
+      {
+        "id": "is-crawlable",
+        "details": {
+          "type": "table",
+          "headings": [
+            {
+              "key": "source",
+              "valueType": "code",
+              "label": "Blocking Directive Source"
+            }
+          ],
+          "items": [
+            {
+              "source": "x-robots-tag: noindex"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "route": "/guides/thumble-phone-mac-pairing",
+    "scores": {
+      "performance": 100,
+      "accessibility": 100,
+      "best-practices": 100,
+      "seo": 66
+    },
+    "failures": [
+      {
+        "id": "is-crawlable",
+        "details": {
+          "type": "table",
+          "headings": [
+            {
+              "key": "source",
+              "valueType": "code",
+              "label": "Blocking Directive Source"
+            }
+          ],
+          "items": [
+            {
+              "source": "x-robots-tag: noindex"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "route": "/guides/iphone-controller-mac",
+    "scores": {
+      "performance": 100,
+      "accessibility": 100,
+      "best-practices": 100,
+      "seo": 69
+    },
+    "failures": [
+      {
+        "id": "is-crawlable",
+        "details": {
+          "type": "table",
+          "headings": [
+            {
+              "key": "source",
+              "valueType": "code",
+              "label": "Blocking Directive Source"
+            }
+          ],
+          "items": [
+            {
+              "source": "x-robots-tag: noindex"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "route": "/compare/wow-phone-vs-gamepad",
+    "scores": {
+      "performance": 100,
+      "accessibility": 100,
+      "best-practices": 100,
+      "seo": 66
+    },
+    "failures": [
+      {
+        "id": "is-crawlable",
+        "details": {
+          "type": "table",
+          "headings": [
+            {
+              "key": "source",
+              "valueType": "code",
+              "label": "Blocking Directive Source"
+            }
+          ],
+          "items": [
+            {
+              "source": "x-robots-tag: noindex"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "route": "/guides/consoleport-wrong-action-modifier",
+    "scores": {
+      "performance": 100,
+      "accessibility": 100,
+      "best-practices": 100,
+      "seo": 66
+    },
+    "failures": [
+      {
+        "id": "is-crawlable",
+        "details": {
+          "type": "table",
+          "headings": [
+            {
+              "key": "source",
+              "valueType": "code",
+              "label": "Blocking Directive Source"
+            }
+          ],
+          "items": [
+            {
+              "source": "x-robots-tag: noindex"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "route": "/guides/wow-controller-camera-reversed-mac",
+    "scores": {
+      "performance": 100,
+      "accessibility": 100,
+      "best-practices": 100,
+      "seo": 66
+    },
+    "failures": [
+      {
+        "id": "is-crawlable",
+        "details": {
+          "type": "table",
+          "headings": [
+            {
+              "key": "source",
+              "valueType": "code",
+              "label": "Blocking Directive Source"
+            }
+          ],
+          "items": [
+            {
+              "source": "x-robots-tag: noindex"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "route": "/guides/consoleport-spell-labels-not-syncing",
+    "scores": {
+      "performance": 100,
+      "accessibility": 100,
+      "best-practices": 100,
+      "seo": 66
+    },
+    "failures": [
+      {
+        "id": "is-crawlable",
+        "details": {
+          "type": "table",
+          "headings": [
+            {
+              "key": "source",
+              "valueType": "code",
+              "label": "Blocking Directive Source"
+            }
+          ],
+          "items": [
+            {
+              "source": "x-robots-tag: noindex"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "route": "/guides/wow-classic-controller-mac",
+    "scores": {
+      "performance": 100,
+      "accessibility": 100,
+      "best-practices": 100,
+      "seo": 66
+    },
+    "failures": [
+      {
+        "id": "is-crawlable",
+        "details": {
+          "type": "table",
+          "headings": [
+            {
+              "key": "source",
+              "valueType": "code",
+              "label": "Blocking Directive Source"
+            }
+          ],
+          "items": [
+            {
+              "source": "x-robots-tag: noindex"
+            }
+          ]
+        }
+      }
+    ]
+  }
+]
