@@ -1,11 +1,24 @@
 # Thumble website
 
 Production source for thumble.io (Cloudflare Pages project `pocketpad-site`).
-The landing page and setup guide target WoW on Mac with ConsolePort. The initial
-journey is choose client → pair phone → prepare ConsolePort → five in-game checks.
-AI controller generation is disabled and is not required for setup. The 30-minute
-total demo and $19.99 USD one-time Pro unlock. Pro only removes the connected-use
-time limit. The phone app is marked coming soon until public store links exist.
+The site uses the app's Native design (November 2026 redesign): system dark,
+the system font, #0A64D8 blue, and `native.css` as the design system. New pages
+(`index.html`, `pricing.html`, `download.html`) load only `native.css`; older pages
+load it last so it rethemes their existing styles and gives every page the same
+header and footer. The homepage controller and customization tiles are inline SVG
+drawn from the app's default Xbox layout (844 × 390).
+
+Positioning (November 12, 2026): Thumble is a phone game controller for any
+game with controller support. General pages stay game-neutral; World of
+Warcraft content lives in the game guides (`/guides`, `/compare`) and in the
+clearly labeled WoW sections of `/docs`.
+
+Plans: Weekly $0.99 and Yearly $29.99 with 7-day free trials, Lifetime $49.99;
+App Store-only Family plans $1.99 / $49.99 / $89.99. Thumble for Android links to
+Google Play (`com.thumble.android`); the iPhone app is marked coming soon and its
+CTA leads to the waitlist until the App Store listing is public. `terms.html` and
+`privacy.html` still describe the earlier 30-minute demo and $19.99 Pro and need
+an owner-reviewed legal update. AI controller generation is disabled.
 
 The Mac DMG is served separately by the `thumble-downloads` Worker at
 `/downloads/receiver-latest.dmg`; its source is in the current app repository at

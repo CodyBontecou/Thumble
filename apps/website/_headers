@@ -8,3 +8,6 @@
 
 /styles.css
   Cache-Control: public, max-age=0, must-revalidate
+
+/native.css
+  Cache-Control: public, max-age=0, must-revalidate

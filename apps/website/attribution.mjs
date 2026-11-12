@@ -1,6 +1,6 @@
 // Shared allowlists keep page attribution bounded in the browser and at ingestion.
 const pages = new Set([
-  '/', '/docs', '/guides', '/waitlist', '/support', '/about', '/blog',
+  '/', '/docs', '/guides', '/waitlist', '/support', '/about', '/blog', '/pricing', '/download',
   '/developers', '/api-policy', '/privacy', '/terms',
   '/blog/connect-chatgpt-claude', '/blog/development-update-october-2026',
   '/guides/wow-controller-mac', '/guides/consoleport-mac-setup',
