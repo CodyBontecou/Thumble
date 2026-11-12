@@ -332,22 +332,25 @@ test('older receivers cannot be sent profile requests and duplicate requests are
   await assert.rejects(pending,/invalid profile/);assert.equal(h.connection.snapshot().phase,'connected');
 });
 
-test('demo includes profiles and custom layouts; expiry blocks live input and chat only', async () => {
+test('play needs a verified plan; free demo time from older receivers unlocks nothing, while profiles and layouts still work', async () => {
   const h = harness(); await h.connection.connect(invitation()); h.ready();
-  const access = { type: 'access', v: 1, pro: false, enabled: true, running: true, remaining: 10, debitedUsed: 1790, receiverId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', nonce: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb' };
+  const access = { type: 'access', v: 1, pro: false, enabled: true, running: true, remaining: 1790, debitedUsed: 10, receiverId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', nonce: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb' };
   h.emit('message', access);
+  assert.equal(h.connection.canPlay, false);
+  const count = h.sent.length;
+  h.connection.submit({ ...neutralState(), buttons: 1 });
+  h.connection.resumePlay();
+  assert.equal(h.sent.length, count);
+  await assert.rejects(h.connection.sendChat('hello', 'say'), /Start a free trial or restore your plan/);
   h.connection.profilesSupported = true;
   const listing = h.connection.requestProfiles();
   const request = h.sent.at(-1);
   h.emit('message', { type: 'profiles-result', id: request.id, catalog: { profiles: [], activationRevision: 0 } });
   assert.deepEqual((await listing).profiles, []);
-  h.connection.submit({ ...neutralState(), buttons: 1 });
-  h.emit('message', { ...access, remaining: 0, enabled: false, running: false, debitedUsed: 1800 });
+  h.emit('message', { ...access, pro: true });
+  assert.equal(h.connection.canPlay, true);
+  h.emit('message', { ...access, pro: false, remaining: 0, enabled: false, running: false });
   assert.equal(h.connection.canPlay, false);
-  const count = h.sent.length;
-  h.connection.submit({ ...neutralState(), buttons: 1 });
-  assert.equal(h.sent.length, count);
-  await assert.rejects(h.connection.sendChat('hello', 'say'), /Start your demo/);
   h.advance(33); assert.deepEqual(h.sent.at(-1).state, neutralState());
   h.emit('message', { type: 'layout', revision: 1, profile: xboxProfile });
   assert.equal(h.connection.snapshot().phase, 'connected');
@@ -357,7 +360,7 @@ test('legacy receivers without access negotiation cannot become an unmetered con
   const h = harness(); await h.connection.connect(invitation()); h.emit('status', 'open');
   h.emit('message', { type: 'ready', seq: -1, lease: 'legacy' });
   assert.equal(h.connection.snapshot().phase, 'offline');
-  assert.match(h.connection.snapshot().detail, /Update your receiver/);
+  assert.match(h.connection.snapshot().detail, /Update the Thumble receiver/);
 });
 
 test('cloud adoption pauses input and confirms exact content only after receiver activation and neutral ACK', async () => {

@@ -21,11 +21,12 @@ export class Connection {
     for (const reset of this.resetListeners) reset();
   }
   resumePlay() {
-    if (this.view.phase !== 'connected' || !this.access || (!this.access.pro && this.access.remaining <= 0)) return;
+    if (this.view.phase !== 'connected' || !this.access || !this.access.pro) return;
     this.native.send(JSON.stringify({ type: 'access-resume' }));
   }
   sendGrant(grant) { if (this.view.phase === 'connected') this.native.send(JSON.stringify({ type: 'access-grant', grant })); }
-  get canPlay() { return !!this.access?.enabled && (this.access.pro || this.access.remaining > 0); }
+  // Play needs a verified plan; the free demo time older receivers report is ignored.
+  get canPlay() { return !!this.access?.enabled && this.access.pro; }
 
   resetListeners = new Set();
   profileListeners = new Set();
@@ -97,7 +98,7 @@ export class Connection {
         }
         if (message.type === 'access') {
           if (transport === 'udp' || this.view.phase !== 'connected' || message.v !== 1 || typeof message.pro !== 'boolean' || typeof message.enabled !== 'boolean' || typeof message.running !== 'boolean' || !Number.isFinite(message.remaining) || message.remaining < 0 || message.remaining > 1800 || !Number.isFinite(message.debitedUsed) || message.debitedUsed < 0 || message.debitedUsed > 1800 || typeof message.receiverId !== 'string' || typeof message.nonce !== 'string' || !/^[a-f0-9-]{36}$/i.test(message.receiverId) || !/^[a-f0-9-]{36}$/i.test(message.nonce)) throw Error('Invalid access status');
-          const blocked = this.canPlay && (!message.enabled || (!message.pro && message.remaining <= 0));
+          const blocked = this.canPlay && (!message.enabled || !message.pro);
           this.setAccess(message);
           if (blocked) {
             this.outbox = []; this.state = neutralState();
@@ -154,7 +155,7 @@ export class Connection {
           return;
         }
         if (message.type === 'layout') { this.receiveLayout(message); return; }
-        if (message.type === 'ready' && message.access !== 1) { this.disconnect('Update your receiver to use the demo and Pro features.'); return; }
+        if (message.type === 'ready' && message.access !== 1) { this.disconnect('Update the Thumble receiver on your computer to keep playing.'); return; }
         if (!['ready', 'ack', 'paused'].includes(message.type) || typeof message.lease !== 'string') throw new Error('Invalid receiver response');
         if (this.view.phase !== 'connecting' && this.view.phase !== 'connected') return;
         if (!message.lease || message.lease.length > 128 || !Number.isSafeInteger(message.seq)) throw new Error('Invalid receiver response');
@@ -361,7 +362,7 @@ export class Connection {
     if (error) request.reject(error); else request.resolve(request.result);
   }
   sendChat(text, channel) {
-    if (!this.canPlay) return Promise.reject(Error('Start your demo or unlock Pro to send chat.'));
+    if (!this.canPlay) return Promise.reject(Error('Start a free trial or restore your plan to send chat.'));
     const error = chatValidation(text, channel);
     if (error) return Promise.reject(Error(error));
     if (this.view.phase !== 'connected' || !this.view.chat || !this.lease || this.layoutPending) return Promise.reject(Error('Connect to an updated receiver to send chat.'));

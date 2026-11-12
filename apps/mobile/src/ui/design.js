@@ -125,7 +125,7 @@ export function Segmented({ options, value, onChange, label }) {
     })}
   </View>;
 }
-/** Demo/trial meter. */
+/** Free-trial meter. */
 export function Meter({ filled, total, inverse = false }) {
   return <View style={{ height: 6, borderRadius: 3, backgroundColor: inverse ? 'rgba(255,255,255,0.25)' : colors.raised, overflow: 'hidden' }}>
     <View style={{ width: `${Math.max(0, Math.min(1, total ? filled / total : 0)) * 100}%`, height: 6, borderRadius: 3, backgroundColor: colors.accent }} />
