@@ -28,12 +28,13 @@ enum CloudProfile {
         }
         var ids: [String: String] = [:]
         for c in controls {
-            guard keys(c, ["id", "type", "label", "frame", "color", "icon", "badge", "layers"]), text(c["id"]), text(c["label"]),
+            guard keys(c, ["id", "type", "label", "customLabel", "frame", "color", "icon", "badge", "layers"]), text(c["id"]), text(c["label"]),
                   let id = c["id"] as? String, ids[id] == nil, let type = c["type"] as? String, ["button", "trigger", "stick"].contains(type),
                   let frame = c["frame"] as? [String: Any], keys(frame, ["x", "y", "width", "height"]),
                   let x = number(frame["x"], 0, 1), let y = number(frame["y"], 0, 1),
                   let width = number(frame["width"], 0.01, 1), let height = number(frame["height"], 0.01, 1),
                   x + width <= 1.000001, y + height <= 1.000001 else { throw ProfileCatalog.Failure.invalid }
+            if let label = c["customLabel"], !text(label) { throw ProfileCatalog.Failure.invalid }
             if let color = c["color"], !matches(color, "^#[0-9a-fA-F]{6}$") { throw ProfileCatalog.Failure.invalid }
             if let icon = c["icon"], !matches(icon, "^[a-z0-9_]{1,128}$") { throw ProfileCatalog.Failure.invalid }
             if let badge = c["badge"], !text(badge) { throw ProfileCatalog.Failure.invalid }

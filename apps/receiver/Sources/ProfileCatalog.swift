@@ -2,7 +2,7 @@ import Foundation
 import CoreFoundation
 
 // Same atomic store and directory lock as the agent tools. Phone requests select
-// existing revisions, or explicitly adopt validated cloud configuration. No executable input.
+// existing revisions, save phone-edited layouts, or adopt validated cloud configuration.
 enum ProfileCatalog {
     enum Failure: LocalizedError {
         case invalid, conflict, busy
@@ -127,6 +127,16 @@ enum ProfileCatalog {
         try CloudProfile.validate(profile)
         let id = try CloudProfile.localID(source: source, profile: profile)
         var local = profile; local["id"] = id
+        return try saveAndActivate(directory, profile: local, id: id, source: source, expectedActivationRevision: expectedActivationRevision)
+    }
+
+    static func savePhoneProfile(_ directory: URL, profile: [String: Any], expectedActivationRevision: Int, expectedProfileRevision: Int = 0) throws -> [String: Any] {
+        try CloudProfile.validate(profile)
+        guard let id = profile["id"] as? String, CloudProfile.matches(id, "^phone-[a-f0-9]{32}$") else { throw Failure.invalid }
+        return try saveAndActivate(directory, profile: profile, id: id, source: nil, expectedActivationRevision: expectedActivationRevision, expectedProfileRevision: expectedProfileRevision)
+    }
+
+    private static func saveAndActivate(_ directory: URL, profile: [String: Any], id: String, source: [String: Any]?, expectedActivationRevision: Int, expectedProfileRevision: Int = 0) throws -> [String: Any] {
         let manager = FileManager.default
         try manager.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         let lock = directory.appendingPathComponent("write.lock", isDirectory: true)
@@ -147,29 +157,40 @@ enum ProfileCatalog {
         let active = store["active"] as? [String: Any]
         let previous = revision(active?["revision"]) ?? 0
         guard expectedActivationRevision == previous, previous < 9_007_199_254_740_991 else { throw Failure.conflict }
-        let canonical = try JSONSerialization.data(withJSONObject: local, options: [.sortedKeys])
-        let sourceData = try JSONSerialization.data(withJSONObject: source, options: [.sortedKeys])
-        if let entry = entries.first(where: { ($0["profile"] as? [String: Any])?["id"] as? String == id }) {
-            guard revision(entry["revision"]) == 1, let old = entry["profile"] as? [String: Any],
-                  let oldSource = entry["cloudSource"] as? [String: Any],
-                  try JSONSerialization.data(withJSONObject: old, options: [.sortedKeys]) == canonical,
-                  try JSONSerialization.data(withJSONObject: oldSource, options: [.sortedKeys]) == sourceData else { throw Failure.conflict }
+        let canonical = try JSONSerialization.data(withJSONObject: profile, options: [.sortedKeys])
+        var profileRevision = 1
+        if let index = entries.firstIndex(where: { ($0["profile"] as? [String: Any])?["id"] as? String == id }) {
+            let entry = entries[index]
+            guard let oldRevision = revision(entry["revision"]), let old = entry["profile"] as? [String: Any] else { throw Failure.invalid }
+            let unchanged = try JSONSerialization.data(withJSONObject: old, options: [.sortedKeys]) == canonical
+            if let source {
+                guard oldRevision == 1, unchanged, let oldSource = entry["cloudSource"] as? [String: Any],
+                      try JSONSerialization.data(withJSONObject: oldSource, options: [.sortedKeys]) == JSONSerialization.data(withJSONObject: source, options: [.sortedKeys]) else { throw Failure.conflict }
+                profileRevision = oldRevision
+            } else {
+                guard entry["phoneEdited"] as? Bool == true, oldRevision == expectedProfileRevision || unchanged, oldRevision < 9_007_199_254_740_991 else { throw Failure.conflict }
+                profileRevision = unchanged ? oldRevision : oldRevision + 1
+                entries[index] = ["profile": profile, "revision": profileRevision, "phoneEdited": true]
+            }
         } else {
+            guard source != nil || expectedProfileRevision == 0 else { throw Failure.conflict }
             guard entries.count < 256 else { throw Failure.invalid }
-            entries.append(["profile": local, "revision": 1, "cloudSource": source])
+            var entry: [String: Any] = ["profile": profile, "revision": profileRevision]
+            if let source { entry["cloudSource"] = source }
+            else { entry["phoneEdited"] = true }
+            entries.append(entry)
         }
-        // Lost-response retries reuse the same immutable local copy and activation.
-        let sameActive = (active?["profile"] as? [String: Any])?["id"] as? String == id && revision(active?["profileRevision"]) == 1
+        let sameActive = (active?["profile"] as? [String: Any])?["id"] as? String == id && revision(active?["profileRevision"]) == profileRevision
         let next = sameActive ? previous : previous + 1
         store["profiles"] = entries
-        store["active"] = ["revision": next, "profileRevision": 1, "profile": local]
+        store["active"] = ["revision": next, "profileRevision": profileRevision, "profile": profile]
         let data = try JSONSerialization.data(withJSONObject: store)
         guard data.count <= 8 * 1024 * 1024 else { throw Failure.invalid }
         let path = directory.appendingPathComponent("store.json")
         try data.write(to: path, options: .atomic)
         try manager.setAttributes([.posixPermissions: 0o600], ofItemAtPath: path.path)
         var result = try summary(store)
-        result["adoption"] = ["profileId": id, "profileRevision": 1, "source": source]
+        if let source { result["adoption"] = ["profileId": id, "profileRevision": profileRevision, "source": source] }
         return result
     }
 }

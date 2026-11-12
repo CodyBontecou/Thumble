@@ -9,10 +9,10 @@
         "type": "stick",
         "label": "Move",
         "frame": {
-          "x": 0.08,
+          "x": 0.04,
           "y": 0.22,
-          "width": 0.22,
-          "height": 0.4
+          "width": 0.2,
+          "height": 0.42
         }
       },
       {
@@ -20,9 +20,9 @@
         "type": "stick",
         "label": "Look",
         "frame": {
-          "x": 0.58,
-          "y": 0.57,
-          "width": 0.22,
+          "x": 0.56,
+          "y": 0.58,
+          "width": 0.2,
           "height": 0.4
         }
       },
@@ -31,10 +31,10 @@
         "type": "button",
         "label": "Up",
         "frame": {
-          "x": 0.335,
-          "y": 0.49,
-          "width": 0.07,
-          "height": 0.14
+          "x": 0.315,
+          "y": 0.48,
+          "width": 0.09,
+          "height": 0.17
         }
       },
       {
@@ -42,10 +42,10 @@
         "type": "button",
         "label": "Left",
         "frame": {
-          "x": 0.265,
-          "y": 0.63,
-          "width": 0.07,
-          "height": 0.14
+          "x": 0.225,
+          "y": 0.65,
+          "width": 0.09,
+          "height": 0.17
         }
       },
       {
@@ -54,9 +54,9 @@
         "label": "Right",
         "frame": {
           "x": 0.405,
-          "y": 0.63,
-          "width": 0.07,
-          "height": 0.14
+          "y": 0.65,
+          "width": 0.09,
+          "height": 0.17
         }
       },
       {
@@ -64,10 +64,10 @@
         "type": "button",
         "label": "Down",
         "frame": {
-          "x": 0.335,
-          "y": 0.77,
-          "width": 0.07,
-          "height": 0.14
+          "x": 0.315,
+          "y": 0.82,
+          "width": 0.09,
+          "height": 0.17
         }
       },
       {
@@ -75,58 +75,58 @@
         "type": "button",
         "label": "A",
         "frame": {
-          "x": 0.815,
-          "y": 0.5,
-          "width": 0.07,
-          "height": 0.14
+          "x": 0.795,
+          "y": 0.54,
+          "width": 0.09,
+          "height": 0.17
         },
-        "color": "#55b959"
+        "color": "#30D158"
       },
       {
         "id": "b",
         "type": "button",
         "label": "B",
         "frame": {
-          "x": 0.895,
-          "y": 0.34,
-          "width": 0.07,
-          "height": 0.14
+          "x": 0.885,
+          "y": 0.37,
+          "width": 0.09,
+          "height": 0.17
         },
-        "color": "#ed625a"
+        "color": "#FF6961"
       },
       {
         "id": "x",
         "type": "button",
         "label": "X",
         "frame": {
-          "x": 0.735,
-          "y": 0.34,
-          "width": 0.07,
-          "height": 0.14
+          "x": 0.705,
+          "y": 0.37,
+          "width": 0.09,
+          "height": 0.17
         },
-        "color": "#59a4ed"
+        "color": "#64A8FF"
       },
       {
         "id": "y",
         "type": "button",
         "label": "Y",
         "frame": {
-          "x": 0.815,
-          "y": 0.18,
-          "width": 0.07,
-          "height": 0.14
+          "x": 0.795,
+          "y": 0.2,
+          "width": 0.09,
+          "height": 0.17
         },
-        "color": "#efc849"
+        "color": "#FFD60A"
       },
       {
         "id": "back",
         "type": "button",
         "label": "View",
         "frame": {
-          "x": 0.405,
+          "x": 0.4,
           "y": 0.3,
-          "width": 0.07,
-          "height": 0.14
+          "width": 0.09,
+          "height": 0.17
         }
       },
       {
@@ -134,10 +134,10 @@
         "type": "button",
         "label": "Menu",
         "frame": {
-          "x": 0.515,
+          "x": 0.51,
           "y": 0.3,
-          "width": 0.07,
-          "height": 0.14
+          "width": 0.09,
+          "height": 0.17
         }
       },
       {
@@ -145,10 +145,10 @@
         "type": "button",
         "label": "L3",
         "frame": {
-          "x": 0.09,
-          "y": 0.72,
-          "width": 0.07,
-          "height": 0.14
+          "x": 0.03,
+          "y": 0.8,
+          "width": 0.09,
+          "height": 0.17
         }
       },
       {
@@ -156,32 +156,10 @@
         "type": "button",
         "label": "R3",
         "frame": {
-          "x": 0.87,
-          "y": 0.75,
-          "width": 0.07,
-          "height": 0.14
-        }
-      },
-      {
-        "id": "lb",
-        "type": "button",
-        "label": "LB",
-        "frame": {
-          "x": 0.05,
-          "y": 0.02,
-          "width": 0.16,
-          "height": 0.14
-        }
-      },
-      {
-        "id": "rb",
-        "type": "button",
-        "label": "RB",
-        "frame": {
-          "x": 0.79,
-          "y": 0.02,
-          "width": 0.14,
-          "height": 0.14
+          "x": 0.88,
+          "y": 0.78,
+          "width": 0.09,
+          "height": 0.17
         }
       },
       {
@@ -189,10 +167,32 @@
         "type": "trigger",
         "label": "LT",
         "frame": {
-          "x": 0.24,
+          "x": 0.02,
           "y": 0.02,
-          "width": 0.15,
-          "height": 0.14
+          "width": 0.14,
+          "height": 0.17
+        }
+      },
+      {
+        "id": "lb",
+        "type": "button",
+        "label": "LB",
+        "frame": {
+          "x": 0.18,
+          "y": 0.02,
+          "width": 0.14,
+          "height": 0.17
+        }
+      },
+      {
+        "id": "rb",
+        "type": "button",
+        "label": "RB",
+        "frame": {
+          "x": 0.6,
+          "y": 0.02,
+          "width": 0.14,
+          "height": 0.17
         }
       },
       {
@@ -200,10 +200,10 @@
         "type": "trigger",
         "label": "RT",
         "frame": {
-          "x": 0.61,
+          "x": 0.76,
           "y": 0.02,
-          "width": 0.15,
-          "height": 0.14
+          "width": 0.14,
+          "height": 0.17
         }
       }
     ],
@@ -299,6 +299,12 @@
         ]
       },
       {
+        "controlId": "lt",
+        "outputs": [
+          "lt"
+        ]
+      },
+      {
         "controlId": "lb",
         "outputs": [
           "lb"
@@ -308,12 +314,6 @@
         "controlId": "rb",
         "outputs": [
           "rb"
-        ]
-      },
-      {
-        "controlId": "lt",
-        "outputs": [
-          "lt"
         ]
       },
       {
@@ -410,7 +410,7 @@
           "width": 0.09,
           "height": 0.22
         },
-        "color": "#55b959",
+        "color": "#30D158",
         "badge": "A"
       },
       {
@@ -423,7 +423,7 @@
           "width": 0.09,
           "height": 0.22
         },
-        "color": "#ed625a",
+        "color": "#FF6961",
         "badge": "B"
       },
       {
@@ -436,7 +436,7 @@
           "width": 0.09,
           "height": 0.22
         },
-        "color": "#59a4ed",
+        "color": "#64A8FF",
         "badge": "X"
       },
       {
@@ -449,7 +449,7 @@
           "width": 0.09,
           "height": 0.22
         },
-        "color": "#efc849",
+        "color": "#FFD60A",
         "badge": "Y"
       },
       {
@@ -501,6 +501,18 @@
         "badge": "R3"
       },
       {
+        "id": "lt",
+        "type": "trigger",
+        "label": "LT",
+        "frame": {
+          "x": 0.33,
+          "y": 0.3,
+          "width": 0.09,
+          "height": 0.18
+        },
+        "badge": "LT"
+      },
+      {
         "id": "lb",
         "type": "button",
         "label": "LB",
@@ -523,18 +535,6 @@
           "height": 0.16
         },
         "badge": "RB"
-      },
-      {
-        "id": "lt",
-        "type": "trigger",
-        "label": "LT",
-        "frame": {
-          "x": 0.33,
-          "y": 0.3,
-          "width": 0.09,
-          "height": 0.18
-        },
-        "badge": "LT"
       },
       {
         "id": "rt",
@@ -642,6 +642,12 @@
         ]
       },
       {
+        "controlId": "lt",
+        "outputs": [
+          "lt"
+        ]
+      },
+      {
         "controlId": "lb",
         "outputs": [
           "lb"
@@ -651,12 +657,6 @@
         "controlId": "rb",
         "outputs": [
           "rb"
-        ]
-      },
-      {
-        "controlId": "lt",
-        "outputs": [
-          "lt"
         ]
       },
       {

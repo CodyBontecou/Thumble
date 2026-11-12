@@ -109,14 +109,27 @@ final class ProfileBridge {
             } catch { completion(.failure(error)) }
         }
     }
-    func adopt(profile: [String: Any], source: [String: Any], expectedActivationRevision: Int, completion: @escaping (Result<[String: Any], Error>) -> Void) {
+    func saveAndActivate(profile: [String: Any], source: [String: Any]?, expectedActivationRevision: Int, expectedProfileRevision: Int = 0, completion: @escaping (Result<[String: Any], Error>) -> Void) {
         queue.async { [self] in
             do {
-                let result = try ProfileCatalog.adopt(directory, profile: profile, source: source, expectedActivationRevision: expectedActivationRevision)
+                let result: [String: Any]
+                if let source {
+                    result = try ProfileCatalog.adopt(directory, profile: profile, source: source, expectedActivationRevision: expectedActivationRevision)
+                } else {
+                    result = try ProfileCatalog.savePhoneProfile(directory, profile: profile, expectedActivationRevision: expectedActivationRevision, expectedProfileRevision: expectedProfileRevision)
+                }
                 lastModification = nil; poll()
                 completion(.success(result))
             } catch { completion(.failure(error)) }
         }
+    }
+    func bindingPage(offset: Int, snapshot: String?, completion: @escaping (Result<[String: Any], Error>) -> Void) {
+        queue.async { [self] in
+            completion(Result { try PhoneBindings.page(directory, offset: offset, expectedSnapshot: snapshot) })
+        }
+    }
+    func bindingPlan(_ plan: [String: Any], completion: @escaping (Result<String, Error>) -> Void) {
+        queue.async { [self] in completion(Result { try PhoneBindings.validatePlan(directory, plan: plan) }) }
     }
     func writeStatus(_ status: [String: Any]) {
         queue.async { [self] in

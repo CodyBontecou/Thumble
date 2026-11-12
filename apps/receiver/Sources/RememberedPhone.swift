@@ -25,6 +25,7 @@ struct RememberedPhone {
         self.phoneID = phoneID; credential = value
         return value
     }
+    var isRemembered: Bool { phoneID != nil }
     func accepts(phoneID: String, credential: String) -> Bool {
         guard self.phoneID == phoneID, let expected = self.credential,
               credential.utf8.count == 64 else { return false }
