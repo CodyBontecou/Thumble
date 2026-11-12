@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "commit": "44243820f9af5665f71bf57da5d7461341a58791",
+    "tree": "4b4bf0d7b1d403fe2b6367e9cfa2508d8e68adfd",
+    "dirty": false
+  },
+  "app": {
+    "bundleId": "com.thumble.ios",
+    "version": "1.1.0",
+    "buildNumber": "13",
+    "platform": "iPhoneOS",
+    "bundleSha256": "b2fe1bd98fa48658bc7bdf723942f9b37245ae96b6ccd62701c87b04fb25225e",
+    "assetsSha256": "94fcae1060a3fd619d5e11b7d9e341591c401fa114a8253e42acd40720bcb226",
+    "sourceCommit": "44243820f9af5665f71bf57da5d7461341a58791",
+    "sourceTree": "4b4bf0d7b1d403fe2b6367e9cfa2508d8e68adfd",
+    "lockSha256": "89a61df2a22d3322b04c88e13ad19a7d08cebe7ea50d34a40379ff79c0da1ac3"
+  },
+  "artifact": {
+    "path": "app.ipa",
+    "sha256": "b23a0e5fb1b3b9ac69b3e1887af9007614cac22223fc031e14072900e8483b7d"
+  },
+  "check": {
+    "path": "source-checks.log",
+    "sha256": "2e94dae3df54288ee7f21853e66cd6f015d88ec093f9f71d2a6896bdaefb5b8a"
+  },
+  "smokeSha256": "dc1ec68beb0cf12cb6b8a8a93231a2024532dcd708ecd1c76fdd6362abb435e3",
+  "smokeScope": "Production JavaScript and assets on a Release simulator native build from the same source.",
+  "createdAt": "2026-11-12T17:11:08.845Z"
+}

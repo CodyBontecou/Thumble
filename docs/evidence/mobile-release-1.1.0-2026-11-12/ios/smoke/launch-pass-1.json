@@ -1,0 +1,58 @@
+{
+  "e2eTest": "qa-ios-release-launch",
+  "flow": "qa-ios-release-launch",
+  "device": "3C7896BD-51AB-4F86-9492-C5A293392FFC",
+  "executionPrerequisite": "",
+  "ok": true,
+  "passed": 5,
+  "failed": 0,
+  "skipped": 0,
+  "errored": 0,
+  "steps": [
+    {
+      "index": 0,
+      "kind": "script",
+      "e2eTest": "qa-ios-release-launch",
+      "target": "../../tools/mobile/clean-install.mjs",
+      "status": "pass",
+      "durationMs": 705,
+      "flow": "qa-ios-release-launch"
+    },
+    {
+      "index": 1,
+      "kind": "launch",
+      "e2eTest": "qa-ios-release-launch",
+      "status": "pass",
+      "durationMs": 2402,
+      "flow": "qa-ios-release-launch"
+    },
+    {
+      "index": 2,
+      "kind": "await",
+      "e2eTest": "qa-ios-release-launch",
+      "target": "visible id=welcome-start",
+      "status": "pass",
+      "durationMs": 389,
+      "flow": "qa-ios-release-launch"
+    },
+    {
+      "index": 3,
+      "kind": "idle",
+      "e2eTest": "qa-ios-release-launch",
+      "status": "pass",
+      "durationMs": 4729,
+      "flow": "qa-ios-release-launch"
+    },
+    {
+      "index": 4,
+      "kind": "assert",
+      "e2eTest": "qa-ios-release-launch",
+      "target": "visible id=welcome-start",
+      "status": "pass",
+      "durationMs": 4,
+      "flow": "qa-ios-release-launch"
+    }
+  ],
+  "startedAt": 1794503452482,
+  "durationMs": 8435
+}

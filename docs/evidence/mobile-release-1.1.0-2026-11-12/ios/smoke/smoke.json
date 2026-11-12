@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "commit": "44243820f9af5665f71bf57da5d7461341a58791",
+    "tree": "4b4bf0d7b1d403fe2b6367e9cfa2508d8e68adfd",
+    "dirty": false
+  },
+  "configuration": "Release",
+  "platform": "ios-simulator",
+  "device": {
+    "name": "iPhone 18 Pro Max",
+    "runtime": "com.apple.CoreSimulator.SimRuntime.iOS-27-0"
+  },
+  "app": {
+    "bundleId": "com.thumble.ios",
+    "version": "1.1.0",
+    "buildNumber": "2",
+    "platform": "iPhoneSimulator",
+    "bundleSha256": "b2fe1bd98fa48658bc7bdf723942f9b37245ae96b6ccd62701c87b04fb25225e",
+    "assetsSha256": "94fcae1060a3fd619d5e11b7d9e341591c401fa114a8253e42acd40720bcb226"
+  },
+  "appSha256": "070f08a7def1a08eb240826550111ce2d51305eb2dc707c8024a4205ab35f2b2",
+  "productionBundle": true,
+  "testSha256": "bf6fc031a1c19e85e0133a2550170f3682e7557e06490cacb4127ed9d8825e6b",
+  "reports": [
+    {
+      "path": "launch-pass-1.json",
+      "sha256": "ee9b43748ad5d3e6b1f1ec7eb6e26e5a856235087b381b3a9fcda08ff590d1e9"
+    },
+    {
+      "path": "launch-pass-2.json",
+      "sha256": "1dc16947968c94ea514798a604402f45ce5c222d5d36c4d4b1b4d4ea032b5939"
+    }
+  ]
+}

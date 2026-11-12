@@ -1,0 +1,6 @@
+- Creating native directory (./ios)
+✔ Created native directory
+- Updating package.json
+✔ Updated package.json | no changes
+- Running prebuild
+✔ Finished prebuild

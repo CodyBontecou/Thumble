@@ -46,3 +46,8 @@ __pycache__/
 
 /apps/mobile/credentials.json
 apps/receiver-desktop/thumble_receiver/workspace/
+
+# Local agent worktrees, environment snapshots and packaged connector archives
+/.claude/worktrees/
+/.argent/project-environment.json
+/distribution/**/*.zip

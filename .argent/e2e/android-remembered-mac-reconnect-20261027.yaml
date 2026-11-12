@@ -1,0 +1,19 @@
+# UI smoke test. Requires updated receiver running and one prior successful pairing.
+# Receiver connection/Pro acceptance is additionally checked by the protocol test and QA evidence.
+steps:
+  - launch: com.thumble.android
+  - await:
+      visible: { id: controller-menu }
+      timeout: 8000
+  - await: { idle: true }
+  - tool: button
+    args: { button: home }
+  - await:
+      hidden: { id: controller-menu }
+      timeout: 5000
+  - tool: launch-app
+    args: { bundleId: com.thumble.android }
+  - await:
+      visible: { id: controller-menu }
+      timeout: 8000
+  - await: { idle: true }
