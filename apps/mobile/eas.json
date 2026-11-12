@@ -13,6 +13,12 @@
     },
     "production": {
       "autoIncrement": true
+    },
+    "production-local": {
+      "extends": "production",
+      "ios": {
+        "credentialsSource": "local"
+      }
     }
   },
   "submit": {

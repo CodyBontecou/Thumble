@@ -44,7 +44,7 @@ function verify(directory) {
   }
 }
 
-function prepare(directory, device) {
+function prepare(directory, device, profile) {
   const source = sourceIdentity();
   if (existsSync(directory)) throw new Error('Use a new output directory for each release attempt.');
   mkdirSync(directory, { recursive: true });
@@ -55,7 +55,7 @@ function prepare(directory, device) {
     THUMBLE_RELEASE_TREE: source.tree, THUMBLE_RELEASE_LOCK_SHA256: fileHash(path.join(root, 'package-lock.json')) };
   const ipa = path.join(directory, 'app.ipa');
   console.log('Building the production IPA locally with EAS.');
-  run('npx', ['--yes', 'eas-cli@27.7.2', 'build', '--local', '--platform', 'ios', '--profile', 'production',
+  run('npx', ['--yes', 'eas-cli@27.7.2', 'build', '--local', '--platform', 'ios', '--profile', profile,
     '--non-interactive', '--output', ipa], { cwd: mobile, env, log: path.join(directory, 'eas-build.log') });
   sameSource(source, sourceIdentity());
   const ipaSha256 = fileHash(ipa);
@@ -118,7 +118,7 @@ function submit(directory, manifest) {
 
 const { values, positionals } = parseArgs({ allowPositionals: true, options: {
   output: { type: 'string', default: path.join(root, 'build/mobile-release') },
-  device: { type: 'string' }, confirm: { type: 'boolean', default: false },
+  device: { type: 'string' }, profile: { type: 'string', default: 'production' }, confirm: { type: 'boolean', default: false },
 } });
 const directory = path.resolve(values.output);
 const command = positionals[0];
@@ -126,7 +126,8 @@ if (positionals.length !== 1 || !['prepare', 'verify', 'upload', 'submit'].inclu
   throw new Error('Usage: npm run mobile:release -- prepare|verify|upload|submit --output build/RELEASE [--device UDID] [--confirm]');
 }
 if (command === 'prepare') {
-  prepare(directory, values.device);
+  if (!['production', 'production-local'].includes(values.profile)) throw new Error('Select a production build profile.');
+  prepare(directory, values.device, values.profile);
 } else if (command === 'verify') {
   verify(directory);
   console.log('Source, IPA, and both launch reports match.');

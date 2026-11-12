@@ -46,8 +46,18 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+      - name: Prepare Xcode and the iOS simulator runtime
+        run: |
+          sudo xcodebuild -runFirstLaunch
+          xcodebuild -downloadPlatform iOS
+          xcodebuild -version
       - name: Install pinned simulator tooling
         run: npm install --global @swmansion/argent@0.32.0
+      - name: Record available test devices
+        run: argent run list-devices --args '{}' --json
       - name: Build Release and prove two clean-install launches
         run: npm run mobile:smoke:ios -- --output build/mobile-ci
       - name: Preserve launch reports and build logs
