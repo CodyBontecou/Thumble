@@ -19,9 +19,9 @@ Implemented in the preview:
   The desktop window additionally handles Windows power broadcasts and Linux
   logind sleep/resume signals, immediately releasing the thread-safe output
   guard and closing the old connection while retaining the remembered phone.
-- Durable 30-minute demo with crash-conservative five-second reservations,
-  phone usage mirroring, signed Ed25519 Pro grants, and explicit Resume.
-  The entitlement public key and wire fields match the existing purchase service.
+- Controller output requires a plan: signed Ed25519 plan grants (every plan and
+  free trial), cached for the paired phone, and explicit Resume. There is no free
+  demo time. The entitlement public key and wire fields match the existing purchase service.
 - A terminal QR, configurable LAN interface/port, single-instance data-directory
   lock, clean signal shutdown, explicit dry-run mode, and packaged-runtime test.
 - Saved profile catalogs/selection, immutable cloud adoption, layout render
@@ -52,7 +52,7 @@ run. Windows includes a per-user setup executable; run it, complete the separate
 gamepad driver setup below, and open **Thumble Receiver** from Start. Setup registers
 the browser sign-in callback without administrator privileges. It does not install
 the kernel driver. Uninstall through Windows Apps settings; your profiles and
-purchase/demo records are retained.
+plan records are retained.
 
 For Linux, extract the archive and install the application for your user:
 
@@ -88,7 +88,8 @@ No router port forwarding is needed. Omitting `--port` chooses an available port
 on first launch and reuses it on later launches. If it is occupied, startup fails
 instead of silently changing the saved endpoint.
 
-Scan the QR in Thumble's **Connect computer** screen, then use **Start demo / Resume**.
+Scan the QR in Thumble's **Connect computer** screen. Start a free trial or restore
+your plan in Thumble, then tap **Resume**.
 The QR renews after expiry or disconnect. Ctrl+C releases the pad and exits.
 Keep the QR private; do not capture it in CI logs or share it with other people.
 The TLS identity, listener port, and phone-bound reconnect credential are stored
@@ -164,9 +165,10 @@ python3 -m venv .venv-desktop
 ```
 
 `--dry-run` pairs normally and exercises access/protocol handling with memory-only
-output, including on a Mac. It still uses the demo ledger, so use a separate
-`--data-dir` for QA. `--self-test` runs entirely on loopback with a temporary
-ledger and no native driver, network-interface selection, or printed invitation:
+output, including on a Mac. It still uses the receiver record and plan grant, so use
+a separate `--data-dir` for QA. `--self-test` runs entirely on loopback with a
+temporary receiver record, a plan grant signed by its own throwaway key, and no
+native driver, network-interface selection, or printed invitation:
 
 ```sh
 thumble-receiver --self-test
@@ -174,12 +176,13 @@ python -m unittest discover -s apps/receiver-desktop/tests -v
 ```
 
 User data defaults to `%LOCALAPPDATA%\Thumble` on Windows and
-`${XDG_STATE_HOME:-~/.local/state}/thumble` on Linux. `demo.json` holds the receiver
-ID and prepaid demo ledger; `pro-grant.json` holds the signed purchase grant.
-Invalid/unwritable ledgers exhaust the demo rather than reset its timer. One
-process can own a data directory at a time. Files are replaced atomically and
-flushed before time is granted. OS account permissions protect this state;
-local administrator tampering is outside the ledger's trust boundary.
+`${XDG_STATE_HOME:-~/.local/state}/thumble` on Linux. `demo.json` is the receiver
+record: it holds the receiver ID that plan grants are bound to, and keeps its name
+from the retired free demo so existing receiver IDs never change. `pro-grant.json`
+caches the latest signed plan grant. An unreadable or unwritable record is reported
+and never replaced. One process can own a data directory at a time. Files are
+replaced atomically and flushed. OS account permissions protect this state; local
+administrator tampering is outside the receiver's trust boundary.
 
 ## Profiles and local agent tools
 

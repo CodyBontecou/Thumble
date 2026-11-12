@@ -1,11 +1,14 @@
 """Packaged-runtime smoke test with real TLS and memory-only output."""
 import asyncio
+import base64
 import hashlib
 import json
 import ssl
 import tempfile
+import time
 import uuid
 
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from websockets.asyncio.client import connect
 from websockets.exceptions import ConnectionClosed
 
@@ -16,8 +19,22 @@ from .server import ReceiverServer
 from .state import NEUTRAL, State
 
 
+def plan_grant(key, access, phone_id):
+    """A plan grant signed by the self-test's own throwaway key, for its own temporary receiver."""
+    now = time.time()
+    payload = json.dumps(dict(v=1, productId='thumble_pro_lifetime', receiverId=access['receiverId'],
+                              phoneId=phone_id, nonce=access['nonce'], pro=True,
+                              issuedAt=now, expiresAt=now + 600)).encode()
+    return dict(payload=base64.b64encode(payload).decode(), signature=base64.b64encode(key.sign(payload)).decode())
+
+
 async def selftest(native=False):
     context, fingerprint = identity()
+    # Output requires a plan grant. The self-test verifies grants against a key pair it
+    # creates here, used only by the temporary receiver below; the production key and
+    # the user's receiver are never involved.
+    grant_key = Ed25519PrivateKey.generate()
+    public_key = base64.b64encode(grant_key.public_key().public_bytes_raw()).decode()
     backend = native_output() if native else MemoryOutput()
     output = GuardedOutput(backend)
     native_probe = None
@@ -34,7 +51,7 @@ async def selftest(native=False):
         with tempfile.TemporaryDirectory(prefix='thumble-selftest-') as directory:
             ready = asyncio.Event()
             invitation = Invitation('127.0.0.1', 0, fingerprint)
-            server = ReceiverServer(output, Access(directory), invitation, lambda _: ready.set())
+            server = ReceiverServer(output, Access(directory, public_key), invitation, lambda _: ready.set())
             stop = asyncio.Event()
             task = asyncio.create_task(server.run('127.0.0.1', 0, context, stop))
             try:
@@ -64,8 +81,8 @@ async def selftest(native=False):
 
                     sequence = -1
                     async def neutral(revision, lease):
-                        # Match the phone's recovery handshake: a slow prepaid-ledger
-                        # write may legitimately invalidate a neutral report's deadline.
+                        # Match the phone's recovery handshake: a stalled receiver step
+                        # may legitimately invalidate a neutral report's deadline.
                         # Only neutral is retried; never replay an old held press.
                         nonlocal sequence
                         deadline = asyncio.get_running_loop().time() + 3
@@ -80,9 +97,18 @@ async def selftest(native=False):
                                 if value['type'] == 'paused':
                                     lease = value['lease']; break
 
+                    phone_id = str(uuid.uuid4())
                     await socket.send(json.dumps(dict(type='hello', v=3, token=invitation.token,
-                                                       phoneId=str(uuid.uuid4()))))
+                                                       phoneId=phone_id, demoUsed=0)))
                     await receive('ready')
+                    access = await receive('access')
+                    if access['pro'] or access['remaining'] != 0:
+                        raise RuntimeError('Receiver offered output without a plan')
+                    await socket.send(json.dumps(dict(type='access-grant', grant=plan_grant(grant_key, access, phone_id))))
+                    while not access['pro']:
+                        access = await receive('access')
+                        if access['error']:
+                            raise RuntimeError('Plan grant was rejected: ' + access['error'])
                     await socket.send(json.dumps(dict(type='access-resume')))
                     paused = await receive('paused')
                     ack = await neutral(0, paused['lease'])
@@ -122,4 +148,4 @@ async def selftest(native=False):
                 await asyncio.wait_for(task, 5)
     finally:
         output.close()
-    print('PASS: ' + ('native OS gamepad, ' if native else '') + 'TLS, certificate pin, pairing, demo, input, watchdog, profile selection, cloud adoption, layout acknowledgement')
+    print('PASS: ' + ('native OS gamepad, ' if native else '') + 'TLS, certificate pin, pairing, plan grant, input, watchdog, profile selection, cloud adoption, layout acknowledgement')

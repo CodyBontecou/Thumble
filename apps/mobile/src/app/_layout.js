@@ -29,7 +29,6 @@ export default function RootLayout() {
     <Stack.Protected guard={AI_CONTROLLER_GENERATOR_ENABLED}>
       <Stack.Screen name="journey" options={{ ...modal, title: 'AI to game' }} />
     </Stack.Protected>
-    <Stack.Screen name="demo-info" options={{ orientation: 'landscape', presentation: 'transparentModal', animation: 'fade', contentStyle: { backgroundColor: 'transparent' } }} />
     <Stack.Screen name="controller-menu" options={{ orientation: 'landscape', presentation: 'transparentModal', animation: 'fade', contentStyle: { backgroundColor: 'transparent' } }} />
     <Stack.Screen name="setup-test" options={{ ...modal, title: 'Test controls' }} />
     <Stack.Protected guard={AI_CONTROLLER_GENERATOR_ENABLED}>

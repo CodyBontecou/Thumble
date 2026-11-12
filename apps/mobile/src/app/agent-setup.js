@@ -41,7 +41,7 @@ export default function AgentSetup() {
   </Actions>}><Columns><View style={ui.column}>
     <Eyebrow>Connect your AI</Eyebrow><Text accessibilityRole="header" style={ui.title}>{'Your agent.\nYour controller.'}</Text>
     <Text style={ui.body}>Share a check request with your computer agent, then verify it here.</Text>
-    <Text style={ui.small}>Checks are free. Custom layouts are included in the demo.</Text>
+    <Text style={ui.small}>Checks are free. Custom layouts are included in every plan.</Text>
   </View><View style={ui.column}>
     {!!error && <Text accessibilityRole="alert" style={ui.error}>{error}</Text>}
     {verified ? <Text accessibilityLiveRegion="polite" style={ui.body}>Connection verified. Your agent reaches this receiver’s profile folder.</Text> : state.agentVerified && <Text style={ui.small}>Previously verified. Run another check to confirm the current connection.</Text>}

@@ -134,7 +134,7 @@ struct StatusPopoverView: View {
         case .readyToPair: readyToPair
         case .waiting: waiting
         case .connected: connected
-        case .freeTimeEnded: freeTimeEnded
+        case .planNeeded: planNeeded
         }
     }
 
@@ -212,7 +212,7 @@ struct StatusPopoverView: View {
                 if let transport = model.receiver?.transport { StatusRow(title: "Connection", value: transport, color: .green) }
                 StatusRow(title: "Layout", value: layoutText, color: model.activeLayout == nil ? .secondary : .green)
                 StatusRow(title: "World of Warcraft labels", value: spellLabelText, color: model.consolePortSync == nil ? .secondary : .green)
-                if let free = model.freeTimeText { StatusRow(title: "Plan", value: free, color: model.receiver?.pro == true || ReceiverUIModel.localTesting ? .green : .orange) }
+                if let plan = model.planText { StatusRow(title: "Plan", value: plan, color: model.receiver?.pro == true || ReceiverUIModel.localTesting ? .green : .orange) }
                 if let error = model.receiver?.accessError, !error.isEmpty { StatusRow(title: "Purchase", value: error, color: .red) }
             }
             Toggle("Sync World of Warcraft labels", isOn: Binding(get: { model.syncEnabled }, set: { model.setSyncEnabled($0) }))
@@ -220,18 +220,21 @@ struct StatusPopoverView: View {
         }
     }
 
-    private var freeTimeEnded: some View {
+    private var planNeeded: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("Free time ended").font(.system(size: 14, weight: .semibold))
+                Text("No active plan").font(.system(size: 14, weight: .semibold))
                 Spacer()
                 Badge(text: "Released", color: .orange)
             }
             Card {
                 Text("All buttons were released and the controller is idle. Your phone stays paired.")
                     .font(.system(size: 12)).fixedSize(horizontal: false, vertical: true)
-                Text("Plans are bought in Thumble on your phone. After you buy or restore, tap Resume there.")
+                Text("Start a free trial or restore your plan in Thumble on your phone, then tap Resume there.")
                     .font(.system(size: 12)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                if let error = model.receiver?.accessError, !error.isEmpty {
+                    Text(error).font(.system(size: 12)).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
+                }
             }
             StatusRow(title: "Gamepad", value: "Neutral, nothing held", color: .green)
         }

@@ -58,6 +58,7 @@ h1, h2, h3, h4 { font-family: var(--n-font); text-transform: none; }
 .snav-brand:hover { color: var(--n-text); }
 .mark { width: 30px; height: 30px; border-radius: 8px; background: var(--n-blue); color: #fff; display: inline-flex; align-items: center; justify-content: center; flex: none; }
 .mark svg { width: 20px; height: 20px; }
+img.mark { display: block; object-fit: cover; background: none; }
 .snav-links { display: flex; align-items: center; gap: 28px; font-size: 14px; }
 .snav-links a:not(.btn) { color: var(--n-text-2); padding: 8px 0; }
 .snav-links a:not(.btn):hover, .snav-links a[aria-current] { color: var(--n-text); }

@@ -7,7 +7,7 @@ from thumble_receiver.access import Access
 from thumble_receiver.selftest import selftest
 
 class SmokeRecoveryTests(unittest.IsolatedAsyncioTestCase):
-    async def test_slow_first_ledger_reservation_recovers_only_with_fresh_neutral(self):
+    async def test_slow_first_access_start_recovers_only_with_fresh_neutral(self):
         original=Access.start
         delayed=[]
         def slow_first(access):
@@ -15,6 +15,8 @@ class SmokeRecoveryTests(unittest.IsolatedAsyncioTestCase):
                 delayed.append(True)
                 time.sleep(.35)  # Longer than the unchanged 300 ms input deadline.
             return original(access)
-        with patch.object(Access,'start',slow_first), contextlib.redirect_stdout(io.StringIO()):
+        printed=io.StringIO()
+        with patch.object(Access,'start',slow_first), contextlib.redirect_stdout(printed):
             await selftest()
         self.assertTrue(delayed)
+        self.assertIn('plan grant', printed.getvalue())

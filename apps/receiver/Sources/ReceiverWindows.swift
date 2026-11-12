@@ -90,7 +90,7 @@ struct SettingsView: View {
     @ViewBuilder private var phone: some View {
         Section("Paired phone") {
             LabeledContent("Status", value: phoneStatus)
-            if let free = model.freeTimeText { LabeledContent("Plan", value: free) }
+            if let plan = model.planText { LabeledContent("Plan", value: plan) }
         }
         Section {
             Button("Show pairing code") { model.showCodeWhileWaiting = true; model.showPopover() }

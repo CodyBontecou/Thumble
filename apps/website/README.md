@@ -16,9 +16,10 @@ clearly labeled WoW sections of `/docs`.
 Plans: Weekly $0.99 and Yearly $29.99 with 7-day free trials, Lifetime $49.99;
 App Store-only Family plans $1.99 / $49.99 / $89.99. Thumble for Android links to
 Google Play (`com.thumble.android`); the iPhone app is marked coming soon and its
-CTA leads to the waitlist until the App Store listing is public. `terms.html` and
-`privacy.html` still describe the earlier 30-minute demo and $19.99 Pro and need
-an owner-reviewed legal update. AI controller generation is disabled.
+badge links to its App Store listing with a "Coming soon" tag until the app is
+public. Weekly and Yearly are auto-renewing subscriptions; `terms.html` and
+`privacy.html` describe subscriptions, trials and Lifetime (updated November 12,
+2026). AI controller generation is disabled.
 
 The Mac DMG is served separately by the `thumble-downloads` Worker at
 `/downloads/receiver-latest.dmg`; its source is in the current app repository at

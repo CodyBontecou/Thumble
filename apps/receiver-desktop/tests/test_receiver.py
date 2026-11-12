@@ -3,6 +3,7 @@ import base64
 from copy import deepcopy
 import hashlib
 import json
+import os
 from pathlib import Path
 import shutil
 import socket as socket_module
@@ -19,7 +20,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from websockets.asyncio.client import connect
 from websockets.exceptions import ConnectionClosed
 
-from thumble_receiver.access import Access, PUBLIC_KEY
+from thumble_receiver.access import Access, GRANT_ERROR, LOAD_ERROR, PUBLIC_KEY, SAVE_ERROR
 from thumble_receiver.lock import DirectoryLock
 from thumble_receiver.output import GuardedOutput, MemoryOutput
 from thumble_receiver.pairing import Invitation, identity, private_ipv4
@@ -33,6 +34,22 @@ class Clock:
 
     def __call__(self):
         return self.value
+
+
+def throwaway_key():
+    """A throwaway entitlement key pair: tests sign their own plan grants."""
+    key = Ed25519PrivateKey.generate()
+    return key, base64.b64encode(key.public_key().public_bytes(
+        serialization.Encoding.Raw, serialization.PublicFormat.Raw)).decode()
+
+
+def sign_grant(key, receiver_id, phone_id, nonce, issued, /, **overrides):
+    payload = dict(v=1, receiverId=receiver_id, phoneId=phone_id, nonce=nonce,
+                   productId='thumble_pro_lifetime', pro=True, issuedAt=issued, expiresAt=issued + 100)
+    payload.update(overrides)
+    data = json.dumps(payload).encode()
+    return dict(payload=base64.b64encode(data).decode(),
+                signature=base64.b64encode(key.sign(data)).decode())
 
 
 class StateTests(unittest.TestCase):
@@ -68,31 +85,48 @@ class AccessTests(unittest.TestCase):
         self.directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)
         self.clock = Clock()
-        self.key = Ed25519PrivateKey.generate()
-        public = base64.b64encode(self.key.public_key().public_bytes(
-            serialization.Encoding.Raw, serialization.PublicFormat.Raw)).decode()
-        self.access = Access(self.directory.name, public, self.clock, self.clock)
-        self.access.pair(str(uuid.uuid4()), 0)
+        self.key, public = throwaway_key()
+        self.access = Access(self.directory.name, public, self.clock)
+        self.access.pair(str(uuid.uuid4()))
 
     def grant(self, **overrides):
-        payload = dict(v=1, receiverId=self.access.receiver_id, phoneId=self.access.phone_id,
-                       nonce=self.access.nonce, productId='thumble_pro_lifetime', pro=True,
-                       issuedAt=100, expiresAt=200)
-        payload.update(overrides)
-        data = json.dumps(payload).encode()
-        return dict(payload=base64.b64encode(data).decode(),
-                    signature=base64.b64encode(self.key.sign(data)).decode())
+        return sign_grant(self.key, self.access.receiver_id, self.access.phone_id, self.access.nonce, 100, **overrides)
 
-    def test_crash_predebit_and_pause_refund(self):
+    def record(self):
+        return json.loads(Path(self.directory.name, 'demo.json').read_text())
+
+    def test_no_plan_cannot_start_and_has_no_free_time(self):
+        snapshot = self.access.snapshot(False)
+        self.assertEqual(set(snapshot), {'type', 'v', 'pro', 'remaining', 'debitedUsed', 'running', 'receiverId',
+                                         'nonce', 'error', 'grantExpires', 'enabled'})
+        self.assertEqual((snapshot['pro'], snapshot['remaining'], snapshot['debitedUsed']), (False, 0, 1800))
         self.access.start()
-        self.assertEqual(Access(self.directory.name).used, 5)
-        self.clock.value += 2
-        self.access.pause()
+        self.assertFalse(self.access.running)
+        self.clock.value += 86400
+        self.access.tick()
+        self.assertFalse(self.access.running)
+        self.assertEqual(self.access.snapshot(True)['remaining'], 0)
+
+    def test_new_record_keeps_schema_and_receiver_id(self):
+        self.assertEqual(self.record(), dict(version=1, receiverId=self.access.receiver_id, used=1800))
         reloaded = Access(self.directory.name)
-        self.assertEqual(reloaded.used, 2)
         self.assertEqual(reloaded.receiver_id, self.access.receiver_id)
-        self.access.pair(str(uuid.uuid4()), 500)
-        self.assertEqual(self.access.used, 500)
+        self.assertEqual(reloaded.error, '')
+
+    def test_old_ledgers_load_keep_their_receiver_id_and_are_not_rewritten(self):
+        for used in (0, 500, 1799.5, 1800):
+            with self.subTest(used=used), tempfile.TemporaryDirectory() as directory:
+                receiver_id = str(uuid.uuid4())
+                ledger = Path(directory, 'demo.json')
+                ledger.write_text(json.dumps(dict(version=1, receiverId=receiver_id, used=used)))
+                before = ledger.read_bytes()
+                access = Access(directory)
+                access.pair(str(uuid.uuid4()))
+                self.assertEqual((access.receiver_id, access.error), (receiver_id, ''))
+                access.start()
+                self.assertFalse(access.running)
+                self.assertEqual(access.snapshot(False)['remaining'], 0)
+                self.assertEqual(ledger.read_bytes(), before)
 
     def test_matches_production_purchase_key(self):
         config = Path(__file__).resolve().parents[3] / 'config/monetization.json'
@@ -107,36 +141,53 @@ class AccessTests(unittest.TestCase):
             first.close()
         DirectoryLock(self.directory.name).close()
 
-    def test_corrupt_ledger_and_failed_write_exhaust_demo(self):
-        Path(self.directory.name, 'demo.json').write_text('{}')
-        self.assertEqual(Access(self.directory.name).used, 1800)
-        self.access.directory = Path(self.directory.name) / 'missing'
-        self.access.start()
-        self.assertFalse(self.access.running)
-        self.assertEqual(self.access.used, 1800)
+    def test_unreadable_record_fails_closed_without_replacing_it(self):
+        for text in ('{}', '{broken', '[]', '{"receiverId": 7}', 'null'):
+            with self.subTest(text=text):
+                Path(self.directory.name, 'demo.json').write_text(text)
+                access = Access(self.directory.name)
+                self.assertEqual(access.error, LOAD_ERROR)
+                self.assertFalse(access.pro)
+                self.assertEqual(access.snapshot(False)['remaining'], 0)
+                self.assertEqual(Path(self.directory.name, 'demo.json').read_text(), text)
 
-    def test_refill_and_exhaustion(self):
-        self.access.used = 1794
-        self.access.start()
-        self.clock.value = 104.5
-        self.access.tick()
-        self.assertEqual(self.access.deadline, 106)
-        self.clock.value = 106
-        self.access.tick()
-        self.assertFalse(self.access.running)
-        self.assertEqual(self.access.snapshot(True)['remaining'], 0)
+    @unittest.skipIf(os.name == 'nt' or (hasattr(os, 'geteuid') and os.geteuid() == 0),
+                     'Requires POSIX permissions enforced for this user')
+    def test_unwritable_record_fails_closed(self):
+        locked = Path(self.directory.name, 'locked')
+        locked.mkdir(mode=0o500)
+        self.addCleanup(locked.chmod, 0o700)
+        self.assertEqual(Access(locked).error, SAVE_ERROR)
 
     def test_signed_grant_binding_expiry_and_cache(self):
         grant = self.grant()
         self.access.submit(grant)
         self.assertTrue(self.access.pro)
-        self.access.pair(self.access.phone_id, 0)
+        self.assertEqual(self.access.error, '')
+        self.access.pair(self.access.phone_id)
         self.assertTrue(self.access.pro)
         self.access.start()
+        self.assertTrue(self.access.running)
+        self.assertEqual(self.access.snapshot(True)['remaining'], 0)
         self.clock.value = 200
         self.access.tick()
         self.assertFalse(self.access.pro)
         self.assertFalse(self.access.running)
+        self.access.start()
+        self.assertFalse(self.access.running)
+        self.access.pair(self.access.phone_id)
+        self.assertFalse(self.access.pro, 'Expired cached grant restored')
+
+    def test_another_phone_does_not_inherit_a_cached_plan(self):
+        phone = self.access.phone_id
+        self.access.submit(self.grant())
+        self.access.pair(str(uuid.uuid4()))
+        self.assertFalse(self.access.pro)
+        self.access.pair(phone)
+        self.assertTrue(self.access.pro)
+        reloaded = Access(self.directory.name, self.access.public_key, self.clock)
+        reloaded.pair(phone)
+        self.assertTrue(reloaded.pro, 'Cached plan grant was not restored after restart')
 
     def test_reject_forged_wrong_phone_nonce_and_product(self):
         for values in (dict(phoneId=str(uuid.uuid4())), dict(nonce=str(uuid.uuid4())),
@@ -144,10 +195,12 @@ class AccessTests(unittest.TestCase):
                        dict(expiresAt=100 + 8 * 86400), dict(pro=1), dict(v=True)):
             self.access.submit(self.grant(**values))
             self.assertFalse(self.access.pro, values)
+            self.assertEqual(self.access.error, GRANT_ERROR)
         grant = self.grant()
         grant['signature'] = base64.b64encode(bytes(64)).decode()
         self.access.submit(grant)
         self.assertFalse(self.access.pro)
+        self.assertFalse(Access(self.directory.name, self.access.public_key, self.clock).cached)
 
 
 class SessionTests(unittest.TestCase):
@@ -157,15 +210,52 @@ class SessionTests(unittest.TestCase):
         self.clock = Clock()
         self.output = GuardedOutput(MemoryOutput(), self.clock)
         self.addCleanup(self.output.close)
-        self.access = Access(self.directory.name, clock=self.clock)
+        self.wall = Clock()
+        self.wall.value = 1000.0
+        self.key, public = throwaway_key()
+        self.access = Access(self.directory.name, public, self.wall)
+        self.access.pair(str(uuid.uuid4()))
         self.session = Session(self.output, self.access, self.clock)
         self.lease = self.session.ack('ready')['lease']
+
+    def plan(self, **overrides):
+        self.access.submit(sign_grant(self.key, self.access.receiver_id, self.access.phone_id,
+                                      self.access.nonce, self.wall(), **overrides))
+        self.assertTrue(self.access.pro)
 
     def frame(self, state=NEUTRAL, seq=0, lease=None):
         return dict(type='input', revision=0, state=state.__dict__, seq=seq,
                     lease=self.lease if lease is None else lease)
 
+    def test_without_plan_resume_stays_disabled_and_held_input_is_neutral(self):
+        replies = self.session.handle(dict(type='access-resume'))
+        self.assertFalse(self.session.enabled)
+        self.assertEqual((replies[0]['enabled'], replies[0]['remaining']), (False, 0))
+        self.lease = replies[-1]['lease']
+        ack = self.session.handle(self.frame())[0]
+        self.assertEqual(ack['type'], 'ack')
+        self.assertEqual(self.session.handle(self.frame(State(buttons=1), seq=1, lease=ack['lease']))[0]['type'], 'ack')
+        self.assertFalse(self.access.running)
+        self.assertEqual(self.output.backend.state, NEUTRAL)
+
+    def test_plan_expiry_releases_held_output_and_disables(self):
+        self.plan()
+        self.lease = self.session.handle(dict(type='access-resume'))[-1]['lease']
+        ack = self.session.handle(self.frame())[0]
+        self.session.handle(self.frame(State(buttons=1), seq=1, lease=ack['lease']))
+        self.assertEqual(self.output.backend.state.buttons, 1)
+        self.wall.value += 99
+        self.session.tick()
+        self.assertEqual(self.output.backend.state.buttons, 1)
+        self.wall.value += 1
+        self.session.tick()
+        self.assertFalse(self.session.enabled)
+        self.assertFalse(self.access.pro)
+        self.assertEqual(self.output.backend.state, NEUTRAL)
+        self.assertEqual(self.session.handle(dict(type='access-resume'))[0]['enabled'], False)
+
     def test_access_resume_neutral_then_held_and_pause(self):
+        self.plan()
         replies = self.session.handle(dict(type='access-resume'))
         self.lease = replies[-1]['lease']
         self.assertEqual(self.session.handle(self.frame(State(buttons=1))), [])
@@ -305,7 +395,8 @@ class TransportTests(unittest.IsolatedAsyncioTestCase):
         self.context, self.fingerprint = identity(PairingStore(self.directory.name))
         self.invitation = Invitation('127.0.0.1', 0, self.fingerprint)
         self.ready = asyncio.Queue()
-        self.server = ReceiverServer(self.output, Access(self.directory.name), self.invitation,
+        self.key, self.public_key = throwaway_key()
+        self.server = ReceiverServer(self.output, Access(self.directory.name, self.public_key), self.invitation,
                                      lambda value: self.ready.put_nowait(value) if value else None)
         self.stop = asyncio.Event()
         self.task = asyncio.create_task(self.server.run('127.0.0.1', 0, self.context, self.stop))
@@ -324,8 +415,25 @@ class TransportTests(unittest.IsolatedAsyncioTestCase):
     async def hello(self, socket, token=None):
         der = socket.transport.get_extra_info('ssl_object').getpeercert(binary_form=True)
         self.assertEqual(hashlib.sha256(der).hexdigest(), self.fingerprint)
-        await socket.send(json.dumps(dict(type='hello', v=3, phoneId=str(uuid.uuid4()),
+        self.phone_id = str(uuid.uuid4())
+        # Older phones send demoUsed; it is accepted and ignored.
+        await socket.send(json.dumps(dict(type='hello', v=3, phoneId=self.phone_id, demoUsed=0,
                                           token=token if token is not None else self.invitation.token)))
+
+    async def unlock(self, socket):
+        """Restore a plan the way the phone does, with a grant signed by the test key, then
+        Resume. Returns the paused ack carrying a lease issued after Resume."""
+        access = await self.receive(socket, 'access')
+        self.assertEqual((access['pro'], access['remaining']), (False, 0))
+        await socket.send(json.dumps(dict(type='access-grant', grant=sign_grant(
+            self.key, access['receiverId'], self.phone_id, access['nonce'], time.time()))))
+        while not access['pro']:
+            access = await self.receive(socket, 'access')
+            self.assertEqual(access['error'], '')
+        await socket.send(json.dumps(dict(type='access-resume')))
+        while not access['enabled']:
+            access = await self.receive(socket, 'access')
+        return await self.receive(socket, 'paused')
 
     async def receive(self, socket, kind):
         while True:
@@ -340,9 +448,7 @@ class TransportTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(ready['access'], 1)
             self.assertNotIn('chat', ready)
             self.assertEqual(ready['profiles'], 1)
-            await self.receive(socket, 'access')
-            await socket.send(json.dumps(dict(type='access-resume')))
-            paused = await self.receive(socket, 'paused')
+            paused = await self.unlock(socket)
             frame = dict(type='input', seq=0, revision=0, lease=paused['lease'], state=NEUTRAL.__dict__)
             await socket.send(json.dumps(frame))
             ack = await self.receive(socket, 'ack')
@@ -352,6 +458,32 @@ class TransportTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(self.output.backend.state.buttons, 1)
         await asyncio.wait_for(self.ready.get(), 3)
         self.assertEqual(self.output.backend.state, NEUTRAL)
+
+    async def test_without_plan_resume_input_and_chat_stay_blocked(self):
+        class Chat:
+            def send(self, text, channel, cancelled):
+                raise AssertionError('Chat was delivered without a plan')
+
+        self.server.chat = Chat()
+        async with connect(self.url, ssl=self.client_context, proxy=None) as socket:
+            await self.hello(socket)
+            await self.receive(socket, 'ready')
+            access = await self.receive(socket, 'access')
+            self.assertEqual((access['pro'], access['remaining'], access['enabled']), (False, 0, False))
+            await socket.send(json.dumps(dict(type='access-resume')))
+            self.assertFalse((await self.receive(socket, 'access'))['enabled'])
+            paused = await self.receive(socket, 'paused')
+            frame = dict(type='input', seq=0, revision=0, lease=paused['lease'], state=NEUTRAL.__dict__)
+            await socket.send(json.dumps(frame))
+            ack = await self.receive(socket, 'ack')
+            await socket.send(json.dumps({**frame, 'seq': 1, 'lease': ack['lease'],
+                                          'state': State(buttons=1).__dict__}))
+            ack = await self.receive(socket, 'ack')
+            self.assertEqual(self.output.backend.state, NEUTRAL)
+            await socket.send(json.dumps(dict(type='chat', id='no-plan', revision=0, lease=ack['lease'],
+                                              text='hello', channel='say')))
+            result = await self.receive(socket, 'chat-result')
+            self.assertEqual(result['error'], 'Start a free trial or restore your plan in Thumble on your phone.')
 
     async def test_wrong_token_binary_and_path_rejected(self):
         for mode in ('token', 'binary', 'path'):
@@ -405,7 +537,7 @@ class TransportTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(store.value['port'], self.invitation.port)
         self.ready = asyncio.Queue()
         self.invitation = Invitation('127.0.0.1', store.value['port'], pin)
-        self.server = ReceiverServer(self.output, Access(self.directory.name), self.invitation,
+        self.server = ReceiverServer(self.output, Access(self.directory.name, self.public_key), self.invitation,
                                      lambda value: self.ready.put_nowait(value) if value else None,
                                      pairing_store=store)
         self.stop = asyncio.Event()
@@ -590,8 +722,10 @@ class TransportTests(unittest.IsolatedAsyncioTestCase):
         process = await asyncio.create_subprocess_exec('node', str(Path(__file__).with_name('phone-client.mjs')),
                     stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
         try:
+            grant_key = self.key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
+                                               serialization.NoEncryption()).decode()
             stdout, stderr = await asyncio.wait_for(process.communicate(json.dumps(
-                dict(invitation=link, expectUdp=udp, expectChat=chat)).encode()), 12)
+                dict(invitation=link, grantKey=grant_key, expectUdp=udp, expectChat=chat)).encode()), 12)
             self.assertEqual(process.returncode, 0, stderr.decode() + '\nReceiver: ' + self.server.profile_error)
             self.assertIn('PASS real phone connection', stdout.decode())
         finally:
@@ -627,8 +761,7 @@ class TransportTests(unittest.IsolatedAsyncioTestCase):
             await self.hello(socket)
             ready = await self.receive(socket, 'ready')
             self.assertEqual(ready['chat'], 1)
-            await socket.send(json.dumps(dict(type='access-resume')))
-            paused = await self.receive(socket, 'paused')
+            paused = await self.unlock(socket)
             frame = dict(type='input', revision=0, seq=0, lease=paused['lease'], state=NEUTRAL.__dict__)
             await socket.send(json.dumps(frame))
             ack = await self.receive(socket, 'ack')
@@ -658,8 +791,7 @@ class TransportTests(unittest.IsolatedAsyncioTestCase):
         async with connect(self.url, ssl=self.client_context, proxy=None) as socket:
             await self.hello(socket)
             await self.receive(socket, 'ready')
-            await socket.send(json.dumps(dict(type='access-resume')))
-            paused = await self.receive(socket, 'paused')
+            paused = await self.unlock(socket)
             frame = dict(type='input', revision=0, seq=0, lease=paused['lease'], state=NEUTRAL.__dict__)
             await socket.send(json.dumps(frame))
             ack = await self.receive(socket, 'ack')

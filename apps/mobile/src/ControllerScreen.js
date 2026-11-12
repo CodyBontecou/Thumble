@@ -109,11 +109,9 @@ function Screen({ tour = false }) {
   const [prefix, setPrefix] = useState('');
   const [focused, setFocused] = useState(false);
   const [appActive, setAppActive] = useState(AppState.currentState === 'active');
-  const [demoUsed, setDemoUsed] = useState(0);
-  const remaining = access?.remaining ?? Math.max(0, 1800 - demoUsed);
-  // With a plan the receiver unlocks after verification; an exhausted meter
-  // means the computer has not accepted this phone's plan yet.
-  const exhausted = network.phase === 'connected' && access && !access.pro && remaining <= 0;
+  // With a plan the receiver unlocks after verification; until then the
+  // computer has not accepted this phone's plan. There is no free demo time.
+  const exhausted = network.phase === 'connected' && access && !access.pro;
   const [lost, setLost] = useState(false);
   const wasConnected = useRef(false);
   // Only a dropped link counts as lost; a remembered pairing means it was not a disconnect.
@@ -157,18 +155,13 @@ function Screen({ tour = false }) {
   }, [controller]);
   useEffect(() => {
     controller.releaseAll();
-    let current = true;
-    void purchases.demoUsed().then(used => { if (current) setDemoUsed(used); }).catch(() => {});
-    return () => { current = false; };
   }, [controller, network.phase]);
   useFocusEffect(useCallback(() => {
     setFocused(true);
-    let current = true;
-    void purchases.demoUsed().then(used => { if (current) setDemoUsed(used); }).catch(() => {});
-    return () => { current = false; setFocused(false); pauseChat(); controller.releaseAll(); connection.pausePlay(); };
+    return () => { setFocused(false); pauseChat(); controller.releaseAll(); connection.pausePlay(); };
   }, [controller, pauseChat]));
   useEffect(() => {
-    if (focused && appActive && network.phase === 'connected' && access && !access.enabled && !access.error && !connection.layoutPending && (access.pro || access.remaining > 0)) {
+    if (focused && appActive && network.phase === 'connected' && access && !access.enabled && !access.error && !connection.layoutPending && access.pro) {
       controller.releaseAll();
       connection.resumePlay();
     }

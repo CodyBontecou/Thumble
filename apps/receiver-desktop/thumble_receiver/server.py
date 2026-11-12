@@ -104,7 +104,8 @@ class Session:
             if self.layout_pending:
                 return [self.access.snapshot(False)]
             self.pause()
-            self.enabled = self.access.pro or self.access.used < 1800
+            # Output requires a plan grant; there is no free time.
+            self.enabled = self.access.pro
             return [self.access.snapshot(self.enabled), self.ack('paused')]
         if kind == 'access-grant':
             self.pause()
@@ -164,10 +165,7 @@ class Session:
         if self.enabled:
             self.access.start()
         allowed = self.enabled and self.access.running and not self.chat_busy
-        deadline = self.last_input + 0.3
-        if allowed and not self.access.pro:
-            deadline = min(deadline, self.access.deadline)
-        if not self.output.apply(state if allowed else NEUTRAL, deadline, self.generation):
+        if not self.output.apply(state if allowed else NEUTRAL, self.last_input + 0.3, self.generation):
             self.pause()
             return [self.ack('paused')]
         return [self.ack('ack')]
@@ -182,7 +180,8 @@ class Session:
             raise ProtocolError('Input timed out')
         self.access.tick()
         replies = []
-        if self.enabled and not self.access.pro and self.access.used >= 1800 and not self.access.running:
+        if self.enabled and not self.access.pro:
+            # The plan expired or was revoked while playing.
             self.enabled = False
             self.pause()
         if self.generation != self.output.generation or now - self.last_input >= 0.3:
@@ -233,9 +232,10 @@ class ReceiverServer:
             lease = message.get('lease')
             if session.chat_busy:
                 raise ChatError('Another chat message is being delivered. Please wait.')
-            if not session.enabled or not self.access.running or (
-                    not self.access.pro and session.clock() >= self.access.deadline):
-                raise ChatError('Start or resume the demo, or restore Pro, before sending chat.')
+            if not self.access.pro:
+                raise ChatError('Start a free trial or restore your plan in Thumble on your phone.')
+            if not session.enabled or not self.access.running:
+                raise ChatError('Tap Resume on your phone, then send your message again.')
             if (session.layout_pending or type(message.get('revision')) is not int
                     or message['revision'] != session.revision or not isinstance(lease, str)
                     or session.clock() > session.leases.get(lease, float('-inf'))):
@@ -405,7 +405,8 @@ class ReceiverServer:
                 self.on_invitation('')
                 self.output.release()
                 await self.work(self.pairing_image.clear)
-                self.access.pair(phone_id, hello.get('demoUsed', 0))
+                # Older phones still send demoUsed. The free demo is retired, so it is ignored.
+                self.access.pair(phone_id)
                 session = Session(self.output, self.access, chat_available=self.chat is not None)
                 self.session = session
                 await self.send(socket, [{**session.ack('ready'), 'reconnectToken': credential},

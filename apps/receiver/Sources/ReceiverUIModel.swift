@@ -7,7 +7,7 @@ import SwiftUI
 /// receiver, its profile store or UserDefaults; nothing here is invented for display.
 @MainActor final class ReceiverUIModel: ObservableObject {
     enum ControllerAccess: Equatable { case starting, ready, needsPermission, unavailable, failed(String) }
-    enum Phase: Equatable { case accessNeeded, starting, unavailable, readyToPair, waiting, connected, freeTimeEnded }
+    enum Phase: Equatable { case accessNeeded, starting, unavailable, readyToPair, waiting, connected, planNeeded }
     struct Layout: Identifiable, Equatable {
         let id: String
         let name: String
@@ -83,7 +83,7 @@ import SwiftUI
         }
         guard let receiver else { return .starting }
         if receiver.connected {
-            if !receiver.pro, let remaining = receiver.remaining, remaining <= 0 { return .freeTimeEnded }
+            if !receiver.pro && receiver.accessKnown { return .planNeeded }
             return .connected
         }
         if receiver.rememberedPhone { return .waiting }
@@ -93,7 +93,7 @@ import SwiftUI
     var statusDot: NSColor? {
         switch phase {
         case .connected: return receiver?.paused == true ? .systemOrange : .systemGreen
-        case .waiting, .accessNeeded, .freeTimeEnded, .unavailable: return .systemOrange
+        case .waiting, .accessNeeded, .planNeeded, .unavailable: return .systemOrange
         case .readyToPair, .starting: return nil
         }
     }
@@ -103,13 +103,11 @@ import SwiftUI
         return String(format: "%d:%02d", seconds / 60, seconds % 60)
     }
     var activeLayout: Layout? { layouts.first(where: \.active) }
-    var freeTimeText: String? {
+    var planText: String? {
         if Self.localTesting { return "Local testing · unlimited" }
         guard let receiver, receiver.connected else { return nil }
-        if receiver.pro { return "Pro · unlimited" }
-        guard let remaining = receiver.remaining else { return nil }
-        let seconds = max(0, Int(remaining.rounded(.down)))
-        return String(format: "%d:%02d free time left", seconds / 60, seconds % 60) + (receiver.running ? "" : " · paused")
+        if receiver.pro { return "Plan active" }
+        return receiver.accessKnown ? "No active plan" : nil
     }
     var controllerAccessText: String {
         switch controllerAccess {

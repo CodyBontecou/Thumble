@@ -49,7 +49,9 @@ class GuiTests(unittest.TestCase):
         self.assertTrue((self.args.data_dir / 'settings.json').exists())
 
     def test_ready_status_and_wrong_interface_restart_validation(self):
-        self.window.set_status(dict(connected=True, ready=True, sync='Hero synced'))
+        self.window.set_status(dict(connected=True, ready=True, pro=False, sync='Hero synced'))
+        self.assertIn('no active plan', self.window.status.text())
+        self.window.set_status(dict(connected=True, ready=True, pro=True, sync='Hero synced'))
         self.assertIn('controller ready', self.window.status.text())
         self.window.address.setCurrentText('8.8.8.8')
         self.window.restart()

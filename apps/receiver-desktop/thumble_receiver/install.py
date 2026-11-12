@@ -95,7 +95,7 @@ def uninstall_user():
     if startup.exists() and str(root) in startup.read_text(encoding='utf-8'):
         startup.unlink()
     shutil.rmtree(source)
-    print('Removed the application. Your demo, Pro grant, and profiles have been retained.')
+    print('Removed the application. Your plan record and profiles have been retained.')
 
 
 def autostart_enabled():

@@ -1,4 +1,4 @@
-"""One process per durable demo ledger, on both supported operating systems."""
+"""One process per receiver data directory (receiver record, plan grant and pairing), on both supported operating systems."""
 import os
 from pathlib import Path
 

@@ -5,8 +5,8 @@ defer { try? FileManager.default.removeItem(at:folder) }
 let path = folder.appendingPathComponent("demo.json")
 let record: [String:Any] = ["version":1, "receiverId":UUID().uuidString, "used":1800]
 try JSONSerialization.data(withJSONObject:record).write(to:path)
-var clock = 100.0
-func make() -> AccessSession { AccessSession(directory:folder, publicKey:"", now:{ clock }) }
+var wall = Date().timeIntervalSince1970
+func make() -> AccessSession { AccessSession(directory:folder, publicKey:"", wallNow:{ wall }) }
 func check(_ session: AccessSession) {
     let value = session.snapshot()
 #if THUMBLE_LOCAL_TESTING
@@ -17,18 +17,18 @@ func check(_ session: AccessSession) {
     precondition(value["remaining"] as? Double == 0 && value["debitedUsed"] as? Double == 1800)
 }
 let session = make()
-session.pair(phoneID:UUID().uuidString, mirroredUsed:1800)
+session.pair(phoneID:UUID().uuidString)
 session.start(); check(session)
-clock += 86400; check(session)
+wall += 86400; check(session)
 session.pause(); _ = session.snapshot()
 let restarted = make()
-restarted.pair(phoneID:UUID().uuidString, mirroredUsed:1800)
+restarted.pair(phoneID:UUID().uuidString)
 restarted.start(); check(restarted)
 let saved = try JSONSerialization.jsonObject(with:Data(contentsOf:path)) as! [String:Any]
-precondition(saved["used"] as? Double == 1800)
+precondition(saved["used"] as? Double == 1800 && saved["receiverId"] as? String == record["receiverId"] as? String)
 precondition(!FileManager.default.fileExists(atPath:folder.appendingPathComponent("pro-grant.json").path))
 #if THUMBLE_LOCAL_TESTING
-print("PASS local QA: exhausted phone can resume beyond 24h and reconnect; no fake grant or usage reset")
+print("PASS local QA: a phone with no plan can resume beyond 24h and reconnect; no fake grant or record change")
 #else
-print("PASS production: exhausted phone remains blocked; local QA code absent")
+print("PASS production: a phone with no plan remains blocked; local QA code absent")
 #endif

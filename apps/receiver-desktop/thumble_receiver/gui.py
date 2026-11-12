@@ -220,7 +220,10 @@ class Window(QMainWindow):
             self.qr.setText('Pairing code cleared')
 
     def set_status(self, status):
-        if status['connected']:
+        if status['connected'] and not status.get('pro'):
+            # Output requires a plan grant; there is no free time.
+            self.status.setText('Phone connected · no active plan')
+        elif status['connected']:
             self.status.setText('Phone connected · controller ready' if status['ready'] else 'Phone connected · controls paused')
         else:
             self.status.setText('Ready to pair · code expires in two minutes')
