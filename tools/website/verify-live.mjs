@@ -46,11 +46,12 @@ async function check(request) {
     const file = route === '/' ? 'index.html' : route.slice(1) + '.html';
     assert.ok(withoutEdgeDecorations(bytes.toString(), route) === await fs.readFile(path.join(artifact, file), 'utf8'), `HTML mismatch: ${route}`);
   } else {
-    // The production edge also adds its existing Chinese landing page to the sitemap.
-    const source = route === '/sitemap.xml'
+    const expected = await fs.readFile(path.join(artifact, route.slice(1)));
+    // The production edge may add the Chinese landing page to a sitemap that does not list it yet.
+    const edgeless = route === '/sitemap.xml'
       ? Buffer.from(bytes.toString().replace('<url><loc>https://thumble.io/zh-hans/</loc><lastmod>2026-10-26</lastmod></url>', ''))
       : bytes;
-    assert.ok(source.equals(await fs.readFile(path.join(artifact, route.slice(1)))), `Asset mismatch: ${route}`);
+    assert.ok(bytes.equals(expected) || edgeless.equals(expected), `Asset mismatch: ${route}`);
   }
 }
 // Retry propagation and transient fetch failures, then fail the workflow visibly.
