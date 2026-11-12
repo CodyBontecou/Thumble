@@ -108,16 +108,16 @@ export default function WowBindings() {
     renderItem={({ item }) => <Row title={item.name} detail={`Spell ${item.id}${item.rank ? ` · ${item.rank}` : ''}`} disabled={busy} onPress={() => choose({ spellId: item.id })} />}
     ListHeaderComponent={<View style={{ gap: 16 }}>
     <View style={{ gap: 8 }}>
-      <Text style={ui.body}>Choose an ability for a gamepad button. In WoW, paste the proposal into /thumblebridge, review it, then click Apply outside combat.</Text>
-      <Text style={ui.small}>Type /reload in WoW to refresh this character’s learned spells and bindings.</Text>
+      <Text style={ui.body}>Choose an ability for a gamepad button. In World of Warcraft, paste the proposal into /thumblebridge, review it, then click Apply outside combat.</Text>
+      <Text style={ui.small}>Type /reload in World of Warcraft to refresh this character’s learned spells and bindings.</Text>
     </View>
     <Button secondary disabled={busy || network.phase !== 'connected'} onPress={() => void refresh()}>{busy ? 'Loading…' : 'Refresh character'}</Button>
-    {network.phase !== 'connected' && <Text style={ui.body}>Connect your Mac to choose WoW actions.</Text>}
+    {network.phase !== 'connected' && <Text style={ui.body}>Connect your Mac to choose World of Warcraft actions.</Text>}
     {!!error && <Text accessibilityRole="alert" style={ui.error}>{error}</Text>}
     {visibleSent && <View style={ui.card} onLayout={() => list.current?.scrollToOffset({ offset: 0, animated: true })}>
       <Text accessibilityRole="header" accessibilityLiveRegion="polite" style={ui.heading}>{confirmed ? 'Binding confirmed' : 'Proposal copied to your Mac'}</Text>
       <Text style={ui.body}>{visibleSent.after}</Text>
-      <Text style={ui.body}>{confirmed ? 'The latest WoW export confirms this action is bound.' : 'In WoW, open /thumblebridge, paste from the Mac clipboard, click Review pasted plan, then Apply reviewed changes. Type /reload and tap Refresh character here to confirm.'}</Text>
+      <Text style={ui.body}>{confirmed ? 'The latest World of Warcraft export confirms this action is bound.' : 'In World of Warcraft, open /thumblebridge, paste from the Mac clipboard, click Review pasted plan, then Apply reviewed changes. Type /reload and tap Refresh character here to confirm.'}</Text>
     </View>}
     {snapshot && <>
       <View style={{ gap: 4 }}>

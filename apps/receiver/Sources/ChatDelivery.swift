@@ -30,10 +30,10 @@ enum ChatDelivery {
         // Clear a previous edit box, then open a fresh one. No slash command comes from the transcript.
         key(53)
         try? await Task.sleep(for: .milliseconds(80))
-        guard focused() else { return "WoW lost focus. Nothing was sent; try again with WoW in front." }
+        guard focused() else { return "World of Warcraft lost focus. Nothing was sent; try again with World of Warcraft in front." }
         key(36)
         try? await Task.sleep(for: .milliseconds(120))
-        guard focused() else { return "WoW lost focus. Nothing was sent; try again with WoW in front." }
+        guard focused() else { return "World of Warcraft lost focus. Nothing was sent; try again with World of Warcraft in front." }
         var chunk: [UniChar] = []
         func typeChunk() {
             guard !chunk.isEmpty else { return }
@@ -52,7 +52,7 @@ enum ChatDelivery {
         }
         typeChunk()
         try? await Task.sleep(for: .milliseconds(100))
-        guard focused() else { return "WoW lost focus. Your draft may be in its chat box; check it before trying again." }
+        guard focused() else { return "World of Warcraft lost focus. Your draft may be in its chat box; check it before trying again." }
         key(36)
         // This confirms local delivery only; WoW provides no server acknowledgement here.
         return nil

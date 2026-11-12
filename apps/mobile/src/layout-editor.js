@@ -82,9 +82,9 @@ export function mirrorProfile(profile, id, name) {
 }
 /** Starting points offered by the onboarding tour. */
 export const TOUR_PRESETS = [
-  { id: 'xbox', name: 'Xbox', detail: 'The default. Best for WoW: Forever.' },
+  { id: 'xbox', name: 'Xbox', detail: 'The default. Works with most controller games.' },
   { id: 'lefty', name: 'Left-handed', detail: 'Sticks and buttons swap sides.' },
-  { id: 'consoleport', name: 'ConsolePort', detail: 'Spell labels sync from WoW via the addon.' },
+  { id: 'consoleport', name: 'ConsolePort', detail: 'For World of Warcraft. Spell labels sync via the addon.' },
 ];
 /** @param {string} id @param {{ xbox: any, consoleport: any }} builtins */
 export function presetProfile(id, builtins) {

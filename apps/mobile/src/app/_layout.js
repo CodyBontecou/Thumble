@@ -27,7 +27,7 @@ export default function RootLayout() {
     <Stack.Screen name="rotate" options={screen} />
     <Stack.Screen name="onboarding" options={screen} />
     <Stack.Protected guard={AI_CONTROLLER_GENERATOR_ENABLED}>
-      <Stack.Screen name="journey" options={{ ...modal, title: 'AI to WoW' }} />
+      <Stack.Screen name="journey" options={{ ...modal, title: 'AI to game' }} />
     </Stack.Protected>
     <Stack.Screen name="demo-info" options={{ orientation: 'landscape', presentation: 'transparentModal', animation: 'fade', contentStyle: { backgroundColor: 'transparent' } }} />
     <Stack.Screen name="controller-menu" options={{ orientation: 'landscape', presentation: 'transparentModal', animation: 'fade', contentStyle: { backgroundColor: 'transparent' } }} />
@@ -38,11 +38,11 @@ export default function RootLayout() {
     <Stack.Screen name="first-layout" options={{ ...modal, title: 'Your first layout' }} />
     <Stack.Screen name="calibration" options={{ ...modal, title: 'Stick calibration' }} />
     <Stack.Screen name="layout-editor" options={{ ...screen, orientation: 'landscape', presentation: 'fullScreenModal' }} />
-    <Stack.Screen name="wow-bindings" options={{ ...modal, title: 'WoW actions' }} />
+    <Stack.Screen name="wow-bindings" options={{ ...modal, title: 'World of Warcraft actions' }} />
     <Stack.Screen name="controller-settings" options={{ ...modal, title: 'Controller settings' }} />
     <Stack.Screen name="cloud" options={{ ...modal, title: AI_CONTROLLER_GENERATOR_ENABLED ? 'Cloud controllers' : 'Cloud account' }} />
     <Stack.Screen name="profiles" options={{ ...modal, title: 'Controllers' }} />
     <Stack.Screen name="pair" options={{ ...modal, title: 'Pair computer' }} />
-    <Stack.Screen name="wow-setup" options={{ ...modal, title: 'WoW setup' }} />
+    <Stack.Screen name="wow-setup" options={{ ...modal, title: 'World of Warcraft setup' }} />
   </Stack>;
 }

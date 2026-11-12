@@ -306,8 +306,8 @@ export class Connection {
     return this.profileOperation('profile-adopt', { profile: checked, source: { ...source }, expectedActivationRevision });
   }
   bindingOperation(type, fields) {
-    if (this.view.phase !== 'connected') return Promise.reject(Error('Connect your Mac to edit WoW actions.'));
-    if (!this.phoneBindingsSupported) return Promise.reject(Error('Update your Mac receiver to edit WoW actions.'));
+    if (this.view.phase !== 'connected') return Promise.reject(Error('Connect your Mac to edit World of Warcraft actions.'));
+    if (!this.phoneBindingsSupported) return Promise.reject(Error('Update your Mac receiver to edit World of Warcraft actions.'));
     if (this.bindingRequest || this.profileRequest) return Promise.reject(Error('A controller request is already in progress.'));
     if (type === 'bindings-copy') this.pausePlay();
     const id = `bindings-${++this.profileSequence}`;
@@ -370,12 +370,12 @@ export class Connection {
     return new Promise((resolve, reject) => {
       const timer = this.timers.setTimeout(() => {
         this.chatRequest = null;
-        reject(Error('Delivery could not be confirmed. Check WoW before sending again.'));
+        reject(Error('Delivery could not be confirmed. Check World of Warcraft before sending again.'));
       }, 5000);
       this.chatRequest = { id, resolve, reject, timer };
       if (!this.native.send(JSON.stringify({ type: 'chat', id, text: text.trim(), channel, lease: this.lease, revision: this.layout.revision }))) {
         this.timers.clearTimeout(timer); this.chatRequest = null;
-        reject(Error('Connection lost. Delivery could not be confirmed; check WoW before sending again.'));
+        reject(Error('Connection lost. Delivery could not be confirmed; check World of Warcraft before sending again.'));
       }
     });
   }
@@ -451,9 +451,9 @@ export class Connection {
     this.cloudAdoptionSupported = false;
     this.phoneProfileSaveSupported = false;
     this.phoneBindingsSupported = false;
-    this.finishBindingRequest(Error('Connection closed. Refresh your WoW actions.'));
+    this.finishBindingRequest(Error('Connection closed. Refresh your World of Warcraft actions.'));
     this.finishProfileRequest(Error('Disconnected from your computer.'));
-    if (this.chatRequest) { this.timers.clearTimeout(this.chatRequest.timer); this.chatRequest.reject(Error('Disconnected. Check WoW before sending again.')); this.chatRequest = null; }
+    if (this.chatRequest) { this.timers.clearTimeout(this.chatRequest.timer); this.chatRequest.reject(Error('Disconnected. Check World of Warcraft before sending again.')); this.chatRequest = null; }
     this.update({phase:'offline',detail,rtt:null,chat:false});
     for (const reset of this.resetListeners) reset();
     if (connected) this.native.send(JSON.stringify({type:'bye'}));

@@ -2,14 +2,14 @@ executionPrerequisite: The Pixel 7 QA app has its portrait controller menu open,
 steps:
   - await: { visible: { text: Disconnect Mac } }
   - await: { idle: true, stableFor: 800 }
-  - tap: { text: AI to WoW }
+  - tap: { text: AI to game }
   - await: { visible: { text: From your AI } }
   - await: { idle: true, stableFor: 800 }
-  - assert: { text: { in: { text: AI TO WOW · }, contains: 3 OF 4 COMPLETE } }
-  - scroll-to: { target: { text: 4 · Tested in WoW } }
+  - assert: { text: { in: { text: AI TO GAME · }, contains: 3 OF 4 COMPLETE } }
+  - scroll-to: { target: { text: 4 · Tested in your game } }
   - assert: { visible: { text: ✓ · Mac ready } }
-  - assert: { visible: { text: 4 · Tested in WoW } }
-  - assert: { visible: { text: Test this controller in WoW } }
+  - assert: { visible: { text: 4 · Tested in your game } }
+  - assert: { visible: { text: Test this controller in your game } }
   - tap: { text: Done }
   - await: { visible: { text: Controller paused } }
   - await: { idle: true, stableFor: 800 }

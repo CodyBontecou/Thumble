@@ -280,7 +280,7 @@ function newDraft(profile) {
 const TOUR_STEPS = [
   { title: 'Drag a control to where your thumb rests.', detail: 'Keep controls apart. A note at the bottom tells you if two overlap.', key: 'moved' },
   { title: 'Tap a control, then drag its blue corner to resize.', detail: 'Make the buttons you hit most a little bigger.', key: 'resized' },
-  { title: 'Change what a button sends.', detail: 'Tap a control, then Options → Gamepad output. Which spell it casts is set in WoW.', key: 'remapped' },
+  { title: 'Change what a button sends.', detail: 'Tap a control, then Options → Gamepad output. Your game decides what each output does.', key: 'remapped' },
 ];
 /** Coach card for chapter one of the first-run tour. Collapsing it keeps the
  * step and its buttons but uncovers the controls underneath. */

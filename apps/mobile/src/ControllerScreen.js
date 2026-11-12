@@ -73,11 +73,11 @@ export function WowSetupScreen() {
   return (
       <SafeAreaProvider><SafeAreaView style={s.screen} edges={['left', 'right', 'bottom']} accessibilityViewIsModal>
         <ScrollView contentContainerStyle={s.setupContent}>
-          <Text style={s.detail}>Connect your computer first, then follow these steps to prepare WoW. WoW: Forever has built-in gamepad support; other versions use ConsolePort. You can test the controller locally before entering the game.</Text>
+          <Text style={s.detail}>Connect your computer first, then follow these steps to prepare World of Warcraft. WoW: Forever has built-in gamepad support; other versions use ConsolePort. You can test the controller locally before entering the game.</Text>
           {[
-            ['1. Prepare your computer', 'Install the receiver and connect both devices to the same Wi-Fi. Verify the virtual gamepad before starting WoW.'],
-            ['2. Install ConsolePort (not needed for WoW: Forever)', 'Select the WoW installation you play in CurseForge, install its matching ConsolePort release, then restart WoW and confirm the addon is enabled.'],
-            ['3. Check in-game controls', 'Follow ConsolePort’s controller setup, or the Gamepad options in WoW: Forever. Test movement, camera, targeting, jump and trigger modifiers. Configure your spells and actions in WoW.'],
+            ['1. Prepare your computer', 'Install the receiver and connect both devices to the same Wi-Fi. Verify the virtual gamepad before starting World of Warcraft.'],
+            ['2. Install ConsolePort (not needed for WoW: Forever)', 'Select the World of Warcraft installation you play in CurseForge, install its matching ConsolePort release, then restart World of Warcraft and confirm the addon is enabled.'],
+            ['3. Check in-game controls', 'Follow ConsolePort’s controller setup, or the Gamepad options in WoW: Forever. Test movement, camera, targeting, jump and trigger modifiers. Configure your spells and actions in World of Warcraft.'],
           ].map(([title, detail]) => <View key={title} style={s.step}><Text style={s.stepTitle}>{title}</Text><Text style={s.detail}>{detail}</Text></View>)}
           <Pressable accessibilityRole="link" onPress={() => Linking.openURL('https://www.curseforge.com/wow/addons/console-port')} style={s.link}><Text style={s.action}>Open ConsolePort on CurseForge ↗</Text></Pressable>
         </ScrollView>

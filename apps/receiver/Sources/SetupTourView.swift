@@ -80,7 +80,7 @@ struct SetupTourView: View {
             VStack(alignment: .leading, spacing: 4) {
                 row(.access, title: "Allow controller", status: accessStatus, done: accessDone)
                 row(.pair, title: "Pair your phone", status: phoneStatus, done: phoneDone)
-                row(.wow, title: "World of Warcraft", status: wowStatus, done: wowFound)
+                row(.wow, title: "A few last settings", status: wowStatus, done: wowFound)
             }
             Spacer()
             Text("Change any of this later from the controller icon in the menu bar.")
@@ -107,7 +107,7 @@ struct SetupTourView: View {
     }
     private var wowStatus: String {
         if let sync = model.consolePortSync { return "Synced · \(sync.character)" }
-        return wowFound ? "Folder found" : "Folder not found"
+        return wowFound ? "World of Warcraft found" : "Optional"
     }
 
     private func row(_ step: Step, title: String, status: String, done: Bool) -> some View {
@@ -208,10 +208,10 @@ struct SetupTourView: View {
 
     private var wowDetail: some View {
         VStack(alignment: .leading, spacing: 18) {
-            Header(eyebrow: "Step 3 of 3", title: "Show your spells on your phone",
-                   text: "With ConsolePort, Thumble reads your bindings so each button shows the spell it casts. Type /reload in game after setup. WoW: Forever has built-in gamepad support, so you can skip this step.")
+            Header(eyebrow: "Step 3 of 3", title: "A few last settings",
+                   text: "Playing World of Warcraft with ConsolePort? Thumble can read your bindings so each button shows the spell it casts. Type /reload in game after setup. WoW: Forever has built-in gamepad support and doesn’t need this.")
             VStack(spacing: 0) {
-                SettingRow(title: "WoW folder", detail: model.wowFolder, ok: wowFound) {
+                SettingRow(title: "World of Warcraft folder", detail: model.wowFolder, ok: wowFound) {
                     Button(wowFound ? "Change…" : "Choose…") { model.chooseWoWFolder() }.buttonStyle(QuietButton())
                 }
                 Divider().padding(.leading, 12)
@@ -228,7 +228,7 @@ struct SetupTourView: View {
             }
             .background(RoundedRectangle(cornerRadius: 10).fill(Color.primary.opacity(0.05)))
             .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Color.primary.opacity(0.08)))
-            Text("Not playing WoW? Leave this as is. Thumble works with any game that supports controllers.")
+            Text("Not playing World of Warcraft? Skip the folder and sync settings. Thumble works with any game that supports controllers.")
                 .font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)

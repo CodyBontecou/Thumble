@@ -273,7 +273,7 @@ test('chat disconnect rejects pending delivery and clears its timer', async () =
   h.connection.view = { ...h.connection.view, chat: true };
   const delivery = h.connection.sendChat('Hello', 'say');
   h.connection.disconnect();
-  await assert.rejects(delivery, /Check WoW/);
+  await assert.rejects(delivery, /Check World of Warcraft/);
   assert.equal(h.connection.chatRequest, null); assert.equal(h.callbacks.size, 0);
 });
 test('chat rejects commands with newlines, control characters, excessive UTF-8 bytes and unknown channels', async () => {

@@ -13,14 +13,14 @@ export function consolePortSyncView({ online, catalog, profile, error = '', load
     && typeof sync.profileId === 'string' && typeof sync.following === 'boolean';
   const following = online && !error && bridge?.enabled === true && valid && sync.following && sync.profileId === profile.id;
   let title = 'Waiting for ConsolePort';
-  let detail = 'In WoW, type /reload after changing your bindings. Leave Automatically sync ConsolePort enabled in the Mac receiver.';
+  let detail = 'In World of Warcraft, type /reload after changing your bindings. Leave Automatically sync ConsolePort enabled in the Mac receiver.';
   if (!online) { title = 'Connect your Mac'; detail = 'Connect to see your character and the latest ConsolePort sync.'; }
   else if (error) { title = 'Sync status unavailable'; detail = error; }
   else if (loading && !catalog) { title = 'Checking ConsolePort…'; detail = 'Reading sync status from your Mac.'; }
   else if (!bridge || typeof bridge.enabled !== 'boolean') { title = 'Update your Mac receiver'; detail = 'This receiver can’t report ConsolePort sync status. Your controller still works.'; }
-  else if (!bridge.enabled) { title = 'ConsolePort sync is off'; detail = 'Enable Automatically sync ConsolePort in the Mac receiver, then type /reload in WoW.'; }
+  else if (!bridge.enabled) { title = 'ConsolePort sync is off'; detail = 'Enable Automatically sync ConsolePort in the Mac receiver, then type /reload in World of Warcraft.'; }
   else if (following) { title = 'Following ConsolePort'; detail = 'Bindings, spell labels and modifier layers follow your character after /reload.'; }
-  else if (valid) { title = 'Another controller is active'; detail = 'Choose your character’s ConsolePort profile, or use built-in ConsolePort controls and type /reload in WoW.'; }
+  else if (valid) { title = 'Another controller is active'; detail = 'Choose your character’s ConsolePort profile, or use built-in ConsolePort controls and type /reload in World of Warcraft.'; }
   const modifiers = valid ? ['shift', 'ctrl', 'alt'].flatMap(key => {
     const value = sync.modifiers?.[key];
     return typeof value === 'string' && /^(a|b|x|y|lt|rt|lb|rb|ls|rs|back|start|up|down|left|right|guide|none)$/.test(value)

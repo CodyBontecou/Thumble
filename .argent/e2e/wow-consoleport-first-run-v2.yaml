@@ -3,7 +3,7 @@ steps:
   - launch: com.thumble.wowsetupqa
   - await: { visible: { text: WoW on your Mac. } }
   - await: { idle: true }
-  - echo: Choose Set up WoW. Expect the WoW client picker.
-  - tap: { text: Set up WoW }
-  - await: { visible: { text: Which WoW } }
+  - echo: Choose Set up your game. Expect the World of Warcraft version picker.
+  - tap: { text: Set up your game }
+  - await: { visible: { text: Which version of } }
   - await: { idle: true }

@@ -36,7 +36,7 @@ export default function RotateScreen() {
       <Text style={ui.body}>The controller is landscape. Hold the phone like a gamepad, one thumb on each side.</Text>
       <View style={[ui.card, { gap: 6 }]}>
         <Text style={ui.label}>Practice · about a minute</Text>
-        <Text style={ui.muted}>Move, look, jump, a modifier layer, then the game menu. Stand somewhere quiet in WoW first.</Text>
+        <Text style={ui.muted}>Move, look, jump, a modifier layer, then the game menu. Stand somewhere quiet in game first.</Text>
       </View>
       <View style={{ flex: 1 }} />
       <Button onPress={toPractice}>Start practice</Button>

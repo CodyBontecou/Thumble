@@ -106,7 +106,7 @@ def main():
     parser.add_argument('--profile-dir', type=Path, default=os.environ.get('TAPPING_PROFILE_DIR'),
                         help='Local-agent profile store (default: data directory / profiles)')
     parser.add_argument('--wow-dir', type=Path, action='append', default=[],
-                        help='WoW install/client folder for saved ConsolePort sync; may be repeated')
+                        help='World of Warcraft install/client folder for saved ConsolePort sync; may be repeated')
     parser.add_argument('--transport', choices=('wss', 'udp'), default='wss',
                         help='Input transport (UDP uses AES-GCM with WSS control/fallback)')
     parser.add_argument('--headless', action='store_true', help='Use a terminal instead of the pairing window and tray')
@@ -125,7 +125,7 @@ def main():
     if not 0 <= args.port <= 65535:
         parser.error('port must be between 0 and 65535')
     if len(args.wow_dir) > 8:
-        parser.error('at most eight WoW roots are supported')
+        parser.error('at most eight World of Warcraft folders are supported')
     try:
         # A protocol handler never performs another action, even if a malformed
         # custom URI caused additional recognized flags to appear in argv.

@@ -46,8 +46,8 @@
         "NSAppTransportSecurity": {
           "NSAllowsLocalNetworking": true
         },
-        "NSMicrophoneUsageDescription": "Dictate a message to review and send to World of Warcraft.",
-        "NSSpeechRecognitionUsageDescription": "Turn your voice into editable World of Warcraft chat messages.",
+        "NSMicrophoneUsageDescription": "Dictate an in-game chat message to review before Thumble sends it.",
+        "NSSpeechRecognitionUsageDescription": "Turn your voice into editable in-game chat messages.",
         "ITSAppUsesNonExemptEncryption": false,
         "NSPhotoLibraryUsageDescription": "Thumble does not request your photo library. A bundled image framework requires this compatibility description."
       },

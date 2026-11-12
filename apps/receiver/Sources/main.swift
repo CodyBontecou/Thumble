@@ -263,7 +263,7 @@ import SwiftUI
         if panel.runModal() == .OK, let url = panel.url {
             UserDefaults.standard.set(url.path, forKey: "consolePortWoWFolder")
             model.wowFolderChanged()
-            model.consolePortStatus = "ConsolePort: reload WoW to sync"
+            model.consolePortStatus = "ConsolePort: reload World of Warcraft to sync"
         }
     }
     @objc private func quit() { NSApp.terminate(nil) }

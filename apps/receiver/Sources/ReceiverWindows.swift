@@ -111,7 +111,7 @@ struct SettingsView: View {
 
     @ViewBuilder private var wow: some View {
         Section {
-            LabeledContent("WoW folder") {
+            LabeledContent("World of Warcraft folder") {
                 Text(model.wowFolder).lineLimit(1).truncationMode(.middle).textSelection(.enabled)
             }
             Button("Choose…") { model.chooseWoWFolder() }

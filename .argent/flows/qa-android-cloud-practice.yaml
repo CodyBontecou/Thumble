@@ -1,6 +1,6 @@
 executionPrerequisite: The separate Android QA app is signed in, Cloud controllers is open in portrait, Pixel WoW Journey has been delivered, and no Mac is connected.
 steps:
-  - await: { visible: { text: View AI to WoW progress } }
+  - await: { visible: { text: View AI to game progress } }
   - await: { idle: true, stableFor: 800 }
   - scroll-to: { target: { text: Try controller in practice } }
   - await: { visible: { text: Try controller in practice } }

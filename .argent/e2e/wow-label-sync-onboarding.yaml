@@ -3,7 +3,7 @@ steps:
     args:
       condition: visible
       selector:
-        text: "Reload WoW.\nCheck your phone labels."
+        text: "Reload World of Warcraft.\nCheck your phone labels."
   - await: { idle: true }
   - scroll-to: { target: { text: Continue without synced labels } }
   - tool: await-ui-element
@@ -16,7 +16,7 @@ steps:
     args:
       condition: visible
       selector:
-        text: "Try your controls\nin WoW."
+        text: "Try your controls in\nWorld of Warcraft."
   - await: { idle: true }
   - tool: await-ui-element
     args:
@@ -24,6 +24,6 @@ steps:
       selector:
         text: 0 of 5 in-game checks confirmed by you
 executionPrerequisite: Isolated com.thumble.wowsetupqa is connected to the
-  input-discarding onboarding receiver, portrait, at the top of Reload WoW /
+  input-discarding onboarding receiver, portrait, at the top of Reload World of Warcraft /
   Check your phone labels, with zero gameplay confirmations. Restore the blank
   sync decision before replay. No real WoW label match is confirmed.
