@@ -5,6 +5,11 @@ import CryptoKit
 /// Phone-relayed configuration only. Never fetches URLs or executes profile data.
 /// Keep validation equivalent to packages/controller/src/controller.js.
 enum CloudProfile {
+    static let desktopDefinitions: [String: [String: Any]] = {
+        let url = Bundle.main.url(forResource: "DesktopKeys", withExtension: "json") ?? URL(fileURLWithPath: "apps/receiver/Resources/DesktopKeys.json")
+        guard let data = try? Data(contentsOf: url), let rows = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return [:] }
+        return Dictionary(uniqueKeysWithValues: rows.compactMap { row in (row["code"] as? String).map { ("key:" + $0, row) } })
+    }()
     static let buttons: Set<String> = ["a", "b", "x", "y", "lb", "rb", "back", "start", "ls", "rs", "up", "down", "left", "right", "guide"]
     static let axes: Set<String> = ["lx", "ly", "rx", "ry"]
     static let triggers: Set<String> = ["lt", "rt"]
@@ -29,7 +34,7 @@ enum CloudProfile {
         var ids: [String: String] = [:]
         for c in controls {
             guard keys(c, ["id", "type", "label", "customLabel", "frame", "color", "icon", "badge", "layers"]), text(c["id"]), text(c["label"]),
-                  let id = c["id"] as? String, ids[id] == nil, let type = c["type"] as? String, ["button", "trigger", "stick"].contains(type),
+                  let id = c["id"] as? String, ids[id] == nil, let type = c["type"] as? String, ["button", "trigger", "stick", "key", "mouse", "trackpad"].contains(type),
                   let frame = c["frame"] as? [String: Any], keys(frame, ["x", "y", "width", "height"]),
                   let x = number(frame["x"], 0, 1), let y = number(frame["y"], 0, 1),
                   let width = number(frame["width"], 0.01, 1), let height = number(frame["height"], 0.01, 1),
@@ -55,10 +60,13 @@ enum CloudProfile {
             switch type {
             case "button": guard outputs.count == 1, buttons.contains(outputs[0]) else { throw ProfileCatalog.Failure.invalid }
             case "trigger": guard outputs.count == 1, triggers.contains(outputs[0]) else { throw ProfileCatalog.Failure.invalid }
+            case "key": guard (1...6).contains(outputs.count), Set(outputs).count == outputs.count, outputs.allSatisfy({ desktopDefinitions[$0] != nil }) else { throw ProfileCatalog.Failure.invalid }
+            case "mouse": guard outputs.count == 1, ["mouse:left", "mouse:right", "mouse:middle"].contains(outputs[0]) else { throw ProfileCatalog.Failure.invalid }
+            case "trackpad": guard outputs == ["pointer"] else { throw ProfileCatalog.Failure.invalid }
             default: guard outputs == ["lx", "ly"] || outputs == ["rx", "ry"] else { throw ProfileCatalog.Failure.invalid }
             }
             if let d = m["deadzone"], type != "stick" || number(d, 0, 0.5) == nil { throw ProfileCatalog.Failure.invalid }
-            if let s = m["sensitivity"], type != "stick" || number(s, 0.1, 3) == nil { throw ProfileCatalog.Failure.invalid }
+            if let s = m["sensitivity"], !(["stick", "trackpad"].contains(type)) || number(s, 0.1, 3) == nil { throw ProfileCatalog.Failure.invalid }
             for key in ["invertX", "invertY"] { if let value = m[key], type != "stick" || !boolean(value) { throw ProfileCatalog.Failure.invalid } }
             for output in outputs where axes.union(triggers).contains(output) { guard owned.insert(output).inserted else { throw ProfileCatalog.Failure.invalid } }
         }

@@ -1,6 +1,24 @@
 # Thumble
 
-A phone gamepad for World of Warcraft: Forever and ConsolePort. Targets iOS and Android, with a minimal macOS menu-bar receiver over local Wi-Fi. Public launch target: November 4, 2026.
+A phone gamepad for World of Warcraft: Forever and ConsolePort. Targets iOS and Android, with a shared desktop design workspace and native macOS, Windows and Linux receivers over local Wi-Fi.
+
+## Desktop workspace
+
+Thumble Studio brings layout design, controller profiles and connection management back to the desktop. One locally bundled interface runs in macOS WebKit and Windows/Linux Qt WebEngine. The existing receivers continue to own native input and pairing; the phone retains quick editing and practice.
+
+- Drag, resize, add and remove controls. Edit labels, colors, gamepad outputs and stick response with undo/redo and touch-target validation.
+- Create, duplicate, rename, import/export and manage controller profiles. Built-in and cloud originals remain protected.
+- **Save controller** persists a desktop draft. **Send to phone** selects its exact saved revision and waits for the phone's layout acknowledgement. A newer draft is shown separately from the revision in use.
+- Manage pairing, connection state, receiver/driver setup, startup and WoW sync. Both native stores reject stale edits and preserve unsent drafts when WoW labels refresh.
+
+```sh
+npm ci
+npm run desktop:preview   # explicit simulated receiver; no real input
+npm run desktop:test
+npm run desktop:build    # shared assets for native packaging
+```
+
+See [desktop architecture, packaging and QA](docs/desktop-workspace.md). Native hardware acceptance is separate from shared UI and CI checks; this branch does not publish new installers or alter store submissions automatically.
 
 ## Current state
 
@@ -36,7 +54,7 @@ For bundled hardware testing without Metro, run `npx expo run:ios --configuratio
 The full app has a 30-minute total connected-use demo, including agent-created
 custom layouts, saved profiles and integrated dictation. Pro is a $19.99 USD
 base-price one-time native store purchase that only removes the time limit.
-No visual editor is planned. Setup and local practice remain free. Purchase initiation stays
+Phone and desktop visual editors support controller customization. Purchase initiation stays
 disabled until production store products and first-party verification are configured.
 See [monetization setup and verification](docs/monetization-setup.md).
 

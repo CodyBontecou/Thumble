@@ -19,6 +19,7 @@ from .chat import ChatError, validate as validate_chat
 from .datagram import DatagramInput
 from .pairing_store import PairingStore
 from .pairing_image import PairingImage
+from .desktop_input import matches_profile
 
 
 class ProtocolError(ValueError):
@@ -31,7 +32,7 @@ def decode(text, adoption=False):
     value = load_json(text)
     if not isinstance(value, dict):
         raise ProtocolError('Expected object')
-    if len(text.encode('utf-8')) > 4096 and value.get('type') != 'profile-adopt':
+    if len(text.encode('utf-8')) > 4096 and value.get('type') not in ('profile-adopt', 'profile-save'):
         raise ProtocolError('Only authenticated profile adoption accepts large messages')
     return value
 
@@ -60,6 +61,7 @@ class Session:
 
     def status(self):
         return dict(updatedAt=time.time() * 1000, connected=True,
+                    layoutAcknowledged=not self.layout_pending,
                     ready=not self.layout_pending and not self.paused,
                     revision=self.revision, pro=self.access.pro, receiverId=self.access.receiver_id)
 
@@ -82,7 +84,7 @@ class Session:
         self.leases[lease] = now + 0.5
         value = dict(type=kind, seq=self.sequence, lease=lease)
         if kind == 'ready':
-            value.update(access=1, profiles=1, cloudAdoption=1)
+            value.update(access=1, profiles=1, cloudAdoption=1, phoneProfileSave=1, desktopInput=1)
             if self.chat_available:
                 value['chat'] = 1
         return value
@@ -119,7 +121,7 @@ class Session:
             self.pause()
             self.last_input = self.clock()
             return [self.ack('paused')]
-        if kind in ('profiles-list', 'profile-select', 'profile-adopt', 'chat'):
+        if kind in ('profiles-list', 'profile-select', 'profile-adopt', 'profile-save', 'chat'):
             # Do not advertise unfinished features, or leave older clients waiting.
             request = message.get('id')
             if isinstance(request, str) and 0 < len(request.encode()) <= 80:
@@ -143,6 +145,8 @@ class Session:
             self.tcp_sequence = sequence
             return []
         state = State.parse(message.get('state'))
+        if not matches_profile(state.desktop, self.profile):
+            raise ProtocolError('Keyboard/mouse input does not match the selected controller')
         lease = message.get('lease')
         if not isinstance(lease, str) or self.clock() > self.leases.get(lease, float('-inf')):
             return []
@@ -151,7 +155,7 @@ class Session:
                 or (not self.paused and self.clock() - self.last_input >= 0.3)):
             self.pause()
             return [self.ack('paused')]
-        if self.paused and state != NEUTRAL:
+        if self.paused and not state.is_neutral:
             return []
         self.paused = False
         self.sequence, self.last_input = sequence, self.clock()
@@ -203,6 +207,7 @@ class ReceiverServer:
         self.active = None
         self.session = None
         self.profile_error = ''
+        self.peer_error = ''
         self.enable_udp, self.chat = enable_udp, chat
         self.chat_worker = ThreadPoolExecutor(max_workers=1, thread_name_prefix='thumble-chat')
         self.pairing_image = PairingImage(self.profiles.directory)
@@ -296,6 +301,9 @@ class ReceiverServer:
                 if kind == 'profile-select':
                     catalog, active = await self.work(self.profiles.select, message.get('profileId'),
                                                        message.get('profileRevision'), message.get('expectedActivationRevision'))
+                elif kind == 'profile-save':
+                    catalog, active = await self.work(self.profiles.save_phone, message.get('profile'),
+                                                       message.get('expectedActivationRevision'), message.get('expectedProfileRevision'))
                 else:
                     catalog, active = await self.work(self.profiles.adopt, message.get('profile'),
                                                        message.get('source'), message.get('expectedActivationRevision'))
@@ -426,14 +434,15 @@ class ReceiverServer:
                             replies.append(self.access.snapshot(session.enabled))
                             last_access = time.monotonic()
                         await self.send(socket, replies)
-                except (ProtocolError, OSError, RuntimeError, TimeoutError):
+                except (ProtocolError, OSError, RuntimeError, TimeoutError) as error:
+                    self.peer_error = (type(error).__name__ + ': ' + str(error))[:200]
                     session.pause()
                     await socket.close(code=1008)
 
             ticker = asyncio.create_task(tick())
             async for text in socket:
                 message = decode(text, adoption=True)
-                if message.get('type') in ('profiles-list', 'profile-select', 'profile-adopt', 'chat'):
+                if message.get('type') in ('profiles-list', 'profile-select', 'profile-adopt', 'profile-save', 'chat'):
                     operation = self.chat_request if message.get('type') == 'chat' else self.profile_request
                     task = asyncio.create_task(operation(socket, session, message))
                     profile_tasks.add(task)
@@ -448,7 +457,8 @@ class ReceiverServer:
                 if completed:
                     await asyncio.gather(*completed)
                     profile_tasks -= completed
-        except (ValueError, TypeError, KeyError, OSError, RuntimeError, TimeoutError, ConnectionClosed):
+        except (ValueError, TypeError, KeyError, OSError, RuntimeError, TimeoutError, ConnectionClosed) as error:
+            self.peer_error = (type(error).__name__ + ': ' + str(error))[:200]
             if session:
                 session.pause()
             await socket.close(code=1008)
@@ -536,7 +546,7 @@ class ReceiverServer:
                             revision=self.active['revision'] if self.active else 0,
                             pro=False, receiverId=self.access.receiver_id)
                         await self.work(self.profiles.write_status, status)
-                        self.on_status({**status, 'sync': self.sync.detail})
+                        self.on_status({**status, 'sync': self.sync.detail, 'running': True})
                         if count % 4 == 0:
                             await self.work(self.pairing_image.publish, self.current_invitation, self.invitation.expires)
                     except (OSError, ValueError, TypeError, KeyError) as error:

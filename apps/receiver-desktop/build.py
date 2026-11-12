@@ -15,6 +15,7 @@ VERSION = '0.1.1'
 
 def main():
     import PyInstaller.__main__
+    subprocess.run(['node', str(ROOT / 'packages/desktop-workspace/build.mjs')], check=True)
     arguments = ['--noconfirm', '--clean', '--onedir', '--name', 'thumble-receiver',
                  '--collect-data', 'thumble_receiver', '--hidden-import', 'qrcode.image.pure',
                  '--additional-hooks-dir', str(APP / 'hooks'),
@@ -39,7 +40,7 @@ def main():
     shutil.copy2(APP / 'thumble_receiver/Icon.png', folder / 'Icon.png')
     licenses = folder / 'ThirdParty'
     licenses.mkdir(exist_ok=True)
-    packages = ['PySide6-Essentials', 'shiboken6', 'cryptography', 'qrcode', 'pypng', 'websockets']
+    packages = ['PySide6-Essentials', 'PySide6-Addons', 'shiboken6', 'cryptography', 'qrcode', 'pypng', 'websockets']
     packages.append('vgamepad' if sys.platform == 'win32' else 'evdev')
     for package in packages:
         metadata = distribution(package)

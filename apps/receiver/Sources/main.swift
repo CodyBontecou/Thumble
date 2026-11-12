@@ -1,5 +1,6 @@
 import AppKit
 import Combine
+import ServiceManagement
 import SwiftUI
 
 @MainActor final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
@@ -24,6 +25,8 @@ import SwiftUI
         DiagnosticsView(model: model)
     }
     private var tour: NSPanel?
+    private var studio: WorkspaceWindow!
+    private var workspaceRunning = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         installMainMenu()
@@ -57,6 +60,7 @@ import SwiftUI
         cloudPairing.onSharing = { [weak self] sharing in self?.model.sharing = sharing }
         observation = model.objectWillChange.sink { [weak self] _ in DispatchQueue.main.async { self?.updateStatusDot(); self?.reanchorPopover() } }
         NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(sleep), name: NSWorkspace.willSleepNotification, object: nil)
+        installStudio()
         startReceiver()
         let ticker = Timer(timeInterval: 1, repeats: true) { [weak self] _ in MainActor.assumeIsolated { self?.tick() } }
         RunLoop.main.add(ticker, forMode: .common); self.ticker = ticker
@@ -77,6 +81,7 @@ import SwiftUI
         model.chooseWoWFolder = { [weak self] in self?.chooseWoWFolder() }
         model.openLayouts = { [weak self] in self?.popover.performClose(nil); self?.model.reloadLayouts(); self?.layouts.show() }
         model.openDiagnostics = { [weak self] in self?.popover.performClose(nil); self?.diagnostics.show() }
+        model.openStudio = { [weak self] in self?.popover.performClose(nil); self?.studio?.show() }
         model.openSettings = { [weak self] in self?.openSettings(nil) }
         model.replayTour = { [weak self] in self?.showTour() }
         model.showPopover = { [weak self] in self?.showPopover() }
@@ -190,9 +195,11 @@ import SwiftUI
     private func startReceiver() {
         do {
             try receiver.start()
+            workspaceRunning = true
             waitingForControllerAccess = false
             model.controllerAccess = .ready
         } catch ReceiverError.virtualGamepadUnavailable {
+            workspaceRunning = false
             waitingForControllerAccess = true
             if !CGPreflightPostEventAccess() {
                 model.statusMessage = "Open controller access settings and enable Thumble Receiver so macOS can create your controller. Then return here. If it is already enabled, remove the old entry and add this app again."
@@ -202,6 +209,7 @@ import SwiftUI
                 model.controllerAccess = .unavailable
             }
         } catch {
+            workspaceRunning = false
             if case ReceiverError.message(let message) = error { model.statusMessage = message }
             else { model.statusMessage = "Receiver could not start: \(error.localizedDescription)" }
             model.controllerAccess = .failed(model.statusMessage)
@@ -259,6 +267,42 @@ import SwiftUI
         }
     }
     @objc private func quit() { NSApp.terminate(nil) }
+    // Thumble Studio: the shared desktop controller workspace (packages/desktop-workspace).
+    private func installStudio() {
+        let directory = ProcessInfo.processInfo.environment["TAPPING_PROFILE_DIR"].map { URL(fileURLWithPath: $0, isDirectory: true) }
+            ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/Tapping/profiles", isDirectory: true)
+        studio = WorkspaceWindow(directory: directory)
+        studio.receiverState = { [weak self] in
+            guard let self else { return [:] }
+            var pairing: [String: Any]?
+            if let data = try? Data(contentsOf: directory.appendingPathComponent("pairing-code.json")), data.count < 262144,
+               let value = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let expires = value["expiresAt"] as? Double, expires > Date().timeIntervalSince1970*1000 { pairing = value }
+            return ["platform": "macOS", "receiver": ["running": self.workspaceRunning, "connected": false, "ready": false, "detail": self.model.statusMessage],
+                    "pairing": pairing as Any? ?? NSNull(), "sync": ["detail": self.model.consolePortStatus],
+                    "settings": ["syncEnabled": !UserDefaults.standard.bool(forKey: "consolePortSyncDisabled"), "startAtLogin": SMAppService.mainApp.status == .enabled,
+                                 "wowPaths": UserDefaults.standard.string(forKey: "consolePortWoWFolder").map { [$0] } ?? []]]
+        }
+        studio.action = { [weak self] operation, _ in
+            guard let self else { return }
+            switch operation {
+            case "disconnect": self.receiver.workspaceDisconnect()
+            case "forget": self.reset()
+            case "retry": if !self.workspaceRunning { self.startReceiver() }
+            case "copy-pairing":
+                guard !self.model.invitation.isEmpty else { return }
+                NSPasteboard.general.clearContents(); NSPasteboard.general.setString(self.model.invitation, forType: .string)
+            case "choose-wow-folder": self.chooseWoWFolder()
+            case "setup-driver": self.enableControllerAccess()
+            default: break
+            }
+        }
+    }
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard let studio else { return .terminateNow }
+        studio.confirmQuit { sender.reply(toApplicationShouldTerminate: $0) }
+        return .terminateLater
+    }
     func applicationWillTerminate(_ notification: Notification) { cloudPairing.stop(); receiver.stop() }
 }
 // Exercise the real signed HID backend without opening a listener or reading user data.

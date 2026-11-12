@@ -57,6 +57,11 @@ class LinuxProbe:
 
 
 def probe(backend):
+    # The combined adapter owns keyboard/pointer output alongside this gamepad.
+    # Observe the actual gamepad device, not its lifecycle wrapper.
+    from .desktop_input import CombinedOutput
+    if isinstance(backend, CombinedOutput):
+        backend = backend.gamepad
     return WindowsProbe(backend) if sys.platform == 'win32' else LinuxProbe(backend)
 
 

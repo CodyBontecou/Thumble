@@ -1,0 +1,170 @@
+[
+  {
+    "path": "/guides",
+    "accept": "text/html",
+    "method": "GET",
+    "status": 200,
+    "bytes": 6328,
+    "verified": true
+  },
+  {
+    "path": "/guides/wow-controller-mac",
+    "accept": "text/html",
+    "method": "GET",
+    "status": 200,
+    "bytes": 12092,
+    "verified": true
+  },
+  {
+    "path": "/guides/consoleport-mac-setup",
+    "accept": "text/html",
+    "method": "GET",
+    "status": 200,
+    "bytes": 12780,
+    "verified": true
+  },
+  {
+    "path": "/guides/install-thumble-wow-addon",
+    "accept": "text/html",
+    "method": "GET",
+    "status": 200,
+    "bytes": 12192,
+    "verified": true
+  },
+  {
+    "path": "/guides/wow-controller-not-detected-mac",
+    "accept": "text/html",
+    "method": "GET",
+    "status": 200,
+    "bytes": 11276,
+    "verified": true
+  },
+  {
+    "path": "/guides/thumble-phone-mac-pairing",
+    "accept": "text/html",
+    "method": "GET",
+    "status": 200,
+    "bytes": 11117,
+    "verified": true
+  },
+  {
+    "path": "/",
+    "accept": "text/html",
+    "method": "GET",
+    "status": 200,
+    "bytes": 17986,
+    "verified": true
+  },
+  {
+    "path": "/docs",
+    "accept": "text/html",
+    "method": "GET",
+    "status": 200,
+    "bytes": 17951,
+    "verified": true
+  },
+  {
+    "path": "/guides",
+    "accept": "text/markdown",
+    "method": "GET",
+    "status": 200,
+    "bytes": 1903,
+    "verified": true
+  },
+  {
+    "path": "/guides/wow-controller-mac",
+    "accept": "text/markdown",
+    "method": "GET",
+    "status": 200,
+    "bytes": 4898,
+    "verified": true
+  },
+  {
+    "path": "/guides/consoleport-mac-setup",
+    "accept": "text/markdown",
+    "method": "GET",
+    "status": 200,
+    "bytes": 6054,
+    "verified": true
+  },
+  {
+    "path": "/guides/install-thumble-wow-addon",
+    "accept": "text/markdown",
+    "method": "GET",
+    "status": 200,
+    "bytes": 5326,
+    "verified": true
+  },
+  {
+    "path": "/guides/wow-controller-not-detected-mac",
+    "accept": "text/markdown",
+    "method": "GET",
+    "status": 200,
+    "bytes": 4702,
+    "verified": true
+  },
+  {
+    "path": "/guides/thumble-phone-mac-pairing",
+    "accept": "text/markdown",
+    "method": "GET",
+    "status": 200,
+    "bytes": 4485,
+    "verified": true
+  },
+  {
+    "path": "/sitemap.xml",
+    "accept": "application/xml",
+    "method": "GET",
+    "status": 200,
+    "bytes": 1356,
+    "verified": true
+  },
+  {
+    "path": "/guides.css",
+    "accept": "text/css",
+    "method": "GET",
+    "status": 200,
+    "bytes": 3823,
+    "verified": true
+  },
+  {
+    "path": "/guides/missing-seo-check",
+    "accept": "text/markdown",
+    "method": "GET",
+    "status": 404,
+    "bytes": 273,
+    "verified": true
+  },
+  {
+    "path": "/cli/thumble.mjs",
+    "accept": "*/*",
+    "method": "GET",
+    "status": 200,
+    "bytes": 3621,
+    "verified": true
+  },
+  {
+    "path": "/cli/thumble-cli-0.1.0.tgz",
+    "accept": "*/*",
+    "method": "GET",
+    "status": 200,
+    "bytes": 3196,
+    "verified": true
+  },
+  {
+    "path": "/guides/wow-controller-mac",
+    "accept": "text/markdown",
+    "method": "HEAD",
+    "status": 200,
+    "bytes": 656,
+    "verified": true
+  },
+  {
+    "path": "/downloads/receiver-latest.dmg",
+    "accept": "*/*",
+    "method": "HEAD",
+    "status": 200,
+    "bytes": 1239,
+    "verified": true
+  }
+]

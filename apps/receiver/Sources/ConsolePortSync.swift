@@ -182,7 +182,7 @@ final class ConsolePortSync {
         try CloudProfile.validate(source)
         let character = snapshot["character"] as! [String: Any]
         let guid = character["guid"] as! String
-        let edited = CloudProfile.matches(source["id"], "^phone-[a-f0-9]{32}$")
+        let edited = CloudProfile.matches(source["id"], "^(phone|desktop)-[a-f0-9]{32}$")
         let id = edited ? source["id"] as! String : "consoleport-" + SHA256.hash(data: Data(guid.utf8)).prefix(12).map { String(format: "%02x", $0) }.joined()
         let exported = snapshot["consolePortLayout"] as! [[String: Any]]
         let byOutput = Dictionary(uniqueKeysWithValues: exported.map { (Self.keyMap[$0["key"] as! String]!, $0) })
@@ -255,10 +255,15 @@ final class ConsolePortSync {
         if try active?["profile"].map(encode) != encode(profile) {
             var entries = store["profiles"] as! [[String: Any]]
             let index = entries.firstIndex { ($0["profile"] as? [String: Any])?["id"] as? String == profile["id"] as? String }
+            if let index, (entries[index]["phoneEdited"] as? Bool == true || entries[index]["desktopEdited"] as? Bool == true),
+               (active?["profile"] as? [String: Any])?["id"] as? String == profile["id"] as? String {
+                guard ProfileCatalog.revision(entries[index]["revision"]) == ProfileCatalog.revision(active?["profileRevision"]) else { throw Failure.changed }
+            }
             let revision = (index.flatMap { ProfileCatalog.revision(entries[$0]["revision"]) } ?? 0) + 1
             guard revision <= 9_007_199_254_740_991, expectedActivation < 9_007_199_254_740_991, index != nil || entries.count < 256 else { throw Failure.invalid }
             var entry: [String: Any] = ["revision": revision, "profile": profile]
             if let index, entries[index]["phoneEdited"] as? Bool == true { entry["phoneEdited"] = true }
+            if let index, entries[index]["desktopEdited"] as? Bool == true { entry["desktopEdited"] = true }
             if let index { entries[index] = entry } else { entries.append(entry) }
             store["profiles"] = entries
             store["active"] = ["revision":expectedActivation + 1, "profileRevision":revision, "profile":profile]

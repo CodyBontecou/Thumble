@@ -1,3 +1,4 @@
+import { desktopKeys, mouseOutputs, desktopTypes, neutralDesktop, hasDesktopInput } from './desktop-input.js';
 // Portable JavaScript: this module runs in Hermes, Node, and local MCP tools.
 export const BUTTONS = Object.freeze([
   'a', 'b', 'x', 'y', 'lb', 'rb', 'back', 'start',
@@ -6,7 +7,7 @@ export const BUTTONS = Object.freeze([
 export const AXES = Object.freeze(['lx', 'ly', 'rx', 'ry']);
 export const TRIGGERS = Object.freeze(['lt', 'rt']);
 const OUTPUTS = Object.freeze([...BUTTONS, ...AXES, ...TRIGGERS]);
-const TYPES = Object.freeze(['button', 'stick', 'trigger']);
+const TYPES = Object.freeze(['button', 'stick', 'trigger', ...desktopTypes]);
 
 const record = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const finite = (value, min, max) => Number.isFinite(value) && value >= min && value <= max;
@@ -66,15 +67,18 @@ export function validateProfile(profile) {
     if (!type || mapped.has(mapping.controlId)) errors.push(`${path}.controlId must reference one previously unmapped control`);
     mapped.add(mapping.controlId);
     const outputs = mapping.outputs;
-    if (!Array.isArray(outputs) || !outputs.every(output => OUTPUTS.includes(output))) {
+    if (!Array.isArray(outputs) || !outputs.every(output => [...OUTPUTS, ...desktopKeys, ...mouseOutputs, 'pointer'].includes(output))) {
       errors.push(`${path}.outputs must contain supported gamepad outputs`);
       return;
     }
+    if (type === 'key' && (outputs.length < 1 || outputs.length > 6 || new Set(outputs).size !== outputs.length || outputs.some(output => !desktopKeys.includes(output)))) errors.push(`${path} needs 1–6 distinct keyboard keys`);
+    if (type === 'mouse' && (outputs.length !== 1 || !mouseOutputs.includes(outputs[0]))) errors.push(`${path} needs a mouse button`);
+    if (type === 'trackpad' && (outputs.length !== 1 || outputs[0] !== 'pointer')) errors.push(`${path} needs pointer output`);
     if (type === 'button' && (outputs.length !== 1 || !BUTTONS.includes(outputs[0]))) errors.push(`${path} must map a button to one gamepad button`);
     if (type === 'trigger' && (outputs.length !== 1 || !TRIGGERS.includes(outputs[0]))) errors.push(`${path} must map a trigger to one gamepad trigger`);
     if (type === 'stick' && !(outputs.length === 2 && ((outputs[0] === 'lx' && outputs[1] === 'ly') || (outputs[0] === 'rx' && outputs[1] === 'ry')))) errors.push(`${path} must map a stick to [lx, ly] or [rx, ry]`);
     if (mapping.deadzone !== undefined && (type !== 'stick' || !finite(mapping.deadzone, 0, 0.5))) errors.push(`${path}.deadzone must be 0–0.5 on a stick`);
-    if (mapping.sensitivity !== undefined && (type !== 'stick' || !finite(mapping.sensitivity, 0.1, 3))) errors.push(`${path}.sensitivity must be 0.1–3 on a stick`);
+    if (mapping.sensitivity !== undefined && (!['stick', 'trackpad'].includes(type) || !finite(mapping.sensitivity, 0.1, 3))) errors.push(`${path}.sensitivity must be 0.1–3 on a stick`);
     for (const axis of ['invertX', 'invertY']) if (mapping[axis] !== undefined && (type !== 'stick' || typeof mapping[axis] !== 'boolean')) errors.push(`${path}.${axis} must be a boolean on a stick`);
   });
   for (const id of ids.keys()) if (!mapped.has(id)) errors.push(`control ${id} needs a mapping`);
@@ -116,6 +120,7 @@ export class Controller {
   #profile;
   #inputs = new Map();
   #mappings;
+  #desktop = neutralDesktop();
 
   constructor(profile) { this.replaceProfile(profile); }
 
@@ -123,7 +128,7 @@ export class Controller {
     const checked = assertProfile(profile);
     this.#profile = checked;
     this.#mappings = new Map(checked.mappings.map(mapping => [mapping.controlId, mapping]));
-    this.#inputs.clear();
+    this.#inputs.clear(); this.#desktop = neutralDesktop();
     // The caller must send this neutral state before activating a new revision.
     return neutralState();
   }
@@ -133,7 +138,14 @@ export class Controller {
   update(controlId, value) {
     const mapping = this.#mappings.get(controlId);
     if (!mapping) throw new RangeError(`unknown control: ${controlId}`);
-    if (mapping.outputs.length === 2) {
+    const type = this.#profile.controls.find(control => control.id === controlId).type;
+    if (type === 'trackpad') {
+      if (!Array.isArray(value) || value.length !== 4 || !value.every(n => finite(n, -10000, 10000))) throw new TypeError('trackpad input must be four bounded deltas');
+      for (const [index, key] of ['x','y','scrollX','scrollY'].entries()) this.#desktop[key] += value[index] * (mapping.sensitivity ?? 1);
+    } else if (type === 'key' || type === 'mouse') {
+      if (typeof value !== 'boolean') throw new TypeError('digital input must be boolean');
+      this.#inputs.set(controlId, value);
+    } else if (mapping.outputs.length === 2) {
       if (!Array.isArray(value) || value.length !== 2) throw new TypeError('stick input must be [x, y]');
       const [x, y] = normalizeStick(value[0], value[1], mapping.deadzone, mapping.sensitivity);
       this.#inputs.set(controlId, [x && mapping.invertX ? -x : x, y && mapping.invertY ? -y : y]);
@@ -147,17 +159,21 @@ export class Controller {
     return this.snapshot();
   }
 
-  releaseAll() { this.#inputs.clear(); return neutralState(); }
+  releaseAll() { this.#inputs.clear(); this.#desktop = neutralDesktop(); return neutralState(); }
 
   snapshot() {
     const state = neutralState();
+    const desktop = { ...this.#desktop, keys: /** @type {string[]} */ ([]) };
     for (const [id, value] of this.#inputs) {
       const { outputs } = this.#mappings.get(id);
-      if (outputs.length === 2) [state[outputs[0]], state[outputs[1]]] = value;
+      if (outputs[0].startsWith('key:')) { if (value) desktop.keys.push(...outputs); }
+      else if (mouseOutputs.includes(outputs[0])) { if (value) desktop.buttons |= 1 << mouseOutputs.indexOf(outputs[0]); }
+      else if (outputs.length === 2) [state[outputs[0]], state[outputs[1]]] = value;
       else if (BUTTONS.includes(outputs[0])) {
         if (value) state.buttons |= 1 << BUTTONS.indexOf(outputs[0]);
       } else state[outputs[0]] = value;
     }
+    if (hasDesktopInput(this.#profile)) state.desktop = { ...desktop, keys: [...new Set(desktop.keys)].sort() };
     return state;
   }
 }
@@ -190,8 +206,8 @@ export class InputWatchdog {
 }
 
 function assertState(state) {
-  if (!record(state) || !onlyKeys(state, ['buttons', ...AXES, ...TRIGGERS]) || !Number.isInteger(state.buttons) || state.buttons < 0 || state.buttons >= (1 << BUTTONS.length) ||
-      !AXES.every(axis => finite(state[axis], -1, 1)) || !TRIGGERS.every(axis => finite(state[axis], 0, 1))) {
+  if (!record(state) || !onlyKeys(state, ['buttons', ...AXES, ...TRIGGERS, 'desktop']) || !Number.isInteger(state.buttons) || state.buttons < 0 || state.buttons >= (1 << BUTTONS.length) ||
+      !AXES.every(axis => finite(state[axis], -1, 1)) || !TRIGGERS.every(axis => finite(state[axis], 0, 1)) || (state.desktop !== undefined && (!record(state.desktop) || !onlyKeys(state.desktop, ['keys','buttons','x','y','scrollX','scrollY']) || !Array.isArray(state.desktop.keys) || state.desktop.keys.length > 128 || state.desktop.keys.some(key => !desktopKeys.includes(key)) || !Number.isInteger(state.desktop.buttons) || !finite(state.desktop.buttons, 0, 7) || !['x','y','scrollX','scrollY'].every(key => finite(state.desktop[key], -1e9, 1e9))))) {
     throw new RangeError('invalid gamepad state');
   }
 }

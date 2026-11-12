@@ -1,0 +1,26 @@
+(node:93565) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/codybontecou/dev/Thumble/apps/mobile/src/connection-core.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/codybontecou/dev/Thumble/apps/mobile/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS real receiver: background/foreground reconnects with a distinct credential
+PASS real receiver: fresh mobile process reconnects from saved credential
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: receiver restart must retain the pinned TLS identity
++ actual - expected
+
++ '8502d1800a4b09c896714a7c3f6e8db9e7c1a5472c5edee8cb55f1a3a91dac29'
+- '2cc8b8400de5e9a10da616a08faf64d5a2c919e921c695077465db362f304aa5'
+
+    at file:///Users/codybontecou/dev/Thumble/tools/test-reconnect-receiver.mjs:79:10 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: '8502d1800a4b09c896714a7c3f6e8db9e7c1a5472c5edee8cb55f1a3a91dac29',
+  expected: '2cc8b8400de5e9a10da616a08faf64d5a2c919e921c695077465db362f304aa5',
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+
+Node.js v26.8.1

@@ -1,0 +1,1 @@
+PASS receiver transport: built-in first-install catalog, matching agent tool round trip, expired marker omitted, no profile activation

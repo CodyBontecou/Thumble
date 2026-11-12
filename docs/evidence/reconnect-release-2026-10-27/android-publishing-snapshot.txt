@@ -1,0 +1,225 @@
+- progressbar
+- generic: Loading Google Play Console
+- banner:
+  - link "Google Play Console logo":
+    - /url: /console/u/0/developers/8478281120215349264/home
+    - button "Google Play Console logo"
+  - button "Notifications Open notification center":
+    - img: notifications
+    - generic: Notifications
+  - button "Switch developer accounts":
+    - img: more_vert
+  - 'button "Google Account: Cody Bontecou (cody@isolated.tech)"':
+- navigation:
+  - list:
+    - listitem "Home":
+      - button "Home":
+        - img: home
+    - listitem "Manage account":
+      - button "Manage account":
+        - img: badge
+    - 'listitem "Thumble: Gamepad for Mac"':
+      - 'button "Thumble: Gamepad for Mac"':
+        - img: play_prism
+    - listitem "Dashboard":
+      - button "Dashboard":
+        - img: dashboard
+    - listitem "Statistics":
+      - button "Statistics":
+        - img: bar_chart
+    - listitem "Publishing overview":
+      - button "Publishing overview":
+        - img: overview
+    - listitem "Protected with Play":
+      - button "Protected with Play":
+        - img: shield
+    - listitem "Test and release":
+      - button "Test and release":
+        - img: rocket_launch
+    - listitem "Monitor and improve":
+      - button "Monitor and improve":
+        - img: vital_signs
+    - listitem "Grow users":
+      - button "Grow users":
+        - img: finance_mode
+    - listitem "Monetize with Play":
+      - button "Monetize with Play":
+        - img: sell
+- heading "Publishing overview" [level=1]
+- text: See an overview of the changes made to your app, and control when changes are sent for review or published.
+- button "Show more details about Publishing overview": Show more
+- button "Managed publishing off":
+  - img: sync_disabled
+  - generic: Managed publishing off
+  - img: arrow_drop_down
+- link "Submission activity":
+  - /url: /console/u/0/developers/8478281120215349264/app/4973267958607968038/publishing/submission-activity
+  - generic: Submission activity
+  - img: arrow_right_alt
+- img: info
+- heading "Geo-blocking regulation" [level=2]
+- button "Geo-blocking regulation, Collapse to show less information" [expanded]:
+  - img: expand_less
+- generic: If you're distributing apps in the EU, see Geo-blocking Regulation (EU) 2018/302
+- link "Learn more about Geo-blocking regulations in the EU (opens in a new tab)":
+  - /url: https://support.google.com/googleplay/android-developer/answer/6223646
+  - generic: Learn more
+- button "Dismiss message titled \"Geo-blocking regulation\"":
+  - generic: Dismiss
+- heading "Changes in review" [level=2]
+- button "More information about \"Changes in review\"":
+  - img: help
+- button "Remove changes": Remove changes
+- 'button "Hide content: Changes in review" [expanded]':
+  - generic: Hide
+  - img: expand_less
+- heading "Running quick checks for commonly found issues" [level=4]
+- meter "Running quick checks for commonly found issues"
+- paragraph:
+  - text: These checks help to find certain policy and app quality issues, so you can fix them before review. Changes will be sent for review as soon as checks complete successfully.
+  - link "Go to the Help center to learn more about the automated checks we run to detect issues before you send your changes for review":
+    - /url: https://support.google.com/googleplay/android-developer/answer/14807773
+    - text: Learn more
+- paragraph: Up to 13 minutes remaining
+- grid "Changes":
+  - row "Item changed Description":
+    - columnheader "Item changed"
+    - columnheader "Description"
+    - cell
+  - row "Production":
+    - img: rocket_launch
+    - gridcell "Production"
+  - row "1.0.0 (3) - Reconnect fixes Start full rollout":
+    - gridcell "1.0.0 (3) - Reconnect fixes":
+      - generic: 1.0.0 (3) - Reconnect fixes
+    - gridcell "Start full rollout":
+      - generic: Start full rollout
+    - gridcell:
+      - listbox "More actions":
+        - button "More actions":
+          - img: more_vert
+  - 'row "Countries / regions Add 177 countries / regions: Albania, Algeria, and 175 more"':
+    - gridcell "Countries / regions":
+      - generic: Countries / regions
+    - 'gridcell "Add 177 countries / regions: Albania, Algeria, and 175 more"':
+      - generic: "Add 177 countries / regions: Albania, Algeria, and 175 more"
+    - gridcell:
+      - listbox "More actions":
+        - button "More actions":
+          - img: more_vert
+  - row "Countries / regions Add rest of world":
+    - gridcell "Countries / regions":
+      - generic: Countries / regions
+    - gridcell "Add rest of world":
+      - generic: Add rest of world
+    - gridcell:
+      - listbox "More actions":
+        - button "More actions":
+          - img: more_vert
+  - row "Store listings":
+    - img: play_prism
+    - gridcell "Store listings"
+  - 'row "English (United States) – en-US Default store listing Add language. Provided app name (Thumble: Gamepad for Mac), and all other required information."':
+    - gridcell "English (United States) – en-US Default store listing":
+      - generic: English (United States) – en-US
+      - generic: Default store listing
+    - 'gridcell "Add language. Provided app name (Thumble: Gamepad for Mac), and all other required information."':
+      - generic: "Add language. Provided app name (Thumble: Gamepad for Mac), and all other required information."
+    - gridcell:
+      - listbox "More actions":
+        - button "More actions":
+          - img: more_vert
+  - row "App content":
+    - img: android_security_privacy_safe
+    - gridcell "App content"
+  - row "Content Rating Submit new questionnaire":
+    - gridcell "Content Rating":
+      - generic: Content Rating
+    - gridcell "Submit new questionnaire":
+      - generic: Submit new questionnaire
+    - gridcell:
+      - listbox "More actions":
+        - button "More actions":
+          - img: more_vert
+  - row "Target audience and content Update Target audience and content information. Target age is 13 and older.":
+    - gridcell "Target audience and content":
+      - generic: Target audience and content
+    - gridcell "Update Target audience and content information. Target age is 13 and older.":
+      - generic: Update Target audience and content information. Target age is 13 and older.
+    - gridcell:
+      - listbox "More actions":
+        - button "More actions":
+          - img: more_vert
+  - row "Privacy policy Set Privacy policy URL to https://thumble.io/privacy":
+    - gridcell "Privacy policy":
+      - generic: Privacy policy
+    - gridcell "Set Privacy policy URL to https://thumble.io/privacy":
+      - generic: Set Privacy policy URL to https://thumble.io/privacy
+    - gridcell:
+      - listbox "More actions":
+        - button "More actions":
+          - img: more_vert
+  - row "Ads declaration Update ads declaration":
+    - gridcell "Ads declaration":
+      - generic: Ads declaration
+    - gridcell "Update ads declaration":
+      - generic: Update ads declaration
+    - gridcell:
+      - listbox "More actions":
+        - button "More actions":
+          - img: more_vert
+  - row "Data safety Complete Data safety questionnaire":
+    - gridcell "Data safety":
+      - generic: Data safety
+    - gridcell "Complete Data safety questionnaire":
+      - generic: Complete Data safety questionnaire
+    - gridcell:
+      - listbox "More actions":
+        - button "More actions":
+          - img: more_vert
+  - row "Health apps Complete Health apps declaration":
+    - gridcell "Health apps":
+      - generic: Health apps
+    - gridcell "Complete Health apps declaration":
+      - generic: Complete Health apps declaration
+    - gridcell:
+      - listbox "More actions":
+        - button "More actions":
+          - img: more_vert
+  - row "Store settings":
+    - img: play_prism
+    - gridcell "Store settings"
+  - row "App category Select app category (Tools app)":
+    - gridcell "App category":
+      - generic: App category
+    - gridcell "Select app category (Tools app)":
+      - generic: Select app category (Tools app)
+    - gridcell:
+      - listbox "More actions":
+        - button "More actions":
+          - img: more_vert
+- heading "What you've told us" [level=3]
+- text: "Items listed here aren't published, but we'll take them into account when reviewing your app:"
+- list:
+  - link "App content"
+  - text: ": Update Sign in details instructions (All or some functionality is restricted)"
+  - link "App content"
+  - text: ": 'Advertising ID' declaration updated"
+  - link "App content"
+  - text: ": 'Government apps' declaration updated"
+  - link "App content"
+  - text: ": 'Financial features' declaration updated"
+- link "Product updates":
+  - /url: https://play.google.com/console/about/whats-new/
+- link "Status dashboard":
+  - /url: https://status.play.google.com/
+- link "Help":
+  - /url: /console/u/0/developers/8478281120215349264/help-and-support?app=4973267958607968038
+- generic: © 2026 Google
+- link "Privacy":
+  - /url: https://www.google.com/policies/privacy/
+- link "Developer Distribution Agreement":
+  - /url: https://play.google.com/about/developer-distribution-agreement.html
+- link "Terms of Service":
+  - /url: https://play.google.com/about/console/terms-of-service/
+- status

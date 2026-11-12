@@ -1,0 +1,13 @@
+{
+  "articles": 14,
+  "viewportWidths": [
+    320,
+    1440
+  ],
+  "checks": 28,
+  "failures": [],
+  "reviewedScreenshots": [
+    "addon guide at 390px",
+    "phone-versus-gamepad comparison at 1440px"
+  ]
+}

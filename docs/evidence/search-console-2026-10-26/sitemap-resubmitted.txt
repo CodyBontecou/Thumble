@@ -1,0 +1,69 @@
+Browser tab: 4, Title: "Sitemaps", URL: "https://search.google.com/search-console/sitemaps?resource_id=sc-domain%3Athumble.io".
+0 AXWebArea Sitemaps, URL: search.google.com/search-console/sitemaps?resource_id=sc-domain%3Athumble.io
+	1 container
+		2 container yDmH0d
+			54 container
+				55 container Breadcrumbs
+					56 heading Sitemaps, Value: 1
+						57 text Sitemaps
+				58 container
+					110 container
+						111 text Add a new sitemap
+						112 container
+							113 text field (settable) Description: Enter sitemap URL, Value: https://thumble.io/sitemap.xml
+						114 button SUBMIT
+							115 text SUBMIT
+					116 heading Submitted sitemaps, Value: 1
+						117 text Submitted sitemaps
+					118 pop up button (collapsed) Description: Filter table rows, Secondary Actions: Expand
+					119 table
+						120 row
+							121 cell
+								122 text Sitemap
+							123 cell
+								124 text Type
+							125 cell
+								126 text Submitted
+							127 cell
+								128 text Last read
+							129 cell
+								130 text Status
+							131 cell
+								132 text Discovered pages
+							133 cell
+								134 text Discovered videos
+						135 row
+							136 cell
+								137 text https://thumble.io/sitemap.xml
+							138 cell
+								139 text Unknown
+							140 cell
+								141 text Oct 26, 2026
+							142 cell
+								143 text Couldn't fetch
+							144 cell
+								145 text 0
+							146 cell
+								147 text 0
+							148 cell
+								149 pop up button (collapsed) Secondary Actions: Expand
+					150 text Rows per page:
+					151 list Number of rows per page
+						152 5
+						153 (selected) 10
+						154 25
+						155 50
+						156 100
+						157 250
+						158 500
+					159 text 1-1 of 1
+			160 container
+				161 container Sitemap submitted successfully
+					162 container
+						163 heading Sitemap submitted successfully, Value: 2
+							164 text Sitemap submitted successfully
+						165 text Google will periodically process it and look for changes. You will be notified if anything goes wrong with it in the future.
+					166 button Dismiss
+						167 text Dismiss
+
+The focused UI element is 166 button Dismiss

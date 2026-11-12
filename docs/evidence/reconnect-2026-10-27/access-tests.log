@@ -1,0 +1,7 @@
+
+> test:access
+> mkdir -p build/access-check && xcrun swiftc -swift-version 5 -module-cache-path build/monetization-swift-cache apps/receiver/Sources/AccessSession.swift tools/access-tests/main.swift -o build/access-check/tests && build/access-check/tests
+
+PASS demo: setup, pause, cumulative use, crash debit, 1800-second exhaustion, reconnect and clock changes
+PASS grants: signature, receiver, pairing nonce, phone binding, cached ownership and revocation
+PASS corrupted ledger fails closed

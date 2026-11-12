@@ -1,0 +1,32 @@
+steps:
+  - tool: gesture-swipe
+    args:
+      fromX: 0.359
+      fromY: 0.735
+      toX: 0.359
+      toY: 0.65
+      durationMs: 1500
+      momentum: false
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Down
+          x: 0.359
+          y: 0.65
+        - type: Up
+          x: 0.359
+          y: 0.65
+          delayMs: 3000
+  - tap:
+      id: controller-menu
+  - tap:
+      text: Disconnect Mac
+  - tap:
+      id: controller-menu
+  - tap:
+      text: Connect Mac
+  - tap:
+      text: Scan Mac QR code
+executionPrerequisite: Physical iPhone 13 Pro Max connected to the local QA Mac
+  receiver, Thumble controller visible, WoW Classic Era safe starter area.
+  Preserve saved progress. Assisted capture, not a passing regression.

@@ -1,0 +1,20 @@
+[
+  {
+    "restart": 1,
+    "sameTLSIdentity": true,
+    "sameEndpoint": true,
+    "connected": true,
+    "ready": true,
+    "pro": true,
+    "elapsedSeconds": 0.83
+  },
+  {
+    "restart": 2,
+    "sameTLSIdentity": true,
+    "sameEndpoint": true,
+    "connected": true,
+    "ready": true,
+    "pro": true,
+    "elapsedSeconds": 0.74
+  }
+]

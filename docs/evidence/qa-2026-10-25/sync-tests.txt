@@ -1,0 +1,9 @@
+
+> test:consoleport-sync
+> node tools/test-consoleport-sync.mjs
+
+PASS bounded Lua string decoding, invalid escapes, stale snapshots, invalid schema and duplicate controls
+PASS reload import, all eight layers, actual modifiers, cached icons, preserved geometry/mappings and idempotence
+PASS stale file retention, opt-out, stale writer rejection, theme guard, character switching and symlink exclusion
+PASS file-replacement race rejection and safe text fallback when artwork cannot resolve
+PASS native ConsolePort profiles readable by Node and valid for phone

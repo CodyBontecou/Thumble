@@ -250,6 +250,7 @@ struct StatusPopoverView: View {
     private var footer: some View {
         VStack(spacing: 0) {
             MenuRow(title: "Layouts…") { model.openLayouts() }
+            MenuRow(title: "Studio…") { model.openStudio() }
             MenuRow(title: "Diagnostics…") { model.openDiagnostics() }
             MenuRow(title: "Settings…", shortcut: "⌘,") { model.openSettings() }
             Divider().padding(.vertical, 4)

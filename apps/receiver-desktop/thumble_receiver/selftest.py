@@ -7,6 +7,7 @@ import tempfile
 import uuid
 
 from websockets.asyncio.client import connect
+from websockets.exceptions import ConnectionClosed
 
 from .access import Access
 from .output import GuardedOutput, MemoryOutput, native_output
@@ -49,37 +50,61 @@ async def selftest(native=False):
 
                     async def receive(kind):
                         while True:
-                            value = json.loads(await asyncio.wait_for(socket.recv(), 3))
+                            try:
+                                value = json.loads(await asyncio.wait_for(socket.recv(), 3))
+                            except ConnectionClosed as error:
+                                # CI must distinguish a native driver failure from
+                                # a wire assertion, without logging pairing data.
+                                native_error = str(output.error) if output.error else 'none recorded'
+                                raise RuntimeError(f'Receiver closed while waiting for {kind}; native output error: {native_error}; transport: {server.peer_error}') from error
+                            if value.get('type') == 'profiles-result' and value.get('error'):
+                                raise RuntimeError('Profile operation failed: ' + str(value['error']))
                             if value['type'] == kind:
                                 return value
+
+                    sequence = -1
+                    async def neutral(revision, lease):
+                        # Match the phone's recovery handshake: a slow prepaid-ledger
+                        # write may legitimately invalidate a neutral report's deadline.
+                        # Only neutral is retried; never replay an old held press.
+                        nonlocal sequence
+                        deadline = asyncio.get_running_loop().time() + 3
+                        while True:
+                            sequence += 1
+                            await socket.send(json.dumps(dict(type='input',seq=sequence,revision=revision,lease=lease,state=NEUTRAL.__dict__)))
+                            while True:
+                                remaining = deadline - asyncio.get_running_loop().time()
+                                if remaining <= 0: raise RuntimeError('Neutral input could not recover within 3 seconds')
+                                value = json.loads(await asyncio.wait_for(socket.recv(), remaining))
+                                if value['type'] == 'ack' and value['seq'] == sequence: return value
+                                if value['type'] == 'paused':
+                                    lease = value['lease']; break
 
                     await socket.send(json.dumps(dict(type='hello', v=3, token=invitation.token,
                                                        phoneId=str(uuid.uuid4()))))
                     await receive('ready')
                     await socket.send(json.dumps(dict(type='access-resume')))
                     paused = await receive('paused')
-                    frame = dict(type='input', seq=0, revision=0, lease=paused['lease'], state=NEUTRAL.__dict__)
-                    await socket.send(json.dumps(frame))
-                    ack = await receive('ack')
+                    ack = await neutral(0, paused['lease'])
                     held = State(buttons=1, lx=-0.25, ly=0.5, rx=0.75, ry=-1, lt=0.25, rt=0.75)
-                    await socket.send(json.dumps({**frame, 'seq': 1, 'lease': ack['lease'], 'state': held.__dict__}))
+                    sequence += 1
+                    await socket.send(json.dumps(dict(type='input',seq=sequence,revision=0,lease=ack['lease'],state=held.__dict__)))
                     await receive('ack')
                     await verify(held)
                     await receive('paused')
                     await verify(NEUTRAL)
                     paused = await receive('paused')
+                    fresh = await neutral(0, paused['lease'])
                     await socket.send(json.dumps(dict(type='profile-select', id='select',
                         profileId='consoleport-standard', profileRevision=1, expectedActivationRevision=0,
-                        lease=paused['lease'])))
+                        lease=fresh['lease'])))
                     layout = await receive('layout')
                     result = await receive('profiles-result')
                     if result.get('catalog', {}).get('activationRevision') != layout['revision']:
                         raise RuntimeError('Profile selection was not confirmed')
                     await socket.send(json.dumps(dict(type='layout-ready', revision=layout['revision'])))
                     paused = await receive('paused')
-                    await socket.send(json.dumps(dict(type='input', seq=2, revision=layout['revision'],
-                                                       lease=paused['lease'], state=NEUTRAL.__dict__)))
-                    ack = await receive('ack')
+                    ack = await neutral(layout['revision'], paused['lease'])
                     profile = {**layout['profile'], 'id': 'selftest-cloud', 'name': 'Self-test cloud profile'}
                     source = dict(service='https://thumble.example/v1', accountId='a' * 64,
                                   profileId=profile['id'], revision=1)
@@ -91,9 +116,7 @@ async def selftest(native=False):
                         raise RuntimeError('Cloud adoption was not confirmed')
                     await socket.send(json.dumps(dict(type='layout-ready', revision=adopted['revision'])))
                     paused = await receive('paused')
-                    await socket.send(json.dumps(dict(type='input', seq=3, revision=adopted['revision'],
-                                                       lease=paused['lease'], state=NEUTRAL.__dict__)))
-                    await receive('ack')
+                    await neutral(adopted['revision'], paused['lease'])
             finally:
                 stop.set()
                 await asyncio.wait_for(task, 5)

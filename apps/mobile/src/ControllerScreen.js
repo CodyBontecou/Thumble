@@ -47,7 +47,8 @@ export function Control({ control, size, visuals, onAccessiblePress, profile, pr
   const baseDisplay = controlDisplay(control, prefix, profile);
   const chatting = control.id === 'chat' && chatState !== 'idle';
   const display = chatting ? { ...baseDisplay, label: chatState === 'listening' ? 'Stop' : chatState === 'finishing' ? 'Finishing…' : 'Cancel' } : baseDisplay;
-  const consolePort = profile.theme === 'consoleport' && !stick;
+  const rectangular = ['key', 'mouse', 'trackpad'].includes(control.type);
+  const consolePort = profile.theme === 'consoleport' && !stick && !rectangular;
   return (
     <View pointerEvents="none" accessible accessibilityRole={stick ? 'adjustable' : 'button'}
       accessibilityLabel={display.label} accessibilityState={{ selected: pressed }}
@@ -59,7 +60,7 @@ export function Control({ control, size, visuals, onAccessiblePress, profile, pr
           <Text style={s.stickLabel}>{baseDisplay.label}</Text>
         </View>
       ) : (
-        <View style={[s.button, { width: shoulder && !consolePort ? width : diameter, height: shoulder && !consolePort ? height : diameter }, shoulder && !consolePort && s.shoulder, dpad && !consolePort && s.dpad, consolePort && s.consolePortButton, pressed && s.active, face && pressed && { borderColor: control.color }, chatting && s.chatActive]}>
+        <View style={[s.button, { width: (shoulder && !consolePort) || rectangular ? width : diameter, height: (shoulder && !consolePort) || rectangular ? height : diameter }, ((shoulder && !consolePort) || rectangular) && s.shoulder, dpad && !consolePort && s.dpad, consolePort && s.consolePortButton, pressed && s.active, face && pressed && { borderColor: control.color }, chatting && s.chatActive]}>
           {consolePort ? <ControlArtwork key={`${display.icon ?? ''}:${display.label}`} label={display.label} icon={chatting ? undefined : display.icon} /> : <Text numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.55} style={[s.buttonLabel, control.color && { color: control.color }, face && { fontSize: control.label.length > 3 ? 14 : 22 }, dpad && { fontSize: 22 }]}>{chatting || control.customLabel ? display.label : control.label === xboxProfile.controls.find(item => item.id === control.id)?.label ? (glyph[control.id] ?? control.label) : control.label}</Text>}
           {consolePort && <Text style={[s.badge, control.color && { color: control.color }]}>{control.badge}</Text>}
         </View>
@@ -191,7 +192,7 @@ function Screen({ tour = false }) {
     });
   }
   function accessiblePress(control) {
-    if (control.type === 'stick' || connection.layoutPending || connection.recovering || openChat(control)) return;
+    if (['stick', 'trackpad'].includes(control.type) || connection.layoutPending || connection.recovering || openChat(control)) return;
     const id = `accessible-${control.id}`;
     controller.down(id, control.frame.x + control.frame.width / 2, control.frame.y + control.frame.height / 2);
     setTimeout(() => controller.up(id), 80);

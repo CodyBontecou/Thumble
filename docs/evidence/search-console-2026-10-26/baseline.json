@@ -1,0 +1,71 @@
+{
+  "captured_at_utc": "2026-10-26T11:45:55.405516+00:00",
+  "property": "sc-domain:thumble.io",
+  "access": {
+    "verified_owner": true,
+    "property_added": "2026-10-25",
+    "mode": "existing authenticated browser session",
+    "api_connector_configured": false
+  },
+  "report": {
+    "type": "web",
+    "requested_start": "2026-09-27",
+    "requested_end": "2026-10-24",
+    "reporting_timezone": "America/Los_Angeles",
+    "filters": [],
+    "displayed_chart_start": "2026-10-24",
+    "displayed_chart_end": "2026-10-24",
+    "last_update_label": "3 hours ago",
+    "history_coverage": "initial/limited; not a fully populated 28-day history"
+  },
+  "metrics": {
+    "clicks": 0,
+    "impressions": 0,
+    "ctr_display": "0%",
+    "position_display": "0",
+    "ctr_meaningful": null,
+    "average_position_meaningful": null
+  },
+  "breakdowns": {
+    "queries": [],
+    "pages": [],
+    "countries": [],
+    "devices": [],
+    "status": "Search Console displayed No data in each table"
+  },
+  "indexing": {
+    "overall": "processing data",
+    "indexed_count": null,
+    "not_indexed_count": null,
+    "guide_hub": {
+      "url": "https://thumble.io/guides",
+      "index_status": "URL is unknown to Google; not indexed",
+      "live_test": "URL is available to Google; page can be indexed",
+      "valid_breadcrumb_items": 1,
+      "indexing_request": "accepted and added to priority crawl queue"
+    }
+  },
+  "sitemap": {
+    "url": "https://thumble.io/sitemap.xml",
+    "previous_submission": "2026-10-25",
+    "previous_status": "Couldn't fetch",
+    "resubmitted": "2026-10-26",
+    "resubmission_accepted": true,
+    "ingestion_confirmed": false,
+    "last_observed_table_status": "Couldn't fetch",
+    "discovered_pages_displayed": 0,
+    "public_http_status": 200,
+    "xml_valid": true,
+    "public_url_count": 18,
+    "googlebot_user_agent_http_status": 200
+  },
+  "comparison_ready": false,
+  "next_review_suggested": "2026-11-02",
+  "scheduled_automation_created": false,
+  "sources": [
+    "https://search.google.com/search-console/settings?resource_id=sc-domain%3Athumble.io",
+    "https://search.google.com/search-console/performance/search-analytics?resource_id=sc-domain%3Athumble.io&start_date=20260927&end_date=20261024",
+    "https://search.google.com/search-console/sitemaps?resource_id=sc-domain%3Athumble.io",
+    "https://search.google.com/search-console/index?resource_id=sc-domain%3Athumble.io"
+  ]
+}

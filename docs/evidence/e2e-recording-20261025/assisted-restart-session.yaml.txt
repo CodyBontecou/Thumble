@@ -1,0 +1,9 @@
+steps:
+  - launch: com.thumble.ios
+  - tool: launch-app
+    args:
+      bundleId: com.thumble.ios
+  - tap:
+      id: controller-menu
+  - tap:
+      text: WoW setup, ›

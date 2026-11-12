@@ -1,0 +1,35 @@
+{
+  "receiver": {
+    "latest": "https://thumble.io/downloads/receiver-latest.dmg",
+    "version": "1.0.1",
+    "sha256": "4377bfa6d5d6b4840f376dd598e2738c1df558717fc86e50b2fc7f7c00dc50e6",
+    "size": 1890189,
+    "matchesLocal": true,
+    "appNotarizationId": "247e9091-b368-4c1b-bb7e-df59326f9d61",
+    "dmgNotarizationId": "95df4386-16a7-44fb-81f7-d0e9ebd77405",
+    "previousVersionAvailable": true
+  },
+  "ios": {
+    "version": "1.0.0",
+    "buildNumber": "6",
+    "buildId": "a4b1530c-b36f-4a86-a5ec-79cea8639515",
+    "submissionId": "473b3f77-757b-4244-ae2a-17ee803eee83",
+    "state": "WAITING_FOR_REVIEW",
+    "submittedAt": "2026-10-27T12:42:34.798Z",
+    "items": 2
+  },
+  "android": {
+    "easBuildId": "e64991cb-d7b5-4c01-9eed-d8f440248b91",
+    "status": "BUILDING",
+    "version": "1.0.0",
+    "versionCode": 3,
+    "state": "CHANGES_IN_REVIEW",
+    "sha256": "6e5284e6090c007915793c883befcf7d799ae7f4b4f7bb8bd1b6428fbd0107ed",
+    "sameProductionSigningCertificate": true,
+    "submitted": true,
+    "automatedChecks": "RUNNING",
+    "observedAt": "2026-10-27T12:50:22.814260+00:00",
+    "productionRolloutPercent": 100,
+    "managedPublishing": false
+  }
+}

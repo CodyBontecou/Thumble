@@ -9,6 +9,7 @@ import unittest
 from thumble_receiver.consoleport import (ConsolePortSync, decode_saved, validate_snapshot,
                                          make_profile, commit, snapshot_files, short_label)
 from thumble_receiver.profiles import MODIFIERS, ProfileStore, validate_profile
+from thumble_receiver.workspace_profiles import WorkspaceProfiles
 
 
 def snapshot(name='Hero', guid='Player-123-456', label='Attack', now=100):
@@ -28,6 +29,30 @@ def saved(value):
 
 
 class ConsolePortTests(unittest.TestCase):
+    def test_desktop_identity_and_unsent_draft_survive_label_sync(self):
+        workspace = WorkspaceProfiles(self.store)
+        source = deepcopy(self.store.builtins[1])
+        source.update(id='desktop-'+'b'*32, name='My desktop layout')
+        control_id = next(m['controlId'] for m in source['mappings'] if m['outputs'] == ['a'])
+        next(c for c in source['controls'] if c['id'] == control_id)['label'] = 'My jump'
+        viewport = dict(width=844, height=390)
+        workspace.save(source, 0, viewport); workspace.activate(source['id'], 1, 0, viewport)
+        value = validate_snapshot(json.dumps(snapshot()).encode(), 100)
+        refreshed = make_profile(value, source)
+        self.assertEqual(refreshed['id'], source['id']); self.assertEqual(refreshed['name'], source['name'])
+        self.assertEqual(next(c for c in refreshed['controls'] if c['id'] == control_id)['label'], 'My jump')
+        commit(self.store, refreshed, value, '/isolated/wow', 1)
+        state = workspace.snapshot()
+        entry = next(e for e in state['profiles'] if e['profile']['id'] == source['id'])
+        self.assertTrue(entry['editable']); self.assertEqual(entry['revision'], 2)
+        draft = {**refreshed, 'name': 'Unsent desktop draft'}
+        workspace.save(draft, 2, viewport)
+        before = (self.store.directory / 'store.json').read_bytes()
+        updated = validate_snapshot(json.dumps(snapshot(label='Later ability')).encode(), 100)
+        with self.assertRaises(ValueError):
+            commit(self.store, make_profile(updated, refreshed), updated, '/isolated/wow', 2)
+        self.assertEqual((self.store.directory / 'store.json').read_bytes(), before)
+
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)

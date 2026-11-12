@@ -1,0 +1,13 @@
+✔ review download fails closed without credentials, wrong credentials, or configuration (19.281ms)
+✔ authorized GET and HEAD access only the review object without public caching (1.522708ms)
+✔ private path cannot select arbitrary bucket objects or accept writes (0.514ms)
+✔ existing public release and latest redirect remain available (0.262ms)
+✔ latest points at the reconnect release and both public versions remain available (0.564542ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 79.943208

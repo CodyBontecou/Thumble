@@ -7,6 +7,9 @@
     "apps/*"
   ],
   "scripts": {
+    "desktop:build": "node packages/desktop-workspace/build.mjs",
+    "desktop:preview": "node packages/desktop-workspace/preview.mjs",
+    "desktop:test": "node --test packages/desktop-workspace/test/*.test.js",
     "test": "node --test packages/cli/test/*.test.mjs packages/controller/test/*.test.js packages/profile-tools/test/*.test.js apps/cloud/test/*.test.js tools/test/*.test.js tools/website/test/*.test.mjs",
     "check": "node --check packages/controller/src/index.js",
     "mobile:check": "node tools/mobile/check.mjs",
@@ -33,6 +36,7 @@
     "node": ">=22"
   },
   "devDependencies": {
+    "esbuild": "0.28.2",
     "ws": "^8.22.0"
   }
 }

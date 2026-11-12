@@ -513,6 +513,52 @@ class TransportTests(unittest.IsolatedAsyncioTestCase):
             await self.receive(socket, 'paused')
             self.assertFalse(self.server.session.layout_pending)
 
+    async def test_desktop_draft_selection_releases_input_and_requires_matching_phone_ack(self):
+        from thumble_receiver.workspace_profiles import WorkspaceProfiles
+        fixture = json.loads((Path(__file__).resolve().parents[3] / 'packages/desktop-workspace/test/contracts.json').read_text())
+        workspace = WorkspaceProfiles(self.server.profiles)
+        async with connect(self.url, ssl=self.client_context, proxy=None) as socket:
+            await self.hello(socket)
+            await self.receive(socket, 'ready')
+            await asyncio.to_thread(workspace.save, fixture['profile'], 0, fixture['viewport'])
+            self.assertIsNone(self.server.active)
+            await asyncio.to_thread(workspace.activate, fixture['profile']['id'], 1, 0, fixture['viewport'])
+            first = await self.receive(socket, 'layout')
+            self.assertEqual(first['profile'], fixture['profile'])
+            self.assertFalse(self.server.session.status()['layoutAcknowledged'])
+            changed = deepcopy(fixture['profile']); changed['name'] = 'Desktop revision 2'
+            await asyncio.to_thread(workspace.save, changed, 1, fixture['viewport'])
+            self.assertEqual(self.server.active['profile']['name'], fixture['profile']['name'])
+            await asyncio.to_thread(workspace.activate, changed['id'], 2, 1, fixture['viewport'])
+            second = await self.receive(socket, 'layout')
+            await socket.send(json.dumps(dict(type='layout-ready', revision=first['revision'])))
+            await asyncio.sleep(.03)
+            self.assertTrue(self.server.session.layout_pending)
+            await socket.send(json.dumps(dict(type='layout-ready', revision=second['revision'])))
+            await self.receive(socket, 'paused')
+            self.assertTrue(self.server.session.status()['layoutAcknowledged'])
+            self.assertFalse(self.server.session.enabled)
+            self.assertEqual(self.output.backend.state, NEUTRAL)
+
+    async def test_phone_edits_and_desktop_edits_share_revision_conflicts(self):
+        from thumble_receiver.workspace_profiles import WorkspaceProfiles
+        fixture = json.loads((Path(__file__).resolve().parents[3] / 'packages/desktop-workspace/test/contracts.json').read_text())
+        profile = deepcopy(fixture['profile']); profile['id'] = 'phone-' + 'a' * 32
+        async with connect(self.url, ssl=self.client_context, proxy=None) as socket:
+            await self.hello(socket)
+            ready = await self.receive(socket, 'ready')
+            await socket.send(json.dumps(dict(type='profile-save', id='phone-edit', profile=profile,
+                expectedProfileRevision=0, expectedActivationRevision=0, lease=ready['lease'])))
+            layout = await self.receive(socket, 'layout')
+            receipt = await self.receive(socket, 'profiles-result')
+            self.assertEqual(receipt['catalog']['activationRevision'], layout['revision'])
+            self.assertEqual(layout['profile'], profile)
+            workspace = WorkspaceProfiles(self.server.profiles)
+            changed = deepcopy(profile); changed['name'] = 'Desktop edited phone controller'
+            await asyncio.to_thread(workspace.save, changed, 1, fixture['viewport'])
+            with self.assertRaises(ValueError):
+                await asyncio.to_thread(self.server.profiles.save_phone, {**profile, 'name': 'Stale phone edit'}, layout['revision'], 1)
+
     async def test_large_frames_require_authenticated_adoption(self):
         async with connect(self.url, ssl=self.client_context, proxy=None) as socket:
             await self.hello(socket)

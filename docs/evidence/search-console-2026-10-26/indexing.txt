@@ -1,0 +1,81 @@
+Browser tab: 4, Title: "Page indexing", URL: "https://search.google.com/search-console/index?resource_id=sc-domain%3Athumble.io".
+0 AXWebArea Page indexing, URL: search.google.com/search-console/index?resource_id=sc-domain%3Athumble.io
+	1 container
+		2 container yDmH0d
+			160 container gb
+				161 container
+					162 button (collapsed) Description: Main menu, Secondary Actions: Expand
+						163 image
+					164 link Description: Google Search Console, Value: search.google.com/search-console?resource_id=sc-domain%3Athumble.io, ID: sdgBod
+					165 container
+						166 combo box (collapsed, settable) Description: Inspect any URL in thumble.io, Secondary Actions: Expand
+					167 button Search
+						168 image
+					169 button Help
+					170 button User settings
+					171 container
+						172 button Unread messages: 1
+						210 text 1
+					174 button (collapsed) Description: Google apps, Secondary Actions: Expand
+					175 button (collapsed) Description: Google Account: verified owner account, Secondary Actions: Expand
+			176 container navigational drawer
+				177 container
+					178 container Primary
+						179 pop up button (collapsed) Description: Search property, Secondary Actions: Expand
+							180 image favicon
+							181 combo box (collapsed, settable) Description: thumble.io, Secondary Actions: Expand
+						182 container
+							183 link Description: Overview, Value: search.google.com/search-console?resource_id=sc-domain%3Athumble.io
+							184 link Description: Insights, Value: search.google.com/search-console/performance/insights?resource_id=sc-domain%3Athumble.io
+							185 link Description: Performance, Value: search.google.com/search-console/performance/search-analytics?resource_id=sc-domain%3Athumble.io
+							186 button URL inspection
+								187 text URL inspection
+							188 container
+								189 text Indexing
+								190 button (expanded) Description: Indexing report section, Secondary Actions: Collapse
+								191 link Description: Pages, Value: search.google.com/search-console/index?resource_id=sc-domain%3Athumble.io
+								192 link Description: Sitemaps, Value: search.google.com/search-console/sitemaps?resource_id=sc-domain%3Athumble.io
+								193 link Description: Removals, Value: search.google.com/search-console/removals?resource_id=sc-domain%3Athumble.io
+							194 container
+								195 text Experience
+								196 button (expanded) Description: Experience report section, Secondary Actions: Collapse
+								197 link Description: Core Web Vitals, Value: search.google.com/search-console/core-web-vitals?resource_id=sc-domain%3Athumble.io
+							198 container
+								199 text Security & Manual Actions
+								200 button (collapsed) Description: Security & Manual Actions report section, Secondary Actions: Expand
+							201 link Description: Links report, Value: search.google.com/search-console/links?resource_id=sc-domain%3Athumble.io
+							202 link Description: Achievements, Value: search.google.com/search-console/achievements?resource_id=sc-domain%3Athumble.io
+							203 link Description: Settings, Value: search.google.com/search-console/settings?resource_id=sc-domain%3Athumble.io
+							204 button Submit feedback
+								205 text Submit feedback
+							206 button About Search Console
+								207 text About Search Console
+							208 link Description: Privacy, Value: myaccount.google.com/privacypolicy?hl=en
+							209 link Description: Terms, Value: myaccount.google.com/termsofservice?hl=en
+			211 container
+				212 container Breadcrumbs
+					213 heading Page indexing, Value: 1
+						214 text Page indexing
+				215 container
+					216 text Processing data, please check again in a day or so
+					217 text Why pages aren’t indexed
+					218 text Pages that aren’t indexed can’t be served on Google
+					219 pop up button (collapsed) Description: Filter table rows, Secondary Actions: Expand
+					220 table
+						221 row
+							222 cell
+								223 text Reason
+							224 cell
+								225 text Source
+								226 container
+									227 button (collapsed) Description: null, Secondary Actions: Expand
+							228 cell
+								229 text Validation
+							230 cell
+								231 text Trend
+							232 cell
+								233 text Pages
+					234 text Processing data, please check again in a day or so
+		235 text Page indexing
+
+The focused UI element is 191 link Description: Pages, URL: search.google.com/search-console/index?resource_id=sc-domain%3Athumble.io

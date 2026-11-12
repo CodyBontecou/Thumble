@@ -33,6 +33,7 @@ export default function ControllerPreview({ width, height, interactive = false }
         if (control.type === 'stick') return <View key={control.id} style={box}>
           <View style={[s.well, { width: d, height: d }]}><View style={[s.cap, { width: d * 0.64, height: d * 0.64 }]}><View style={s.grip} /></View><Text style={s.stickLabel}>{control.label}</Text></View>
         </View>;
+        if (['key', 'mouse', 'trackpad'].includes(control.type)) return <View key={control.id} style={box}><View style={[s.button, { width: w, height: h, borderRadius: 12 }]}><Text numberOfLines={2} style={s.buttonLabel}>{control.customLabel ?? control.label}</Text></View></View>;
         const display = controlDisplay(control, prefix, profile);
         const isModifier = interactive && modifiers.includes(control.id);
         const on = held.includes(control.id);

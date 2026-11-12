@@ -84,11 +84,12 @@ class LinuxOutput:
 
 
 def native_output():
+    from .desktop_input import CombinedOutput, native_desktop
     try:
         if sys.platform == 'win32':
-            return WindowsOutput()
+            return CombinedOutput(WindowsOutput(), native_desktop)
         if sys.platform == 'linux':
-            return LinuxOutput()
+            return CombinedOutput(LinuxOutput(), native_desktop)
     except Exception as error:
         raise RuntimeError('Native gamepad unavailable. Check ViGEmBus on Windows or /dev/uinput access on Linux.') from error
     raise RuntimeError('Native output supports Windows and Linux; use --dry-run on macOS')

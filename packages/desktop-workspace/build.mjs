@@ -1,0 +1,15 @@
+import { build } from 'esbuild';
+import { cp, mkdir, rm } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+const here = path.dirname(fileURLToPath(import.meta.url));
+const root = path.resolve(here, '../..');
+const output = path.join(root, 'build/desktop-workspace');
+await rm(output, { recursive: true, force: true });
+await mkdir(output, { recursive: true });
+await cp(path.join(here, 'public'), output, { recursive: true });
+await build({ entryPoints: [path.join(here, 'src/app.js')], outfile: path.join(output, 'app.js'), bundle: true, format: 'iife', target: ['safari16', 'chrome110'], sourcemap: false });
+const pythonAssets = path.join(root, 'apps/receiver-desktop/thumble_receiver/workspace');
+await rm(pythonAssets, { recursive: true, force: true });
+await cp(output, pythonAssets, { recursive: true });
+console.log(`Shared desktop assets: ${output}`);

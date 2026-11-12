@@ -1,0 +1,126 @@
+Browser tab: 4, Title: "Performance on Search results", URL: "https://search.google.com/search-console/performance/search-analytics?resource_id=sc-domain%3Athumble.io&num_of_days=28".
+0 AXWebArea Performance on Search results, URL: search.google.com/search-console/performance/search-analytics?resource_id=sc-domain%3Athumble.io&num_of_days=28
+	1 container
+		2 container yDmH0d
+			3 container gb
+				4 container
+					5 button (collapsed) Description: Main menu, Secondary Actions: Expand
+						6 image
+					7 link Description: Google Search Console, Value: search.google.com/search-console?resource_id=sc-domain%3Athumble.io, ID: sdgBod
+					8 container
+						9 combo box (collapsed, settable) Description: Inspect any URL in thumble.io, Secondary Actions: Expand
+					10 button Search
+						11 image
+					12 button Help
+					13 button User settings
+					14 container
+						15 button Unread messages: 1
+						64 text 1
+					17 button (collapsed) Description: Google apps, Secondary Actions: Expand
+					18 button (collapsed) Description: Google Account: verified owner account, Secondary Actions: Expand
+			19 container navigational drawer
+				20 container
+					21 container Primary
+						22 pop up button (collapsed) Description: Search property, Secondary Actions: Expand
+							23 image favicon
+							24 combo box (collapsed, settable) Description: thumble.io, Secondary Actions: Expand
+						25 container
+							26 link Description: Overview, Value: search.google.com/search-console?resource_id=sc-domain%3Athumble.io
+							27 link Description: Insights, Value: search.google.com/search-console/performance/insights?resource_id=sc-domain%3Athumble.io
+							28 link Description: Performance, Value: search.google.com/search-console/performance/search-analytics?resource_id=sc-domain%3Athumble.io
+							29 button URL inspection
+								30 text URL inspection
+							51 container
+								52 text Indexing
+								53 button (expanded) Description: Indexing report section, Secondary Actions: Collapse
+								54 link Description: Pages, Value: search.google.com/search-console/index?resource_id=sc-domain%3Athumble.io
+								55 link Description: Sitemaps, Value: search.google.com/search-console/sitemaps?resource_id=sc-domain%3Athumble.io
+								56 link Description: Removals, Value: search.google.com/search-console/removals?resource_id=sc-domain%3Athumble.io
+							57 container
+								58 text Experience
+								59 button (expanded) Description: Experience report section, Secondary Actions: Collapse
+								60 link Description: Core Web Vitals, Value: search.google.com/search-console/core-web-vitals?resource_id=sc-domain%3Athumble.io
+							61 container
+								62 text Security & Manual Actions
+								63 button (collapsed) Description: Security & Manual Actions report section, Secondary Actions: Expand
+							42 link Description: Links report, Value: search.google.com/search-console/links?resource_id=sc-domain%3Athumble.io
+							43 link Description: Achievements, Value: search.google.com/search-console/achievements?resource_id=sc-domain%3Athumble.io
+							44 link Description: Settings, Value: search.google.com/search-console/settings?resource_id=sc-domain%3Athumble.io
+							45 button Submit feedback
+								46 text Submit feedback
+							47 button About Search Console
+								48 text About Search Console
+							49 link Description: Privacy, Value: myaccount.google.com/privacypolicy?hl=en
+							50 link Description: Terms, Value: myaccount.google.com/termsofservice?hl=en
+			65 container
+				66 container Breadcrumbs
+					67 heading Performance, Value: 1
+						68 text Performance
+				69 pop up button (collapsed) Description: EXPORT, ID: ow14, Secondary Actions: Expand
+				70 container
+					71 Select time range
+						72 radio button 24 hours, Value: 0
+						73 radio button 7 days, Value: 0
+						74 radio button 28 days, Value: 1
+						75 radio button 3 months, Value: 0
+					76 button More time ranges
+					77 content list
+						78 button Search type: Web
+						79 pop up button (collapsed) Add filter, Secondary Actions: Expand
+						80 button Customize your Performance report using AI
+						81 button Reset filters
+							82 text Reset filters
+				83 text Last update: 3 hours ago
+				84 container
+					85 container
+						86 button Total clicks 0
+							87 text Total clicks
+							88 text 0
+						89 container
+							90 button (collapsed) Description: null, Secondary Actions: Expand
+						91 button Total impressions 0
+							92 text Total impressions
+							93 text 0
+						94 container
+							95 button (collapsed) Description: null, Secondary Actions: Expand
+						96 button Average CTR 0%
+							97 text Average CTR
+							98 text 0%
+						99 container
+							100 button (collapsed) Description: null, Secondary Actions: Expand
+						101 button Average position 0
+							102 text Average position
+							103 text 0
+						104 container
+							105 button (collapsed) Description: null, Secondary Actions: Expand
+						106 pop up button (collapsed) Description: Selected Time Granularity: Daily, Secondary Actions: Expand
+							107 image
+						108 container chart
+							109 text Chart, containing counts of Total clicks, Total impressions, Average CTR, and Average position from October 24, 2026 to October 24, 2026
+					110 container dimension-tables
+						111 tab group
+							112 tab (selected, settable, boolean) QUERIES, Value: 1
+QUERIES
+							113 tab (selectable, settable, boolean) PAGES, Value: 0
+PAGES
+							114 tab (selectable, settable, boolean) COUNTRIES, Value: 0
+COUNTRIES
+							115 tab (selectable, settable, boolean) DEVICES, Value: 0
+DEVICES
+							116 tab (selectable, settable, boolean) SEARCH APPEARANCE, Value: 0
+SEARCH APPEARANCE
+							117 tab (selectable, settable, boolean) DAYS, Value: 0
+DAYS
+						118 container
+							119 pop up button (collapsed) Description: Filter table rows, Secondary Actions: Expand
+							120 table
+								121 row
+									122 cell
+										123 text Top queries
+									124 cell
+										125 text Clicks
+									126 cell
+										127 text Impressions
+							128 text No data
+
+The focused UI element is 69 pop up button (collapsed) Description: EXPORT, ID: ow14, Secondary Actions: Expand

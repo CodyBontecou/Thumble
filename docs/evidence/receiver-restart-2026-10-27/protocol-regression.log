@@ -1,0 +1,9 @@
+(node:5016) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/codybontecou/dev/Thumble/apps/mobile/src/connection-core.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/codybontecou/dev/Thumble/apps/mobile/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS real receiver: background/foreground reconnects with a distinct credential
+PASS real receiver: fresh mobile process reconnects from saved credential
+PASS real receiver: Mac receiver restart retains TLS pin, endpoint and phone authentication
+PASS real receiver: credential cannot authenticate a different phone or replace its session
+PASS mobile: explicit disconnect forgets remembered computer

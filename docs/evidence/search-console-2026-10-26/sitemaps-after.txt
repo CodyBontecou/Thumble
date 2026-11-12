@@ -1,0 +1,114 @@
+Browser tab: 4, Title: "Sitemaps", URL: "https://search.google.com/search-console/sitemaps?resource_id=sc-domain%3Athumble.io".
+0 AXWebArea Sitemaps, URL: search.google.com/search-console/sitemaps?resource_id=sc-domain%3Athumble.io
+	1 container
+		15 container yDmH0d
+			16 container gb
+				17 container
+					18 button (collapsed) Description: Main menu, Secondary Actions: Expand
+						19 image
+					20 link Description: Google Search Console, Value: search.google.com/search-console?resource_id=sc-domain%3Athumble.io, ID: sdgBod
+					21 container
+						22 combo box (collapsed, settable) Description: Inspect any URL in thumble.io, Secondary Actions: Expand
+					23 button Search
+						24 image
+					25 button Help
+					26 button User settings
+					27 container
+						28 button Unread messages: 1
+						66 text 1
+					30 button (collapsed) Description: Google apps, Secondary Actions: Expand
+					31 button (collapsed) Description: Google Account: Cody Bontecou (cody@isolated.tech), Secondary Actions: Expand
+			32 container navigational drawer
+				33 container
+					34 container Primary
+						35 pop up button (collapsed) Description: Search property, Secondary Actions: Expand
+							36 image favicon
+							37 combo box (collapsed, settable) Description: thumble.io, Secondary Actions: Expand
+						38 container
+							39 link Description: Overview, Value: search.google.com/search-console?resource_id=sc-domain%3Athumble.io
+							40 link Description: Insights, Value: search.google.com/search-console/performance/insights?resource_id=sc-domain%3Athumble.io
+							41 link Description: Performance, Value: search.google.com/search-console/performance/search-analytics?resource_id=sc-domain%3Athumble.io
+							42 button URL inspection
+								43 text URL inspection
+							44 container
+								45 text Indexing
+								46 button (expanded) Description: Indexing report section, Secondary Actions: Collapse
+								47 link Description: Pages, Value: search.google.com/search-console/index?resource_id=sc-domain%3Athumble.io
+								48 link Description: Sitemaps, Value: search.google.com/search-console/sitemaps?resource_id=sc-domain%3Athumble.io
+								49 link Description: Removals, Value: search.google.com/search-console/removals?resource_id=sc-domain%3Athumble.io
+							50 container
+								51 text Experience
+								52 button (expanded) Description: Experience report section, Secondary Actions: Collapse
+								53 link Description: Core Web Vitals, Value: search.google.com/search-console/core-web-vitals?resource_id=sc-domain%3Athumble.io
+							54 container
+								55 text Security & Manual Actions
+								56 button (collapsed) Description: Security & Manual Actions report section, Secondary Actions: Expand
+							57 link Description: Links report, Value: search.google.com/search-console/links?resource_id=sc-domain%3Athumble.io
+							58 link Description: Achievements, Value: search.google.com/search-console/achievements?resource_id=sc-domain%3Athumble.io
+							59 link Description: Settings, Value: search.google.com/search-console/settings?resource_id=sc-domain%3Athumble.io
+							60 button Submit feedback
+								61 text Submit feedback
+							62 button About Search Console
+								63 text About Search Console
+							64 link Description: Privacy, Value: myaccount.google.com/privacypolicy?hl=en
+							65 link Description: Terms, Value: myaccount.google.com/termsofservice?hl=en
+			67 container
+				68 container Breadcrumbs
+					69 heading Sitemaps, Value: 1
+						70 text Sitemaps
+				71 container
+					72 text Add a new sitemap
+					73 container
+						74 text field (settable) Enter sitemap URL
+					75 button (disabled) SUBMIT
+						76 text SUBMIT
+					77 heading Submitted sitemaps, Value: 1
+						78 text Submitted sitemaps
+					79 pop up button (collapsed) Description: Filter table rows, Secondary Actions: Expand
+					80 table
+						81 row
+							82 cell
+								83 text Sitemap
+							84 cell
+								85 text Type
+							86 cell
+								87 text Submitted
+							88 cell
+								89 text Last read
+							90 cell
+								91 text Status
+							92 cell
+								93 text Discovered pages
+							94 cell
+								95 text Discovered videos
+						96 row
+							97 cell
+								98 text https://thumble.io/sitemap.xml
+							99 cell
+								100 text Unknown
+							101 cell
+								102 text Oct 26, 2026
+							103 cell
+								104 text Couldn't fetch
+							105 cell
+								106 text 0
+							107 cell
+								108 text 0
+							109 cell
+								110 pop up button (collapsed) Secondary Actions: Expand
+					111 text Rows per page:
+					112 list Number of rows per page
+						113 5
+						114 (selected) 10
+						115 25
+						116 50
+						117 100
+						118 250
+						119 500
+					120 text 1-1 of 1
+		11 container reCAPTCHA
+			12 AXWebArea reCAPTCHA, URL: google.com/recaptcha/api2/anchor?ar=1&k=6LeKMsIjAAAAAGP5PskdMId0tLXc7dL3LiO07Avf&co=aHR0cHM6Ly9zZWFyY2guZ29vZ2xlLmNvbTo0NDM.&hl=en&v=NhfdZHzre16wrc2m6BxEdu7J&size=invisible&anchor-ms=20000&execute-ms=30000&cb=db1jgskyr13l
+				13 text protected by 
+				14 text reCAPTCHA
+
+The focused UI element is 74 text field (settable) Enter sitemap URL

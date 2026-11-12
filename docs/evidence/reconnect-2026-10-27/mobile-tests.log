@@ -1,0 +1,52 @@
+✔ QR retains exact TLS identity and expiring local capability (0.70875ms)
+✔ QR rejects public, cleartext, credentials, stale and malformed invitations (0.667292ms)
+✔ legacy pairing links retain compatibility (0.173166ms)
+(node:48371) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/codybontecou/dev/Thumble/apps/mobile/src/connection-core.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/codybontecou/dev/Thumble/apps/mobile/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ late callbacks from an old socket cannot affect a replacement (1.798375ms)
+✔ disconnect cancels an asynchronous pairing preparation (0.188917ms)
+✔ overlapping preparation only opens the latest requested pairing (0.216458ms)
+✔ pause releases held controls and uses the replacement lease immediately (0.478958ms)
+✔ duplicate acknowledgements cannot keep a dead receiver alive (0.372334ms)
+✔ failed initial input does not leave a heartbeat running (0.21ms)
+✔ handshake timeout and invalid future acknowledgements disconnect safely (0.394625ms)
+✔ touch timing context never leaks into heartbeats or neutral resets (0.528917ms)
+✔ layout activation releases input, blocks old geometry, and waits for fresh receiver lease (0.44225ms)
+✔ invalid or stale layout disconnects and reconnect can receive the same active revision (0.568875ms)
+✔ superseded renders cannot acknowledge a more recent layout (0.255667ms)
+✔ UDP input requires the encrypted native handshake; blocked handshake keeps WebSocket input (0.242291ms)
+✔ UDP send failure releases controls and closes the control session (0.195833ms)
+✔ a burst of analog updates cannot disconnect a healthy but temporarily backpressured session (0.225709ms)
+✔ backpressure preserves press/release edges while merging intermediate motion (0.235458ms)
+✔ an expired queued press is cancelled, never replayed when ACK delivery resumes (0.142458ms)
+✔ heartbeats coalesce to the current held state without falsely cancelling a sustained hold (0.131125ms)
+✔ slow ACK return does not stop forward heartbeats when native writes are available (0.136041ms)
+✔ native backpressure coalesces motion, preserves edges, and retries without waiting for network ACK (0.256959ms)
+✔ pause blocks held input until fresh neutral is acknowledged and clears queued edges (0.158292ms)
+✔ chat requires receiver support and never enters the datagram input path (0.486375ms)
+✔ chat matches acknowledgement IDs and surfaces receiver errors without disconnecting (0.162875ms)
+✔ chat disconnect rejects pending delivery and clears its timer (0.163875ms)
+✔ chat rejects commands with newlines, control characters, excessive UTF-8 bytes and unknown channels (0.22775ms)
+✔ unconfirmed chat times out without automatically resending (0.220833ms)
+✔ profile list uses paired control transport; selecting waits for rendered layout and fresh neutral ACK (0.479ms)
+✔ profile conflicts, invalid catalogs, and disconnect reject without claiming activation (0.228875ms)
+✔ older receivers cannot be sent profile requests and duplicate requests are rejected (0.150875ms)
+✔ demo includes profiles and custom layouts; expiry blocks live input and chat only (0.207208ms)
+✔ legacy receivers without access negotiation cannot become an unmetered connection (0.158625ms)
+✔ cloud adoption pauses input and confirms exact content only after receiver activation and neutral ACK (0.406875ms)
+✔ cloud adoption refuses old receivers and rejects forged provenance before success (0.440042ms)
+✔ explicit practice retains character appearance while disconnecting input and clearing activation state (0.265209ms)
+✔ a paired phone reconnects after background and process restart without reusing its QR token (0.467666ms)
+✔ explicit disconnect forgets trust and never reconnects a stale saved computer (0.103875ms)
+✔ remembered connections reject public or malformed endpoints before opening a socket (0.146834ms)
+✔ background during secure storage loading cannot open a late connection (0.093ms)
+ℹ tests 40
+ℹ suites 0
+ℹ pass 40
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 64.687583

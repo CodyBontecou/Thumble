@@ -1,0 +1,2 @@
+PASS receiver: demo receives custom layouts and can list/select profiles; expiry still neutralizes held input
+PASS receiver: Pro only removes the time limit; purchase/revocation preserve layouts and profile access

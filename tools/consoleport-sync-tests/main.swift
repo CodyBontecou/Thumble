@@ -140,3 +140,25 @@ try check(refreshedControl["label"] as? String == "My label")
 try check((refreshedControl["layers"] as? [String:[String:Any]])?[""]?["label"] as? String == "New ability")
 _ = try ProfileCatalog.savePhoneProfile(directory, profile:refreshed, expectedActivationRevision:refreshedActive["revision"] as! Int)
 print("PASS edited layouts retain identity, geometry, labels, mappings and write ownership through ConsolePort reload")
+
+var desktop = ((try ProfileCatalog.read(directory))["profiles"] as! [[String:Any]]).compactMap { $0["profile"] as? [String:Any] }.first { $0["id"] as? String == "consoleport-standard" }!
+desktop["id"] = "desktop-" + String(repeating: "b", count: 32)
+desktop["name"] = "My desktop layout"
+let viewport: [String: Any] = ["width":844, "height":390]
+try WorkspaceProfiles.save(directory, profile:desktop, expected:0, viewport:viewport)
+let priorActive = ((try ProfileCatalog.read(directory))["active"] as! [String:Any])["revision"] as! Int
+_ = try ProfileCatalog.activate(directory, id:desktop["id"] as! String, profileRevision:1, expectedActivationRevision:priorActive)
+try write(encode(snapshot("Hero", label:"Desktop ability"))); sync.poll()
+var desktopStore = try ProfileCatalog.read(directory)
+let desktopActive = desktopStore["active"] as! [String:Any]
+let desktopEntry = (desktopStore["profiles"] as! [[String:Any]]).first { ($0["profile"] as? [String:Any])?["id"] as? String == desktop["id"] as? String }!
+try check(desktopEntry["desktopEdited"] as? Bool == true)
+try check((desktopActive["profile"] as? [String:Any])?["name"] as? String == "My desktop layout")
+var unsent = desktopEntry["profile"] as! [String:Any]; unsent["name"] = "Unsent desktop draft"
+try WorkspaceProfiles.save(directory, profile:unsent, expected:desktopEntry["revision"] as! Int, viewport:viewport)
+try write(encode(snapshot("Hero", label:"Later desktop ability"))); sync.poll()
+desktopStore = try ProfileCatalog.read(directory)
+let unsentEntry = (desktopStore["profiles"] as! [[String:Any]]).first { ($0["profile"] as? [String:Any])?["id"] as? String == desktop["id"] as? String }!
+try check((unsentEntry["profile"] as? [String:Any])?["name"] as? String == "Unsent desktop draft")
+try check((desktopStore["active"] as? [String:Any])?["revision"] as? Int == desktopActive["revision"] as? Int)
+print("PASS desktop layout identity and unsent draft survive ConsolePort label sync")

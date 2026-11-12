@@ -1,0 +1,15 @@
+{
+  "repository": "https://github.com/CodyBontecou/Thumble",
+  "commit": "f468b92ae4fc20761fbb436c8517683a07f39ec1",
+  "source": "apps/website",
+  "tooling": "tools/website",
+  "deployment": "https://3e733347.pocketpad-site.pages.dev",
+  "production": "https://thumble.io",
+  "ci": "https://github.com/CodyBontecou/Thumble/actions/runs/40344436605",
+  "ciConclusion": "success",
+  "tests": 10,
+  "liveChecks": 39,
+  "artifactFiles": 105,
+  "legacyDependency": false,
+  "syntheticSignup": "local-only D1"
+}

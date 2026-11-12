@@ -1,0 +1,1 @@
+{"installed":"/Applications/World of Warcraft/_classic_era_/Interface/AddOns/ThumbleBridge","backup":"/Applications/World of Warcraft/_classic_era_/Interface/AddOns/.thumble-backups/ThumbleBridge-1792929754764","next":"Reload the UI (restart the client if this is a newly discovered addon), then type /thumble. No bindings are applied automatically."}

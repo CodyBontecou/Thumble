@@ -1,0 +1,18 @@
+Browser tab: 4, Title: "URL Inspection", URL: "https://search.google.com/search-console/inspect?resource_id=sc-domain%3Athumble.io&id=DCCaTAyX2xnnFHG68j52wA&alt_id=Py0W2c5RtKYpXjLBw70EAg".
+0 AXWebArea URL Inspection, URL: search.google.com/search-console/inspect?resource_id=sc-domain%3Athumble.io&id=DCCaTAyX2xnnFHG68j52wA&alt_id=Py0W2c5RtKYpXjLBw70EAg
+	1 container
+		2 container
+			3 container Indexing requested
+				4 container
+					5 heading Indexing requested, Value: 2
+						6 text Indexing requested
+					7 text URL was added to a priority crawl queue. Submitting a page multiple times will not change its queue position or priority. 
+					8 link Description: Learn more., Value: support.google.com/webmasters/answer/6065812
+				9 button Dismiss
+					10 text Dismiss
+		11 container reCAPTCHA
+			12 AXWebArea reCAPTCHA, URL: google.com/recaptcha/api2/anchor?ar=1&k=6LeKMsIjAAAAAGP5PskdMId0tLXc7dL3LiO07Avf&co=aHR0cHM6Ly9zZWFyY2guZ29vZ2xlLmNvbTo0NDM.&hl=en&v=NhfdZHzre16wrc2m6BxEdu7J&size=invisible&anchor-ms=20000&execute-ms=30000&cb=db1jgskyr13l
+				13 text protected by 
+				14 text reCAPTCHA
+
+The focused UI element is 9 button Dismiss

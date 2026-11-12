@@ -1,0 +1,37 @@
+{
+  "ios": {
+    "baseCommit": "0ce92c8",
+    "version": "1.0.0",
+    "buildNumber": "6",
+    "scope": "Submitted text-only iOS source plus tested OAuth validation and reconnect fixes; existing App Store identity/profile",
+    "files": {
+      "apps/mobile/src/connection-core.js": "5d0373a85a620816de96e1d2af68bf77d0c622a25ab19ba0a2fbc67b2e3960c0",
+      "apps/mobile/src/connection.js": "525eaea2534266148a3b85ab45f13610cc27871b3a0a380b71ec9b2146a83368",
+      "apps/mobile/src/cloud/oauth.js": "4eae0ea2ff84c5b52f1762262699472640e8ca743c985f418a07b464746de6ef",
+      "packages/controller/src/pairing.js": "fc578b6fd07720d2d1e534fad03db7fc6740aa697156ce26142210b67286b0dd",
+      "packages/controller/src/index.js": "3f302b40516f5c1ef591502f1cb2f6b9384bf56a5e4b5eb99284a7ad7c887596",
+      "apps/mobile/app.json": "3eb7be544d42966c6e9eadd5ffb089b62b753493405189e95a7a6f580487a9fe",
+      "apps/mobile/eas.json": "69f1aea0451637c4ad9b9ffb07cc60ab997d8c96cc5c2d9302d3651a9594f224"
+    }
+  },
+  "android": {
+    "easBuildId": "e64991cb-d7b5-4c01-9eed-d8f440248b91",
+    "version": "1.0.0",
+    "versionCode": "3"
+  },
+  "receiver": {
+    "version": "1.0.1",
+    "buildNumber": "2",
+    "notarized": true,
+    "files": {
+      "apps/receiver/Sources/Receiver.swift": "1d7b3d1a067a0fb2f54d5552a872487179701dc006a883a456f2ada4d7654239",
+      "apps/receiver/Sources/Identity.swift": "f694baa1c98104f0dab34053e4a2efe8aaefa1b1f1a820803329da4d7dad49e3",
+      "apps/receiver/Sources/RememberedPhone.swift": "edcf237b71ed629e1e98ca2e2733fb3f22ad09b7795927d1a2e73d9c394759ef",
+      "apps/receiver/Sources/ReceiverSecrets.swift": "11b10bb1bf70d2006f5a4e0cbd028e98a5cd7322abe3e49c57cc076131d6dea7",
+      "apps/receiver/Sources/main.swift": "8b0bdc933cb2e471808af889e9d425d0aea68f012ce92a75026144ed2b3bd4ba",
+      "apps/receiver/Info.plist": "c2125ce82ebea050fcca33d26a2d96a5c539737ba7389043698b31cbcde87a42"
+    },
+    "appNotarization": "247e9091-b368-4c1b-bb7e-df59326f9d61",
+    "dmgNotarization": "95df4386-16a7-44fb-81f7-d0e9ebd77405"
+  }
+}

@@ -18,6 +18,7 @@ AXES = {'lx', 'ly', 'rx', 'ry'}
 TRIGGERS = {'lt', 'rt'}
 MODIFIERS = {'', 'SHIFT-', 'CTRL-', 'ALT-', 'CTRL-SHIFT-', 'ALT-SHIFT-', 'ALT-CTRL-', 'ALT-CTRL-SHIFT-'}
 MAX_REVISION = 9_007_199_254_740_991
+DESKTOP_KEYS = {'key:' + key['code'] for key in json.loads(files('thumble_receiver').joinpath('DesktopKeys.json').read_bytes())}
 
 
 class ProfileError(ValueError):
@@ -89,9 +90,9 @@ def validate_profile(profile):
     require(len(encoded(profile)) <= 60000, 'Profile exceeds 60000 bytes.')
     ids = {}
     for control in controls:
-        require(only(control, ('id', 'type', 'label', 'frame', 'color', 'icon', 'badge', 'layers')))
+        require(only(control, ('id', 'type', 'label', 'customLabel', 'frame', 'color', 'icon', 'badge', 'layers')))
         require(text(control.get('id')) and text(control.get('label')))
-        require(control['id'] not in ids and control.get('type') in ('button', 'trigger', 'stick'))
+        require(control['id'] not in ids and control.get('type') in ('button', 'trigger', 'stick', 'key', 'mouse', 'trackpad'))
         frame = control.get('frame')
         require(only(frame, ('x', 'y', 'width', 'height')))
         require(all(finite(frame.get(key), 0, 1) for key in ('x', 'y')))
@@ -100,6 +101,7 @@ def validate_profile(profile):
         for key, pattern in (('color', r'#[0-9a-fA-F]{6}'), ('icon', r'[a-z0-9_]{1,128}')):
             require(key not in control or matches(control[key], pattern))
         require('badge' not in control or text(control['badge']))
+        require('customLabel' not in control or text(control['customLabel']))
         if 'layers' in control:
             layers = control['layers']
             require(only(layers, MODIFIERS))
@@ -118,10 +120,16 @@ def validate_profile(profile):
             require(len(outputs) == 1 and outputs[0] in BUTTONS)
         elif kind == 'trigger':
             require(len(outputs) == 1 and outputs[0] in TRIGGERS)
+        elif kind == 'key':
+            require(1 <= len(outputs) <= 6 and len(set(outputs)) == len(outputs) and set(outputs) <= DESKTOP_KEYS)
+        elif kind == 'mouse':
+            require(len(outputs) == 1 and outputs[0] in ('mouse:left', 'mouse:right', 'mouse:middle'))
+        elif kind == 'trackpad':
+            require(outputs == ['pointer'])
         else:
             require(outputs in (['lx', 'ly'], ['rx', 'ry']))
         for key, low, high in (('deadzone', 0, 0.5), ('sensitivity', 0.1, 3)):
-            require(key not in mapping or (kind == 'stick' and finite(mapping[key], low, high)))
+            require(key not in mapping or ((kind == 'stick' or (key == 'sensitivity' and kind == 'trackpad')) and finite(mapping[key], low, high)))
         for key in ('invertX', 'invertY'):
             require(key not in mapping or (kind == 'stick' and type(mapping[key]) is bool))
         for output in outputs:
@@ -275,6 +283,28 @@ class ProfileStore:
         summary = self.summary(store)
         summary['adoption'] = dict(profileId=local_id, profileRevision=1, source=deepcopy(source))
         return summary, store['active']
+
+    def save_phone(self, profile, expected, expected_profile):
+        profile = validate_profile(profile)
+        require(matches(profile['id'], r'phone-[a-f0-9]{32}') and integer(expected_profile))
+        with self.transaction() as store:
+            previous = self.expect(store, expected)
+            entry = next((e for e in store['profiles'] if e['profile']['id'] == profile['id']), None)
+            if entry:
+                unchanged = entry['profile'] == profile
+                require(entry.get('phoneEdited') is True and not entry.get('cloudSource'), 'Save your own phone controller copy.')
+                require((entry['revision'] == expected_profile or unchanged) and entry['revision'] < MAX_REVISION,
+                        'This controller changed elsewhere. Refresh and try again.')
+                if not unchanged:
+                    entry['profile'] = deepcopy(profile); entry['revision'] += 1
+            else:
+                require(expected_profile == 0 and len(store['profiles']) < 256)
+                entry = dict(profile=deepcopy(profile), revision=1, phoneEdited=True)
+                store['profiles'].append(entry)
+            active = store.get('active')
+            same = active and active['profile']['id'] == profile['id'] and active['profileRevision'] == entry['revision']
+            store['active'] = dict(revision=previous if same else previous+1, profileRevision=entry['revision'], profile=deepcopy(profile))
+        return self.summary(store), store['active']
 
     def write_status(self, status):
         self.directory.mkdir(mode=0o700, parents=True, exist_ok=True)

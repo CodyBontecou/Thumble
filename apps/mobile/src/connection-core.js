@@ -1,5 +1,5 @@
 import { LatencyRecorder } from './latency-recorder.js';
-import { neutralState, parseInvitation, parseReceiverEndpoint, assertProfile, defaultProfile } from '@tapping/controller';
+import { neutralState, parseInvitation, parseReceiverEndpoint, assertProfile, defaultProfile, hasDesktopInput, isNeutralInput } from '@tapping/controller';
 
 const canonical = value => JSON.stringify(value, (_, item) => item && typeof item === 'object' && !Array.isArray(item) ? Object.fromEntries(Object.keys(item).sort().map(key => [key, item[key]])) : item);
 
@@ -82,7 +82,7 @@ export class Connection {
     this.native = native; this.beforeConnect = beforeConnect; this.timers = timers; this.now = now;
     native.addListener('status', ({ value, id }) => {
       if (!this.session || id !== this.session) return;
-      if (value === 'open' && this.invitation) this.native.send(JSON.stringify({ type: 'hello', v: 3, phoneId: this.phoneId, demoUsed: this.demoUsed, ...(this.invitation.reconnectToken ? { reconnectToken: this.invitation.reconnectToken } : { token: this.invitation.token }), datagram: typeof this.native.configureDatagram === 'function' ? 1 : 0 }));
+      if (value === 'open' && this.invitation) this.native.send(JSON.stringify({ type: 'hello', v: 3, desktopInput: 1, phoneId: this.phoneId, demoUsed: this.demoUsed, ...(this.invitation.reconnectToken ? { reconnectToken: this.invitation.reconnectToken } : { token: this.invitation.token }), datagram: typeof this.native.configureDatagram === 'function' ? 1 : 0 }));
       else if (value !== 'open' && this.view.phase !== 'offline') this.disconnect(value, { keepPairing: true });
     });
     native.addListener('message', ({ value, id, receivedAt, transport }) => {
@@ -146,7 +146,7 @@ export class Connection {
           return;
         }
         if (message.type === 'udp-ready') {
-          if (!this.udpOffered || transport !== 'udp' || this.view.phase !== 'connected' || this.inputTransport === 'udp') return;
+          if (hasDesktopInput(this.layout.profile) || !this.udpOffered || transport !== 'udp' || this.view.phase !== 'connected' || this.inputTransport === 'udp') return;
           this.inputTransport = 'udp';
           this.state = neutralState();
           for (const reset of this.resetListeners) reset();
@@ -189,6 +189,7 @@ export class Connection {
           this.cloudAdoptionSupported = message.cloudAdoption === 1;
           this.phoneProfileSaveSupported = message.phoneProfileSave === 1;
           this.phoneBindingsSupported = message.phoneBindings === 1;
+          this.desktopInputSupported = message.desktopInput === 1;
           this.diagnostics = message.diagnostics === true && typeof this.native.sendTimed === 'function' ? new LatencyRecorder(text => this.native.send(text)) : null;
           this.update({ phase: 'connected', detail: 'Connected · Xbox gamepad', rtt: null, chat: message.chat === 1 });
           this.submit(neutralState(), 'neutral');
@@ -230,6 +231,10 @@ export class Connection {
     if (message.revision <= this.layout.revision) throw Error('Stale layout revision');
     const profile = assertProfile(message.profile);
     this.preview = null;
+    if (hasDesktopInput(profile)) {
+      if (!this.desktopInputSupported) throw Error('Update the receiver for keyboard and mouse controls');
+      this.inputTransport = 'wss';
+    }
     this.layoutPending = true;
     this.outbox = [];
     this.recovering = true;
@@ -379,14 +384,14 @@ export class Connection {
     try { action(); } finally { this.inputTime = null; }
   }
   submit = (state, kind = this.inputTime == null ? 'neutral' : 'touch') => {
-    if ((!this.canPlay || this.recovering) && Object.values(state).some(value => value !== 0)) return;
+    if ((!this.canPlay || this.recovering) && !isNeutralInput(state)) return;
     this.state = state;
     if (this.view.phase !== 'connected' || !this.lease || this.layoutPending) return;
     const item = { state: { ...state }, kind, at: this.inputTime ?? this.now() };
     // Preserve digital edges; only replace consecutive snapshots with the same
     // button/trigger ownership. Motion and duplicate heartbeats cannot flood native sends.
     const last = this.outbox.at(-1);
-    if (last && last.state.buttons === state.buttons && (last.state.lt > 0) === (state.lt > 0) && (last.state.rt > 0) === (state.rt > 0)) {
+    if (last && JSON.stringify(last.state.desktop?.keys ?? []) === JSON.stringify(state.desktop?.keys ?? []) && (last.state.desktop?.buttons ?? 0) === (state.desktop?.buttons ?? 0) && last.state.buttons === state.buttons && (last.state.lt > 0) === (state.lt > 0) && (last.state.rt > 0) === (state.rt > 0)) {
       if (kind === 'heartbeat' && last.kind !== 'heartbeat') return;
       this.outbox[this.outbox.length - 1] = item;
     } else this.outbox.push(item);

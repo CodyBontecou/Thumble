@@ -1,0 +1,866 @@
+[
+  {
+    "code": "KeyA",
+    "label": "A",
+    "mac": 0,
+    "linux": 30,
+    "scan": 30,
+    "extended": false
+  },
+  {
+    "code": "KeyB",
+    "label": "B",
+    "mac": 11,
+    "linux": 48,
+    "scan": 48,
+    "extended": false
+  },
+  {
+    "code": "KeyC",
+    "label": "C",
+    "mac": 8,
+    "linux": 46,
+    "scan": 46,
+    "extended": false
+  },
+  {
+    "code": "KeyD",
+    "label": "D",
+    "mac": 2,
+    "linux": 32,
+    "scan": 32,
+    "extended": false
+  },
+  {
+    "code": "KeyE",
+    "label": "E",
+    "mac": 14,
+    "linux": 18,
+    "scan": 18,
+    "extended": false
+  },
+  {
+    "code": "KeyF",
+    "label": "F",
+    "mac": 3,
+    "linux": 33,
+    "scan": 33,
+    "extended": false
+  },
+  {
+    "code": "KeyG",
+    "label": "G",
+    "mac": 5,
+    "linux": 34,
+    "scan": 34,
+    "extended": false
+  },
+  {
+    "code": "KeyH",
+    "label": "H",
+    "mac": 4,
+    "linux": 35,
+    "scan": 35,
+    "extended": false
+  },
+  {
+    "code": "KeyI",
+    "label": "I",
+    "mac": 34,
+    "linux": 23,
+    "scan": 23,
+    "extended": false
+  },
+  {
+    "code": "KeyJ",
+    "label": "J",
+    "mac": 38,
+    "linux": 36,
+    "scan": 36,
+    "extended": false
+  },
+  {
+    "code": "KeyK",
+    "label": "K",
+    "mac": 40,
+    "linux": 37,
+    "scan": 37,
+    "extended": false
+  },
+  {
+    "code": "KeyL",
+    "label": "L",
+    "mac": 37,
+    "linux": 38,
+    "scan": 38,
+    "extended": false
+  },
+  {
+    "code": "KeyM",
+    "label": "M",
+    "mac": 46,
+    "linux": 50,
+    "scan": 50,
+    "extended": false
+  },
+  {
+    "code": "KeyN",
+    "label": "N",
+    "mac": 45,
+    "linux": 49,
+    "scan": 49,
+    "extended": false
+  },
+  {
+    "code": "KeyO",
+    "label": "O",
+    "mac": 31,
+    "linux": 24,
+    "scan": 24,
+    "extended": false
+  },
+  {
+    "code": "KeyP",
+    "label": "P",
+    "mac": 35,
+    "linux": 25,
+    "scan": 25,
+    "extended": false
+  },
+  {
+    "code": "KeyQ",
+    "label": "Q",
+    "mac": 12,
+    "linux": 16,
+    "scan": 16,
+    "extended": false
+  },
+  {
+    "code": "KeyR",
+    "label": "R",
+    "mac": 15,
+    "linux": 19,
+    "scan": 19,
+    "extended": false
+  },
+  {
+    "code": "KeyS",
+    "label": "S",
+    "mac": 1,
+    "linux": 31,
+    "scan": 31,
+    "extended": false
+  },
+  {
+    "code": "KeyT",
+    "label": "T",
+    "mac": 17,
+    "linux": 20,
+    "scan": 20,
+    "extended": false
+  },
+  {
+    "code": "KeyU",
+    "label": "U",
+    "mac": 32,
+    "linux": 22,
+    "scan": 22,
+    "extended": false
+  },
+  {
+    "code": "KeyV",
+    "label": "V",
+    "mac": 9,
+    "linux": 47,
+    "scan": 47,
+    "extended": false
+  },
+  {
+    "code": "KeyW",
+    "label": "W",
+    "mac": 13,
+    "linux": 17,
+    "scan": 17,
+    "extended": false
+  },
+  {
+    "code": "KeyX",
+    "label": "X",
+    "mac": 7,
+    "linux": 45,
+    "scan": 45,
+    "extended": false
+  },
+  {
+    "code": "KeyY",
+    "label": "Y",
+    "mac": 16,
+    "linux": 21,
+    "scan": 21,
+    "extended": false
+  },
+  {
+    "code": "KeyZ",
+    "label": "Z",
+    "mac": 6,
+    "linux": 44,
+    "scan": 44,
+    "extended": false
+  },
+  {
+    "code": "Digit1",
+    "label": "1",
+    "mac": 18,
+    "linux": 2,
+    "scan": 2,
+    "extended": false
+  },
+  {
+    "code": "Digit2",
+    "label": "2",
+    "mac": 19,
+    "linux": 3,
+    "scan": 3,
+    "extended": false
+  },
+  {
+    "code": "Digit3",
+    "label": "3",
+    "mac": 20,
+    "linux": 4,
+    "scan": 4,
+    "extended": false
+  },
+  {
+    "code": "Digit4",
+    "label": "4",
+    "mac": 21,
+    "linux": 5,
+    "scan": 5,
+    "extended": false
+  },
+  {
+    "code": "Digit5",
+    "label": "5",
+    "mac": 23,
+    "linux": 6,
+    "scan": 6,
+    "extended": false
+  },
+  {
+    "code": "Digit6",
+    "label": "6",
+    "mac": 22,
+    "linux": 7,
+    "scan": 7,
+    "extended": false
+  },
+  {
+    "code": "Digit7",
+    "label": "7",
+    "mac": 26,
+    "linux": 8,
+    "scan": 8,
+    "extended": false
+  },
+  {
+    "code": "Digit8",
+    "label": "8",
+    "mac": 28,
+    "linux": 9,
+    "scan": 9,
+    "extended": false
+  },
+  {
+    "code": "Digit9",
+    "label": "9",
+    "mac": 25,
+    "linux": 10,
+    "scan": 10,
+    "extended": false
+  },
+  {
+    "code": "Digit0",
+    "label": "0",
+    "mac": 29,
+    "linux": 11,
+    "scan": 11,
+    "extended": false
+  },
+  {
+    "code": "Enter",
+    "label": "Enter",
+    "mac": 36,
+    "linux": 28,
+    "scan": 28,
+    "extended": false
+  },
+  {
+    "code": "Escape",
+    "label": "Esc",
+    "mac": 53,
+    "linux": 1,
+    "scan": 1,
+    "extended": false
+  },
+  {
+    "code": "Backspace",
+    "label": "Backspace",
+    "mac": 51,
+    "linux": 14,
+    "scan": 14,
+    "extended": false
+  },
+  {
+    "code": "Tab",
+    "label": "Tab",
+    "mac": 48,
+    "linux": 15,
+    "scan": 15,
+    "extended": false
+  },
+  {
+    "code": "Space",
+    "label": "Space",
+    "mac": 49,
+    "linux": 57,
+    "scan": 57,
+    "extended": false
+  },
+  {
+    "code": "Minus",
+    "label": "−",
+    "mac": 27,
+    "linux": 12,
+    "scan": 12,
+    "extended": false
+  },
+  {
+    "code": "Equal",
+    "label": "=",
+    "mac": 24,
+    "linux": 13,
+    "scan": 13,
+    "extended": false
+  },
+  {
+    "code": "BracketLeft",
+    "label": "[",
+    "mac": 33,
+    "linux": 26,
+    "scan": 26,
+    "extended": false
+  },
+  {
+    "code": "BracketRight",
+    "label": "]",
+    "mac": 30,
+    "linux": 27,
+    "scan": 27,
+    "extended": false
+  },
+  {
+    "code": "Backslash",
+    "label": "\\",
+    "mac": 42,
+    "linux": 43,
+    "scan": 43,
+    "extended": false
+  },
+  {
+    "code": "Semicolon",
+    "label": ";",
+    "mac": 41,
+    "linux": 39,
+    "scan": 39,
+    "extended": false
+  },
+  {
+    "code": "Quote",
+    "label": "'",
+    "mac": 39,
+    "linux": 40,
+    "scan": 40,
+    "extended": false
+  },
+  {
+    "code": "Backquote",
+    "label": "`",
+    "mac": 50,
+    "linux": 41,
+    "scan": 41,
+    "extended": false
+  },
+  {
+    "code": "Comma",
+    "label": ",",
+    "mac": 43,
+    "linux": 51,
+    "scan": 51,
+    "extended": false
+  },
+  {
+    "code": "Period",
+    "label": ".",
+    "mac": 47,
+    "linux": 52,
+    "scan": 52,
+    "extended": false
+  },
+  {
+    "code": "Slash",
+    "label": "/",
+    "mac": 44,
+    "linux": 53,
+    "scan": 53,
+    "extended": false
+  },
+  {
+    "code": "CapsLock",
+    "label": "Caps Lock",
+    "mac": 57,
+    "linux": 58,
+    "scan": 58,
+    "extended": false
+  },
+  {
+    "code": "Home",
+    "label": "Home",
+    "mac": 115,
+    "linux": 102,
+    "scan": 71,
+    "extended": true
+  },
+  {
+    "code": "End",
+    "label": "End",
+    "mac": 119,
+    "linux": 107,
+    "scan": 79,
+    "extended": true
+  },
+  {
+    "code": "PageUp",
+    "label": "Page Up",
+    "mac": 116,
+    "linux": 104,
+    "scan": 73,
+    "extended": true
+  },
+  {
+    "code": "PageDown",
+    "label": "Page Down",
+    "mac": 121,
+    "linux": 109,
+    "scan": 81,
+    "extended": true
+  },
+  {
+    "code": "Delete",
+    "label": "Delete",
+    "mac": 117,
+    "linux": 111,
+    "scan": 83,
+    "extended": true
+  },
+  {
+    "code": "ArrowUp",
+    "label": "↑",
+    "mac": 126,
+    "linux": 103,
+    "scan": 72,
+    "extended": true
+  },
+  {
+    "code": "ArrowDown",
+    "label": "↓",
+    "mac": 125,
+    "linux": 108,
+    "scan": 80,
+    "extended": true
+  },
+  {
+    "code": "ArrowLeft",
+    "label": "←",
+    "mac": 123,
+    "linux": 105,
+    "scan": 75,
+    "extended": true
+  },
+  {
+    "code": "ArrowRight",
+    "label": "→",
+    "mac": 124,
+    "linux": 106,
+    "scan": 77,
+    "extended": true
+  },
+  {
+    "code": "ControlLeft",
+    "label": "Ctrl",
+    "mac": 59,
+    "linux": 29,
+    "scan": 29,
+    "extended": false
+  },
+  {
+    "code": "ShiftLeft",
+    "label": "Shift",
+    "mac": 56,
+    "linux": 42,
+    "scan": 42,
+    "extended": false
+  },
+  {
+    "code": "AltLeft",
+    "label": "Alt / Option",
+    "mac": 58,
+    "linux": 56,
+    "scan": 56,
+    "extended": false
+  },
+  {
+    "code": "MetaLeft",
+    "label": "Win / Command",
+    "mac": 55,
+    "linux": 125,
+    "scan": 91,
+    "extended": true
+  },
+  {
+    "code": "ControlRight",
+    "label": "Right Ctrl",
+    "mac": 62,
+    "linux": 97,
+    "scan": 29,
+    "extended": true
+  },
+  {
+    "code": "ShiftRight",
+    "label": "Right Shift",
+    "mac": 60,
+    "linux": 54,
+    "scan": 54,
+    "extended": false
+  },
+  {
+    "code": "AltRight",
+    "label": "Right Alt",
+    "mac": 61,
+    "linux": 100,
+    "scan": 56,
+    "extended": true
+  },
+  {
+    "code": "MetaRight",
+    "label": "Right Win / Command",
+    "mac": 54,
+    "linux": 126,
+    "scan": 92,
+    "extended": true
+  },
+  {
+    "code": "F1",
+    "label": "F1",
+    "mac": 122,
+    "linux": 59,
+    "scan": 59,
+    "extended": false
+  },
+  {
+    "code": "F2",
+    "label": "F2",
+    "mac": 120,
+    "linux": 60,
+    "scan": 60,
+    "extended": false
+  },
+  {
+    "code": "F3",
+    "label": "F3",
+    "mac": 99,
+    "linux": 61,
+    "scan": 61,
+    "extended": false
+  },
+  {
+    "code": "F4",
+    "label": "F4",
+    "mac": 118,
+    "linux": 62,
+    "scan": 62,
+    "extended": false
+  },
+  {
+    "code": "F5",
+    "label": "F5",
+    "mac": 96,
+    "linux": 63,
+    "scan": 63,
+    "extended": false
+  },
+  {
+    "code": "F6",
+    "label": "F6",
+    "mac": 97,
+    "linux": 64,
+    "scan": 64,
+    "extended": false
+  },
+  {
+    "code": "F7",
+    "label": "F7",
+    "mac": 98,
+    "linux": 65,
+    "scan": 65,
+    "extended": false
+  },
+  {
+    "code": "F8",
+    "label": "F8",
+    "mac": 100,
+    "linux": 66,
+    "scan": 66,
+    "extended": false
+  },
+  {
+    "code": "F9",
+    "label": "F9",
+    "mac": 101,
+    "linux": 67,
+    "scan": 67,
+    "extended": false
+  },
+  {
+    "code": "F10",
+    "label": "F10",
+    "mac": 109,
+    "linux": 68,
+    "scan": 68,
+    "extended": false
+  },
+  {
+    "code": "F11",
+    "label": "F11",
+    "mac": 103,
+    "linux": 87,
+    "scan": 87,
+    "extended": false
+  },
+  {
+    "code": "F12",
+    "label": "F12",
+    "mac": 111,
+    "linux": 88,
+    "scan": 88,
+    "extended": false
+  },
+  {
+    "code": "Numpad0",
+    "label": "Numpad 0",
+    "mac": 82,
+    "linux": 82,
+    "scan": 82,
+    "extended": false
+  },
+  {
+    "code": "Numpad1",
+    "label": "Numpad 1",
+    "mac": 83,
+    "linux": 79,
+    "scan": 79,
+    "extended": false
+  },
+  {
+    "code": "Numpad2",
+    "label": "Numpad 2",
+    "mac": 84,
+    "linux": 80,
+    "scan": 80,
+    "extended": false
+  },
+  {
+    "code": "Numpad3",
+    "label": "Numpad 3",
+    "mac": 85,
+    "linux": 81,
+    "scan": 81,
+    "extended": false
+  },
+  {
+    "code": "Numpad4",
+    "label": "Numpad 4",
+    "mac": 86,
+    "linux": 75,
+    "scan": 75,
+    "extended": false
+  },
+  {
+    "code": "Numpad5",
+    "label": "Numpad 5",
+    "mac": 87,
+    "linux": 76,
+    "scan": 76,
+    "extended": false
+  },
+  {
+    "code": "Numpad6",
+    "label": "Numpad 6",
+    "mac": 88,
+    "linux": 77,
+    "scan": 77,
+    "extended": false
+  },
+  {
+    "code": "Numpad7",
+    "label": "Numpad 7",
+    "mac": 89,
+    "linux": 71,
+    "scan": 71,
+    "extended": false
+  },
+  {
+    "code": "Numpad8",
+    "label": "Numpad 8",
+    "mac": 91,
+    "linux": 72,
+    "scan": 72,
+    "extended": false
+  },
+  {
+    "code": "Numpad9",
+    "label": "Numpad 9",
+    "mac": 92,
+    "linux": 73,
+    "scan": 73,
+    "extended": false
+  },
+  {
+    "code": "NumpadDecimal",
+    "label": "Numpad .",
+    "mac": 65,
+    "linux": 83,
+    "scan": 83,
+    "extended": false
+  },
+  {
+    "code": "NumpadAdd",
+    "label": "Numpad +",
+    "mac": 69,
+    "linux": 78,
+    "scan": 78,
+    "extended": false
+  },
+  {
+    "code": "NumpadSubtract",
+    "label": "Numpad −",
+    "mac": 78,
+    "linux": 74,
+    "scan": 74,
+    "extended": false
+  },
+  {
+    "code": "NumpadMultiply",
+    "label": "Numpad ×",
+    "mac": 67,
+    "linux": 55,
+    "scan": 55,
+    "extended": false
+  },
+  {
+    "code": "NumpadDivide",
+    "label": "Numpad /",
+    "mac": 75,
+    "linux": 98,
+    "scan": 53,
+    "extended": true
+  },
+  {
+    "code": "NumpadEnter",
+    "label": "Numpad Enter",
+    "mac": 76,
+    "linux": 96,
+    "scan": 28,
+    "extended": true
+  },
+  {
+    "code": "Insert",
+    "label": "Insert / Help",
+    "mac": 114,
+    "linux": 110,
+    "scan": 82,
+    "extended": true
+  },
+  {
+    "code": "F13",
+    "label": "F13",
+    "mac": 105,
+    "linux": 183,
+    "scan": 0,
+    "vk": 124,
+    "extended": false
+  },
+  {
+    "code": "F14",
+    "label": "F14",
+    "mac": 107,
+    "linux": 184,
+    "scan": 0,
+    "vk": 125,
+    "extended": false
+  },
+  {
+    "code": "F15",
+    "label": "F15",
+    "mac": 113,
+    "linux": 185,
+    "scan": 0,
+    "vk": 126,
+    "extended": false
+  },
+  {
+    "code": "F16",
+    "label": "F16",
+    "mac": 106,
+    "linux": 186,
+    "scan": 0,
+    "vk": 127,
+    "extended": false
+  },
+  {
+    "code": "F17",
+    "label": "F17",
+    "mac": 64,
+    "linux": 187,
+    "scan": 0,
+    "vk": 128,
+    "extended": false
+  },
+  {
+    "code": "F18",
+    "label": "F18",
+    "mac": 79,
+    "linux": 188,
+    "scan": 0,
+    "vk": 129,
+    "extended": false
+  },
+  {
+    "code": "F19",
+    "label": "F19",
+    "mac": 80,
+    "linux": 189,
+    "scan": 0,
+    "vk": 130,
+    "extended": false
+  },
+  {
+    "code": "F20",
+    "label": "F20",
+    "mac": 90,
+    "linux": 190,
+    "scan": 0,
+    "vk": 131,
+    "extended": false
+  }
+]

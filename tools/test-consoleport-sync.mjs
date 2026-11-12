@@ -7,7 +7,7 @@ import { ProfileStore } from '../packages/profile-tools/src/store.js';
 const directory = await mkdtemp(join(tmpdir(), 'thumble-consoleport-sync-'));
 try {
   const binary = join(directory, 'tests');
-  execFileSync('xcrun', ['swiftc', '-swift-version', '5', '-module-cache-path', resolve('build/swift-module-cache'), ...['ProfileCatalog', 'CloudProfile', 'ConsolePortSync'].map(n => resolve(`apps/receiver/Sources/${n}.swift`)), resolve('tools/consoleport-sync-tests/main.swift'), '-o', binary], { stdio: 'inherit' });
+  execFileSync('xcrun', ['swiftc', '-swift-version', '5', '-module-cache-path', resolve('build/swift-module-cache'), ...['ProfileCatalog', 'CloudProfile', 'ConsolePortSync', 'WorkspaceProfiles'].map(n => resolve(`apps/receiver/Sources/${n}.swift`)), resolve('tools/consoleport-sync-tests/main.swift'), '-o', binary], { stdio: 'inherit' });
   execFileSync(binary, [directory], { stdio: 'inherit' });
   const store = await new ProfileStore(join(directory, 'profiles')).read();
   if (validateProfile(store.active.profile).length) throw Error('Swift output fails phone validation');

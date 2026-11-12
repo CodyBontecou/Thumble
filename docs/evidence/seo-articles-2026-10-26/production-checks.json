@@ -1,0 +1,202 @@
+[
+  {
+    "path": "/guides",
+    "accept": "text/html",
+    "method": "GET",
+    "status": 200,
+    "bytes": 7000,
+    "verified": true
+  },
+  {
+    "path": "/guides/wow-controller-mac",
+    "accept": "text/html",
+    "method": "GET",
+    "status": 200,
+    "bytes": 12371,
+    "verified": true
+  },
+  {
+    "path": "/guides/consoleport-mac-setup",
+    "accept": "text/html",
+    "method": "GET",
+    "status": 200,
+    "bytes": 13059,
+    "verified": true
+  },
+  {
+    "path": "/guides/install-thumble-wow-addon",
+    "accept": "text/html",
+    "method": "GET",
+    "status": 200,
+    "bytes": 12192,
+    "verified": true
+  },
+  {
+    "path": "/guides/wow-controller-not-detected-mac",
+    "accept": "text/html",
+    "method": "GET",
+    "status": 200,
+    "bytes": 11276,
+    "verified": true
+  },
+  {
+    "path": "/guides/thumble-phone-mac-pairing",
+    "accept": "text/html",
+    "method": "GET",
+    "status": 200,
+    "bytes": 11117,
+    "verified": true
+  },
+  {
+    "path": "/guides/iphone-controller-mac",
+    "accept": "text/html",
+    "method": "GET",
+    "status": 200,
+    "bytes": 12740,
+    "verified": true
+  },
+  {
+    "path": "/compare/wow-phone-vs-gamepad",
+    "accept": "text/html",
+    "method": "GET",
+    "status": 200,
+    "bytes": 13778,
+    "verified": true
+  },
+  {
+    "path": "/",
+    "accept": "text/html",
+    "method": "GET",
+    "status": 200,
+    "bytes": 18145,
+    "verified": true
+  },
+  {
+    "path": "/docs",
+    "accept": "text/html",
+    "method": "GET",
+    "status": 200,
+    "bytes": 17951,
+    "verified": true
+  },
+  {
+    "path": "/guides",
+    "accept": "text/markdown",
+    "method": "GET",
+    "status": 200,
+    "bytes": 2427,
+    "verified": true
+  },
+  {
+    "path": "/guides/wow-controller-mac",
+    "accept": "text/markdown",
+    "method": "GET",
+    "status": 200,
+    "bytes": 5128,
+    "verified": true
+  },
+  {
+    "path": "/guides/consoleport-mac-setup",
+    "accept": "text/markdown",
+    "method": "GET",
+    "status": 200,
+    "bytes": 6284,
+    "verified": true
+  },
+  {
+    "path": "/guides/install-thumble-wow-addon",
+    "accept": "text/markdown",
+    "method": "GET",
+    "status": 200,
+    "bytes": 5326,
+    "verified": true
+  },
+  {
+    "path": "/guides/wow-controller-not-detected-mac",
+    "accept": "text/markdown",
+    "method": "GET",
+    "status": 200,
+    "bytes": 4702,
+    "verified": true
+  },
+  {
+    "path": "/guides/thumble-phone-mac-pairing",
+    "accept": "text/markdown",
+    "method": "GET",
+    "status": 200,
+    "bytes": 4485,
+    "verified": true
+  },
+  {
+    "path": "/guides/iphone-controller-mac",
+    "accept": "text/markdown",
+    "method": "GET",
+    "status": 200,
+    "bytes": 5705,
+    "verified": true
+  },
+  {
+    "path": "/compare/wow-phone-vs-gamepad",
+    "accept": "text/markdown",
+    "method": "GET",
+    "status": 200,
+    "bytes": 6523,
+    "verified": true
+  },
+  {
+    "path": "/sitemap.xml",
+    "accept": "application/xml",
+    "method": "GET",
+    "status": 200,
+    "bytes": 1554,
+    "verified": true
+  },
+  {
+    "path": "/guides.css",
+    "accept": "text/css",
+    "method": "GET",
+    "status": 200,
+    "bytes": 3823,
+    "verified": true
+  },
+  {
+    "path": "/guides/missing-seo-check",
+    "accept": "text/markdown",
+    "method": "GET",
+    "status": 404,
+    "bytes": 273,
+    "verified": true
+  },
+  {
+    "path": "/cli/thumble.mjs",
+    "accept": "*/*",
+    "method": "GET",
+    "status": 200,
+    "bytes": 3621,
+    "verified": true
+  },
+  {
+    "path": "/cli/thumble-cli-0.1.0.tgz",
+    "accept": "*/*",
+    "method": "GET",
+    "status": 200,
+    "bytes": 3196,
+    "verified": true
+  },
+  {
+    "path": "/guides/wow-controller-mac",
+    "accept": "text/markdown",
+    "method": "HEAD",
+    "status": 200,
+    "bytes": 654,
+    "verified": true
+  },
+  {
+    "path": "/downloads/receiver-latest.dmg",
+    "accept": "*/*",
+    "method": "HEAD",
+    "status": 200,
+    "bytes": 1233,
+    "verified": true
+  }
+]

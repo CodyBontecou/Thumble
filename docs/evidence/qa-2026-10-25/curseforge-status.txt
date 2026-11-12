@@ -1,0 +1,3 @@
+Browser tab: 1, Title: "Thumble - Authors CurseForge", URL: "https://authors.curseforge.com/#/projects/1763832/files".
+There has been no change in the accessibility tree.
+The focused UI element is 0 AXWebArea Thumble - Authors CurseForge, URL: authors.curseforge.com/#/projects/1763832/files

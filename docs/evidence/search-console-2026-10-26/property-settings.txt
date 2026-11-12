@@ -1,0 +1,86 @@
+Browser tab: 4, Title: "Settings", URL: "https://search.google.com/search-console/settings?resource_id=sc-domain%3Athumble.io".
+0 AXWebArea Settings, URL: search.google.com/search-console/settings?resource_id=sc-domain%3Athumble.io
+	1 container
+		15 container yDmH0d
+			16 container gb
+				17 container
+					18 button (collapsed) Description: Main menu, Secondary Actions: Expand
+						19 image
+					20 link Description: Google Search Console, Value: search.google.com/search-console?resource_id=sc-domain%3Athumble.io, ID: sdgBod
+					21 container
+						22 combo box (collapsed, settable) Description: Inspect any URL in thumble.io, Secondary Actions: Expand
+					23 button Search
+						24 image
+					25 button Help
+					26 button User settings
+					27 container
+						28 button Unread messages: 1
+						66 text 1
+					30 button (collapsed) Description: Google apps, Secondary Actions: Expand
+					31 button (collapsed) Description: Google Account: verified owner account, Secondary Actions: Expand
+			32 container navigational drawer
+				33 container
+					34 container Primary
+						35 pop up button (collapsed) Description: Search property, Secondary Actions: Expand
+							36 image favicon
+							37 combo box (collapsed, settable) Description: thumble.io, Secondary Actions: Expand
+						38 container
+							39 link Description: Overview, Value: search.google.com/search-console?resource_id=sc-domain%3Athumble.io
+							40 link Description: Insights, Value: search.google.com/search-console/performance/insights?resource_id=sc-domain%3Athumble.io
+							41 link Description: Performance, Value: search.google.com/search-console/performance/search-analytics?resource_id=sc-domain%3Athumble.io
+							42 button URL inspection
+								43 text URL inspection
+							44 container
+								45 text Indexing
+								46 button (expanded) Description: Indexing report section, Secondary Actions: Collapse
+								47 link Description: Pages, Value: search.google.com/search-console/index?resource_id=sc-domain%3Athumble.io
+								48 link Description: Sitemaps, Value: search.google.com/search-console/sitemaps?resource_id=sc-domain%3Athumble.io
+								49 link Description: Removals, Value: search.google.com/search-console/removals?resource_id=sc-domain%3Athumble.io
+							50 container
+								51 text Experience
+								52 button (expanded) Description: Experience report section, Secondary Actions: Collapse
+								53 link Description: Core Web Vitals, Value: search.google.com/search-console/core-web-vitals?resource_id=sc-domain%3Athumble.io
+							54 container
+								55 text Security & Manual Actions
+								56 button (collapsed) Description: Security & Manual Actions report section, Secondary Actions: Expand
+							57 link Description: Links report, Value: search.google.com/search-console/links?resource_id=sc-domain%3Athumble.io
+							58 link Description: Achievements, Value: search.google.com/search-console/achievements?resource_id=sc-domain%3Athumble.io
+							59 link Description: Settings, Value: search.google.com/search-console/settings?resource_id=sc-domain%3Athumble.io
+							60 button Submit feedback
+								61 text Submit feedback
+							62 button About Search Console
+								63 text About Search Console
+							64 link Description: Privacy, Value: myaccount.google.com/privacypolicy?hl=en
+							65 link Description: Terms, Value: myaccount.google.com/termsofservice?hl=en
+			67 container
+				68 container Breadcrumbs
+					69 heading Settings, Value: 1
+						70 text Settings
+				71 container
+					72 text General settings
+					73 link Description: Ownership verification You are a verified owner, Value: search.google.com/search-console/ownership?resource_id=sc-domain%3Athumble.io
+					74 link Description: Users and permissions Cody Bontecou, Value: search.google.com/search-console/users?resource_id=sc-domain%3Athumble.io
+					75 link Description: Associations Associate a service with this property, Value: search.google.com/search-console/settings/associations?resource_id=sc-domain%3Athumble.io
+					76 link Description: Change of address Inform Google when your site moves to a new address, Value: search.google.com/search-console/settings/change-address?resource_id=sc-domain%3Athumble.io
+					77 link Description: Bulk data export Daily export of performance data to BigQuery, Value: search.google.com/search-console/settings/bulk-data-export?resource_id=sc-domain%3Athumble.io
+					78 text AI controls
+					79 link Description: Search generative AI Include, Value: search.google.com/search-console/settings/search-gen-ai?resource_id=sc-domain%3Athumble.io
+					80 text Crawling
+					81 text robots.txt
+					82 text No robots.txt file
+					83 button (disabled) OPEN REPORT
+						84 text OPEN REPORT
+					85 text Crawl stats
+					86 text No data available yet
+					87 button (disabled) OPEN REPORT
+						88 text OPEN REPORT
+					89 text About Property added to account October 25, 2026
+					90 button REMOVE PROPERTY
+						91 text REMOVE PROPERTY
+		92 text Settings
+		11 container reCAPTCHA
+			12 AXWebArea reCAPTCHA, URL: google.com/recaptcha/api2/anchor?ar=1&k=6LeKMsIjAAAAAGP5PskdMId0tLXc7dL3LiO07Avf&co=aHR0cHM6Ly9zZWFyY2guZ29vZ2xlLmNvbTo0NDM.&hl=en&v=NhfdZHzre16wrc2m6BxEdu7J&size=invisible&anchor-ms=20000&execute-ms=30000&cb=db1jgskyr13l
+				13 text protected by 
+				14 text reCAPTCHA
+
+The focused UI element is 59 link Description: Settings, URL: search.google.com/search-console/settings?resource_id=sc-domain%3Athumble.io

@@ -1,0 +1,31 @@
+steps:
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: Space
+      timeoutMs: 10000
+  - tap:
+      text: Space
+  - tap:
+      text: Left click
+  - tap:
+      text: Right click
+  - tool: gesture-swipe
+    args:
+      fromX: 0.55
+      fromY: 0.53
+      toX: 0.7
+      toY: 0.6
+      durationMs: 450
+      momentum: false
+  - tool: gesture-custom
+    args:
+      events:
+        - { type: Down, x: 0.52, y: 0.35, x2: 0.75, y2: 0.35 }
+        - { type: Move, x: 0.52, y: 0.5, x2: 0.75, y2: 0.5, delayMs: 500 }
+        - { type: Move, x: 0.52, y: 0.7, x2: 0.75, y2: 0.7, delayMs: 500 }
+        - { type: Up, x: 0.52, y: 0.7, x2: 0.75, y2: 0.7, delayMs: 200 }
+executionPrerequisite: Physical iPhone paired to isolated QA receiver, Physical
+  phone QA revision 1 active, controller foreground, portrait, Metro 8093
+  reachable, Expo Tools overlay disabled.

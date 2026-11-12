@@ -53,7 +53,7 @@ export class TouchController {
       return control.type !== 'stick' || !this.#viewport || Math.hypot((x - f.x - f.width / 2) / (f.width / 2), (y - f.y - f.height / 2) / (f.height / 2)) <= 1;
     });
     if (!control) return;
-    if (control.type !== 'button' && [...this.#touches.values()].some(touch => touch.control.id === control.id)) return;
+    if (['stick', 'trigger'].includes(control.type) && [...this.#touches.values()].some(touch => touch.control.id === control.id)) return;
     this.#touches.set(id, { control, x, y, startY: y });
     this.#refresh(control);
   }
@@ -61,9 +61,12 @@ export class TouchController {
   move(id, x, y) {
     const touch = this.#touches.get(id);
     if (!touch || !Number.isFinite(x) || !Number.isFinite(y)) return;
+    const count = [...this.#touches.values()].filter(item => item.control.id === touch.control.id).length;
+    const dx = (x - touch.x) * (this.#viewport?.width ?? 844) / count;
+    const dy = (y - touch.y) * (this.#viewport?.height ?? 390) / count;
     touch.x = x;
     touch.y = y;
-    this.#refresh(touch.control);
+    this.#refresh(touch.control, count > 1 ? [0, 0, dx / 30, dy / 30] : [dx, dy, 0, 0]);
   }
 
   up(id) {
@@ -83,12 +86,13 @@ export class TouchController {
 
   snapshot() { return this.#controller.snapshot(); }
 
-  #refresh(control) {
+  #refresh(control, delta = [0, 0, 0, 0]) {
     const touches = [...this.#touches.values()].filter(touch => touch.control.id === control.id);
     const touch = touches[0];
     let value;
     let x = 0, y = 0;
-    if (control.type === 'button') value = touches.some(touch => contains(control.frame, touch.x, touch.y));
+    if (['button', 'key', 'mouse'].includes(control.type)) value = touches.some(touch => contains(control.frame, touch.x, touch.y));
+    else if (control.type === 'trackpad') value = delta;
     else if (control.type === 'trigger') value = touch ? clamp(1 - (touch.y - touch.startY) / control.frame.height, 0, 1) : 0;
     else {
       if (touch) {

@@ -1,0 +1,132 @@
+steps:
+  - tool: launch-app
+    args:
+      bundleId: com.thumble.ios
+  - tap:
+      id: controller-menu
+  - tap:
+      text: Getting started, ›
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: reload WoW to check your phone labels
+  - tap:
+      text: Continue WoW setup
+  - tool: gesture-swipe
+    args:
+      fromX: 0.75
+      fromY: 0.66
+      toX: 0.75
+      toY: 0.3
+      durationMs: 650
+      momentum: false
+  - tool: gesture-swipe
+    args:
+      fromX: 0.75
+      fromY: 0.65
+      toX: 0.75
+      toY: 0.42
+      durationMs: 600
+      momentum: false
+  - tap:
+      text: WoW Classic Era, Era, Hardcore or a seasonal Era realm, ›
+  - tap:
+      text: Connect Mac
+  - tap:
+      text: Mac pairing link
+  - tap:
+      text: v
+  - tap:
+      text: Scan Mac QR code
+  - tool: await-ui-element
+    args:
+      condition: visible
+      selector:
+        text: "Prepare your\nWoW addons."
+  - tool: gesture-swipe
+    args:
+      fromX: 0.75
+      fromY: 0.66
+      toX: 0.75
+      toY: 0.24
+      durationMs: 700
+      momentum: false
+  - tool: gesture-swipe
+    args:
+      fromX: 0.75
+      fromY: 0.66
+      toX: 0.75
+      toY: 0.24
+      durationMs: 700
+      momentum: false
+  - tap:
+      text: ConsolePort is ready in WoW
+  - tool: gesture-swipe
+    args:
+      fromX: 0.75
+      fromY: 0.66
+      toX: 0.75
+      toY: 0.24
+      durationMs: 700
+      momentum: false
+  - tool: gesture-swipe
+    args:
+      fromX: 0.75
+      fromY: 0.66
+      toX: 0.75
+      toY: 0.24
+      durationMs: 700
+      momentum: false
+  - tool: gesture-swipe
+    args:
+      fromX: 0.75
+      fromY: 0.66
+      toX: 0.75
+      toY: 0.28
+      durationMs: 700
+      momentum: false
+  - tap:
+      text: Open controller to check labels
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Down
+          x: 0.39
+          y: 0.37
+        - type: Up
+          x: 0.39
+          y: 0.37
+          delayMs: 3000
+  - tool: gesture-custom
+    args:
+      events:
+        - type: Down
+          x: 0.61
+          y: 0.37
+        - type: Up
+          x: 0.61
+          y: 0.37
+          delayMs: 3000
+  - tap:
+      text: Jump
+  - tool: gesture-swipe
+    args:
+      fromX: 0.359
+      fromY: 0.735
+      toX: 0.359
+      toY: 0.65
+      durationMs: 1200
+      momentum: false
+  - tool: gesture-swipe
+    args:
+      fromX: 0.641
+      fromY: 0.735
+      toX: 0.7
+      toY: 0.735
+      durationMs: 1000
+      momentum: false
+  - tap:
+      text: Menu
+  - tap:
+      text: Menu

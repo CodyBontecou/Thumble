@@ -1,0 +1,72 @@
+[
+  {
+    "route": "/guides/consoleport-keybindings-mac",
+    "signupLast": true,
+    "relatedBlock": true
+  },
+  {
+    "route": "/guides/consoleport-spell-labels-not-syncing",
+    "signupLast": true,
+    "relatedBlock": true
+  },
+  {
+    "route": "/guides/iphone-controller-mac",
+    "signupLast": true,
+    "relatedBlock": true
+  },
+  {
+    "route": "/guides/thumble-phone-mac-pairing",
+    "signupLast": true,
+    "relatedBlock": true
+  },
+  {
+    "route": "/guides/wow-addons-not-showing-mac",
+    "signupLast": true,
+    "relatedBlock": true
+  },
+  {
+    "route": "/guides/wow-controller-camera-reversed-mac",
+    "signupLast": true,
+    "relatedBlock": true
+  },
+  {
+    "route": "/guides/wow-controller-mac",
+    "signupLast": true,
+    "relatedBlock": false
+  },
+  {
+    "route": "/guides/wow-controller-not-detected-mac",
+    "signupLast": true,
+    "relatedBlock": true
+  },
+  {
+    "route": "/guides/consoleport-mac-setup",
+    "signupLast": true,
+    "relatedBlock": false
+  },
+  {
+    "route": "/guides/wow-classic-controller-mac",
+    "signupLast": true,
+    "relatedBlock": true
+  },
+  {
+    "route": "/guides/install-thumble-wow-addon",
+    "signupLast": true,
+    "relatedBlock": true
+  },
+  {
+    "route": "/guides/consoleport-wrong-action-modifier",
+    "signupLast": true,
+    "relatedBlock": true
+  },
+  {
+    "route": "/compare/wow-controller-vs-keyboard-mouse-mac",
+    "signupLast": true,
+    "relatedBlock": true
+  },
+  {
+    "route": "/compare/wow-phone-vs-gamepad",
+    "signupLast": true,
+    "relatedBlock": true
+  }
+]

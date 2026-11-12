@@ -47,6 +47,7 @@ import SwiftUI
     var chooseWoWFolder: () -> Void = {}
     var openLayouts: () -> Void = {}
     var openDiagnostics: () -> Void = {}
+    var openStudio: () -> Void = {}
     var openSettings: () -> Void = {}
     var replayTour: () -> Void = {}
     var showPopover: () -> Void = {}

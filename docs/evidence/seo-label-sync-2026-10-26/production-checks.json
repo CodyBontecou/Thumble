@@ -1,0 +1,250 @@
+[
+  {
+    "path": "/guides",
+    "accept": "text/html",
+    "method": "GET",
+    "status": 200,
+    "bytes": 10058,
+    "verified": true
+  },
+  {
+    "path": "/guides/wow-controller-mac",
+    "accept": "text/html",
+    "method": "GET",
+    "status": 200,
+    "bytes": 12378,
+    "verified": true
+  },
+  {
+    "path": "/guides/consoleport-mac-setup",
+    "accept": "text/html",
+    "method": "GET",
+    "status": 200,
+    "bytes": 13368,
+    "verified": true
+  },
+  {
+    "path": "/guides/install-thumble-wow-addon",
+    "accept": "text/html",
+    "method": "GET",
+    "status": 200,
+    "bytes": 12443,
+    "verified": true
+  },
+  {
+    "path": "/guides/wow-controller-not-detected-mac",
+    "accept": "text/html",
+    "method": "GET",
+    "status": 200,
+    "bytes": 11585,
+    "verified": true
+  },
+  {
+    "path": "/guides/thumble-phone-mac-pairing",
+    "accept": "text/html",
+    "method": "GET",
+    "status": 200,
+    "bytes": 11124,
+    "verified": true
+  },
+  {
+    "path": "/guides/iphone-controller-mac",
+    "accept": "text/html",
+    "method": "GET",
+    "status": 200,
+    "bytes": 12747,
+    "verified": true
+  },
+  {
+    "path": "/compare/wow-phone-vs-gamepad",
+    "accept": "text/html",
+    "method": "GET",
+    "status": 200,
+    "bytes": 13785,
+    "verified": true
+  },
+  {
+    "path": "/guides/consoleport-wrong-action-modifier",
+    "accept": "text/html",
+    "method": "GET",
+    "status": 200,
+    "bytes": 13304,
+    "verified": true
+  },
+  {
+    "path": "/guides/wow-controller-camera-reversed-mac",
+    "accept": "text/html",
+    "method": "GET",
+    "status": 200,
+    "bytes": 12364,
+    "verified": true
+  },
+  {
+    "path": "/guides/consoleport-spell-labels-not-syncing",
+    "accept": "text/html",
+    "method": "GET",
+    "status": 200,
+    "bytes": 14011,
+    "verified": true
+  },
+  {
+    "path": "/",
+    "accept": "text/html",
+    "method": "GET",
+    "status": 200,
+    "bytes": 18145,
+    "verified": true
+  },
+  {
+    "path": "/docs",
+    "accept": "text/html",
+    "method": "GET",
+    "status": 200,
+    "bytes": 18497,
+    "verified": true
+  },
+  {
+    "path": "/guides",
+    "accept": "text/markdown",
+    "method": "GET",
+    "status": 200,
+    "bytes": 3578,
+    "verified": true
+  },
+  {
+    "path": "/guides/wow-controller-mac",
+    "accept": "text/markdown",
+    "method": "GET",
+    "status": 200,
+    "bytes": 5128,
+    "verified": true
+  },
+  {
+    "path": "/guides/consoleport-mac-setup",
+    "accept": "text/markdown",
+    "method": "GET",
+    "status": 200,
+    "bytes": 6537,
+    "verified": true
+  },
+  {
+    "path": "/guides/install-thumble-wow-addon",
+    "accept": "text/markdown",
+    "method": "GET",
+    "status": 200,
+    "bytes": 5529,
+    "verified": true
+  },
+  {
+    "path": "/guides/wow-controller-not-detected-mac",
+    "accept": "text/markdown",
+    "method": "GET",
+    "status": 200,
+    "bytes": 4955,
+    "verified": true
+  },
+  {
+    "path": "/guides/thumble-phone-mac-pairing",
+    "accept": "text/markdown",
+    "method": "GET",
+    "status": 200,
+    "bytes": 4485,
+    "verified": true
+  },
+  {
+    "path": "/guides/iphone-controller-mac",
+    "accept": "text/markdown",
+    "method": "GET",
+    "status": 200,
+    "bytes": 5705,
+    "verified": true
+  },
+  {
+    "path": "/compare/wow-phone-vs-gamepad",
+    "accept": "text/markdown",
+    "method": "GET",
+    "status": 200,
+    "bytes": 6523,
+    "verified": true
+  },
+  {
+    "path": "/guides/consoleport-wrong-action-modifier",
+    "accept": "text/markdown",
+    "method": "GET",
+    "status": 200,
+    "bytes": 6071,
+    "verified": true
+  },
+  {
+    "path": "/guides/wow-controller-camera-reversed-mac",
+    "accept": "text/markdown",
+    "method": "GET",
+    "status": 200,
+    "bytes": 5518,
+    "verified": true
+  },
+  {
+    "path": "/guides/consoleport-spell-labels-not-syncing",
+    "accept": "text/markdown",
+    "method": "GET",
+    "status": 200,
+    "bytes": 6562,
+    "verified": true
+  },
+  {
+    "path": "/sitemap.xml",
+    "accept": "application/xml",
+    "method": "GET",
+    "status": 200,
+    "bytes": 1891,
+    "verified": true
+  },
+  {
+    "path": "/guides.css",
+    "accept": "text/css",
+    "method": "GET",
+    "status": 200,
+    "bytes": 4287,
+    "verified": true
+  },
+  {
+    "path": "/guides/missing-seo-check",
+    "accept": "text/markdown",
+    "method": "GET",
+    "status": 404,
+    "bytes": 273,
+    "verified": true
+  },
+  {
+    "path": "/cli/thumble.mjs",
+    "accept": "*/*",
+    "method": "GET",
+    "status": 200,
+    "bytes": 3621,
+    "verified": true
+  },
+  {
+    "path": "/cli/thumble-cli-0.1.0.tgz",
+    "accept": "*/*",
+    "method": "GET",
+    "status": 200,
+    "bytes": 3196,
+    "verified": true
+  },
+  {
+    "path": "/guides/wow-controller-mac",
+    "accept": "text/markdown",
+    "method": "HEAD",
+    "status": 200,
+    "bytes": 660,
+    "verified": true
+  },
+  {
+    "path": "/downloads/receiver-latest.dmg",
+    "accept": "*/*",
+    "method": "HEAD",
+    "status": 200,
+    "bytes": 1237,
+    "verified": true
+  }
+]

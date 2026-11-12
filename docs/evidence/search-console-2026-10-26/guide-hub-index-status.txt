@@ -1,0 +1,85 @@
+Browser tab: 4, Title: "URL Inspection", URL: "https://search.google.com/search-console/inspect?resource_id=sc-domain%3Athumble.io&id=Py0W2c5RtKYpXjLBw70EAg".
+0 AXWebArea URL Inspection, URL: search.google.com/search-console/inspect?resource_id=sc-domain%3Athumble.io&id=Py0W2c5RtKYpXjLBw70EAg
+	1 container
+		2 container yDmH0d
+			3 container gb
+				4 container
+					5 button (collapsed) Description: Main menu, Secondary Actions: Expand
+						6 image
+					7 link Description: Google Search Console, Value: search.google.com/search-console?resource_id=sc-domain%3Athumble.io, ID: sdgBod
+					8 container
+						9 combo box (collapsed, settable) Description: Inspect any URL in thumble.io, Secondary Actions: Expand
+					10 button Search
+						11 image
+					12 button Help
+					13 button User settings
+					14 container
+						15 button Unread messages: 1
+						16 text 1
+					17 button (collapsed) Description: Google apps, Secondary Actions: Expand
+					18 button (collapsed) Description: Google Account: verified owner account, Secondary Actions: Expand
+			19 container navigational drawer
+				20 container
+					21 container Primary
+						22 pop up button (collapsed) Description: Search property, Secondary Actions: Expand
+							23 image favicon
+							24 combo box (collapsed, settable) Description: thumble.io, Secondary Actions: Expand
+						25 container
+							26 link Description: Overview, Value: search.google.com/search-console?resource_id=sc-domain%3Athumble.io
+							27 link Description: Insights, Value: search.google.com/search-console/performance/insights?resource_id=sc-domain%3Athumble.io
+							28 link Description: Performance, Value: search.google.com/search-console/performance/search-analytics?resource_id=sc-domain%3Athumble.io
+							29 button URL inspection
+								30 text URL inspection
+							31 container
+								32 text Indexing
+								33 button (expanded) Description: Indexing report section, Secondary Actions: Collapse
+								34 link Description: Pages, Value: search.google.com/search-console/index?resource_id=sc-domain%3Athumble.io
+								35 link Description: Sitemaps, Value: search.google.com/search-console/sitemaps?resource_id=sc-domain%3Athumble.io
+								36 link Description: Removals, Value: search.google.com/search-console/removals?resource_id=sc-domain%3Athumble.io
+							37 container
+								38 text Experience
+								39 button (expanded) Description: Experience report section, Secondary Actions: Collapse
+								40 link Description: Core Web Vitals, Value: search.google.com/search-console/core-web-vitals?resource_id=sc-domain%3Athumble.io
+							41 container
+								42 text Security & Manual Actions
+								43 button (collapsed) Description: Security & Manual Actions report section, Secondary Actions: Expand
+							44 link Description: Links report, Value: search.google.com/search-console/links?resource_id=sc-domain%3Athumble.io
+							45 link Description: Achievements, Value: search.google.com/search-console/achievements?resource_id=sc-domain%3Athumble.io
+							46 link Description: Settings, Value: search.google.com/search-console/settings?resource_id=sc-domain%3Athumble.io
+							47 button Submit feedback
+								48 text Submit feedback
+							49 button About Search Console
+								50 text About Search Console
+							51 link Description: Privacy, Value: myaccount.google.com/privacypolicy?hl=en
+							52 link Description: Terms, Value: myaccount.google.com/termsofservice?hl=en
+			53 container
+				54 text https://thumble.io/guides
+				55 container
+					56 container Breadcrumbs
+						57 heading URL Inspection, Value: 1
+							58 text URL Inspection
+					59 button TEST LIVE URL
+						60 text TEST LIVE URL
+				61 container
+					62 container
+						63 text URL is not on Google This page is not indexed. Pages that aren't indexed can't be served on Google. See the details below to learn why it wasn't indexed. 
+						64 link Description: Learn more, Value: support.google.com/webmasters/answer/9012289#url_not_on_google
+					65 button (disabled) View crawled page
+						66 text VIEW CRAWLED PAGE
+					67 container
+						68 text Page changed?
+						69 button Request indexingRequest again
+							70 text REQUEST INDEXING
+					71 button (expanded) Page indexing Page is not indexed: URL is unknown to Google, Secondary Actions: Collapse
+						72 text Page indexing
+						73 container
+							74 text Page is not indexed:  URL is unknown to Google
+					75 container
+						76 text Discovery Sitemaps No referring sitemaps detected Referring page None detected URL might be known from other sources that are currently not reported Crawl Last crawl N/A Crawled as N/A Crawl allowed? N/A Page fetch N/A Indexing allowed? N/A Indexing User-declared canonical N/A Google-selected canonical
+						77 button (collapsed) Description: null, Secondary Actions: Expand
+						78 text N/A
+						79 link Description: Link to more extensive documentation, Value: support.google.com/webmasters/answer/9012289#url_unknown
+					80 text Enhancements & Experience Only indexed URLs can have enhancements
+		81 text URL Inspection
+
+The focused UI element is 0 AXWebArea URL Inspection, URL: search.google.com/search-console/inspect?resource_id=sc-domain%3Athumble.io&id=Py0W2c5RtKYpXjLBw70EAg
