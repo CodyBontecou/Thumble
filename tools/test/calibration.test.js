@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { registerHooks } from 'node:module';
-import { TouchController, defaultProfile, neutralState } from '@tapping/controller';
+import { TouchController, consolePortProfile as defaultProfile, neutralState } from '@tapping/controller';
 
 const hooks = registerHooks({
   resolve(specifier, context, nextResolve) {
@@ -13,7 +13,11 @@ const { calibration } = await import('../../apps/mobile/src/calibration.js');
 hooks.deregister();
 
 test('ConsolePort movement sends negative Y upward, positive Y downward, before and after calibration', () => {
-  for (const profile of [defaultProfile, calibration.standard()]) {
+  const mirrored = { ...defaultProfile, id: 'consoleport-0123456789abcdef01234567' };
+  const legacy = structuredClone(mirrored);
+  delete legacy.mappings.find(mapping => mapping.outputs.includes('ly')).invertY;
+  const legacyDefault = { ...legacy, id: defaultProfile.id };
+  for (const profile of [defaultProfile, calibration.standard(undefined, defaultProfile), calibration.standard(undefined, mirrored), calibration.standard(undefined, legacy), calibration.standard(undefined, legacyDefault)]) {
     const controller = new TouchController(profile);
     controller.setViewport(740, 380);
     const { frame } = profile.controls.find(control => control.id === 'left-stick');
@@ -33,7 +37,7 @@ test('ConsolePort movement sends negative Y upward, positive Y downward, before 
 test('vertical calibration toggles the ConsolePort movement direction', () => {
   const settings = structuredClone(calibration.snapshot());
   settings.left.invertY = true;
-  const profile = calibration.standard(settings);
+  const profile = calibration.standard(settings, defaultProfile);
   assert.equal(profile.mappings.find(mapping => mapping.controlId === 'left-stick').invertY, false);
   assert.equal(profile.mappings.find(mapping => mapping.controlId === 'right-stick').invertY, false);
 });

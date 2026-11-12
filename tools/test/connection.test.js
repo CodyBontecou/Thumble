@@ -483,3 +483,39 @@ test('transient input overload keeps the remembered computer', async () => {
   assert.equal(h.connection.snapshot().phase, 'offline');
   assert.equal(saved.value?.reconnectToken, 'c'.repeat(64));
 });
+
+test('WoW binding requests negotiate support, match responses and release their request slot', async () => {
+  const h = harness(); await h.connection.connect(invitation()); h.ready();
+  await assert.rejects(h.connection.readBindings(), /Update your Mac receiver/);
+  h.connection.phoneBindingsSupported = true;
+  h.connection.profilesSupported = true;
+  let complete = false;
+  const pending = h.connection.readBindings().then(value => { complete = true; return value; });
+  const request = h.sent.at(-1);
+  assert.equal(request.type, 'bindings-read');
+  await assert.rejects(h.connection.requestProfiles(), /in progress/);
+  h.emit('message', { type: 'bindings-result', id: 'other-request', data: {} });
+  await Promise.resolve(); assert.equal(complete, false);
+  const page = { snapshotId: 'snapshot', spells: [], nextOffset: null };
+  h.emit('message', { type: 'bindings-result', id: request.id, data: page });
+  assert.deepEqual(await pending, page);
+  const next = h.connection.readBindings(32, 'snapshot');
+  assert.equal(h.sent.at(-1).snapshotId, 'snapshot');
+  h.emit('message', { type: 'bindings-result', id: h.sent.at(-1).id, error: 'Character changed. Refresh.' });
+  await assert.rejects(next, /Refresh/);
+});
+
+test('WoW binding timeouts and disconnects reject without claiming a handoff', async () => {
+  const h = harness(); await h.connection.connect(invitation()); h.ready();
+  h.connection.phoneBindingsSupported = true;
+  h.connection.timers.clearInterval(h.connection.timer);
+  const timed = h.connection.readBindings();
+  h.advance(10000);
+  await assert.rejects(timed, /Could not confirm/);
+  const copying = h.connection.copyBindingPlan({ id: 'proposal' });
+  assert.equal(h.connection.canPlay, false);
+  h.connection.disconnect();
+  await assert.rejects(copying, /Connection closed/);
+  assert.equal(h.connection.bindingRequest, null);
+  assert.equal(h.connection.phoneBindingsSupported, false);
+});

@@ -20,7 +20,7 @@ const pages = {};
 function htmlFiles(directory, prefix = '') {
  return fs.readdirSync(directory, { withFileTypes: true }).sort((a,b)=>a.name.localeCompare(b.name)).flatMap(entry => {
   const file = path.posix.join(prefix, entry.name);
-  if (entry.isDirectory() && (prefix || ['blog', 'guides', 'compare'].includes(entry.name))) return htmlFiles(path.join(directory, entry.name), file);
+  if (entry.isDirectory() && (prefix || ['blog', 'guides', 'compare', 'zh-hans'].includes(entry.name))) return htmlFiles(path.join(directory, entry.name), file);
   return entry.isFile() && entry.name.endsWith('.html') && entry.name !== '404.html' ? [file] : [];
  });
 }

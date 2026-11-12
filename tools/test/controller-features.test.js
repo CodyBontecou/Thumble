@@ -10,20 +10,21 @@ import { CLOUD_SCOPES } from '@tapping/cloud-contracts';
 import { initialSetup, setupComplete } from '../../apps/mobile/src/onboarding-core.js';
 import { Connection } from '../../apps/mobile/src/connection-core.js';
 
-test('generation requires explicit opt-in, and ConsolePort is the phone and setup default', () => {
+test('generation requires explicit opt-in, and the Xbox layout is the phone default', () => {
   for (const value of [undefined, '', 'false', '1', 'TRUE', true]) assert.equal(aiControllerGeneratorEnabled(value), false);
   assert.equal(aiControllerGeneratorEnabled('true'), true);
-  assert.equal(defaultProfile, consolePortProfile);
+  assert.equal(defaultProfile, xboxProfile);
   assert.equal(initialSetup().layoutMode, 'consoleport');
-  assert.equal(new Connection({ addListener() {} }).profileSnapshot().profile.id, consolePortProfile.id);
+  assert.equal(new Connection({ addListener() {} }).profileSnapshot().profile.id, xboxProfile.id);
   assert.equal(setupComplete({ ...initialSetup(), paired: true, controlsTested: true, wowTested: true }), true);
 });
 
 test('ConsolePort touch targets fit compact and large landscape canvases with every gamepad output', () => {
   for (const [width, height] of [[568, 300], [640, 320], [740, 380], [840, 380], [900, 420]]) {
+    assert.deepEqual(validateLayout(consolePortProfile, { width, height }).errors, [], `${width} × ${height}`);
     assert.deepEqual(validateLayout(defaultProfile, { width, height }).errors, [], `${width} × ${height}`);
   }
-  assert.deepEqual(defaultProfile.mappings, xboxProfile.mappings.map(mapping => mapping.controlId === 'left-stick' ? { ...mapping, invertY: true } : mapping));
+  assert.deepEqual(consolePortProfile.mappings, xboxProfile.mappings.map(mapping => mapping.controlId === 'left-stick' ? { ...mapping, invertY: true } : mapping));
 });
 
 test('local MCP hides generation tools and rejects direct calls before touching the store', async () => {

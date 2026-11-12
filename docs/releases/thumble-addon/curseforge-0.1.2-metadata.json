@@ -9,7 +9,7 @@
   "optionalDependency": "ConsolePort",
   "license": "All Rights Reserved",
   "distribution": "CurseForge ecosystem only",
-  "status": "Uploaded successfully; Processing. New project still awaits moderator approval before public visibility and CurseForge synchronization.",
+  "status": "Approved; authenticated author dashboard verified October 25, 2026.",
   "file": "build/addons/Thumble-0.1.2.zip",
   "sha256": "3043ae49936b7135b0ee5435b1195541f79aec0407e3102dbf41cc0eb9f20ad8",
   "changelogFile": "../../../addons/ThumbleBridge/CHANGELOG.md",
@@ -17,5 +17,6 @@
   "fileId": 9316122,
   "fileUrl": "https://authors.curseforge.com/#/projects/1763832/files/9316122",
   "submittedDate": "2026-10-24",
-  "releaseOptions": "Publish automatically once approved"
+  "releaseOptions": "Publish automatically once approved",
+  "approvalVerifiedDate": "2026-10-25"
 }

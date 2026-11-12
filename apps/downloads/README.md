@@ -6,7 +6,7 @@ private to their existing endpoints. Large files stream directly from R2.
 
 | Download | Alias | R2 prefix |
 | --- | --- | --- |
-| Signed/notarized macOS 1.0.0 DMG | `/downloads/receiver-latest.dmg` | `macos/receiver/` |
+| Signed/notarized macOS 1.0.3 DMG | `/downloads/receiver-latest.dmg` | `macos/receiver/` |
 | Unsigned Windows x64 0.1.0 preview setup | `/downloads/receiver-latest-windows.exe` | `windows/receiver/` |
 | Linux x64 0.1.0 preview archive | `/downloads/receiver-latest-linux.tar.gz` | `linux/receiver/` |
 | Desktop setup instructions | `/downloads/receiver-desktop-setup.txt` | `desktop/receiver/` |
@@ -27,6 +27,8 @@ must not imply real-game acceptance solely from native CI checks.
 Build macOS with `tools/build-macos-receiver.sh`, then
 `tools/package-macos-receiver.sh`. Both app and DMG must pass notarization,
 stapling and Gatekeeper assessment before upload.
+Packaging also requires the signed app's Launch Services HID check to pass;
+running the binary directly from an authorized terminal is not sufficient.
 
 Use a new versioned filename for every release, update `src/worker.js`, and retain
 published artifacts. Upload files/checksums with

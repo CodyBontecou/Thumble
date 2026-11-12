@@ -186,3 +186,25 @@ test('setup lights are detected, not self-reported, and labels may be skipped pe
   assert.equal(setupSignals({ state: skipped, online: true, recovering: false, labelsFollowing: false, context: 'c' }).stage, 3);
   assert.equal(setupSignals({ state: skipped, online: true, recovering: false, labelsFollowing: false, context: 'other' }).stage, 2, 'a new controller or receiver needs labels again');
 });
+
+test('WoW: Forever uses its built-in gamepad support and skips the addon and label-sync steps', async () => {
+  const { WOW_CHECKS, wowSetupStep, wowSetupStages, canCompleteWowSetup, nativeGamepad, setupSignals, cloudLayoutPrompt } = await import('../../apps/mobile/src/onboarding-core.js');
+  const context = { controlKey: 'receiver:xbox-standard:2', wowKey: 'receiver:xbox-standard:2:forever' };
+  const setup = normalizeSetup({ ...initialSetup(), wowClient: 'forever' });
+  assert.equal(setup.wowClient, 'forever');
+  assert.equal(nativeGamepad(setup), true);
+  assert.equal(nativeGamepad({ ...setup, wowClient: 'classic-era' }), false);
+  assert.deepEqual(wowSetupStages(setup), ['client', 'connect', 'game', 'ready']);
+  assert.equal(wowSetupStep(setup, false, context), 'connect');
+  assert.equal(wowSetupStep(setup, true, context), 'game', 'no addon or label sync step');
+  const checked = { ...setup, wowCheckContext: context.wowKey, wowChecks: Object.fromEntries(WOW_CHECKS.map(check => [check.id, true])) };
+  assert.equal(canCompleteWowSetup(checked, true, context), true);
+  assert.equal(canCompleteWowSetup({ ...checked, wowChecks: {} }, true, context), false);
+  assert.equal(canCompleteWowSetup(checked, false, context), false);
+  assert.equal(wowSetupStep({ ...checked, wowTested: true, controlsTested: true, controlsCheckContext: context.controlKey }, true, context), 'ready');
+  assert.equal(setupSignals({ state: setup, online: true, recovering: false, labelsFollowing: false, context: 'c' }).stage, 3, 'no labels light to wait for');
+  assert.equal(setupSignals({ state: setup, online: true, recovering: true, labelsFollowing: false, context: 'c' }).stage, 1);
+  const prompt = cloudLayoutPrompt({ ...setup, layoutMode: 'consoleport' }, { service: 'https://example.test', device: { id: 'phone-a', name: 'My phone' } });
+  assert.ok(prompt.includes('WoW: Forever') && prompt.includes('built-in gamepad'));
+  assert.equal(prompt.includes('with ConsolePort'), false);
+});

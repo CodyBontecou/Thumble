@@ -1,0 +1,75 @@
+name: Mobile
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source:
+    name: Mobile source checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run mobile:check
+
+  ios-release:
+    name: iOS Release launch
+    needs: source
+    runs-on: macos-26
+    timeout-minutes: 45
+    env:
+      CI: '1'
+      EXPO_NO_TELEMETRY: '1'
+      ARGENT_SIMULATOR_NO_WINDOW: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install pinned simulator tooling
+        run: npm install --global @swmansion/argent@0.32.0
+      - name: Build Release and prove two clean-install launches
+        run: npm run mobile:smoke:ios -- --output build/mobile-ci
+      - name: Preserve launch reports and build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-release-launch-${{ github.sha }}
+          path: |
+            build/mobile-ci/*.json
+            build/mobile-ci/*.log
+            build/mobile-ci/screenshots/**
+          if-no-files-found: warn
+          retention-days: 14
+
+  required:
+    name: Mobile required checks
+    if: always()
+    needs: [source, ios-release]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require both validation jobs
+        env:
+          SOURCE_RESULT: ${{ needs.source.result }}
+          IOS_RESULT: ${{ needs.ios-release.result }}
+        run: test "$SOURCE_RESULT" = success && test "$IOS_RESULT" = success

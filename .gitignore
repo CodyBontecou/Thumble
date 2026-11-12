@@ -8,6 +8,11 @@ build/
 .env.*
 !.env.example
 .argent/recordings/
+# Scratch diagnostic takes; keepers are copied into docs/evidence
+.argent/e2e/*.yaml.txt
+
+# Stray Expo config from running expo outside apps/mobile
+/app.json
 
 # Signing credentials and machine-local keys
 *.p12

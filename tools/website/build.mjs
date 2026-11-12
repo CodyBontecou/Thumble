@@ -7,7 +7,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const repository = fileURLToPath(new URL('../../', import.meta.url));
 const source = path.join(repository, 'apps/website');
 export const output = path.join(repository, 'dist/website');
-const publicDirectories = new Set(['assets', 'blog', 'guides', 'compare', '.well-known', 'functions']);
+const publicDirectories = new Set(['assets', 'blog', 'guides', 'compare', 'zh-hans', '.well-known', 'functions']);
 const publicFiles = new Set(['_headers', '_redirects', 'pricing.md', 'openapi.json', 'sitemap.xml']);
 
 // Positive selection keeps migrations, reports, schema and maintenance tools private.
