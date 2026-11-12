@@ -154,6 +154,8 @@ private final class ScrawlTouchWindow: UIWindow {
 
 /** @param {import('expo/config').ExpoConfig} config */
 module.exports = function withScrawl(config) {
+  // Store builds never link the SDK: SwiftPM would otherwise embed it in Release too.
+  if (/^production/.test(process.env.EAS_BUILD_PROFILE ?? '')) return config;
   config = withDangerousMod(config, ['ios', (mod) => {
     const file = path.join(mod.modRequest.platformProjectRoot, mod.modRequest.projectName, 'SceneDelegate.swift');
     const source = fs.readFileSync(file, 'utf8');

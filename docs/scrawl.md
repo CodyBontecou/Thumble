@@ -1,6 +1,6 @@
 # Scrawl development captures
 
-Debug builds of the mobile app include [Scrawl](https://github.com/kitlangton/scrawl): hold three fingers for half a second to start/finish a recording of the screen, your narration and touches, and send it to Scrawl on your Mac. Release builds never include it. This follows the myself.md integration.
+Debug builds of the mobile app include [Scrawl](https://github.com/kitlangton/scrawl): hold three fingers for half a second to start/finish a recording of the screen, your narration and touches, and send it to Scrawl on your Mac. EAS production builds skip the plugin entirely, so store builds never link ScrawlKit. This follows the myself.md integration.
 
 ## iOS
 
