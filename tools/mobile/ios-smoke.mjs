@@ -45,7 +45,17 @@ function validateLaunch({ output, device, simApp, productionApp, allowDirty = fa
   mkdirSync(output, { recursive: true });
   const receiptPath = path.join(output, 'smoke.json');
   rmSync(receiptPath, { force: true });
-  const { devices } = argentTool('list-devices');
+  // argent reports no simulators when its 10 s `simctl` listing times out, which happens
+  // while a freshly booted simulator keeps CoreSimulator busy; retry before giving up.
+  let devices = [];
+  for (let attempt = 1; attempt <= 8; attempt++) {
+    ({ devices } = argentTool('list-devices'));
+    if (devices.some(item => item.platform === 'ios' && (!device || item.udid === device))) break;
+    if (attempt < 8) {
+      console.error(`Simulator list is incomplete (attempt ${attempt}/8); retrying in 15 s.`);
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 15e3);
+    }
+  }
   const simulators = devices.filter(item => item.platform === 'ios' && item.kind !== 'device' &&
     item.runtimeKind === 'mobile' && !item.foldable && /iPhone/i.test(item.name));
   const booted = simulators.filter(item => item.state === 'Booted');

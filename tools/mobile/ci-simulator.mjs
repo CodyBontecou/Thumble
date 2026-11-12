@@ -68,4 +68,18 @@ log(`Created ${type.name} on iOS ${runtime.version}: ${udid}. Booting…`);
 const started = Date.now();
 retry('simctl bootstatus', () => exec('xcrun', ['simctl', 'bootstatus', udid, '-b']), { attempts: 3, wait: 15 });
 log(`Booted in ${Math.round((Date.now() - started) / 1000)}s.`);
+
+// argent lists simulators through `simctl list devices` with a 10 s timeout and reports
+// none when it is exceeded. A freshly booted simulator keeps CoreSimulator busy for a
+// while, so wait until listing answers quickly three times in a row.
+const settleBy = Date.now() + 10 * 60e3;
+for (let quick = 0; quick < 3;) {
+  const begin = Date.now();
+  try { execFileSync('xcrun', ['simctl', 'list', 'devices', '--json'], { stdio: 'ignore', timeout: 60e3 }); } catch { /* slow or busy; measured below */ }
+  const took = Date.now() - begin;
+  quick = took < 4000 ? quick + 1 : 0;
+  if (Date.now() > settleBy) { log(`Device listing still takes ${took}ms; continuing anyway.`); break; }
+  if (quick < 3) pause(took < 4000 ? 2 : 10);
+  else log(`Device listing settled (${took}ms).`);
+}
 console.log(`udid=${udid}`);
