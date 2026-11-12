@@ -110,4 +110,4 @@ The build creates `dist/website`, excludes database and maintenance sources from
 
 Thumble is licensed under the [GNU Affero General Public License v3.0](LICENSE) (`AGPL-3.0-only`). If you run a modified version as a network service, you must offer its source to that service's users.
 
-Exceptions: [`packages/cli`](packages/cli) is MIT-licensed and published on npm as `thumble-cli`; third-party code keeps its own license (see [`ThirdParty/`](ThirdParty) and [`apps/mobile/LICENSE`](apps/mobile/LICENSE) for the Expo template). "Thumble" and the Thumble app icon are not licensed for use in other apps or services.
+Exceptions: [`packages/cli`](packages/cli) is MIT-licensed and published on npm as `thumble-cli`; third-party code keeps its own license (see [`ThirdParty/`](ThirdParty)). "Thumble" and the Thumble app icon are not licensed for use in other apps or services.
