@@ -1,5 +1,11 @@
 # Mobile production submission status
 
+## November 12, 2026 — 1.1.0 submitted to both stores
+
+- Source `4424382` (redesign, Codex in-app editor branch merged, text-only controller labels, ScrawlKit excluded from production builds). 304 tests, mobile lint and typecheck pass.
+- **iOS 1.1.0 (13): Waiting for Review.** Build `73df1bb0-09c2-463d-a50c-2495f7dd9bc0`; hashes are in `.claude/worktrees/mobile-1.1.0/build/ios-release-1.1.0b/release.json` and `upload.json`. Two clean-install Release simulator launches passed; the TestFlight build launched on a physical iPhone 13 Pro Max (iOS 27.2) to onboarding and loaded StoreKit prices. Build 10's submission was cancelled; the version was renamed 1.0.0 → 1.1.0 and resubmitted as submission `6cd99fdb-347c-4280-8c7a-ffd5cb19714b` with the same 8 items (version, 4 subscriptions, subscription group, 2 lifetime IAPs). Review notes updated. Manual release.
+- **Android 1.1.0 (7): Changes in review**, full production rollout, replacing 1.0.0 (4). Built locally with EAS (cloud queue stalled), AAB SHA-256 `2cca4892f1b0b49a5601c948a1d93fe8998e31a2f3500f04c8ccabf1f48924b1`, uploaded through the Play API. The `thumble-play-verifier` service account was granted "Release to production" for Thumble on Nov 12 at the owner's request. Not tested on a Play-installed Pixel build.
+
 ## November 10, 2026 — iOS launch rejection diagnosed
 
 - Apple rejected **1.0.0 (6)** under **2.1(a)** after a launch crash on iPhone 17 Pro Max, iOS 27.0. Both reviewer crash reports identify the same native-module abort. The archived binary UUID `BBF78427-318C-3DFB-8309-638834148045` matches the reports.
