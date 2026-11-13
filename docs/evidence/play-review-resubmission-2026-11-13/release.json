@@ -1,0 +1,38 @@
+{
+  "sourceCommit": "0e00cb63455622d8b7fcf29937672092d20ab895",
+  "package": "com.thumble.android",
+  "version": "1.1.0",
+  "versionCode": 9,
+  "aabSha256": "a0565dd8b39c1494e10661e74a64b424857c2ceb7673416a709c28b1b788eb6c",
+  "qaApkSha256": "d54e427e282560513d66efe0cd69b3548f9f627f55cf6aaf1e8327e80129ee32",
+  "upload": {
+    "versionCode": 9,
+    "sha1": "9b9da73184f572e4af721e9d9f0e7b997d09ede0",
+    "sha256": "a0565dd8b39c1494e10661e74a64b424857c2ceb7673416a709c28b1b788eb6c"
+  },
+  "state": "Uploaded; submission awaiting explicit full-rollout approval required by automatic approval review",
+  "checks": {
+    "lint": "passed",
+    "typecheck": "passed",
+    "mobileTests": 166,
+    "repositoryTests": 320,
+    "bundletool": "validated",
+    "signature": "jar verified; Android self-signed upload certificate"
+  },
+  "qa": {
+    "device": "emulator-5556",
+    "install": "universal APK generated from exact AAB, signed for local QA",
+    "observed": [
+      "Welcome launch",
+      "Plans Close returns to Welcome",
+      "Receiver setup available without purchase",
+      "Expired-plan Close reaches controller tour",
+      "No fallback numeric prices when store is unavailable"
+    ],
+    "limits": [
+      "Regional Play checkout not exercised; emulator sideload cannot certify Play-installed billing",
+      "Landscape presentation inspected in earlier local build; direct landscape tap injection unreliable in this environment"
+    ]
+  },
+  "pullRequest": "https://github.com/CodyBontecou/Thumble/pull/12"
+}
