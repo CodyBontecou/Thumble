@@ -60,7 +60,7 @@ def install_user():
     if sys.platform != 'linux' or not getattr(sys, 'frozen', False):
         raise RuntimeError('Use the packaged Linux receiver with --install-user, or the Windows setup executable')
     source = Path(sys.executable).resolve().parent
-    target = data_home() / 'thumble/receiver/0.1.1'
+    target = data_home() / 'thumble/receiver/0.2.0'
     if source != target:
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copytree(source, target, dirs_exist_ok=True)

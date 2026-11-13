@@ -3,12 +3,17 @@ import assert from 'node:assert/strict';
 import worker from '../../apps/downloads/src/worker.js';
 
 const files = [
+  ['Thumble-Receiver-1.1.0.dmg', 'macos/receiver', 'application/x-apple-diskimage'],
   ['Thumble-Receiver-1.0.3.dmg', 'macos/receiver', 'application/x-apple-diskimage'],
   ['Thumble-Receiver-1.0.2.dmg', 'macos/receiver', 'application/x-apple-diskimage'],
   ['Thumble-Receiver-0.1.1-windows-x64-setup.exe', 'windows/receiver', 'application/vnd.microsoft.portable-executable'],
+  ['Thumble-Receiver-0.2.0-windows-x64-setup.exe', 'windows/receiver', 'application/vnd.microsoft.portable-executable'],
   ['Thumble-Receiver-0.1.1-linux-x64.tar.gz', 'linux/receiver', 'application/gzip'],
+  ['Thumble-Receiver-0.2.0-linux-x64.tar.gz', 'linux/receiver', 'application/gzip'],
   ['Thumble-Receiver-0.1.1-desktop-setup.txt', 'desktop/receiver', 'text/plain'],
+  ['Thumble-Receiver-0.2.0-desktop-setup.txt', 'desktop/receiver', 'text/plain'],
   ['Thumble-Receiver-0.1.1-desktop.json', 'desktop/receiver', 'application/json'],
+  ['Thumble-Receiver-0.2.0-desktop.json', 'desktop/receiver', 'application/json'],
 ];
 
 test('versioned releases and checksums stream only from their allowlisted keys', async () => {
@@ -29,8 +34,8 @@ test('versioned releases and checksums stream only from their allowlisted keys',
 });
 
 test('latest aliases redirect without touching storage or caching a release choice', async () => {
-  for (const [alias, name] of [['receiver-latest.dmg', files[0][0]], ['receiver-latest-windows.exe', files[2][0]],
-    ['receiver-latest-linux.tar.gz', files[3][0]], ['receiver-desktop-setup.txt', files[4][0]]]) {
+  for (const [alias, name] of [['receiver-latest.dmg', 'Thumble-Receiver-1.1.0.dmg'], ['receiver-latest-windows.exe', 'Thumble-Receiver-0.2.0-windows-x64-setup.exe'],
+    ['receiver-latest-linux.tar.gz', 'Thumble-Receiver-0.2.0-linux-x64.tar.gz'], ['receiver-desktop-setup.txt', 'Thumble-Receiver-0.2.0-desktop-setup.txt']]) {
     const response = await worker.fetch(new Request(`https://thumble.io/downloads/${alias}`), {});
     assert.equal(response.status, 302);
     assert.equal(response.headers.get('Location'), `/downloads/${name}`);

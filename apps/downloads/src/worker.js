@@ -1,23 +1,28 @@
 // Explicit public release allowlist: no access to other objects in the bucket.
 const releases = new Map([
+  ['Thumble-Receiver-1.1.0.dmg', ['macos/receiver', 'application/x-apple-diskimage']],
   ['Thumble-Receiver-1.0.3.dmg', ['macos/receiver', 'application/x-apple-diskimage']],
   ['Thumble-Receiver-1.0.2.dmg', ['macos/receiver', 'application/x-apple-diskimage']],
   ['Thumble-Receiver-1.0.1.dmg', ['macos/receiver', 'application/x-apple-diskimage']],
   ['Thumble-Receiver-1.0.0.dmg', ['macos/receiver', 'application/x-apple-diskimage']],
   ['Thumble-Receiver-0.1.0-windows-x64-setup.exe', ['windows/receiver', 'application/vnd.microsoft.portable-executable']],
   ['Thumble-Receiver-0.1.1-windows-x64-setup.exe', ['windows/receiver', 'application/vnd.microsoft.portable-executable']],
+  ['Thumble-Receiver-0.2.0-windows-x64-setup.exe', ['windows/receiver', 'application/vnd.microsoft.portable-executable']],
   ['Thumble-Receiver-0.1.0-linux-x64.tar.gz', ['linux/receiver', 'application/gzip']],
   ['Thumble-Receiver-0.1.1-linux-x64.tar.gz', ['linux/receiver', 'application/gzip']],
+  ['Thumble-Receiver-0.2.0-linux-x64.tar.gz', ['linux/receiver', 'application/gzip']],
   ['Thumble-Receiver-0.1.0-desktop-setup.txt', ['desktop/receiver', 'text/plain; charset=utf-8']],
   ['Thumble-Receiver-0.1.1-desktop-setup.txt', ['desktop/receiver', 'text/plain; charset=utf-8']],
+  ['Thumble-Receiver-0.2.0-desktop-setup.txt', ['desktop/receiver', 'text/plain; charset=utf-8']],
   ['Thumble-Receiver-0.1.0-desktop.json', ['desktop/receiver', 'application/json; charset=utf-8']],
   ['Thumble-Receiver-0.1.1-desktop.json', ['desktop/receiver', 'application/json; charset=utf-8']],
+  ['Thumble-Receiver-0.2.0-desktop.json', ['desktop/receiver', 'application/json; charset=utf-8']],
 ]);
 const aliases = new Map([
-  ['/downloads/receiver-latest.dmg', 'Thumble-Receiver-1.0.3.dmg'],
-  ['/downloads/receiver-latest-windows.exe', 'Thumble-Receiver-0.1.1-windows-x64-setup.exe'],
-  ['/downloads/receiver-latest-linux.tar.gz', 'Thumble-Receiver-0.1.1-linux-x64.tar.gz'],
-  ['/downloads/receiver-desktop-setup.txt', 'Thumble-Receiver-0.1.1-desktop-setup.txt'],
+  ['/downloads/receiver-latest.dmg', 'Thumble-Receiver-1.1.0.dmg'],
+  ['/downloads/receiver-latest-windows.exe', 'Thumble-Receiver-0.2.0-windows-x64-setup.exe'],
+  ['/downloads/receiver-latest-linux.tar.gz', 'Thumble-Receiver-0.2.0-linux-x64.tar.gz'],
+  ['/downloads/receiver-desktop-setup.txt', 'Thumble-Receiver-0.2.0-desktop-setup.txt'],
 ]);
 
 const reviewPath = '/downloads/app-review/receiver.zip';

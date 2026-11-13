@@ -1,0 +1,20 @@
+{
+  "version": "1.1.0",
+  "build": "5",
+  "platform": "macos",
+  "architecture": [
+    "arm64",
+    "x86_64"
+  ],
+  "filename": "Thumble-Receiver-1.1.0.dmg",
+  "bytes": 2721340,
+  "sha256": "bae718d9d8cfb47cf1b73d88dbf5a3e9c70b9ea519923601809af5693ffd9fac",
+  "url": "https://thumble.io/downloads/Thumble-Receiver-1.1.0.dmg",
+  "source": "branch release/receivers-studio (6b1de62)",
+  "change": "Ships the redesigned Thumble Studio desktop editor (keyboard keys, chords, mouse buttons and trackpads) and the Nov 12 plan requirement: the free demo is retired and controller output needs a plan or free trial from the phone app.",
+  "notarization": {
+    "app": "839492e7-290e-42a6-a939-d5091e602707",
+    "dmg": "3f675d92-f2d0-4d3e-a570-ad1c21065cca"
+  },
+  "status": "published"
+}
