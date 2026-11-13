@@ -19,6 +19,16 @@ Worktree: `/private/tmp/thumble-desktop-workspace-20261111`, branch `codex/share
 
 Shared source lives in `packages/desktop-workspace`. Assets are built into receiver resources during native packaging. Requests and responses use structured JSON with request IDs; only native code accesses profile files or receiver lifecycle. Each adapter exposes the same operations and response shapes. The existing phone/profile wire protocol remains authoritative for delivery and acknowledgement.
 
+## Interface
+
+Studio follows the Native redesign (the "Desktop · Thumble Studio" boards on the redesign canvas). It is dark by default and follows the system light appearance.
+
+- **Design**: grouped controls list with an Add palette (Stick and Trigger disable when both analog outputs are used), the phone canvas with separate faces and dashed touch areas, the reserved Chat and Thumble menu zones, corner handles, a size badge and snapping guides (Alt skips snapping), and a type-specific inspector (Sends, Feel, Appearance, Position and size). Layout problems are numbered on the canvas and in the inspector with one-click fixes where a fix is unambiguous; Save stays disabled until the layout passes.
+- **Send to phone** opens a review sheet, then tracks pause, send and the phone's layout acknowledgement from receiver snapshots. Offline, it selects the revision for the next connection.
+- **Changed elsewhere**: when the open controller gains a newer revision while there are unsaved edits, a sheet compares both and offers Save mine as a copy, Open the newer version or Export my draft.
+- **Controllers**: filterable, searchable library (Yours, Built in, From your account) with previews and a detail panel for open, use on phone, duplicate, export, rename and delete. Entries only carry `editable`; built-in versus account origin is inferred from the built-in profile ids.
+- **Connections**: phone status or pairing code, three readiness checks (controller output, phone, controller confirmed on phone), WoW label sync, start at sign-in, restart receiver and driver/permissions. The phone's name and screen size are not part of the receiver snapshot, so Studio says "your phone" and keeps the manual canvas-size picker.
+
 ## Verification boundary
 
 Automated UI and native input tests establish their specific contracts. They do not establish real-game latency, home-network pairing, firewall prompts, suspend/resume, or physical-phone behavior on Windows/Linux. Those remain explicit external beta acceptance checks rather than claims inferred from green CI.

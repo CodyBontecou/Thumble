@@ -358,18 +358,19 @@ def smoke(args, path):
     deadline = monotonic() + 60
     result = {'step': 0, 'error': None}
     click = "Array.from(document.querySelectorAll('button')).find(b=>b.textContent===%s)?.click()"
+    contains = "Array.from(document.querySelectorAll('button')).find(b=>b.textContent.includes(%s))?.click()"
 
     def received(text):
         try:
             if monotonic() > deadline:
                 raise RuntimeError('Shared desktop workspace did not finish its native save/send flow: ' + str(text)[:200])
             step = result['step']
-            if step == 0 and text and 'your controllers' in text.lower():
+            if step == 0 and text and 'layout check' in text.lower():
                 result['step'] = 1
-                window.studio.page.runJavaScript((click % json.dumps('Controllers')) + ';' + (click % json.dumps('Keyboard & mouse starter')))
+                window.studio.page.runJavaScript((click % json.dumps('Controllers')) + ';' + (click % json.dumps('New controller')) + ';' + (contains % json.dumps('Keyboard and mouse starter')))
             elif step == 1 and text and 'Unsaved changes' in text:
                 result['step'] = 2
-                window.studio.page.runJavaScript(click % json.dumps('Save controller'))
+                window.studio.page.runJavaScript(click % json.dumps('Save'))
             elif step == 2 and text and 'Saved on this computer.' in text:
                 store = ProfileStore(args.profile_dir).read()
                 if store.get('active') is not None:
@@ -377,7 +378,8 @@ def smoke(args, path):
                 if not any(e.get('desktopEdited') for e in store['profiles']):
                     raise RuntimeError('Native bridge did not save a desktop controller')
                 result['step'] = 3
-                window.studio.page.runJavaScript(click % json.dumps('Send to phone'))
+                # Send opens a review sheet; the phone is offline, so confirm selection.
+                window.studio.page.runJavaScript((click % json.dumps('Send to phone')) + ';' + (click % json.dumps('Select for phone')))
             elif step == 3 and text and 'Selected. This controller' in text:
                 active = ProfileStore(args.profile_dir).read().get('active')
                 if not active or active['profileRevision'] != 1 or not active['profile']['id'].startswith('desktop-'):

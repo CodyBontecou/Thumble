@@ -87,3 +87,55 @@ test('a key control face follows its keys unless the player renamed it', () => {
   assert.equal(profile.controls.at(-1).label, 'Potion');
   assert.equal(setOutput(desktopProfile, 'left-click', 'mouse:right').controls.find(control => control.id === 'left-click').label, 'Left click', 'mouse labels are untouched');
 });
+
+test('layout problems name controls in player language and one-click fixes clear them', async () => {
+  const { layoutProblems, suggestFix, updateControl, canvasSize } = await import('../src/model.js');
+  const base = copy(defaultProfile);
+  const rt = base.controls.find(c => c.id === 'rt');
+  const covered = updateControl(base, 'rt', { frame: { ...rt.frame, x: 1 - rt.frame.width, y: 0 } });
+  const [menu] = layoutProblems(covered, canvasSize);
+  assert.equal(menu.code, 'obscured_control');
+  assert.match(menu.title, /RT covers the Thumble menu/);
+  const moved = suggestFix(covered, menu, canvasSize);
+  assert.match(moved.label, /^Move RT /);
+  assert.deepEqual(layoutProblems(moved.profile, canvasSize), []);
+  const up = base.controls.find(c => c.id === 'up');
+  const tiny = updateControl(base, 'up', { frame: { ...up.frame, width: .03, height: .05 } });
+  const [small] = layoutProblems(tiny, canvasSize);
+  assert.equal(small.code, 'target_too_small');
+  const grown = suggestFix(tiny, small, canvasSize);
+  assert.ok(layoutProblems(grown.profile, canvasSize).every(p => !p.controls.includes('up') || p.code !== 'target_too_small'));
+});
+
+test('corner resizing keeps the opposite corner fixed and respects minimum sizes', async () => {
+  const { resizeControl, canvasSize } = await import('../src/model.js');
+  const profile = copy(defaultProfile);
+  const a = profile.controls.find(c => c.id === 'a').frame;
+  const next = resizeControl(profile, 'a', 'nw', -.02, -.02, canvasSize).controls.find(c => c.id === 'a').frame;
+  assert.ok(Math.abs(next.x + next.width - (a.x + a.width)) < 1e-9 && Math.abs(next.y + next.height - (a.y + a.height)) < 1e-9);
+  const shrunk = resizeControl(profile, 'a', 'se', -1, -1, canvasSize).controls.find(c => c.id === 'a').frame;
+  assert.ok(shrunk.width * canvasSize.width >= 48 - 1e-6 && shrunk.height * canvasSize.height >= 48 - 1e-6);
+});
+
+test('snapping aligns a dragged control with neighbours and reports guides', async () => {
+  const { snapFrame, canvasSize } = await import('../src/model.js');
+  const profile = copy(defaultProfile);
+  const y = profile.controls.find(c => c.id === 'y').frame;
+  const a = profile.controls.find(c => c.id === 'a').frame;
+  const nearly = { ...a, x: y.x + 2 / canvasSize.width };
+  const { frame, guides } = snapFrame(profile, 'a', nearly, canvasSize);
+  assert.ok(Math.abs(frame.x - y.x) < 1e-9);
+  assert.notEqual(guides.x, null);
+});
+
+test('controller sources, groups and analog availability drive the library and palette', async () => {
+  const { profileSource, controlGroup, canAdd } = await import('../src/model.js');
+  const profile = copy(defaultProfile);
+  assert.equal(profileSource({ profile, editable: false }), 'Built in');
+  assert.equal(profileSource({ profile: { ...profile, id: 'cloud-left-handed' }, editable: false }), 'From your account');
+  assert.equal(profileSource({ profile, editable: true }), 'Yours');
+  const group = id => controlGroup(profile.controls.find(c => c.id === id), profile.mappings.find(m => m.controlId === id));
+  assert.deepEqual(['left-stick', 'a', 'up', 'lb', 'rt', 'start'].map(group), ['Sticks', 'Face buttons', 'D-pad', 'Shoulders', 'Shoulders', 'Other']);
+  assert.equal(canAdd(profile, 'stick'), false);
+  assert.equal(canAdd(profile, 'key'), true);
+});
