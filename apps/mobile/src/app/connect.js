@@ -76,7 +76,7 @@ export default function ConnectScreen() {
     await save({ wowSyncStatus: 'skipped', wowSyncContext: context });
     setBusy(false);
   }
-  function practice() { router.dismissTo('/'); }
+  function practice() { router.dismissTo('/?practice=1'); }
   async function later() { if (await save({ dismissed: true })) router.dismissTo('/'); }
 
   const lights = <View style={{ gap: 8 }}>
@@ -120,7 +120,8 @@ export default function ConnectScreen() {
     {stage === 3 && <>
       <Eyebrow inverse>{!native && sync.character ? `${sync.character} · ConsolePort found` : 'All three lights on'}</Eyebrow>
       <Text style={[ui.heading, { fontSize: 26, lineHeight: 28 }]}>{native ? 'Your gamepad is live.' : 'Your controls are on your phone.'}</Text>
-      <Text style={ui.muted}>Next, a one-minute practice run on the real controller. Stand somewhere quiet in game.</Text>
+      <Text style={ui.muted}>Pairing and layout delivery work. Practice on your phone before choosing a plan. Game input needs an active plan or store trial; pairing alone does not prove game compatibility.</Text>
+      {!access?.pro && <Button onPress={() => router.push('/pro')} testID="setup-choose-plan">Choose a plan</Button>}
       {landscape && <Button onPress={practice} testID="connect-practice">Open controller</Button>}
     </>}
     {!!error && <Text accessibilityRole="alert" style={ui.error}>{error}</Text>}

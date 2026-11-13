@@ -21,7 +21,7 @@ export default function WelcomeScreen() {
     if (await save({ welcomeSeen: true })) router.replace(path);
     else setBusy(false);
   }
-  const footnote = `Mac · Windows · Linux${landscape ? '  ·  ' : '\n'}7 days free, then from $0.99/week${familyAvailable(Platform.OS) ? ' · family plans' : ''}`;
+  const footnote = `Mac · Windows · Linux${landscape ? '  ·  ' : '\n'}Check pairing before choosing a plan${familyAvailable(Platform.OS) ? ' · family plans' : ''}`;
   const copy = <View style={{ gap: 12 }}>
     <Eyebrow>For games on your computer</Eyebrow>
     <Text accessibilityRole="header" style={[ui.title, { fontSize: landscape ? 34 : 34, lineHeight: 40 }]}>{'Eyes on the game.\nThumbs on your phone.'}</Text>
@@ -29,7 +29,7 @@ export default function WelcomeScreen() {
     {!!error && <Text accessibilityRole="alert" style={ui.error}>{error}</Text>}
   </View>;
   const actions = <View style={{ gap: 12, ...(landscape ? { flexDirection: 'row', alignItems: 'center' } : {}) }}>
-    <Button disabled={!state.loaded || busy} onPress={() => begin('/pro')} testID="welcome-start">Start 7 days free</Button>
+    <Button disabled={!state.loaded || busy} onPress={() => begin('/connect')} testID="welcome-start">Check my setup</Button>
     <Button secondary disabled={!state.loaded || busy} onPress={() => begin('/pro?restore=1')}>I already have a plan</Button>
   </View>;
   return <SafeAreaProvider><SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
@@ -49,7 +49,7 @@ export default function WelcomeScreen() {
       {copy}
       <View style={{ flex: 1 }} />
       <View style={{ gap: 8 }}>
-        <Button disabled={!state.loaded || busy} onPress={() => begin('/pro')} testID="welcome-start">Start 7 days free</Button>
+        <Button disabled={!state.loaded || busy} onPress={() => begin('/connect')} testID="welcome-start">Check my setup</Button>
         <Button secondary disabled={!state.loaded || busy} onPress={() => begin('/pro?restore=1')}>I already have a plan</Button>
       </View>
       <Text style={[ui.small, { textAlign: 'center', marginTop: 12 }]}>{footnote}</Text>
