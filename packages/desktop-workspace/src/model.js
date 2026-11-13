@@ -1,4 +1,4 @@
-import { assertProfile, validateLayout, BUTTONS, TRIGGERS, defaultProfile, desktopKeys, desktopLabels, keyChordLabel, mouseOutputs } from '../../controller/src/index.js';
+import { assertProfile, validateLayout, layoutLimits, BUTTONS, TRIGGERS, defaultProfile, builtInProfiles, desktopKeys, desktopLabels, keyChordLabel, mouseOutputs } from "../../controller/src/index.js";
 
 export const copy = value => JSON.parse(JSON.stringify(value));
 export const signature = value => JSON.stringify(value, (_key, item) => item && typeof item === 'object' && !Array.isArray(item) ? Object.fromEntries(Object.keys(item).sort().map(key => [key, item[key]])) : item);
@@ -126,3 +126,114 @@ export const desktopProfile = {
   ],
   mappings: [{ controlId: 'trackpad', outputs: ['pointer'] },{ controlId: 'left-click', outputs: ['mouse:left'] },{ controlId: 'right-click', outputs: ['mouse:right'] },{ controlId: 'space', outputs: ['key:Space'] }],
 };
+
+/* ---- Studio helpers: grouping, structured layout checks, fixes, resizing ---- */
+export const controlName = control => control.customLabel ?? control.label;
+export const builtInIds = new Set(builtInProfiles.map(profile => profile.id));
+/** Where a saved controller came from. Native entries only say whether they are editable. */
+export function profileSource(entry) {
+  if (entry.editable) return 'Yours';
+  return builtInIds.has(entry.profile.id) ? 'Built in' : 'From your account';
+}
+export function controlGroup(control, mapping) {
+  const output = mapping?.outputs[0];
+  if (control.type === 'stick') return 'Sticks';
+  if (['key', 'mouse', 'trackpad'].includes(control.type)) return 'Keys and mouse';
+  if (control.type === 'trigger' || ['lb', 'rb'].includes(output)) return 'Shoulders';
+  if (['a', 'b', 'x', 'y'].includes(output)) return 'Face buttons';
+  if (['up', 'down', 'left', 'right'].includes(output)) return 'D-pad';
+  return 'Other';
+}
+export const groupOrder = ['Sticks', 'Face buttons', 'D-pad', 'Shoulders', 'Keys and mouse', 'Other'];
+/** Control types that can still be added without displacing an analog output. */
+export function canAdd(profile, type) {
+  if (profile.controls.length >= 64) return false;
+  if (!['stick', 'trigger'].includes(type)) return true;
+  const used = new Set(profile.mappings.flatMap(m => m.outputs));
+  return outputs(type).some(output => !used.has(output));
+}
+
+const pt = (control, viewport) => {
+  const f = controlBox(control, viewport);
+  return { x: f.x * viewport.width, y: f.y * viewport.height, width: f.width * viewport.width, height: f.height * viewport.height };
+};
+/** Layout problems in player language, each tied to the controls involved. */
+export function layoutProblems(profile, viewport = canvasSize) {
+  let result;
+  try { assertProfile(profile); result = validateLayout(profile, viewport); }
+  catch (error) { return [{ code: 'invalid_profile', controls: [], title: error.message, detail: '' }]; }
+  const byId = new Map(profile.controls.map(control => [control.id, control]));
+  const problems = [];
+  if (!profile.name.trim()) problems.push({ code: 'name', controls: [], title: 'Give this controller a name', detail: 'Names help you pick it on your phone.' });
+  for (const error of result.errors) {
+    const [first, second] = error.controls.map(id => byId.get(id));
+    if (error.code === 'target_too_small' && first) {
+      const box = pt(first, viewport), minimum = first.type === 'stick' ? layoutLimits.minimumStick : layoutLimits.minimumTarget;
+      problems.push({ ...error, title: `${controlName(first)} is too small to hit`, detail: `${Math.round(box.width)} × ${Math.round(box.height)} pt. Touch areas need at least ${minimum} pt each way.` });
+    } else if (error.code === 'overlapping_controls' && first && second) {
+      problems.push({ ...error, title: `${controlName(first)} overlaps ${controlName(second)}`, detail: 'A press could hit both. Move one so the touch areas don’t touch.' });
+    } else if (error.code === 'obscured_control' && first) {
+      const area = /Chat/.test(error.message) ? 'Chat' : 'Thumble menu';
+      problems.push({ ...error, area, title: `${controlName(first)} covers the ${area} button`, detail: `The top of the screen keeps space for ${area}.` });
+    } else problems.push({ ...error, title: error.message, detail: '' });
+  }
+  return problems;
+}
+const problemsFor = (profile, id, viewport) => layoutProblems(profile, viewport).filter(problem => problem.controls.includes(id)).length;
+const withFrame = (profile, id, frame) => updateControl(profile, id, { frame });
+const fits = f => f.x >= 0 && f.y >= 0 && f.x + f.width <= 1 + 1e-9 && f.y + f.height <= 1 + 1e-9;
+/** One-click repair for a problem, or null when only the player can decide. */
+export function suggestFix(profile, problem, viewport = canvasSize) {
+  const id = problem.controls.at(-1), control = profile.controls.find(c => c.id === id);
+  if (!control) return null;
+  const f = control.frame, W = viewport.width, H = viewport.height;
+  const best = (candidates) => {
+    const scored = candidates.filter(c => fits(c.frame)).map(c => ({ ...c, profile: withFrame(profile, id, c.frame) })).map(c => ({ ...c, count: problemsFor(c.profile, id, viewport) }));
+    scored.sort((a, b) => a.count - b.count || a.cost - b.cost);
+    return scored[0] && scored[0].count < problemsFor(profile, id, viewport) ? { label: scored[0].label, profile: scored[0].profile } : null;
+  };
+  if (problem.code === 'target_too_small') {
+    const minimum = (control.type === 'stick' ? layoutLimits.minimumStick : layoutLimits.minimumTarget) + 0.5;
+    const width = Math.max(f.width, minimum / W), height = Math.max(f.height, minimum / H);
+    const x = Math.min(Math.max(0, f.x - (width - f.width) / 2), 1 - width), y = Math.min(Math.max(0, f.y - (height - f.height) / 2), 1 - height);
+    const frame = { x, y, width, height };
+    return { label: `Enlarge to ${Math.round(width * W)} × ${Math.round(height * H)}`, profile: withFrame(profile, id, frame) };
+  }
+  // Move the control the shortest distance that clears it. Steps are in points.
+  const candidates = [];
+  for (let step = 4; step <= 240; step += 4) {
+    for (const [dx, dy, word] of [[-step, 0, 'left'], [step, 0, 'right'], [0, step, 'down'], [0, -step, 'up']]) {
+      candidates.push({ cost: step, label: `Move ${controlName(control)} ${word} ${step} pt`, frame: { ...f, x: f.x + dx / W, y: f.y + dy / H } });
+    }
+  }
+  return best(candidates);
+}
+/** Resize from any corner while keeping the opposite corner fixed. */
+export function resizeControl(profile, id, corner, dx, dy, viewport = canvasSize) {
+  const control = profile.controls.find(item => item.id === id);
+  if (!control) return profile;
+  const f = control.frame, minW = (control.type === 'stick' ? 96 : 48) / viewport.width, minH = (control.type === 'stick' ? 96 : 48) / viewport.height;
+  let left = f.x, top = f.y, right = f.x + f.width, bottom = f.y + f.height;
+  if (corner.includes('w')) left = clamp(left + dx, 0, right - minW); else right = clamp(right + dx, left + minW, 1);
+  if (corner.includes('n')) top = clamp(top + dy, 0, bottom - minH); else bottom = clamp(bottom + dy, top + minH, 1);
+  return updateControl(profile, id, { frame: { x: left, y: top, width: right - left, height: bottom - top } });
+}
+/** Snap a moving frame's edges and centre to other controls; returns guide lines in 0–1 space. */
+export function snapFrame(profile, id, frame, viewport = canvasSize, tolerance = 4) {
+  const tx = tolerance / viewport.width, ty = tolerance / viewport.height;
+  const others = profile.controls.filter(c => c.id !== id).map(c => c.frame);
+  const xs = others.flatMap(o => [o.x, o.x + o.width / 2, o.x + o.width]).concat([.5]);
+  const ys = others.flatMap(o => [o.y, o.y + o.height / 2, o.y + o.height]);
+  const pick = (points, values, limit) => {
+    let found = null;
+    for (const [offset] of points) for (const value of values) {
+      const delta = value - offset;
+      if (Math.abs(delta) <= limit && (!found || Math.abs(delta) < Math.abs(found.delta))) found = { delta, value };
+    }
+    return found;
+  };
+  const sx = pick([[frame.x], [frame.x + frame.width / 2], [frame.x + frame.width]], xs, tx);
+  const sy = pick([[frame.y], [frame.y + frame.height / 2], [frame.y + frame.height]], ys, ty);
+  const next = { ...frame, x: clamp(frame.x + (sx?.delta ?? 0), 0, 1 - frame.width), y: clamp(frame.y + (sy?.delta ?? 0), 0, 1 - frame.height) };
+  return { frame: next, guides: { x: sx ? sx.value : null, y: sy ? sy.value : null } };
+}
