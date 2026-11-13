@@ -388,6 +388,8 @@ def smoke(args, path):
                 if not {'key', 'mouse', 'trackpad'} <= types:
                     raise RuntimeError('Keyboard/mouse starter did not survive native persistence')
                 result['step'] = 4
+                # Close the send sheet so the capture shows the stable canvas.
+                window.studio.page.runJavaScript(click % json.dumps('Done'))
             elif step == 4:
                 window.studio.page.runJavaScript("document.querySelectorAll('.pad-control').length > 0 && document.querySelector('#canvas').getBoundingClientRect().width > 300 && Number(getComputedStyle(document.querySelector('.device')).opacity) >= 0.99 && document.getAnimations().every(a => a.playState !== 'running')", ready_to_capture)
                 return
