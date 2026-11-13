@@ -1,4 +1,4 @@
-import { assertProfile, validateLayout, BUTTONS, TRIGGERS, defaultProfile, desktopKeys, desktopLabels, mouseOutputs } from '../../controller/src/index.js';
+import { assertProfile, validateLayout, BUTTONS, TRIGGERS, defaultProfile, desktopKeys, desktopLabels, keyChordLabel, mouseOutputs } from '../../controller/src/index.js';
 
 export const copy = value => JSON.parse(JSON.stringify(value));
 export const signature = value => JSON.stringify(value, (_key, item) => item && typeof item === 'object' && !Array.isArray(item) ? Object.fromEntries(Object.keys(item).sort().map(key => [key, item[key]])) : item);
@@ -62,7 +62,12 @@ export function setOutput(profile, id, output, settings = {}) {
   if (!control || !outputs(control.type).includes(output)) throw Error('Choose a compatible gamepad output.');
   const target = control.type === 'stick' ? [output, output === 'lx' ? 'ly' : 'ry'] : [output];
   if (['stick', 'trigger'].includes(control.type) && profile.mappings.some(m => m.controlId !== id && m.outputs.some(o => target.includes(o)))) throw Error('That analog output is already assigned.');
-  return { ...profile, mappings: profile.mappings.map(mapping => mapping.controlId === id ? { ...mapping, ...settings, outputs: target } : mapping) };
+  return keyLabel({ ...profile, mappings: profile.mappings.map(mapping => mapping.controlId === id ? { ...mapping, ...settings, outputs: target } : mapping) }, id);
+}
+/** A key control's face names the keys it presses unless the player renamed it. */
+function keyLabel(profile, id) {
+  const outputs = profile.mappings.find(mapping => mapping.controlId === id)?.outputs ?? [];
+  return { ...profile, controls: profile.controls.map(control => control.id === id && control.type === 'key' && control.customLabel === undefined ? { ...control, label: keyChordLabel(outputs) } : control) };
 }
 
 export function removeControl(profile, id) {
@@ -108,7 +113,7 @@ export class Editor {
 }
 
 export function setChord(profile, id, keys) {
-  const next = { ...profile, mappings: profile.mappings.map(m => m.controlId === id ? { controlId: id, outputs: keys } : m) };
+  const next = keyLabel({ ...profile, mappings: profile.mappings.map(m => m.controlId === id ? { controlId: id, outputs: keys } : m) }, id);
   assertProfile(next); return next;
 }
 export const desktopProfile = {

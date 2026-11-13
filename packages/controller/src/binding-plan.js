@@ -6,7 +6,7 @@ export const utilityActions = ['JUMP', 'OPENCHAT', 'TARGETNEARESTENEMY', 'TARGET
 export function bindingChange(snapshot, profile, intent) {
   const control = profile.controls.find(item => item.id === intent.controlId);
   const mapping = profile.mappings.find(item => item.controlId === intent.controlId);
-  if (!control || control.type === 'stick' || !mapping || mapping.outputs.length !== 1) throw Error('Choose a gamepad button or trigger.');
+  if (!control || !['button', 'trigger'].includes(control.type) || !mapping || mapping.outputs.length !== 1) throw Error('Choose a gamepad button or trigger.');
   const key = gamepadKeys[mapping.outputs[0]];
   if (!key || snapshot.reserved[key]) throw Error(`${key ?? 'This output'} is reserved for ${snapshot.reserved[key] ?? 'the controller'}.`);
   const binding = snapshot.bindings.find(item => item.key === key);

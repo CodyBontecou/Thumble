@@ -6,7 +6,7 @@
 - Familiar Xbox-style landscape controller: two sticks, D-pad, ABXY, bumpers, triggers, stick clicks, View and Menu. Multitouch is required.
 - Minimal macOS menu-bar receiver with QR pairing, input diagnostics and WoW setup help.
 - Local Wi-Fi only for launch; one active phone per receiver as an initial implementation assumption.
-- Layouts and mappings are declarative and editable through the local MCP tools only. No visual editor.
+- Layouts and mappings are declarative. Players edit them visually in the phone's layout editor and the desktop workspace; the local MCP tools edit the same profiles.
 - Public App Store and Google Play launch target: November 4, 2026. Signed/notarized direct Mac distribution is the initial proposal, subject to the HID path. A Mac App Store release has not been assumed.
 
 ## Component boundaries

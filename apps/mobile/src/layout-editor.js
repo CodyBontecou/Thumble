@@ -1,7 +1,78 @@
-import { BUTTONS, TRIGGERS, layoutLimits, validateLayout } from '@tapping/controller';
+import { BUTTONS, TRIGGERS, desktopKeys, desktopLabels, keyChordLabel, keyModifiers, keyParts, layoutLimits, validateLayout } from '@tapping/controller';
 
-const names = { back: 'View', start: 'Menu', guide: 'Guide', lb: 'Left bumper', rb: 'Right bumper', lt: 'Left trigger', rt: 'Right trigger', ls: 'Left stick click', rs: 'Right stick click', lx: 'Left stick', rx: 'Right stick', up: 'D-pad up', down: 'D-pad down', left: 'D-pad left', right: 'D-pad right' };
-export const outputName = output => names[output] ?? output.toUpperCase();
+const names = { back: 'View', start: 'Menu', guide: 'Guide', lb: 'Left bumper', rb: 'Right bumper', lt: 'Left trigger', rt: 'Right trigger', ls: 'Left stick click', rs: 'Right stick click', lx: 'Left stick', rx: 'Right stick', up: 'D-pad up', down: 'D-pad down', left: 'D-pad left', right: 'D-pad right', 'mouse:left': 'Left click', 'mouse:right': 'Right click', 'mouse:middle': 'Middle click', pointer: 'Trackpad' };
+export const outputName = output => names[output] ?? desktopLabels[output] ?? output.toUpperCase();
+
+/** "Hold with" toggles, in chord order. */
+const modifierLabels = { 'key:ShiftLeft': 'Shift', 'key:ControlLeft': 'Ctrl', 'key:AltLeft': 'Alt / Option', 'key:MetaLeft': 'Win / Command' };
+export const KEY_MODIFIERS = Object.freeze(keyModifiers.map(key => ({ key, label: modifierLabels[key] })));
+const modifierKeys = keyModifiers;
+/** The shared key registry split into pages a phone sheet can show. Every key
+ * except the left-hand modifiers (offered as "Hold with" toggles) appears once. */
+export const KEY_GROUPS = (() => {
+  const pages = [
+    { id: 'numbers', name: '1–0', pattern: /^key:Digit/ }, { id: 'letters', name: 'A–Z', pattern: /^key:Key[A-Z]$/ },
+    { id: 'function', name: 'F1–F20', pattern: /^key:F\d+$/ }, { id: 'numpad', name: 'Numpad', pattern: /^key:Numpad/ },
+  ].map(({ id, name, pattern }) => ({ id, name, keys: desktopKeys.filter(key => pattern.test(key)) }));
+  const paged = new Set(pages.flatMap(page => page.keys));
+  return Object.freeze([...pages, { id: 'other', name: 'Other', keys: desktopKeys.filter(key => !paged.has(key) && !modifierKeys.includes(key)) }]);
+})();
+
+export { keyParts };
+export const chordLabel = keyChordLabel;
+/** The first number key no other key control uses; number keys are the usual action-bar keys. */
+function nextKey(profile) {
+  const used = new Set(profile.mappings.flatMap(item => item.outputs));
+  return desktopKeys.find(key => key.startsWith('key:Digit') && !used.has(key)) ?? desktopKeys.find(key => !used.has(key) && !modifierKeys.includes(key)) ?? 'key:Digit1';
+}
+
+function setKeys(profile, id, outputs) {
+  const { modifiers, main } = keyParts(outputs);
+  const keys = [...modifiers, ...main];
+  if (!keys.length || keys.length > 6 || new Set(keys).size !== keys.length || keys.some(key => !desktopKeys.includes(key))) return profile;
+  return {
+    ...profile,
+    mappings: profile.mappings.map(item => item.controlId === id ? { controlId: id, outputs: keys } : item),
+    controls: profile.controls.map(item => item.id === id ? { ...item, label: chordLabel(keys) } : item),
+  };
+}
+/** Makes `key` the key this control presses, keeping any held modifiers. */
+export function pickKey(profile, id, key) {
+  const control = profile.controls.find(item => item.id === id);
+  const mapping = profile.mappings.find(item => item.controlId === id);
+  if (control?.type !== 'key' || !mapping || modifierKeys.includes(key)) return profile;
+  return setKeys(profile, id, [...keyParts(mapping.outputs).modifiers, key]);
+}
+/** Adds or removes a held modifier. A control always keeps at least one key. */
+export function toggleModifier(profile, id, modifier) {
+  const control = profile.controls.find(item => item.id === id);
+  const mapping = profile.mappings.find(item => item.controlId === id);
+  if (control?.type !== 'key' || !mapping || !modifierKeys.includes(modifier)) return profile;
+  return setKeys(profile, id, mapping.outputs.includes(modifier) ? mapping.outputs.filter(key => key !== modifier) : [...mapping.outputs, modifier]);
+}
+/** Switches a button between sending a gamepad button and a keyboard key.
+ * Gamepad artwork and colours belong to gamepad outputs, so a key drops them;
+ * a button returning to the gamepad takes its new output's artwork. */
+export function setControlKind(profile, id, kind) {
+  const control = profile.controls.find(item => item.id === id);
+  if (!control || id === 'chat') return profile;
+  if (kind === 'keyboard' && control.type === 'button') {
+    const outputs = [nextKey(profile)];
+    const { icon: _icon, layers: _layers, badge: _badge, color: _color, ...rest } = control;
+    return {
+      ...profile,
+      controls: profile.controls.map(item => item.id === id ? { ...rest, type: 'key', label: chordLabel(outputs) } : item),
+      mappings: profile.mappings.map(item => item.controlId === id ? { controlId: id, outputs } : item),
+    };
+  }
+  if (kind === 'gamepad' && control.type === 'key') {
+    const owned = new Set(profile.mappings.filter(item => item.controlId !== id).flatMap(item => item.outputs));
+    const output = BUTTONS.find(button => !owned.has(button)) ?? BUTTONS[0];
+    const asButton = { ...profile, controls: profile.controls.map(item => item.id === id ? { ...item, type: 'button' } : item) };
+    return changeOutput(asButton, id, [output]);
+  }
+  return profile;
+}
 
 export function availableOutputs(profile, control) {
   if (['key', 'mouse', 'trackpad'].includes(control.type)) return [profile.mappings.find(item => item.controlId === control.id).outputs];
@@ -46,7 +117,7 @@ export function addControl(profile, id, viewport, type = 'button') {
   const side = (type === 'stick' ? layoutLimits.minimumStick : layoutLimits.minimumTarget) + 8;
   const width = side / viewport.width, height = side / viewport.height;
   if (width > 1 || height > 1 || profile.controls.length >= 64) return profile;
-  const options = availableOutputs(profile, { id, type });
+  const options = type === 'key' ? [[nextKey(profile)]] : availableOutputs(profile, { id, type });
   const outputs = options.find(([key]) => !profile.mappings.some(mapping => mapping.outputs.includes(key))) ?? options[0];
   if (!outputs) return profile;
   const donor = profile.controls.find(control => control.id !== 'chat' && profile.mappings.some(mapping => mapping.controlId === control.id && mapping.outputs[0] === outputs[0]));

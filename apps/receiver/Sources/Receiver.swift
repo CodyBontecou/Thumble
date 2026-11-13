@@ -51,6 +51,8 @@ final class Receiver {
     private var expiry = 0.0
     private var fingerprint = ""
     private let desktopOutput = DesktopInput()
+    private var desktopFailure: String?
+    private var accessibilityPrompted = false
     private var state = PadState.neutral
     var onStatus: ((String) -> Void)?
     var onInvitation: ((String) -> Void)?
@@ -322,7 +324,10 @@ final class Receiver {
         if playRequested && !accessStarting && !accessRunning {
             accessStarting = true; access.start()
         }
-        if !apply(chatBusy || !outputAllowed ? .neutral : next) { disconnect("Virtual gamepad report failed"); return }
+        if !apply(chatBusy || !outputAllowed ? .neutral : next) {
+            let reason = desktopFailure ?? "Virtual gamepad report failed"
+            desktopFailure = nil; disconnect(reason); return
+        }
         acknowledge(connection, type: "ack", sequence: sequence, timing: diagnostics == nil ? nil : ["receivedMs": receivedMs, "hidMs": ProcessInfo.processInfo.systemUptime * 1000], udp: udp)
     }
     private func handleProfiles(_ message: [String: Any], connection: NWConnection) {
@@ -483,6 +488,7 @@ final class Receiver {
         // Reconnect restores the saved layout whether or not the phone has a plan.
         profileRevision = savedProfileRevision
         guard apply(.neutral) else { disconnect("Could not release controls before changing layout"); return }
+        desktopOutput.forgetAccess()
         leases.removeAll(); layoutPending = true; paused = true
         layoutDeadline = ProcessInfo.processInfo.systemUptime + 5
         send(["type": "layout", "revision": profileRevision, "profile": activeProfile], to: peer)
@@ -500,6 +506,7 @@ final class Receiver {
         let lease = UUID().uuidString; leases[lease] = InputTiming.leaseDeadline(issuedAt: now)
         if leases.count > 256 { disconnect("Input rate exceeded"); return }
         var response: [String: Any] = ["type": type, "seq": sequence, "lease": lease]
+        if type == "ack", desktopOutput.blocked { response["desktop"] = "permission" }
         if type == "ready" { response["chat"] = 1; response["profiles"] = 1; response["access"] = 1; response["cloudAdoption"] = 1; response["phoneProfileSave"] = 1; response["phoneBindings"] = 1; response["desktopInput"] = 1 }
         if let reconnectToken { response["reconnectToken"] = reconnectToken }
         if type == "ready", diagnostics != nil { response["diagnostics"] = true }
@@ -523,14 +530,23 @@ final class Receiver {
         let result = next.report.withUnsafeBufferPointer { tapping_gamepad_send(gamepad, $0.baseAddress!) }
         audit?.record(next.report, result: result)
         state = next
-        do { try desktopOutput.write(next.desktop) } catch { status(error.localizedDescription); return false }
+        do {
+            if try desktopOutput.deliver(next.desktop) { desktopAccessChanged() }
+        } catch { desktopFailure = error.localizedDescription; status(error.localizedDescription); return false }
         return result == 0
+    }
+    /// Missing Accessibility access disables only keyboard and mouse controls; the
+    /// gamepad keeps playing. Ask macOS once per launch and say why keys do nothing.
+    private func desktopAccessChanged() {
+        guard desktopOutput.blocked else { status("Connected · keyboard and mouse ready"); return }
+        status(DesktopInput.Failure.permission.localizedDescription)
+        if !accessibilityPrompted { accessibilityPrompted = true; DesktopInput.askForAccess() }
     }
     private func release() { apply(.neutral) }
     private func disconnect(_ reason: String) {
         pauseAccess()
         chatTask?.cancel(); chatTask = nil; chatBusy = false
-        datagram?.stop(); datagram = nil; layoutPending = false; release(); if let activity { ProcessInfo.processInfo.endActivity(activity); self.activity = nil }; let old = peer; peer = nil; leases.removeAll(); old?.cancel()
+        datagram?.stop(); datagram = nil; layoutPending = false; release(); desktopOutput.forgetAccess(); if let activity { ProcessInfo.processInfo.endActivity(activity); self.activity = nil }; let old = peer; peer = nil; leases.removeAll(); old?.cancel()
         if old != nil { newInvitation() }; publishProfileStatus(); status(reason)
     }
 }

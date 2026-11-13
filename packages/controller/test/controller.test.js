@@ -147,3 +147,13 @@ test('axis calibration accepts booleans only on sticks', () => {
   p.mappings[0].invertY = -1;
   assert(validateProfile(p).some(e => e.includes('invertY must be a boolean on a stick')));
 });
+
+test('WoW binding proposals refuse keyboard keys with a clear reason', async () => {
+  const { bindingChange, xboxProfile, validateProfile } = await import('../src/index.js');
+  const profile = { ...xboxProfile,
+    controls: [...xboxProfile.controls, { id: 'key-1', type: 'key', label: '1', frame: { x: 0.45, y: 0.6, width: 0.07, height: 0.15 } }],
+    mappings: [...xboxProfile.mappings, { controlId: 'key-1', outputs: ['key:Digit1'] }] };
+  assert.deepEqual(validateProfile(profile), []);
+  const snapshot = { reserved: {}, bindings: [], spells: [{ id: 100, name: 'Charge', passive: false }] };
+  assert.throws(() => bindingChange(snapshot, profile, { controlId: 'key-1', spellId: 100 }), /Choose a gamepad button or trigger/);
+});
