@@ -28,6 +28,25 @@ final class DesktopInput {
             if let flag = modifiers[String(key.dropFirst(4))] { flags.insert(flag) }
         }
     }
+    /// True while macOS withholds Accessibility access, so keyboard and mouse output is skipped.
+    private(set) var blocked = false
+    /// Writes like `write`, but missing Accessibility access only blocks keyboard and
+    /// mouse output instead of failing the whole report, so the gamepad keeps working
+    /// while the player grants access. Returns true when the blocked state changes.
+    @discardableResult func deliver(_ state: DesktopState?) throws -> Bool {
+        let was = blocked
+        do {
+            try write(state)
+            if state != nil { blocked = false }
+        } catch Failure.permission { blocked = true }
+        return was != blocked
+    }
+    /// A new session or layout checks access again on its first keyboard or mouse state.
+    func forgetAccess() { blocked = false }
+    /// Shows the macOS prompt that opens Privacy & Security → Accessibility.
+    static func askForAccess() {
+        _ = AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary)
+    }
     func write(_ state: DesktopState?) throws {
         if state != nil && !trusted() { throw Failure.permission }
         let next = Set(state?.keys ?? [])

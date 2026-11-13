@@ -5,6 +5,7 @@ const expoConfig = require('eslint-config-expo/flat');
 module.exports = defineConfig([
   expoConfig,
   {
-    ignores: ['dist/*'],
+    // ios/ and android/ are generated native projects (and local build output).
+    ignores: ['dist/*', 'ios/**', 'android/**'],
   },
 ]);

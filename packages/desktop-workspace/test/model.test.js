@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { defaultProfile } from '../../controller/src/index.js';
-import { Editor, copy, newProfile, moveControl, addControl, removeControl, setOutput, issues, acknowledged, controlBox, labelColor, profileState } from '../src/model.js';
+import { Editor, copy, newProfile, moveControl, addControl, removeControl, setOutput, setChord, updateControl, desktopProfile, issues, acknowledged, controlBox, labelColor, profileState } from '../src/model.js';
 
 test('undo/redo restores the exact saved profile and does not mutate originals', () => {
   const editor = new Editor(defaultProfile, 1), original = copy(defaultProfile);
@@ -73,4 +73,17 @@ test('a newer saved draft is not presented as the revision selected for the phon
   assert.equal(profileState(entry, snapshot), 'draft');
   snapshot.active.profileRevision = 2; assert.equal(profileState(entry, snapshot), 'selected');
   snapshot.active.profile.id = 'another'; assert.equal(profileState(entry, snapshot), 'saved');
+});
+
+test('a key control face follows its keys unless the player renamed it', () => {
+  let profile = addControl(desktopProfile, 'key', 'jump');
+  assert.equal(profile.controls.at(-1).label, 'A');
+  profile = setOutput(profile, 'jump', 'key:Digit1');
+  assert.equal(profile.controls.at(-1).label, '1');
+  profile = setChord(profile, 'jump', ['key:Digit1', 'key:ShiftLeft']);
+  assert.equal(profile.controls.at(-1).label, 'Shift+1');
+  profile = updateControl(profile, 'jump', { label: 'Potion', customLabel: 'Potion' });
+  profile = setChord(profile, 'jump', ['key:Digit2']);
+  assert.equal(profile.controls.at(-1).label, 'Potion');
+  assert.equal(setOutput(desktopProfile, 'left-click', 'mouse:right').controls.find(control => control.id === 'left-click').label, 'Left click', 'mouse labels are untouched');
 });

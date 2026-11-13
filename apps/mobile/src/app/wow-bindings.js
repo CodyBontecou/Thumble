@@ -36,7 +36,8 @@ export default function WowBindings() {
   const selectedControl = layout.profile.controls.find(control => control.id === selected);
   const selectedMapping = layout.profile.mappings.find(mapping => mapping.controlId === selected);
   const binding = snapshot?.bindings.find(item => item.key === gamepadKeys[selectedMapping?.outputs[0]]);
-  const controls = layout.profile.controls.filter(control => control.type !== 'stick' && control.id !== 'chat');
+  // WoW binds gamepad buttons here; keyboard keys use WoW's own key bindings.
+  const controls = layout.profile.controls.filter(control => ['button', 'trigger'].includes(control.type) && control.id !== 'chat');
 
   const refresh = useCallback(async () => {
     const attempt = ++epoch.current;

@@ -41,9 +41,12 @@ export function Control({ control, size, visuals, onAccessiblePress, profile, pr
     return () => visuals.delete(control.id);
   }, [control.id, diameter, position, visuals]);
   const stick = control.type === 'stick';
-  const shoulder = control.type === 'trigger' || ['lb', 'rb'].includes(control.id);
-  const dpad = ['up', 'down', 'left', 'right'].includes(control.id);
-  const face = ['a', 'b', 'x', 'y'].includes(control.id);
+  // Built-in ids keep their gamepad styling only while they are gamepad buttons; a
+  // button switched to a keyboard key in the editor keeps its id.
+  const button = control.type === 'button';
+  const shoulder = control.type === 'trigger' || (button && ['lb', 'rb'].includes(control.id));
+  const dpad = button && ['up', 'down', 'left', 'right'].includes(control.id);
+  const face = button && ['a', 'b', 'x', 'y'].includes(control.id);
   const baseDisplay = controlDisplay(control, prefix, profile);
   const chatting = control.id === 'chat' && chatState !== 'idle';
   const display = chatting ? { ...baseDisplay, label: chatState === 'listening' ? 'Stop' : chatState === 'finishing' ? 'Finishing…' : 'Cancel' } : baseDisplay;
@@ -60,7 +63,7 @@ export function Control({ control, size, visuals, onAccessiblePress, profile, pr
           <Text style={s.stickLabel}>{baseDisplay.label}</Text>
         </View>
       ) : (
-        <View style={[s.button, { width: (shoulder && !consolePort) || rectangular ? width : diameter, height: (shoulder && !consolePort) || rectangular ? height : diameter }, ((shoulder && !consolePort) || rectangular) && s.shoulder, dpad && !consolePort && s.dpad, consolePort && s.consolePortButton, pressed && s.active, face && pressed && { borderColor: control.color }, chatting && s.chatActive]}>
+        <View style={[s.button, { width: (shoulder && !consolePort) || rectangular ? width : diameter, height: (shoulder && !consolePort) || rectangular ? height : diameter }, ((shoulder && !consolePort) || rectangular) && s.shoulder, dpad && !consolePort && s.dpad, consolePort && s.consolePortButton, pressed && s.active, face && pressed && !!control.color && { borderColor: control.color }, chatting && s.chatActive]}>
           {consolePort ? <ControlArtwork key={`${display.icon ?? ''}:${display.label}`} label={display.label} icon={chatting ? undefined : display.icon} /> : <Text numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.55} style={[s.buttonLabel, control.color && { color: control.color }, face && { fontSize: control.label.length > 3 ? 14 : 22 }, dpad && { fontSize: 22 }]}>{chatting || control.customLabel ? display.label : control.label === xboxProfile.controls.find(item => item.id === control.id)?.label ? (glyph[control.id] ?? control.label) : control.label}</Text>}
           {consolePort && <Text style={[s.badge, control.color && { color: control.color }]}>{control.badge}</Text>}
         </View>
@@ -241,6 +244,7 @@ function Screen({ tour = false }) {
         </View>
       </View></View>}
       {network.phase === 'connected' && !!access?.error && !exhausted && <Text accessibilityRole="alert" style={s.accessError}>{access.error}</Text>}
+      {network.phase === 'connected' && !access?.error && network.keysBlocked && <Text accessibilityRole="alert" style={s.accessError}>Keys are off: on your Mac, allow Thumble Receiver in System Settings → Privacy & Security → Accessibility.</Text>}
     </SafeAreaView>
   );
 }

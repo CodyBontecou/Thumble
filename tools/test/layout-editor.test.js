@@ -99,3 +99,86 @@ test('remapping a face button takes the donor button colour', async () => {
   const plain = changeOutput(xboxProfile, 'a', ['guide']);
   assert.equal(plain.controls.find(control => control.id === 'a').color, undefined);
 });
+
+test('adding a key presses the next free number key and fits the canvas', async () => {
+  const { xboxProfile } = await import('@tapping/controller');
+  const viewport = { width: 820, height: 380 };
+  const one = addControl(xboxProfile, 'key-one', viewport, 'key');
+  const two = addControl(one, 'key-two', viewport, 'key');
+  assert.deepEqual(two.mappings.slice(-2).map(item => item.outputs), [['key:Digit1'], ['key:Digit2']]);
+  assert.deepEqual(two.controls.slice(-2).map(item => [item.type, item.label]), [['key', '1'], ['key', '2']]);
+  assert.deepEqual(validateProfile(two), []);
+  assert.equal(validateLayout(two, viewport).valid, true);
+});
+
+test('a button switches to a keyboard key and back without stale gamepad artwork', async () => {
+  const { setControlKind } = await import('../../apps/mobile/src/layout-editor.js');
+  const { consolePortProfile } = await import('@tapping/controller');
+  const profile = structuredClone(consolePortProfile);
+  const a = profile.controls.find(item => item.id === 'a');
+  Object.assign(a, { customLabel: 'Jump', icon: 'spell_test', layers: { '': { label: 'Spell', icon: 'spell_test' } } });
+  const keyed = setControlKind(profile, 'a', 'keyboard');
+  const key = keyed.controls.find(item => item.id === 'a');
+  assert.deepEqual(validateProfile(keyed), []);
+  assert.equal(key.type, 'key');
+  assert.equal(key.label, '1');
+  assert.equal(key.customLabel, 'Jump');
+  assert.deepEqual(key.frame, a.frame);
+  for (const field of ['icon', 'layers', 'badge', 'color']) assert.equal(key[field], undefined, field);
+  assert.deepEqual(keyed.mappings.find(item => item.controlId === 'a'), { controlId: 'a', outputs: ['key:Digit1'] });
+  const back = setControlKind(keyed, 'a', 'gamepad');
+  const button = back.controls.find(item => item.id === 'a');
+  assert.deepEqual(validateProfile(back), []);
+  assert.equal(button.type, 'button');
+  assert.equal(button.customLabel, 'Jump');
+  // The key freed A, so the first free gamepad button is A again, with its ConsolePort badge.
+  assert.deepEqual(back.mappings.find(item => item.controlId === 'a').outputs, ['a']);
+  assert.equal(button.label, 'A');
+  assert.equal(button.badge, 'A');
+  // If another control took A meanwhile, the key returns as the first button nobody sends.
+  const taken = changeOutput(keyed, 'x', ['a']);
+  assert.deepEqual(setControlKind(taken, 'a', 'gamepad').mappings.find(item => item.controlId === 'a').outputs, ['x']);
+  assert.equal(setControlKind(back, 'left-stick', 'keyboard'), back, 'sticks stay analog');
+  assert.equal(setControlKind(back, 'a', 'gamepad'), back, 'already a gamepad button');
+});
+
+test('picking keys keeps held modifiers, labels the chord and always leaves one key', async () => {
+  const { setControlKind, pickKey, toggleModifier, chordLabel, keyParts } = await import('../../apps/mobile/src/layout-editor.js');
+  const { xboxProfile } = await import('@tapping/controller');
+  let profile = setControlKind(xboxProfile, 'x', 'keyboard');
+  const outputs = () => profile.mappings.find(item => item.controlId === 'x').outputs;
+  const label = () => profile.controls.find(item => item.id === 'x').label;
+  profile = toggleModifier(profile, 'x', 'key:ShiftLeft');
+  profile = pickKey(profile, 'x', 'key:Digit4');
+  assert.deepEqual(outputs(), ['key:ShiftLeft', 'key:Digit4']);
+  assert.equal(label(), 'Shift+4');
+  profile = toggleModifier(profile, 'x', 'key:ControlLeft');
+  assert.deepEqual(outputs(), ['key:ShiftLeft', 'key:ControlLeft', 'key:Digit4']);
+  assert.equal(label(), 'Shift+Ctrl+4');
+  assert.deepEqual(validateProfile(profile), []);
+  profile = toggleModifier(toggleModifier(profile, 'x', 'key:ShiftLeft'), 'x', 'key:ControlLeft');
+  assert.deepEqual(outputs(), ['key:Digit4']);
+  assert.equal(pickKey(profile, 'x', 'key:ShiftLeft'), profile, 'modifiers are toggles, not main keys');
+  assert.equal(pickKey(profile, 'a', 'key:Digit5'), profile, 'gamepad buttons have no key');
+  // A chord recorded in the desktop workspace may hold two ordinary keys; picking one replaces both.
+  const desktop = { ...profile, mappings: profile.mappings.map(item => item.controlId === 'x' ? { ...item, outputs: ['key:KeyA', 'key:AltLeft', 'key:KeyB'] } : item) };
+  assert.deepEqual(keyParts(['key:KeyA', 'key:AltLeft', 'key:KeyB']), { modifiers: ['key:AltLeft'], main: ['key:KeyA', 'key:KeyB'] });
+  assert.equal(chordLabel(['key:KeyA', 'key:AltLeft', 'key:KeyB']), 'Alt+A+B');
+  assert.deepEqual(pickKey(desktop, 'x', 'key:F1').mappings.find(item => item.controlId === 'x').outputs, ['key:AltLeft', 'key:F1']);
+  // Toggling a modifier on and off keeps the rest of the chord, in chord order.
+  const roundTrip = toggleModifier(toggleModifier(desktop, 'x', 'key:ShiftLeft'), 'x', 'key:ShiftLeft');
+  assert.deepEqual(roundTrip.mappings.find(item => item.controlId === 'x').outputs, ['key:AltLeft', 'key:KeyA', 'key:KeyB']);
+  // A modifier-only key (a held Shift) keeps its last key.
+  const lone = { ...profile, mappings: profile.mappings.map(item => item.controlId === 'x' ? { ...item, outputs: ['key:ShiftLeft'] } : item) };
+  assert.equal(toggleModifier(lone, 'x', 'key:ShiftLeft'), lone);
+});
+
+test('the key picker pages list every registry key once and leave modifiers to the toggles', async () => {
+  const { KEY_GROUPS, KEY_MODIFIERS } = await import('../../apps/mobile/src/layout-editor.js');
+  const { desktopKeys } = await import('@tapping/controller');
+  const listed = KEY_GROUPS.flatMap(group => group.keys);
+  assert.equal(new Set(listed).size, listed.length);
+  assert.deepEqual([...listed, ...KEY_MODIFIERS.map(item => item.key)].sort(), [...desktopKeys].sort());
+  assert.deepEqual(KEY_GROUPS[0].keys.map(key => key.slice(-1)).join(''), '1234567890');
+  assert.ok(KEY_GROUPS.every(group => group.keys.length > 0));
+});

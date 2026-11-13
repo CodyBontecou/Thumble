@@ -332,6 +332,34 @@ test('older receivers cannot be sent profile requests and duplicate requests are
   await assert.rejects(pending,/invalid profile/);assert.equal(h.connection.snapshot().phase,'connected');
 });
 
+test('edited layouts with keyboard keys need a receiver that can press them', async () => {
+  const h = harness(); await h.connection.connect(invitation()); h.ready();
+  h.connection.phoneProfileSaveSupported = true; h.connection.profilesSupported = true;
+  const withKey = { ...xboxProfile, id: 'phone-' + 'c'.repeat(32), name: 'Keys',
+    controls: [...xboxProfile.controls, { id: 'key-1', type: 'key', label: '1', frame: { x: 0.45, y: 0.6, width: 0.07, height: 0.15 } }],
+    mappings: [...xboxProfile.mappings, { controlId: 'key-1', outputs: ['key:Digit1'] }] };
+  const before = h.sent.length;
+  await assert.rejects(h.connection.savePhoneProfile(withKey, 0), /Update the receiver for keyboard/);
+  assert.equal(h.sent.length, before, 'nothing reaches an older receiver');
+  h.connection.desktopInputSupported = true;
+  const pending = h.connection.savePhoneProfile(withKey, 0);
+  const request = h.sent.find(message => message.type === 'profile-save');
+  assert.equal(request?.profile.id, withKey.id);
+  h.connection.disconnect(); await assert.rejects(pending);
+});
+test('the phone shows when the Mac receiver cannot press keys and clears it once access is granted', async () => {
+  const h = harness(); await h.connection.connect(invitation()); h.ready();
+  assert.equal(h.connection.snapshot().keysBlocked, false);
+  h.connection.submit({ ...neutralState(), buttons: 1 });
+  h.emit('message', { type: 'ack', seq: h.connection.sequence, lease: 'blocked', desktop: 'permission' });
+  assert.equal(h.connection.snapshot().keysBlocked, true);
+  assert.equal(h.connection.snapshot().phase, 'connected', 'the gamepad session continues');
+  h.connection.submit(neutralState());
+  h.emit('message', { type: 'ack', seq: h.connection.sequence, lease: 'allowed' });
+  assert.equal(h.connection.snapshot().keysBlocked, false);
+  h.connection.disconnect();
+  assert.equal(h.connection.snapshot().keysBlocked, false);
+});
 test('play needs a verified plan; free demo time from older receivers unlocks nothing, while profiles and layouts still work', async () => {
   const h = harness(); await h.connection.connect(invitation()); h.ready();
   const access = { type: 'access', v: 1, pro: false, enabled: true, running: true, remaining: 1790, debitedUsed: 10, receiverId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', nonce: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb' };

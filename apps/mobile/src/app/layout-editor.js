@@ -4,14 +4,14 @@ import { router, useLocalSearchParams, usePreventRemove } from 'expo-router';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { randomUUID } from 'expo-crypto';
-import { assertProfile, consolePortProfile, controlDisplay, modifierPrefix, TouchController, validateLayout, validateProfile, xboxProfile } from '@tapping/controller';
+import { assertProfile, consolePortProfile, controlDisplay, desktopLabels, modifierPrefix, TouchController, validateLayout, validateProfile, xboxProfile } from '@tapping/controller';
 import { calibration } from '../calibration';
 import { usesPhoneCalibration } from '../consoleport-sync';
 import { Control } from '../ControllerScreen';
 import { connection } from '../connection';
 import { layoutDrafts as drafts } from '../layout-drafts';
 import { onboarding } from '../onboarding';
-import { TOUR_PRESETS, addControl, availableOutputs, changeOutput, editFrame, outputName, presetProfile } from '../layout-editor';
+import { KEY_GROUPS, KEY_MODIFIERS, TOUR_PRESETS, addControl, availableOutputs, chordLabel, changeOutput, editFrame, keyParts, outputName, pickKey, presetProfile, setControlKind, toggleModifier } from '../layout-editor';
 import { Button, colors, fonts, pad, ui } from '../ui/design';
 
 export default function LayoutEditorRoute() {
@@ -208,9 +208,18 @@ function LayoutEditor() {
             {control && mapping ? <>
               <TextInput accessibilityLabel="Custom label" placeholder={controlDisplay(control, '', draft).label} placeholderTextColor="#a8a8a8" style={styles.input} value={control.customLabel ?? ''} maxLength={80} editable={!busy} onChangeText={label => updateControl({ customLabel: label || undefined })} />
               {control.id !== 'chat' && <>
-                <Text style={styles.detail}>Gamepad output</Text>
-                <View style={styles.outputs}>{availableOutputs(draft, control).map(outputs => <Tool key={outputs[0]} label={outputName(outputs[0])}
-                  selected={mapping.outputs[0] === outputs[0]} disabled={!!busy} onPress={() => setDraft(current => changeOutput(current, control.id, outputs))} />)}</View>
+                {['button', 'key'].includes(control.type) && <>
+                  <Text style={styles.detail}>Sends</Text>
+                  <Segment accessibilityLabel="Sends" value={control.type === 'key' ? 'keyboard' : 'gamepad'} disabled={!!busy}
+                    options={[['gamepad', 'Gamepad'], ['keyboard', 'Keyboard']]} onChange={kind => setDraft(current => setControlKind(current, control.id, kind))} />
+                </>}
+                {control.type === 'key' ? <KeyPicker key={control.id} outputs={mapping.outputs} disabled={!!busy}
+                  onKey={key => setDraft(current => pickKey(current, control.id, key))}
+                  onModifier={key => setDraft(current => toggleModifier(current, control.id, key))} /> : <>
+                  <Text style={styles.detail}>{['mouse', 'trackpad'].includes(control.type) ? 'Mouse output' : 'Gamepad output'}</Text>
+                  <View style={styles.outputs}>{availableOutputs(draft, control).map(outputs => <Tool key={outputs[0]} label={outputName(outputs[0])}
+                    selected={mapping.outputs[0] === outputs[0]} disabled={!!busy} onPress={() => setDraft(current => changeOutput(current, control.id, outputs))} />)}</View>
+                </>}
               </>}
               <View style={styles.outputs}>
                 {[
@@ -244,10 +253,10 @@ function LayoutEditor() {
             {!!error && <Text accessibilityRole="alert" style={ui.error}>{error}</Text>}
             <TextInput accessibilityLabel="Layout name" style={styles.input} value={draft.name} maxLength={80} editable={!busy} onChangeText={name => setDraft(current => ({ ...current, name }))} />
             {!!nameError && <Text accessibilityRole="alert" style={ui.error}>{nameError}</Text>}
-            <View style={styles.outputs}>{['button', 'trigger', 'stick'].map(type => <Tool key={type} label={`Add ${type}`} disabled={!!busy || !viewport || draft.controls.length >= 64} onPress={() => {
+            <View style={styles.outputs}>{['button', 'trigger', 'stick', 'key'].map(type => <Tool key={type} label={`Add ${type}`} disabled={!!busy || !viewport || draft.controls.length >= 64} onPress={() => {
               const id = `${type}-${randomUUID()}`;
               const next = addControl(draft, id, viewport, type);
-              if (next === draft) { setError('Free a matching gamepad output and make room on the canvas first.'); return; }
+              if (next === draft) { setError(type === 'key' ? 'Make room on the canvas first.' : 'Free a matching gamepad output and make room on the canvas first.'); return; }
               setError(''); setStatus(''); setDraft(next); setSelected(id); setOptionsOpen(false);
             }} />)}</View>
             <Tool label="Start from active controller" disabled={!!busy} onPress={() => Alert.alert('Start a new layout?', 'The editor will copy your active controller. Save your draft first to keep its changes.', [
@@ -313,11 +322,40 @@ function EditorTour({ step, progress, selected, onNext, onBack, onOptions, busy,
   </View>;
 }
 
-function Tool({ label, onPress, disabled = false, selected = false }) {
-  return <Pressable accessibilityRole="button" accessibilityState={{ disabled, selected }} disabled={disabled} onPress={onPress}
+/** @param {{ label: string, onPress: () => void, disabled?: boolean, selected?: boolean, accessibilityLabel?: string }} props */
+function Tool({ label, onPress, disabled = false, selected = false, accessibilityLabel }) {
+  return <Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel} accessibilityState={{ disabled, selected }} disabled={disabled} onPress={onPress}
     style={({ pressed }) => [styles.tool, (selected || pressed) && styles.selected, disabled && styles.disabled]}>
     <Text style={styles.toolLabel}>{label}</Text>
   </Pressable>;
+}
+
+/** A one-of-several choice, such as what a control sends or which key page is open. */
+function Segment({ options, value, onChange, disabled = false, accessibilityLabel }) {
+  return <View style={styles.segment} accessibilityRole="radiogroup" accessibilityLabel={accessibilityLabel}>
+    {options.map(([id, name]) => <Pressable key={id} accessibilityRole="radio" accessibilityState={{ checked: value === id, disabled }} disabled={disabled}
+      onPress={() => { if (value !== id) onChange(id); }} style={({ pressed }) => [styles.segmentOption, (value === id || pressed) && styles.segmentSelected]}>
+      <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75} style={styles.toolLabel}>{name}</Text>
+    </Pressable>)}
+  </View>;
+}
+
+/** Chooses the key a key control presses and the modifiers held with it.
+ * Pages keep the 100-key registry short enough for a phone sheet. */
+function KeyPicker({ outputs, disabled, onKey, onModifier }) {
+  const { modifiers, main } = keyParts(outputs);
+  const [page, setPage] = useState(() => (KEY_GROUPS.find(group => main.some(key => group.keys.includes(key))) ?? KEY_GROUPS[0]).id);
+  const group = KEY_GROUPS.find(item => item.id === page) ?? KEY_GROUPS[0];
+  return <>
+    <Text style={styles.detail}>Presses {chordLabel(outputs).split('+').join(' + ')}</Text>
+    <Segment accessibilityLabel="Keys" value={group.id} options={KEY_GROUPS.map(item => [item.id, item.name])} onChange={setPage} />
+    <View style={styles.outputs}>{group.keys.map(key => <Tool key={key} label={group.id === 'numpad' ? desktopLabels[key].replace(/^Numpad /, '') : desktopLabels[key]}
+      accessibilityLabel={desktopLabels[key]} selected={main.includes(key)} disabled={disabled} onPress={() => onKey(key)} />)}</View>
+    <Text style={styles.detail}>Hold with</Text>
+    <View style={styles.outputs}>{KEY_MODIFIERS.map(item => <Tool key={item.key} label={item.label} selected={modifiers.includes(item.key)}
+      disabled={disabled || (outputs.length === 1 && outputs[0] === item.key)} onPress={() => onModifier(item.key)} />)}</View>
+    <Text style={styles.detail}>Thumble Receiver presses these keys on your computer. On a Mac, allow it in System Settings → Privacy & Security → Accessibility.</Text>
+  </>;
 }
 
 function Setting({ label, value, min, max, step, onChange, disabled }) {
@@ -393,6 +431,9 @@ const styles = StyleSheet.create({
   detail: { color: pad.muted, fontFamily: fonts.body, fontSize: 13 },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 4, flexWrap: 'wrap' },
   outputs: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  segment: { flexDirection: 'row', gap: 2, padding: 2, borderRadius: 11, borderCurve: 'continuous', backgroundColor: 'rgba(118,118,128,0.24)' },
+  segmentOption: { flex: 1, minHeight: 36, paddingHorizontal: 2, alignItems: 'center', justifyContent: 'center', borderRadius: 9, borderCurve: 'continuous' },
+  segmentSelected: { backgroundColor: '#636366' },
   footer: { position: 'absolute', bottom: 6, alignSelf: 'center', maxWidth: '75%', backgroundColor: 'rgba(58,58,60,0.96)', color: pad.text, fontFamily: fonts.bodyMedium, fontSize: 13, paddingVertical: 6, paddingHorizontal: 12, borderRadius: 14, overflow: 'hidden' },
   tour: { position: 'absolute', top: 46, alignSelf: 'center', width: 340, backgroundColor: '#F2F2F7', borderRadius: 14, borderCurve: 'continuous', padding: 12, gap: 4, boxShadow: '0px 10px 26px rgba(0,0,0,0.5)' },
   tourSmall: { width: 'auto', flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6, paddingHorizontal: 10 },

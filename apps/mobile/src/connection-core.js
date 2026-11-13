@@ -34,7 +34,7 @@ export class Connection {
   /** @type {any} A phone-made layout shown while offline, until a computer sends one. */
   preview = null;
   layoutPending = false;
-  view = { phase: 'offline', detail: 'Practice · Computer not connected', rtt: null, chat: false };
+  view = { phase: 'offline', detail: 'Practice · Computer not connected', rtt: null, chat: false, keysBlocked: false };
   /** @type {{id: string, resolve: (value?: any) => void, reject: (error: Error) => void, timer: ReturnType<typeof setTimeout>} | null} */
   chatRequest = null;
   profilesSupported = false;
@@ -192,7 +192,7 @@ export class Connection {
           this.phoneBindingsSupported = message.phoneBindings === 1;
           this.desktopInputSupported = message.desktopInput === 1;
           this.diagnostics = message.diagnostics === true && typeof this.native.sendTimed === 'function' ? new LatencyRecorder(text => this.native.send(text)) : null;
-          this.update({ phase: 'connected', detail: 'Connected · Xbox gamepad', rtt: null, chat: message.chat === 1 });
+          this.update({ phase: 'connected', detail: 'Connected · Xbox gamepad', rtt: null, chat: message.chat === 1, keysBlocked: false });
           this.submit(neutralState(), 'neutral');
           if (this.view.phase !== 'connected') return;
           this.timer = this.timers.setInterval(() => {
@@ -202,6 +202,9 @@ export class Connection {
         } else {
           const sent = this.pending.get(message.seq);
           if (sent && this.diagnostics) this.diagnostics.record(sent, receivedAt, this.lastAck, message);
+          // The Mac receiver keeps the gamepad running but cannot press keys without Accessibility access.
+          const keysBlocked = message.type === 'ack' && message.desktop === 'permission';
+          if (keysBlocked !== !!this.view.keysBlocked) this.update({ ...this.view, keysBlocked });
           if (sent != null && this.lastAck - this.lastMetric > 1000) {
             this.lastMetric = this.lastAck;
             this.update({ ...this.view, rtt: Math.round(this.lastAck - sent.js) });
@@ -266,7 +269,7 @@ export class Connection {
     if (attempt !== this.attempt) return;
     this.disconnect(undefined, { keepPairing: !!invitation.reconnectToken });
     this.invitation = invitation; this.sequence = 0;
-    this.update({ phase: 'connecting', detail: 'Connecting securely…', rtt: null, chat: false });
+    this.update({ phase: 'connecting', detail: 'Connecting securely…', rtt: null, chat: false, keysBlocked: false });
     try {
       this.session = this.native.connect(invitation.url, invitation.pin);
       if (typeof this.session !== 'string' || !this.session) throw new Error('Invalid native connection');
@@ -332,6 +335,8 @@ export class Connection {
     if (!this.phoneProfileSaveSupported) return Promise.reject(Error('Update your Mac receiver to use edited layouts.'));
     const checked = assertProfile(profile);
     if (!/^phone-[a-f0-9]{32}$/.test(checked.id)) return Promise.reject(Error('Invalid edited layout ID.'));
+    // An older receiver would accept the layout and then fail to press its keys.
+    if (hasDesktopInput(checked) && !this.desktopInputSupported) return Promise.reject(Error('Update the receiver for keyboard and mouse controls'));
     this.pausePlay();
     return this.profileOperation('profile-save', { profile: checked, expectedActivationRevision, expectedProfileRevision });
   }
@@ -455,7 +460,7 @@ export class Connection {
     this.finishBindingRequest(Error('Connection closed. Refresh your World of Warcraft actions.'));
     this.finishProfileRequest(Error('Disconnected from your computer.'));
     if (this.chatRequest) { this.timers.clearTimeout(this.chatRequest.timer); this.chatRequest.reject(Error('Disconnected. Check World of Warcraft before sending again.')); this.chatRequest = null; }
-    this.update({phase:'offline',detail,rtt:null,chat:false});
+    this.update({phase:'offline',detail,rtt:null,chat:false,keysBlocked:false});
     for (const reset of this.resetListeners) reset();
     if (connected) this.native.send(JSON.stringify({type:'bye'}));
     this.native.disconnect();

@@ -13,4 +13,4 @@ export { xboxProfile as defaultProfile } from './xbox-profile.js';
 export { gamepadKeys } from './gamepad-keys.js';
 export { bindingChange, utilityActions } from './binding-plan.js';
 
-export { desktopKeys, desktopLabels, mouseOutputs, desktopTypes, hasDesktopInput, isNeutralInput } from './desktop-input.js';
+export { desktopKeys, desktopLabels, mouseOutputs, desktopTypes, hasDesktopInput, isNeutralInput, keyChordLabel, keyModifiers, keyParts } from './desktop-input.js';
