@@ -39,6 +39,11 @@ Implemented in the preview:
 - Local MCP pairing PNG export with POSIX permissions or a protected Windows ACL,
   browser OAuth/PKCE sign-in, and explicit ten-minute ChatGPT QR sharing.
 - Bounded, cached spell/item icon-name lookup, matching the Mac endpoint.
+- Thumble Studio, the shared desktop editor (Qt WebEngine): design controllers on
+  a phone-sized canvas with gamepad buttons, keyboard keys and chords, mouse
+  buttons and trackpads; layout checks; a controller library; and revision-checked
+  Send to phone that waits for the phone's layout acknowledgement. Keys, mouse
+  buttons and trackpads need the latest Thumble phone app.
 
 These builds are unsigned previews; production signing and an automatic update
 service are separate release work. The current phone source uses **Connect computer**.
@@ -58,13 +63,13 @@ For Linux, extract the archive and install the application for your user:
 
 ```sh
 # Linux
-tar -xzf Thumble-Receiver-0.1.1-linux-x64.tar.gz
+tar -xzf Thumble-Receiver-0.2.0-linux-x64.tar.gz
 ./thumble-receiver/thumble-receiver --install-user
 ```
 
 Open **Thumble Receiver** from the applications menu. The installer registers the
 browser callback and adds `~/.local/bin/thumble-receiver`. It requires `xdg-utils`
-and uses `${XDG_DATA_HOME:-~/.local/share}/thumble/receiver/0.1.1`. Run the installed
+and uses `${XDG_DATA_HOME:-~/.local/share}/thumble/receiver/0.2.0`. Run the installed
 binary with `--uninstall-user` to remove the app while retaining receiver data.
 Keep the bundle's `_internal` directory alongside the executable; libraries stay
 replaceable and third-party licenses are included. SHA-256 checksums accompany

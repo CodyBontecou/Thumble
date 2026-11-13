@@ -1,0 +1,25 @@
+{
+  "version": "0.2.0",
+  "channel": "preview",
+  "signed": false,
+  "sourceCommit": "6b1de62d0b3e5555be01072833f11a68de0bc581",
+  "validation": "https://github.com/CodyBontecou/Thumble/actions/runs/43430272712",
+  "artifacts": [
+    {
+      "platform": "windows",
+      "architecture": "x64",
+      "filename": "Thumble-Receiver-0.2.0-windows-x64-setup.exe",
+      "bytes": 130916841,
+      "sha256": "03e2e3046823cee30083696ebac06b2a604a1c91f6e4ff6a31b7d6a40f2ac705",
+      "url": "https://thumble.io/downloads/Thumble-Receiver-0.2.0-windows-x64-setup.exe"
+    },
+    {
+      "platform": "linux",
+      "architecture": "x64",
+      "filename": "Thumble-Receiver-0.2.0-linux-x64.tar.gz",
+      "bytes": 212232134,
+      "sha256": "599926ccd76e0aa7ecdd08a9038bd1200ad0be24b049ac72d39b097420ec82fe",
+      "url": "https://thumble.io/downloads/Thumble-Receiver-0.2.0-linux-x64.tar.gz"
+    }
+  ]
+}

@@ -6,15 +6,15 @@ private to their existing endpoints. Large files stream directly from R2.
 
 | Download | Alias | R2 prefix |
 | --- | --- | --- |
-| Signed/notarized macOS 1.0.3 DMG | `/downloads/receiver-latest.dmg` | `macos/receiver/` |
-| Unsigned Windows x64 0.1.0 preview setup | `/downloads/receiver-latest-windows.exe` | `windows/receiver/` |
-| Linux x64 0.1.0 preview archive | `/downloads/receiver-latest-linux.tar.gz` | `linux/receiver/` |
+| Signed/notarized macOS 1.1.0 DMG | `/downloads/receiver-latest.dmg` | `macos/receiver/` |
+| Unsigned Windows x64 0.2.0 preview setup | `/downloads/receiver-latest-windows.exe` | `windows/receiver/` |
+| Linux x64 0.2.0 preview archive | `/downloads/receiver-latest-linux.tar.gz` | `linux/receiver/` |
 | Desktop setup instructions | `/downloads/receiver-desktop-setup.txt` | `desktop/receiver/` |
 
 Aliases redirect without caching. Versioned filenames and their `.sha256` files
 are immutable. The allowlist also publishes
-`/downloads/Thumble-Receiver-0.1.1-desktop.json` with the preview's source commit,
-validation run, file sizes and hashes. See `docs/releases/desktop-receiver-0.1.0.json`.
+`/downloads/Thumble-Receiver-0.2.0-desktop.json` with the preview's source commit,
+validation run, file sizes and hashes. See `docs/releases/desktop-receiver-0.2.0.json`.
 
 ## Publish
 
@@ -43,3 +43,5 @@ all three platforms. Preserve the published `/cli/` files when deploying that
 source, since CLI archives are generated outputs stored separately.
 
 Desktop preview 0.1.1 retains phone pairing across checkout, app/receiver restarts, and sleep. Publish only installers from the successful native Windows/Linux workflow run recorded in `docs/releases/desktop-receiver-0.1.1.json`. Keep previous versioned objects immutable. The private reviewer ZIP retains its separate authentication requirement.
+
+Desktop preview 0.2.0 and Mac 1.1.0 ship Thumble Studio and require a plan or free trial from the phone app (no free demo). The 0.2.0 setup guide is `apps/receiver-desktop/README.md` at the release commit. Windows/Linux installers now bundle Qt WebEngine for Studio, so they are larger than 0.1.1.
