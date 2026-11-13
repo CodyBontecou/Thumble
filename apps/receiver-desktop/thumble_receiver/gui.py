@@ -363,7 +363,7 @@ def smoke(args, path):
     def received(text):
         try:
             if monotonic() > deadline:
-                raise RuntimeError('Shared desktop workspace did not finish its native save/send flow: ' + str(text)[:200])
+                raise RuntimeError('Shared desktop workspace did not finish its native save/send flow at step %d: %s … %s' % (result['step'], str(text)[:120], str(text)[-400:]))
             step = result['step']
             if step == 0 and text and 'layout check' in text.lower():
                 result['step'] = 1
