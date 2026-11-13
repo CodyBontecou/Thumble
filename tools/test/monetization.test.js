@@ -119,6 +119,13 @@ test('Google subscriptions verify the current state, acknowledge once and report
 
 const { planOptions, accessGate } = await import('../../apps/mobile/src/purchases/core.js');
 const planConfig = JSON.parse(await (await import('node:fs/promises')).readFile(new URL('../../config/monetization.json', import.meta.url), 'utf8'));
+test('purchase entry and recovery screens do not embed fixed dollar prices', async () => {
+  const { readFile } = await import('node:fs/promises');
+  for (const name of ['welcome', 'pro', 'expired']) {
+    const source = await readFile(new URL(`../../apps/mobile/src/app/${name}.js`, import.meta.url), 'utf8');
+    assert.doesNotMatch(source, /\$\d/, `${name} must use localized store pricing`);
+  }
+});
 test('plan options use store prices, offer Family only on iOS and compare yearly with weekly', () => {
   const catalog = [
     { id: 'thumble_yearly', price: '$29.99', amount: 29.99, currency: 'USD', trialEligible: true, trialDays: 7 },

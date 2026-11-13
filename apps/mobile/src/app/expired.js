@@ -5,7 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import config from '../../../../config/monetization.json';
 import { connection } from '../connection';
-import { familyAvailable, planOptions } from '../purchases/core';
+import { planOptions } from '../purchases/core';
 import { purchases } from '../purchases/store';
 import { Bullet, Button, Eyebrow, Wordmark, colors, fonts, scheme, ui } from '../ui/design';
 
@@ -38,17 +38,18 @@ export default function ExpiredScreen() {
     {options.map(option => <Pressable key={option.id} accessibilityRole="button" onPress={() => router.push('/pro')}
       style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 52, paddingHorizontal: 16, borderRadius: 12, borderCurve: 'continuous', backgroundColor: pressed ? colors.raised : colors.surface })}>
       <View><Text style={{ color: colors.text, fontFamily: fonts.bodyBold, fontSize: 16 }}>{option.plan === 'yearly' ? 'Yearly' : option.plan === 'weekly' ? 'Weekly' : 'Lifetime'}</Text><Text style={ui.muted}>{option.plan === 'yearly' && option.perWeek ? `${option.perWeek} a week` : option.plan === 'weekly' ? 'cancel anytime' : 'pay once'}</Text></View>
-      <Text style={{ color: colors.text, fontFamily: fonts.bodyBold, fontSize: 16 }}>{option.price}</Text>
+      <Text style={{ color: colors.text, fontFamily: fonts.bodyBold, fontSize: 16 }}>{option.available ? option.price : 'Unavailable'}</Text>
     </Pressable>)}
     <Button onPress={() => billing ? Linking.openURL(manageURL) : router.push('/pro')}>{billing ? (ios ? 'Fix payment' : 'Fix in Play') : 'Choose a plan'}</Button>
     <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
       <Pressable accessibilityRole="button" disabled={purchase.busy} onPress={() => purchases.restore()} style={{ minHeight: 40, justifyContent: 'center' }}><Text style={[ui.small, { fontFamily: fonts.bodyMedium, fontSize: 14, color: colors.link }]}>Restore purchase</Text></Pressable>
       {billing && <Pressable accessibilityRole="link" onPress={() => Linking.openURL(manageURL)} style={{ minHeight: 40, justifyContent: 'center' }}><Text style={[ui.small, { fontFamily: fonts.bodyMedium, fontSize: 14, color: colors.link }]}>{ios ? 'Manage subscription' : 'Manage in Google Play'}</Text></Pressable>}
     </View>
-    <Text style={[ui.small, { textAlign: 'center' }]}>{familyAvailable(Platform.OS) ? 'Family plans from $1.99/week' : 'Plans from $0.99/week'}</Text>
+    <Text style={[ui.small, { textAlign: 'center' }]}>Setup and phone practice remain available without a plan.</Text>
   </View>;
   return <SafeAreaProvider><SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
     <StatusBar style={scheme === 'light' ? 'dark' : 'light'} />
+    <View style={{ alignItems: 'flex-start', paddingHorizontal: 16, paddingTop: 8 }}><Button secondary compact onPress={() => router.dismissTo('/?practice=1')} accessibilityLabel="Close plans" testID="expired-close">✕ Close</Button></View>
     {landscape ? <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 16 }}>
       <View accessibilityViewIsModal style={[ui.card, { flexDirection: 'row', gap: 18, width: '100%', maxWidth: 640, maxHeight: '100%' }]}>
         <ScrollView style={{ flex: 1 }}>{message}</ScrollView>{plans}
