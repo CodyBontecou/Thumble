@@ -10,7 +10,7 @@
     "sha1": "9b9da73184f572e4af721e9d9f0e7b997d09ede0",
     "sha256": "a0565dd8b39c1494e10661e74a64b424857c2ceb7673416a709c28b1b788eb6c"
   },
-  "state": "Uploaded; submission awaiting explicit full-rollout approval required by automatic approval review",
+  "state": "Changes in review; Google automated quick checks running",
   "checks": {
     "lint": "passed",
     "typecheck": "passed",
@@ -34,5 +34,14 @@
       "Landscape presentation inspected in earlier local build; direct landscape tap injection unreliable in this environment"
     ]
   },
-  "pullRequest": "https://github.com/CodyBontecou/Thumble/pull/12"
+  "pullRequest": "https://github.com/CodyBontecou/Thumble/pull/12",
+  "submittedAt": "2026-11-14T01:19:07.489557+00:00",
+  "rollout": "Full production rollout; managed publishing off; explicitly approved by user",
+  "consoleVerification": {
+    "version": "1.1.0 (9) - Purchase screen fixes",
+    "heading": "Changes in review",
+    "checks": "Running quick checks for commonly found issues",
+    "note": "Changes will be sent for review as soon as checks complete successfully.",
+    "url": "https://play.google.com/console/u/0/developers/8478281120215349264/app/4973267958607968038/publishing"
+  }
 }
