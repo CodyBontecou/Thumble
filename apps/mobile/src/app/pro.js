@@ -10,7 +10,7 @@ import { setupComplete } from '../onboarding-core';
 import { onboarding } from '../onboarding';
 import { familyAvailable, planOptions } from '../purchases/core';
 import { purchases } from '../purchases/store';
-import { BackButton, Button, Segmented, colors, fonts, scheme, ui } from '../ui/design';
+import { Button, Segmented, colors, fonts, scheme, ui } from '../ui/design';
 
 const ios = Platform.OS === 'ios';
 const FEATURES = [
@@ -61,9 +61,9 @@ export default function Paywall() {
 
   const per = option.plan === 'yearly' ? '/year' : option.plan === 'weekly' ? '/week' : '';
   const lifetime = option.plan === 'lifetime';
-  const priceLine = active ? 'Your plan is active.' : lifetime ? `${option.price} once` : option.trial ? `${option.trialDays} days free, then ${option.price}${per}` : `${option.price}${per}`;
+  const priceLine = active ? 'Your plan is active.' : !option.available ? 'Store price unavailable' : lifetime ? `${option.price} once` : option.trial ? `${option.trialDays} days free, then ${option.price}${per}` : `${option.price}${per}`;
   const cta = active ? 'Continue' : !option.available ? 'Plans unavailable' : lifetime ? `Buy Lifetime · ${option.price}` : option.trial ? 'Start free trial' : `Subscribe · ${option.price}${per}`;
-  const terms = active ? '' : lifetime
+  const terms = active || !option.available ? '' : lifetime
     ? `Charged once today${ios ? ' to your Apple ID' : ' to your Google account'}. No subscription. Buying Lifetime does not cancel an existing subscription.`
     : `${option.trial ? `Free for ${option.trialDays} days, then ` : ''}${option.price}${per}, renewing until cancelled. ${ios ? 'Cancel at least 24 hours before the trial or period ends in App Store subscriptions. Charged to your Apple ID.' : 'Cancel anytime in Google Play before the trial or period ends. Charged to your Google account.'}${option.family ? ' Shared with up to 5 family members through Family Sharing.' : ''}`;
 
@@ -83,13 +83,13 @@ export default function Paywall() {
       </View>
     </View>,
     <View key="plans" style={{ flex: 1, gap: 8 }}>
-      <Text accessibilityRole="header" style={[ui.title, { fontSize: landscape ? 26 : 30, lineHeight: landscape ? 28 : 32 }]}>Seven days, on us.</Text>
-      <View style={{ flexDirection: landscape ? 'row' : 'column', gap: 6 }}>
+      <Text accessibilityRole="header" style={[ui.title, { fontSize: landscape ? 26 : 30, lineHeight: landscape ? 28 : 32 }]}>Choose your plan.</Text>
+      {option.trial && <View style={{ flexDirection: landscape ? 'row' : 'column', gap: 6 }}>
         {[['D1', 'Everything unlocked today'], ['D5', ios ? 'Cancel anytime before day 7' : 'Cancel in Google Play before day 7'], ['D7', lifetime ? 'Lifetime has no trial' : 'Trial ends, your plan starts']].map(([day, text]) => <View key={day} style={{ flex: landscape ? 1 : 0, flexDirection: 'row', gap: 8, alignItems: 'center' }}>
           <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: day === 'D1' ? colors.accent : colors.raised, alignItems: 'center', justifyContent: 'center' }}><Text style={{ fontFamily: fonts.bodyBold, fontSize: 12, color: day === 'D1' ? '#fff' : colors.text }}>{day.slice(1)}</Text></View>
           <Text style={[ui.small, { fontFamily: fonts.bodyMedium, color: colors.text, flex: 1 }]}>{text}</Text>
         </View>)}
-      </View>
+      </View>}
       {familyAvailable(Platform.OS) && <Segmented label="Who is it for" value={audience} onChange={setAudience} options={[{ value: 'individual', label: 'Just me' }, { value: 'family', label: landscape ? 'Family · 6' : 'Family · up to 6' }]} />}
       <View accessibilityRole="radiogroup" accessibilityLabel="Plan" style={{ gap: 6 }}>
         {options.map(item => <PlanCard key={item.id} option={item} selected={item.plan === option.plan} compact={landscape} onPress={() => setChoice(current => ({ ...current, [audience]: item.plan }))} />)}
@@ -121,8 +121,8 @@ export default function Paywall() {
     </View>
   </View>;
   const header = <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 44 }}>
-    <BackButton onPress={() => router.canGoBack() ? router.back() : router.replace('/welcome')} />
-    <Text style={[ui.label, { flex: 1, textAlign: 'right' }]}>{active ? 'Your plan' : `7 days free · ${slide + 1} of 3`}</Text>
+    <Button secondary compact onPress={leave} accessibilityLabel="Close plans" testID="paywall-close">✕ Close</Button>
+    <Text style={[ui.label, { flex: 1, textAlign: 'right' }]}>{active ? 'Your plan' : `Plans · ${slide + 1} of 3`}</Text>
   </View>;
   const pagerView = <ScrollView ref={pager} horizontal pagingEnabled showsHorizontalScrollIndicator={false} onLayout={event => setPageWidth(event.nativeEvent.layout.width)}
     onMomentumScrollEnd={event => pageWidth && setSlide(Math.round(event.nativeEvent.contentOffset.x / pageWidth))} style={{ flex: 1, overflow: 'hidden' }}>
@@ -157,7 +157,7 @@ function PreviewCard({ width, onFull }) {
 function PlanCard({ option, selected, compact, onPress }) {
   const unit = option.plan === 'yearly' ? 'per year' : option.plan === 'weekly' ? 'per week' : 'one time';
   const sub = option.plan === 'lifetime' ? 'Pay once · no trial' : `${option.trial ? `${option.trialDays} days free · ` : ''}${option.plan === 'yearly' && option.perWeek ? `${option.perWeek} a week` : 'cancel anytime'}`;
-  return <Pressable accessibilityRole="radio" accessibilityState={{ checked: selected }} accessibilityLabel={`${option.plan}, ${option.price} ${unit}`} onPress={onPress}
+  return <Pressable accessibilityRole="radio" accessibilityState={{ checked: selected }} accessibilityLabel={`${option.plan}, ${option.available ? `${option.price} ${unit}` : 'store price unavailable'}`} onPress={onPress}
     style={{ flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: compact ? 50 : 60, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 14, borderCurve: 'continuous', backgroundColor: colors.surface, borderWidth: 2, borderColor: selected ? colors.accent : 'transparent' }}>
     <View style={{ width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: selected ? colors.accent : colors.grip, alignItems: 'center', justifyContent: 'center' }}>{selected && <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: colors.accent }} />}</View>
     <View style={{ flex: 1, gap: 1 }}>
@@ -167,7 +167,7 @@ function PlanCard({ option, selected, compact, onPress }) {
       </View>
       <Text style={ui.muted}>{sub}</Text>
     </View>
-    <View style={{ alignItems: 'flex-end' }}><Text style={{ color: colors.text, fontFamily: fonts.bodyBold, fontSize: 16 }}>{option.price}</Text><Text style={ui.muted}>{unit}</Text></View>
+    <View style={{ alignItems: 'flex-end', flexShrink: 1 }}><Text style={{ color: colors.text, fontFamily: fonts.bodyBold, fontSize: 16 }}>{option.available ? option.price : 'Unavailable'}</Text>{option.available && <Text style={ui.muted}>{unit}</Text>}</View>
   </Pressable>;
 }
 // Upright phones turn the preview sideways, the way the controller is held.
@@ -181,7 +181,7 @@ function FullScreenPreview({ visible, onClose, onStart }) {
         <View style={{ position: 'absolute', left: 0, top: 60 }}><ControllerPreview width={w} height={h - 64} interactive /></View>
         <View style={{ position: 'absolute', left: 44, right: 44, top: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <Text style={{ fontFamily: fonts.bodyBold, fontSize: 12, color: '#F2F2F7', backgroundColor: 'rgba(58,58,60,0.96)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14, overflow: 'hidden' }}>Preview · tap a modifier</Text>
-          <Button compact onPress={onStart}>Start free trial</Button>
+          <Button compact onPress={onStart}>See plans</Button>
           <Pressable accessibilityRole="button" accessibilityLabel="Close preview" onPress={onClose} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(58,58,60,0.96)', alignItems: 'center', justifyContent: 'center' }}><Text style={{ fontFamily: fonts.bodyBold, fontSize: 17, color: '#F2F2F7' }}>✕</Text></Pressable>
         </View>
       </View>

@@ -119,6 +119,13 @@ test('Google subscriptions verify the current state, acknowledge once and report
 
 const { planOptions, accessGate } = await import('../../apps/mobile/src/purchases/core.js');
 const planConfig = JSON.parse(await (await import('node:fs/promises')).readFile(new URL('../../config/monetization.json', import.meta.url), 'utf8'));
+test('purchase entry and recovery screens do not embed fixed dollar prices', async () => {
+  const { readFile } = await import('node:fs/promises');
+  for (const name of ['welcome', 'pro', 'expired']) {
+    const source = await readFile(new URL(`../../apps/mobile/src/app/${name}.js`, import.meta.url), 'utf8');
+    assert.doesNotMatch(source, /\$\d/, `${name} must use localized store pricing`);
+  }
+});
 test('plan options use store prices, offer Family only on iOS and compare yearly with weekly', () => {
   const catalog = [
     { id: 'thumble_yearly', price: '$29.99', amount: 29.99, currency: 'USD', trialEligible: true, trialDays: 7 },
@@ -132,8 +139,38 @@ test('plan options use store prices, offer Family only on iOS and compare yearly
   const family = planOptions({ catalog, config: planConfig, audience: 'family' });
   assert.deepEqual(family.map(option => option.id), ['thumble_family_yearly', 'thumble_family_weekly', 'thumble_family_lifetime']);
   assert(family.every(option => !option.available), 'list prices never enable a purchase');
-  assert.equal(family[0].save, 'SAVE 52%');
+  assert.equal(family[0].save, '', 'unavailable Family products have no invented savings');
   assert(planOptions({ catalog, config: planConfig, audience: 'family', platform: 'android' }).every(option => !option.family));
+});
+test('unavailable catalogs never display USD list prices or advertise an unverified trial', () => {
+  for (const catalog of [[], [{ id: 'thumble_yearly', price: '', amount: 29.99, currency: 'USD', trialEligible: true }]]) {
+    const options = planOptions({ catalog, config: planConfig, platform: 'android' });
+    assert(options.every(option => !option.available && option.price === '' && !option.trial && !option.save && !option.perWeek));
+  }
+});
+test('localized prices are preserved exactly and comparisons require both prices in the same currency', () => {
+  const yearly = { id: 'thumble_yearly', price: '29,99 €', amount: 29.99, currency: 'EUR', trialEligible: true };
+  const weekly = { id: 'thumble_weekly', price: '0,99 €', amount: 0.99, currency: 'EUR' };
+  const options = planOptions({ catalog: [yearly, weekly], config: planConfig, platform: 'android' });
+  assert.equal(options[0].price, '29,99 €');
+  assert.equal(options[1].price, '0,99 €');
+  assert.equal(options[0].save, 'SAVE 42%');
+  assert.match(options[0].perWeek, /EUR/);
+  for (const catalog of [[yearly], [yearly, { ...weekly, currency: 'USD', price: '$0.99' }]]) {
+    const [option] = planOptions({ catalog, config: planConfig });
+    assert.equal(option.save, ''); assert.equal(option.perWeek, '');
+  }
+});
+test('failed catalog refresh clears stale prices while retaining ownership', async () => {
+  const native = { status: async () => ({ status: 'active' }), catalog: async () => [{ id: 'thumble_yearly', price: '$29.99' }] };
+  const store = createPurchaseStore(native, planConfig);
+  await store.refresh();
+  assert.equal(store.snapshot().catalog.length, 1);
+  native.catalog = async () => { throw Error('Store unavailable'); };
+  await store.refresh();
+  assert.deepEqual(store.snapshot().catalog, []);
+  assert.equal(store.snapshot().status, 'active');
+  assert.equal(store.snapshot().unavailable, true);
 });
 test('the root gate opens only for an active plan and routes lapsed plans to recovery', () => {
   assert.equal(accessGate({ loaded: false, status: 'unknown' }), 'loading');

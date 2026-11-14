@@ -1,7 +1,6 @@
 // Hard paywall: weekly/yearly subscriptions with a store-run 7-day trial, plus
 // Lifetime. Apple also offers Family variants; Google Play has none. Prices
-// always come from the store catalog; list prices only label an unavailable
-// catalog and never enable a purchase.
+// always come from the store catalog. An unavailable catalog shows no prices.
 export const PLAN_KEYS = ['yearly', 'weekly', 'lifetime'];
 const STATUSES = ['active', 'expired', 'billing', 'pending', 'free'];
 
@@ -10,23 +9,21 @@ export function planOptions({ catalog = [], config, audience = 'individual', pla
   const family = audience === 'family' && platform === 'ios';
   const keyFor = plan => family ? `family${plan[0].toUpperCase()}${plan.slice(1)}` : plan;
   const byId = new Map(catalog.map(item => [item.id, item]));
-  const list = config.listPricesUSD ?? {};
   const weekly = byId.get(config.products[keyFor('weekly')]);
   const options = PLAN_KEYS.map(plan => {
     const key = keyFor(plan), id = config.products[key], item = byId.get(id);
-    const listPrice = typeof list[key] === 'number' ? `$${list[key].toFixed(2)}` : '';
     return {
       plan, id, family, available: !!item?.price,
-      price: item?.price || listPrice,
-      amount: Number.isFinite(item?.amount) ? item.amount : list[key] ?? null,
-      currency: item?.currency || 'USD',
-      trial: plan !== 'lifetime' && (item ? item.trialEligible === true : true),
+      price: item?.price || '',
+      amount: Number.isFinite(item?.amount) ? item.amount : null,
+      currency: item?.currency || '',
+      trial: plan !== 'lifetime' && !!item?.price && item.trialEligible === true,
       trialDays: item?.trialDays || config.trialDays || 7,
       perWeek: '', save: '',
     };
   });
-  const yearly = options[0], weeklyAmount = Number.isFinite(weekly?.amount) ? weekly.amount : list[keyFor('weekly')];
-  if (Number.isFinite(yearly.amount) && Number.isFinite(weeklyAmount) && weeklyAmount > 0) {
+  const yearly = options[0], weeklyAmount = weekly?.amount;
+  if (yearly.available && weekly?.price && yearly.currency && yearly.currency === weekly.currency && Number.isFinite(yearly.amount) && Number.isFinite(weeklyAmount) && weeklyAmount > 0) {
     yearly.perWeek = formatAmount(yearly.amount / 52, yearly.currency);
     const save = Math.round((1 - yearly.amount / (weeklyAmount * 52)) * 100);
     if (save > 0) yearly.save = `SAVE ${save}%`;
@@ -34,8 +31,8 @@ export function planOptions({ catalog = [], config, audience = 'individual', pla
   return options;
 }
 function formatAmount(value, currency) {
-  try { return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(value); }
-  catch { return `$${value.toFixed(2)}`; }
+  try { return new Intl.NumberFormat(undefined, { style: 'currency', currency, currencyDisplay: 'code' }).format(value); }
+  catch { return ''; }
 }
 export const familyAvailable = platform => platform === 'ios';
 
@@ -78,9 +75,9 @@ export function createPurchaseStore(native, config, fetcher = fetch) {
           if (!native) throw Error('Install the updated app to enable purchases.');
           const [value, catalog] = await Promise.all([native.status(), native.catalog ? native.catalog(ids()).catch(() => null) : null]);
           if (started !== generation) return;
-          update({ ...entitlement(value), ...(Array.isArray(catalog) ? { catalog } : {}), loaded: true, error: '', unavailable: !Array.isArray(catalog) || catalog.length === 0 });
+          update({ ...entitlement(value), catalog: Array.isArray(catalog) ? catalog : [], loaded: true, error: '', unavailable: !Array.isArray(catalog) || catalog.length === 0 });
           await purchases.verifyOnMac();
-        } catch (error) { update({ loaded: true, unavailable: true, error: error.message }); }
+        } catch (error) { update({ loaded: true, catalog: [], unavailable: true, error: error.message }); }
       }).finally(() => { refreshing = null; });
       return refreshing;
     },

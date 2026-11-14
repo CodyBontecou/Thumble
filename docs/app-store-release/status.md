@@ -1,5 +1,12 @@
 # Mobile production submission status
 
+## November 13, 2026 — Android review fixes resubmitted
+
+- **Android 1.1.0 (9): Changes in review.** Play Console confirms the replacement production release and automated quick checks. Changes pass to review after successful checks. Full rollout and managed publishing off retained with explicit owner approval. This is submission, not approval or public availability.
+- Source `0e00cb6` on `fix/play-review-2026-11-13`; [PR #12](https://github.com/CodyBontecou/Thumble/pull/12). Fixes visible dismissal, setup/practice access, localized store prices, and expired-plan recovery pricing.
+- AAB SHA-256 `a0565dd8b39c1494e10661e74a64b424857c2ceb7673416a709c28b1b788eb6c`. Bundletool validation, signature verification, mobile lint/typecheck, 166 mobile tests and 320 repository tests passed. The universal APK generated from the exact AAB launched and dismissed Plans/recovery successfully; unpaid setup was accessible. Regional Play-installed billing remains unverified.
+- [Submission receipt and QA evidence](../evidence/play-review-resubmission-2026-11-13/release.json).
+
 ## November 12, 2026 — 1.1.0 submitted to both stores
 
 - Source `4424382` (redesign, Codex in-app editor branch merged, text-only controller labels, ScrawlKit excluded from production builds). 304 tests, mobile lint and typecheck pass.

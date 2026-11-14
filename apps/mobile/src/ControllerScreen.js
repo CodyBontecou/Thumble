@@ -116,6 +116,16 @@ function Screen({ tour = false }) {
   // computer has not accepted this phone's plan. There is no free demo time.
   const exhausted = network.phase === 'connected' && access && !access.pro;
   const [lost, setLost] = useState(false);
+  const [planDismissed, setPlanDismissed] = useState(false);
+  useEffect(() => {
+    let previous = connection.accessSnapshot();
+    const unsubscribe = connection.subscribeAccess(() => {
+      const current = connection.accessSnapshot();
+      if (current?.pro !== previous?.pro || current?.receiverId !== previous?.receiverId) setPlanDismissed(false);
+      previous = current;
+    });
+    return () => { unsubscribe(); };
+  }, []);
   const wasConnected = useRef(false);
   // Only a dropped link counts as lost; a remembered pairing means it was not a disconnect.
   useEffect(() => connection.subscribe(() => {
@@ -225,13 +235,15 @@ function Screen({ tour = false }) {
         </Pressable>
       </View>
       {coach && focused && setup.loaded && <Tour state={setup} save={saveSetup} connected={connected} connecting={connecting} rtt={network.rtt ?? null} pill={pill} onRelease={() => controller.releaseAll()} />}
-      {exhausted && !coach && <View style={s.overlay}><ScrollView style={s.card} contentContainerStyle={{ gap: 10 }} accessibilityViewIsModal>
-        <Text style={[s.ovTag, { color: pad.y }]}>Plan not verified yet</Text>
-        <Text style={s.ovTitle}>Your computer is waiting for your plan.</Text>
-        <Text style={s.ovBody}>Thumble checks your plan with the store before your computer unlocks the controller. Make sure this phone is online, then retry.</Text>
+      {exhausted && !coach && !planDismissed && <View style={s.overlay}><ScrollView style={s.card} contentContainerStyle={{ gap: 10 }} accessibilityViewIsModal>
+        <Text style={[s.ovTag, { color: pad.y }]}>Setup connected · game input paused</Text>
+        <Text style={s.ovTitle}>Ready to choose a plan?</Text>
+        <Text style={s.ovBody}>Pairing and layout delivery are available before purchase. Start a store trial or restore your plan to send controls to your game.</Text>
         {!!access.error && <Text style={s.ovError}>{access.error}</Text>}
         <ThumbleButton onPress={() => { void purchases.refresh(); }}>Retry verification</ThumbleButton>
         <ThumbleButton secondary onPress={() => router.push('/pro')}>Plans and restore</ThumbleButton>
+        <ThumbleButton secondary onPress={() => router.push('/connect')}>Check receiver setup</ThumbleButton>
+        <ThumbleButton secondary onPress={() => setPlanDismissed(true)}>Practice without sending</ThumbleButton>
       </ScrollView></View>}
       {lost && !connected && !coach && <View style={s.overlay}><View style={s.card} accessibilityViewIsModal accessibilityRole="alert">
         <Text style={[s.ovTag, { color: connecting ? pad.y : pad.b }]}>{connecting ? 'Reconnecting…' : 'Connection lost'}</Text>
