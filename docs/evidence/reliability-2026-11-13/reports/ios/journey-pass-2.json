@@ -1,0 +1,241 @@
+{
+  "e2eTest": "qa-ios-controller-orientation",
+  "flow": "qa-ios-controller-orientation",
+  "device": "9A45202D-BD45-4AF2-8B8E-CA0BE5F2F07A",
+  "executionPrerequisite": "",
+  "ok": true,
+  "passed": 26,
+  "failed": 0,
+  "skipped": 0,
+  "errored": 0,
+  "steps": [
+    {
+      "index": 0,
+      "kind": "script",
+      "e2eTest": "qa-ios-controller-orientation",
+      "target": "../../tools/mobile/clean-install.mjs",
+      "status": "pass",
+      "durationMs": 777,
+      "flow": "qa-ios-controller-orientation"
+    },
+    {
+      "index": 1,
+      "kind": "launch",
+      "e2eTest": "qa-ios-controller-orientation",
+      "status": "pass",
+      "durationMs": 1710,
+      "flow": "qa-ios-controller-orientation"
+    },
+    {
+      "index": 2,
+      "kind": "await",
+      "e2eTest": "qa-ios-controller-orientation",
+      "target": "visible id=welcome-start",
+      "status": "pass",
+      "durationMs": 313,
+      "flow": "qa-ios-controller-orientation"
+    },
+    {
+      "index": 3,
+      "kind": "idle",
+      "e2eTest": "qa-ios-controller-orientation",
+      "status": "pass",
+      "warning": "the screen settled, but a small part of it was still changing while it did — a spinner, a caret, a progress dot. If it is a loading spinner then the screen had not finished loading, and stillness cannot tell those apart: look at what is moving, and gate the next action on the element the loading produces rather than on this settle.",
+      "durationMs": 1539,
+      "flow": "qa-ios-controller-orientation"
+    },
+    {
+      "index": 4,
+      "kind": "tap",
+      "e2eTest": "qa-ios-controller-orientation",
+      "target": "id=welcome-start",
+      "status": "pass",
+      "durationMs": 314,
+      "flow": "qa-ios-controller-orientation"
+    },
+    {
+      "index": 5,
+      "kind": "await",
+      "e2eTest": "qa-ios-controller-orientation",
+      "target": "visible \"Scan pairing code\"",
+      "status": "pass",
+      "durationMs": 312,
+      "flow": "qa-ios-controller-orientation"
+    },
+    {
+      "index": 6,
+      "kind": "idle",
+      "e2eTest": "qa-ios-controller-orientation",
+      "status": "pass",
+      "durationMs": 665,
+      "flow": "qa-ios-controller-orientation"
+    },
+    {
+      "index": 7,
+      "kind": "tap",
+      "e2eTest": "qa-ios-controller-orientation",
+      "target": "\"Later\"",
+      "status": "pass",
+      "durationMs": 314,
+      "flow": "qa-ios-controller-orientation"
+    },
+    {
+      "index": 8,
+      "kind": "await",
+      "e2eTest": "qa-ios-controller-orientation",
+      "target": "visible id=tour-start",
+      "status": "pass",
+      "durationMs": 631,
+      "flow": "qa-ios-controller-orientation"
+    },
+    {
+      "index": 9,
+      "kind": "idle",
+      "e2eTest": "qa-ios-controller-orientation",
+      "status": "pass",
+      "durationMs": 1132,
+      "flow": "qa-ios-controller-orientation"
+    },
+    {
+      "index": 10,
+      "kind": "tap",
+      "e2eTest": "qa-ios-controller-orientation",
+      "target": "id=tour-skip-to-connect",
+      "status": "pass",
+      "durationMs": 334,
+      "flow": "qa-ios-controller-orientation"
+    },
+    {
+      "index": 11,
+      "kind": "await",
+      "e2eTest": "qa-ios-controller-orientation",
+      "target": "visible id=tour-later",
+      "status": "pass",
+      "durationMs": 327,
+      "flow": "qa-ios-controller-orientation"
+    },
+    {
+      "index": 12,
+      "kind": "idle",
+      "e2eTest": "qa-ios-controller-orientation",
+      "status": "pass",
+      "durationMs": 451,
+      "flow": "qa-ios-controller-orientation"
+    },
+    {
+      "index": 13,
+      "kind": "tap",
+      "e2eTest": "qa-ios-controller-orientation",
+      "target": "id=tour-later",
+      "status": "pass",
+      "durationMs": 324,
+      "flow": "qa-ios-controller-orientation"
+    },
+    {
+      "index": 14,
+      "kind": "await",
+      "e2eTest": "qa-ios-controller-orientation",
+      "target": "hidden id=tour-later",
+      "status": "pass",
+      "durationMs": 324,
+      "flow": "qa-ios-controller-orientation"
+    },
+    {
+      "index": 15,
+      "kind": "await",
+      "e2eTest": "qa-ios-controller-orientation",
+      "target": "visible id=controller-landscape",
+      "status": "pass",
+      "durationMs": 10,
+      "flow": "qa-ios-controller-orientation"
+    },
+    {
+      "index": 16,
+      "kind": "idle",
+      "e2eTest": "qa-ios-controller-orientation",
+      "status": "pass",
+      "durationMs": 441,
+      "flow": "qa-ios-controller-orientation"
+    },
+    {
+      "index": 17,
+      "kind": "tap",
+      "e2eTest": "qa-ios-controller-orientation",
+      "target": "id=controller-menu",
+      "status": "pass",
+      "durationMs": 319,
+      "flow": "qa-ios-controller-orientation"
+    },
+    {
+      "index": 18,
+      "kind": "await",
+      "e2eTest": "qa-ios-controller-orientation",
+      "target": "visible \"Back to your game\"",
+      "status": "pass",
+      "durationMs": 330,
+      "flow": "qa-ios-controller-orientation"
+    },
+    {
+      "index": 19,
+      "kind": "idle",
+      "e2eTest": "qa-ios-controller-orientation",
+      "status": "pass",
+      "durationMs": 527,
+      "flow": "qa-ios-controller-orientation"
+    },
+    {
+      "index": 20,
+      "kind": "tap",
+      "e2eTest": "qa-ios-controller-orientation",
+      "target": "\"Stick calibration\"",
+      "status": "pass",
+      "durationMs": 345,
+      "flow": "qa-ios-controller-orientation"
+    },
+    {
+      "index": 21,
+      "kind": "await",
+      "e2eTest": "qa-ios-controller-orientation",
+      "target": "visible \"Fine-tune your thumbs.\"",
+      "status": "pass",
+      "durationMs": 654,
+      "flow": "qa-ios-controller-orientation"
+    },
+    {
+      "index": 22,
+      "kind": "idle",
+      "e2eTest": "qa-ios-controller-orientation",
+      "status": "pass",
+      "durationMs": 1640,
+      "flow": "qa-ios-controller-orientation"
+    },
+    {
+      "index": 23,
+      "kind": "tap",
+      "e2eTest": "qa-ios-controller-orientation",
+      "target": "\"Done\"",
+      "status": "pass",
+      "durationMs": 341,
+      "flow": "qa-ios-controller-orientation"
+    },
+    {
+      "index": 24,
+      "kind": "await",
+      "e2eTest": "qa-ios-controller-orientation",
+      "target": "visible id=controller-landscape",
+      "status": "pass",
+      "durationMs": 335,
+      "flow": "qa-ios-controller-orientation"
+    },
+    {
+      "index": 25,
+      "kind": "idle",
+      "e2eTest": "qa-ios-controller-orientation",
+      "status": "pass",
+      "durationMs": 1564,
+      "flow": "qa-ios-controller-orientation"
+    }
+  ],
+  "startedAt": 1794588896827,
+  "durationMs": 16185
+}

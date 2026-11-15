@@ -1,0 +1,18 @@
+source
+ℹ tests 320
+ℹ pass 320
+ℹ fail 0
+ℹ skipped 0
+
+mobile
+ℹ tests 166
+ℹ pass 166
+ℹ fail 0
+ℹ skipped 0
+Mobile lint, typecheck, and regression tests passed.
+
+studio
+ℹ tests 17
+ℹ pass 17
+ℹ fail 0
+ℹ skipped 0

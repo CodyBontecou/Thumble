@@ -7,9 +7,10 @@ if (releaseLock && fileHash(path.join(root, 'package-lock.json')) !== releaseLoc
   throw new Error('The build workspace dependency lock differs from the checked release source.');
 }
 
+run('node', ['tools/check-monetization-config.mjs']);
 run('npm', ['run', 'lint', '--workspace', '@tapping/mobile']);
 run('npm', ['run', 'typecheck', '--workspace', '@tapping/mobile']);
-const tests = ['connection', 'calibration', 'layout-editor', 'onboarding', 'monetization', 'cloud-mobile', 'mobile-release']
+const tests = ['orientation', 'connection', 'calibration', 'layout-editor', 'onboarding', 'monetization', 'cloud-mobile', 'mobile-release']
   .map(name => `tools/test/${name}.test.js`);
 const directory = 'packages/controller/test';
 for (const name of readdirSync(path.join(root, directory)).sort()) {

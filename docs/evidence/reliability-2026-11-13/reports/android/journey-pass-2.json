@@ -1,0 +1,75 @@
+{
+  "e2eTest": "qa-setup-before-purchase",
+  "flow": "qa-setup-before-purchase",
+  "device": "emulator-5554",
+  "executionPrerequisite": "",
+  "ok": true,
+  "passed": 7,
+  "failed": 0,
+  "skipped": 0,
+  "errored": 0,
+  "steps": [
+    {
+      "index": 0,
+      "kind": "script",
+      "e2eTest": "qa-setup-before-purchase",
+      "target": "../../tools/mobile/clean-install.mjs",
+      "status": "pass",
+      "durationMs": 2321,
+      "flow": "qa-setup-before-purchase"
+    },
+    {
+      "index": 1,
+      "kind": "launch",
+      "e2eTest": "qa-setup-before-purchase",
+      "status": "pass",
+      "durationMs": 2457,
+      "flow": "qa-setup-before-purchase"
+    },
+    {
+      "index": 2,
+      "kind": "await",
+      "e2eTest": "qa-setup-before-purchase",
+      "target": "visible id=welcome-start",
+      "status": "pass",
+      "durationMs": 559,
+      "flow": "qa-setup-before-purchase"
+    },
+    {
+      "index": 3,
+      "kind": "idle",
+      "e2eTest": "qa-setup-before-purchase",
+      "status": "pass",
+      "durationMs": 531,
+      "flow": "qa-setup-before-purchase"
+    },
+    {
+      "index": 4,
+      "kind": "tap",
+      "e2eTest": "qa-setup-before-purchase",
+      "target": "id=welcome-start",
+      "status": "pass",
+      "durationMs": 474,
+      "flow": "qa-setup-before-purchase"
+    },
+    {
+      "index": 5,
+      "kind": "await",
+      "e2eTest": "qa-setup-before-purchase",
+      "target": "visible \"Scan pairing code\"",
+      "status": "pass",
+      "durationMs": 775,
+      "flow": "qa-setup-before-purchase"
+    },
+    {
+      "index": 6,
+      "kind": "idle",
+      "e2eTest": "qa-setup-before-purchase",
+      "status": "pass",
+      "durationMs": 550,
+      "flow": "qa-setup-before-purchase"
+    }
+  ],
+  "startedAt": 1794588944350,
+  "durationMs": 7978
+}

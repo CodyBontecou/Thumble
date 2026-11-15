@@ -1,0 +1,58 @@
+{
+  "e2eTest": "qa-android-release-launch",
+  "flow": "qa-android-release-launch",
+  "device": "emulator-5554",
+  "executionPrerequisite": "",
+  "ok": true,
+  "passed": 5,
+  "failed": 0,
+  "skipped": 0,
+  "errored": 0,
+  "steps": [
+    {
+      "index": 0,
+      "kind": "script",
+      "e2eTest": "qa-android-release-launch",
+      "target": "../../tools/mobile/clean-install.mjs",
+      "status": "pass",
+      "durationMs": 3338,
+      "flow": "qa-android-release-launch"
+    },
+    {
+      "index": 1,
+      "kind": "launch",
+      "e2eTest": "qa-android-release-launch",
+      "status": "pass",
+      "durationMs": 3758,
+      "flow": "qa-android-release-launch"
+    },
+    {
+      "index": 2,
+      "kind": "await",
+      "e2eTest": "qa-android-release-launch",
+      "target": "visible id=welcome-start",
+      "status": "pass",
+      "durationMs": 765,
+      "flow": "qa-android-release-launch"
+    },
+    {
+      "index": 3,
+      "kind": "idle",
+      "e2eTest": "qa-android-release-launch",
+      "status": "pass",
+      "durationMs": 3581,
+      "flow": "qa-android-release-launch"
+    },
+    {
+      "index": 4,
+      "kind": "assert",
+      "e2eTest": "qa-android-release-launch",
+      "target": "visible id=welcome-start",
+      "status": "pass",
+      "durationMs": 231,
+      "flow": "qa-android-release-launch"
+    }
+  ],
+  "startedAt": 1794588913747,
+  "durationMs": 12033
+}

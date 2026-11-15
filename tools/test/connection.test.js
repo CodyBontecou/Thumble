@@ -4,6 +4,31 @@ import { Connection } from '../../apps/mobile/src/connection-core.js';
 import { neutralState, xboxProfile } from '@tapping/controller';
 
 const invitation = () => 'tapping://pair?data=' + Buffer.from(JSON.stringify({ v: 1, url: 'wss://192.168.1.2:1234/controller', pin: 'a'.repeat(64), token: 'b'.repeat(64), expires: Math.floor(Date.now() / 1000) + 120 })).toString('base64url');
+
+test('phone canvas is negotiated, bounded, resent on reconnect, and never treated as input', async () => {
+  const h = harness();
+  h.connection.setViewport({ width: 844, height: 390, x: 12 });
+  assert.equal(h.sent.length, 0);
+  await h.connection.connect(invitation());
+  h.emit('status', 'open');
+  h.emit('message', { type: 'ready', seq: -1, lease: 'first', access: 1, viewport: 1 });
+  assert.deepEqual(h.sent.find(m => m.type === 'viewport'), { type: 'viewport', width: 844, height: 390 });
+  const count = h.sent.length, sequence = h.connection.sequence;
+  for (const v of [{width: 390, height: 844}, {width: NaN, height: 390}, {width: 20000, height: 390}, {width: 844, height: 390}]) assert.equal(h.connection.setViewport(v), false);
+  assert.equal(h.sent.length, count);
+  h.connection.setViewport({width: 900, height: 400});
+  assert.equal(h.connection.sequence, sequence);
+  h.connection.disconnect();
+  await h.connection.connect(invitation());
+  h.emit('status', 'open');
+  h.emit('message', { type: 'ready', seq: -1, lease: 'second', access: 1, viewport: 1 });
+  assert.deepEqual(h.sent.filter(m => m.type === 'viewport').at(-1), {type: 'viewport', width: 900, height: 400});
+  h.connection.disconnect();
+  await h.connection.connect(invitation()); h.ready();
+  const before = h.sent.length;
+  h.connection.setViewport({width: 800, height: 400});
+  assert.equal(h.sent.length, before, 'older receivers must never receive an unknown message');
+});
 function harness(beforeConnect) {
   let time = 0, next = 0, socket = 0;
   const callbacks = new Map(), events = {}, sent = [];

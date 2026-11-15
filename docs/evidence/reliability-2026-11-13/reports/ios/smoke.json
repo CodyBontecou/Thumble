@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "commit": "e3e93e62a02d7815a19487da2a05493932d10006",
+    "tree": "691c025f2bad856c9252965173debd9c07cb7324",
+    "dirty": true
+  },
+  "configuration": "Release",
+  "platform": "ios-simulator",
+  "device": {
+    "name": "iPhone 18 Pro",
+    "runtime": "com.apple.CoreSimulator.SimRuntime.iOS-27-0"
+  },
+  "app": {
+    "bundleId": "com.thumble.ios",
+    "version": "1.1.0",
+    "buildNumber": "2",
+    "platform": "iPhoneSimulator",
+    "bundleSha256": "38ce4be18ea8e561c60022e325d8f811e8b6d458d26debcee3fbaad6e79a5099",
+    "assetsSha256": "94fcae1060a3fd619d5e11b7d9e341591c401fa114a8253e42acd40720bcb226"
+  },
+  "appSha256": "4601defc2790dad2a312d044aee341668de3d4279eb9217744734681a7ed463a",
+  "productionBundle": false,
+  "testSha256": "bf6fc031a1c19e85e0133a2550170f3682e7557e06490cacb4127ed9d8825e6b",
+  "reports": [
+    {
+      "path": "launch-pass-1.json",
+      "sha256": "70e92b4c495667110335b4abe156e280e2b39c67ff17aee277907b6f961c4bca"
+    },
+    {
+      "path": "launch-pass-2.json",
+      "sha256": "c99075f6de3381ff2a6cdeebf162063315165c230832717df2e15ec1219e7f57"
+    }
+  ],
+  "journeyReports": [
+    {
+      "path": "journey-pass-1.json",
+      "sha256": "bdb336cca5670a90a71f73c354e4c052f6c7a4493b9f2010d9d7933296d22a9d"
+    },
+    {
+      "path": "journey-pass-2.json",
+      "sha256": "b1c9e8deb1f94f04cf1d1c111ad7c9e37f7c60f5cf7abdc3bf5bbda4f29fa572"
+    }
+  ],
+  "journeyTestSha256": "8d71c7fcdc39853b6dc4bfa00e7193cfaf1488fcaed0ef162f15aa95c0ac5ad4"
+}

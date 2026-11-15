@@ -1,0 +1,8 @@
+............................qt.qpa.fonts: Populating font family aliases took 32 ms. Replace uses of missing font family "Sans Serif" with one that exists to avoid this cost. 
+.......ssss..........................................................Executing <Task pending name='Task-373' coro=<Server.conn_handler() running at /Users/codybontecou/dev/Thumble/build/receiver-qa-python314/lib/python3.14/site-packages/websockets/asyncio/server.py:376> wait_for=<Future pending cb=[Task.task_wakeup()] created at /opt/homebrew/Cellar/python@3.14/3.14.7/Frameworks/Python.framework/Versions/3.14/lib/python3.14/asyncio/base_events.py:460> created at /Users/codybontecou/dev/Thumble/build/receiver-qa-python314/lib/python3.14/site-packages/websockets/asyncio/server.py:406> took 0.361 seconds
+...
+----------------------------------------------------------------------
+Ran 100 tests in 9.194s
+
+OK (skipped=4)
+Installed Thumble Receiver for this user. Open it from your applications menu.

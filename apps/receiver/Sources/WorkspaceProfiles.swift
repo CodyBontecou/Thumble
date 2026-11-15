@@ -3,6 +3,20 @@ import Foundation
 /// Desktop drafts share the agent/phone lock and store, but saving is separate
 /// from selecting a controller for the phone.
 enum WorkspaceProfiles {
+    static func phoneViewport(_ value: [String: Any]) -> [String: Double]? {
+        guard Set(value.keys) == ["width", "height"],
+              let width = CloudProfile.number(value["width"], 0, 10000),
+              let height = CloudProfile.number(value["height"], 0, 10000), height > 0, width > height else { return nil }
+        return ["width": width, "height": height]
+    }
+    static func connectedViewport(_ directory: URL, now: Double = Date().timeIntervalSince1970 * 1000) -> [String: Any]? {
+        guard let data = try? Data(contentsOf: directory.appendingPathComponent("receiver-status.json")), data.count <= 16384,
+              let status = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let at = status["updatedAt"] as? Double, (0..<5000).contains(now-at),
+              status["running"] as? Bool == true, status["connected"] as? Bool == true,
+              let value = status["viewport"] as? [String: Any], let checked = phoneViewport(value) else { return nil }
+        return checked
+    }
     static func editable(_ entry: [String: Any]) -> Bool {
         entry["cloudSource"] == nil && (entry["desktopEdited"] as? Bool == true || entry["phoneEdited"] as? Bool == true)
     }

@@ -1,3 +1,5 @@
+> This file is a dated implementation ledger. Older “outstanding” lists describe their recorded baseline, not current release status. Use [release acceptance](release-acceptance.md) for current checks and gaps.
+
 # Hardware and gameplay validation — October 23, 2026
 
 ## Implemented and checked

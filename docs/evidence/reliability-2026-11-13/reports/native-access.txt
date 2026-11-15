@@ -1,0 +1,3 @@
+PASS receiver: without a plan, layouts and profiles work but Resume, input and chat stay blocked with no free time
+PASS receiver: a valid plan grant starts output; expiry during held input neutralizes it
+PASS receiver: plan grants keep layouts and profile access; revocation stops output; the receiver record is unchanged

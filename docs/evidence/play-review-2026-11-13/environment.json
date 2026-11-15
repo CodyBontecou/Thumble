@@ -1,0 +1,18 @@
+{
+  "workspace": "apps/mobile",
+  "is_react_native": true,
+  "is_native_ios": false,
+  "is_native_android": false,
+  "expo_version": "~58.0.17",
+  "react_native_version": "0.88.0",
+  "package_manager": "npm",
+  "metro_port": 8088,
+  "android_package": "com.thumble.android",
+  "lint": "npm run lint --workspace @tapping/mobile",
+  "typecheck": "npm run typecheck --workspace @tapping/mobile",
+  "mobile_gate": "npm run mobile:check",
+  "local_qa_build": "ANDROID_HOME=/Users/codybontecou/Library/Android/sdk ./gradlew :app:assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a",
+  "qa_device": "emulator-5556",
+  "qa_avd": "thumble-desktop-keys-qa",
+  "local_signing": "debug key; local QA only"
+}

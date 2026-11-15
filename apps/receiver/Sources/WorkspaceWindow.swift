@@ -79,14 +79,14 @@ import ServiceManagement
                 switch operation {
                 case "save":
                     guard let profile = payload["profile"] as? [String: Any], let expected = ProfileCatalog.revision(payload["expectedProfileRevision"]), let viewport = payload["viewport"] as? [String: Any] else { throw ProfileCatalog.Failure.invalid }
-                    try WorkspaceProfiles.save(directory, profile: profile, expected: expected, viewport: viewport)
+                    try WorkspaceProfiles.save(directory, profile: profile, expected: expected, viewport: WorkspaceProfiles.connectedViewport(directory) ?? viewport)
                 case "delete":
                     guard let profileID = payload["profileId"] as? String, let expected = ProfileCatalog.revision(payload["expectedProfileRevision"]), let activation = ProfileCatalog.revision(payload["expectedActivationRevision"]) else { throw ProfileCatalog.Failure.invalid }
                     try WorkspaceProfiles.remove(directory, id: profileID, expected: expected, activation: activation)
                 case "activate":
                     guard let profileID = payload["profileId"] as? String, let revision = ProfileCatalog.revision(payload["profileRevision"]), let activation = ProfileCatalog.revision(payload["expectedActivationRevision"]), let viewport = payload["viewport"] as? [String: Any],
                           let entries = try ProfileCatalog.read(directory)["profiles"] as? [[String: Any]], let found = entries.first(where: { ($0["profile"] as? [String: Any])?["id"] as? String == profileID }), let profile = found["profile"] as? [String: Any] else { throw ProfileCatalog.Failure.invalid }
-                    try WorkspaceProfiles.validateLayout(profile, viewport: viewport)
+                    try WorkspaceProfiles.validateLayout(profile, viewport: WorkspaceProfiles.connectedViewport(directory) ?? viewport)
                     _ = try ProfileCatalog.activate(directory, id: profileID, profileRevision: revision, expectedActivationRevision: activation)
                 default: break
                 }
@@ -100,7 +100,7 @@ import ServiceManagement
                    let at = status["updatedAt"] as? Double, (0..<5000).contains(Date().timeIntervalSince1970*1000-at),
                    (result["receiver"] as? [String: Any])?["running"] as? Bool == true {
                     var receiver = result["receiver"] as? [String: Any] ?? [:]
-                    for key in ["connected", "ready", "layoutAcknowledged", "revision", "running"] { receiver[key] = status[key] }
+                    for key in ["connected", "ready", "layoutAcknowledged", "revision", "running", "viewport"] { receiver[key] = status[key] }
                     if ProfileCatalog.revision(status["revision"]) != ProfileCatalog.revision(result["activationRevision"]) { receiver["ready"] = false; receiver["layoutAcknowledged"] = false }
                     result["receiver"] = receiver
                 }

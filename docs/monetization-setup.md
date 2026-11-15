@@ -3,10 +3,12 @@
 The implementation uses StoreKit 2 on iOS and Google Play Billing 8.3 on Android.
 There is no RevenueCat dependency.
 
-## Hard paywall (November 2026)
+## Compatibility before purchase (November 2026)
 
-The phone gates the controller behind a plan, right after Welcome. Plans match
-Health.md's catalog:
+Welcome opens receiver setup before purchase. Pairing, profile delivery, editing
+and local practice are available without a plan. Sending gameplay input and chat
+still requires a signed plan grant. Computer/game compatibility must be verified
+with actual game input after activating a plan or eligible trial. Plans:
 
 | Plan | iOS product | Google Play product | US list price | Trial |
 | --- | --- | --- | --- | --- |

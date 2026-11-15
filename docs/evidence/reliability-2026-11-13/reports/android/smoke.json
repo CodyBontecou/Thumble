@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "commit": "e3e93e62a02d7815a19487da2a05493932d10006",
+    "tree": "691c025f2bad856c9252965173debd9c07cb7324",
+    "dirty": true
+  },
+  "configuration": "Release",
+  "platform": "android-emulator",
+  "bundleId": "com.thumble.android",
+  "apkSha256": "ea9a629afe6dc484d3150137c1253cc9c3292c5c000698109ec83617e45ce4d0",
+  "testSha256": "777f29927b3e4887983d9ddd525ee95a7f8edc5a5590a92a0314b96c02a7f9f5",
+  "reports": [
+    {
+      "path": "launch-pass-1.json",
+      "sha256": "235448024603c392e9d935f03384e7558bc31c959cb4be9e2b9d53d1cdac7a71"
+    },
+    {
+      "path": "launch-pass-2.json",
+      "sha256": "f0f9f97f1a17538707bc57fd8ae7a1b1ff53a3e642ef97f30ad9d0ef124ae31b"
+    }
+  ],
+  "journeyReports": [
+    {
+      "path": "journey-pass-1.json",
+      "sha256": "bfd9a31590606d4650490b63b1c706c8a7c1a495a0ec49c27e9b4ca70fbc34b6"
+    },
+    {
+      "path": "journey-pass-2.json",
+      "sha256": "42273873e6bcc9a5629d79317f6bc414196f68ecb24c5174ab4ccde20569d78b"
+    }
+  ],
+  "journeyTestSha256": "5f22b149b897ce1eebff85a8ba2bd61924cb622b83557b1ebaebc1c084e7b57b"
+}

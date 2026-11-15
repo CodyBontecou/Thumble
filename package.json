@@ -14,6 +14,8 @@
     "test": "node --test packages/cli/test/*.test.mjs packages/controller/test/*.test.js packages/profile-tools/test/*.test.js apps/cloud/test/*.test.js tools/test/*.test.js tools/website/test/*.test.mjs",
     "check": "node --check packages/controller/src/index.js",
     "mobile:check": "node tools/mobile/check.mjs",
+    "mobile:smoke:android": "node tools/mobile/android-smoke.mjs",
+    "test:protocol:mac": "node tools/test-protocol-mac.mjs",
     "mobile:smoke:ios": "node tools/mobile/ios-smoke.mjs",
     "mobile:release": "node tools/mobile/release.mjs",
     "profiles": "node packages/profile-tools/src/server.js",

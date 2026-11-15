@@ -1,6 +1,8 @@
 import { AI_CONTROLLER_GENERATOR_ENABLED } from '../features';
-import { Stack, router } from 'expo-router';
-import { Pressable, Text, View } from 'react-native';
+import { Stack, router, usePathname } from 'expo-router';
+import { useEffect } from 'react';
+import { AppState, Pressable, Text, View } from 'react-native';
+import { landscapeRoute, requestOrientation } from '../orientation';
 import { useFonts } from 'expo-font';
 import { InterTight_400Regular, InterTight_500Medium, InterTight_700Bold } from '@expo-google-fonts/inter-tight';
 import { colors, fonts, pad } from '../ui/design';
@@ -12,13 +14,20 @@ const modal = { presentation: /** @type {const} */ ('modal'), headerShown: true,
 const screen = { animation: /** @type {const} */ ('fade') };
 const locked = { ...screen, gestureEnabled: false, fullScreenGestureEnabled: false };
 export default function RootLayout() {
+  const pathname = usePathname();
+  useEffect(() => {
+    const apply = () => { void requestOrientation(landscapeRoute(pathname)); };
+    apply();
+    const subscription = AppState.addEventListener('change', phase => { if (phase === 'active') apply(); });
+    return () => subscription.remove();
+  }, [pathname]);
   const [loaded, failed] = useFonts({ InterTight_400Regular, InterTight_500Medium, InterTight_700Bold });
   // Fall back to system type rather than blocking the app if fonts fail.
   if (!loaded && !failed) return <View style={{ flex: 1, backgroundColor: colors.background }} />;
   // Explicit defaults let setup and settings rotate even while the landscape
   // controller remains mounted underneath. The native stack applies the lock
   // only when the controller route is visible and restores it on return.
-  return <Stack screenOptions={{ orientation: 'default', headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
+  return <Stack screenListeners={{ transitionEnd: () => { void requestOrientation(landscapeRoute(pathname)); } }} screenOptions={{ orientation: 'default', headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
     <Stack.Screen name="index" options={{ orientation: 'landscape', gestureEnabled: false, fullScreenGestureEnabled: false, contentStyle: { backgroundColor: pad.ground } }} />
     <Stack.Screen name="welcome" options={locked} />
     <Stack.Screen name="pro" options={locked} />

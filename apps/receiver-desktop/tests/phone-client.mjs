@@ -67,6 +67,7 @@ const native = {
 };
 const connection = new Connection(native);
 connection.phoneId = '11111111-1111-1111-1111-111111111111';
+connection.setViewport({width: 844, height: 390});
 const wait = async predicate => {
   const deadline = performance.now() + 5000;
   while (!predicate()) {
@@ -80,6 +81,7 @@ connection.subscribeProfile(() => {
 try {
   await connection.connect(invitation);
   await wait(() => connection.snapshot().phase === 'connected' && connection.access);
+  assert.equal(connection.viewportSupported, true);
   assert.equal(connection.access.pro, false); assert.equal(connection.access.remaining, 0);
   // Restore a plan as the phone does after a store purchase or restore.
   connection.sendGrant(createGrant({ receiverId: connection.access.receiverId, nonce: connection.access.nonce,
@@ -133,7 +135,24 @@ try {
   await wait(() => connection.pending.size === 0);
   connection.submit(desktop.releaseAll());
   await wait(() => connection.pending.size === 0);
-  console.log(`PASS real phone connection: TLS, plan grant, select, render, neutral ACK, resume, input, cloud adoption, phone editing, reconnect, transport=${connection.inputTransport}, chat=${expectChat}`);
+  const grant = (pro, until) => createGrant({receiverId: connection.access.receiverId, nonce: connection.access.nonce,
+    phoneId: connection.phoneId, pro, ...(until ? {until} : {})}, grantKey);
+  connection.sendGrant(grant(true, Date.now()/1000+1.5));
+  await wait(() => connection.access?.pro && !connection.canPlay);
+  connection.resumePlay();
+  await wait(() => connection.canPlay && !connection.recovering);
+  connection.submit(desktop.update('space', true));
+  await wait(() => !connection.access?.pro && !connection.canPlay);
+  assert.equal(connection.layout.profile.id, phoneDraft.id, 'expiry must preserve the layout');
+  connection.sendGrant(grant(true));
+  await wait(() => connection.access?.pro);
+  assert(!connection.canPlay, 'restore must wait for resume');
+  connection.resumePlay();
+  await wait(() => connection.canPlay && !connection.recovering);
+  connection.sendGrant(grant(false));
+  await wait(() => !connection.access?.pro && !connection.canPlay);
+  assert.equal(connection.layout.profile.id, phoneDraft.id);
+  console.log(`PASS portable phone connection: TLS, plan grant, select, render, neutral ACK, resume, input, cloud adoption, phone editing, reconnect, transport=${connection.inputTransport}, chat=${expectChat}`);
 } finally {
   connection.disconnect();
 }

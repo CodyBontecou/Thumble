@@ -1,0 +1,35 @@
+{
+  "date": "2026-11-13",
+  "review": {
+    "version": "1.1.0 (7)",
+    "issues": ["Unclear or invisible dismiss button", "Currency differences with prominent display price"]
+  },
+  "changes": [
+    "Persistent labeled Close plans button, minimum 44-point height, using themed foreground and filled secondary background",
+    "Plan cards, purchase CTA, price summary and renewal terms use the catalog's exact localized price",
+    "No USD list-price or currency fallback; failed catalog refresh clears stale prices",
+    "Savings require available yearly and weekly prices in the same currency; calculated weekly equivalents identify the currency by code",
+    "Trial claims require catalog eligibility; preview action says See plans"
+  ],
+  "automated": {
+    "command": "npm run mobile:check",
+    "lint": "passed",
+    "typecheck": "passed",
+    "tests_passed": 169,
+    "regressions": ["missing/empty catalog", "localized EUR price preserved", "partial catalog", "mixed currencies", "failed refresh clears stale prices and retains ownership"]
+  },
+  "android_qa": {
+    "device": "emulator-5556",
+    "build": "local release APK, debug signing",
+    "apk_sha256": "6faec21bb756100ddb05ee12d5ad3c24672b3bdcc5bf75a253099de43843ffe6",
+    "portrait": "Close visible on controller and plans pages; tapping Close returns to Welcome; Check my setup then opens pairing without purchase",
+    "landscape": "Close and purchase information visually inspected; hardware Back returns to setup",
+    "store_unavailable": "No numeric fallback prices; no trial claim; purchase CTA disabled",
+    "limitations": [
+      "Play checkout unavailable on this locally signed emulator build. Real regional checkout must still be checked using a Play-installed tester build.",
+      "One landscape Close coordinate tap did not navigate. This environment has prior documented landscape injection failures; portrait Close worked, and landscape Back worked. Landscape Close tap behavior is not claimed as verified.",
+      "Light appearance inspected; dark appearance not exercised."
+    ]
+  },
+  "publication": "No commit, upload or store resubmission performed"
+}

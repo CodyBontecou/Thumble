@@ -49,6 +49,7 @@ class Session:
         self.profile_busy = False
         self.chat_available, self.chat_busy, self.chat_cancel = chat_available, False, None
         self.chat_results = {}
+        self.viewport = None
 
     def activate(self, active):
         if not active or active['revision'] <= self.revision:
@@ -63,7 +64,7 @@ class Session:
         return dict(updatedAt=time.time() * 1000, connected=True,
                     layoutAcknowledged=not self.layout_pending,
                     ready=not self.layout_pending and not self.paused,
-                    revision=self.revision, pro=self.access.pro, receiverId=self.access.receiver_id)
+                    revision=self.revision, pro=self.access.pro, receiverId=self.access.receiver_id, viewport=self.viewport)
 
     def pause(self, revoke=True):
         if self.chat_cancel:
@@ -84,13 +85,20 @@ class Session:
         self.leases[lease] = now + 0.5
         value = dict(type=kind, seq=self.sequence, lease=lease)
         if kind == 'ready':
-            value.update(access=1, profiles=1, cloudAdoption=1, phoneProfileSave=1, desktopInput=1)
+            value.update(access=1, profiles=1, cloudAdoption=1, phoneProfileSave=1, desktopInput=1, viewport=1)
             if self.chat_available:
                 value['chat'] = 1
         return value
 
     def handle(self, message, udp=False):
         kind = message.get('type')
+        if kind == 'viewport':
+            width, height = message.get('width'), message.get('height')
+            if (udp or set(message) != {'type', 'width', 'height'} or
+                    any(type(v) not in (int, float) or not 0 < v <= 10000 for v in (width, height)) or width <= height):
+                raise ProtocolError('Invalid phone canvas')
+            self.viewport = dict(width=width, height=height)
+            return []
         if kind == 'bye':
             raise ProtocolError('Phone disconnected')
         if kind == 'access-pause':

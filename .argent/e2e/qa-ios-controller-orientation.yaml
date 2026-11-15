@@ -1,0 +1,29 @@
+# Unpaid clean install. Recorded path; targets resolved against the native runner
+# after direct gesture capture incorrectly selected AXTextField for labelled buttons.
+steps:
+  - script: { path: ../../tools/mobile/clean-install.mjs, timeout: 60000 }
+  - launch: com.thumble.ios
+  - await: { visible: { id: welcome-start }, timeout: 15000 }
+  - await: { idle: true }
+  - tap: { id: welcome-start }
+  - await: { visible: { text: Scan pairing code }, timeout: 15000 }
+  - await: { idle: true }
+  - tap: { text: Later }
+  - await: { visible: { id: tour-start }, timeout: 15000 }
+  - await: { idle: true }
+  - tap: { id: tour-skip-to-connect }
+  - await: { visible: { id: tour-later }, timeout: 15000 }
+  - await: { idle: true }
+  - tap: { id: tour-later }
+  - await: { hidden: { id: tour-later }, timeout: 5000 }
+  - await: { visible: { id: controller-landscape }, timeout: 15000 }
+  - await: { idle: true }
+  - tap: { id: controller-menu }
+  - await: { visible: { text: Back to your game }, timeout: 15000 }
+  - await: { idle: true }
+  - tap: { text: Stick calibration }
+  - await: { visible: { text: Fine-tune your thumbs. }, timeout: 15000 }
+  - await: { idle: true }
+  - tap: { text: Done }
+  - await: { visible: { id: controller-landscape }, timeout: 15000 }
+  - await: { idle: true }

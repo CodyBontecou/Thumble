@@ -1,7 +1,7 @@
 import {
   Editor, copy, newProfile, canvasSize, outputNames, outputs, moveControl, updateControl, setOutput, addControl, removeControl,
   acknowledged, signature, controlBox, labelColor, profileState, setChord, desktopProfile, controlName, controlGroup, groupOrder,
-  canAdd, layoutProblems, suggestFix, resizeControl, snapFrame, profileSource,
+  canAdd, layoutProblems, suggestFix, resizeControl, snapFrame, profileSource, phoneViewport, phoneStatus,
 } from './model.js';
 import { defaultProfile, builtInProfiles, keyChordLabel } from '../../controller/src/index.js';
 import { request } from './bridge.js';
@@ -97,7 +97,7 @@ async function perform(operation, payload = {}, success) {
   let ok = false;
   try {
     const result = await request(operation, payload);
-    if (result?.profiles) snapshot = result;
+    if (result?.profiles) { snapshot = result; viewport = phoneViewport(result) ?? viewport; }
     ok = true;
     if (success) await success(result);
     return result;
@@ -259,7 +259,7 @@ function stage(problems) {
   }));
   return el('main', { class: 'stage', 'aria-label': 'Layout canvas' },
     el('div', { class: 'cbar' },
-      el('select', { class: 'sel', 'aria-label': 'Phone screen size', onChange: e => { const [width, height] = e.target.value.split('x').map(Number); viewport = { width, height }; render(); } },
+      phoneViewport(snapshot) ? el('span', { class: 'chip', 'aria-label': 'Connected phone canvas' }, `Your phone · ${viewport.width} × ${viewport.height} pt`) : el('select', { class: 'sel', 'aria-label': 'Phone screen size', onChange: e => { const [width, height] = e.target.value.split('x').map(Number); viewport = { width, height }; render(); } },
         sizes.map(([w, h]) => el('option', { value: `${w}x${h}`, selected: viewport.width === w && viewport.height === h || undefined }, `Landscape · ${w} × ${h} pt`))),
       el('button', { type: 'button', class: 'chip', role: 'switch', 'aria-checked': String(showAreas), onClick: () => { showAreas = !showAreas; render(); } }, 'Touch areas'),
       el('span', { class: 'push' }), check),
@@ -343,8 +343,8 @@ function problemList(problems) {
   }));
 }
 function controllerInspector(problems) {
-  const entry = currentEntry(), active = snapshot.active;
-  const onPhone = !entry ? 'Not saved yet' : active?.profile.id !== entry.profile.id ? 'No' : active.profileRevision === entry.revision ? `Yes · revision ${entry.revision}` : `Revision ${active.profileRevision} (older)`;
+  const entry = currentEntry();
+  const onPhone = !entry ? 'Not saved yet' : phoneStatus(entry, snapshot);
   const counts = Object.entries(editor.profile.controls.reduce((all, c) => ({ ...all, [c.type]: (all[c.type] ?? 0) + 1 }), {})).map(([t, n]) => `${n} ${typeNames[t].toLowerCase()}${n === 1 ? '' : 's'}`).join(', ');
   return [el('div', { class: 'ihead' }, el('div', {}, el('b', {}, 'Controller'), el('span', {}, 'Select a control to edit it'))),
     el('div', { class: 'sec' }, el('h4', {}, 'Details'), el('div', { class: 'box' },
@@ -440,7 +440,7 @@ function libraryPage() {
     el('div', { class: 'tgroup', role: 'radiogroup', 'aria-label': 'Filter' }, chips),
     shown.length ? el('div', { class: 'cards' }, shown.map(entry => {
       const state = profileState(entry, snapshot), source = profileSource(entry);
-      const tags = [state === 'selected' && ['ok', 'On your phone'], state === 'draft' && ['warn', 'Newer than phone'], !entry.editable && ['', source === 'Built in' ? 'Original' : 'Read only'],
+      const tags = [state === 'selected' && [acknowledged(snapshot) ? 'ok' : 'warn', acknowledged(snapshot) ? 'On your phone' : 'Selected for phone'], state === 'draft' && ['warn', acknowledged(snapshot) ? 'Newer than phone' : 'Newer than selected'], !entry.editable && ['', source === 'Built in' ? 'Original' : 'Read only'],
         entry.profile.controls.some(c => ['key', 'mouse', 'trackpad'].includes(c.type)) && ['acc', 'Keys and mouse'], entry.profile.theme === 'consoleport' && ['', 'World of Warcraft']].filter(Boolean);
       return el('button', { type: 'button', class: 'card', 'aria-pressed': String(entry.profile.id === libraryId), 'data-key': `card-${entry.profile.id}`, onClick: () => { libraryId = entry.profile.id; render(); }, onDblclick: () => openInDesign(entry) },
         miniPreview(entry.profile), el('span', { class: 'ct' }, el('b', {}, entry.profile.name), el('span', { class: 'meta' }, `${plural(entry.profile.controls.length, 'control')} · ${entry.editable ? `revision ${entry.revision}` : source.toLowerCase()}`)),
@@ -464,9 +464,9 @@ function libraryDetail(entry) {
     el('div', {}, el('b', { style: { fontSize: '15px' } }, entry.profile.name), el('p', { class: 'note', style: { marginTop: '2px' } }, sourceNote)),
     el('div', { class: 'box' }, row('Controls', el('span', { class: 'v' }, Object.entries(types).map(([t, n]) => `${n} ${typeNames[t].toLowerCase()}${n === 1 ? '' : 's'}`).join(', '))),
       row('Revision', el('span', { class: 'v' }, entry.revision)),
-      row('On your phone', el('span', { class: 'v' }, state === 'selected' ? `Yes · revision ${entry.revision}` : state === 'draft' ? `Revision ${snapshot.active.profileRevision} · newer saved` : 'No'))),
+      row('On your phone', el('span', { class: 'v' }, phoneStatus(entry, snapshot)))),
     el('div', { class: 'lib-actions' }, btn(entry.editable ? 'Open in Design' : 'Duplicate and edit', () => openInDesign(entry), { class: 'btn lg pri' }),
-      btn(state === 'selected' ? 'On your phone' : state === 'draft' ? 'Send the latest revision' : 'Use on phone', () => send(entry), { class: 'btn lg', disabled: busy || state === 'selected' || openedHere, title: openedHere ? 'Save your changes in Design first' : undefined })),
+      btn(state === 'selected' ? (acknowledged(snapshot) ? 'On your phone' : 'Selected for phone') : state === 'draft' ? 'Send the latest revision' : 'Use on phone', () => send(entry), { class: 'btn lg', disabled: busy || state === 'selected' || openedHere, title: openedHere ? 'Save your changes in Design first' : undefined })),
     el('div', { class: 'tgroup' }, btn('Duplicate', () => createController(entry.profile)), btn('Export…', () => exportProfile(entry.profile)),
       entry.editable && btn('Rename…', () => openSheet({ kind: 'rename', entryId: entry.profile.id }), { disabled: openedHere, title: openedHere ? 'Save your changes in Design first' : undefined })),
     entry.editable ? el('div', { class: 'sec', style: { marginTop: 'auto' } }, btn('Delete controller', () => confirmSheet(`Delete “${entry.profile.name}”?`, 'This removes it from this computer. Export a copy first if you want a backup.', 'Delete controller', () => {
@@ -474,7 +474,7 @@ function libraryDetail(entry) {
         if (editor.profile.id === entry.profile.id) { const next = snapshot.profiles.find(e => e.profile.id === snapshot.active?.profile.id) ?? snapshot.profiles[0]; if (next) loadEntry(next); }
         sheet = null; status('Controller deleted.');
       });
-    }, true), { class: 'btn red', disabled: busy || active }), active && note('Your phone uses this one. Send another controller before deleting it.'))
+    }, true), { class: 'btn red', disabled: busy || active }), active && note('This controller is selected for your phone. Select another controller before deleting it.'))
       : note(source === 'Built in' ? 'Built-in controllers can’t be changed or deleted.' : 'Edit it and Studio saves your changes as a new controller.'));
 }
 
@@ -633,6 +633,7 @@ async function refresh() {
     const next = await request('snapshot');
     if (epoch !== mutationEpoch || busy || dragging) return;
     snapshot = next;
+    viewport = phoneViewport(next) ?? viewport;
     if (message.startsWith('Sent.') && acknowledged(next)) status('Phone acknowledged the selected controller. Resume controls on your phone.');
     if (!editor) {
       const active = snapshot.profiles.find(item => item.profile.id === snapshot.active?.profile.id) ?? snapshot.profiles[0];

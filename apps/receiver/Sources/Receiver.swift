@@ -40,6 +40,7 @@ final class Receiver {
     private var gamepad: UnsafeMutableRawPointer?
     private var clients: [ObjectIdentifier: NWConnection] = [:]
     private var peer: NWConnection?
+    private var phoneViewport: [String: Double]?
     private var leases: [String: TimeInterval] = [:]
     private var lastSequence = -1
     private var lastInput = 0.0
@@ -273,12 +274,25 @@ final class Receiver {
             return
         }
         if message["type"] as? String == "access-pause" { pauseAccess(); return }
+        if message["type"] as? String == "viewport" {
+            guard udp == nil, Set(message.keys) == ["type", "width", "height"],
+                  let value = WorkspaceProfiles.phoneViewport(message.filter { $0.key != "type" }) else { disconnect("Invalid phone canvas"); return }
+            phoneViewport = value
+            publishProfileStatus()
+            return
+        }
         if message["type"] as? String == "access-resume" {
             guard !layoutPending, pro else { publishAccess(); return }
             playRequested = true; publishAccess(); return
         }
         if message["type"] as? String == "access-grant", let grant = message["grant"] as? [String: Any] {
-            access.submitGrant(grant); return
+            // Match the desktop receiver: replacing a plan must release held
+            // input and require Resume, even when ownership remains active.
+            pauseAccess()
+            paused = true; leases.removeAll()
+            access.submitGrant(grant)
+            if !layoutPending { acknowledge(connection, type: "paused", sequence: lastSequence) }
+            return
         }
         if message["type"] as? String == "probe", let udp { datagram?.send(["type": "udp-ready"], to: udp); return }
         if udp != nil && message["type"] as? String != "input" { return }
@@ -497,7 +511,7 @@ final class Receiver {
     private func publishProfileStatus() {
         profiles.writeStatus(["updatedAt": Date().timeIntervalSince1970 * 1000, "connected": peer != nil,
                               "running": gamepad != nil && port > 0, "layoutAcknowledged": peer != nil && !layoutPending,
-                              "ready": peer != nil && !layoutPending && (profileCapable || profileRevision == 0), "revision": profileRevision, "pro": pro, "receiverId": accessInfo["receiverId"] ?? ""])
+                              "ready": peer != nil && !layoutPending && (profileCapable || profileRevision == 0), "revision": profileRevision, "pro": pro, "receiverId": accessInfo["receiverId"] ?? "", "viewport": phoneViewport as Any? ?? NSNull()])
     }
     private func acknowledge(_ connection: NWConnection, type: String, sequence: Int, timing: [String: Double]? = nil, udp: NWConnection? = nil, reconnectToken: String? = nil) {
         let now = ProcessInfo.processInfo.systemUptime
@@ -507,7 +521,7 @@ final class Receiver {
         if leases.count > 256 { disconnect("Input rate exceeded"); return }
         var response: [String: Any] = ["type": type, "seq": sequence, "lease": lease]
         if type == "ack", desktopOutput.blocked { response["desktop"] = "permission" }
-        if type == "ready" { response["chat"] = 1; response["profiles"] = 1; response["access"] = 1; response["cloudAdoption"] = 1; response["phoneProfileSave"] = 1; response["phoneBindings"] = 1; response["desktopInput"] = 1 }
+        if type == "ready" { response["chat"] = 1; response["profiles"] = 1; response["viewport"] = 1; response["access"] = 1; response["cloudAdoption"] = 1; response["phoneProfileSave"] = 1; response["phoneBindings"] = 1; response["desktopInput"] = 1 }
         if let reconnectToken { response["reconnectToken"] = reconnectToken }
         if type == "ready", diagnostics != nil { response["diagnostics"] = true }
         if var timing { timing["ackMs"] = ProcessInfo.processInfo.systemUptime * 1000; response["timing"] = timing }
@@ -544,6 +558,7 @@ final class Receiver {
     }
     private func release() { apply(.neutral) }
     private func disconnect(_ reason: String) {
+        phoneViewport = nil
         pauseAccess()
         chatTask?.cancel(); chatTask = nil; chatBusy = false
         datagram?.stop(); datagram = nil; layoutPending = false; release(); desktopOutput.forgetAccess(); if let activity { ProcessInfo.processInfo.endActivity(activity); self.activity = nil }; let old = peer; peer = nil; leases.removeAll(); old?.cancel()

@@ -26,7 +26,7 @@ This repository contains the React Native/Expo controller, a shared JavaScript l
 
 ConsolePort is the default controller for practice, pairing, and calibration. AI/MCP controller generation is experimental and disabled by default. The phone uses the build-time flag `EXPO_PUBLIC_AI_CONTROLLER_GENERATOR_ENABLED=true`; the cloud Worker and local MCP process each require `AI_CONTROLLER_GENERATOR_ENABLED=true` to enable generation. Missing values and values other than the exact string `true` keep it disabled. Rebuild the phone bundle and restart the local MCP server after changing their flags; deploy the Worker configuration to change the hosted flag. Pairing, read-only inspection, saved controllers, and existing cloud account management remain available. Existing profiles are preserved.
 
-Local profile MCP tools, atomic profile storage, and acknowledged live layout delivery are implemented. [Thumble](docs/companion-addon.md) adds character exports, skill-binding proposals, in-game review/Apply, and confirmed phone-label synchronization. Public distribution signing, store submissions, Forever-client gameplay and latency qualification remain outstanding. See [agent profile workflow](docs/agent-profiles.md) for setup and recording instructions. The [latency report](docs/latency.md) contains measured baselines, an isolated parser improvement and the rejected Wi-Fi-lock experiment.
+Local profile MCP tools, atomic profile storage, and acknowledged live layout delivery are implemented. [Thumble](docs/companion-addon.md) adds character exports, skill-binding proposals, in-game review/Apply, and confirmed phone-label synchronization. Signed/notarized Mac and Windows/Linux preview receiver releases are recorded in [the November 13 release evidence](docs/evidence/receivers-release-2026-11-13/README.md). Store submission history is recorded in [mobile status](docs/app-store-release/status.md); dated records are not a live store-status check. Physical current-release gameplay, Forever-client compatibility and latency qualification still need acceptance evidence. See [agent profile workflow](docs/agent-profiles.md) for setup and recording instructions. The [latency report](docs/latency.md) contains measured baselines, an isolated parser improvement and the rejected Wi-Fi-lock experiment.
 ```sh
 npm test
 npm run check
@@ -49,14 +49,20 @@ Metro uses port 8088. The Android build command is `npm run android --workspace 
 
 For bundled hardware testing without Metro, run `npx expo run:ios --configuration Release --device IPHONE_UDID --no-bundler` or `npx expo run:android --variant release --device ANDROID_SERIAL --no-bundler` from `apps/mobile`. Configure `ANDROID_HOME` to the installed SDK. Build the Mac receiver using [its instructions](apps/receiver/README.md), then open Connect Mac on the phone.
 
-## Demo and Pro
+## Setup and plans
 
-The full app has a 30-minute total connected-use demo, including agent-created
-custom layouts, saved profiles and integrated dictation. Pro is a $19.99 USD
-base-price one-time native store purchase that only removes the time limit.
-Phone and desktop visual editors support controller customization. Purchase initiation stays
-disabled until production store products and first-party verification are configured.
-See [monetization setup and verification](docs/monetization-setup.md).
+Pairing, receiver setup checks, layout editing and phone-side practice are available
+before purchase. Game input and chat require an active plan or eligible store trial.
+The phone offers weekly, yearly and lifetime plans; iOS also offers Family plans.
+Localized prices and trial eligibility come from the native store catalog. Existing
+lifetime purchases retain their product ID and can be restored. The former
+30-minute connected-use demo is retired.
+
+The purchase verifier checks Apple/Google proofs and issues a signed grant bound
+to this phone and receiver. Expiry or revocation pauses output and releases held
+controls while preserving pairing and saved layouts. See
+[monetization setup](docs/monetization-setup.md) and the
+[current release acceptance matrix](docs/release-acceptance.md).
 
 ## Shared controller API
 

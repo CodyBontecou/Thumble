@@ -17,7 +17,7 @@ const shortDate = ms => new Date(ms).toLocaleDateString(undefined, { month: 'sho
 
 function planSummary(purchase, now = Date.now()) {
   if (!purchase.loaded) return { label: 'Checking your plan…', detail: 'Asking the store', filled: 0, total: 0 };
-  if (purchase.status !== 'active') return { label: 'No active plan', detail: 'Choose a plan to keep playing.', filled: 0, total: 0 };
+  if (purchase.status !== 'active') return { label: 'No active plan', detail: 'Choose a plan to send controls to your game.', filled: 0, total: 0 };
   const name = PLAN_NAMES[purchase.productId] ?? 'Plan';
   if (!purchase.expiresAt) return { label: `${name} · never expires`, detail: 'Thanks for supporting Thumble.', filled: 0, total: 0 };
   const left = Math.max(0, Math.ceil((purchase.expiresAt - now) / 86_400_000));

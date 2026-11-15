@@ -69,11 +69,13 @@ class Bridge(QObject):
                 raise ValueError('Invalid workspace payload.')
             owner = self.owner
             if operation in ('save', 'activate', 'delete'):
+                viewport = self.status.get('viewport') if self.status.get('connected') else None
+                viewport = viewport or payload.get('viewport')
                 def mutate():
                     if operation == 'save':
-                        self.profiles.save(payload.get('profile'), payload.get('expectedProfileRevision'), payload.get('viewport'))
+                        self.profiles.save(payload.get('profile'), payload.get('expectedProfileRevision'), viewport)
                     elif operation == 'activate':
-                        self.profiles.activate(payload.get('profileId'), payload.get('profileRevision'), payload.get('expectedActivationRevision'), payload.get('viewport'))
+                        self.profiles.activate(payload.get('profileId'), payload.get('profileRevision'), payload.get('expectedActivationRevision'), viewport)
                     else:
                         self.profiles.delete(payload.get('profileId'), payload.get('expectedProfileRevision'), payload.get('expectedActivationRevision'))
                 # The normal receiver poll observes activation and releases input

@@ -1,4 +1,10 @@
-import { assertProfile, validateLayout, layoutLimits, BUTTONS, TRIGGERS, defaultProfile, builtInProfiles, desktopKeys, desktopLabels, keyChordLabel, mouseOutputs } from "../../controller/src/index.js";
+import { assertProfile, validateLayout, validViewport, layoutLimits, BUTTONS, TRIGGERS, defaultProfile, builtInProfiles, desktopKeys, desktopLabels, keyChordLabel, mouseOutputs } from "../../controller/src/index.js";
+
+export function phoneViewport(snapshot) {
+  const value = snapshot?.receiver?.viewport;
+  return snapshot?.receiver?.running && snapshot.receiver.connected && validViewport(value) && value.width > value.height
+    ? { width: value.width, height: value.height } : null;
+}
 
 export const copy = value => JSON.parse(JSON.stringify(value));
 export const signature = value => JSON.stringify(value, (_key, item) => item && typeof item === 'object' && !Array.isArray(item) ? Object.fromEntries(Object.keys(item).sort().map(key => [key, item[key]])) : item);
@@ -8,6 +14,13 @@ export const acknowledged = snapshot => !!snapshot?.receiver.running && !!snapsh
 export function profileState(entry, snapshot) {
   if (snapshot.active?.profile.id !== entry.profile.id) return 'saved';
   return snapshot.active.profileRevision === entry.revision ? 'selected' : 'draft';
+}
+export function phoneStatus(entry, snapshot) {
+  const state = profileState(entry, snapshot);
+  if (state === 'saved') return 'Not selected';
+  const revision = snapshot.active.profileRevision;
+  const label = acknowledged(snapshot) ? 'Confirmed' : snapshot.receiver?.connected ? 'Awaiting confirmation' : 'Selected for next connection';
+  return `${label} · revision ${revision}${state === 'draft' ? ' · newer saved' : ''}`;
 }
 export function labelColor(color = '#3c473d') {
   const channels = color.slice(1).match(/../g).map(hex => parseInt(hex, 16) / 255).map(value => value <= .04045 ? value / 12.92 : ((value + .055) / 1.055) ** 2.4);

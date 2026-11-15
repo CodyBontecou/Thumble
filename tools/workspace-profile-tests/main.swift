@@ -43,3 +43,17 @@ for (index, step) in (fixture["steps"] as! [[String: Any]]).enumerated() {
     }
 }
 print("PASS: shared desktop workspace contract (\((fixture["steps"] as! [Any]).count) operations)")
+
+// A fresh connected phone wins over a manually supplied editor viewport.
+let phoneSize: [String: Any] = ["width": 900, "height": 400]
+check(WorkspaceProfiles.phoneViewport(phoneSize) != nil, "valid phone canvas rejected")
+for invalid: [String: Any] in [["width": true, "height": 1], ["width": 390, "height": 844], ["width": 10001, "height": 390], ["width": 844, "height": 0], ["width": 844, "height": 390, "extra": 1]] {
+    check(WorkspaceProfiles.phoneViewport(invalid) == nil, "invalid phone canvas accepted")
+}
+try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+let statusURL = directory.appendingPathComponent("receiver-status.json")
+for (connected, at, accepted) in [(true, 1000.0, true), (false, 1000.0, false), (true, -5000.0, false), (true, 2000.0, false)] {
+    try JSONSerialization.data(withJSONObject: ["running": true, "connected": connected, "updatedAt": at, "viewport": phoneSize]).write(to: statusURL)
+    check((WorkspaceProfiles.connectedViewport(directory, now: 1001) != nil) == accepted, "stale/disconnected phone canvas trusted")
+}
+print("PASS phone canvas validation, freshness and disconnect contract")

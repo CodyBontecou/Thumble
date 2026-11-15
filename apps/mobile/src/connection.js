@@ -10,7 +10,6 @@ export const connection = new Connection(native, { beforeConnect: async () => {
     if (result !== PermissionsAndroid.RESULTS.GRANTED) throw new Error('Allow local network access to connect to your computer.');
   }
   connection.phoneId = await purchases.installationId();
-  connection.demoUsed = await purchases.demoUsed();
   if (AppState.currentState !== 'active') throw new Error('Open Thumble before connecting to your computer.');
 } });
 const pairingKey = 'thumble.receiver.reconnect.v1';
@@ -47,19 +46,10 @@ AppState.addEventListener('change', phase => {
 restoreConnection();
 
 purchases.initialize(connection);
-let lastPairing = '', lastDebit = -1;
+let lastPairing = '';
 connection.subscribeAccess(() => {
   const access = connection.accessSnapshot();
   if (!access) { lastPairing = ''; return; }
-  if (!access.pro && Math.floor(1800 - access.remaining) !== lastDebit) {
-    lastDebit = Math.floor(1800 - access.remaining);
-    // Mirror actual consumed time; pre-debit reservations are conservative on crashes.
-    void purchases.rememberDemo(lastDebit).catch(() => {
-      connection.pausePlay();
-      const current = connection.accessSnapshot();
-      if (current) connection.setAccess({ ...current, error: 'Free time could not be saved. Restore Pro or try again.' });
-    });
-  }
   const pairing = `${access.receiverId}:${access.nonce}`;
   if (lastPairing !== pairing) {
     lastPairing = pairing;

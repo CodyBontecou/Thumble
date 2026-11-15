@@ -67,14 +67,24 @@ export function argentTool(name, args = {}) {
   return text ? JSON.parse(text) : result;
 }
 
-export function assertSmokeReport(report) {
+export function assertSmokeReport(report, name = 'qa-ios-release-launch') {
   const expected = ['script', 'launch', 'await', 'idle', 'assert'];
-  if (report.ok !== true || report.e2eTest !== 'qa-ios-release-launch' || report.passed !== expected.length ||
+  if (report.ok !== true || report.e2eTest !== name || report.passed !== expected.length ||
       !Array.isArray(report.steps) || report.steps.length !== expected.length ||
       report.steps.some((step, index) => step.kind !== expected[index] || step.status !== 'pass' ||
         step.reason || step.warning || step.warnings?.length)) {
     throw new Error('Launch smoke test did not pass every step without warnings.');
   }
+}
+
+export function assertJourneyReport(report, name) {
+  if (report.ok !== true || report.e2eTest !== name || !Array.isArray(report.steps) || report.steps.length < 3 ||
+      report.passed !== report.steps.length || report.steps.some(step => step.status !== 'pass' || step.reason ||
+        (step.kind !== 'idle' && (step.warning || step.warnings?.length)))) {
+    throw Error('UI journey did not pass every recorded requirement.');
+  }
+  // Idle can report cosmetic movement (e.g. a fading scroll indicator). Screen
+  // identities and measured orientation are separate hard requirements.
 }
 
 export function appIdentity(app) {

@@ -93,14 +93,66 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+  android-release:
+    name: Android Release launch
+    needs: source
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      CI: '1'
+      EXPO_NO_TELEMETRY: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Enable emulator acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - run: npm ci --no-audit --no-fund
+      - name: Prepare Android test image
+        run: |
+          sdkmanager 'system-images;android-36;google_apis;x86_64' 'platform-tools' 'emulator'
+          echo no | avdmanager create avd --force --name thumble-release-qa --package 'system-images;android-36;google_apis;x86_64' --device pixel_7
+      - name: Boot Android with Argent
+        run: |
+          npm install --global @swmansion/argent@0.32.0
+          argent server start --detach
+          argent run list-devices --args '{}' --json
+          argent run boot-device --args '{"avdName":"thumble-release-qa"}' --json
+      - name: Build Release and prove two clean-install launches
+        run: npm run mobile:smoke:android -- --output build/android-ci
+      - name: Preserve Android launch evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-release-launch-${{ github.sha }}
+          path: |
+            build/android-ci/*.json
+            build/android-ci/*.log
+            build/android-ci/screenshots/**
+          if-no-files-found: warn
+          retention-days: 14
+
   required:
     name: Mobile required checks
     if: always()
-    needs: [source, ios-release]
+    needs: [source, ios-release, android-release]
     runs-on: ubuntu-latest
     steps:
-      - name: Require both validation jobs
+      - name: Require all validation jobs
         env:
           SOURCE_RESULT: ${{ needs.source.result }}
           IOS_RESULT: ${{ needs.ios-release.result }}
-        run: test "$SOURCE_RESULT" = success && test "$IOS_RESULT" = success
+          ANDROID_RESULT: ${{ needs.android-release.result }}
+        run: test "$SOURCE_RESULT" = success && test "$IOS_RESULT" = success && test "$ANDROID_RESULT" = success

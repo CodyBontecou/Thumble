@@ -1,4 +1,7 @@
-# Full-featured demo and unlimited Pro
+# Historical: full-featured demo and unlimited Pro
+
+Superseded by the November 2026 plans in [monetization setup](monetization-setup.md).
+The old free demo below is retained as design history, not current behavior.
 
 Updated October 23, 2026 to reflect the user's instruction: no feature gates.
 

@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
-import { appIdentity, argentTool, assertSmokeReport, directoryHash, fileHash, readJSON, root, run, sameSource, smokeTest, sourceIdentity, writeJSON } from './common.mjs';
+import { appIdentity, argentTool, assertJourneyReport, assertSmokeReport, directoryHash, fileHash, readJSON, root, run, sameSource, smokeTest, sourceIdentity, writeJSON } from './common.mjs';
 
 function buildSimulator({ output, target, source, allowDirty }) {
   const temporary = allowDirty ? null : mkdtempSync(path.join(os.tmpdir(), 'thumble-simulator-source-'));
@@ -92,12 +92,22 @@ function validateLaunch({ output, device, simApp, productionApp, allowDirty = fa
     console.log(`Clean-install Release launch pass ${pass}/2 succeeded.`);
   }
   if (directoryHash(installedApp) !== appSha256) throw new Error('Test app changed during validation.');
+  const journeyReports = [];
+  const journey = 'qa-ios-controller-orientation';
+  for (let pass = 1; pass <= 2; pass++) {
+    const file = path.join(output, `journey-pass-${pass}.json`);
+    run('argent', ['e2e', 'run', journey, '--platform', 'ios', '--device', target.udid,
+      '--output', path.join(output, 'screenshots'), '--json'], { log: file });
+    assertJourneyReport(readJSON(file), journey);
+    journeyReports.push({ path: path.basename(file), sha256: fileHash(file) });
+  }
   if (!allowDirty) sameSource(source, sourceIdentity());
   const receipt = {
     schemaVersion: 1, source, configuration: 'Release', platform: 'ios-simulator',
     device: { name: target.name, runtime: target.runtime },
     app: identity, appSha256, productionBundle: Boolean(productionApp),
-    testSha256: fileHash(smokeTest), reports,
+    testSha256: fileHash(smokeTest), reports, journeyReports,
+    journeyTestSha256: fileHash(path.join(root, '.argent/e2e', `${journey}.yaml`)),
   };
   writeJSON(receiptPath, receipt);
   return receipt;

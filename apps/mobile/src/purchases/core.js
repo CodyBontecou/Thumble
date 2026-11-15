@@ -118,8 +118,6 @@ export function createPurchaseStore(native, config, fetcher = fetch) {
       connector.sendGrant(grant);
     },
     async installationId() { if (!native) throw Error("Install the updated native app before pairing."); return await native.installationId(); },
-    async demoUsed() { return native ? await native.demoUsed() : 0; },
-    async rememberDemo(used) { if (native) await native.saveDemoUsed(used); },
     configured: () => !!native && config.entitlementServiceURL.startsWith('https://') && !!config.entitlementPublicKey,
   };
 

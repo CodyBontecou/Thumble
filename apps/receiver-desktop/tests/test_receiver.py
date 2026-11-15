@@ -227,6 +227,20 @@ class SessionTests(unittest.TestCase):
         return dict(type='input', revision=0, state=state.__dict__, seq=seq,
                     lease=self.lease if lease is None else lease)
 
+    def test_phone_canvas_never_refreshes_input_or_unlocks_output(self):
+        before = self.session.last_input
+        self.clock.value += 0.1
+        self.session.handle(dict(type='viewport', width=844, height=390))
+        self.assertEqual(self.session.status()['viewport'], dict(width=844, height=390))
+        self.assertEqual(self.session.last_input, before)
+        self.assertFalse(self.session.enabled)
+        self.assertEqual(self.output.backend.state, NEUTRAL)
+        for fields in [dict(width=True, height=1), dict(width=390, height=844), dict(width=float('nan'), height=1), dict(width=10001, height=1), dict(width=844, height=390, extra=1)]:
+            with self.subTest(fields=fields), self.assertRaises(ProtocolError):
+                self.session.handle(dict(type='viewport', **fields))
+        with self.assertRaises(ProtocolError):
+            self.session.handle(dict(type='viewport', width=844, height=390), udp=True)
+
     def test_without_plan_resume_stays_disabled_and_held_input_is_neutral(self):
         replies = self.session.handle(dict(type='access-resume'))
         self.assertFalse(self.session.enabled)
@@ -727,7 +741,7 @@ class TransportTests(unittest.IsolatedAsyncioTestCase):
             stdout, stderr = await asyncio.wait_for(process.communicate(json.dumps(
                 dict(invitation=link, grantKey=grant_key, expectUdp=udp, expectChat=chat)).encode()), 12)
             self.assertEqual(process.returncode, 0, stderr.decode() + '\nReceiver: ' + self.server.profile_error)
-            self.assertIn('PASS real phone connection', stdout.decode())
+            self.assertIn('PASS portable phone connection', stdout.decode())
         finally:
             if process.returncode is None:
                 process.kill()

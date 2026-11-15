@@ -3,7 +3,7 @@
 The Windows/Linux preview is in [receiver-desktop](../receiver-desktop/README.md),
 with a separate protocol implementation and GitHub Actions test/package matrix.
 
-Small AppKit menu-bar app for macOS 15+. Receives one phone over local Wi-Fi and emits the Xbox-compatible 20-byte HID report. A paired phone can explicitly adopt a validated cloud controller as an immutable local profile. The LAN controller needs no cloud account. Optional ChatGPT pairing shares a temporary QR through your Thumble account; gameplay stays on the local network. There are no game scripts or keyboard emulation.
+Small AppKit menu-bar app for macOS 15+. Receives one phone over local Wi-Fi and emits the Xbox-compatible 20-byte HID report. A paired phone can explicitly adopt a validated cloud controller as an immutable local profile. The LAN controller needs no cloud account. Optional ChatGPT pairing shares a temporary QR through your Thumble account; gameplay stays on the local network. Gamepad controls emit virtual HID reports. Optional declarative desktop controls also support keyboard and pointer input; no game scripts are executed.
 
 ```sh
 bash tools/build-macos-receiver.sh /path/to/approved.provisionprofile 'Developer ID Application identity'
@@ -25,7 +25,7 @@ creation and neutral-report submission without opening a listener or loading
 profiles. Direct terminal execution can inherit the terminal's controller access
 and is insufficient as a distribution check. The packaging script enforces this gate.
 
-The receiver creates a process-local TLS certificate with macOS's `/usr/bin/openssl`, imports its identity into memory only, and deletes temporary key files. The phone pins the exact SHA-256 leaf certificate from the QR. A new receiver process has a new certificate. LAN changes currently require restarting the receiver. Automatic discovery, remembered pairing, distribution signing and launch-at-login remain follow-up work.
+The receiver persists its TLS identity and remembered-phone credential in Keychain, and keeps a stable listener port across restarts. The phone pins the exact SHA-256 leaf certificate from the QR. Reconnect uses a separate credential rather than reusing the QR token. Explicit Forget revokes trust. Signed/notarized releases and launch-at-login are implemented; see `docs/release-acceptance.md` for current acceptance checks. LAN address changes can still require a fresh pairing.
 
 Input processing and the watchdog use their own serial queue. A 20 ms timer releases the gamepad after 300 ms without valid input, uses a separate 500 ms server-clock lease budget, requires fresh-lease neutral recovery, and closes the session after two seconds without valid input. The UI thread does not own that timer. On Mac sleep, disconnect or quit, all controls release. Rumble is unsupported.
 

@@ -10,7 +10,8 @@ import { Button as ThumbleButton, fonts, pad } from './ui/design';
 import Tour from './Tour';
 import ControllerChat, { useControllerChat } from './ControllerChat';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { Animated, AppState, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Animated, AppState, Linking, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { requestOrientation } from './orientation';
 import { router, useFocusEffect } from 'expo-router';
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -89,6 +90,8 @@ export function WowSetupScreen() {
 }
 
 function Screen({ tour = false }) {
+  const window = useWindowDimensions();
+  const landscape = window.width > window.height;
   const coach = tour;
   const { state: setup, save: saveSetup } = useSetup();
   const [pill, setPill] = useState(/** @type {any} */ (null));
@@ -147,8 +150,11 @@ function Screen({ tour = false }) {
   useLayoutEffect(() => {
     controller.releaseAll();
     controller.replaceProfile(renderedProfile);
-    connection.acknowledgeLayout(layout.revision);
-  }, [controller, layout, renderedProfile]);
+    if (landscape && size.width > size.height) connection.acknowledgeLayout(layout.revision);
+  }, [controller, layout, renderedProfile, landscape, size.width, size.height]);
+  useEffect(() => {
+    if (!landscape) { controller.releaseAll(); connection.pausePlay(); }
+  }, [controller, landscape]);
   useEffect(() => {
     if (cloudSelection && focused && size.width > 0 && cloudState.foreground) void cloud.rendered(cloudSelection);
   }, [cloudSelection, focused, size.width, cloudState.foreground, cloudState.renderAttempt]);
@@ -174,13 +180,26 @@ function Screen({ tour = false }) {
     return () => { setFocused(false); pauseChat(); controller.releaseAll(); connection.pausePlay(); };
   }, [controller, pauseChat]));
   useEffect(() => {
-    if (focused && appActive && network.phase === 'connected' && access && !access.enabled && !access.error && !connection.layoutPending && access.pro) {
+    if (!focused || !appActive || landscape) return;
+    // UIKit can refuse geometry while a native-stack transition is finishing.
+    // Retry only while this controller is visible and still measured portrait.
+    // Cleanup on blur/rotation prevents a delayed lock from affecting setup.
+    let timer, attempts = 0;
+    const recover = () => {
+      void requestOrientation(true);
+      if (++attempts < 4) timer = setTimeout(recover, 250);
+    };
+    recover();
+    return () => clearTimeout(timer);
+  }, [focused, appActive, landscape]);
+  useEffect(() => {
+    if (focused && landscape && appActive && network.phase === 'connected' && access && !access.enabled && !access.error && !connection.layoutPending && access.pro) {
       controller.releaseAll();
       connection.resumePlay();
     }
-  }, [focused, appActive, network.phase, network.detail, access, layout.revision, controller]);
+  }, [focused, landscape, appActive, network.phase, network.detail, access, layout.revision, controller]);
   function touch(method, event) {
-    if (!geometry.width || !geometry.height || connection.layoutPending || connection.recovering) return;
+    if (!landscape || !geometry.width || !geometry.height || connection.layoutPending || connection.recovering) return;
     connection.withTouch(() => {
     for (const item of event.nativeEvent.changedTouches) {
       if (chatTouches.current.has(item.identifier)) {
@@ -198,15 +217,15 @@ function Screen({ tour = false }) {
     });
   }
   function accessiblePress(control) {
-    if (['stick', 'trackpad'].includes(control.type) || connection.layoutPending || connection.recovering || openChat(control)) return;
+    if (!landscape || ['stick', 'trackpad'].includes(control.type) || connection.layoutPending || connection.recovering || openChat(control)) return;
     const id = `accessible-${control.id}`;
     controller.down(id, control.frame.x + control.frame.width / 2, control.frame.y + control.frame.height / 2);
     setTimeout(() => controller.up(id), 80);
   }
   return (
-    <SafeAreaView style={s.screen} pointerEvents={focused ? 'auto' : 'none'} accessibilityElementsHidden={!focused} importantForAccessibility={focused ? 'auto' : 'no-hide-descendants'}>
+    <SafeAreaView testID={landscape ? 'controller-landscape' : 'controller-portrait'} style={s.screen} pointerEvents={focused ? 'auto' : 'none'} accessibilityElementsHidden={!focused} importantForAccessibility={focused ? 'auto' : 'no-hide-descendants'}>
       <StatusBar hidden />
-      <View style={s.canvas} onLayout={event => { controller.setViewport(event.nativeEvent.layout.width, event.nativeEvent.layout.height); cloud.setViewport(event.nativeEvent.layout); setSize(event.nativeEvent.layout); const target = event.currentTarget; if (typeof target !== 'number') target.measureInWindow((x, y, width, height) => Object.assign(geometry, { x, y, width, height })); }}
+      <View style={s.canvas} onLayout={event => { controller.setViewport(event.nativeEvent.layout.width, event.nativeEvent.layout.height); cloud.setViewport(event.nativeEvent.layout); connection.setViewport(event.nativeEvent.layout); setSize(event.nativeEvent.layout); const target = event.currentTarget; if (typeof target !== 'number') target.measureInWindow((x, y, width, height) => Object.assign(geometry, { x, y, width, height })); }}
         onStartShouldSetResponder={() => true}
         onResponderGrant={event => touch('down', event)} onResponderStart={event => touch('down', event)}
         onResponderMove={event => touch('move', event)} onResponderEnd={event => touch('up', event)}
@@ -219,7 +238,7 @@ function Screen({ tour = false }) {
           top-right corner, so neither covers a control; the pill sits below. */}
       <View style={[s.chrome, { top: insets.top + 6, left: insets.left + 8, right: insets.right + 8 }]} pointerEvents="box-none">
         {!hasChatControl && <Pressable accessibilityRole="button" accessibilityLabel={chat.state === 'listening' ? 'Stop dictation' : 'Chat'} onPress={chat.toggle} style={({ pressed }) => [s.chip, s.chatChip, pressed && s.pressed]}><Text style={s.chipText}>{chat.state === 'listening' ? 'Stop' : 'Chat'}</Text></Pressable>}
-        <Pressable accessibilityRole="button" accessibilityLabel="Thumble menu" testID="controller-menu"
+        <Pressable accessibilityRole="button" accessibilityLabel="Thumble menu" accessibilityValue={{ text: landscape ? 'Landscape' : 'Portrait' }} testID="controller-menu"
           onPress={() => { controller.releaseAll(); router.push('/controller-menu'); }}
           style={({ pressed }) => [s.chip, s.menuChip, pressed && s.pressed]}><Text style={[s.chipText, { fontSize: 18 }]}>≡</Text></Pressable>
       </View>
@@ -234,7 +253,7 @@ function Screen({ tour = false }) {
           <Text style={s.pillText}>{connected ? (network.rtt != null ? `Computer · ${network.rtt} ms` : 'Computer connected') : connecting ? 'Connecting…' : 'Not connected · tap to pair'}</Text>
         </Pressable>
       </View>
-      {coach && focused && setup.loaded && <Tour state={setup} save={saveSetup} connected={connected} connecting={connecting} rtt={network.rtt ?? null} pill={pill} onRelease={() => controller.releaseAll()} />}
+      {coach && landscape && focused && setup.loaded && <Tour state={setup} save={saveSetup} connected={connected} connecting={connecting} rtt={network.rtt ?? null} pill={pill} onRelease={() => controller.releaseAll()} />}
       {exhausted && !coach && !planDismissed && <View style={s.overlay}><ScrollView style={s.card} contentContainerStyle={{ gap: 10 }} accessibilityViewIsModal>
         <Text style={[s.ovTag, { color: pad.y }]}>Setup connected · game input paused</Text>
         <Text style={s.ovTitle}>Ready to choose a plan?</Text>
@@ -257,6 +276,12 @@ function Screen({ tour = false }) {
       </View></View>}
       {network.phase === 'connected' && !!access?.error && !exhausted && <Text accessibilityRole="alert" style={s.accessError}>{access.error}</Text>}
       {network.phase === 'connected' && !access?.error && network.keysBlocked && <Text accessibilityRole="alert" style={s.accessError}>Keys are off: on your Mac, allow Thumble Receiver in System Settings → Privacy & Security → Accessibility.</Text>}
+      {!landscape && focused && <View style={s.overlay}><View style={s.card} accessibilityViewIsModal>
+        <Text style={s.ovTitle}>Turn your phone sideways.</Text>
+        <Text style={s.ovBody}>Controls are paused until the window is wide enough. If you’re mirroring your phone, make that window wider.</Text>
+        <ThumbleButton onPress={() => { void requestOrientation(true); }}>Try landscape again</ThumbleButton>
+        <ThumbleButton secondary onPress={() => router.push('/connect')}>Check setup</ThumbleButton>
+      </View></View>}
     </SafeAreaView>
   );
 }

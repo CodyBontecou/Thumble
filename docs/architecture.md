@@ -1,5 +1,7 @@
 # Architecture and release gates
 
+> The original launch schedule and gates below are historical planning context. Current implemented protocol behavior is in [LAN protocol](lan-protocol.md); current acceptance evidence is in [release acceptance](release-acceptance.md).
+
 ## Product contract
 
 - JavaScript React Native application for iOS and Android.
@@ -27,7 +29,7 @@ Implemented MCP adapter: `packages/profile-tools`, a local stdio process exposin
 
 Implemented pairing: a short-lived QR invitation contains a receiver address, pinned identity and single-use secret. A cryptographic handshake establishes an authenticated encrypted session. Do not send a reusable bearer secret in every cleartext input packet. Use an established secure transport rather than custom cryptography. Re-pair/revoke is available from the menu bar. Handle camera denial with a manually entered pairing invitation.
 
-The current vertical slice uses native TLS WebSockets with immediate full-state transitions, 33 ms heartbeats, TCP no-delay and server-clock freshness leases. It releases on stalls and requires neutral recovery. See [protocol v1](lan-protocol.md). Protocol v2 adds layout distribution, renderer acknowledgement and input revision checks; legacy v1 clients support only the built-in layout.
+The current vertical slice uses native TLS WebSockets with immediate full-state transitions, 33 ms heartbeats, TCP no-delay and server-clock freshness leases. It releases on stalls and requires neutral recovery. See [protocol v1](lan-protocol.md). Protocol v3 includes layout distribution, renderer acknowledgement, input revision checks and remembered-phone reconnects. Current receivers require v3.
 
 Before release, separate reliable configuration traffic from fresh input. Prototype a native datagram or unordered data-channel path and benchmark it against a simple persistent connection. Select transport after measuring on physical devices. Never queue old analog positions behind configuration or telemetry. Button press/release edges need acknowledgements and bounded retransmission: full-state UDP snapshots alone can lose a short tap entirely. Include full-state heartbeats to repair losses and release held inputs.
 

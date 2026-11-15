@@ -4,7 +4,7 @@ Thumble initially targets World of Warcraft on a Mac with ConsolePort. The phone
 
 ## First run (November 2026 redesign)
 
-Welcome → plan (hard paywall, 7-day trial) → Connect → Rotate (portrait phones) → coached Practice → controller.
+Welcome → receiver setup checks → phone practice and controller tour → optional plan or eligible store trial → game input. Pairing, layout delivery and local practice work before purchase; the receiver still requires a signed plan grant for game input and chat.
 
 - **Connect** shows three lights that the phone detects itself: *paired* (receiver handshake), *gamepad live* (connected with input recovered) and *spell labels* (ConsolePort sync is following this controller, which only happens when ConsolePort and the Thumble addon both work). The WoW client picker and the "ConsolePort is ready" confirmation are gone. Players without the addon can choose **Play with button names**, saved per receiver and controller.
 - **Practice** runs on the real controller: five prompts (move, look, jump, a modifier layer, game menu), each with the control ringed and a one-line fix under **Not quite**. Finishing records the same milestones as the former five checks, so existing completion rules and tests still apply.

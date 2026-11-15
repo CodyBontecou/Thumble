@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { assertSmokeReport, sourceIdentity } from '../mobile/common.mjs';
+import { assertJourneyReport, assertSmokeReport, sourceIdentity } from '../mobile/common.mjs';
 import { verifyManifest } from '../mobile/release-manifest.mjs';
 
 function fixture() {
@@ -81,4 +81,16 @@ test('release source validation rejects both uncommitted edits and untracked sou
     writeFileSync(path.join(directory, 'app.js'), 'changed');
     assert.throws(() => sourceIdentity(true, directory), /clean committed/);
   } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+
+test('Android launch reports are bound to their scenario and UI journeys fail closed', () => {
+  const launch = {e2eTest:'qa-android-release-launch',ok:true,passed:5,steps:['script','launch','await','idle','assert'].map(kind=>({kind,status:'pass'}))};
+  assertSmokeReport(launch,'qa-android-release-launch');
+  assert.throws(()=>assertSmokeReport(launch));
+  const journey = {e2eTest:'qa-setup-before-purchase',ok:true,passed:3,steps:['launch','tap','await'].map(kind=>({kind,status:'pass'}))};
+  assertJourneyReport(journey,journey.e2eTest);
+  for (const mutate of [r=>{r.ok=false;},r=>{r.steps=[];},r=>{r.steps[2].status='skipped';},r=>{r.steps[2].warning='unreadable';}]) {
+    const invalid=structuredClone(journey);mutate(invalid);assert.throws(()=>assertJourneyReport(invalid,journey.e2eTest));
+  }
 });

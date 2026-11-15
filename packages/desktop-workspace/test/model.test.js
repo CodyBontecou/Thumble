@@ -139,3 +139,22 @@ test('controller sources, groups and analog availability drive the library and p
   assert.equal(canAdd(profile, 'stick'), false);
   assert.equal(canAdd(profile, 'key'), true);
 });
+import { phoneViewport, phoneStatus } from '../src/model.js';
+
+test('selection never claims phone delivery without the current renderer acknowledgement', () => {
+  const entry = {profile:{id:'test'},revision:2};
+  const snapshot = {active:{profile:{id:'test'},profileRevision:2},activationRevision:8,receiver:{running:true,connected:false,layoutAcknowledged:false,revision:8}};
+  assert.match(phoneStatus(entry,snapshot), /Selected for next connection/);
+  snapshot.receiver.connected=true;
+  assert.match(phoneStatus(entry,snapshot), /Awaiting confirmation/);
+  snapshot.receiver.layoutAcknowledged=true;
+  assert.equal(phoneStatus(entry,snapshot),'Confirmed · revision 2');
+  snapshot.receiver.revision=7;
+  assert.match(phoneStatus(entry,snapshot), /Awaiting confirmation/);
+});
+
+test('only the currently connected phone supplies a bounded landscape canvas', () => {
+  const receiver = {running: true, connected: true, viewport: {width: 900, height: 400}};
+  assert.deepEqual(phoneViewport({receiver}), {width: 900, height: 400});
+  for (const patch of [{connected:false}, {running:false}, {viewport:null}, {viewport:{width:400,height:900}}, {viewport:{width:Infinity,height:400}}]) assert.equal(phoneViewport({receiver:{...receiver,...patch}}), null);
+});

@@ -37,7 +37,7 @@ Run `node --test tools/test/downloads-worker.test.js`, dry-run the Worker deploy
 then deploy with `wrangler deploy --config apps/downloads/wrangler.jsonc`.
 Verify public GET/HEAD, alias targets and downloaded SHA-256 before adding links.
 
-The website source is currently `../Thumble-legacy/Website`, deployed to Pages
+The website source is `apps/website` in this repository, deployed to Pages
 project `pocketpad-site`. Its download cards and `/docs#desktop-receivers` explain
 all three platforms. Preserve the published `/cli/` files when deploying that
 source, since CLI archives are generated outputs stored separately.

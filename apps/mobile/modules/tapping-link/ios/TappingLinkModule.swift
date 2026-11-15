@@ -2,6 +2,7 @@ import ExpoModulesCore
 import Foundation
 import CryptoKit
 import Security
+import UIKit
 
 public final class TappingLinkModule: Module {
     private var link: PinnedSocket?
@@ -11,6 +12,22 @@ public final class TappingLinkModule: Module {
     public func definition() -> ModuleDefinition {
         Name("TappingLink")
         Events("status", "message")
+        AsyncFunction("requestOrientation") { (landscape: Bool) -> Bool in
+            guard let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene })
+                .first(where: { $0.activationState == .foregroundActive && $0.windows.contains(where: { $0.isKeyWindow }) }),
+                  let window = scene.windows.first(where: { $0.isKeyWindow }), let root = window.rootViewController else { return false }
+            var top = root
+            while let presented = top.presentedViewController { top = presented }
+            // Re-evaluate the focused native stack after presentation/foreground
+            // changes, then request geometry on that window's own scene.
+            root.setNeedsUpdateOfSupportedInterfaceOrientations()
+            top.setNeedsUpdateOfSupportedInterfaceOrientations()
+            scene.requestGeometryUpdate(.iOS(interfaceOrientations: landscape ? .landscape : .allButUpsideDown)) { _ in
+                // A resizable/mirrored window can refuse. JS checks actual canvas
+                // shape and pauses controls rather than assuming this succeeded.
+            }
+            return true
+        }.runOnQueue(.main)
         Function("connect") { (url: String, pin: String) in
             self.datagram?.close(); self.datagram = nil
             let id = UUID().uuidString

@@ -1,5 +1,5 @@
 import { LatencyRecorder } from './latency-recorder.js';
-import { neutralState, parseInvitation, parseReceiverEndpoint, assertProfile, defaultProfile, hasDesktopInput, isNeutralInput } from '@tapping/controller';
+import { neutralState, parseInvitation, parseReceiverEndpoint, assertProfile, defaultProfile, hasDesktopInput, isNeutralInput, validViewport } from '@tapping/controller';
 
 const canonical = value => JSON.stringify(value, (_, item) => item && typeof item === 'object' && !Array.isArray(item) ? Object.fromEntries(Object.keys(item).sort().map(key => [key, item[key]])) : item);
 
@@ -8,7 +8,24 @@ export class Connection {
   accessListeners = new Set();
   /** @type {any} */
   access = null;
-  demoUsed = 0;
+  /** @type {{width: number, height: number} | null} */
+  viewport = null;
+  viewportSupported = false;
+  setViewport(value) {
+    // The controller canvas already excludes safe areas. Never report a portrait
+    // transition as the landscape design target.
+    if (!validViewport(value) || value.width <= value.height) return false;
+    const next = { width: value.width, height: value.height };
+    if (canonical(next) === canonical(this.viewport)) return false;
+    this.viewport = next;
+    this.publishViewport();
+    return true;
+  }
+  publishViewport() {
+    if (this.viewport && this.viewportSupported && this.view.phase === 'connected') {
+      if (!this.native.send(JSON.stringify({ type: 'viewport', ...this.viewport }))) this.disconnect('Could not report phone screen size', { keepPairing: true });
+    }
+  }
   phoneId = "";
   subscribeAccess = listener => { this.accessListeners.add(listener); return () => this.accessListeners.delete(listener); };
   accessSnapshot = () => this.access;
@@ -83,7 +100,7 @@ export class Connection {
     this.native = native; this.beforeConnect = beforeConnect; this.timers = timers; this.now = now;
     native.addListener('status', ({ value, id }) => {
       if (!this.session || id !== this.session) return;
-      if (value === 'open' && this.invitation) this.native.send(JSON.stringify({ type: 'hello', v: 3, desktopInput: 1, phoneId: this.phoneId, demoUsed: this.demoUsed, ...(this.invitation.reconnectToken ? { reconnectToken: this.invitation.reconnectToken } : { token: this.invitation.token }), datagram: typeof this.native.configureDatagram === 'function' ? 1 : 0 }));
+      if (value === 'open' && this.invitation) this.native.send(JSON.stringify({ type: 'hello', v: 3, desktopInput: 1, phoneId: this.phoneId, ...(this.invitation.reconnectToken ? { reconnectToken: this.invitation.reconnectToken } : { token: this.invitation.token }), datagram: typeof this.native.configureDatagram === 'function' ? 1 : 0 }));
       else if (value !== 'open' && this.view.phase !== 'offline') this.disconnect(value, { keepPairing: true });
     });
     native.addListener('message', ({ value, id, receivedAt, transport }) => {
@@ -191,8 +208,10 @@ export class Connection {
           this.phoneProfileSaveSupported = message.phoneProfileSave === 1;
           this.phoneBindingsSupported = message.phoneBindings === 1;
           this.desktopInputSupported = message.desktopInput === 1;
+          this.viewportSupported = message.viewport === 1;
           this.diagnostics = message.diagnostics === true && typeof this.native.sendTimed === 'function' ? new LatencyRecorder(text => this.native.send(text)) : null;
           this.update({ phase: 'connected', detail: 'Connected · Xbox gamepad', rtt: null, chat: message.chat === 1, keysBlocked: false });
+          this.publishViewport();
           this.submit(neutralState(), 'neutral');
           if (this.view.phase !== 'connected') return;
           this.timer = this.timers.setInterval(() => {
@@ -454,6 +473,7 @@ export class Connection {
     for (const listener of this.profileListeners) listener();
     this.lease = null; this.invitation = null; this.state = neutralState(); this.pending.clear();
     this.profilesSupported = false;
+    this.viewportSupported = false;
     this.cloudAdoptionSupported = false;
     this.phoneProfileSaveSupported = false;
     this.phoneBindingsSupported = false;

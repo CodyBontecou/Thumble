@@ -1,0 +1,9 @@
+# Unpaid clean install: Welcome reaches receiver compatibility checks without billing.
+steps:
+  - script: { path: ../../tools/mobile/clean-install.mjs, timeout: 60000 }
+  - launch: com.thumble.android
+  - await: { visible: { id: welcome-start }, timeout: 15000 }
+  - await: { idle: true }
+  - tap: { id: welcome-start }
+  - await: { visible: { text: Scan pairing code }, timeout: 15000 }
+  - await: { idle: true }
