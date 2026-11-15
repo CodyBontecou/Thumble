@@ -65,8 +65,8 @@ test('existing public release and latest redirect remain available', async () =>
 test('latest points at the Thumble Studio release and previous public versions remain available', async () => {
   const { env, reads } = fixture();
   const latest = await worker.fetch(new Request('https://thumble.io/downloads/receiver-latest.dmg'), env);
-  assert.equal(latest.headers.get('Location'), '/downloads/Thumble-Receiver-1.1.0.dmg');
-  for (const version of ['1.0.0', '1.0.1', '1.0.2', '1.0.3', '1.1.0']) {
+  assert.equal(latest.headers.get('Location'), '/downloads/Thumble-Receiver-1.1.1.dmg');
+  for (const version of ['1.0.0', '1.0.1', '1.0.2', '1.0.3', '1.1.0', '1.1.1']) {
     for (const suffix of ['', '.sha256']) {
       const name = `Thumble-Receiver-${version}.dmg${suffix}`;
       assert.equal((await worker.fetch(new Request(`https://thumble.io/downloads/${name}`), env)).status, 200);

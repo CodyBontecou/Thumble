@@ -1,0 +1,20 @@
+{
+  "version": "1.1.1",
+  "build": "6",
+  "platform": "macos",
+  "architecture": [
+    "arm64",
+    "x86_64"
+  ],
+  "filename": "Thumble-Receiver-1.1.1.dmg",
+  "bytes": 2728241,
+  "sha256": "f6181ea04556326aabd8d8030b2bcdb972b67982b8ff9acbe3f10a7a79fb8feb",
+  "url": "https://thumble.io/downloads/Thumble-Receiver-1.1.1.dmg",
+  "source": "main (432a478) with version bump",
+  "change": "Reports the phone canvas to Thumble Studio so desktop saves and selections validate against the connected phone, and pauses held input (requiring Resume) when a plan grant is replaced, matching the desktop receiver.",
+  "notarization": {
+    "app": "9b9effec-7c18-4c25-b75e-972e36241ad3",
+    "dmg": "bf361c88-1a63-4dbf-9e2e-d25c3e079bd7"
+  },
+  "status": "published"
+}

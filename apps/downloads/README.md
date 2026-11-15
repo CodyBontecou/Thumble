@@ -6,7 +6,7 @@ private to their existing endpoints. Large files stream directly from R2.
 
 | Download | Alias | R2 prefix |
 | --- | --- | --- |
-| Signed/notarized macOS 1.1.0 DMG | `/downloads/receiver-latest.dmg` | `macos/receiver/` |
+| Signed/notarized macOS 1.1.1 DMG | `/downloads/receiver-latest.dmg` | `macos/receiver/` |
 | Unsigned Windows x64 0.2.0 preview setup | `/downloads/receiver-latest-windows.exe` | `windows/receiver/` |
 | Linux x64 0.2.0 preview archive | `/downloads/receiver-latest-linux.tar.gz` | `linux/receiver/` |
 | Desktop setup instructions | `/downloads/receiver-desktop-setup.txt` | `desktop/receiver/` |
@@ -45,3 +45,5 @@ source, since CLI archives are generated outputs stored separately.
 Desktop preview 0.1.1 retains phone pairing across checkout, app/receiver restarts, and sleep. Publish only installers from the successful native Windows/Linux workflow run recorded in `docs/releases/desktop-receiver-0.1.1.json`. Keep previous versioned objects immutable. The private reviewer ZIP retains its separate authentication requirement.
 
 Desktop preview 0.2.0 and Mac 1.1.0 ship Thumble Studio and require a plan or free trial from the phone app (no free demo). The 0.2.0 setup guide is `apps/receiver-desktop/README.md` at the release commit. Windows/Linux installers now bundle Qt WebEngine for Studio, so they are larger than 0.1.1.
+
+Mac 1.1.1 (build 6) reports the phone canvas to Thumble Studio so desktop saves and selections validate against the connected phone, and pauses held input when a plan grant is replaced, matching the desktop receiver.

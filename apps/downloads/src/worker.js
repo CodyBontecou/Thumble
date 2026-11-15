@@ -1,5 +1,6 @@
 // Explicit public release allowlist: no access to other objects in the bucket.
 const releases = new Map([
+  ['Thumble-Receiver-1.1.1.dmg', ['macos/receiver', 'application/x-apple-diskimage']],
   ['Thumble-Receiver-1.1.0.dmg', ['macos/receiver', 'application/x-apple-diskimage']],
   ['Thumble-Receiver-1.0.3.dmg', ['macos/receiver', 'application/x-apple-diskimage']],
   ['Thumble-Receiver-1.0.2.dmg', ['macos/receiver', 'application/x-apple-diskimage']],
@@ -19,7 +20,7 @@ const releases = new Map([
   ['Thumble-Receiver-0.2.0-desktop.json', ['desktop/receiver', 'application/json; charset=utf-8']],
 ]);
 const aliases = new Map([
-  ['/downloads/receiver-latest.dmg', 'Thumble-Receiver-1.1.0.dmg'],
+  ['/downloads/receiver-latest.dmg', 'Thumble-Receiver-1.1.1.dmg'],
   ['/downloads/receiver-latest-windows.exe', 'Thumble-Receiver-0.2.0-windows-x64-setup.exe'],
   ['/downloads/receiver-latest-linux.tar.gz', 'Thumble-Receiver-0.2.0-linux-x64.tar.gz'],
   ['/downloads/receiver-desktop-setup.txt', 'Thumble-Receiver-0.2.0-desktop-setup.txt'],
